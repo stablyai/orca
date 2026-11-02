@@ -32,6 +32,7 @@ describe('orca plugin types', () => {
       '.orca/types/orca-host/index.d.ts',
       '.orca/types/orca-frame/index.d.ts',
       '.orca/types/orca-worker/index.d.ts',
+      '.orca/types/orca-services/index.d.ts',
       '.orca/types/orca-testing/index.d.ts',
       '.orca/types/tsconfig.json'
     ])
@@ -47,13 +48,14 @@ describe('orca plugin types', () => {
     expect(await read('orca-frame')).toContain('var orca: OrcaFrameApi')
     expect(await read('orca-worker')).toContain("declare module 'orca/worker'")
     expect(await read('orca-testing')).toContain("declare module 'orca/testing'")
+    expect(await read('orca-services')).toContain('export interface PluginRequests {}')
     const tsconfig = JSON.parse(
       await readFile(join(dir, '.orca', 'types', 'tsconfig.json'), 'utf8')
     )
     expect(tsconfig.compilerOptions).toMatchObject({
       jsxImportSource: 'orca',
       typeRoots: ['.'],
-      types: ['orca', 'orca-host', 'orca-frame', 'orca-worker', 'orca-testing']
+      types: ['orca', 'orca-host', 'orca-frame', 'orca-worker', 'orca-services', 'orca-testing']
     })
     expect(await readFile(join(dir, '.orca', '.gitignore'), 'utf8')).toBe('*\n')
   })

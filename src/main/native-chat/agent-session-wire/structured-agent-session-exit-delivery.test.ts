@@ -5,7 +5,7 @@ import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifec
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
-} from '../../../shared/structured-agent-session-reducer'
+} from '../../../shared/agent-session/structured-agent-session-reducer'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import {
   exitChild,

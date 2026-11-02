@@ -1,13 +1,8 @@
 import { posix } from 'node:path'
-
-/** Tried in order for an extensionless relative import, then as `<dir>/index.<ext>`. */
-const RESOLVE_EXTENSIONS = ['.tsx', '.ts', '.jsx', '.js', '.mts', '.mjs']
-// Why: TypeScript ESM style imports `./util.js` for `util.ts`.
-const SOURCE_FOR_OUTPUT_EXTENSION: Record<string, readonly string[]> = {
-  '.js': ['.ts', '.tsx'],
-  '.jsx': ['.tsx'],
-  '.mjs': ['.mts']
-}
+import {
+  PLUGIN_MODULE_RESOLVE_EXTENSIONS,
+  pluginModuleCandidatePaths
+} from '../plugin-module-candidate-paths'
 
 export type PluginModuleSpecifierResolution =
   | { kind: 'keep' }
@@ -22,17 +17,6 @@ const isOrcaSpecifier = (specifier: string): boolean =>
 
 // Why kept: URLs are not bare names; the guest CSP decides whether they load.
 const isUrlSpecifier = (specifier: string): boolean => /^[a-z][a-z0-9+.-]*:/i.test(specifier)
-
-function candidates(target: string): string[] {
-  const extension = posix.extname(target).toLowerCase()
-  const stem = target.slice(0, target.length - extension.length)
-  return [
-    ...(extension ? [target] : []),
-    ...(SOURCE_FOR_OUTPUT_EXTENSION[extension] ?? []).map((source) => stem + source),
-    ...(extension ? [] : RESOLVE_EXTENSIONS.map((each) => target + each)),
-    ...RESOLVE_EXTENSIONS.map((each) => posix.join(target, `index${each}`))
-  ]
-}
 
 function relativeSpecifier(fromPath: string, toPath: string): string {
   const relative = posix.relative(posix.dirname(fromPath), toPath)
@@ -72,13 +56,13 @@ export async function resolvePluginModuleSpecifier(
   if (target === '..' || target.startsWith('../')) {
     return { kind: 'refuse', reason: `cannot import "${specifier}": it is outside the plugin` }
   }
-  for (const candidate of candidates(target.replace(/\/$/, ''))) {
+  for (const candidate of pluginModuleCandidatePaths(target.replace(/\/$/, ''))) {
     if (await exists(candidate)) {
       return { kind: 'rewrite', specifier: relativeSpecifier(fromPath, candidate) + suffix }
     }
   }
   return {
     kind: 'refuse',
-    reason: `cannot import "${specifier}": no such file in the plugin (tried ${RESOLVE_EXTENSIONS.join(', ')} and index files)`
+    reason: `cannot import "${specifier}": no such file in the plugin (tried ${PLUGIN_MODULE_RESOLVE_EXTENSIONS.join(', ')} and index files)`
   }
 }

@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
+import { projectStructuredItemsToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { isAdmissibleAgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-schemas'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -467,6 +467,15 @@ describe('notice rows', () => {
         'Connectez-vous à Grok avec `grok login` sur l’ordinateur qui exécute ce chat.'
       )
     ).toBeInTheDocument()
+  })
+  it("rewords the host's missing saved conversation words in the reader's language", async () => {
+    await i18n.changeLanguage('fr')
+    const failure = { kind: 'savedConversationMissing' } as const
+    const words = agentSessionFailureWords(failure, { agentName: 'Claude', surface: 'row' })
+    renderStatus({ kind: 'status', tone: 'error', ...words }, null, false, false, 'Claude')
+    const french =
+      'Claude n’a pas trouvé la conversation enregistrée de ce chat. Démarrez un nouveau chat pour continuer.'
+    expect(screen.getByText(french)).toBeInTheDocument()
   })
   it.each([
     ['fr', 'Grok', 'Connectez-vous à Grok avec `grok login` sur l’ordinateur qui exécute ce chat.'],

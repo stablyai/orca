@@ -44,6 +44,8 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     readWorkspaceLabels: (worktreeId, paneKey) =>
       this.readTerminalAgentWorkspaceLabels(worktreeId, paneKey),
     isWorkspaceMuted: (worktreeId) => this.isWorkspaceNotificationMuted(worktreeId),
+    readOrchestration: (paneKey) => this.getAgentStatusOrchestrationContextForPaneKey(paneKey),
+    readTerminalTitle: (paneKey) => this.getPtyRecordForPaneKey(paneKey)?.lastOscTitle ?? null,
     readHookRow: (paneKey) => this.agentTransitions.latestRow(paneKey),
     translate: (key, fallback) =>
       getRuntimeDesktopSurface().translateNotification?.(key, fallback) ?? fallback,
@@ -121,11 +123,17 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     // Attach connector watches at hook-store startup, before any connector call.
     this.externalConversations.current()
     const detachTransitions = this.agentTransitions.attach(store)
+    const detachCrew = store.subscribeStatusRowMutations(() =>
+      this.crewChanges.notify(new Set(['status', 'names']))
+    )
+    this.crewChanges.notify(new Set(['status', 'names']))
     const subscribe = store.subscribeEnrichedStatus?.bind(store)
     const detachTitles = subscribe
       ? subscribeHookStatusTitles({ subscribeEnrichedStatus: subscribe }, this)
       : () => {}
     return () => {
+      detachCrew()
+      this.crewChanges.notify(new Set(['status', 'names']))
       detachTitles()
       detachTransitions()
     }

@@ -68,14 +68,47 @@ describe('usePluginDeclarativeTree', () => {
     })
   })
 
-  it('attributes and clamps plugin errors, and keeps a repeated one as the same issue', () => {
-    const { hook } = setup()
+  it('attributes and clamps plugin errors, and keeps a repeated one as the same issue', async () => {
+    const { hook, flushFrame } = setup()
+    hook.result.current.channel.onRender({ document: 'd1', revision: 1, tree: button('c1') })
+    await flushFrame()
     act(() => hook.result.current.channel.onError({ revision: 1, message: 'x'.repeat(1000) }))
     const first = hook.result.current.issue
     expect(first?.source).toBe('plugin')
     expect(first?.message.length).toBe(PLUGIN_DECLARATIVE_ERROR_MAX_CHARS)
     act(() => hook.result.current.channel.onError({ revision: 1, message: 'x'.repeat(1000) }))
     expect(hook.result.current.issue).toBe(first)
+  })
+
+  it('keeps the last good tree when a new guest fails to load, and counts the reload that fixes it', async () => {
+    const { hook, flushFrame } = setup()
+    act(() => hook.result.current.channel.onError({ revision: 0, message: 'a.tsx:1:1: first' }))
+    // Nothing has rendered yet: still a load failure.
+    expect(hook.result.current.issue).toEqual({ source: 'load', message: 'a.tsx:1:1: first' })
+    hook.result.current.channel.onRender({ document: 'd1', revision: 1, tree: button('c1') })
+    await flushFrame()
+    expect(hook.result.current.issue).toBeNull()
+    expect(hook.result.current.reloads).toBe(0)
+
+    // A dev save: a new guest starts, and its module throws before rendering.
+    act(() => hook.result.current.resetDocument())
+    act(() =>
+      hook.result.current.channel.onError({ revision: 0, message: 'src/panel.tsx:3:5: Unexpected' })
+    )
+    expect(hook.result.current.issue?.source).toBe('load')
+    expect(hook.result.current.rendered).toMatchObject({ document: 'd1', revision: 1 })
+    act(() => hook.result.current.dismissIssue())
+    expect(hook.result.current.issue).toBeNull()
+    expect(hook.result.current.rendered?.document).toBe('d1')
+
+    // The next save loads: its first tree replaces the old one and clears the banner.
+    act(() => hook.result.current.resetDocument())
+    act(() => hook.result.current.channel.onError({ revision: 0, message: 'still broken' }))
+    hook.result.current.channel.onRender({ document: 'd2', revision: 1, tree: button('c2') })
+    await flushFrame()
+    expect(hook.result.current.rendered?.document).toBe('d2')
+    expect(hook.result.current.issue).toBeNull()
+    expect(hook.result.current.reloads).toBe(1)
   })
 
   it('grants a gesture only for a press on a control that is settled in the tree and on screen', async () => {

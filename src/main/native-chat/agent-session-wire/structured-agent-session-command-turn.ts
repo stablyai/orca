@@ -20,7 +20,7 @@ import {
   type AgentJournalMessageItem,
   type AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionConversationCommand } from '../../../shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
@@ -37,14 +37,12 @@ import type {
 } from './structured-agent-session-adapter'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
-import { structuredAgentSessionCommandTurn } from '../../../shared/structured-agent-session-command-turn-identity'
+import { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import { refuseQueuedCommand } from './structured-agent-session-queued-command-refusal'
 import {
   contextStructuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWork
 } from './structured-agent-session-current-work'
-
-export { structuredAgentSessionCommandTurn } from '../../../shared/structured-agent-session-command-turn-identity'
 
 export const STRUCTURED_AGENT_SESSION_COMPACT_COMMAND = 'compact'
 

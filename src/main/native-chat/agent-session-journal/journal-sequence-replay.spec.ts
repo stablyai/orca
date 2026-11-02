@@ -1,13 +1,13 @@
 import type { createFixture } from './journal-store-contract-test-fixture'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   agentJournalItemKey,
   boundJournalKeyComponent,
   MAX_JOURNAL_KEY_COMPONENT_CHARS
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
+import { activeStructuredAgentSessionTurnId } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { AgentSessionJournalError } from './journal-write-guards'
 import {
   openTestJournalHostDatabase,

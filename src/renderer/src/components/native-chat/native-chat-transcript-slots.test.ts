@@ -3,14 +3,14 @@ import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { nativeChatTurnMembership } from '../../../../shared/native-chat/transcript/native-chat-turn-membership'
 import {
   selectNativeChatTurnStatuses,
   type NativeChatTurnStatus
 } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
-import { selectStructuredAgentSettledTurns } from '../../../../shared/structured-agent-session-turn-timing'
+import { selectStructuredAgentSettledTurns } from '../../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat/native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from './native-chat-turn-diffs'
 import {

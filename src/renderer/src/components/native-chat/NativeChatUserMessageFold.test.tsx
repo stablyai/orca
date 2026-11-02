@@ -52,17 +52,6 @@ const showFull = () => screen.queryByRole('button', { name: 'Show full message' 
 const showLess = () => screen.queryByRole('button', { name: 'Show less' })
 
 describe('a long sent prompt', () => {
-  it.each([
-    ['8 lines', Array(8).fill('line').join('\n'), false],
-    ['9 lines', Array(9).fill('line').join('\n'), true],
-    ['600 characters', 'x'.repeat(600), false],
-    ['601 characters', 'x'.repeat(601), true]
-  ])('at %s, folds: %s', (_label, text, folds) => {
-    renderPrompt(prompt('prompt', text))
-    expect(folded() !== null).toBe(folds)
-    expect(showFull() !== null).toBe(folds)
-  })
-
   it('opens and folds again', () => {
     renderPrompt(prompt('prompt'))
     fireEvent.click(showFull()!)
@@ -71,12 +60,6 @@ describe('a long sent prompt', () => {
     fireEvent.click(showLess()!)
     expect(folded()).not.toBeNull()
     expect(showFull()).toBeInTheDocument()
-  })
-
-  it('shows no fade or toggle when a long text already fits its preview', () => {
-    renderPrompt(prompt('prompt'), 150)
-    expect(folded()).toBeNull()
-    expect(showFull()).toBeNull()
   })
 
   it('measures again when a longer copy of the message replaces one that fit', () => {

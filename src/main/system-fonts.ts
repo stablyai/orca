@@ -7,6 +7,7 @@ const SYSTEM_FONT_LIST_TIMEOUT_MS = 15_000
 // Large macOS font catalogs need more time in system_profiler.
 const MAC_SYSTEM_FONT_LIST_TIMEOUT_MS = 45_000
 
+/** Empty when the OS list is unreadable; the renderer then shows its curated fonts and says so. */
 export async function listSystemFontFamilies(): Promise<string[]> {
   if (cachedFonts) {
     return cachedFonts
@@ -16,13 +17,13 @@ export async function listSystemFontFamilies(): Promise<string[]> {
   }
 
   fontsPromise = loadSystemFontFamilies()
-    .then((fonts) => {
-      cachedFonts = fonts.length > 0 ? fonts : fallbackFonts()
-      return cachedFonts
+    .catch((error: unknown) => {
+      console.warn('[system-fonts] failed to list installed fonts:', error)
+      return []
     })
-    .catch(() => {
-      cachedFonts = fallbackFonts()
-      return cachedFonts
+    .then((fonts) => {
+      cachedFonts = fonts
+      return fonts
     })
     .finally(() => {
       fontsPromise = null
@@ -129,21 +130,4 @@ function uniqueSorted(values: (string | undefined)[]): string[] {
         .filter((value) => value.length > 0 && !value.startsWith('.'))
     )
   ).sort((a, b) => a.localeCompare(b))
-}
-
-function fallbackFonts(): string[] {
-  if (process.platform === 'darwin') {
-    return ['SF Mono', 'Menlo', 'Monaco', 'JetBrains Mono', 'Fira Code']
-  }
-  if (process.platform === 'win32') {
-    return ['Cascadia Mono', 'Consolas', 'Lucida Console', 'JetBrains Mono', 'Fira Code']
-  }
-  return [
-    'JetBrains Mono',
-    'Fira Code',
-    'DejaVu Sans Mono',
-    'Liberation Mono',
-    'Ubuntu Mono',
-    'Noto Sans Mono'
-  ]
 }

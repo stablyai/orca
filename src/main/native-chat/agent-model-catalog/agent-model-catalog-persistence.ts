@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 import type {
   AgentSessionModelOption,
   AgentSessionOptionChoice
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import {
   agentModelCatalogEntry,
   serializedAgentModelCatalogListing,

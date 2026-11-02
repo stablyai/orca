@@ -57,6 +57,29 @@ beforeEach(async () => {
 })
 
 describe('queued edit draft ownership', () => {
+  it('tracks completed paste projection in edit identity and output without changing raw text', () => {
+    const id = '11111111-1111-4111-8111-111111111111'
+    const raw = `before${nativeChatPastedTextToken(id)}after`
+    const edit = createNativeChatQueuedEditDraft(
+      { ...body, blocks: [{ type: 'text', text: raw }], skills: [] },
+      'bottom'
+    )
+    expect(nativeChatQueuedEditDirty(edit)).toBe(false)
+    updateNativeChatComposerDraft(
+      edit.scopeKey,
+      { pastedTextFiles: { [id]: '/tmp/queued.txt' } },
+      'immediate'
+    )
+    expect(readNativeChatComposerDraft(edit.scopeKey).text).toBe(raw)
+    expect(nativeChatQueuedEditDirty(edit)).toBe(true)
+    expect(nativeChatQueuedEditInput(edit, true, true)).toEqual({
+      text: 'before @/tmp/queued.txt after',
+      images: [],
+      skills: []
+    })
+    discardNativeChatQueuedEdit(edit)
+  })
+
   it('seeds skill identity without a catalog, preserves original image blocks and omits unsupported fields', async () => {
     const edit = createNativeChatQueuedEditDraft(body, 'bottom')
     expect(nativeChatQueuedEditInput(edit, true, true)).toEqual({

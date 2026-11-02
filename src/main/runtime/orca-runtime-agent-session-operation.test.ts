@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type {
   RuntimeCreateAgentSessionRequest,
   RuntimeCreateAgentSessionResult
-} from '../../shared/agent-session-host-authority'
+} from '../../shared/agent-session/agent-session-host-authority'
 import { OrcaRuntimeService } from './orca-runtime'
 import { buildAgentStartupPlan, buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
 import { tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'

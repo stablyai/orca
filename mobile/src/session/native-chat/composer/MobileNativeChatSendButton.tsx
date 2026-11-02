@@ -3,7 +3,7 @@ import { CornerDownRight, ListEnd } from 'lucide-react-native'
 import type {
   NativeChatFollowUpBehavior,
   NativeChatSendFollowUp
-} from '../../../../../src/shared/native-chat-follow-up-behavior'
+} from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 import { ActionSheetModal } from '../../../components/ActionSheetModal'
 import { ComposerSendButton } from '../../../components/composer-input/ComposerSendButton'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'

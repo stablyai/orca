@@ -1,6 +1,6 @@
 // Codes span situations with different next steps (cleared chat versus busy command). Name only a listed reason; otherwise omit it for the code fallback, as older hosts do.
 
-import type { AgentSessionAccountKind } from '../../agent-session-availability'
+import type { AgentSessionAccountKind } from '../agent-session-availability'
 import type { AgentJournalResolution } from '../journal/agent-session-journal-types'
 import {
   readAgentCliInstallationProblem,
@@ -67,6 +67,7 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'goalsUnsupported',
     'providerRejected',
     'providerStartFailed',
+    'savedConversationMissing',
     'notSignedIn',
     /** The agent's CLI is not installed on the host that would run it. */
     'cliMissing',

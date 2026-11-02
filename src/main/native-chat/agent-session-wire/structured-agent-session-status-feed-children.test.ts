@@ -7,7 +7,7 @@ import type { AgentSessionHandleProvider } from '../../../shared/agent-session/l
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { acpChildWorkStatusSink } from '../../acp/acp-structured-child-work.test-support'

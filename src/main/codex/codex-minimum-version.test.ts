@@ -19,7 +19,7 @@ import {
 } from '../runtime/structured-agent-launch-composition.test-support'
 import { resolveProviderChildEnv } from '../provider-process/provider-process-launch'
 import { identityFor } from './codex-structured-session-adapter-fixture'
-import { openCodexAppServerConnection } from './codex-app-server-connection'
+import { openCodexAppServerConnection } from './app-server/codex-app-server-connection'
 
 const readVersion = vi.fn<AgentCliVersionReader>()
 beforeEach(() => {

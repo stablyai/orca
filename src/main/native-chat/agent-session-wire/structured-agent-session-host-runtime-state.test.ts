@@ -6,7 +6,7 @@ import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   type AgentSessionRecord
 } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase

@@ -33,7 +33,7 @@ import { isWriteFailureSubmission } from '../../../shared/agent-session/requests
 import { projectJournalStopNote } from './journal-stop-note-projection'
 import { journalItemExecutionFence } from './journal-item-provenance'
 import { retireRewoundJournalSubmission } from './journal-rewind-submission-retirement'
-import { latestAgentSessionContextClearSequence } from '../../../shared/agent-session-context-clear'
+import { latestAgentSessionContextClearSequence } from '../../../shared/agent-session/agent-session-context-clear'
 import {
   createJournalQueuePauseMarks,
   foldJournalQueuePauseMark,

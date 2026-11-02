@@ -6,7 +6,7 @@ import type {
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
-import { runningStructuredAgentSessionTurnItemBySequence } from '../../../shared/structured-agent-session-live-turn'
+import { runningStructuredAgentSessionTurnItemBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import type { StructuredAgentSessionCurrentWorkJournal } from './structured-agent-session-current-work'
 import { structuredAgentSessionResumableSet } from './structured-agent-session-restart-resume-set'
 import {

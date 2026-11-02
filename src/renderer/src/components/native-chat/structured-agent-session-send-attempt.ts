@@ -1,12 +1,12 @@
 // Only agentSession.send mutates; stops during earlier local/read-only work prove the request never went out.
 
-import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionHistoryResult,
   AgentSessionMutationResult,
   AgentSessionSendResult
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import {
   AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS,
   agentSessionWriteNoticeParts,

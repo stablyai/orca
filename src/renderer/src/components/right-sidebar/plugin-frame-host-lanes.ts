@@ -133,11 +133,12 @@ export function pluginFrameLaneFor(
   if (data.kind === 'req' && data.method === PLUGIN_FRAME_USER_METHODS.saveAs) {
     return lanes.save
   }
-  // Persisted state rides with renders: values may exceed the 64 KiB general lane.
+  // Persisted and retained state rides with renders: values may exceed the 64 KiB general lane.
   if (
     data.kind === 'evt' &&
     (data.event === PLUGIN_DECLARATIVE_MESSAGES.render ||
-      data.event === PLUGIN_DECLARATIVE_MESSAGES.persist)
+      data.event === PLUGIN_DECLARATIVE_MESSAGES.persist ||
+      data.event === PLUGIN_DECLARATIVE_MESSAGES.retain)
   ) {
     return lanes.render
   }

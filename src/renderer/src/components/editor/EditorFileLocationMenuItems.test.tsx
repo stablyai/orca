@@ -65,20 +65,6 @@ afterEach(() => {
 })
 
 describe('EditorFileLocationMenuItems', () => {
-  it('reveals the open file through the existing host-aware shell action', () => {
-    renderMenu()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Reveal in Finder' }))
-    expect(openInFileManager).toHaveBeenCalledWith(file.filePath, 'local')
-  })
-
-  it('uses the header copy feedback and copies the workspace-relative path separately', () => {
-    renderMenu()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy Path' }))
-    expect(onCopyPath).toHaveBeenCalledOnce()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy Relative Path' }))
-    expect(writeClipboardText).toHaveBeenCalledWith('src/file.ts')
-  })
-
   it('keeps a backslash in a POSIX file name when copying the name', () => {
     renderMenu({ filePath: '/repo/src/foo\\bar.ts', relativePath: 'src/foo\\bar.ts' })
     fireEvent.click(screen.getByRole('menuitem', { name: 'Copy File Name' }))

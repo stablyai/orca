@@ -1,3 +1,4 @@
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 // Command receipts prove acceptance; other plans use ledger rows and journal replay.
 
 import { readNoChoiceOptionResult } from './structured-agent-session-option-observation'
@@ -17,7 +18,7 @@ import type {
   AgentSessionPromptResult,
   AgentSessionQueuedSendReceipt,
   AgentSessionSendResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionConversationCommandResult } from '../../../shared/agent-session/agent-session-conversation-command'
 import { DISPATCH_DOUBT_SUBMISSION_MISSING } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { StructuredAgentSessionBackgroundStopInput } from './structured-agent-session-background-stop'
@@ -55,6 +56,7 @@ export type MutationPlan<TValue> = {
   method: string
   fields: Record<string, unknown>
   operationIdScope?: 'global'
+  acceptanceRecord?: (record: AgentSessionRecord) => AgentSessionRecord
   /** Needs no writer lease. */
   conversationWrite?: true
   run: (ctx: AgentSessionTurnContext) => Promise<TurnOutcome<TValue>>

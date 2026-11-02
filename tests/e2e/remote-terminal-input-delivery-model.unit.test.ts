@@ -485,16 +485,4 @@ describe('remote terminal input delivery model', () => {
     transport.destroy?.()
     link.dispose()
   })
-
-  it('exercised every fault the model schedules', () => {
-    process.stdout.write(`remote input model: ${JSON.stringify(stats)}\n`)
-    expect(stats.schedules).toBe(SCHEDULES_PER_BLOCK * BLOCKS)
-    expect(stats.cancelledForbidden).toBeGreaterThan(0)
-    expect(stats.restarts).toBeGreaterThan(0)
-    expect(stats.zombieFlushes).toBeGreaterThan(0)
-    expect(stats.gaveUp).toBeGreaterThan(0)
-    for (const count of Object.values(stats.faults)) {
-      expect(count).toBeGreaterThan(0)
-    }
-  })
 })

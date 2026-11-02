@@ -79,7 +79,7 @@ export function components(input: PluginTemplateInput): PluginTemplate {
       'tsconfig.json': json({ extends: `./${PLUGIN_TYPES_DIR}/tsconfig.json`, include: ['src'] }),
       'README.md': readme(
         input,
-        `A right-sidebar panel written in TSX. Orca transpiles \`src/panel.tsx\` when the panel loads, so there is no build step and no build folder: edit, save, and the panel reloads. \`orca plugin types .\` (also run by \`orca plugin dev load\`) writes the editor typings to \`${PLUGIN_TYPES_DIR}/\`, which \`tsconfig.json\` extends; run \`npx tsc -p .\` to type-check. \`orca plugin test .\` runs \`src/panel.test.tsx\` in Node with \`orca/testing\`, and \`orca plugin check .\` renders the panel once and reports errors with file:line. Import only \`orca\` and relative files.`
+        `A right-sidebar panel written in TSX. Orca transpiles \`src/panel.tsx\` when the panel loads, so there is no build step and no build folder: edit, save, and the panel reloads. \`orca plugin types .\` (also run by \`orca plugin dev watch\`) writes the editor typings to \`${PLUGIN_TYPES_DIR}/\`, which \`tsconfig.json\` extends; run \`npx tsc -p .\` to type-check. \`orca plugin test .\` runs \`src/panel.test.tsx\` in Node with \`orca/testing\`, and \`orca plugin check .\` renders the panel once and reports errors with file:line. Import only \`orca\` and relative files.`
       ),
       ...COMMON_FILES
     }

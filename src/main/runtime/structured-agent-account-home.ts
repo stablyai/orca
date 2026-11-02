@@ -1,7 +1,8 @@
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
+import { claudeRoutedHomeAsync } from '../claude-accounts/claude-profile-routed-home'
 import { normalizeCodexRuntimeSelection } from '../codex-accounts/runtime-selection'
 import { resolveOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
@@ -20,13 +21,14 @@ export type StructuredClaudeAccountHomeDeps = {
   ) => string | null | undefined
 }
 
-export function resolveStructuredClaudeAccountHomePath(
+export async function resolveStructuredClaudeAccountHomePath(
   deps: StructuredClaudeAccountHomeDeps
-): string {
+): Promise<string> {
   // Why only an account: System default keeps the launch-env and configured homes below.
-  const accountHome = deps.wslDistro
-    ? null
-    : getClaudeProfileRouter()?.routedHome(deps.purpose === 'identity' ? 'identity' : 'checked')
+  const router = deps.wslDistro ? undefined : getClaudeProfileRouter()
+  const accountHome = router
+    ? await claudeRoutedHomeAsync(router, deps.purpose === 'identity' ? 'identity' : 'checked')
+    : null
   if (accountHome) {
     return accountHome
   }

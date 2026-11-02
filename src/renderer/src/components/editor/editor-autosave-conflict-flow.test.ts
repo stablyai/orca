@@ -185,6 +185,31 @@ describe('editor autosave changed-on-disk conflict flow', () => {
     })
   })
 
+  // A custom editor's Cmd+S reaches this same explicit save after flushing its frame.
+  it('refuses an explicit save while the banner shows, keeping the edits and the disk', async () => {
+    const fakeDisk = stubEditorWindowWithDisk(
+      createFakeEditorDisk({ '/repo/file.ts': 'agent write' })
+    )
+    const store = createEditorStore()
+    openDirtyFile(store, 'user stroke')
+    store.getState().setLastKnownDiskSignature('/repo/file.ts', getDiskBaselineSignature('base'))
+    store.getState().setExternalMutation('/repo/file.ts', 'changed')
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      await expect(requestEditorFileSave({ fileId: '/repo/file.ts' })).rejects.toThrow(
+        'changed on disk'
+      )
+      expect(fakeDisk.files.get('/repo/file.ts')).toBe('agent write')
+      expect(store.getState().editorDrafts['/repo/file.ts']).toBe('user stroke')
+      expect(store.getState().openFiles[0]).toMatchObject({
+        isDirty: true,
+        externalMutation: 'changed'
+      })
+    } finally {
+      cleanup()
+    }
+  })
+
   it("clears the changed-on-disk mark after the banner's Overwrite", async () => {
     const writeFile = stubEditorWindow()
     const store = createEditorStore()

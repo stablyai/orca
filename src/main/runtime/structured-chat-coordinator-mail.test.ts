@@ -8,7 +8,7 @@ import {
   AgentSessionPreSpawnError
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../shared/agent-session-host-authority'
+import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../shared/agent-session/agent-session-host-authority'
 import { refuse } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import { localOrchestrationCliCommand } from './orchestration/cli-command'
 import { formatMessagePointer } from './orchestration/formatter'

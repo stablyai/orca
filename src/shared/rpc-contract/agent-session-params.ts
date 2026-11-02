@@ -10,7 +10,7 @@ import {
   parseAgentSessionOperationTimestamp,
   type RuntimeCreateAgentSessionRequest,
   type RuntimeEnsureAgentSessionRequest
-} from '../agent-session-host-authority'
+} from '../agent-session/agent-session-host-authority'
 import { isTuiAgent } from '../tui-agent-config'
 import { RESTORE_SPAWN_INTENTS } from '../host-spawn-admission'
 import { AgentLaunchAccountEnv } from '../agent-launch-account-env'

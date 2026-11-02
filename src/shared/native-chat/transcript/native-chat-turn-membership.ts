@@ -1,7 +1,7 @@
 import {
   unresolvedNativeChatRowIds,
   newestNativeChatUserTurnKey
-} from '../../native-chat-live-turn-membership'
+} from './native-chat-live-turn-membership'
 // Share desktop/mobile keys anchored on the opening user entry or provider-resumed turn record.
 // Explicit conversation/missing-turn scopes own no turn; legacy hosts fall back to journal order, then position.
 
@@ -24,9 +24,9 @@ import {
 import type { NativeChatMessage, NativeChatRole } from '../native-chat-types'
 import { dispatchWasWithdrawn } from '../../agent-session/requests/structured-agent-session-dispatch-rejection'
 import { inSendOrder } from '../native-chat-send-order'
-import { runningStructuredAgentSessionTurnScope } from '../../structured-agent-session-live-turn'
+import { runningStructuredAgentSessionTurnScope } from '../../agent-session/view/structured-agent-session-live-turn'
 import { nativeChatOpeningTurnKey } from './native-chat-messages-waiting-behind-live-turn'
-import type { AgentSessionLatestTurn } from '../../agent-session-wire'
+import type { AgentSessionLatestTurn } from '../../agent-session/agent-session-wire'
 import { nativeChatTurnRowAttribution } from './native-chat-turn-row-attribution'
 
 /** Turn scopes identify hosts that also run /compact through the send path; older hosts omit them. */

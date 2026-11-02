@@ -5,7 +5,7 @@ import type { NativeChatTurnJournal } from '../../../../../src/shared/native-cha
 import type { NativeChatTaskListPredecessors } from '../../../../../src/shared/native-chat/input/native-chat-task-list-history'
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import { MobileNativeChatRow } from './MobileNativeChatRowItemSource'
-import { mobileNativeChatUnsentNotices } from '../../mobile-native-chat-unsent-notices'
+import { mobileNativeChatUnsentNotices } from '../mobile-native-chat-unsent-notices'
 import type { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 
 export function useMobileNativeChatRowRenderer({

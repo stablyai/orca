@@ -1,17 +1,18 @@
 import * as fileOperations from 'node:fs/promises'
 import { readFile, rm } from 'node:fs/promises'
 import * as contextSnapshots from '../../../native-chat/agent-session-context-snapshots'
+import { journalPayload } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
 import { piRpcDialogPresentation } from '../../../pi/rpc-extension-dialogs'
-import { legacyAgentSessionSelectedOptionId } from '../../../../shared/agent-session-question-answer'
-import type {
-  AgentJournalItemBody,
-  AgentJournalResolution,
-  AgentJournalQuestionItem
-} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { legacyAgentSessionSelectedOptionId } from '../../../../shared/agent-session/agent-session-question-answer'
 import '../unused-default-rpc-methods.test-fixture'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  type AgentJournalItemBody,
+  type AgentJournalResolution,
+  type AgentJournalQuestionItem,
+  AGENT_JOURNAL_THREAD_SCOPE
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { hostTestMessage } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
@@ -23,7 +24,7 @@ import {
 import {
   editPersistedTestAgentSessionStore,
   readPersistedTestAgentSessionStore
-} from '../../agent-session-record-store-test-harness'
+} from '../../agent-session/records/agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
@@ -285,7 +286,7 @@ it('hands off the reduced saved chat after clear and rewind, budgets only the st
     expect(file).toContain('EARLY_SAVED_MARKER')
     expect(file).not.toMatch(/PRE_CLEAR_SECRET|DISCARDED_REWIND_SECRET|LATER_SAVED_MARKER/)
     expect(first.capturedText?.length).toBeLessThanOrEqual(36_000)
-    expect(first.capturedText).toContain('Earlier saved chat messages omitted')
+    expect(first.capturedText).toContain('saved chat messages or tool details omitted')
     expect(first.capturedText).not.toContain('EARLY_SAVED_MARKER')
     for (const text of [file, first.capturedText ?? '']) {
       const prompts: unknown[] = [...text.matchAll(/^Saved prompt: (.+)$/gm)].map((match) =>
@@ -364,6 +365,82 @@ it('hands off the reduced saved chat after clear and rewind, budgets only the st
       force: true
     })
   }
+})
+
+it('hands off bounded tool evidence with the latest conversation while keeping the full saved output', async () => {
+  await restingChat()
+  await rig.host.journalSnapshot(SESSION)
+  const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  const output = `AssertionError: CURRENT PART\nReceived: ${'a'.repeat(200_000)}\nTests: 2 failed`
+  const toolOutput = `Error: SAVED_TOOL_FAILURE\n${'b'.repeat(200_000)}\nSAVED_TOOL_OUTPUT_END`
+  const bodies: AgentJournalItemBody[] = [
+    hostTestMessage('Review the viewer'),
+    {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [
+        {
+          type: 'tool-call',
+          name: 'shell',
+          input: { command: 'pnpm test viewer.test.ts' },
+          callId: 'test'
+        },
+        { type: 'tool-result', output, callId: 'test', isError: true }
+      ]
+    },
+    {
+      kind: 'tool-call',
+      name: 'shell',
+      input: { command: 'pnpm test saved-viewer.test.ts' },
+      callId: 'saved-test',
+      state: 'failed',
+      output: journalPayload(toolOutput)
+    },
+    {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'The append resets reader position.' }]
+    },
+    hostTestMessage('Should we redo the viewer?')
+  ]
+  for (const [ordinal, body] of bodies.entries()) {
+    await journal.appendItem(
+      { provider: 'codex', threadId: 'saved-thread', turnId: 'handoff-turn', ordinal },
+      body,
+      {
+        fence: rig.store.getRecord(SESSION)!.lease.runtimeFence,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      }
+    )
+  }
+  const context = await rig.host.continuationContext({
+    sessionId: SESSION,
+    workspaceId: 'workspace-1',
+    expectedCursor: journal.cursor()
+  })
+  if (context.status !== 'current' || !context.transcriptPath) {
+    throw new Error('Snapshot missing')
+  }
+  expect(context.capturedText).toContain('[user] Review the viewer')
+  expect(context.capturedText).toContain('[tool shell input preview]')
+  expect(context.capturedText).toContain(
+    '[tool result error] call=test AssertionError: CURRENT PART'
+  )
+  expect(context.capturedText).toContain('Tests: 2 failed')
+  expect(context.capturedText).toContain('[assistant] The append resets reader position.')
+  expect(context.capturedText).toContain('[user] Should we redo the viewer?')
+  expect(context.capturedText).not.toContain('a'.repeat(2_000))
+  expect(context.capturedText).toContain(
+    '[tool shell failed input preview] call=saved-test {"command":"pnpm test saved-viewer.test.ts"}'
+  )
+  expect(context.capturedText).toContain(
+    '[tool result error] call=saved-test Error: SAVED_TOOL_FAILURE'
+  )
+  expect(context.capturedText).toContain('SAVED_TOOL_OUTPUT_END')
+  expect(context.capturedText).not.toContain('b'.repeat(2_000))
+  expect(await readFile(context.transcriptPath, 'utf8')).toContain(output)
+  expect(await readFile(context.transcriptPath, 'utf8')).toContain(toolOutput)
+  expect(rig.adapter.acquire).not.toHaveBeenCalled()
 })
 
 it('hands off a readable saved conversation without granting its invalid execution lease authority', async () => {

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
-import type { AgentSessionCancelResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionCancelResult } from '../../../../shared/agent-session/agent-session-wire'
 import {
   structuredSessionConfirmedStopsStillListed,
   structuredSessionListedTaskRun,

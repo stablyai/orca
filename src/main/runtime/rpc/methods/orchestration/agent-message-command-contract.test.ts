@@ -28,15 +28,15 @@ import {
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
 import { agentMessageDisplayText } from '../../../../../shared/agent-session/agent-message-display-text'
 import { readAgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
-import { nativeChatMessageCopyText } from '../../../../../shared/native-chat-message-copy-text'
+import { nativeChatMessageCopyText } from '../../../../../shared/native-chat/transcript/native-chat-message-copy-text'
 import {
   projectQueuedMessageCards,
   queuedMessageCardLine
-} from '../../../../../shared/structured-agent-session-queued-cards'
+} from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import {
   projectStructuredAgentSessionStatusSummary,
   projectStructuredItemToNativeChat
-} from '../../../../../shared/structured-agent-session-projection'
+} from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { latestStructuredAgentSessionPrompt } from '../../../../../shared/agent-session/requests/structured-agent-session-latest-request'
 import { isOrcaDispatchPrompt } from '../../../../../shared/agent-row-primary-text'
 import * as placement from './worker/worker-start-agent-placement'
@@ -632,7 +632,7 @@ it.each([
     }
     expect(prompt).toContain(`Your task ID is: ${from.orchestration.taskId}`)
     if (queued) {
-      expect(agentMessageHeading(from)).toBe('task')
+      expect(agentMessageHeading(from, { blocks: [] })).toBe('task')
       expect(agentMessageSenderCanOpen(from.senders[0], true)).toBe(true)
       expect(agentSessionMessagePayload(body)).not.toHaveProperty('from')
       expect(agentSessionSendBodyFingerprint(WORKER, body)).toBe(

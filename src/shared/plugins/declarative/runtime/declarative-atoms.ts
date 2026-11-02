@@ -2,8 +2,9 @@
 
 const ATOM = Symbol.for('orca.declarative.atom')
 
-/** Where a keyed atom's value survives: `memory` (this panel run), `plugin`, or `workspace`. */
-export type OrcaPersistScope = 'memory' | 'plugin' | 'workspace'
+/** Where a keyed atom's value survives: `memory` (this panel run), `plugin`, `workspace`, or
+ *  `storage`: the plugin's own storage under the atom's key, shared with its worker. */
+export type OrcaPersistScope = 'memory' | 'plugin' | 'workspace' | 'storage'
 export type OrcaAtomOptions<T> = {
   persist?: OrcaPersistScope
   /** Bump when the stored shape changes; `migrate` then receives the older value. */
@@ -32,12 +33,17 @@ let activeTracker: Tracker | null = null
 
 const ATOM_KEY = /^[A-Za-z0-9_.:-]{1,128}$/
 const keyed = new Map<string, OrcaAtom<unknown>>()
-/** Persisted values from the host, by scope; atoms created later hydrate from it too. */
-const snapshot: Record<'plugin' | 'workspace', Map<string, OrcaStoredValue>> = {
+/** Values from the host, by scope; atoms created later hydrate from it too. `memory` holds the
+ *  keyed memory atoms of the guest a dev hot reload replaced. */
+type SnapshotScope = Exclude<OrcaPersistScope, 'storage'>
+const snapshot: Record<SnapshotScope, Map<string, OrcaStoredValue>> = {
+  memory: new Map(),
   plugin: new Map(),
   workspace: new Map()
 }
 let onPersistedChange: ((atom: OrcaAtom<unknown>) => void) | null = null
+let onMemoryChange: ((atom: OrcaAtom<unknown>) => void) | null = null
+let onStorageAtom: ((key: string) => void) | null = null
 
 /** Plugin-written atoms, so a new runtime starts them from their initial values. */
 const writableAtoms = new Set<AtomState<unknown>>()
@@ -76,7 +82,7 @@ export function resetAtoms(): void {
 type Stored<T> = { found: true; value: T } | { found: false }
 
 function stored<T>(inner: AtomState<T>): Stored<T> {
-  if (!inner.key || inner.persist === 'memory') {
+  if (!inner.key || inner.persist === 'storage') {
     return { found: false }
   }
   const entry = snapshot[inner.persist].get(inner.key)
@@ -87,8 +93,9 @@ function stored<T>(inner: AtomState<T>): Stored<T> {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: written by this atom's own version, which stores values of its type.
     return { found: true, value: entry.value as T }
   }
-  // A shape the plugin no longer understands falls back to the initial value.
-  return inner.migrate
+  // A shape the plugin no longer understands falls back to the initial value; a hot reload's
+  // hand-over never migrates, since a version bump there means "start this atom over".
+  return inner.migrate && inner.persist !== 'memory'
     ? { found: true, value: inner.migrate(entry.value, entry.version) }
     : { found: false }
 }
@@ -111,8 +118,8 @@ export function atom<T>(...args: [T] | [string, T, OrcaAtomOptions<T>?]): OrcaAt
     throw new Error(`atom key "${key}" is already used`)
   }
   const persist = options.persist ?? 'memory'
-  if (persist !== 'memory' && persist !== 'plugin' && persist !== 'workspace') {
-    throw new TypeError('persist is "memory", "plugin" or "workspace"')
+  if (!['memory', 'plugin', 'workspace', 'storage'].includes(persist)) {
+    throw new TypeError('persist is "memory", "plugin", "workspace" or "storage"')
   }
   const result = create(initial, {
     key,
@@ -126,6 +133,9 @@ export function atom<T>(...args: [T] | [string, T, OrcaAtomOptions<T>?]): OrcaAt
     inner.value = hydrated.value
   }
   keyed.set(key, result)
+  if (persist === 'storage') {
+    onStorageAtom?.(key)
+  }
   return result
 }
 
@@ -168,11 +178,10 @@ function assign<T>(inner: AtomState<T>, value: T, persist: boolean): void {
   for (const listener of inner.listeners) {
     listener()
   }
-  if (persist && inner.key && inner.persist !== 'memory') {
-    const target = keyed.get(inner.key)
-    if (target) {
-      onPersistedChange?.(target)
-    }
+  const target = persist && inner.key ? keyed.get(inner.key) : undefined
+  const notify = inner.persist === 'memory' ? onMemoryChange : onPersistedChange
+  if (target) {
+    notify?.(target)
   }
 }
 
@@ -220,7 +229,7 @@ export function trackAtomReads<R>(reads: Set<OrcaAtom<unknown>>, render: () => R
 }
 
 export type OrcaPersistedEntry = {
-  scope: 'plugin' | 'workspace'
+  scope: 'plugin' | 'workspace' | 'storage'
   key: string
   version: number
   value: unknown
@@ -238,9 +247,58 @@ export function watchPersistedAtoms(listener: ((atom: OrcaAtom<unknown>) => void
   onPersistedChange = listener
 }
 
+/** A keyed memory atom's value, for handing over to the next guest of a dev hot reload. */
+export function memoryEntry(
+  target: OrcaAtom<unknown>
+): { key: string; version: number; value: unknown } | null {
+  const inner = state(target)
+  return inner.key && inner.persist === 'memory'
+    ? { key: inner.key, version: inner.version, value: inner.value }
+    : null
+}
+
+/** Called with each keyed memory atom that changes from plugin code. */
+export function watchMemoryAtoms(listener: ((atom: OrcaAtom<unknown>) => void) | null): void {
+  onMemoryChange = listener
+}
+
+/** `storage` atoms: `listener` hears every key, those created before it was set included. */
+export function watchStorageAtoms(listener: ((key: string) => void) | null): void {
+  onStorageAtom = listener
+  for (const [key, target] of keyed) {
+    if (listener && target[ATOM].persist === 'storage') {
+      listener(key)
+    }
+  }
+}
+
+/** The plugin's stored value for a `storage` atom; absent (`undefined`) restores the initial one. */
+export function applyStorageValue(key: string, value: unknown): void {
+  const inner = keyed.get(key)?.[ATOM]
+  if (inner?.persist === 'storage') {
+    assign(inner, value === undefined ? inner.initial : value, false)
+  }
+}
+
+/**
+ * `orca plugin shot --act`: remembers every plugin-written atom's value; the returned function
+ * sets them back as plugin code would, so persisted atoms store their old values again.
+ */
+export function captureAtomValues(): () => void {
+  const values = new Map<AtomState<unknown>, unknown>()
+  for (const inner of writableAtoms) {
+    values.set(inner, inner.value)
+  }
+  return () => {
+    for (const [inner, value] of values) {
+      assign(inner, value, true)
+    }
+  }
+}
+
 /** Applies stored values for a scope (on boot, or the workspace's after a workspace switch). */
 export function hydrateAtoms(
-  scope: 'plugin' | 'workspace',
+  scope: SnapshotScope,
   values: ReadonlyMap<string, OrcaStoredValue>
 ): void {
   snapshot[scope] = new Map(values)
@@ -250,7 +308,10 @@ export function hydrateAtoms(
       continue
     }
     const hydrated = stored(inner)
-    // A key the new snapshot lacks (another workspace, say) goes back to its initial value.
-    assign(inner, hydrated.found ? hydrated.value : inner.initial, false)
+    // A key the new snapshot lacks (another workspace, say) goes back to its initial value; a
+    // hand-over only ever adds values.
+    if (hydrated.found || scope !== 'memory') {
+      assign(inner, hydrated.found ? hydrated.value : inner.initial, false)
+    }
   }
 }

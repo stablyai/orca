@@ -352,10 +352,9 @@ describe('openFileInBrowserTab', () => {
     expect(mocks.createBrowserTab).not.toHaveBeenCalled()
   })
 
-  // Reject outside-worktree paired paths with a boundary message instead of a worktree-scoped files.read 404.
-  it('names the worktree boundary for a paired document outside the workspace', () => {
+  it('previews a paired document outside the workspace without a server browser', () => {
     mocks.environmentId = 'runtime-1'
-    mocks.browserAvailability = { state: 'enabled', provider: 'paired-runtime' }
+    mocks.browserAvailability = { state: 'hidden', reason: 'streaming unavailable' }
 
     openFilePreviewToSide({
       language: 'html',
@@ -364,11 +363,13 @@ describe('openFileInBrowserTab', () => {
       sourceGroupId: 'group-1'
     })
 
-    expect(mocks.toastError).toHaveBeenCalledWith(
-      "Files outside the workspace can't be previewed on a paired server yet."
+    expect(mocks.createBrowserTab).toHaveBeenCalledWith(
+      ...docPreviewCall('/tmp/agent-scratch/report.html', {
+        split: { sourceGroupId: 'group-1', splitDirection: 'right', activate: false }
+      })
     )
     expect(mocks.createEmptySplitGroup).not.toHaveBeenCalled()
-    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
   it('keeps previewing an SSH document outside the worktree root', () => {

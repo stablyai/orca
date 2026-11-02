@@ -11,7 +11,8 @@ export const todos = atom<Todo[]>(
   ],
   { persist: 'plugin' }
 )
-export const draft = atom('')
+// Keyed, in memory: a save in a development folder hot reloads the panel and keeps the draft.
+export const draft = atom('draft', '')
 export const openCount = derived(() => read(todos).filter((todo) => !todo.done).length)
 export const percentDone = derived(() => {
   const list = read(todos)

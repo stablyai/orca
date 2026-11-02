@@ -5,7 +5,7 @@ import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/age
 import {
   legacyAgentSessionSelectedOptionId,
   type AgentSessionPromptResponse
-} from '../../shared/agent-session-question-answer'
+} from '../../shared/agent-session/agent-session-question-answer'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { openProviderTimelineRig } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'

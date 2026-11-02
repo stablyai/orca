@@ -101,26 +101,28 @@ describe('createPluginSourceModuleCompiler', () => {
     expect(code).toContain('export const add = (a, b) => (a + b)')
   })
 
-  it('serves a module that throws, naming the file, for bare imports and syntax errors', async () => {
+  it('serves a module that throws, naming file:line:column, for bare imports and syntax errors', async () => {
     const compile = inProcess()
     const bare = await compile({
       relativePath: 'src/panel.tsx',
-      bytes: encode("import React from 'react'\nexport default () => React\n"),
+      bytes: encode("// a panel\nimport React from 'react'\nexport default () => React\n"),
       exists
     })
-    expect(bare).toMatch(/^throw new Error\(".*src\/panel\.tsx: cannot import \\"react\\"/)
+    expect(bare).toMatch(/^throw new Error\("src\/panel\.tsx:2:19: cannot import \\"react\\"/)
     const broken = await compile({
       relativePath: 'src/util.ts',
-      bytes: encode('export const = 1'),
+      bytes: encode('const ok = 1\nexport const = 1'),
       exists
     })
-    expect(broken).toMatch(/^throw new Error\("src\/util\.ts: /)
+    // Sucrase's "Error transforming <file>:" prefix and "(line:column)" suffix become the location.
+    expect(broken).toBe('throw new Error("src/util.ts:2:14: Unexpected token")\n')
   })
 
   it('caches by content and transpiler, not by path alone', async () => {
     const transpile = vi.fn(async (_path: string, source: string) => ({
       ok: true as const,
       code: source,
+      mappings: '',
       imports: []
     }))
     const compile = createPluginSourceModuleCompiler({ transpile })

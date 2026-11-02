@@ -6,7 +6,7 @@ import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/ag
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
-import { resolveClaudeChildEnvSources } from '../claude/claude-structured-child-env'
+import { resolveClaudeChildEnvSources } from '../claude/structured/launch/claude-structured-child-env'
 import {
   createAcpStructuredLaunchResolver,
   createCodexStructuredLaunchResolver

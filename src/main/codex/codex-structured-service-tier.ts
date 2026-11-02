@@ -2,7 +2,7 @@ import type {
   AgentSessionFastModeSupport,
   AgentSessionModelOption,
   AgentSessionOptionChoice
-} from '../../shared/agent-session-wire'
+} from '../../shared/agent-session/agent-session-wire'
 import { readRecord } from './codex-item-field-readers'
 import type { CodexOpenedThread } from './codex-structured-thread-open'
 import type { CodexSession } from './codex-structured-session-state'

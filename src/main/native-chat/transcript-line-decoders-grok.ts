@@ -6,7 +6,7 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
-import { AGENT_SESSION_PASTED_IMAGE_SUFFIX_SOURCE } from '../../shared/agent-session-attachments'
+import { AGENT_SESSION_PASTED_IMAGE_SUFFIX_SOURCE } from '../../shared/agent-session/agent-session-attachments'
 
 export function decodeGrokTranscriptLine(
   line: string,

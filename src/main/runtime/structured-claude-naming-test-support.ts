@@ -5,7 +5,8 @@ import { dirname, join } from 'node:path'
 import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { appendTranscriptEntries } from '../claude/claude-provider-session-rename'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { fakeClaude, type FakeConnection } from '../claude/claude-structured-session-test-support'
+import { fakeClaude } from '../claude/structured/claude-structured-session-test-support'
+import type { FakeConnection } from '../claude/structured/claude-structured-session-test-support'
 import type { ClaudeStreamJsonLaunch } from '../claude/claude-stream-json-connection'
 import { createStructuredChatNamingHandler } from '../native-chat/structured-chat-naming'
 import {
@@ -21,9 +22,9 @@ import { createStructuredAgentSessionLogger } from '../native-chat/agent-session
 import { closeTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import {
   ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime,
-  type StructuredAgentSessionRuntimeDeps
-} from './structured-agent-session-runtime'
+  stopStructuredAgentSessionRuntime
+} from './agent-session/structured-agent-session-runtime'
+import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 
 export async function writeNativeNamingConversation(
   path: string,

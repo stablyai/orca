@@ -12,10 +12,37 @@ export type OrcaBridge = {
     has?(method: string): boolean
   }
   on?(event: string, handler: (payload: unknown) => void): OrcaDisposable
+  /** The frame shell's plugin data facades (plugin-panel-shell-facades.ts). */
+  plugin?: {
+    request(name: string, input?: unknown, options?: unknown): Promise<unknown>
+    on(event: string, handler: (payload: unknown) => void): OrcaDisposable
+  }
+  storage?: {
+    get(key: string): Promise<unknown>
+    set(key: string, value: unknown): Promise<void>
+    delete(key: string): Promise<void>
+    keys(): Promise<string[]>
+    onDidChange(handler: (change: { key: string }) => void): OrcaDisposable
+  }
+  settings?: {
+    get(key?: string): Promise<unknown>
+    set(key: string, value: unknown): Promise<void>
+    onDidChange(handler: (change: { key: string }) => void): OrcaDisposable
+  }
+  secrets?: {
+    get(key: string): Promise<string | null>
+    set(key: string, value: string): Promise<void>
+    delete(key: string): Promise<void>
+  }
 }
 export type OrcaColorScheme = 'light' | 'dark'
 export type OrcaTheme = { colorScheme: OrcaColorScheme }
-type PostedEvent = (typeof PLUGIN_DECLARATIVE_MESSAGES)['render' | 'error' | 'ready' | 'persist']
+type PostedEvent = (typeof PLUGIN_DECLARATIVE_MESSAGES)[
+  | 'render'
+  | 'error'
+  | 'ready'
+  | 'persist'
+  | 'retain']
 
 export type OrcaPanelContext = {
   /** Disposed when the panel closes or reloads. */
@@ -58,6 +85,8 @@ export type OrcaDeclarativeRuntime = {
   flush(): void
   /** Renders the mounted component again now. */
   rerender(): void
+  /** Logs `error` and posts it as `ui.error`, located at its first plugin stack frame. */
+  report(error: unknown): void
   readonly themeAtom: OrcaAtom<OrcaTheme>
   readonly bridge: OrcaBridge | null
   dispose(): void

@@ -8,7 +8,7 @@ import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import { activeProviderContext } from '../../shared/agent-session-provider-context'
+import { activeProviderContext } from '../../shared/agent-session/agent-session-provider-context'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
   createStore,
@@ -25,7 +25,7 @@ import { idOf, isRecord, resultOf } from './rpc/orchestration-session-caller-tes
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 import { createCoordinatorMailObservationClock } from './structured-chat-coordinator-observation-clock.test-fixture'
 import {
   attachParams,

@@ -5,8 +5,8 @@ import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity,
   AgentSessionJournalProviderHandle
-} from '../../../shared/agent-session-journal-identity'
-import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   type AgentJournalSubmission,

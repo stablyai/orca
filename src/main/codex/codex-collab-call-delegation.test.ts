@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { codexCollabRowAgentIds } from '../../shared/codex-collab-agent-tools'
 import { projectNativeChatTranscript } from '../../shared/native-chat/transcript/native-chat-transcript-projection'
 import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
-import { projectStructuredAgentSessionMessages } from '../../shared/structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '../../shared/agent-session/view/structured-agent-session-message-projection'
 import {
   nativeChatSubagentDelegation,
   type NativeChatSubagentDelegation

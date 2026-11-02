@@ -5,7 +5,7 @@ import { projectStructuredAgentSessionMessages } from '../../src/renderer/src/co
 import { nativeChatTurnMembership } from '../../src/shared/native-chat/transcript/native-chat-turn-membership.ts'
 import { nativeChatRowsInDrawOrder } from '../../src/shared/native-chat/transcript/native-chat-turn-grouping.ts'
 import { selectNativeChatTurnStatuses } from '../../src/shared/native-chat/transcript/native-chat-turn-status.ts'
-import { selectStructuredAgentSettledTurns } from '../../src/shared/structured-agent-session-turn-timing.ts'
+import { selectStructuredAgentSettledTurns } from '../../src/shared/agent-session/view/structured-agent-session-turn-timing.ts'
 import { buildNativeChatTranscriptSlots } from '../../src/renderer/src/components/native-chat/native-chat-transcript-slots.ts'
 
 async function snapshotWithLaterHistory() {

@@ -4,9 +4,9 @@ import type {
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
-import type { AgentSessionLatestTurn } from '../../../../shared/agent-session-wire'
-import type { StructuredAgentHostClock } from '../../../../shared/structured-agent-session-reducer'
-import { selectStructuredAgentTurnBars } from '../../../../shared/structured-agent-session-turn-timing'
+import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/agent-session-wire'
+import type { StructuredAgentHostClock } from '../../../../shared/agent-session/structured-agent-session-reducer'
+import { selectStructuredAgentTurnBars } from '../../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import {
   stepStructuredAgentTurnClock,
   type StructuredAgentTurnClockLatch
