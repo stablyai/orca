@@ -149,6 +149,44 @@ describe('federated read RPC transport routing', () => {
     }
   )
 
+  it.each([
+    ['orchestration.federationAck', { dispatchId: 'dispatch-1', throughSequence: 4 }],
+    ['orchestration.federationImport', { dispatchId: 'dispatch-1', items: [] }]
+  ])('falls back to one-shot for %s when the host lacks shared control', async (method, params) => {
+    const envelope = { orchestrationContractVersion: 1, orchestrationRequestId: 'relay-1' }
+    sendRemoteRuntimeRequestMock.mockImplementation(async (_pairing, calledMethod) => ({
+      id: calledMethod,
+      ok: true,
+      result: calledMethod === 'status.get' ? { capabilities: [] } : { acknowledgedThrough: 4 },
+      _meta: { runtimeId: 'runtime-worker' }
+    }))
+
+    await callRuntimeEnvironment(
+      userDataPath,
+      environmentId,
+      method,
+      params,
+      15_000,
+      undefined,
+      envelope
+    )
+
+    expect(sendRemoteRuntimeRequestMock.mock.calls.map((call) => call[1])).toEqual([
+      'status.get',
+      method
+    ])
+    expect(sendRemoteRuntimeRequestMock).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      method,
+      params,
+      15_000,
+      envelope,
+      undefined,
+      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+    )
+    expect(sendRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
+  })
+
   it('falls back to one-shot with the envelope when shared control is unavailable', async () => {
     const envelope = { orchestrationContractVersion: 1 }
     sendRemoteRuntimeRequestMock.mockImplementation(async (_pairing, method) =>
