@@ -3648,6 +3648,17 @@
     },
     "webviewReadyWatchdog": {
       "initializeFailed": "터미널이 초기화되지 않았습니다. 터미널 뷰에서 준비 신호를 받지 못했습니다."
+    },
+    "appearance": {
+      "title": "터미널 테마",
+      "loadFailed": "저장된 터미널 테마를 불러오지 못했습니다.",
+      "system": "자동 (휴대전화)",
+      "systemHint": "휴대전화의 밝은 모드 또는 어두운 모드를 따릅니다.",
+      "dark": "어둡게",
+      "light": "밝게",
+      "desktop": "데스크톱과 동일",
+      "desktopHint": "연결된 데스크톱의 터미널 색상을 사용합니다.",
+      "saveFailed": "터미널 테마를 저장하지 못했습니다. 선택한 테마는 앱을 다시 시작할 때까지 적용됩니다."
     }
   },
   "webShell": {

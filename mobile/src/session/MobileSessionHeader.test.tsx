@@ -24,7 +24,11 @@ vi.mock('lucide-react-native', () => ({
   Columns2: 'Icon',
   Plus: 'Icon',
   SquareChevronRight: 'Icon',
-  ListChecks: 'Icon'
+  ListChecks: 'Icon',
+  Palette: 'Icon'
+}))
+vi.mock('../terminal/MobileTerminalAppearancePicker', () => ({
+  MobileTerminalAppearancePicker: 'AppearancePicker'
 }))
 vi.mock('../components/nav-bar/NavBarButton', () => ({ NavBarButton: 'HeaderButton' }))
 vi.mock('../components/nav-bar/PullDownMenu', () => ({ PullDownMenu: 'PullDownMenu' }))
@@ -154,12 +158,13 @@ it('gives narrow Duo tabs the header width and keeps every collapsed action reac
   expect(controller.setShowHeaderMoreActions).toHaveBeenCalledWith(true)
   expect(menuLabels()).toEqual([
     ['File explorer', 'Source control', 'Quick commands'],
-    ['Terminal layout'],
+    ['Terminal appearance', 'Terminal layout'],
     ['New tab']
   ])
   for (const action of menuGroups().flat()) {
     act(() => action.onPress())
   }
+  expect(nodes('AppearancePicker')[0].props.visible).toBe(true)
   expect(controller.setShowTerminalLayout).toHaveBeenCalledWith(true)
   expect(controller.handleOpenNewTab).toHaveBeenCalledOnce()
   expect(controller.handleOpenQuickCommands).toHaveBeenCalledOnce()
@@ -189,7 +194,7 @@ it('puts a portrait session in one NavBar with source control and the ⋯ menu',
   expect(tree!.root.find((node) => String(node.type) === 'TabStrip').props.inTopBar).toBe(false)
   expect(menuLabels()).toEqual([
     ['File explorer', 'Checks', 'Agent History', 'Quick commands'],
-    ['Terminal layout'],
+    ['Terminal appearance', 'Terminal layout'],
     []
   ])
   const checks = menuGroups()[0][1]

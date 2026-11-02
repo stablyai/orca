@@ -4279,6 +4279,17 @@
     },
     "webviewReadyWatchdog": {
       "initializeFailed": "Terminal did not initialize - no ready signal from the terminal view"
+    },
+    "appearance": {
+      "title": "Terminal appearance",
+      "loadFailed": "Couldn’t load your saved terminal appearance.",
+      "system": "Automatic (phone)",
+      "systemHint": "Follow your phone’s light or dark setting.",
+      "dark": "Dark",
+      "light": "Light",
+      "desktop": "Match desktop",
+      "desktopHint": "Use the connected desktop’s terminal colors.",
+      "saveFailed": "Couldn’t save terminal appearance. Your selection applies until the app restarts."
     }
   },
   "mobileWebShell": {

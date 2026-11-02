@@ -1,10 +1,11 @@
-import type { RefObject } from 'react'
+import { useState, type RefObject } from 'react'
 import type { View } from 'react-native'
 import {
   Columns2,
   Folder,
   GitBranch,
   ListChecks,
+  Palette,
   Plus,
   SquareChevronRight
 } from 'lucide-react-native'
@@ -15,6 +16,7 @@ import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { MobileTerminalAppearancePicker } from '../terminal/MobileTerminalAppearancePicker'
 
 type Props = {
   controller: MobileSessionController
@@ -26,6 +28,7 @@ type Props = {
 export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsCollapsed }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const [showAppearance, setShowAppearance] = useState(false)
   const {
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
@@ -103,8 +106,15 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
       onPress: handleOpenQuickCommands
     }
   ]
-  const view: ActionSheetAction[] =
-    canSplitTerminals || terminalSplitActive
+  const view: ActionSheetAction[] = [
+    {
+      id: 'terminalAppearance',
+      label: t('terminal.appearance.title', 'Terminal appearance'),
+      icon: Palette,
+      closeBeforePress: true,
+      onPress: () => setShowAppearance(true)
+    },
+    ...(canSplitTerminals || terminalSplitActive
       ? [
           {
             id: 'terminalLayout',
@@ -114,7 +124,8 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
             onPress: () => setShowTerminalLayout(true)
           }
         ]
-      : []
+      : [])
+  ]
   const tabs: ActionSheetAction[] = actionsCollapsed
     ? [
         {
@@ -128,11 +139,17 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
       ]
     : []
   return (
-    <PullDownMenu
-      visible={showHeaderMoreActions}
-      anchorRef={anchorRef}
-      groups={[panels, view, tabs]}
-      onClose={() => setShowHeaderMoreActions(false)}
-    />
+    <>
+      <PullDownMenu
+        visible={showHeaderMoreActions}
+        anchorRef={anchorRef}
+        groups={[panels, view, tabs]}
+        onClose={() => setShowHeaderMoreActions(false)}
+      />
+      <MobileTerminalAppearancePicker
+        visible={showAppearance}
+        onClose={() => setShowAppearance(false)}
+      />
+    </>
   )
 }

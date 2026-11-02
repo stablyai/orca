@@ -16,7 +16,11 @@ const hosts = vi.hoisted(() => {
     TerminalWebView: component('TerminalWebView')
   }
 })
+vi.mock('@react-native-async-storage/async-storage', () => ({
+  default: { getItem: async () => null }
+}))
 vi.mock('react-native', () => ({
+  useColorScheme: () => 'dark',
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
   View: hosts.View,
   Text: hosts.Text,

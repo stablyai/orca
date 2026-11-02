@@ -3648,6 +3648,17 @@
     },
     "webviewReadyWatchdog": {
       "initializeFailed": "終端機未能初始化：未收到終端機檢視的就緒訊號"
+    },
+    "appearance": {
+      "title": "終端機外觀",
+      "loadFailed": "無法載入已儲存的終端機外觀。",
+      "system": "自動（手機）",
+      "systemHint": "跟隨手機的淺色或深色設定。",
+      "dark": "深色",
+      "light": "淺色",
+      "desktop": "與桌面一致",
+      "desktopHint": "使用所連接桌面的終端機色彩。",
+      "saveFailed": "無法儲存終端機外觀。所選設定會套用到應用程式重新啟動為止。"
     }
   },
   "webShell": {

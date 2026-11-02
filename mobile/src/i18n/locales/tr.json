@@ -3652,6 +3652,17 @@
     },
     "webviewReadyWatchdog": {
       "initializeFailed": "Terminal başlatılamadı - terminal görünümünden hazır sinyali alınamadı"
+    },
+    "appearance": {
+      "title": "Terminal görünümü",
+      "loadFailed": "Kaydedilen terminal görünümü yüklenemedi.",
+      "system": "Otomatik (telefon)",
+      "systemHint": "Telefonun açık veya koyu mod ayarını izler.",
+      "dark": "Koyu",
+      "light": "Açık",
+      "desktop": "Masaüstüyle aynı",
+      "desktopHint": "Bağlı masaüstünün terminal renklerini kullanır.",
+      "saveFailed": "Terminal görünümü kaydedilemedi. Seçiminiz uygulama yeniden başlatılana kadar geçerlidir."
     }
   },
   "webShell": {

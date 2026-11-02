@@ -5,6 +5,7 @@ import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-sha
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 vi.mock('react-native', () => ({
+  useColorScheme: () => 'dark',
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
   View: 'View',
   Text: 'Text',

@@ -56,7 +56,11 @@ vi.mock('lucide-react-native', () => ({
   LayoutGrid: 'Icon',
   Edit3: 'Icon',
   Trash2: 'Icon',
-  ListChecks: 'Icon'
+  ListChecks: 'Icon',
+  Palette: 'Icon'
+}))
+vi.mock('../terminal/MobileTerminalAppearancePicker', () => ({
+  MobileTerminalAppearancePicker: 'AppearancePicker'
 }))
 vi.mock('../components/BottomDrawer', () => ({
   BottomDrawer: ({ children, ...props }: { children: ReactNode; visible: boolean }) =>

@@ -3648,6 +3648,17 @@
     },
     "webviewReadyWatchdog": {
       "initializeFailed": "终端未能初始化：未收到终端视图的就绪信号"
+    },
+    "appearance": {
+      "title": "终端外观",
+      "loadFailed": "无法加载已保存的终端外观。",
+      "system": "自动（手机）",
+      "systemHint": "跟随手机的浅色或深色设置。",
+      "dark": "深色",
+      "light": "浅色",
+      "desktop": "与桌面一致",
+      "desktopHint": "使用所连接桌面的终端颜色。",
+      "saveFailed": "无法保存终端外观。所选设置将在应用重启前生效。"
     }
   },
   "webShell": {

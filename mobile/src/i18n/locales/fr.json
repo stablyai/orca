@@ -3746,6 +3746,17 @@
     },
     "webviewReadyWatchdog": {
       "initializeFailed": "Échec de l'initialisation du terminal - aucun signal de disponibilité reçu de la vue du terminal"
+    },
+    "appearance": {
+      "title": "Apparence du terminal",
+      "loadFailed": "Impossible de charger l’apparence enregistrée du terminal.",
+      "system": "Automatique (téléphone)",
+      "systemHint": "Suit le mode clair ou sombre du téléphone.",
+      "dark": "Sombre",
+      "light": "Clair",
+      "desktop": "Comme sur le bureau",
+      "desktopHint": "Utilise les couleurs du terminal du bureau connecté.",
+      "saveFailed": "Impossible d’enregistrer l’apparence du terminal. Votre choix s’applique jusqu’au redémarrage de l’application."
     }
   },
   "webShell": {

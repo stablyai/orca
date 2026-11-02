@@ -3652,6 +3652,17 @@
     },
     "webviewReadyWatchdog": {
       "initializeFailed": "Terminal konnte nicht initialisiert werden – kein Bereitschaftssignal von der Terminal-Ansicht"
+    },
+    "appearance": {
+      "title": "Terminaldarstellung",
+      "loadFailed": "Die gespeicherte Terminaldarstellung konnte nicht geladen werden.",
+      "system": "Automatisch (Telefon)",
+      "systemHint": "Folgt dem hellen oder dunklen Modus des Telefons.",
+      "dark": "Dunkel",
+      "light": "Hell",
+      "desktop": "Wie auf dem Desktop",
+      "desktopHint": "Verwendet die Terminalfarben des verbundenen Desktops.",
+      "saveFailed": "Die Terminaldarstellung konnte nicht gespeichert werden. Die Auswahl gilt bis zum Neustart der App."
     }
   },
   "webShell": {

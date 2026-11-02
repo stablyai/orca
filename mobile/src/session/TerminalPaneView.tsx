@@ -9,6 +9,7 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { TerminalFrame } from '../terminal/terminal-webview-messages'
 import { TerminalWebView } from '../terminal/TerminalWebView'
+import { useMobileTerminalTheme } from '../terminal/use-mobile-terminal-theme'
 import type {
   MobileTerminalTheme,
   TerminalKeyboardAvoidanceMetrics,
@@ -49,6 +50,7 @@ type TerminalPaneViewProps = {
   onCellBoxChange: (handle: string) => void
 }
 
+/** Updates appearance in place so theme changes preserve terminal state, including hidden panes. */
 export function TerminalPaneView({
   handle,
   active,
@@ -80,6 +82,7 @@ export function TerminalPaneView({
   onTextScaleChange,
   onCellBoxChange
 }: TerminalPaneViewProps) {
+  const resolvedTheme = useMobileTerminalTheme(terminalTheme)
   useMobileColorScheme()
   const t = useMobileTranslation()
   const [visited, setVisited] = useState(visible)
@@ -174,9 +177,10 @@ export function TerminalPaneView({
             ref={setRef}
             style={[
               styles.terminalWebView,
+              { backgroundColor: resolvedTheme?.theme.background },
               keyboardLift > 0 && { transform: [{ translateY: -keyboardLift }] }
             ]}
-            terminalTheme={terminalTheme}
+            terminalTheme={resolvedTheme}
             textScale={textScale}
             shownAtMount={visible}
             interactionActive={visible && appActive && routeFocused}

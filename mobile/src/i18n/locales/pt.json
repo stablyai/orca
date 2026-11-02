@@ -3746,6 +3746,17 @@
     },
     "webviewReadyWatchdog": {
       "initializeFailed": "O terminal não foi inicializado - a visualização do terminal não sinalizou que está pronta"
+    },
+    "appearance": {
+      "title": "Aparência do terminal",
+      "loadFailed": "Não foi possível carregar a aparência salva do terminal.",
+      "system": "Automático (telefone)",
+      "systemHint": "Segue o modo claro ou escuro do telefone.",
+      "dark": "Escuro",
+      "light": "Claro",
+      "desktop": "Igual ao desktop",
+      "desktopHint": "Usa as cores do terminal do desktop conectado.",
+      "saveFailed": "Não foi possível salvar a aparência do terminal. A seleção será aplicada até reiniciar o aplicativo."
     }
   },
   "webShell": {
