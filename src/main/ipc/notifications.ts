@@ -11,6 +11,8 @@ import type {
 } from '../../shared/notification-settings-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { readNotificationAuthorizationStatus } from './notification-authorization-status'
+import { dismissAnnouncedNotificationsForWorktree } from './dismiss-worktree-notifications'
+import { setWorktreeNotificationDismissal } from '../notifications/worktree-notification-dismissal'
 import { setTrayAttention } from '../tray/system-tray'
 import { isMainWindowVisible } from '../window/main-window-visibility'
 import { activeNotificationsById } from './native-notification-lifecycle'
@@ -97,6 +99,9 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
   const announced = createAnnouncedNotificationRegistry()
   // RPC-side worktree acknowledgements retire announcements through this instance.
   setSessionAnnouncedNotificationRegistry(announced)
+  // Install the retirement the worktree.set RPC calls; the headless build keeps
+  // its import graph free of the electron package by never importing this module.
+  setWorktreeNotificationDismissal(dismissAnnouncedNotificationsForWorktree)
 
   ipcMain.removeHandler('notifications:dismiss')
   ipcMain.handle(

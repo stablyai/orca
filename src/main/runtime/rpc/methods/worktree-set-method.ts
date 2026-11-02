@@ -1,7 +1,7 @@
 import { WorktreeSet } from '../../../../shared/rpc-contract/worktree-params'
 import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-name-provenance'
 import { getWorkspaceStatusWarning } from '../../../../shared/workspace-status-warning'
-import { dismissAnnouncedNotificationsForWorktree } from '../../../ipc/dismiss-worktree-notifications'
+import { dismissWorktreeNotifications } from '../../../notifications/worktree-notification-dismissal'
 import { defineMethod } from '../core'
 
 export const WORKTREE_SET_METHOD = defineMethod({
@@ -65,8 +65,9 @@ export const WORKTREE_SET_METHOD = defineMethod({
     if (params.isUnread === false) {
       // A whole-worktree read can arrive from the CLI or orchestration with no
       // focused window to drive the renderer's dismiss path; retire its
-      // announced notifications here so desktop ones close too (#37328).
-      dismissAnnouncedNotificationsForWorktree(worktree.id, runtime)
+      // announced notifications here so desktop ones close too (#37328). The
+      // Electron process installs the retirement; headless builds no-op.
+      dismissWorktreeNotifications(worktree.id, runtime)
     }
     const warning = getWorkspaceStatusWarning(
       params.workspaceStatus,
