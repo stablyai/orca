@@ -48,12 +48,7 @@ import {
 } from '../../../shared/host-spawn-admission'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
-  return {
-    id,
-    ok: true,
-    result,
-    _meta: meta
-  }
+  return { id, ok: true, result, _meta: meta }
 }
 
 export function errorResponse(
