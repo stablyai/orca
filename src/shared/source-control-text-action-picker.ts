@@ -45,10 +45,11 @@ export function textActionPickerEffectiveChoices(
   const effort = draft.choices.options?.effort ?? live?.defaultEffort
   return {
     model,
-    options: live?.efforts.some((level) => level.value === effort)
-      ? { effort }
-      : live?.defaultEffort
-        ? { effort: live.defaultEffort }
-        : {}
+    options:
+      effort !== undefined && live?.efforts.some((level) => level.value === effort)
+        ? { effort }
+        : live?.defaultEffort
+          ? { effort: live.defaultEffort }
+          : {}
   }
 }

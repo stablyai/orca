@@ -60,7 +60,7 @@ export function replaySourceControlAiModelEdits(input: {
     if ('sourceControlAi' in saved) {
       settings = { ...settings, sourceControlAi: saved.sourceControlAi }
     } else {
-      repo = { sourceControlAi: saved.update.sourceControlAi }
+      repo = { sourceControlAi: saved.update.sourceControlAi ?? undefined }
     }
   }
   return input.target.type === 'global'

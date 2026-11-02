@@ -104,7 +104,7 @@ export function saveSourceControlTextPickerDraft({
       nextChoice = currentSource.modelOverridesByOperation?.[operation]
       nextArgs = currentSource.actions?.[operation]?.agentArgs ?? nextArgs
     } else if (operation !== 'conversationName') {
-      currentRepo = { sourceControlAi: saved.update.sourceControlAi }
+      currentRepo = { sourceControlAi: saved.update.sourceControlAi ?? undefined }
       nextChoice = currentRepo.sourceControlAi?.modelOverridesByOperation?.[operation]
       nextArgs = currentRepo.sourceControlAi?.actionOverrides?.[operation]?.agentArgs ?? nextArgs
     }
