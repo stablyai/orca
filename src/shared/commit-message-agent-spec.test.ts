@@ -157,7 +157,8 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
 describe('buildArgs (Claude)', () => {
   const spec = getCommitMessageAgentSpec('claude')!
 
-  it('passes -p, output format, and model on every call', () => {
+  // Plan mode made the CLI run Sonnet for `haiku`; tools stay off without it.
+  it('passes the picked model with tools off and no plan mode', () => {
     const args = spec.buildArgs({ prompt: '', model: 'haiku' })
     expect(args).toEqual([
       '-p',
@@ -165,8 +166,10 @@ describe('buildArgs (Claude)', () => {
       'text',
       '--model',
       'haiku',
+      '--tools',
+      '',
       '--permission-mode',
-      'plan',
+      'dontAsk',
       '--strict-mcp-config',
       '--settings',
       '{"disableAllHooks":true}'
@@ -185,8 +188,10 @@ describe('buildArgs (Claude)', () => {
       'text',
       '--model',
       'sonnet',
+      '--tools',
+      '',
       '--permission-mode',
-      'plan',
+      'dontAsk',
       '--effort',
       'high',
       '--strict-mcp-config',

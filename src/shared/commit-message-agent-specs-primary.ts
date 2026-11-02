@@ -41,8 +41,11 @@ export function buildPrimaryCommitMessageAgentSpecs({
         'text',
         '--model',
         model,
+        // No tools instead of plan mode: plan mode runs Sonnet for `haiku`, and an explicit mode outranks settings.
+        '--tools',
+        '',
         '--permission-mode',
-        'plan',
+        'dontAsk',
         ...(thinkingLevel ? ['--effort', thinkingLevel] : []),
         ...claudeBackgroundArgs(strictMcp, userArgs)
       ],
