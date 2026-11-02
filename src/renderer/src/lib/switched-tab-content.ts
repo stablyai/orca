@@ -1,11 +1,7 @@
 import { useAppStore } from '@/store'
-import type { Tab } from '../../../shared/tab-types'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { logicalTabIdOf } from '../../../shared/runtime-mobile-session-tab-contracts'
 import type { WindowTabContentRequest } from '../../../shared/window-tab-content'
 import { switchedTab } from '../../../shared/workspace-layout/workspace-layout-tab-content'
 import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-pane-tree'
-import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
@@ -15,6 +11,7 @@ import { requestNativeChatComposerFocus } from '@/components/native-chat/use-nat
 import { recordUnlistedCreatedChat } from './structured-agent-session-unlisted-created-chats'
 import { retireSwitchedStructuredAgentSessionContent } from '@/runtime/structured-agent-session-tab-retirement'
 import { sourceTabGroupInView, sourceTabHoldsSelection } from './switch-source-selection'
+import { tabHolding } from './switched-tab-holding'
 
 /**
  * The window's half of a switch: the tab holding just the switch's source keeps its id, group,
@@ -63,23 +60,7 @@ export function setWindowTabContent(
     request.focus &&
     sourceTabHoldsSelection(state, worktreeId, tab) &&
     sourceTabGroupInView(state, worktreeId, tab.groupId)
-  // Kept: id, group, place, pin, color. Reset: what described the old content.
-  const kept: Tab = {
-    id: tab.id,
-    entityId: destination.kind === 'terminal' ? destination.terminalId : destination.sessionId,
-    groupId: tab.groupId,
-    worktreeId: tab.worktreeId,
-    ...(tab.executionHostId ? { executionHostId: tab.executionHostId } : {}),
-    contentType: content.kind,
-    label: content.kind === 'terminal' ? tab.label : defaultAgentChatLabel(content.agent),
-    customLabel: null,
-    color: tab.color,
-    sortOrder: tab.sortOrder,
-    createdAt: tab.createdAt,
-    ...(tab.isPinned ? { isPinned: true } : {}),
-    ...(tab.lastFocusedAt !== undefined ? { lastFocusedAt: tab.lastFocusedAt } : {}),
-    ...(content.kind === 'agent-session' ? { agentSessionAgent: content.agent } : {})
-  }
+  const kept = tabHolding(tab, content)
   useAppStore.setState((current) => ({
     unifiedTabsByWorktree: {
       ...current.unifiedTabsByWorktree,
@@ -142,44 +123,6 @@ export function setWindowTabContent(
     requestNativeChatComposerFocus(tab.id)
   }
   return { retargeted: true, tabId }
-}
-
-/**
- * Restart reconcile, through the same write: main's chat-tab record names tab T only once a switch
- * committed (the window already answered and T's CLI exited), so a window that restored T still
- * holding that terminal (it stopped before saving) takes the chat there. A terminal with a process
- * in this run is never taken: that is a newer switch's live CLI, not the stale half.
- */
-export function reconcileSwitchedChatTabs(
-  snapshots: readonly RuntimeMobileSessionTabsResult[]
-): void {
-  for (const snapshot of snapshots) {
-    for (const row of snapshot.tabs) {
-      if (row.type !== 'agent-session' || !row.logicalTabId) {
-        continue
-      }
-      const state = useAppStore.getState()
-      const tab = state.unifiedTabsByWorktree[snapshot.worktree]?.find(
-        (entry) => entry.id === row.logicalTabId
-      )
-      if (
-        tab?.contentType !== 'terminal' ||
-        (state.ptyIdsByTabId[tab.entityId]?.length ?? 0) > 0 ||
-        snapshot.tabs.some(
-          (other) => other.type === 'terminal' && other.ptyId && logicalTabIdOf(other) === tab.id
-        )
-      ) {
-        continue
-      }
-      setWindowTabContent({
-        worktreeId: snapshot.worktree,
-        tabId: tab.id,
-        expectSource: { kind: 'terminal', terminalId: tab.entityId },
-        content: { kind: 'agent-session', sessionId: row.sessionId, agent: row.agent },
-        focus: false
-      })
-    }
-  }
 }
 
 /** A switch changes what one of this window's tabs holds; main waits for whether it did. */

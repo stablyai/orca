@@ -99,51 +99,69 @@ it.each([
   }
 })
 
-it('keeps the chat and ends its parked terminal when the chat cannot leave the saved tabs', async () => {
-  const { runtime } = setupMainOwnedWorkspace()
-  await rig.store.setSessionTabVisibility(id, false)
-  await rig.store.setSessionTabVisibility(id, true, 'source-chat')
-  vi.spyOn(runtime, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
-    id: WORKTREE_ID,
-    path: rig.root,
-    connectionId: null,
-    repo: null,
-    folderWorkspace: null
-  })
-  const killFenced = vi.fn(async () => ({ outcome: 'ended' as const }))
-  runtime.setPtyController({
-    spawn: async () => ({
-      id: 'switch-pty',
-      incarnationId: '55555555-5555-4555-8555-555555555555'
-    }),
-    killFenced,
-    write: () => true,
-    kill: () => true,
-    stopAndWait: async () => true,
-    getForegroundProcess: async () => null
-  })
-  const changes: boolean[] = []
-  vi.spyOn(runtime, 'setSwitchedTabContent').mockImplementation(async (_ws, _request, decide) => {
-    changes.push(decide === true)
-    return { retargeted: true, tabId: 'source-chat' }
-  })
-  const record = rig.host.setSessionTabVisibility
-  vi.spyOn(rig.host, 'setSessionTabVisibility').mockImplementation(
-    async (sessionId, visible, tabId, options) => {
-      if (!visible) {
-        throw new Error('fixture journal failure')
+it.each([
+  ['commits', false],
+  ['cannot commit', true]
+] as const)(
+  'takes the chat out of the saved tabs before its tab changes: the record %s',
+  async (_name, fails) => {
+    const { runtime } = setupMainOwnedWorkspace()
+    await rig.store.setSessionTabVisibility(id, false)
+    await rig.store.setSessionTabVisibility(id, true, 'source-chat')
+    vi.spyOn(runtime, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
+      id: WORKTREE_ID,
+      path: rig.root,
+      connectionId: null,
+      repo: null,
+      folderWorkspace: null
+    })
+    const killFenced = vi.fn(async () => ({ outcome: 'ended' as const }))
+    runtime.setPtyController({
+      spawn: async () => ({
+        id: 'switch-pty',
+        incarnationId: '55555555-5555-4555-8555-555555555555'
+      }),
+      killFenced,
+      write: () => true,
+      kill: () => true,
+      stopAndWait: async () => true,
+      getForegroundProcess: async () => null
+    })
+    const steps: string[] = []
+    vi.spyOn(runtime, 'setSwitchedTabContent').mockImplementation(async (_ws, _request, decide) => {
+      steps.push(decide ? 'decide' : 'change')
+      return { retargeted: true, tabId: 'source-chat' }
+    })
+    const record = rig.host.setSessionTabVisibility
+    vi.spyOn(rig.host, 'setSessionTabVisibility').mockImplementation(
+      async (sessionId, visible, tabId, options) => {
+        if (!visible) {
+          steps.push('hide')
+          if (fails) {
+            throw new Error('fixture journal failure')
+          }
+        }
+        return record(sessionId, visible, tabId, options)
       }
-      return record(sessionId, visible, tabId, options)
+    )
+    const result = await executeStructuredSessionSwitch(
+      { sessionId: id, execution: { invocationId: 'hide-first', sourceTabId: 'source-chat' } },
+      { runtime },
+      'terminal'
+    )
+    if (fails) {
+      // The chat's tab never changed, so the chat stays and nothing will show the parked CLI.
+      expect(result.status).not.toBe('completed')
+      expect(steps).toEqual(['decide', 'hide'])
+      expect(rig.store.getSessionTabId(id)).toBe('source-chat')
+      expect(killFenced).toHaveBeenCalledOnce()
+      return
     }
-  )
-  const result = await executeStructuredSessionSwitch(
-    { sessionId: id, execution: { invocationId: 'hide-fails', sourceTabId: 'source-chat' } },
-    { runtime },
-    'terminal'
-  )
-  expect(result.status).not.toBe('completed')
-  // The decision only: the chat's tab never changed, so the chat stays and nothing shows the CLI.
-  expect(changes).toEqual([true])
-  expect(rig.store.getSessionTabId(id)).toBe('source-chat')
-  expect(killFenced).toHaveBeenCalledOnce()
-})
+    // A window that saved the terminal in the chat's tab can never restore beside a record still
+    // listing that chat there: the record went first.
+    expect(result).toMatchObject({ status: 'completed', sessionId: id })
+    expect(steps).toEqual(['decide', 'hide', 'change'])
+    expect(rig.store.getSessionTabId(id)).toBeNull()
+    expect(killFenced).not.toHaveBeenCalled()
+  }
+)

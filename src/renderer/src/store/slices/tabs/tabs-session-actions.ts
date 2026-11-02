@@ -1,4 +1,5 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { captureRestoredSwitchCandidates } from '@/lib/restored-switch-recovery'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace-session-hydration-keys'
@@ -93,6 +94,7 @@ export function createTabsSessionActions(
         undefined,
         new Set(options?.wslMovedChatWorkspaceKeys)
       )
+      captureRestoredSwitchCandidates(hydrated.unifiedTabsByWorktree, options?.replaceWorkspaceKeys)
       if (!options?.replaceWorkspaceKeys) {
         set(hydrated)
         return

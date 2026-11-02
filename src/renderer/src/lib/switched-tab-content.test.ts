@@ -4,8 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 
 // The window's half of a switch, through the real store: the tab keeps its id, place, pin, color
-// and selection and now holds the other content; and a restart that lost the window's save takes
-// the chat into the tab main's chat record names.
+// and selection and now holds the other content.
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/runtime/structured-agent-session-close', () => ({
@@ -250,20 +249,6 @@ it('changes nothing for a tab that no longer holds just the source', () => {
   ).toEqual({ retargeted: false })
   expect(tabs()).toEqual(before)
 })
-
-it.each([
-  ['its terminal never started this run: the chat takes the tab', {}, 'agent-session'],
-  // A live process there is a newer switch's CLI, never the stale half of a crashed one.
-  ['its terminal runs a process: the tab is left alone', { [SWITCHED]: ['pty-live'] }, 'terminal']
-] satisfies [string, Record<string, string[]>, string][])(
-  'after a restart that lost the window’s save, a tab main’s chat record names: %s',
-  (_name, live, kind) => {
-    seed(SWITCHED, live)
-    applyStructuredSessionTabSnapshots([chatFrame({ logicalTabId: SWITCHED })])
-    expect(tabs().find((tab) => tab.id === SWITCHED)?.contentType).toBe(kind)
-    expect(tabs().filter((tab) => tab.contentType === 'agent-session')).toHaveLength(1)
-  }
-)
 
 it('opens a split pane’s chat right after the tab holding the source terminal', () => {
   seed(SWITCHED)
