@@ -34,6 +34,8 @@ import {
   createClaudeSessionJournalTranslator
 } from './journal/claude-structured-session-journal-control'
 import { isRootClaudeFrame } from '../claude-turn-opening'
+import { createClaudeStartupOutcome } from './claude-structured-startup-outcome'
+import { claudeStartupResultError } from '../claude-stream-json-exit-error'
 
 export async function acquireClaudeSession({
   input,
@@ -58,6 +60,8 @@ export async function acquireClaudeSession({
   // Preserve the CLI diagnostic when SDK cleanup reports a generic error.
   let childEnded: Error | null = null
   const initProof = createClaudeInitProof()
+  // Owned by this acquisition alone, so a late frame cannot fail a replacement's open.
+  const startup = createClaudeStartupOutcome()
   const translator = createClaudeSessionJournalTranslator(
     input.events,
     String(input.fence),
@@ -67,7 +71,8 @@ export async function acquireClaudeSession({
       callbacks,
       sessionId
     },
-    () => (liveSession && sessions.get(sessionId) === liveSession ? liveSession : null)
+    () => (liveSession && sessions.get(sessionId) === liveSession ? liveSession : null),
+    (message) => startup.accept(claudeStartupResultError(message))
   )
   const contextActivity = translator?.contextActivity ?? 0
   const recordTurnEnd = claudeTurnResumePointWriter(sessionId, sessions, deps)
@@ -119,8 +124,6 @@ export async function acquireClaudeSession({
       startsTurn || message.type === 'result' ? { observedAt: deps.now?.() ?? Date.now() } : {}
     const requestedAt = turnOrigin?.requestedAt
     const startedSend = !startsTurn && liveSession ? claudeStartedUnechoedSend(liveSession) : null
-    // Read at arrival: a frame buffered before publication belongs to this acquisition's startup.
-    const startupPending = liveSession?.initialization.opened !== true
     // Retain send ownership during publication until the host receives its settlement.
     const session = liveSession
     const reported = session?.unreportedSettlements
@@ -152,7 +155,6 @@ export async function acquireClaudeSession({
           ...(requestedAt === null || requestedAt === undefined ? {} : { requestedAt }),
           ...(turnOrigin?.clientMessageId ? { clientMessageId: turnOrigin.clientMessageId } : {}),
           ...(startedSend ? { startedSend } : {}),
-          ...(startupPending ? { startupPending: true } : {}),
           ...observedAt
         })
         // Final snapshots and the turn settlement must reach the journal before its leaf can move.
@@ -267,6 +269,7 @@ export async function acquireClaudeSession({
         proof: initProof,
         contextActivity,
         onLateRefusal: (error) => callbacks.handleExit(sessionId, attempt, error),
+        startup,
         emit,
         naming
       }

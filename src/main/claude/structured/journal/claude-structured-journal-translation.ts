@@ -168,7 +168,8 @@ export function createClaudeJournalTranslator(
     ...messageContext,
     prompts,
     context,
-    goalBackgroundWork: deps.goalBackgroundWork ?? (() => 'unverifiable')
+    goalBackgroundWork: deps.goalBackgroundWork ?? (() => 'unverifiable'),
+    acceptStartupFailure: deps.acceptStartupFailure
   }
 
   return {
@@ -227,7 +228,7 @@ export function createClaudeJournalTranslator(
         prompts.retryPendingCancellations()
         prompts.cancel(event.promptKey)
       } else if (event.type === 'message' && event.message.type === 'result') {
-        journalClaudeResult(resultContext, event)
+        journalClaudeResult(resultContext, event.message, event.observedAt ?? Date.now())
       } else if (event.type === 'message') {
         backgroundTasks.observe(event.message, event.observedAt ?? Date.now())
         messageContext.usageLimits.observe(event.message)

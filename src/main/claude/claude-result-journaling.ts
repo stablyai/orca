@@ -11,9 +11,7 @@ import {
 import { claudeTurnEndForResult } from './claude-turn-lifecycle-item'
 import { claudeFrameParentRef, isRootClaudeFrame } from './claude-turn-opening'
 import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
-import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
-
-type ClaudeResultFrameEvent = Extract<ClaudeStructuredSessionEvent, { type: 'message' }>
+import type { ClaudeJournalTranslatorDeps } from './claude-journal-translator-contract'
 
 export type ClaudeResultJournalContext = Pick<
   ClaudeMessageJournalContext,
@@ -30,6 +28,20 @@ export type ClaudeResultJournalContext = Pick<
   prompts: ClaudeJournalPrompts
   context: ClaudeContextFacts
   goalBackgroundWork: () => ClaudeGoalBackgroundWork
+  acceptStartupFailure?: ClaudeJournalTranslatorDeps['acceptStartupFailure']
+}
+
+const namesClaudeInput = (value: unknown): boolean => typeof value === 'string' && value !== ''
+
+/** Input it answered (receipts, a resumed turn) or model round-trips mean the result is a turn's own. */
+function claudeResultShowsTurnWork(message: Record<string, unknown>): boolean {
+  return (
+    namesClaudeInput(message.user_message_uuid) ||
+    (Array.isArray(message.user_message_uuids) &&
+      message.user_message_uuids.some(namesClaudeInput)) ||
+    namesClaudeInput(message.resume_reason) ||
+    (typeof message.num_turns === 'number' && message.num_turns > 0)
+  )
 }
 
 export function journalClaudeResult(
@@ -45,13 +57,11 @@ export function journalClaudeResult(
     assistantFailures,
     usageLimits,
     threadGoal,
-    goalBackgroundWork
+    goalBackgroundWork,
+    acceptStartupFailure
   }: ClaudeResultJournalContext,
-  {
-    message,
-    observedAt = Date.now(),
-    startupPending
-  }: Pick<ClaudeResultFrameEvent, 'message' | 'observedAt' | 'startupPending'>
+  message: Record<string, unknown>,
+  observedAt: number
 ): void {
   // Child results can report failures but must never settle the root turn.
   const settlesTurn = isRootClaudeFrame(message)
@@ -102,8 +112,16 @@ export function journalClaudeResult(
     return
   }
   const alreadyShown = assistantFailures.resultAlreadyShown(message)
-  // The host's final startup failure reports a turnless failure before this acquisition opened.
-  if (failure && settlesTurn && endedTurnIdentity === null && startupPending === true) {
+  // Only a still-starting acquisition that fails its open with this failure may take over its row.
+  if (
+    failure &&
+    settlesTurn &&
+    endedTurnIdentity === null &&
+    !usageLimit &&
+    !alreadyShown &&
+    !claudeResultShowsTurnWork(message) &&
+    acceptStartupFailure?.(message) === true
+  ) {
     return
   }
   if ((failure || !isSettledClaudeResultKind(kind)) && !alreadyShown) {
