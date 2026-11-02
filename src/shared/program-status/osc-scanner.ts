@@ -1,5 +1,5 @@
 import {
-  PROGRAM_STATUS_MAX_SEQUENCE_BYTES,
+  PROGRAM_STATUS_MAX_BODY_BYTES,
   PROGRAM_STATUS_OSC_PREFIX,
   parseProgramStatusBody,
   type ProgramStatusMessage
@@ -17,7 +17,8 @@ type ProgramStatusStreamEvent =
 const PROMPT_START_MARKER = '\x1b]133;A'
 const FULL_RESET_MARKER = '\x1bc'
 const MARKERS = [PROGRAM_STATUS_OSC_PREFIX, PROMPT_START_MARKER, FULL_RESET_MARKER] as const
-const MAX_BODY_LENGTH = PROGRAM_STATUS_MAX_SEQUENCE_BYTES - PROGRAM_STATUS_OSC_PREFIX.length - 1
+/** UTF-16 units never outnumber UTF-8 bytes, so this bounds buffering; the parser enforces the byte cap. */
+const MAX_BODY_LENGTH = PROGRAM_STATUS_MAX_BODY_BYTES
 /** Bounds the `;key=value` options a prompt-start mark may carry before its terminator. */
 const MAX_PROMPT_START_OPTIONS_LENGTH = 512
 

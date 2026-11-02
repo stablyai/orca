@@ -71,4 +71,16 @@ describe('createProgramStatusOscScanner', () => {
     expect(scan(`\x1b]7501;state=working:junk=${'x'.repeat(5000)}`)).toEqual([])
     expect(scan('\x07\x1b]7501;state=done\x07')).toMatchObject([{ report: { state: 'done' } }])
   })
+
+  it('applies the byte cap to a multi-byte body split across chunks', () => {
+    const scan = createProgramStatusOscScanner()
+    const body = `state=idle:x=${'é'.repeat(2037)}`
+    expect(Buffer.byteLength(body)).toBe(4087)
+    expect(scan(`\x1b]7501;${body.slice(0, 2000)}`)).toEqual([])
+    expect(scan(`${body.slice(2000)}\x07`)).toMatchObject([{ report: { state: 'idle' } }])
+    expect(scan(`\x1b]7501;${body.slice(0, 2000)}`)).toEqual([])
+    expect(scan(`${body.slice(2000)}a\x07\x1b]7501;state=done\x07`)).toMatchObject([
+      { report: { state: 'done' } }
+    ])
+  })
 })
