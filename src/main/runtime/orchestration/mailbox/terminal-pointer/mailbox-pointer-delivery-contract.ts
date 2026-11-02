@@ -35,4 +35,5 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   lastUserInputAt?: (ptyId: string) => number | undefined
   isOrcaWindowFocused?: () => boolean
   now?: () => number
+  scheduleTypingQuietRetry?: (ptyId: string, mailboxHandle: string) => void
 }
