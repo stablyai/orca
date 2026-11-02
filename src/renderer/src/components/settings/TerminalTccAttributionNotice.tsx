@@ -5,7 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { openTerminalManageSessions } from './open-terminal-manage-sessions'
 export { MANAGE_SESSIONS_SECTION_ID } from './open-terminal-manage-sessions'
 
-/** Updates delete the daemon’s responsible app binary, silently severing macOS TCC grants for terminals (osascript -25211); surface recovery beside affected permissions (STA-3491). */
+/** A forked daemon outlives the app macOS holds responsible for it, severing TCC grants for terminals (osascript -25211, repeat App Data prompts); surface recovery beside affected permissions (STA-3491, #12971). */
 export function useMacTccAttributionSevered(refreshRevision = 0): boolean {
   const [severed, setSevered] = useState(false)
 
@@ -60,7 +60,7 @@ export function TerminalTccAttributionNotice(props: {
           <p className="text-xs leading-snug">
             {translate(
               'auto.components.settings.TerminalTccAttributionNotice.body',
-              'The terminal daemon was started by an Orca install that no longer exists, so macOS can’t attribute its commands to Orca — Accessibility and Automation grants are silently ignored (osascript fails with error -25211). Restarting the daemon fixes this; running terminal sessions will close.'
+              'The terminal daemon was started by an Orca process that has since exited, so macOS can’t attribute its commands to Orca — Accessibility and Automation grants are silently ignored (osascript fails with error -25211), and prompts to access data from other apps come back on every command. Restarting the daemon fixes this; running terminal sessions will close.'
             )}
           </p>
         </div>

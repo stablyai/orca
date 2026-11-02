@@ -48,6 +48,27 @@ Only Developer ID builds exercise the helper path in practice. A local ad hoc bu
 requirement is a cdhash, which the helper (a different binary) cannot match, so it falls back to the
 fork.
 
+## Why a forked daemon that outlives the app is severed
+
+Measured on macOS 27.2 with `tccd`'s own `AUTHREQ_ATTRIBUTION` log (#12971). `tccd` scopes an App
+Data grant to the responsible process's pid, pid version and boot UUID. Terminal children have the
+daemon's responsible process, and `/usr/bin/login` does not change that:
+
+| Host                             | `responsible` for a new child                  | Session grant              |
+| -------------------------------- | ---------------------------------------------- | -------------------------- |
+| Forked daemon, app still running | the app's pid                                  | Lasts until the app quits  |
+| Forked daemon, app exited        | the child's own pid, still `com.stablyai.orca` | New session every process  |
+| launchd terminal host            | the host's pid                                 | Lasts until the host exits |
+
+So a forked daemon adopted by a later app launch raises the prompt on every run, however often the
+user allows it. `getMacDaemonTccAttributionHealth` reports it as `severed`: with no live sessions
+it is replaced, and otherwise the notice offers a restart.
+
+`responsibility_spawnattrs_setdisclaim` is not the fix. It makes every descendant its own
+responsible process, which starts a new session per process, and it makes Apple tools such as `ls`
+fail with `EPERM` in `~/Documents` with no prompt (`Platform binary prompting is 'Deny'`), also
+through `login`.
+
 ## Why the helper is `com.stablyai.orca`
 
 TCC records grants against the designated requirement, which for Orca is the identifier plus team.

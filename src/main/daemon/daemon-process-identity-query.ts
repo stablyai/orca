@@ -58,3 +58,20 @@ export async function getPsProcessIdentityAsync(pid: number): Promise<ProcessIde
     return null
   }
 }
+
+export async function getPsParentPidAsync(pid: number): Promise<number | null> {
+  try {
+    const stdout = await new Promise<string>((resolve, reject) => {
+      execFile(
+        'ps',
+        ['-p', String(pid), '-o', 'ppid='],
+        { encoding: 'utf8', env: psLocaleEnvironment(), timeout: PS_IDENTITY_TIMEOUT_MS },
+        (error, output) => (error ? reject(error) : resolve(output))
+      )
+    })
+    const parentPid = Number(stdout.trim())
+    return stdout.trim() && Number.isSafeInteger(parentPid) ? parentPid : null
+  } catch {
+    return null
+  }
+}

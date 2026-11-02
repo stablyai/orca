@@ -1,8 +1,13 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { basename } from 'node:path'
 import { getDaemonPidPath } from './daemon-spawner'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import { readVerifiedDaemonPid } from './daemon-pid-identity'
+import { getPsParentPidAsync } from './daemon-process-identity-query'
+import { MAC_TERMINAL_HOST_EXECUTABLE } from './macos-daemon-bundle'
 import { PROTOCOL_VERSION } from './types'
+
+const LAUNCHD_PID = 1
 
 // Unknown attribution must not trigger daemon replacement.
 export type MacDaemonTccAttributionHealth = 'intact' | 'severed' | 'unknown'
@@ -61,10 +66,22 @@ export async function getMacDaemonTccAttributionHealth(
     if (!parsedPid) {
       return 'unknown'
     }
-    if (parsedPid.spawnerExecPath) {
-      return existsSync(parsedPid.spawnerExecPath) ? 'intact' : 'severed'
+    if (!parsedPid.spawnerExecPath) {
+      return 'unknown'
     }
-    return 'unknown'
+    if (!existsSync(parsedPid.spawnerExecPath)) {
+      return 'severed'
+    }
+    // The launchd terminal host is its own responsible process.
+    if (basename(parsedPid.spawnerExecPath) === MAC_TERMINAL_HOST_EXECUTABLE) {
+      return 'intact'
+    }
+    // Once the forking app exits, tccd sees each new child as its own session, so session-scoped grants never stick (#12971).
+    const parentPid = await getPsParentPidAsync(parsedPid.pid)
+    if (parentPid === null) {
+      return 'unknown'
+    }
+    return parentPid === LAUNCHD_PID ? 'severed' : 'intact'
   })()
   if (cacheKey) {
     cachedMacDaemonTccAttributionHealth = { key: cacheKey, pending }

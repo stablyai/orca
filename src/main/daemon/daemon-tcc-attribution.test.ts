@@ -7,6 +7,7 @@ import { getDaemonPidPath } from './daemon-spawner'
 
 import { getMacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
 import { getProcessStartedAtMs } from './daemon-process-start-time'
+import { MAC_TERMINAL_HOST_EXECUTABLE } from './macos-daemon-bundle'
 
 // Exercise real PID verification with a child whose argv matches the daemon.
 function spawnDaemonLikeProcess(socketPath: string, tokenPath: string) {
@@ -88,6 +89,63 @@ describe('macOS daemon TCC attribution health', () => {
       const spawnerPath = join(dir, 'Orca')
       writeFileSync(spawnerPath, '', 'utf8')
       writePidFile({ spawnerExecPath: spawnerPath, appVersion: '1.2.2' })
+      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('intact')
+    })
+  })
+
+  describe('after the app that forked the daemon has exited', () => {
+    let orphanPid: number | null = null
+
+    afterEach(() => {
+      if (orphanPid) {
+        process.kill(orphanPid, 'SIGKILL')
+        orphanPid = null
+      }
+    })
+
+    // The intermediate shell exits at once, so launchd adopts the daemon-like process.
+    async function writeOrphanedDaemonPidFile(spawnerExecPath: string): Promise<void> {
+      const pid = await new Promise<number>((resolve, reject) => {
+        const shell = spawn(
+          '/bin/sh',
+          [
+            '-c',
+            '"$0" -e "setTimeout(() => {}, 30000)" daemon-entry --socket "$1" --token "$2" >/dev/null 2>&1 & echo $!',
+            process.execPath,
+            socketPath,
+            tokenPath
+          ],
+          { stdio: ['ignore', 'pipe', 'ignore'] }
+        )
+        let stdout = ''
+        shell.stdout.on('data', (chunk) => (stdout += String(chunk)))
+        shell.on('error', reject)
+        shell.on('close', () => resolve(Number(stdout.trim())))
+      })
+      orphanPid = pid
+      const startedAtMs = await getStartedAtMs(pid)
+      writeFileSync(getDaemonPidPath(dir), JSON.stringify({ pid, startedAtMs, spawnerExecPath }), {
+        mode: 0o600
+      })
+    }
+
+    it('reports a forked daemon as severed even though the app binary still exists', async () => {
+      if (process.platform !== 'darwin') {
+        return
+      }
+      const spawnerPath = join(dir, 'Orca')
+      writeFileSync(spawnerPath, '', 'utf8')
+      await writeOrphanedDaemonPidFile(spawnerPath)
+      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('severed')
+    })
+
+    it('reports the launchd terminal host as intact because it is its own responsible process', async () => {
+      if (process.platform !== 'darwin') {
+        return
+      }
+      const hostPath = join(dir, MAC_TERMINAL_HOST_EXECUTABLE)
+      writeFileSync(hostPath, '', 'utf8')
+      await writeOrphanedDaemonPidFile(hostPath)
       expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('intact')
     })
   })

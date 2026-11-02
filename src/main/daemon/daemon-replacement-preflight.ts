@@ -161,7 +161,7 @@ export async function prepareDaemonReplacement(
           )
           if (liveSessionCount === 0) {
             console.warn(
-              '[daemon] Replacing daemon whose macOS TCC attribution is severed (spawning app binary no longer exists)'
+              '[daemon] Replacing daemon whose macOS TCC attribution is severed (its spawning app has exited or no longer exists)'
             )
             pendingReplacement = { reason: 'severed_tcc_attribution', liveSessionCount }
             confirmedReplacement = (await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION))
