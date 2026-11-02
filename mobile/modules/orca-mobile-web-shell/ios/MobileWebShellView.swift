@@ -220,7 +220,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
       webView.leadingAnchor.constraint(equalTo: leadingAnchor),
       webView.trailingAnchor.constraint(equalTo: trailingAnchor)
     ])
-    for name in [UIWindow.didBecomeKeyNotification, UIApplication.didBecomeActiveNotification] {
+    for name in [UIWindow.didBecomeKeyNotification, UIScene.didActivateNotification, UIApplication.didBecomeActiveNotification] {
       windowObservers.append(NotificationCenter.default.addObserver(
         forName: name, object: nil, queue: .main
       ) { [weak self] _ in
