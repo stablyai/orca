@@ -6,10 +6,10 @@ import { createGlobalSettingsFixture } from '../../../../shared/global-settings-
 import { useAppStore } from '../../store'
 import { TerminalInteractionSection } from './TerminalInteractionSection'
 
-const i18nMock = vi.hoisted(() => ({
-  language: 'en',
-  translations: {} as Record<string, string>
-}))
+const i18nMock = vi.hoisted(() => {
+  const translations: Record<string, string> = {}
+  return { language: 'en', translations }
+})
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (key: string, defaultValue: string) => i18nMock.translations[key] ?? defaultValue,
