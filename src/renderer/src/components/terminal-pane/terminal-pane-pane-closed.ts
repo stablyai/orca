@@ -16,6 +16,7 @@ import {
 } from './deferred-split-pane-handoff'
 import type { PaneClosedHandlerContext } from './terminal-pane-mount-context'
 
+/** Creates the PaneManager `onPaneClosed` callback. */
 export function createTerminalPaneClosedHandler(
   context: Omit<PaneClosedHandlerContext, 'paneId' | 'closedPane'>
 ): (paneId: number, closedPane?: PaneClosedHandlerContext['closedPane']) => void {
@@ -50,6 +51,7 @@ export function createTerminalPaneClosedHandler(
     const isRetiredSurface = closedPane?.reason === 'retire'
     disposeMapEntry(refs.linkProviderDisposablesRef.current, paneId)
     disposeMapEntry(refs.terminalHandleLinkDisposablesRef.current, paneId)
+    disposeMapEntry(refs.commandLinkDisposablesRef.current, paneId)
     disposeMapEntry(refs.linkifierClickPrimingDisposablesRef.current, paneId)
     const gesture = refs.linkPointerGesturesRef.current.get(paneId)
     gesture?.dispose()
