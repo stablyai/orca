@@ -176,7 +176,9 @@ async function switchToChat(
     ? await host.captureSwitchStop(
         adopt ? undefined : sessionId,
         before,
-        Boolean(row && mainAgentState(row) === 'working'),
+        // Any open turn the switch ends is the user's stop, also one waiting on a permission
+        // prompt or a question; the Escape before the stop stays for a working agent only.
+        Boolean(row && mainAgentState(row) !== 'done'),
         deadline
       )
     : undefined

@@ -92,12 +92,13 @@ function piHistoryCut(
 }
 
 /**
- * This capture is used only with an explicit Stop and positive exit of its exact CLI. `retained`:
+ * This capture is used only with an explicit Stop and positive exit of its exact CLI. `turnOpen`:
+ * the CLI's row showed a turn in progress (working, or waiting on the user). `retained`:
  * the chat that already holds the conversation, whose own history the read starts after.
  */
 export async function captureSwitchStoppedCliTurn(
   source: SwitchTranscriptSource,
-  working: boolean,
+  turnOpen: boolean,
   deadline: AgentSessionSwitchDeadline,
   retained?: { journal: AgentSessionJournal; resumeCursor?: string }
 ): Promise<SwitchStoppedCliTurn | undefined> {
@@ -106,7 +107,7 @@ export async function captureSwitchStoppedCliTurn(
   if (cut && !cut.mergeable) {
     throw transcriptUnreadable()
   }
-  if (!working) {
+  if (!turnOpen) {
     return undefined
   }
   const prepared = await prepare(source, deadline, cut?.entry)

@@ -24,6 +24,10 @@ import {
 import { executeStructuredSessionSwitch } from './structured-agent-session-switch-execution'
 import * as legacyImport from '../../../native-chat/agent-session-journal/journal-legacy-import'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
+import { createHookListenerState } from '../../../../shared/agent-hook-listener/listener-state'
+import { normalizeClaudeEvent } from '../../../../shared/agent-hook-listener/providers/claude-events'
+import { codexHookEventState } from '../../../../shared/agent-hook-listener/providers/codex-state'
+import { hookAt, loadCapture } from '../../../agent-hooks/claude-cancel-capture.test-fixture'
 vi.mock('../../../native-chat/agent-session-journal/journal-legacy-import', async (load) => {
   const actual = await load<typeof legacyImport>()
   return { ...actual, prepareLegacyTranscriptImport: vi.fn(actual.prepareLegacyTranscriptImport) }
@@ -165,6 +169,93 @@ it('settles a CLI turn left open once its own pane is stopped', async () => {
     .filter((turn) => turn.turnId === 'cli-turn')
   expect(turns).toEqual([expect.objectContaining({ state: 'interrupted' })])
   expect(turns[0]).not.toHaveProperty('outcome')
+})
+
+/** Claude 2.1.301's recorded hooks up to its first permission prompt, through the listener. */
+function claudePermissionRowState(): string | undefined {
+  const records = loadCapture('claude-permission-approve-deny-hooks')
+  const state = createHookListenerState()
+  let parsed: ReturnType<typeof normalizeClaudeEvent> = null
+  for (const index of [0, 1, 2]) {
+    const { payload } = hookAt(records, index)
+    parsed =
+      normalizeClaudeEvent(state, payload.hook_event_name, '', `${TAB_ID}:${LEAF_A}`, payload) ??
+      parsed
+    if (payload.hook_event_name === 'PermissionRequest') {
+      break
+    }
+  }
+  return parsed?.state
+}
+
+// A switch is the user's stop: a turn waiting on a permission prompt or a question reads
+// "Interrupted", as a working one does, without the Escape that would answer the prompt.
+it.each([
+  { agent: 'Claude, at a permission prompt (recorded)', row: claudePermissionRowState },
+  {
+    agent: 'Codex, at a permission prompt',
+    row: () => codexHookEventState('PermissionRequest', 'shell')
+  },
+  {
+    agent: 'Codex, asking a question',
+    row: () => codexHookEventState('PreToolUse', 'request_user_input')
+  }
+])('a turn waiting on the user that the switch ends reads Interrupted: $agent', async (c) => {
+  const rowState = c.row()
+  expect(rowState).toBe('waiting')
+  await openCliTurn()
+  const { runtime } = setupMainOwnedWorkspace()
+  const incarnationId = '11111111-1111-4111-8111-111111111111'
+  runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
+  const source = runtime.resolveTerminalPane(`${TAB_ID}:${LEAF_A}`, WORKTREE_ID)
+  if (!source.presentation) {
+    throw new Error('missing captured source')
+  }
+  const stopped = vi.fn(async () => {
+    await runtime.onPtyExit(PTY_A, 0, incarnationId, { hostExitConfirmed: true })
+    return true
+  })
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => false,
+    stopAndWait: stopped,
+    getForegroundProcess: async () => 'codex'
+  })
+  const sent = vi.spyOn(runtime, 'sendTerminal')
+  vi.spyOn(runtime.agentTransitions, 'latestRow').mockImplementation((paneKey) => ({
+    state: rowState as 'waiting',
+    prompt: '',
+    paneKey,
+    connectionId: null,
+    receivedAt: 0,
+    stateStartedAt: 0
+  }))
+  const answer = await executeStructuredSessionSwitch(
+    {
+      sessionId: id,
+      execution: {
+        invocationId: 'waiting',
+        source: {
+          terminal: source.handle,
+          expectedIncarnationId: incarnationId,
+          originalPresentation: source.presentation
+        }
+      }
+    },
+    { runtime },
+    'chat'
+  )
+  expect(answer).toEqual({ status: 'completed', sessionId: id })
+  expect(sent).not.toHaveBeenCalled()
+  expect(stopped).toHaveBeenCalledOnce()
+  const { journal } = await rig.host.collaboratorsForTests().lifetime.conversation(id)
+  const turns = journal
+    .snapshot()
+    .items.flatMap(({ body }) => (body.kind === 'turn' ? [body] : []))
+    .filter((turn) => turn.turnId === 'cli-turn')
+  expect(turns).toEqual([
+    expect.objectContaining({ state: 'interrupted', outcome: 'cancellation' })
+  ])
 })
 
 it.each([false, true])(
