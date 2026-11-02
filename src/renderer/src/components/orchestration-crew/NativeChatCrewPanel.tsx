@@ -22,21 +22,17 @@ export function NativeChatCrewPanel({
   return <OrchestrationCrewPanel target={target} party={party} isVisible={isVisible} />
 }
 
-/** The chat transcript: the crew panel overlays it, never the header's buttons or the composer below it. */
+/** Wraps a native chat's transcript: the crew panel overlays it, never the header's buttons or the composer below it. */
 export function NativeChatCrewFrame({
-  pane,
+  crew,
   children
 }: {
-  pane: { target: RuntimeClientTarget; sessionId: string; isVisible: boolean }
+  crew: React.ComponentProps<typeof NativeChatCrewPanel>
   children: React.ReactNode
 }): React.JSX.Element {
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      <NativeChatCrewPanel
-        target={pane.target}
-        sessionId={pane.sessionId}
-        isVisible={pane.isVisible}
-      />
+      <NativeChatCrewPanel {...crew} />
       {children}
     </div>
   )

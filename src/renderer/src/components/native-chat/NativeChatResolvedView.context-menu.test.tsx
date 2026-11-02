@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 import type { ComponentProps } from 'react'
-import type { NativeChatCrewPanel } from '../orchestration-crew/NativeChatCrewPanel'
+import type { NativeChatCrewFrame } from '../orchestration-crew/NativeChatCrewPanel'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ImageBlobPng from '@/lib/image-blob-png'
@@ -29,9 +29,9 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('../orchestration-crew/NativeChatCrewPanel', () => ({
-  NativeChatCrewPanel: (props: ComponentProps<typeof NativeChatCrewPanel>) => {
-    mocks.crewVisibility(props.isVisible)
-    return null
+  NativeChatCrewFrame: ({ crew, children }: ComponentProps<typeof NativeChatCrewFrame>) => {
+    mocks.crewVisibility(crew.isVisible)
+    return children
   }
 }))
 

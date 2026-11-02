@@ -276,7 +276,9 @@ export function NativeChatStructuredSession(
       data-native-chat-scheme={appearanceStyle.colorScheme}
     >
       {nativeChatPaneHeader(props, ownerWorktreeId, appearanceStyle.colorScheme, handOff)}
-      <NativeChatCrewFrame pane={props}>
+      <NativeChatCrewFrame
+        crew={{ target: props.target, sessionId: props.sessionId, isVisible: props.isVisible }}
+      >
         <NativeChatContextClearFade clearing={controller.contextClear.clearing}>
           {find.isOpen ? <NativeChatFindBar find={find} isVisible={props.isVisible} /> : null}
           {viewState.kind === 'loading' || (viewState.kind === 'error' && !readFailure) ? (
