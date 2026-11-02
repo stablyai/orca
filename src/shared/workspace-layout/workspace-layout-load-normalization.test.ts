@@ -246,7 +246,6 @@ describe('Loader precedence for stored data that disagrees with itself, and its 
     const entry = stored.unifiedTabs![GIT_KEY]![0]!
     entry.id = id
     entry.entityId = id
-    entry.hostTerminalAlias = alias
     entry.executionHostId = alias.executionHostId
     stored.tabGroups![GIT_KEY]![0]!.tabOrder[0] = id
     stored.tabGroups![GIT_KEY]![0]!.activeTabId = id
@@ -258,9 +257,9 @@ describe('Loader precedence for stored data that disagrees with itself, and its 
     delete stored.terminalLayoutsByTabId['tab-a']
     const saved = saveWorkspaceLayout(load(stored))
     expect(saved.tabsByWorktree[GIT_KEY]![0]!.hostTerminalAlias).toEqual(alias)
+    expect(saved.unifiedTabs![GIT_KEY]![0]).not.toHaveProperty('hostTerminalAlias')
     expect(saved.unifiedTabs![GIT_KEY]![0]).toMatchObject({
-      executionHostId: 'runtime:host',
-      hostTerminalAlias: alias
+      executionHostId: 'runtime:host'
     })
     delete stored.terminalLayoutsByTabId[id]
     const restored = saveWorkspaceLayout(load(stored))

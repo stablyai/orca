@@ -154,14 +154,12 @@ const ENTRY_FIELDS = {
 
 const TERMINAL_ENTRY = {
   ...ENTRY_FIELDS,
-  hostTerminalAlias: own('tab.terminal', 'hostTerminalAlias'),
   executionHostId: { from: 'model.hostId', via: ['tab.terminal.hostTerminalAlias'] },
   label: own('terminalRow', 'title')
 } as const satisfies Record<keyof Tab, DiskFieldWritten>
 
 const CONTENT_ENTRY = {
   ...ENTRY_FIELDS,
-  hostTerminalAlias: 'unwritten',
   executionHostId: {
     from: 'model.hostId',
     via: ['file.externalSshTargetId', 'file.runtimeEnvironmentId']

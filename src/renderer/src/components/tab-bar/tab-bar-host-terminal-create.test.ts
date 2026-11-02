@@ -207,7 +207,14 @@ it.each(['created', 'repaired', 'refresh-failed'])(
     expect(mocks.call).toHaveBeenCalledTimes(12)
     const source = store.getState().worktreesByRepo.repo1![0]!
     const aliasEntry = store.getState().unifiedTabsByWorktree[LOCAL]![0]!
-    expect(isUnifiedTabOwnedByWorktree(aliasEntry, source, new Set())).toBe(true)
+    expect(
+      isUnifiedTabOwnedByWorktree(
+        aliasEntry,
+        source,
+        new Set(),
+        store.getState().tabsByWorktree[LOCAL]?.[0]
+      )
+    ).toBe(true)
     store.setState({
       worktreesByRepo: {
         repo1: [{ ...source, hostId: 'local', runtimeOwnerEnvironmentId: 'other-runtime' }]

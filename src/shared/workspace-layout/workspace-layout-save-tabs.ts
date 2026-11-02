@@ -95,7 +95,6 @@ export function saveTabBarEntry(
     worktreeId: scope.worktreeId,
     executionHostId: tabExecutionHostId(tab, scope.workspace, scope.hostId),
     contentType: tab.kind,
-    ...(tab.kind === 'terminal' ? pickStoredFields(tab.terminal, ['hostTerminalAlias']) : {}),
     label,
     ...(tab.generatedTitle !== undefined ? { generatedLabel: tab.generatedTitle } : {}),
     ...pickStoredFields(tab, SHARED_OPTIONAL_FIELDS),

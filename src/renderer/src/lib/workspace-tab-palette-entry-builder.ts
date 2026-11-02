@@ -175,10 +175,11 @@ export function buildSearchableWorkspaceTabEntries({
     const unifiedTabs = unifiedTabsByWorktree[worktree.id] ?? []
     const duplicateTabIds = findDuplicateIds(unifiedTabs)
     for (const rawTab of unifiedTabs) {
+      const row = terminalTabs.get(rawTab.entityId)
       if (
         duplicateTabIds.has(rawTab.id) ||
         !isWorkspaceTabContentType(rawTab.contentType) ||
-        !isUnifiedTabOwnedByWorktree(rawTab, worktree, ambiguousWorktreeIds)
+        !isUnifiedTabOwnedByWorktree(rawTab, worktree, ambiguousWorktreeIds, row ?? undefined)
       ) {
         continue
       }
@@ -211,19 +212,18 @@ export function buildSearchableWorkspaceTabEntries({
         isCurrentWorktree
       }
       if (tab.contentType === 'terminal') {
-        const terminalTab = terminalTabs.get(tab.entityId)
-        if (terminalTab === null) {
+        if (row === null) {
           continue
         }
-        const terminalTitle = terminalTab
-          ? resolveTerminalTabTitle(terminalTab, generatedTitlesEnabled, 'Terminal')
+        const terminalTitle = row
+          ? resolveTerminalTabTitle(row, generatedTitlesEnabled, 'Terminal')
           : 'Terminal'
         const title = resolveUnifiedTabLabel(
           {
             ...tab,
-            customLabel: tab.customLabel ?? terminalTab?.customTitle ?? null,
-            quickCommandLabel: tab.quickCommandLabel ?? terminalTab?.quickCommandLabel,
-            generatedLabel: tab.generatedLabel ?? terminalTab?.generatedTitle
+            customLabel: tab.customLabel ?? row?.customTitle ?? null,
+            quickCommandLabel: tab.quickCommandLabel ?? row?.quickCommandLabel,
+            generatedLabel: tab.generatedLabel ?? row?.generatedTitle
           },
           generatedTitlesEnabled,
           terminalTitle
@@ -254,8 +254,8 @@ export function buildSearchableWorkspaceTabEntries({
           occupantAgent: resolveOpenTabOccupantAgent({
             tabId: tab.entityId,
             title,
-            defaultTitle: terminalTab?.defaultTitle,
-            launchAgent: terminalTab?.launchAgent,
+            defaultTitle: row?.defaultTitle,
+            launchAgent: row?.launchAgent,
             layout: terminalLayoutsByTabId?.[tab.entityId],
             agentStatusByPaneKey,
             retainedAgentsByPaneKey,

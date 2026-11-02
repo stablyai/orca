@@ -47,7 +47,6 @@ it('retains aliases on exit or failed HOST close and retires LOCAL membership af
           entityId: id,
           worktreeId: local,
           groupId: 'group',
-          hostTerminalAlias: alias,
           executionHostId: alias.executionHostId
         })
       ]

@@ -44,6 +44,7 @@ type WorkspaceTabPaletteActivationState = Pick<
   | 'setActiveTab'
   | 'setActiveTabType'
   | 'unifiedTabsByWorktree'
+  | 'tabsByWorktree'
   | 'worktreesByRepo'
 >
 
@@ -74,7 +75,12 @@ function validateTarget(
       candidate.groupId === result.groupId &&
       candidate.worktreeId === result.worktreeId &&
       candidate.contentType === result.contentType &&
-      isUnifiedTabOwnedByWorktree(candidate, worktree, ambiguousWorktreeIds)
+      isUnifiedTabOwnedByWorktree(
+        candidate,
+        worktree,
+        ambiguousWorktreeIds,
+        state.tabsByWorktree[result.worktreeId]?.find((row) => row.id === candidate.entityId)
+      )
   )
   if (tabs.length !== 1 || !tab) {
     return 'missing-tab'

@@ -194,7 +194,7 @@ export function createTerminalTabCreationActions(
           contentType: 'terminal' as const,
           // Why: an explicit host alias is the user's selected owner and wins over creation facts.
           ...(hostTerminalAlias
-            ? { hostTerminalAlias, executionHostId: hostTerminalAlias.executionHostId }
+            ? { executionHostId: hostTerminalAlias.executionHostId }
             : facts || folder
               ? { executionHostId: facts?.hostId ?? folder?.hostId }
               : {}),

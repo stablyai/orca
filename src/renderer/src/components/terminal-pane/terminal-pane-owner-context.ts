@@ -34,23 +34,15 @@ export function resolveTerminalPaneOwnerContext(
   const unifiedTab = state.unifiedTabsByWorktree[worktreeId]?.find(
     (entry) => entry.contentType === 'terminal' && entry.entityId === tabId
   )
-  const aliases = [tab?.hostTerminalAlias, unifiedTab?.hostTerminalAlias]
-  const alias = aliases.find((entry) => entry != null)
-  const hostIds = [
-    unifiedTab?.executionHostId,
-    ...aliases.map((entry) => entry?.executionHostId)
-  ].filter((host) => Boolean(host))
-  const conflictingOwner =
-    hostIds.some((host) => !parseExecutionHostId(host)) ||
-    new Set(hostIds).size > 1 ||
-    aliases.some(
-      (entry) =>
-        entry &&
-        (!terminalHostAliasMatchesTab(entry, tabId) ||
-          entry.worktreeId !== alias?.worktreeId ||
-          entry.leafId !== alias?.leafId)
-    )
-  const tabHost = hostIds[0]
+  const alias = tab?.hostTerminalAlias
+  const tabHost = alias?.executionHostId ?? unifiedTab?.executionHostId
+  const conflictingOwner = Boolean(
+    (tabHost && !parseExecutionHostId(tabHost)) ||
+    (alias &&
+      (parseExecutionHostId(alias.executionHostId)?.kind !== 'runtime' ||
+        !terminalHostAliasMatchesTab(alias, tabId) ||
+        (unifiedTab?.executionHostId && unifiedTab.executionHostId !== alias.executionHostId)))
+  )
   const selectedHost = parseExecutionHostId(tabHost)
   const scope = parseWorkspaceKey(worktreeId)
   const result =
@@ -127,8 +119,7 @@ export function resolveTerminalPaneOwnerContext(
             ? getConnectionExecutionHostId(connectionId)
             : UNRESOLVED_OWNER_HOST_ID))
   return {
-    tab:
-      tab && alias && alias !== tab.hostTerminalAlias ? { ...tab, hostTerminalAlias: alias } : tab,
+    tab,
     selectedHost,
     folderWorkspace: folder?.workspace ?? null,
     worktree,

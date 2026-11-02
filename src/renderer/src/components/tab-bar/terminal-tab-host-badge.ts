@@ -15,16 +15,18 @@ export function selectTerminalTabHostBadgeLabel(
   unifiedTabId: string
 ): string | null {
   const tab = state.unifiedTabsByWorktree[worktreeId]?.find((entry) => entry.id === unifiedTabId)
+  const row = state.tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tab?.entityId)
+  const alias = row?.hostTerminalAlias
+  const executionHostId = alias?.executionHostId ?? tab?.executionHostId
   const worktree = selectKnownWorktreeById(state, worktreeId)
-  if (!tab?.executionHostId || !worktree) {
+  if (!executionHostId || !worktree) {
     return null
   }
   const repo = state.repos.find((candidate) => candidate.id === worktree.repoId)
-  if (isWorktreeOwnHost(tab.executionHostId, worktree, repo)) {
+  if (isWorktreeOwnHost(executionHostId, worktree, repo)) {
     return null
   }
-  const label = selectExecutionHostDisplayLabel(state, tab.executionHostId)
-  const alias = tab.hostTerminalAlias
+  const label = selectExecutionHostDisplayLabel(state, executionHostId)
   if (!alias) {
     return label
   }
@@ -33,9 +35,7 @@ export function selectTerminalTabHostBadgeLabel(
     host?.kind === 'runtime'
       ? state.runtimeStatusByEnvironmentId.get(host.environmentId)
       : undefined
-  const gone = state.tabsByWorktree[worktreeId]?.find(
-    (row) => row.id === tab.entityId
-  )?.hostTerminalAliasGone
+  const gone = row?.hostTerminalAliasGone
   const status = isDisconnectedRuntimeHostState(runtimeHostConnectionStateForEntry(entry))
     ? translate('auto.components.settings.RepositoryPane.hostStateDisconnected', 'Disconnected')
     : gone
