@@ -59,7 +59,8 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
     notify(scope, {
       type: 'pong',
       pingId: msg.id,
-      terminalAvailable: scope.hasEngine(),
+      // The bridge receives pings while fonts are still delaying the first readiness report.
+      terminalAvailable: scope.webReadyReported && scope.hasEngine(),
       cellBox: laidOutCellBox(scope)?.cellBox ?? null
     })
   } else if (msg.type === 'init') {

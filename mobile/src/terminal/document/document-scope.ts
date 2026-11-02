@@ -113,6 +113,7 @@ export type TerminalDocumentState = {
   nonFatalErrorNotifies: number
   uninstallErrorReporter: (() => void) | null
   uninstallHostTransport: (() => void) | null
+  webReadyReported: boolean
   cancelFontReadiness: (() => void) | null
   removeViewportRefit: (() => void) | null
   removeTapDispatch: (() => void) | null
@@ -238,6 +239,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     nonFatalErrorNotifies: 0,
     uninstallErrorReporter: null,
     uninstallHostTransport: null,
+    webReadyReported: false,
     cancelFontReadiness: null,
     removeViewportRefit: null,
     removeTapDispatch: null,
