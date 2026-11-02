@@ -183,7 +183,7 @@ export const ptySessionControlApi = {
   ): Promise<PtyListedSession[]> => ipcRenderer.invoke('pty:listSessions', scope, admission),
   getAuthoritativeBufferSnapshotCapabilities: (
     ids: string[]
-  ): Promise<{ id: string; authoritative: boolean | null }[]> =>
+  ): Promise<{ id: string; authoritative: boolean | null; gone?: boolean }[]> =>
     ipcRenderer.invoke('pty:getAuthoritativeBufferSnapshotCapabilities', { ids }),
   hasPty: (id: string): Promise<boolean | null> => ipcRenderer.invoke('pty:hasPty', { id }),
   moveLeafToNewTab: (request: TerminalLeafMoveRequest): Promise<TerminalLeafMoveResult> =>

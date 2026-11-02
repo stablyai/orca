@@ -48,7 +48,7 @@ export function installPtyInspectIpcHandlers(deps: {
       if (hasLocalPtyId) {
         await getLocalPtyProviderStartupPromise()
       }
-      const capabilities: { id: string; authoritative: boolean | null }[] = []
+      const capabilities: { id: string; authoritative: boolean | null; gone?: boolean }[] = []
       const seen = new Set<string>()
       for (const value of ids) {
         if (
@@ -62,16 +62,19 @@ export function installPtyInspectIpcHandlers(deps: {
         seen.add(value)
         const provider = tryGetProviderForPty(value)
         // Missing inspection support is non-authoritative; unattached SSH relays remain retryable.
-        capabilities.push({
-          id: value,
-          authoritative: !provider
-            ? isDispatchablePtyHost(resolvePtyExecutionHost(value))
-              ? null
-              : false
-            : provider.canProvideAuthoritativeBufferSnapshot
-              ? provider.canProvideAuthoritativeBufferSnapshot(value)
-              : false
-        })
+        const authoritative = !provider
+          ? isDispatchablePtyHost(resolvePtyExecutionHost(value))
+            ? null
+            : false
+          : provider.canProvideAuthoritativeBufferSnapshot
+            ? provider.canProvideAuthoritativeBufferSnapshot(value)
+            : false
+        // Only a local provider's explicit absent answer marks a session gone; SSH and remote hosts keep their own parking rules.
+        const gone =
+          authoritative === false &&
+          resolvePtyExecutionHost(value) === LOCAL_EXECUTION_HOST_ID &&
+          (await provider?.probePtyLiveness?.(value)) === false
+        capabilities.push({ id: value, authoritative, ...(gone ? { gone: true } : {}) })
       }
       return capabilities
     }

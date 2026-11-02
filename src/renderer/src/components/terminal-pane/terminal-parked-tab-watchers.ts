@@ -3,7 +3,10 @@ import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
 import { isRemoteExecutionHostPtyId } from '../../../../shared/remote-execution-host-pty-id'
 import { discardPreHandlerPtyState } from './pty-pre-handler-buffer'
-import { terminalProviderHasAuthoritativeSnapshot } from '../terminal/terminal-provider-snapshot-capability'
+import {
+  terminalProviderHasAuthoritativeSnapshot,
+  terminalProviderSessionIsGone
+} from '../terminal/terminal-provider-snapshot-capability'
 import {
   isParkRestorableTerminalPty,
   selectPairedRuntimeParkingEnvironmentIds,
@@ -44,7 +47,9 @@ export type { ParkableTerminalTabModel } from './terminal-parked-watcher-reconci
 export type ParkedTerminalPtyEligibility = (ptyId: string) => boolean
 
 const allowOrdinaryParkRestore = (ptyId: string): boolean =>
-  isRemoteExecutionHostPtyId(ptyId) || terminalProviderHasAuthoritativeSnapshot(ptyId)
+  isRemoteExecutionHostPtyId(ptyId) ||
+  terminalProviderHasAuthoritativeSnapshot(ptyId) ||
+  terminalProviderSessionIsGone(ptyId)
 
 // SSH fact watchers use local main too; coverage follows restore policy, not daemon-only snapshots.
 function parkRestorePolicyFromState(state: {

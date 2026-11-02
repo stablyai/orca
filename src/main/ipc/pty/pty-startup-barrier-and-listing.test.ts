@@ -199,6 +199,26 @@ describe('registerPtyHandlers', () => {
 
     expect(result).toEqual([{ id: 'local-pty', authoritative: false }])
   })
+  it('marks a session gone only when the provider answers that it is absent', async () => {
+    const probePtyLiveness = vi.fn(async (id: string) =>
+      id === 'dead-pty' ? false : id === 'unobserved-pty' ? null : true
+    )
+    registerPtyHandlers(mainWindow as never)
+    installDaemonTestProvider({
+      canProvideAuthoritativeBufferSnapshot: () => false,
+      probePtyLiveness
+    })
+
+    const result = await handlers.get('pty:getAuthoritativeBufferSnapshotCapabilities')?.(null, {
+      ids: ['dead-pty', 'live-unattached-pty', 'unobserved-pty']
+    })
+
+    expect(result).toEqual([
+      { id: 'dead-pty', authoritative: false, gone: true },
+      { id: 'live-unattached-pty', authoritative: false },
+      { id: 'unobserved-pty', authoritative: false }
+    ])
+  })
   it('checks single-PTY liveness without listing every session', async () => {
     const hasPty = vi.fn((id: string) => id === 'live-pty')
     // A session that survived a restart is live on the host before this run attaches it.

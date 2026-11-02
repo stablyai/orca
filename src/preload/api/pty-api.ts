@@ -191,7 +191,7 @@ export type PtyApi = {
   ) => Promise<PtyListedSession[]>
   getAuthoritativeBufferSnapshotCapabilities?: (
     ids: string[]
-  ) => Promise<{ id: string; authoritative: boolean | null }[]>
+  ) => Promise<{ id: string; authoritative: boolean | null; gone?: boolean }[]>
   hasPty: (id: string) => Promise<boolean | null>
   moveLeafToNewTab: (request: TerminalLeafMoveRequest) => Promise<TerminalLeafMoveResult>
   getMainBufferSnapshot: (
