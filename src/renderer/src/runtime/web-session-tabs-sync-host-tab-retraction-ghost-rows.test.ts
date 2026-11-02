@@ -11,11 +11,17 @@ import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult
 } from '../../../shared/runtime-types'
+import { registerHostStatusRetirementTests } from './web-session-tabs-sync-agent-status-retirement.spec'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { AppState } from '../store/types'
-import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
+import {
+  createTestStore,
+  makeWorktree,
+  seedStore,
+  TEST_REPO
+} from '../store/slices/store-test-helpers'
 import {
   markRendererOwnedAgentStatusWrite,
   registerRendererOwnedAgentStatusPane,
@@ -30,6 +36,10 @@ import {
   buildRetainedAgentsSyncSnapshot,
   collectRetainedAgentsOnDisappear
 } from '../components/dashboard/useRetainedAgents'
+import { resolveTerminalTabActivityStatus } from '../components/tab-bar/terminal-tab-activity-status'
+import { selectWorktreeAgentActivitySummary } from '../components/sidebar/worktree-agent-activity-summary'
+import { resolveWorktreeStatus } from '../lib/worktree-status'
+import { buildDashboardSnapshot } from '../components/dashboard/build-dashboard-snapshot'
 import { buildWorktreeAgentRows } from '../components/sidebar/worktree-agent-rows'
 import {
   selectLiveAgentStatusEntriesForWorktree,
@@ -123,6 +133,11 @@ function makeHostSnapshot(args: {
         : {})
     }))
   }
+}
+
+function makeShellSnapshot(args: Parameters<typeof makeHostSnapshot>[0]) {
+  const snapshot = makeHostSnapshot(args)
+  return { ...snapshot, tabs: snapshot.tabs.map((tab) => ({ ...tab, title: 'zsh' })) }
 }
 
 /** Inventory omission empties the whole worktree mirror, including live sibling environments. Host removal tombstones differ only in epoch shape; neither proves every host tab closed. */
@@ -219,6 +234,7 @@ function replayRetainedAgentsSync(
 function seedPairedClientStore(): TestStore {
   const store = createTestStore()
   seedStore(store, {
+    repos: [TEST_REPO],
     settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: true },
     worktreesByRepo: { repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' })] },
     activeWorktreeId: WT
@@ -254,6 +270,45 @@ function observeSidebar(store: TestStore, now: number): SidebarObservation {
   }
 }
 
+/** Read the same live/retained maps as tabs, sidebar counts, workspace activity and dashboard/popout. */
+function observeCurrentDisplay(store: TestStore, now: number) {
+  const state = store.getState()
+  const tabs = state.tabsByWorktree[WT] ?? []
+  const summary = selectWorktreeAgentActivitySummary(state, WT)
+  return {
+    tabs: tabs.map((tab) => resolveTerminalTabActivityStatus({ tab, ...state })),
+    sidebar: observeSidebar(store, now).rowPaneKeys,
+    workspace: resolveWorktreeStatus({
+      tabs,
+      browserTabs: [],
+      ...summary,
+      ptyIdsByTabId: state.ptyIdsByTabId,
+      runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
+      terminalLayoutsByTabId: state.terminalLayoutsByTabId
+    }),
+    dashboard: buildDashboardSnapshot({ ...state, chatNames: new Map() }, now, {
+      includeCardDetails: false,
+      includeFilterOptions: false
+    }).cards.map((card) => card.paneKey)
+  }
+}
+
+export type HostStatusRetirementHarness = {
+  seedPairedClientStore: typeof seedPairedClientStore
+  makeHostSnapshot: typeof makeHostSnapshot
+  makeShellSnapshot: typeof makeShellSnapshot
+  applyHostSnapshot: typeof applyHostSnapshot
+  replayRetainedAgentsSync: typeof replayRetainedAgentsSync
+  observeCurrentDisplay: typeof observeCurrentDisplay
+  mirrorPaneKey: typeof mirrorPaneKey
+  KEEP_TAB: typeof KEEP_TAB
+  KEEP_LEAF: typeof KEEP_LEAF
+  RETRACTED_TAB: typeof RETRACTED_TAB
+  RETRACTED_LEAF: typeof RETRACTED_LEAF
+  ENV: typeof ENV
+  T0: typeof T0
+}
+
 describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -265,6 +320,22 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
   afterEach(() => {
     vi.useRealTimers()
     resetRendererOwnedAgentStatusPanesForTests()
+  })
+
+  registerHostStatusRetirementTests({
+    seedPairedClientStore,
+    makeHostSnapshot,
+    makeShellSnapshot,
+    applyHostSnapshot,
+    replayRetainedAgentsSync,
+    observeCurrentDisplay,
+    mirrorPaneKey,
+    KEEP_TAB,
+    KEEP_LEAF,
+    RETRACTED_TAB,
+    RETRACTED_LEAF,
+    ENV,
+    T0
   })
 
   it('retracts only the removed owned leaf of a retained tab through the real final patch and rejects its later publication', async () => {

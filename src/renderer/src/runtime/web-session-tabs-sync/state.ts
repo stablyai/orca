@@ -219,6 +219,8 @@ export type WebSessionTabsSyncState = Pick<
   | 'openFiles'
   | 'ptyIdsByTabId'
   | 'remoteBrowserPageHandlesByPageId'
+  | 'retainedAgentsByPaneKey'
+  | 'retentionSuppressedPaneKeys'
   | 'tabBarOrderByWorktree'
   | 'tabsByWorktree'
   | 'terminalLayoutsByTabId'

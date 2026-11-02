@@ -23,6 +23,7 @@ import {
   isMirroredAgentPaneKeyForTabs,
   batchAgentPaneKeysForTabs,
   remapHostAgentStatus,
+  toMirroredPaneKey,
   updateBatchAgentPaneKey
 } from './agent-status-primitives'
 import {
@@ -31,6 +32,10 @@ import {
   isMirroredCommandCodeTurnBump,
   writableWebSessionTabsRecord
 } from './state-equality-core'
+import {
+  buildMirroredAgentRetentionPatch,
+  matchesMirroredTerminal
+} from './agent-status-retention-patch'
 
 export function buildMirroredAgentStatusPatch(
   state: WebSessionTabsSyncState,
@@ -42,7 +47,7 @@ export function buildMirroredAgentStatusPatch(
   retractedTabIds: ReadonlySet<string>,
   now: number,
   batchContext?: WebSessionTabsBatchContext
-): Pick<WebSessionTabsSyncState, 'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'> | null {
+): Partial<WebSessionTabsSyncState> | null {
   const mirroredTabIds = new Set<string>()
   for (const tab of currentTerminalTabs) {
     if (isWebTerminalSurfaceTabId(tab.id)) {
@@ -70,10 +75,20 @@ export function buildMirroredAgentStatusPatch(
     }
   }
   const nextByPaneKey = new Map<string, AgentStatusEntry>()
+  const readySurfaces = new Map<string, TerminalSurface>()
   for (const surface of terminalSurfaceTabs) {
     const retainedSurface = retainedSurfaceByHostTabAndPrunedLeafId
       ?.get(surface.parentTabId)
       ?.get(surface.leafId)
+    const paneKey = toMirroredPaneKey(surface, retainedSurface?.leafId)
+    if (
+      paneKey &&
+      surface.status === 'ready' &&
+      surface.terminal &&
+      !isMirroredAgentPaneKeyForTabs(paneKey, retractedTabIds)
+    ) {
+      readySurfaces.set(paneKey, surface)
+    }
     const hostEntry = remapHostAgentStatus(surface, retainedSurface)
     if (!hostEntry) {
       continue
@@ -140,6 +155,19 @@ export function buildMirroredAgentStatusPatch(
   let changed = false
   let aggregateRelevantChange = false
   let sortRelevantChange = false
+  const retentionPatch = buildMirroredAgentRetentionPatch(
+    state,
+    readySurfaces,
+    nextByPaneKey,
+    environmentId,
+    worktreeId,
+    batchContext
+  )
+
+  if (retentionPatch.retainedAgentsByPaneKey) {
+    aggregateRelevantChange = true
+    sortRelevantChange = true
+  }
 
   for (const paneKey of batchAgentPaneKeysForTabs(state, mirroredTabIds, batchContext)) {
     if (!isMirroredAgentPaneKeyForTabs(paneKey, mirroredTabIds)) {
@@ -159,6 +187,10 @@ export function buildMirroredAgentStatusPatch(
     }
     // Host omission cannot prove OSC-driven exit. Retain owned rows through staleness so wake decays them like local panes instead of erasing them (STA-3107).
     if (isClientOwnedAgentStatus(paneKey, state.agentStatusByPaneKey[paneKey])) {
+      continue
+    }
+    const surface = readySurfaces.get(paneKey)
+    if (surface && !matchesMirroredTerminal(state.agentStatusByPaneKey[paneKey]!, surface)) {
       continue
     }
     if (nextAgentStatusByPaneKey === state.agentStatusByPaneKey) {
@@ -219,11 +251,12 @@ export function buildMirroredAgentStatusPatch(
     sortRelevantChange = sortRelevantChange || entrySortRelevantChange
   }
 
-  if (!changed) {
+  if (!changed && Object.keys(retentionPatch).length === 0) {
     return null
   }
 
   return {
+    ...retentionPatch,
     agentStatusByPaneKey: nextAgentStatusByPaneKey,
     agentStatusEpoch: aggregateRelevantChange ? state.agentStatusEpoch + 1 : state.agentStatusEpoch,
     sortEpoch: sortRelevantChange ? state.sortEpoch + 1 : state.sortEpoch
