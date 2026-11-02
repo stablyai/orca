@@ -19,7 +19,7 @@ import {
   type TabDrop
 } from '@/components/tab-group/tab-group-layout-owner-commands'
 import { resolveBrowserSessionTabTarget } from './browser-session-tab-target'
-import { resolveWindowTabIdForHostTab } from './host-session-tab-target'
+import { windowTabIdsByRowId } from './host-session-tab-target'
 
 export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
@@ -27,9 +27,9 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
       if (isLocalSessionTabCloseOwned(worktreeId, tabId)) {
         return
       }
-      const localTabId = resolveWindowTabIdForHostTab(worktreeId, tabId)
+      const localTabId = windowTabIdsByRowId(worktreeId)(tabId)
       const store = useAppStore.getState()
-      const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, localTabId)
+      const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, localTabId ?? tabId)
       if (browserTarget) {
         guardPinnedTabClose({
           isPinned: isUnifiedTabPinned(store, worktreeId, browserTarget.workspaceId),
@@ -39,11 +39,11 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
         return
       }
       guardPinnedTabClose({
-        isPinned: isUnifiedTabPinned(store, worktreeId, localTabId),
-        tabLabel: resolvePinnedTabLabel(store, worktreeId, localTabId),
+        isPinned: localTabId !== null && isUnifiedTabPinned(store, worktreeId, localTabId),
+        tabLabel: resolvePinnedTabLabel(store, worktreeId, localTabId ?? tabId),
         onClose: () => {
           const currentStore = useAppStore.getState()
-          closeMobileSessionTabInStore(currentStore, worktreeId, localTabId)
+          closeMobileSessionTabInStore(currentStore, worktreeId, localTabId, tabId)
         }
       })
     })
@@ -51,9 +51,9 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
 
   unsubs.push(
     window.api.ui.onSessionTabCloseRequest(({ requestId, tabId, worktreeId, expiresAt }) => {
-      const localTabId = resolveWindowTabIdForHostTab(worktreeId, tabId)
+      const localTabId = windowTabIdsByRowId(worktreeId)(tabId)
       const store = useAppStore.getState()
-      const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, localTabId)
+      const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, localTabId ?? tabId)
       let cancelConfirmation: (() => void) | undefined
       let timeout: ReturnType<typeof setTimeout> | undefined
       let settled = false
@@ -90,7 +90,8 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
           const closed = closeMobileSessionTabInStore(
             useAppStore.getState(),
             worktreeId,
-            localTabId
+            localTabId,
+            tabId
           )
           respond(closed ? undefined : SESSION_TAB_NOT_FOUND_ERROR)
         } catch (error) {
@@ -107,8 +108,8 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
       }
       const visibleId = browserTarget?.workspaceId ?? localTabId
       cancelConfirmation = guardPinnedTabClose({
-        isPinned: isUnifiedTabPinned(store, worktreeId, visibleId),
-        tabLabel: resolvePinnedTabLabel(store, worktreeId, visibleId),
+        isPinned: visibleId !== null && isUnifiedTabPinned(store, worktreeId, visibleId),
+        tabLabel: resolvePinnedTabLabel(store, worktreeId, visibleId ?? tabId),
         onClose: closeAndRespond,
         onCancel: () => respond(SESSION_TAB_CLOSE_CANCELED_ERROR)
       })
@@ -117,12 +118,18 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
 
   unsubs.push(
     window.api.ui.onMoveSessionTab((move) => {
-      const { tabId, targetGroupId } = move
+      const { targetGroupId } = move
+      // Main names tabs by their rows: a switched tab's terminal moves its tab, a stale row nothing.
+      const tabIdOf = windowTabIdsByRowId(move.worktreeId)
+      const tabId = tabIdOf(move.tabId)
+      if (!tabId) {
+        return
+      }
       // Main owns moves; whole-order changes use the reorder path that records equivalent main moves.
       if (
         ORCA_LAYOUT_OWNER_IS_MAIN &&
         move.kind !== 'reorder' &&
-        dropTabThroughLayoutOwner(move.worktreeId, tabDropOf(move))
+        dropTabThroughLayoutOwner(move.worktreeId, tabDropOf({ ...move, tabId }))
       ) {
         return
       }
@@ -130,8 +137,8 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
       if (move.kind === 'reorder') {
         store.reorderUnifiedTabs(
           targetGroupId,
-          move.tabOrder.map((id) => resolveWindowTabIdForHostTab(move.worktreeId, id)),
-          { projectedMoveTabId: resolveWindowTabIdForHostTab(move.worktreeId, tabId) }
+          move.tabOrder.flatMap((id) => tabIdOf(id) ?? []),
+          { projectedMoveTabId: tabId }
         )
         return
       }

@@ -435,6 +435,52 @@ describe('session.tabs.move translation', () => {
   })
 })
 
+describe('a switched tab answers to its current content only', () => {
+  /** tabA's tab after its terminal switched to chat session-1. */
+  function switchedToChat() {
+    const { ctx, model, tabA, leafA } = setup()
+    const command: LayoutCommand = {
+      type: 'setTabContent',
+      workspace: WS,
+      tabId: tabA,
+      expectSource: { kind: 'terminal', terminalId: tabA },
+      content: { kind: 'agent-session', sessionId: 'session-1', agent: 'codex' }
+    }
+    return { model: build(ctx, [command], model).model, tabA, leafA }
+  }
+
+  it('moves the chat by its row, and nothing by the terminal id it replaced', () => {
+    const { model, tabA } = switchedToChat()
+    const workspace = model.workspaces[WS]!
+    const shown = projectSessionTabs(WS, workspace, NO_VIEW, NO_FACTS, false)
+    const groupId = workspace.groups[0]!.id
+    const split = (tabId: string) =>
+      translateSessionTabMove(
+        WS,
+        workspace,
+        shown,
+        MoveTab.parse({
+          worktree: WS,
+          tabId,
+          targetGroupId: groupId,
+          kind: 'split',
+          splitDirection: 'right'
+        })
+      )
+    expect(split(tabA)).toEqual({ ok: false, code: 'tab_not_found' })
+    expect(commandsOf(split('agent-session:session-1'))).toEqual([
+      expect.objectContaining({ type: 'splitGroup', tabId: tabA })
+    ])
+  })
+
+  it('refuses a new terminal under the id of a tab that now holds a chat', () => {
+    const { model, tabA } = switchedToChat()
+    expect(
+      translateTerminalCreate(model, WS, createParams({ tabId: tabA, leafId: NEW_LEAF }))
+    ).toEqual({ ok: false, code: 'invalid_params' })
+  })
+})
+
 describe('terminal.close and terminal.closeTab keep the pinned refusal', () => {
   it('refuses a pinned tab and its last pane, and closes a pane of a split tab', () => {
     const { ctx, model, tabA, leafA, tabB, leafB } = setup()

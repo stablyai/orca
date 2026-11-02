@@ -9,6 +9,22 @@ import {
 import type { MobileSessionWorktreeInputs } from './types'
 import { isEditorSurfaceTab } from './mobile-session-surfaces'
 
+/** Name each tab as its rows do, like main's projection: a chat by its row id (window tab ids have
+ *  no main position and sort chats last on mobile), a terminal by its terminal id, anything else
+ *  by its tab id. Inbound row ids resolve by this rule's inverse (`windowTabIdsByRowId`). */
+export function windowPublishedRowId(
+  type: string,
+  entityId: string,
+  tabId: string,
+  hostTabId: string | undefined
+): string {
+  return type === 'agent-session'
+    ? agentSessionRowId(entityId, hostTabId)
+    : type === 'terminal'
+      ? entityId
+      : tabId
+}
+
 export function getEditorUnifiedTabsForWorktree(
   inputs: Pick<MobileSessionWorktreeInputs, 'unifiedTabs'>
 ): Tab[] {
@@ -186,16 +202,15 @@ export function buildMobileSessionGroupProjection(
     if (visibleOrder.length === 0) {
       continue
     }
-    // Name each tab as its rows do, like main's projection: a chat by its row id (window tab ids
-    // have no main position and sort chats last on mobile), a terminal by its terminal id.
     const publishedIdByTabId = new Map(
       visibleOrder.map((item) => [
         item.tabId ?? item.id,
-        item.type === 'agent-session'
-          ? agentSessionRowId(item.id, inputs.hostTabIds.get(item.tabId ?? item.id))
-          : item.type === 'terminal'
-            ? item.id
-            : (item.tabId ?? item.id)
+        windowPublishedRowId(
+          item.type,
+          item.id,
+          item.tabId ?? item.id,
+          inputs.hostTabIds.get(item.tabId ?? item.id)
+        )
       ])
     )
     for (const item of visibleOrder) {

@@ -303,7 +303,7 @@ describe('TabsSlice', () => {
       ])
 
       const main = await drawTabsFromMain(store)
-      expect(closeMobileSessionTabInStore(store.getState(), WT, tab.id)).toBe(true)
+      expect(closeMobileSessionTabInStore(store.getState(), WT, tab.id, tab.id)).toBe(true)
       // A layout-owner build closes the tab in main; the file goes after its frame drops the tab.
       await main.settle()
       main.close()
@@ -356,7 +356,7 @@ describe('TabsSlice', () => {
       ])
 
       const main = await drawTabsFromMain(store)
-      expect(closeMobileSessionTabInStore(store.getState(), WT, tab.id)).toBe(true)
+      expect(closeMobileSessionTabInStore(store.getState(), WT, tab.id, tab.id)).toBe(true)
       // A layout-owner build closes the tab in main; the file goes after its frame drops the tab.
       await main.settle()
       main.close()
@@ -388,7 +388,7 @@ describe('TabsSlice', () => {
         { id: file.id, type: 'file', filePath: file.filePath }
       ])
 
-      expect(closeMobileSessionTabInStore(store.getState(), WT, file.id)).toBe(true)
+      expect(closeMobileSessionTabInStore(store.getState(), WT, null, file.id)).toBe(true)
 
       expect(store.getState().openFiles).toEqual([])
       expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs ?? []).toEqual([])

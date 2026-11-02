@@ -2,16 +2,21 @@
 
 import type { LayoutTab, WorkspaceLayout } from '../workspace-layout-model'
 import { layoutContainsLeafId } from '../terminal-pane-tree'
-import { AGENT_SESSION_ROW_PREFIX, TERMINAL_ROW_SEPARATOR } from './old-client-session-row-ids'
+import {
+  AGENT_SESSION_ROW_PREFIX,
+  publishedTabOrderId,
+  TERMINAL_ROW_SEPARATOR
+} from './old-client-session-row-ids'
 
 export { agentSessionRowId, publishedTabOrderId, terminalRowId } from './old-client-session-row-ids'
 export { projectSessionTabs } from './old-client-session-tabs-projection'
 
 export type SessionTabRowTarget = { tab: LayoutTab; leafId?: string }
 
-/** terminal::pane names a pane and a bare terminal id its tab: both name content, so they match a
- *  terminal's own id only, never a tab id that a switch left on other content. Chat rows name their
- *  session (or a reopened chat's tab), browser rows their tab. */
+/** A row id names the tab whose current content publishes it (`publishedTabOrderId`): terminal::pane
+ *  a pane, a bare terminal id its tab, a chat row its chat, any other row its tab. A tab id is
+ *  never a match key by itself, so a terminal id a switch left behind names nothing. Chats also
+ *  answer to their session's row, and a browser to its workspace. */
 export function resolveSessionTabRow(
   workspace: WorkspaceLayout,
   rowId: string
@@ -33,9 +38,8 @@ export function resolveSessionTabRow(
   const tab = workspace.tabs.find((entry) =>
     sessionId !== null
       ? entry.kind === 'agent-session' && entry.entityId === sessionId
-      : entry.kind === 'terminal'
-        ? entry.entityId === rowId
-        : entry.id === rowId || (entry.kind === 'browser' && entry.entityId === rowId)
+      : publishedTabOrderId(entry) === rowId ||
+        (entry.kind === 'browser' && entry.entityId === rowId)
   )
   return tab ? { tab } : null
 }

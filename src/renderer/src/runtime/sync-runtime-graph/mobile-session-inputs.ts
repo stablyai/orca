@@ -27,6 +27,17 @@ import {
 } from './mobile-session-surfaces'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
+/** The host tab ids this window's chat rows publish under (see `windowPublishedRowId`). */
+export function publishedHostTabIds(
+  state: Parameters<typeof runtimeEnvironmentIdForWorkspaceOwner>[0],
+  worktreeId: string
+): ReadonlyMap<string, string> {
+  const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: worktreeId })
+  return owner.kind === 'resolved'
+    ? hostSessionTabIdsByLocalTabForWorktree(owner.environmentId ?? 'local', worktreeId)
+    : EMPTY_NARROWED_BY_KEY
+}
+
 export function getOpenFileIndexes(openFiles: AppState['openFiles']): OpenFileIndexes {
   if (graphState.cachedOpenFileIndexesSource === openFiles && graphState.cachedOpenFileIndexes) {
     return graphState.cachedOpenFileIndexes
@@ -129,13 +140,9 @@ export function buildMobileSessionWorktreeInputs(
   const activeEditorFileId =
     resolvedActiveFileId && openFilesById?.has(resolvedActiveFileId) ? resolvedActiveFileId : null
   const activeTabId = state.activeTabId
-  const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: worktreeId })
   return {
     worktreeId,
-    hostTabIds:
-      owner.kind === 'resolved'
-        ? hostSessionTabIdsByLocalTabForWorktree(owner.environmentId ?? 'local', worktreeId)
-        : EMPTY_NARROWED_BY_KEY,
+    hostTabIds: publishedHostTabIds(state, worktreeId),
     worktreeInstanceId: resolveWorktreeInstanceId(state, worktreeId),
     terminalTabs,
     browserWorkspaces,

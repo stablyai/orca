@@ -8,6 +8,8 @@ import type {
   TerminalPaneLayoutNode
 } from '../../../shared/terminal-tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import type { Tab } from '../../../shared/tab-types'
+import { agentSessionRowId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import { cloneTerminalLayoutSnapshot } from '../mobile-session-layout-projection'
 import { sameStringRecord, terminalLayoutNodeEqual } from '../../../shared/terminal-layout-equality'
 
@@ -30,6 +32,18 @@ function paneLayoutEditIsNoOp(
     (edit.chatLeafId === undefined || (layout.chatLeafId ?? null) === (edit.chatLeafId ?? null)) &&
     (!edit.titlesByLeafId || sameStringRecord(layout.titlesByLeafId, edit.titlesByLeafId))
   )
+}
+
+/** Whether a saved window tab's current content publishes this row id (as the window's rows do):
+ *  a terminal its terminal id, a chat its chat row, anything else its tab id. A tab a switch left
+ *  holding a chat no longer answers to its old terminal's id. */
+function savedTabPublishes(tab: Tab, rowId: string): boolean {
+  return tab.contentType === 'terminal'
+    ? tab.entityId === rowId
+    : tab.contentType === 'agent-session'
+      ? agentSessionRowId(tab.entityId) === rowId ||
+        agentSessionRowId(tab.entityId, tab.id) === rowId
+      : tab.id === rowId || (tab.contentType === 'browser' && tab.entityId === rowId)
 }
 
 export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithHeadlessPaneMoveToNewTab {
@@ -147,12 +161,12 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithHeadle
     const unifiedTabs = session.unifiedTabs?.[worktreeId]
     // A browser row is named by its page; a window keys the tab's props by the saved tab.
     const unifiedId = this.serveBrowserTabs.unifiedTabId(worktreeId, tabId)
-    if (unifiedTabs?.some((tab) => tab.id === unifiedId || tab.entityId === unifiedId)) {
+    if (unifiedTabs?.some((tab) => savedTabPublishes(tab, unifiedId))) {
       changed = true
       nextSession.unifiedTabs = {
         ...session.unifiedTabs,
         [worktreeId]: unifiedTabs.map((tab) =>
-          tab.id === unifiedId || tab.entityId === unifiedId
+          savedTabPublishes(tab, unifiedId)
             ? {
                 ...tab,
                 ...(props.color !== undefined ? { color: props.color } : {}),

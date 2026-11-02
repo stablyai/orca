@@ -63,8 +63,9 @@ export function translateTerminalCreate(
       paneKey: paneKeyOf(target.entityId, leafId)
     })
   }
-  // Pane ids are unique in the partition: one named elsewhere is not this pane.
-  if (paneIdInUse(model, leafId)) {
+  // Pane and tab ids are unique in the partition: one named elsewhere is not this pane, and a
+  // tab id in use (say, one a switch left holding a chat) is no new terminal's.
+  if (paneIdInUse(model, leafId) || (!target && tabIdInUse(model, tabId))) {
     return refused('invalid_params')
   }
   if (!target) {
@@ -82,6 +83,12 @@ export function translateTerminalCreate(
         newLeafId: leafId
       })
     : refused('pane_not_found')
+}
+
+function tabIdInUse(model: WorkspaceLayoutModel, tabId: string): boolean {
+  return Object.values(model.workspaces).some((workspace) =>
+    workspace.tabs.some((tab) => tab.id === tabId)
+  )
 }
 
 function paneIdInUse(model: WorkspaceLayoutModel, leafId: string): boolean {
