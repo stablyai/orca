@@ -178,7 +178,7 @@ export function synthesizeTerminalAppTheme(
     ? towardText
     : surfacesToward(light ? [255, 255, 255, 1] : [0, 0, 0, 1])
   const text = legible(foreground, [background, ...Object.values(surfaces)], light)
-  // Why: the host pill paints muted text on the accent, as main.css tints it over the sidebar.
+  // Why: the host pill paints muted text on the accent, tinted in dark over the sidebar (= background).
   const hostBadgeRule = pluginAppThemeCssFallback('--host-badge', base)
   const hostBadge = mix(
     surfaces.accent,
