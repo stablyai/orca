@@ -33,14 +33,15 @@ export function useAddRepoWslHostOffer(
   }: {
     selectedHostId: ExecutionHostId | null
     handleSelectAddProjectHost: (hostId: ExecutionHostId) => Promise<boolean>
-    handleConnectAddProjectHost: (hostId: ExecutionHostId) => Promise<void>
-  }
+    handleConnectAddProjectHost: (hostId: ExecutionHostId) => Promise<boolean>
+  },
+  droppedHostPath: DroppedHostPath | null
 ): {
   offer: (path: string, source: AddRepoExistingWorkspaceSource) => boolean
   notice: (
     addLocalPath: (path: string, source: AddRepoExistingWorkspaceSource) => Promise<unknown>
   ) => ReactNode
-  /** The host path the user chose to add on an existing host, prefilled once that host is selected. */
+  /** The newest of "Add on host" and a drop onto a host, prefilled once that host is selected. */
   hostPath: DroppedHostPath | null
 } {
   const [pending, setPending] = useState<PendingOffer | null>(null)
@@ -53,6 +54,12 @@ export function useAddRepoWslHostOffer(
       setPending(null)
       setHostPath(null)
     }
+  }
+  // A later drop supersedes an earlier "Add on host" choice.
+  const [seenDrop, setSeenDrop] = useState(droppedHostPath)
+  if (seenDrop !== droppedHostPath) {
+    setSeenDrop(droppedHostPath)
+    setHostPath(null)
   }
   const offer = useCallback(
     (path: string, source: AddRepoExistingWorkspaceSource): boolean => {
@@ -78,16 +85,18 @@ export function useAddRepoWslHostOffer(
   const addOnHost = useCallback(
     async (target: ExistingWslHostOffer): Promise<void> => {
       setHostPath({ hostId: target.hostId, path: target.linuxPath })
-      if (!(await selectHost(target.hostId))) {
-        await connectHost(target.hostId)
+      if ((await selectHost(target.hostId)) || (await connectHost(target.hostId))) {
+        setPending(null)
+        return
       }
-      setPending(null)
+      // Keep the offer so the user can retry or add it on this computer instead.
+      setHostPath(null)
     },
     [connectHost, selectHost]
   )
   return {
     offer,
-    hostPath,
+    hostPath: hostPath ?? droppedHostPath,
     notice: (addLocalPath) => {
       if (!pending || selectedHostId !== LOCAL_EXECUTION_HOST_ID) {
         return null
