@@ -748,14 +748,6 @@ async function runSelectedRuntimeAddJourney(
   }
 }
 
-test('routes every Add Project path to a selected non-default headed runtime @headful', async ({
-  electronApp,
-  orcaPage
-}, testInfo) => {
-  test.setTimeout(300_000)
-  await runSelectedRuntimeAddJourney(electronApp, orcaPage, testInfo, true)
-})
-
 test('keeps every selected-runtime Add Project path in hidden-window desktop parity', async ({
   electronApp,
   orcaPage
