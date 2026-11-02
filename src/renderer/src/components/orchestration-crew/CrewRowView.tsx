@@ -69,7 +69,7 @@ export const CrewRowView = memo(function CrewRowView({
         >
           {row.pendingQuestion
             ? `${translate('components.orchestrationCrew.waitingPrefix', 'Waiting for you · ')}${row.pendingQuestion.preview}`
-            : (row.latest?.preview ?? row.progress ?? '')}
+            : (row.latest?.preview ?? '')}
         </span>
       </button>
       <div className="flex shrink-0 items-center">

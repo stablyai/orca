@@ -41,14 +41,6 @@ export function CrewRowDetails({ row }: { row: OrchestrationCrewRow }) {
           translate('components.orchestrationCrew.noTask', 'No shared task')
         )}
       </dd>
-      {row.progress ? (
-        <>
-          <dt className="text-muted-foreground">
-            {translate('components.orchestrationCrew.progress', 'Progress')}
-          </dt>
-          <dd>{row.progress}</dd>
-        </>
-      ) : null}
       {row.pendingQuestion ? (
         <>
           <dt className="text-status-warning">
