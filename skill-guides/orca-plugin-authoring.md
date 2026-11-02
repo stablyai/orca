@@ -42,7 +42,7 @@ Use the lowest `execution` profile that covers the request; it decides what the 
 | A panel backed by its own Node code, storage or settings  | `trusted-worker`; `main`, a panel, `capabilities`, `settings`       | `--template worker-panel`                        |
 | Settings the user edits in Orca's Settings                | `contributes.settings` and `settings:own`                           | `references/manifest.md`                         |
 | Reacting to workspace or agent status changes             | `trusted-worker`; `main`, `contributes.events`, `*:read` capability | example `hello-orca`                             |
-| Rewriting or refusing terminal text or workspace creates  | `trusted-worker`; `main`, `contributes.hooks`                       | `references/recipes.md` (hooks)                  |
+| Rewriting or refusing terminal text or workspace creates  | `trusted-worker`; `main`, `contributes.hooks`                       | `--template hook`; `references/recipes.md`       |
 | A virtual machine environment recipe                      | `declarative`; `contributes.vmRecipes`                              | hand-written; fields in `references/manifest.md` |
 | A status bar item (a worker can update it)                | `declarative`; `contributes.statusBarItems`                         | `references/recipes.md`                          |
 

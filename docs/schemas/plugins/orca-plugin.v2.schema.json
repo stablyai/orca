@@ -733,6 +733,15 @@
             "workspace.create.before": "1.4.248",
             "workspace.create.after": "1.4.248"
           }
+        },
+        "onError": {
+          "description": "What Orca does when this plugin's hook throws, times out, crashes or does not start: `pass` (the default) carries on as if it passed; `deny` refuses the action, naming the plugin, so a guard fails closed. Ignored for hooks that only observe.",
+          "x-orca-since": "1.4.248",
+          "type": "string",
+          "enum": [
+            "pass",
+            "deny"
+          ]
         }
       },
       "required": [

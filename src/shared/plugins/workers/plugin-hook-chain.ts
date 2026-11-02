@@ -20,6 +20,8 @@ export type PluginHookChainInput = {
   invoke: (pluginKey: string, payload: unknown, timeoutMs: number) => Promise<unknown>
   log: (pluginKey: string, line: string) => void
   now: () => number
+  /** Plugins listing the hook with `onError: "deny"`: their failure refuses the action. */
+  failsClosed?: (pluginKey: string) => boolean
   deadlineMs?: number
 }
 
@@ -57,9 +59,14 @@ function applyChange(
     : { ok: false, reason: parsed.error.issues[0]?.message ?? 'invalid change' }
 }
 
+/** Thrown for a plugin that is gone (disabled, removed, changed): it passes even when it would
+ *  deny on error, since it no longer speaks for the person. */
+export class PluginHookParticipantGoneError extends Error {}
+
 /**
- * Runs a hook through each participant in order. A plugin that times out, throws, crashes or is
- * gone counts as having passed, so a broken plugin can delay Orca by at most its deadline.
+ * Runs a hook through each participant in order. A plugin that times out, throws, crashes or
+ * answers nonsense counts as having passed (or refuses, with `onError: "deny"`), so a broken
+ * plugin can delay Orca by at most its deadline.
  */
 export async function runPluginHookChain(
   input: PluginHookChainInput
@@ -70,11 +77,20 @@ export async function runPluginHookChain(
   let current = input.payload
   for (const pluginKey of input.participants) {
     const startedAt = input.now()
-    const skip = (reason: string): void =>
-      input.log(
-        pluginKey,
-        `hook ${event} skipped after ${Math.round(input.now() - startedAt)}ms: ${reason}`
-      )
+    const elapsed = (): number => Math.round(input.now() - startedAt)
+    const failClosed = spec.result !== null && input.failsClosed?.(pluginKey) === true
+    const fail = (reason: string, gone = false): PluginHookChainOutcome | null => {
+      if (failClosed && !gone) {
+        input.log(pluginKey, `hook ${event} denied after ${elapsed()}ms (onError: deny): ${reason}`)
+        return {
+          kind: 'deny',
+          pluginKey,
+          reason: `${pluginKey} failed and denies on error: ${reason}`
+        }
+      }
+      input.log(pluginKey, `hook ${event} skipped after ${elapsed()}ms: ${reason}`)
+      return null
+    }
     let raw: unknown
     try {
       if (input.start) {
@@ -83,12 +99,18 @@ export async function runPluginHookChain(
       }
       raw = await withinDeadline(input.invoke(pluginKey, current, deadlineMs), deadlineMs)
     } catch (error) {
-      skip(errorText(error))
+      const denied = fail(errorText(error), error instanceof PluginHookParticipantGoneError)
+      if (denied) {
+        return denied
+      }
       continue
     }
     const decision = pluginWorkerHookDecisionSchema.safeParse(raw)
     if (!decision.success) {
-      skip('the worker answered with something other than a hook decision')
+      const denied = fail('the worker answered with something other than a hook decision')
+      if (denied) {
+        return denied
+      }
       continue
     }
     if (decision.data.decision === 'continue') {

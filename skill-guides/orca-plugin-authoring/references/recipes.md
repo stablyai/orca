@@ -74,18 +74,21 @@ keep their value and `visible: false` hides it. Bind a key to the same command w
 
 `trusted-worker` with `main`; list each hook in `contributes.hooks` (`{ "event": "terminal.send" }`)
 and set `engines.orca` to at least `>=1.4.248`. Events, results and what `next` may change are in
-`references/host-api.md` (Hooks).
+`references/host-api.md` (Hooks). Start from `ORCA plugin create <dir> --template hook`.
 
 ```ts
 export default function activate(orca: OrcaWorkerApi) {
-  orca.hooks.on('terminal.send', (event, next) => {
+  orca.hooks.on('terminal.send', (event) => {
     if (event.text.includes('rm -rf /')) return { deny: 'blocked by my mod' }
-    return next({ ...event, text: event.text.trimEnd() })
+    // Returning nothing passes the event on unchanged; `next({ ...event, text })` rewrites it.
   })
 }
 ```
 
-Return `next(event)` to go on, `{ deny }` to stop, nothing to pass. Past 2 s or on a throw Orca
-carries on as if the hook passed and logs it (`ORCA plugin logs`). Unit-test with
+Return `{ deny }` to stop, nothing (or `next(event)`) to pass. Past 2 s or on a throw Orca carries
+on as if the hook passed and logs it (`ORCA plugin logs`); a guard that must fail closed lists the
+hook as `{ "event": "terminal.send", "onError": "deny" }`. Decide before any other awaited call:
+`await orca.host.call('notifications.show', …)` ahead of `return { deny }` can throw or time out and
+let the action through, so count blocks after deciding (`void orca.host.call(...)`). Unit-test with
 `(await mountWorker(worker)).hooks.fire('terminal.send', event)`, which returns
 `{ kind: 'continue', event }` or `{ kind: 'deny', reason }`.

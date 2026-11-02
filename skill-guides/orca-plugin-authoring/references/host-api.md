@@ -83,6 +83,17 @@ Host API 1.2 (`"pluginApi": 1`). Call `host.call(method, params, { signal })`; a
 - `statusBar.update` (no capability; worker; since 1.2): Changes one of the plugin's `contributes.statusBarItems` (named by `id`): fields given replace their current value, `visible: false` hides it. Desktop app only; lasts until Orca restarts, and is hidden while the plugin is disabled.
   `(params: { id: string; text?: string; icon?: "activity" | "bar-chart-3" | "bell" | "blocks" | "book" | "bot" | "bug" | "calendar" | "cloud" | "code" | "database" | "file-text" | "flag" | "folder" | "gauge" | "globe" | "hammer" | "layers" | "lightbulb" | "package" | "plug" | "puzzle" | "rocket" | "star" | "terminal" | "wrench" | "zap" | "add" | "remove" | "delete" | "edit" | "refresh" | "search" | "settings" | "check" | "close" | "info" | "warning" | "error" | "open-external" | "copy" | "download" | "upload" | "play" | "pause" | "stop" | "more" | "expand" | "collapse" | "next" | "filter" | "branch" | "file" | "agent" | "link"; tone?: "neutral" | "accent" | "success" | "warning" | "danger"; tooltip?: string; visible?: boolean }) => { ok: true }`
 
+## Hooks
+
+List each in `contributes.hooks` (`{ "event", "onError"? }`; `main` and `trusted-worker`) and handle it with `orca.hooks.on(event, (event, next) => ...)`. Return `next(event)` (or nothing) to go on, or the stop result. Plugins run in turn, 2 s each; a throw, timeout or crash passes unless the entry says `"onError": "deny"`. Decide first: an awaited call before you return (a notification, say) can fail or time out and turn your deny into a pass.
+
+- `terminal.send` (since 1.4.248): Text Orca, the CLI or a plugin is about to send to a terminal. A person typing (on the desktop, a phone or a paired client) is never hooked, and prompts Orca submits to an agent are not included (a separate agent prompt hook covers them). Writes to one terminal stay in order while a hook decides. Rewrite `text` or `enter` with `next`, or return `{ deny }` to refuse the send.
+  event `{ terminalId: string; text: string; enter: boolean; inputKind: "driving" | "orchestration" | "launch" }`; `next` may change `text`, `enter`; stop with `{ deny: string }`
+- `workspace.create.before` (since 1.4.248): A worktree or folder workspace is about to be created. Change `name`, `branch` or `base` with `next`, or return `{ deny }` to refuse it.
+  event `{ kind: "worktree" | "folder"; projectId: string; name: string; branch?: string; base?: string }`; `next` may change `name`, `branch`, `base`; stop with `{ deny: string }`
+- `workspace.create.after` (since 1.4.248): A worktree or folder workspace was created. Observe only: Orca does not wait for it, and results are ignored.
+  event `{ workspaceId: string; kind: "worktree" | "folder"; path: string; branch: string }`; `next` may change nothing; stop with nothing (observe only)
+
 ## Capabilities
 
 - `workspace:read` (since 1.4.160): Read the name, branch, and terminal list of your focused workspace, and get notified when workspaces are created or removed

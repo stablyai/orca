@@ -1,5 +1,8 @@
 import type { z } from 'zod'
-import type { PluginHookName } from '../../../shared/plugins/contributions/plugin-hook-contribution'
+import {
+  PLUGIN_HOOK_DENIED_CODE,
+  type PluginHookName
+} from '../../../shared/plugins/contributions/plugin-hook-contribution'
 import type { PluginHookChainOutcome } from '../../../shared/plugins/workers/plugin-hook-chain'
 
 /**
@@ -26,6 +29,10 @@ export function pluginHookWanted(event: PluginHookName): boolean {
 
 /** A plugin hook refused the action; the message names the plugin and its reason. */
 export class PluginHookDeniedError extends Error {
+  /** Passed through RPC as code `denied_by_plugin`, so callers do not retry it. */
+  readonly code = PLUGIN_HOOK_DENIED_CODE
+  readonly data: { event: PluginHookName; pluginKey: string; reason: string }
+
   constructor(
     readonly event: PluginHookName,
     readonly pluginKey: string,
@@ -33,6 +40,7 @@ export class PluginHookDeniedError extends Error {
   ) {
     super(`${event} denied by plugin ${pluginKey}: ${reason}`)
     this.name = 'PluginHookDeniedError'
+    this.data = { event, pluginKey, reason }
   }
 }
 

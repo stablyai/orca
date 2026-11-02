@@ -25,8 +25,9 @@ export type MountWorkerOptions = {
   events: readonly string[]
   /** Command ids it may register, as listed in `contributes.commands`; null skips the check. */
   commands: readonly string[] | null
-  /** Hooks Orca runs through it, as listed in `contributes.hooks`; defaults to the manifest's. */
-  hooks: readonly string[]
+  /** Hooks Orca runs through it, as listed in `contributes.hooks` (a name, or `{ event, onError }`);
+   *  defaults to the manifest's. */
+  hooks: readonly (string | { event: string; onError?: 'pass' | 'deny' })[]
 }
 
 /** What a hook chain of this one worker decided: Orca goes on with `event`, or it was refused. */
@@ -51,7 +52,13 @@ function messageOf(error: unknown): string {
 export async function mountWorker(module: WorkerModule, options: MountWorkerOptions) {
   const { host } = options
   const subscribed = new Set(options.events)
-  const hooked = new Set(options.hooks)
+  const hookEntries = options.hooks.map((hook) =>
+    typeof hook === 'string' ? { event: hook } : hook
+  )
+  const hooked = new Set(hookEntries.map((hook) => hook.event))
+  const failsClosed = new Set(
+    hookEntries.filter((hook) => hook.onError === 'deny').map((hook) => hook.event)
+  )
   const tables = createPluginWorkerApiTables()
   const logs: string[] = []
   const posts: PluginWorkerPanelPost[] = []
@@ -154,7 +161,8 @@ export async function mountWorker(module: WorkerModule, options: MountWorkerOpti
           invoke: (_plugin, current) =>
             runPluginWorkerHookHandlers(tables.hooks.get(event) ?? [], current),
           log: (_plugin, line) => void logs.push(line),
-          now: () => performance.now()
+          now: () => performance.now(),
+          failsClosed: () => failsClosed.has(event)
         })
         await host.idle()
         return outcome.kind === 'deny'

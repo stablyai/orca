@@ -119,4 +119,27 @@ describe('pluginHookParticipants', () => {
     })
     expect(logs[0]).toMatch(/disabled or changed while its hook ran/)
   })
+
+  it('refuses when a plugin listing the hook with onError: deny crashes', async () => {
+    const runHook = async () => {
+      throw new Error('worker exited before responding')
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runner calls only runHook.
+    const crashing = { runHook } as unknown as PluginWorkerHandle
+    const runner = createPluginHookRunner({
+      plugins: () => [
+        plugin('acme.guard', false, { hooks: [{ event: 'terminal.send', onError: 'deny' }] })
+      ],
+      isRuntimeApproved: () => true,
+      ensureWorker: async () => crashing,
+      logWarning: () => () => undefined,
+      isEnabled: () => true
+    })
+    const event = { terminalId: 't', text: 'rm -rf /', enter: true, inputKind: 'driving' }
+    await expect(runner.run('terminal.send', event)).resolves.toEqual({
+      kind: 'deny',
+      pluginKey: 'acme.guard',
+      reason: 'acme.guard failed and denies on error: worker exited before responding'
+    })
+  })
 })

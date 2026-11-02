@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runPluginHookChain, type PluginHookChainInput } from './plugin-hook-chain'
+import {
+  PluginHookParticipantGoneError,
+  runPluginHookChain,
+  type PluginHookChainInput
+} from './plugin-hook-chain'
 import { runPluginWorkerHookHandlers, type PluginHookHandler } from './plugin-worker-hooks'
 import { terminalSendHookPayloadSchema } from '../events/plugin-hook-payloads'
 
@@ -135,5 +139,58 @@ describe('runPluginHookChain', () => {
       send
     )
     expect(decision).toEqual({ decision: 'continue', payload: { ...send, text: 'ab' } })
+  })
+
+  it('refuses when a fail-closed plugin throws, misses its deadline or answers nonsense', async () => {
+    const failsClosed = () => true
+    const thrown = chain(
+      {
+        'a.guard': [
+          () => {
+            throw new Error('status bar down')
+          }
+        ]
+      },
+      { failsClosed }
+    )
+    await expect(thrown.outcome).resolves.toEqual({
+      kind: 'deny',
+      pluginKey: 'a.guard',
+      reason: 'a.guard failed and denies on error: status bar down'
+    })
+    expect(thrown.logs[0]).toMatch(/denied after 0ms \(onError: deny\)/)
+    const nonsense = chain(
+      {},
+      { participants: ['a.guard'], invoke: async () => 'nope', failsClosed }
+    )
+    await expect(nonsense.outcome).resolves.toMatchObject({ kind: 'deny', pluginKey: 'a.guard' })
+  })
+
+  it('passes a fail-closed plugin that is gone, and observe-only hooks', async () => {
+    const gone = chain(
+      {},
+      {
+        participants: ['a.guard'],
+        invoke: async () => {
+          throw new PluginHookParticipantGoneError('the plugin is no longer enabled')
+        },
+        failsClosed: () => true
+      }
+    )
+    await expect(gone.outcome).resolves.toEqual({ kind: 'continue', payload: send })
+    const created = { workspaceId: 'w', kind: 'folder', path: '/w', branch: '' }
+    const observe = chain(
+      {},
+      {
+        event: 'workspace.create.after',
+        payload: created,
+        participants: ['a.guard'],
+        invoke: async () => {
+          throw new Error('boom')
+        },
+        failsClosed: () => true
+      }
+    )
+    await expect(observe.outcome).resolves.toEqual({ kind: 'continue', payload: created })
   })
 })

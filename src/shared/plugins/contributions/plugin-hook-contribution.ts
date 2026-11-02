@@ -20,6 +20,9 @@ export const PLUGIN_HOOK_SINCE: Record<PluginHookName, string> = {
   'workspace.create.after': PLUGIN_HOOKS_SINCE
 }
 
+/** RPC error code for an action a plugin hook refused; `data` names the plugin and its reason. */
+export const PLUGIN_HOOK_DENIED_CODE = 'denied_by_plugin'
+
 export function isPluginHookName(name: string): name is PluginHookName {
   return PLUGIN_HOOK_NAMES.some((hook) => hook === name)
 }
@@ -29,7 +32,16 @@ export const pluginHookContributionSchema = z
     event: z.enum(PLUGIN_HOOK_NAMES).meta({
       ...pluginFieldDoc('Hook the worker handles with `orca.hooks.on`.', PLUGIN_HOOKS_SINCE),
       [PLUGIN_ENUM_SINCE_KEY]: PLUGIN_HOOK_SINCE
-    })
+    }),
+    onError: z
+      .enum(['pass', 'deny'])
+      .optional()
+      .meta(
+        pluginFieldDoc(
+          "What Orca does when this plugin's hook throws, times out, crashes or does not start: `pass` (the default) carries on as if it passed; `deny` refuses the action, naming the plugin, so a guard fails closed. Ignored for hooks that only observe.",
+          PLUGIN_HOOKS_SINCE
+        )
+      )
   })
   .strict()
   .meta({

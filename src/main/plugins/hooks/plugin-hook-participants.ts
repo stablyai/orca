@@ -5,6 +5,7 @@ import {
 import { isInvalidDiscoveredPlugin, type ValidDiscoveredPlugin } from '../plugin-discovery'
 import type { PluginEventDeliveryContext } from '../plugin-event-delivery'
 import {
+  PluginHookParticipantGoneError,
   runPluginHookChain,
   type PluginHookChainOutcome
 } from '../../../shared/plugins/workers/plugin-hook-chain'
@@ -80,7 +81,7 @@ export function createPluginHookRunner(context: PluginHookHostContext): PluginHo
           const plugin = participants.get(pluginKey)
           // Why recheck: an earlier hook may have outlived this plugin's removal or disablement.
           if (!plugin || !context.isRuntimeApproved(plugin)) {
-            throw new Error('the plugin is no longer enabled')
+            throw new PluginHookParticipantGoneError('the plugin is no longer enabled')
           }
           workers.set(pluginKey, await context.ensureWorker(plugin))
         },
@@ -95,12 +96,20 @@ export function createPluginHookRunner(context: PluginHookHostContext): PluginHo
           const decision = await worker.runHook(event, current, timeoutMs)
           // Why: a plugin disabled, removed or updated while it decided no longer speaks for Orca.
           if (!isSamePluginStillEnabled(plugin, context)) {
-            throw new Error('the plugin was disabled or changed while its hook ran')
+            throw new PluginHookParticipantGoneError(
+              'the plugin was disabled or changed while its hook ran'
+            )
           }
           return decision
         },
         log: (pluginKey, line) => context.logWarning(pluginKey)(line),
-        now: () => performance.now()
+        now: () => performance.now(),
+        failsClosed: (pluginKey) =>
+          participants
+            .get(pluginKey)
+            ?.manifest.contributes.hooks.some(
+              (hook) => hook.event === event && hook.onError === 'deny'
+            ) === true
       })
     }
   }
