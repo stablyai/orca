@@ -194,6 +194,8 @@ describe('TerminalWebView engine errors', () => {
 
       const ping = postedCommands()[0]
       expect(ping?.type).toBe('ping')
+      postWebViewMessage(renderer, { type: 'pong', pingId: ping?.id, terminalAvailable: false })
+      expect(onWebReady).not.toHaveBeenCalled()
       postWebViewMessage(renderer, { type: 'pong', pingId: ping?.id, terminalAvailable: true })
 
       act(() => {

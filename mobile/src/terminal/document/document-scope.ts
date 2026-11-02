@@ -114,6 +114,7 @@ export type TerminalDocumentState = {
   uninstallErrorReporter: (() => void) | null
   uninstallHostTransport: (() => void) | null
   webReadyReported: boolean
+  pendingReadinessPingId: number | null
   cancelFontReadiness: (() => void) | null
   removeViewportRefit: (() => void) | null
   removeTapDispatch: (() => void) | null
@@ -240,6 +241,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     uninstallErrorReporter: null,
     uninstallHostTransport: null,
     webReadyReported: false,
+    pendingReadinessPingId: null,
     cancelFontReadiness: null,
     removeViewportRefit: null,
     removeTapDispatch: null,

@@ -38,14 +38,20 @@ function pendingFonts() {
 }
 
 describe('the terminal waits for its bundled glyphs', () => {
-  it.each(['loaded', 'deadline'] as const)(
-    'withholds ready pongs until font readiness completes through %s',
+  it.each(['loaded', 'deadline', 'failed'] as const)(
+    'answers a pending ping after %s even when web-ready is dropped',
     async (completion) => {
       vi.useFakeTimers()
       const fonts = pendingFonts()
+      const delivered = vi.fn()
+      fonts.scope.postToHost = (message) => {
+        if (message.type !== 'web-ready') {
+          delivered(message)
+        }
+      }
       const ready = startMessageBridge(fonts.scope)
       handleIncomingMessage(fonts.scope, { type: 'ping', id: 1 })
-      expect(fonts.postToHost).toHaveBeenLastCalledWith({
+      expect(delivered).toHaveBeenLastCalledWith({
         type: 'pong',
         pingId: 1,
         terminalAvailable: false,
@@ -53,13 +59,20 @@ describe('the terminal waits for its bundled glyphs', () => {
       })
       if (completion === 'loaded') {
         fonts.finish()
+      } else if (completion === 'failed') {
+        fonts.fail()
       } else {
         await vi.advanceTimersByTimeAsync(2000)
       }
       await ready
-      expect(fonts.postToHost).toHaveBeenLastCalledWith({ type: 'web-ready', cellBox: null })
+      expect(delivered).toHaveBeenLastCalledWith({
+        type: 'pong',
+        pingId: 1,
+        terminalAvailable: true,
+        cellBox: null
+      })
       handleIncomingMessage(fonts.scope, { type: 'ping', id: 2 })
-      expect(fonts.postToHost).toHaveBeenLastCalledWith({
+      expect(delivered).toHaveBeenLastCalledWith({
         type: 'pong',
         pingId: 2,
         terminalAvailable: true,

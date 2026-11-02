@@ -42,6 +42,19 @@ function holdHostFrame(scope: TerminalDocumentScope, msg: TerminalHostMessage) {
   scope.hostFrame = hostFrameOf(msg) ?? scope.hostFrame
 }
 
+// A recovered subscription needs the same measured cell box as web-ready.
+export function replyToTerminalReadinessPing(
+  scope: TerminalDocumentScope,
+  pingId: number | undefined
+) {
+  notify(scope, {
+    type: 'pong',
+    pingId,
+    terminalAvailable: scope.webReadyReported && scope.hasEngine(),
+    cellBox: laidOutCellBox(scope)?.cellBox ?? null
+  })
+}
+
 export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage) {
   if (typeof msg.id === 'number') {
     // oxlint-disable-next-line unicorn/prefer-includes -- the document's text is pinned token for token; rewriting this changes the native program
@@ -54,15 +67,11 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
     }
   }
   if (msg.type === 'ping') {
-    // Why: a pong that stands in for a dropped web-ready must carry the same cell box, or the
-    // host's first subscribe goes out unmeasured and the snapshot comes back at host size.
-    notify(scope, {
-      type: 'pong',
-      pingId: msg.id,
-      // The bridge receives pings while fonts are still delaying the first readiness report.
-      terminalAvailable: scope.webReadyReported && scope.hasEngine(),
-      cellBox: laidOutCellBox(scope)?.cellBox ?? null
-    })
+    // Retain only the current probe; font readiness can finish after the load-end ping.
+    if (!scope.webReadyReported && typeof msg.id === 'number') {
+      scope.pendingReadinessPingId = msg.id
+    }
+    replyToTerminalReadinessPing(scope, msg.id)
   } else if (msg.type === 'init') {
     holdHostFrame(scope, msg)
     init(
