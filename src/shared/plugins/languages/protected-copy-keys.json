@@ -794,6 +794,7 @@
     "profileState.repairChoice.quitButton",
     "profileState.repairChoice.repairButton",
     "profileState.repairChoice.restUnchanged",
+    "profileState.repairChoice.sectionKeptCurrent",
     "profileState.repairChoice.sectionRestored",
     "profileState.repairChoice.sectionStartsEmpty",
     "profileState.repairChoice.title",

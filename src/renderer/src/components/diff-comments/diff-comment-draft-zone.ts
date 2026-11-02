@@ -5,6 +5,10 @@ import { installDiffCommentZoneMouseDownStopper } from './diff-comment-zone-mous
 import { renderDiffCommentDraftCard } from './diff-comment-zone-card'
 import {
   resizeDiffCommentZone,
+  snapshotDiffCommentDraft,
+  type CarriedDiffCommentDraft,
+  type OpenDiffCommentDraft,
+  type RestoreDiffCommentDraft,
   DRAFT_ZONE_DEFAULT_HEIGHT,
   type DraftZoneEntry
 } from './diff-comment-view-zone-entry'
@@ -14,12 +18,11 @@ export type DiffCommentDraft = {
   startLine?: number
 }
 
-type CarriedDraft = { draft: DiffCommentDraft; body: string }
-
 export type UseDiffCommentDraftZoneArgs = {
   editor: monacoEditor.ICodeEditor | null
   monacoModelIdentity?: string
   canOpenDraft?: boolean
+  captureCreateComment?: boolean
   onCreateComment?: (args: {
     lineNumber: number
     startLine?: number
@@ -42,6 +45,7 @@ export function useDiffCommentDraftZone({
   editor,
   monacoModelIdentity,
   canOpenDraft = true,
+  captureCreateComment = false,
   onCreateComment,
   draftPlaceholder,
   draftSubmitLabel,
@@ -49,7 +53,7 @@ export function useDiffCommentDraftZone({
 }: UseDiffCommentDraftZoneArgs): DiffCommentDraftZoneHandle {
   const draftZoneRef = useRef<DraftZoneEntry | null>(null)
   // Retain the only draft copy between card teardown and replacement.
-  const pendingDraftRef = useRef<CarriedDraft | null>(null)
+  const pendingDraftRef = useRef<CarriedDiffCommentDraft | null>(null)
   const previousModelIdentityRef = useRef(monacoModelIdentity)
   const reanchorFrameRef = useRef<number | null>(null)
   const onAddCommentClickRef = useRef<
@@ -100,21 +104,23 @@ export function useDiffCommentDraftZone({
   }, [])
 
   // Re-anchor frames and settling submits need the latest opener.
-  const openDraftRef = useRef<(draft: DiffCommentDraft, initialBody?: string) => boolean>(
-    () => false
-  )
+  const openDraftRef = useRef<OpenDiffCommentDraft>(() => false)
 
   // Restore failed submissions after teardown unless another card now owns the composer; the toast covers displaced failures.
-  const restoreFailedSubmit = useCallback((draft: DiffCommentDraft, body: string): void => {
-    if (unmountedRef.current || draftZoneRef.current || openDraftRef.current(draft, body)) {
+  const restoreFailedSubmit = useCallback<RestoreDiffCommentDraft>((draft, body, createComment) => {
+    if (
+      unmountedRef.current ||
+      draftZoneRef.current ||
+      openDraftRef.current(draft, body, createComment)
+    ) {
       return
     }
-    pendingDraftRef.current = { draft, body }
+    pendingDraftRef.current = { draft, body, createComment }
   }, [])
 
-  const openDraft = useCallback(
-    (draft: DiffCommentDraft, initialBody = ''): boolean => {
-      if (!editor || !editor.getModel() || !onCreateCommentRef.current || !canOpenDraft) {
+  const openDraft = useCallback<OpenDiffCommentDraft>(
+    (draft, initialBody = '', capturedCreateComment = onCreateCommentRef.current) => {
+      if (!editor || !editor.getModel() || !capturedCreateComment || !canOpenDraft) {
         return false
       }
 
@@ -156,6 +162,7 @@ export function useDiffCommentDraftZone({
           root,
           draft,
           body: initialBody,
+          createComment: capturedCreateComment,
           submitting: false,
           disposeMouseDownStopper: () => {
             disposeDomMouseDownStopper()
@@ -180,7 +187,9 @@ export function useDiffCommentDraftZone({
           },
           onCancel: () => disposeDraftZone(true),
           onSubmit: async (body) => {
-            const createComment = onCreateCommentRef.current
+            const createComment = captureCreateComment
+              ? entry.createComment
+              : onCreateCommentRef.current
             if (!createComment) {
               return false
             }
@@ -202,7 +211,7 @@ export function useDiffCommentDraftZone({
                   disposeDraftZone(entry.domNode.contains(document.activeElement))
                 }
               } else if (draftZoneRef.current !== entry) {
-                restoreFailedSubmit(draft, body)
+                restoreFailedSubmit(draft, body, entry.createComment)
               }
             }
           }
@@ -213,6 +222,7 @@ export function useDiffCommentDraftZone({
     },
     [
       canOpenDraft,
+      captureCreateComment,
       disposeDraftZone,
       draftPlaceholder,
       draftSubmitLabel,
@@ -233,7 +243,7 @@ export function useDiffCommentDraftZone({
     reanchorFrameRef.current = requestAnimationFrame(() => {
       reanchorFrameRef.current = null
       const pending = pendingDraftRef.current
-      if (pending && openDraftRef.current(pending.draft, pending.body)) {
+      if (pending && openDraftRef.current(pending.draft, pending.body, pending.createComment)) {
         pendingDraftRef.current = null
       }
     })
@@ -256,7 +266,13 @@ export function useDiffCommentDraftZone({
       // A new anchor must cancel any frame that would move the card back.
       cancelReanchorFrame()
       pendingDraftRef.current = null
-      if (!openDraft({ lineNumber: args.lineNumber, startLine: args.startLine }, carriedBody)) {
+      if (
+        !openDraft(
+          { lineNumber: args.lineNumber, startLine: args.startLine },
+          carriedBody,
+          current?.createComment ?? pending?.createComment
+        )
+      ) {
         pendingDraftRef.current = pending
       }
     },
@@ -277,7 +293,7 @@ export function useDiffCommentDraftZone({
     if (current) {
       // In-flight saves restore their own failures; carrying their text would allow duplicate submission.
       if (!current.submitting) {
-        pendingDraftRef.current = { draft: current.draft, body: current.body }
+        pendingDraftRef.current = snapshotDiffCommentDraft(current)
       }
       disposeDraftZone()
     }
@@ -304,7 +320,7 @@ export function useDiffCommentDraftZone({
       // Runs before the identity effect on a same-render swap, so stash here or the draft is lost.
       const current = draftZoneRef.current
       if (!unmountedRef.current && current && !current.submitting) {
-        pendingDraftRef.current = { draft: current.draft, body: current.body }
+        pendingDraftRef.current = snapshotDiffCommentDraft(current)
       }
       disposeDraftZone(false)
     }

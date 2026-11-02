@@ -17,6 +17,7 @@ import {
   nativeChatSplitShortcutLabels
 } from './native-chat-split-shortcut'
 import { runNativeChatSplitTarget } from './native-chat-layout-actions'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 
 export function useStructuredNativeChatPaneCommands({
   pane,
@@ -25,10 +26,12 @@ export function useStructuredNativeChatPaneCommands({
   rootRef,
   composerRef,
   questionAnswerInputRef,
+  sessionContext,
   ...menuTargets
 }: {
   pane: Omit<NativeChatStructuredViewProps, 'mode'>
   handOff: NativeChatHandOff
+  sessionContext: { messages: readonly NativeChatMessage[]; epoch: string | null }
   ownerWorktreeId: string | null
   rootRef: RefObject<HTMLDivElement | null>
   composerRef: RefObject<NativeChatComposerHandle | null>
@@ -37,6 +40,7 @@ export function useStructuredNativeChatPaneCommands({
   const { tabId, groupId, isVisible, sessionId, target } = pane
   const terminalPaneActions = pane.contextMenuActions
   const keybindings = useAppStore((state) => state.keybindings)
+  const focusSource = useCallback(() => composerRef.current?.focus(), [composerRef])
   const resolveOrcaSessionId = useMemo(
     () =>
       isOrcaSessionId(sessionId)
@@ -65,9 +69,20 @@ export function useStructuredNativeChatPaneCommands({
     composerRef,
     showTerminalPaneActions: terminalPaneActions !== undefined,
     splitShortcutLabels: nativeChatSplitShortcutLabels(getShortcutPlatform(), keybindings),
+    chatSession:
+      ownerWorktreeId && terminalPaneActions === undefined && isVisible
+        ? {
+            target,
+            sessionId,
+            worktreeId: ownerWorktreeId,
+            agent: pane.agent,
+            ...sessionContext,
+            focusSource
+          }
+        : undefined,
     chatPane:
       ownerWorktreeId && groupId && terminalPaneActions === undefined
-        ? { tabId, worktreeId: ownerWorktreeId, groupId }
+        ? { tabId, worktreeId: ownerWorktreeId, groupId, sessionId }
         : undefined
   })
   const onKeyDownCapture = useCallback<KeyboardEventHandler<HTMLDivElement>>(

@@ -206,6 +206,9 @@ export function restoreShedStatusFields(
 /** Request cache replay after wiring handlers; eager setWrite pushes can arrive before listeners and be lost. */
 export const AGENT_HOOK_REQUEST_REPLAY_METHOD = 'agent_hook.requestReplay' as const
 
+/** A WSL relay asks which guest shell roots a pane's Windows-owned PTY; older desktops lack it. */
+export const AGENT_HOOK_PANE_ROOT_METHOD = 'agent_hook.paneRoot' as const
+
 /** Ship OpenCode/Pi plugin sources at session-ready so the relay can materialize remote overlays. */
 export const AGENT_HOOK_INSTALL_PLUGINS_METHOD = 'agent_hook.installPlugins' as const
 

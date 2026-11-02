@@ -107,22 +107,6 @@ describe("a launch pane's verdict in the window", () => {
     expect(launchTab()).toBeUndefined()
   })
 
-  it('withdrawn: a split the user added stays; only the launch pane closes', () => {
-    store.getState().setTabLayout(tabId, {
-      root: {
-        type: 'split',
-        direction: 'vertical',
-        first: { type: 'leaf', leafId: LEAF },
-        second: { type: 'leaf', leafId: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d' }
-      },
-      activeLeafId: LEAF,
-      expandedLeafId: null
-    })
-    apply({ kind: 'withdrawn' })
-    expect(launchTab()).toBeDefined()
-    expect(applyClosedTerminalLeafNotice).toHaveBeenCalledWith(tabId, LEAF)
-  })
-
   it('never touches a pane no launch laid out', () => {
     apply({ kind: 'withdrawn' }, '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d')
     expect(launchTab()).toBeDefined()

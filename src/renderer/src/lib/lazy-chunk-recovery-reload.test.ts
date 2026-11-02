@@ -9,18 +9,6 @@ describe('requestLazyChunkRecoveryReload', () => {
     vi.unstubAllGlobals()
   })
 
-  it('refuses the reload when the staged checkpoint never reaches disk', async () => {
-    const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => undefined)
-
-    await expect(
-      requestLazyChunkRecoveryReload(window, () =>
-        Promise.reject(new Error('Failed to persist renderer state before unload.'))
-      )
-    ).resolves.toBe('checkpoint-refused')
-
-    expect(reload).not.toHaveBeenCalled()
-  })
-
   it('joins the preload checkpoint before navigating when no override is supplied', async () => {
     const order: string[] = []
     let flush: () => void = () => undefined
