@@ -35,6 +35,12 @@ function isConfirmedSignedOut(provider: ProviderRateLimits): boolean {
     return true
   }
   const error = provider.error
+  // Why: a saved Claude account whose managed credentials were removed reports
+  // exactly "No credentials" and no failure kind. That is a missing sign-in,
+  // not a refresh that failed mid-read.
+  if (error?.trim() === 'No credentials') {
+    return true
+  }
   return Boolean(error && CONFIRMED_SIGN_OUT_PATTERNS.some((pattern) => pattern.test(error)))
 }
 
