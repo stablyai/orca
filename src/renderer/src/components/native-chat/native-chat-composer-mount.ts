@@ -72,23 +72,35 @@ export function nativeChatComposerSelection(
 export function waitForNativeChatComposerHandoff(
   sourceScope: string,
   destinationTabId: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  destinationReadyTimeoutMs?: number
 ): Promise<void> {
   return new Promise((resolve) => {
+    let destinationReadyTimedOut = false
+    let timeout: ReturnType<typeof setTimeout> | undefined
     const finish = (): void => {
       listeners.delete(check)
       signal.removeEventListener('abort', finish)
+      if (timeout !== undefined) {
+        clearTimeout(timeout)
+      }
       resolve()
     }
     const check = (): void => {
       const ready = [...(panes.get(destinationTabId) ?? [])].some((isActionable) => isActionable())
       const composing = [...(inputs.get(sourceScope) ?? [])].some((owner) => owner.isComposing())
-      if ((ready && !composing) || signal.aborted) {
+      if (((ready || destinationReadyTimedOut) && !composing) || signal.aborted) {
         finish()
       }
     }
     listeners.add(check)
     signal.addEventListener('abort', finish, { once: true })
+    if (destinationReadyTimeoutMs !== undefined) {
+      timeout = setTimeout(() => {
+        destinationReadyTimedOut = true
+        check()
+      }, destinationReadyTimeoutMs)
+    }
     check()
   })
 }

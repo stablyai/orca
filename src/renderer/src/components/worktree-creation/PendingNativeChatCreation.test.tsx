@@ -75,6 +75,7 @@ afterEach(() => {
   composer.props = null
   clearNativeChatComposerDraftsForTests()
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
 function Destination({
@@ -223,10 +224,64 @@ it.each(['commit', 'blur', 'unmount'])(
   }
 )
 
+it.each([false, true])(
+  'bounds destination readiness while preserving IME composition: %s',
+  async (composing) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    useAppStore.setState({
+      pendingWorktreeCreations: {
+        creation: {
+          creationId: 'creation',
+          phase: 'creating',
+          status: 'creating',
+          startedAt: 1,
+          indeterminate: false,
+          loaderVisible: true,
+          request
+        }
+      }
+    })
+    render(
+      <TooltipProvider>
+        <PendingNativeChatCreation creationId="creation" />
+      </TooltipProvider>
+    )
+    const field = screen.getByRole('textbox')
+    changePrompt(field, 'Still typing')
+    if (composing) {
+      fireEvent.compositionStart(field)
+    }
+    let completed = false
+    const handoff = waitForNativeChatComposerHandoff(
+      'pending-worktree-creation:creation',
+      'missing',
+      new AbortController().signal,
+      5000
+    ).then(() => {
+      completed = true
+    })
+
+    await act(async () => vi.advanceTimersByTime(4999))
+    expect(completed).toBe(false)
+    await act(async () => vi.advanceTimersByTime(1))
+    expect(completed).toBe(!composing)
+    if (composing) {
+      changePrompt(field, 'Still typing, committed')
+      fireEvent.compositionEnd(field)
+    }
+    await handoff
+    expect(completed).toBe(true)
+    expect(readNativeChatComposerDraft('pending-worktree-creation:creation').text).toBe(
+      composing ? 'Still typing, committed' : 'Still typing'
+    )
+  }
+)
+
 it('cancels a handoff whose destination never mounts', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   const abort = new AbortController()
   let completed = false
-  const handoff = waitForNativeChatComposerHandoff('no-source', 'missing', abort.signal).then(
+  const handoff = waitForNativeChatComposerHandoff('no-source', 'missing', abort.signal, 5000).then(
     () => {
       completed = true
     }
@@ -236,6 +291,7 @@ it('cancels a handoff whose destination never mounts', async () => {
   abort.abort()
   await handoff
   expect(completed).toBe(true)
+  expect(vi.getTimerCount()).toBe(0)
 })
 
 it('keeps typing visible in the replacement while its draft write is slow or refused', async () => {

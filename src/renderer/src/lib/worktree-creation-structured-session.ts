@@ -23,6 +23,8 @@ import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-termina
 import { mountCreatedWorktreeStartupTabsInBackground } from '@/lib/worktree-creation-background-mount'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
+const HANDOFF_READY_TIMEOUT_MS = 5000
+
 export type WorktreeCreationStructuredSessionResult = {
   accepted: boolean
   cancelled: boolean
@@ -136,7 +138,12 @@ export async function launchStructuredWorktreeSession(
       state.activePendingCreationId === args.creationId
     ) {
       requestBackgroundTerminalWorktreeMount({ worktreeId: args.worktreeId, tabIds: [tab.id] })
-      await waitForNativeChatComposerHandoff(sourceScope, tab.id, revealAbandoned.signal)
+      await waitForNativeChatComposerHandoff(
+        sourceScope,
+        tab.id,
+        revealAbandoned.signal,
+        HANDOFF_READY_TIMEOUT_MS
+      )
     }
     if (abandoned.signal.aborted) {
       return
