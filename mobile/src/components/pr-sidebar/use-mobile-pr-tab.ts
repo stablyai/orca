@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { ConnectionState } from '../../transport/types'
 import type { RpcClient } from '../../transport/rpc-client'
+import type { HostConnectionInputs } from '../../transport/client-context-connection-metrics'
 import {
   isPrSidebarDetailsPlaceholder,
   prSidebarResourceKey,
@@ -43,6 +44,8 @@ type Input = {
   live?: PrTabLive
   client: RpcClient | null
   connState: ConnectionState
+  /** The screen header's own verdict inputs, so a sheet's no-data wait reads as the header does. */
+  hostConnection: HostConnectionInputs
   worktreeId: string
   gitBranch: string | null
   gitStatus: MobileGitStatusResult | null

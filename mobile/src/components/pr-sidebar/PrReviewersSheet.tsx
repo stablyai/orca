@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { Search, X } from 'lucide-react-native'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { Translate } from '../../i18n/mobile-i18n'
-import type { GitHubAssignableUser } from '../../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import { getGitHubPRReviewerRows } from '../../../../src/shared/github/pr-reviewer-display'
-import { fetchAssignableUsers } from '../../session/github-pr-rpc'
+import { useCalmConnectionState } from '../../transport/calm-connection-state'
+import { classifyConnection, verdictDisplayLabel } from '../../transport/connection-health'
+import { useReviewerPeople } from './use-reviewer-people'
 import { SheetHeader } from '../nav-bar/SheetHeader'
 import { ListGroup, ListRow } from '../list/ListGroup'
 import { TextField } from '../composer-input/TextField'
@@ -51,11 +52,6 @@ function reviewerStateLabel(
   }
 }
 
-type PeopleLoad =
-  | { status: 'idle' | 'loading' }
-  | { status: 'error'; message: string | null }
-  | { status: 'loaded'; users: GitHubAssignableUser[] }
-
 // Reviewers with remove, and a search that requests a new one; same add/remove as the old section.
 export function PrReviewersSheet({
   tab,
@@ -72,8 +68,23 @@ export function PrReviewersSheet({
   // A placeholder means the read failed; only null is still loading.
   const detailsFailed = rawDetails !== null && details === null
   const [query, setQuery] = useState('')
-  const [people, setPeople] = useState<PeopleLoad>({ status: 'idle' })
   const searching = query.trim().length > 0
+  // Candidates belong to this open request's repository; closing or a PR departure ends their visit at once.
+  const people = useReviewerPeople({
+    client,
+    worktreeId,
+    prRepo: readyPrData(tab)?.pr.prRepo ?? null,
+    request: tab.sheetRequest === request ? request : null,
+    search: searching
+  })
+  const { users, error } = people
+  const { hostConnection } = tab
+  const presentedConnState = useCalmConnectionState(people.state, hostConnection.lastConnectedAt)
+  // Without candidates, an outage the calm presentation reveals explains the wait with the header's verdict.
+  const connectionLabel =
+    !users && !error && people.state !== 'connected' && presentedConnState !== 'connected'
+      ? verdictDisplayLabel(classifyConnection({ state: people.state, ...hostConnection }))
+      : null
 
   const rows = useMemo(
     () =>
@@ -102,39 +113,20 @@ export function PrReviewersSheet({
   }
   const approvals = rows.filter((row) => row.approved).length
 
-  // Load people once, on the first search; the loading state must not re-run and cancel this read.
-  const peopleRequestedRef = useRef(false)
-  useEffect(() => {
-    if (!searching || peopleRequestedRef.current || !client) {
-      return
-    }
-    peopleRequestedRef.current = true
-    setPeople({ status: 'loading' })
-    void fetchAssignableUsers(client, worktreeId)
-      .then((outcome) =>
-        setPeople(
-          outcome.ok
-            ? { status: 'loaded', users: outcome.result }
-            : { status: 'error', message: outcome.error }
-        )
-      )
-      .catch(() => setPeople({ status: 'error', message: null }))
-  }, [client, searching, worktreeId])
-
   const matches = useMemo(() => {
-    if (people.status !== 'loaded') {
+    if (!users) {
       return []
     }
     const q = query.trim().toLowerCase()
     const author = details?.item.author?.toLowerCase()
-    return people.users
+    return users
       .filter((user) => user.login.toLowerCase() !== author)
       .filter(
         (user) =>
           user.login.toLowerCase().includes(q) || (user.name ?? '').toLowerCase().includes(q)
       )
       .slice(0, 20)
-  }, [details, people, query])
+  }, [details, users, query])
 
   return (
     <View>
@@ -161,7 +153,7 @@ export function PrReviewersSheet({
           autoCorrect={false}
         />
         {searching ? (
-          people.status === 'loaded' ? (
+          users ? (
             matches.length > 0 ? (
               <ListGroup>
                 {matches.map((user) => {
@@ -184,11 +176,13 @@ export function PrReviewersSheet({
                 {t('pullRequest.reviewerPickerDrawer.noMatches', 'No matching people')}
               </Text>
             )
-          ) : people.status === 'error' ? (
+          ) : error ? (
             <Text style={sheetStyles.error}>
-              {people.message ??
+              {error.message ??
                 t('pullRequest.reviewerPickerDrawer.loadFailed', 'Failed to load people')}
             </Text>
+          ) : connectionLabel ? (
+            <Text style={sheetStyles.note}>{connectionLabel}</Text>
           ) : (
             <ActivityIndicator color={colors.textSecondary} />
           )

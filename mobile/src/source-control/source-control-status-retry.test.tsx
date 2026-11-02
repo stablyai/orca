@@ -54,6 +54,16 @@ vi.mock('../components/pr-sidebar/use-mobile-pr-tab', () => ({
 }))
 vi.mock('../components/pr-sidebar/use-pr-tab-menu', () => ({ usePrTabMenuGroups: () => null }))
 vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
+// The header's verdict inputs come from the host store, which this panel-only scenario does not mount.
+vi.mock('../transport/client-context-connection-metrics', () => ({
+  useHostConnectionInputs: () => ({
+    reconnectAttempts: 0,
+    lastConnectedAt: null,
+    pendingPath: null,
+    pairingRejected: false,
+    relayHostReachability: 'connecting'
+  })
+}))
 vi.mock('./use-mobile-source-control-action-sheet', () => ({
   useMobileSourceControlActionSheet: () => []
 }))
