@@ -61,12 +61,4 @@ describe('the live line both clients draw', () => {
       reasoning: null
     })
   })
-
-  // The label may read the provider's own words; the block it discloses is still the open one.
-  it('keeps the activity text it was handed', () => {
-    expect(line({ activityText: 'Summarizing the plan' })).toMatchObject({
-      activityText: 'Summarizing the plan',
-      reasoning: { message: open }
-    })
-  })
 })

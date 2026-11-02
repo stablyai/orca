@@ -35,6 +35,12 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     reference: '--reference <name>     Print one bundled reference by name',
     references: '--references           List the bundled reference names for a topic'
   },
+  'plugin create': {
+    template: '--template <name>      Template to scaffold from (see Usage)',
+    publisher: '--publisher <name>     Repository owner; only for Orca older than 1.4.246',
+    id: '--id <id>              Plugin id (default: the folder name)',
+    name: '--name <display name>  Plugin name shown in Orca'
+  },
   'environment update': {
     force: '--force                Restart over running terminals instead of deferring the update'
   },

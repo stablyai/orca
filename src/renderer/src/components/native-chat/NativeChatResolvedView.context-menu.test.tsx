@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import type { ComponentProps } from 'react'
+import { isValidElement, type ComponentProps } from 'react'
 import type { NativeChatCrewFrame } from '../orchestration-crew/NativeChatCrewPanel'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -29,10 +29,13 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('../orchestration-crew/NativeChatCrewPanel', () => ({
-  NativeChatCrewFrame: ({ crew, children }: ComponentProps<typeof NativeChatCrewFrame>) => {
-    mocks.crewVisibility(crew.isVisible)
+  NativeChatCrewFrame: ({ panel, children }: ComponentProps<typeof NativeChatCrewFrame>) => {
+    mocks.crewVisibility(isValidElement<{ isVisible?: boolean }>(panel) && panel.props.isVisible)
     return children
   }
+}))
+vi.mock('../orchestration-crew/TerminalChatCrewPanel', () => ({
+  TerminalChatCrewPanel: () => null
 }))
 
 vi.mock('./use-native-chat-retained-session', () => ({

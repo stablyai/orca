@@ -16,7 +16,7 @@ import type { StructuredAgentSessionAdapter } from './structured-agent-session-a
 import { rewindRefusal } from './structured-rewind-refusal'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 
 type RewindRecoveryDeps = {
   store: AgentSessionRecordStore

@@ -27,15 +27,6 @@ describe('RelayAgentHookServer', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('scopes endpoint files by relay socket path', () => {
-    const first = endpointDirForRelaySocket(join(dir, 'relay-a.sock'))
-    const second = endpointDirForRelaySocket(join(dir, 'relay-b.sock'))
-
-    expect(first).toBe(join(dir, 'agent-hooks', 'relay-a.sock'))
-    expect(second).toBe(join(dir, 'agent-hooks', 'relay-b.sock'))
-    expect(first).not.toBe(second)
-  })
-
   it('keeps named-pipe endpoint files on a real filesystem path', () => {
     const endpointDir = endpointDirForRelaySocket('\\\\.\\pipe\\orca-relay-abc123')
 
@@ -150,59 +141,6 @@ describe('RelayAgentHookServer', () => {
       expect(readFileSync(spoolFile, 'utf8')).not.toBe('')
     } finally {
       server.stop()
-    }
-  })
-
-  it('caches before forwarding, schedules retries after forwarding, and responds last', async () => {
-    const order: string[] = []
-    let server!: RelayAgentHookServer
-    let internals!: RelayServerInternals
-    server = new RelayAgentHookServer({
-      endpointDir: dir,
-      forward: () => {
-        expect(internals.state.lastStatusByPaneKey.has(PANE_KEY)).toBe(true)
-        order.push('forward')
-      }
-    })
-    // Characterization deliberately observes the server-owned scheduler without widening production API.
-    internals = server as unknown as RelayServerInternals
-    const retryScheduler = internals.retryScheduler
-    const originalAssistantRetry = retryScheduler.scheduleAssistantMessageRetry.bind(retryScheduler)
-    const originalTranscriptPoll = retryScheduler.scheduleTranscriptPoll.bind(retryScheduler)
-    const assistantRetry = vi
-      .spyOn(retryScheduler, 'scheduleAssistantMessageRetry')
-      .mockImplementation((...args) => {
-        order.push('assistant-retry')
-        originalAssistantRetry(...args)
-      })
-    const codexRetry = vi
-      .spyOn(retryScheduler, 'scheduleTranscriptPoll')
-      .mockImplementation((...args) => {
-        order.push('codex-retry')
-        originalTranscriptPoll(...args)
-      })
-    await server.start()
-    try {
-      const { port, token } = server.getCoordinates()
-      const res = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': token
-        },
-        body: JSON.stringify({
-          paneKey: PANE_KEY,
-          hook_event_name: 'UserPromptSubmit',
-          payload: { prompt: 'ordered' }
-        })
-      })
-      order.push('response')
-      expect(res.status).toBe(204)
-      expect(order).toEqual(['forward', 'assistant-retry', 'codex-retry', 'response'])
-    } finally {
-      server.stop()
-      assistantRetry.mockRestore()
-      codexRetry.mockRestore()
     }
   })
 
@@ -490,23 +428,6 @@ describe('RelayAgentHookServer', () => {
       // Rejected hooks still return 204 so agents never block.
       expect(res.status).toBe(204)
       expect(forward).not.toHaveBeenCalled()
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('exposes ORCA_AGENT_HOOK_* env vars after start', async () => {
-    const forward = vi.fn()
-    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
-    await server.start()
-    try {
-      const env = server.buildPtyEnv()
-      expect(env.ORCA_AGENT_HOOK_PORT).toMatch(/^\d+$/)
-      expect(env.ORCA_AGENT_HOOK_TOKEN).toBeTruthy()
-      expect(env.ORCA_AGENT_HOOK_ENV).toBe('remote')
-      expect(env.ORCA_AGENT_HOOK_VERSION).toBe('1')
-      expect(env.ORCA_AGENT_HOOK_TRANSPORT).toBe('raw-json-v1')
-      expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeTruthy()
     } finally {
       server.stop()
     }

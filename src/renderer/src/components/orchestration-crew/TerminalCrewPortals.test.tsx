@@ -7,6 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { PtyTransport } from '../terminal-pane/pty-transport-types'
 import { emptyCrew, type OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
@@ -75,6 +76,7 @@ function mount(insertion?: {
   split?: boolean
   restored?: boolean
 }) {
+  useAppStore.setState({ settings: { experimentalOrchestrationPanel: true } as GlobalSettings })
   const link = { connected: !insertion?.restored }
   currentWorker = insertion
     ? { ...worker, task: { title: 'Inspect', state: 'dispatched' }, sendAddress: 'term_worker' }

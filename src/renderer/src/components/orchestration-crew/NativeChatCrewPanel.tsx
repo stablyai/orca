@@ -2,6 +2,7 @@ import { formatOrcaSessionAddress, isOrcaSessionId } from '../../../../shared/or
 import type { RefObject } from 'react'
 import type { NativeChatComposerHandle } from '../native-chat/native-chat-composer-types'
 import { OrchestrationCrewPanel } from './OrchestrationCrewPanel'
+import { useOrchestrationPanelEnabled } from './use-orchestration-panel-enabled'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 export function NativeChatCrewPanel({
@@ -45,18 +46,21 @@ export function NativeChatCrewPanel({
 
 /** Wraps a native chat's transcript: the crew panel overlays it, never the header's buttons or the composer below it. */
 export function NativeChatCrewFrame({
-  crew,
+  panel,
   children
 }: {
-  crew: React.ComponentProps<typeof NativeChatCrewPanel>
+  /** Mounted only while the experimental setting is on, so an off panel costs no queries. */
+  panel: React.ReactNode
   children: React.ReactNode
 }): React.JSX.Element {
+  const enabled = useOrchestrationPanelEnabled()
+  // The wrapper stays either way so toggling the setting never remounts the transcript.
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      {/* Clips the panel to the transcript even when it is shorter than the panel's header. */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <NativeChatCrewPanel {...crew} />
-      </div>
+      {enabled ? (
+        // Clips the panel to the transcript even when it is shorter than the panel's header.
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">{panel}</div>
+      ) : null}
       {children}
     </div>
   )

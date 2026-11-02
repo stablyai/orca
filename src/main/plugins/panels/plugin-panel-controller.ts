@@ -268,11 +268,10 @@ export class PluginPanelController {
       return null
     }
     const declarative = contribution.ui === 'components'
-    // Why no entry text: a declarative entry is a module the desktop guest imports; browser
-    // clients get an empty shell and show that the panel needs the desktop app.
-    const html = withShell
-      ? await this.readShell(plugin, declarative ? null : contribution.entry, surface)
-      : ''
+    // Why no entry text: a declarative entry is a module the desktop guest imports, and an
+    // isolated-only editor never runs in the srcdoc fallback; both show they need the desktop app.
+    const shellEntry = declarative || contribution.frame === 'isolated' ? null : contribution.entry
+    const html = withShell ? await this.readShell(plugin, shellEntry, surface) : ''
     if (html === null) {
       return null
     }
@@ -329,7 +328,7 @@ function findFrameContribution(
   plugin: ValidDiscoveredPlugin,
   surface: PluginPanelSessionBinding['surface'],
   id: string
-): { entry: string; ui?: string } | null {
+): { entry: string; ui?: string; frame?: string } | null {
   const list =
     surface === 'panel'
       ? plugin.manifest.contributes.panels

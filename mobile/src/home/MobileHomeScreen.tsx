@@ -30,6 +30,7 @@ import { mobileConnectionPathLabel } from '../transport/mobile-connection-path-l
 import type { HomeJumpBackInRow } from '../worktree/home-jump-back-in'
 import { isResumeTargetConfirmedMissing } from '../worktree/home-resume-card'
 import { MobileHomeAppUpdateCard } from './MobileHomeAppUpdateCard'
+import { MobileHomeTasksAndAutomations } from './MobileHomeTasksAndAutomations'
 import { MobileHomeBottomBar, MobileHomePairBar } from './MobileHomeBottomBar'
 import { MobileHomeEmptyState } from './MobileHomeEmptyState'
 import { MobileHomeHostList } from './MobileHomeHostList'
@@ -150,7 +151,16 @@ export function MobileHomeScreen() {
                 />
               ) : null
             }
-            footer={<MobileHomeAppUpdateCard />}
+            footer={
+              <>
+                <MobileHomeTasksAndAutomations
+                  connectedHosts={data.connectedHosts}
+                  onOpenTasks={(hostId) => openMobileTasks(hostId)}
+                  onOpenAutomations={openMobileAutomations}
+                />
+                <MobileHomeAppUpdateCard />
+              </>
+            }
             hostAttempts={data.hostAttempts}
             hostLastConnected={data.hostLastConnected}
             hostConnections={data.hostConnections}
@@ -171,8 +181,6 @@ export function MobileHomeScreen() {
             isWideLayout={isWideLayout}
             connectedHosts={data.connectedHosts}
             hostsConnecting={data.hostsConnecting}
-            onOpenTasks={(hostId) => openMobileTasks(hostId)}
-            onOpenAutomations={openMobileAutomations}
             onCreateWorkspace={() =>
               data.router.push(newWorkspaceOverlayHref(data.connectedHosts.map((host) => host.id)))
             }
