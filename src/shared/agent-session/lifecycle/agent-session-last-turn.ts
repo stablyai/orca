@@ -1,4 +1,4 @@
-import { isAgentTurnOutcome, type AgentTurnOutcome } from './agent-turn-outcome'
+import { isAgentTurnOutcome, type AgentTurnOutcome } from '../../agent-turn-outcome'
 
 export type AgentSessionLastTurn = {
   state: 'open' | 'settled'

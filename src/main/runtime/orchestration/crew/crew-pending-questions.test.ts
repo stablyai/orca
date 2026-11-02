@@ -3,7 +3,7 @@ import { fixture } from './crew-read-model.test-fixture'
 import { buildCrewSnapshot } from './crew-read-model'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-freshness'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 
 // Ages the clock from the writers' actual timestamps, so the cutoff lands just past them.

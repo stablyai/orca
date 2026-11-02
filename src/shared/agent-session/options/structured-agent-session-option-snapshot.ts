@@ -16,7 +16,7 @@ import type { TrackedNativeChatSessionOption } from '../../native-chat/input/nat
 import {
   catalogEffortLevels,
   effectiveAgentEffort
-} from '../../structured-agent-session-effective-effort'
+} from './structured-agent-session-effective-effort'
 import { effectiveServiceTier } from './structured-agent-session-effective-tier'
 import { serviceTierOption } from './structured-agent-session-discovered-model'
 import {

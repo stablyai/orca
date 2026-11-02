@@ -5,7 +5,7 @@ import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-
 import type { StructuredAgentSessionAtRestCommands } from '../native-chat/agent-session-wire/structured-agent-session-at-rest-commands'
 import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
 import type { AgentJournalAnsweredTurnIdentity } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import { randomUUID } from 'node:crypto'
 import type { AgentJournalDispatchRejection } from '../../shared/agent-session/failures/agent-session-failure-words'
 import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'

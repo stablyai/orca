@@ -1,37 +1,34 @@
 // Derive hold labels on the client; the wire carries queue state, not presentation wording.
 
-import { agentMessageDisplayText } from './agent-session/agent-message-display-text'
+import { agentMessageDisplayText } from '../agent-message-display-text'
 import {
   readWholeAgentSessionFailureFact,
   type AgentSessionFailureFact,
   type UnreadAgentSessionFailureFact
-} from './agent-session/failures/agent-session-failure'
-import { agentSessionFailureStatedByRow } from './agent-session/failures/agent-session-visible-failures'
-import { agentSessionWriteNotDoneParts } from './agent-session/failures/agent-session-refusal-notice'
-import type { AgentSessionWriteNoticePart } from './agent-session/failures/agent-session-write-notice-copy'
-import { dispatchWasWithdrawn } from './agent-session/requests/structured-agent-session-dispatch-rejection'
-import { structuredAgentSessionAttemptFailureParts } from './agent-session/failures/structured-agent-session-rejection-words'
+} from '../failures/agent-session-failure'
+import { agentSessionFailureStatedByRow } from '../failures/agent-session-visible-failures'
+import { agentSessionWriteNotDoneParts } from '../failures/agent-session-refusal-notice'
+import type { AgentSessionWriteNoticePart } from '../failures/agent-session-write-notice-copy'
+import { dispatchWasWithdrawn } from '../requests/structured-agent-session-dispatch-rejection'
+import { structuredAgentSessionAttemptFailureParts } from '../failures/structured-agent-session-rejection-words'
 import type {
   AgentJournalItemBody,
   AgentJournalSubmission
-} from './agent-session/journal/agent-session-journal-types'
-import { pendingPromptsAllUnanswerableHere } from './agent-session/agent-session-approval-subject'
-import type { NativeChatImageRefBlock } from './native-chat/native-chat-types'
+} from '../journal/agent-session-journal-types'
+import { pendingPromptsAllUnanswerableHere } from '../agent-session-approval-subject'
+import type { NativeChatImageRefBlock } from '../../native-chat/native-chat-types'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage,
   type AgentSessionQueuePause
-} from './agent-session/requests/agent-session-queued-message-wire'
-import {
-  readAgentMessageSource,
-  type AgentMessageSource
-} from './agent-session/agent-session-message-source'
-import { handedOffQueuedMessageIds } from './agent-session/view/structured-agent-session-draft-hand-off'
+} from '../requests/agent-session-queued-message-wire'
+import { readAgentMessageSource, type AgentMessageSource } from '../agent-session-message-source'
+import { handedOffQueuedMessageIds } from './structured-agent-session-draft-hand-off'
 import {
   NATIVE_CHAT_IMAGE_LABEL_ENGLISH,
   nativeChatImageLabel,
   type NativeChatImageLabelCopy
-} from './native-chat-image-label'
+} from '../../native-chat-image-label'
 
 export type QueuedMessageCardHold =
   /** Plainly queued, also behind an open question: the question already says the agent waits. */
