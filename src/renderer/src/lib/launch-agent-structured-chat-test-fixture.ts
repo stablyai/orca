@@ -154,15 +154,13 @@ vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-create-call'
   launchStructuredAgentSession: mockLaunchStructuredCodexSession
 }))
 
-vi.mock('@/lib/launch-structured-agent-session', () => {
-  return {
-    createStructuredAgentSessionLaunchIntent: mockCreateStructuredCodexSessionLaunchIntent,
-    abandonStructuredAgentSessionLaunchIntent: vi.fn(),
-    retryStructuredAgentSessionLaunchIntent: mockRetryStructuredAgentSessionLaunchIntent,
-    launchStructuredAgentSession: mockLaunchStructuredCodexSession,
-    ...launchErrorMocks
-  }
-})
+vi.mock('@/lib/launch-structured-agent-session', () => ({
+  createStructuredAgentSessionLaunchIntent: mockCreateStructuredCodexSessionLaunchIntent,
+  abandonStructuredAgentSessionLaunchIntent: vi.fn(),
+  retryStructuredAgentSessionLaunchIntent: mockRetryStructuredAgentSessionLaunchIntent,
+  launchStructuredAgentSession: mockLaunchStructuredCodexSession,
+  ...launchErrorMocks
+}))
 vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionTabs: mockRefreshLocalStructuredSessionTabs
 }))
@@ -174,13 +172,16 @@ vi.mock('@/runtime/local-runtime-capabilities', () => ({
   ensureLocalRuntimeCapabilities: async () => STRUCTURED_HOST_CAPABILITIES,
   awaitLocalRuntimeCapabilities: () => ({ known: Promise.resolve([]), stop: () => {} })
 }))
+// The scenario's workspace owner: its repo's SSH connection, else the runtime it names, else local.
+function scenarioOwnerHostId(): string {
+  const { connectionId } = state().repos[0] ?? {}
+  const runtime = currentLaunchSettings().activeRuntimeEnvironmentId
+  return connectionId ? `ssh:${connectionId}` : runtime ? `runtime:${runtime}` : 'local'
+}
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getExecutionHostIdForWorktree: () =>
-    state().repos[0]?.connectionId
-      ? `ssh:${state().repos[0].connectionId}`
-      : currentLaunchSettings().activeRuntimeEnvironmentId
-        ? `runtime:${currentLaunchSettings().activeRuntimeEnvironmentId}`
-        : 'local',
+  getExecutionHostIdForWorktree: scenarioOwnerHostId,
+  // The menu's readiness reads the same owner as the launch, as the real module's twin does.
+  getResourceExecutionHostIdForWorktree: scenarioOwnerHostId,
   runtimeEnvironmentIdOrLocalUnlessTwin: () => null
 }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
