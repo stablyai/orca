@@ -1062,6 +1062,18 @@
             "text",
             "bytes"
           ]
+        },
+        "frame": {
+          "description": "`any` (the default) runs in whatever frame the client gives. `isolated` runs only in the desktop app's isolated frame, never the browser-client fallback: browser clients, and desktop with isolated frames switched off, open the file in Source with a notice that the editor needs the Orca desktop app.",
+          "x-orca-since": "1.4.248",
+          "examples": [
+            "isolated"
+          ],
+          "type": "string",
+          "enum": [
+            "any",
+            "isolated"
+          ]
         }
       },
       "required": [

@@ -19,7 +19,10 @@ import {
 import { pluginCatalogTypes } from '../../shared/plugins/catalog/plugin-catalog-types'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import type { PluginHostListEntry, PluginHostStatus } from '../../shared/plugins/plugin-list-entry'
-import { customEditorContentKind } from '../../shared/plugins/contributions/plugin-custom-editor-contribution'
+import {
+  customEditorContentKind,
+  customEditorFrame
+} from '../../shared/plugins/contributions/plugin-custom-editor-contribution'
 import { pluginExecutionProfile } from '../../shared/plugins/contributions/plugin-execution-profile'
 
 const PLUGIN_LIST_PROJECTION_CONCURRENCY = 4
@@ -183,6 +186,7 @@ export async function buildPluginList(
           filenames: editor.filenames,
           priority: editor.priority ?? 'default',
           contentKind: customEditorContentKind(editor),
+          frame: customEditorFrame(editor),
           ...contributionIcon(`editor-${index}`, editor.icon)
         })),
         newFiles: plugin.manifest.contributes.newFiles.map((newFile, index) => ({

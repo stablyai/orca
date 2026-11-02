@@ -24,6 +24,7 @@ import type { useMarkdownDocuments } from './useMarkdownDocuments'
 import { EditorMarkdownFileSurface } from './EditorMarkdownFileSurface'
 import type { MarkdownRenderState } from './markdown-render-mode'
 import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
+import { PluginEditorSourceFallbackNotice } from './PluginEditorNeedsDesktopNotice'
 import PluginCustomEditorFrame from './PluginCustomEditorFrame'
 import PluginBytesCustomEditorSurface from './PluginBytesCustomEditorSurface'
 
@@ -184,6 +185,7 @@ export function EditorEditFileSurface({
     }
     return (
       <div className="flex h-full flex-col">
+        <PluginEditorSourceFallbackNotice fileId={activeFile.id} filePath={activeFile.filePath} />
         <PluginFileTypeSuggestion filePath={activeFile.filePath} />
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
           {translate(
@@ -359,6 +361,9 @@ export function EditorEditFileSurface({
   return (
     <div className="flex flex-1 min-h-0 flex-col">
       {externalChangeBanner}
+      {customEditor ? null : (
+        <PluginEditorSourceFallbackNotice fileId={activeFile.id} filePath={activeFile.filePath} />
+      )}
       {customEditor ? null : (
         <PluginFileTypeSuggestion
           filePath={activeFile.filePath}

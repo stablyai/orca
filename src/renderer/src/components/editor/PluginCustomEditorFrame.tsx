@@ -1,7 +1,10 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
+import {
+  useCustomEditorViewStore,
+  type ActivePluginCustomEditor
+} from '@/store/plugin-custom-editors'
 import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import { CUSTOM_EDITOR_LARGE_DOCUMENT_BYTES } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
 import { fillPluginPanelShell } from '../right-sidebar/plugin-panel-design-token-css'
@@ -16,6 +19,7 @@ import { usePluginFrameEntry } from '../right-sidebar/use-plugin-frame-entry'
 import { editorShortcutMatches } from './editor-shortcuts'
 import { registerEditorFrameFlush } from './editor-pending-flush'
 import { useCustomEditorReloadFlush } from './use-custom-editor-reload-flush'
+import { PluginEditorNeedsDesktopNotice } from './PluginEditorNeedsDesktopNotice'
 import {
   createCustomEditorHost,
   type CustomEditorBinaryDocument,
@@ -199,6 +203,19 @@ export default function PluginCustomEditorFrame({
           { value0: editor.title }
         )}
       </FrameMessage>
+    )
+  }
+  // An isolated-only editor never runs in the srcdoc fallback main hands back without a guest.
+  if (entry.status === 'ready' && !guest && editor.frame === 'isolated') {
+    return (
+      <PluginEditorNeedsDesktopNotice
+        title={editor.title}
+        onOpenSource={
+          fileId === undefined
+            ? undefined
+            : () => useCustomEditorViewStore.getState().setChoice(fileId, 'source')
+        }
+      />
     )
   }
   if (entry.status === 'error') {
