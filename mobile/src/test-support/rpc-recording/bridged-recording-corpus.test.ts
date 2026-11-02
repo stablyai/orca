@@ -106,7 +106,7 @@ async function replay(
       const recording = await runRecording(
         scenario,
         pilotMountAdapters(root, { device: scenario }).adapters[scenario.operation]!,
-        vitestRecordingScheduler({ producer: id, scenario: scenario.id }),
+        vitestRecordingScheduler({ producer: id, scenario: scenario.id, mode: 'page' }),
         (rpc, observation) => {
           const pair = createBridgePortPair({
             rpc,

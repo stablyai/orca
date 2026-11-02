@@ -18,33 +18,56 @@ export function reactActQueuePrimed(): boolean {
   return priming !== undefined
 }
 
-// Product timers main's scheduler silently cleared; they are inherited, not fixed, and still reported.
-type KnownMainTimer = { delay: number; owner: readonly string[] }
+// Product timers main's scheduler silently cleared; they are inherited, not fixed, and still reported. Each
+// declaration names the recording modes (native, or through the page) where its inner scenario leaves it.
+type RecordingMode = 'native' | 'page'
+type KnownMainTimer = { delay: number; owner: readonly string[]; modes: readonly RecordingMode[] }
+const BOTH_MODES: readonly RecordingMode[] = ['native', 'page']
 const RECONNECT_WAIT = ['rpc-client-reconnect-wait', 'replay-on-ambiguous-delivery']
+// Traced on the admitted run (check-3949 Job 2): every first-poll reply partition leaves the reveal's one
+// 300 ms poll timer in both modes.
+const REVEAL_FIRST_POLL: Readonly<Record<string, KnownMainTimer>> = Object.fromEntries(
+  [
+    'result-absent',
+    'result-null',
+    'inner-ok-missing',
+    'inner-false-string-error',
+    'inner-false-object-error',
+    'outer-refused',
+    'outer-refused-no-message',
+    'method-not-found',
+    'transport-rejection',
+    'transport-rejection-no-message'
+  ].map((partition) => [
+    `sc-reveal-first-poll.${partition}`,
+    {
+      delay: 300,
+      owner: ['reveal-mobile-source-control-session-diff', 'waitForDelay'],
+      modes: BOTH_MODES
+    }
+  ])
+)
+const TRIAGE_RECONNECT = {
+  delay: 20_000,
+  owner: [...RECONNECT_WAIT, 'mobile-existing-agent-launch', 'pr-ai-triage-launch']
+}
 const KNOWN_MAIN_TIMERS: Readonly<Record<string, Readonly<Record<string, KnownMainTimer>>>> = {
-  'matrix-session.tab-reveal-session.tabs.list-1': {
-    'sc-reveal-first-poll.result-absent': {
-      delay: 300,
-      owner: ['reveal-mobile-source-control-session-diff', 'waitForDelay']
-    }
-  },
-  'matrix-session.tab-reveal-session.tabs.activate-1': {
-    'sc-reveal-first-poll.result-absent': {
-      delay: 300,
-      owner: ['reveal-mobile-source-control-session-diff', 'waitForDelay']
-    }
-  },
+  'matrix-session.tab-reveal-session.tabs.list-1': REVEAL_FIRST_POLL,
+  'matrix-session.tab-reveal-session.tabs.activate-1': REVEAL_FIRST_POLL,
   'matrix-worktree.agent-launch-create-agent.launch-1': {
     'tw-create-retry-agent-launched.method-not-found': {
       delay: 20_000,
-      owner: [...RECONNECT_WAIT, 'worktree-create-retry']
+      owner: [...RECONNECT_WAIT, 'worktree-create-retry'],
+      modes: BOTH_MODES
     }
   },
+  // The transport partitions traced on the admitted run (check-3949 Job 2) leave the same reconnect waiter; only
+  // the page refuses the absent result, so only there does it wait too.
   'matrix-session.pr-triage-agent.launchreplay-1': {
-    'pr-triage-launch.prelude': {
-      delay: 20_000,
-      owner: [...RECONNECT_WAIT, 'mobile-existing-agent-launch', 'pr-ai-triage-launch']
-    }
+    'pr-triage-launch.prelude': { ...TRIAGE_RECONNECT, modes: BOTH_MODES },
+    'pr-triage-launch.transport-rejection': { ...TRIAGE_RECONNECT, modes: BOTH_MODES },
+    'pr-triage-launch.transport-rejection-no-message': { ...TRIAGE_RECONNECT, modes: BOTH_MODES },
+    'pr-triage-launch.result-absent': { ...TRIAGE_RECONNECT, modes: ['page'] }
   }
 }
 
@@ -138,8 +161,10 @@ function knownMainTimerProblems(
 export function vitestRecordingScheduler(identity?: {
   producer: string
   scenario: string
+  mode: RecordingMode
 }): RecordingScheduler {
-  const known = identity && KNOWN_MAIN_TIMERS[identity.producer]?.[identity.scenario]
+  const declared = identity && KNOWN_MAIN_TIMERS[identity.producer]?.[identity.scenario]
+  const known = identity && declared?.modes.includes(identity.mode) ? declared : undefined
   let tracked: Map<unknown, TrackedTimer> | undefined
   let baseline: number | undefined
   let stopCount: number | undefined
@@ -228,7 +253,7 @@ export function vitestRecordingScheduler(identity?: {
         if (known && identity && tracked) {
           // Checked before restoration: the exact declared survivor, nothing else and no other owner.
           const problems = knownMainTimerProblems(
-            `${identity.producer}/${identity.scenario}`,
+            `${identity.producer}/${identity.scenario} (${identity.mode})`,
             known,
             tracked,
             stopCount
@@ -237,14 +262,16 @@ export function vitestRecordingScheduler(identity?: {
             errors.push(new Error(`Recording cleanup timers:\n${problems.join('\n')}`))
           } else {
             process.stdout.write(
-              `known main timer retained: ${identity.producer}/${identity.scenario} ${known.delay} ms\n`
+              `known main timer retained: ${identity.producer}/${identity.scenario} (${identity.mode}) ${known.delay} ms\n`
             )
             for (const timer of tracked.values()) {
               timer.release()
             }
           }
         } else if (stopCount !== 0) {
-          const named = identity ? `${identity.producer}/${identity.scenario}: ` : ''
+          const named = identity
+            ? `${identity.producer}/${identity.scenario} (${identity.mode}): `
+            : ''
           errors.push(new Error(`${named}Recording cleanup retained ${stopCount} actual timers`))
         }
       } catch (error) {
