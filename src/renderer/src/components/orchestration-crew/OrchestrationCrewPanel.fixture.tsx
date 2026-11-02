@@ -1,9 +1,11 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
+import { useAppStore } from '@/store'
 import type {
   OrchestrationCrewRow,
   OrchestrationCrewSnapshot
 } from '../../../../shared/orchestration-crew'
 import { CrewPanelContent } from './OrchestrationCrewPanel'
+import { NativeChatCrewFrame } from './NativeChatCrewPanel'
 
 const snapshot = (name: string): OrchestrationCrewSnapshot => ({
   status: 'ok',
@@ -216,12 +218,14 @@ function crew(managedBy: Agent[], managing: Agent[], talkingWith: Agent[]) {
   }
 }
 
-// A chat-sized pane with placeholder lines, so any chat showing above the panel is visible.
-function pane(value: OrchestrationCrewSnapshot) {
+// A terminal pane with placeholder output and a CLI prompt in its bottom quarter, which the card must leave clear.
+function pane(value: OrchestrationCrewSnapshot, height = 'h-130') {
   return defineFixture({
     width: 900,
     render: () => (
-      <div className="pane relative h-130 overflow-hidden rounded-md border border-border bg-background p-4">
+      <div
+        className={`pane relative ${height} overflow-hidden rounded-md border border-border bg-background p-4`}
+      >
         <div className="grid max-w-md gap-3 pt-6">
           {Array.from({ length: 14 }, (_, index) => (
             <div
@@ -231,9 +235,14 @@ function pane(value: OrchestrationCrewSnapshot) {
             />
           ))}
         </div>
+        <div
+          data-testid="cli-prompt"
+          className="absolute inset-x-4 bottom-4 h-8 rounded border border-border"
+        />
         <CrewPanelContent
           target={{ kind: 'local' }}
           party="term_self"
+          surface="terminal"
           canMention
           mention={() => {}}
           snapshot={value}
@@ -243,20 +252,30 @@ function pane(value: OrchestrationCrewSnapshot) {
   })
 }
 
-// A wide native chat: the panel overlays the transcript and ends above the composer.
-function nativeChat(value: OrchestrationCrewSnapshot) {
+// A wide native chat: the real transcript frame ends above the composer, and so does the card.
+function nativeChat(value: OrchestrationCrewSnapshot, height = 'h-130') {
   return defineFixture({
     width: 1100,
+    setup: () => {
+      useAppStore.setState(({ settings }) => ({
+        settings: settings && { ...settings, experimentalOrchestrationPanel: true }
+      }))
+    },
     render: () => (
-      <div className="flex h-130 flex-col overflow-hidden rounded-md border border-border bg-background">
-        <div className="relative flex min-h-0 flex-1 flex-col">
-          <CrewPanelContent
-            target={{ kind: 'local' }}
-            party="term_self"
-            snapshot={value}
-            canMention
-            mention={() => {}}
-          />
+      <div
+        className={`flex ${height} flex-col overflow-hidden rounded-md border border-border bg-background`}
+      >
+        <NativeChatCrewFrame
+          panel={
+            <CrewPanelContent
+              target={{ kind: 'local' }}
+              party="term_self"
+              snapshot={value}
+              canMention
+              mention={() => {}}
+            />
+          }
+        >
           <div className="mx-auto grid w-full max-w-3xl gap-3 px-4 pt-10">
             {Array.from({ length: 12 }, (_, index) => (
               <div
@@ -266,8 +285,11 @@ function nativeChat(value: OrchestrationCrewSnapshot) {
               />
             ))}
           </div>
-        </div>
-        <div className="mx-auto mb-3 flex h-20 w-full max-w-3xl items-end justify-end rounded-lg border border-border p-2">
+        </NativeChatCrewFrame>
+        <div
+          data-testid="composer"
+          className="mx-auto mb-3 flex h-20 w-full max-w-3xl shrink-0 items-end justify-end rounded-lg border border-border p-2"
+        >
           <span data-testid="composer-send" className="size-7 rounded-full bg-foreground" />
         </div>
       </div>
@@ -275,9 +297,9 @@ function nativeChat(value: OrchestrationCrewSnapshot) {
   })
 }
 
-function expanded(value: OrchestrationCrewSnapshot, host = pane) {
+function expanded(value: OrchestrationCrewSnapshot, host = pane, height?: string) {
   return {
-    ...host(value),
+    ...host(value, height),
     interact: (frame: HTMLElement) =>
       frame.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()
   }
@@ -307,3 +329,6 @@ export const peerOnlyExpanded = expanded(peerOnly)
 export const allFinishedExpanded = expanded(allFinished)
 export const nativeChatCollapsed = nativeChat(fiveWorkers)
 export const nativeChatExpanded = expanded(fiveWorkers, nativeChat)
+// Short panes: ten workers scroll inside a card that stops above the composer or the CLI's prompt.
+export const tenWorkersShortPaneExpanded = expanded(tenWorkers, pane, 'h-80')
+export const tenWorkersShortChatExpanded = expanded(tenWorkers, nativeChat, 'h-80')
