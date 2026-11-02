@@ -165,13 +165,21 @@ describe('deleting an imported terminal theme (#32138)', () => {
       terminalThemeLight: 'Builtin Tango Light',
       terminalColorOverridesLight: undefined
     })
-    expect(undo({ terminalCustomThemes: [kept] })).toEqual({
+    const afterDelete = { ...settings, ...updates, terminalCustomThemes: [kept] }
+    expect(undo(afterDelete)).toEqual({
       terminalCustomThemes: [kept, imported],
       terminalThemeDark: 'custom:warp:dusk',
       terminalColorOverrides: { background: '#000000' },
       terminalThemeLight: 'custom:warp:dusk',
       terminalColorOverridesLight: { background: '#ffffff' }
     })
+  })
+
+  it('undo keeps a slot the user changed after the delete', () => {
+    const { updates, undo } = terminalCustomThemeRemoval(settings, 'warp:dusk')
+    const restored = undo({ ...settings, ...updates, terminalThemeDark: 'Tokyo Night' })
+    expect(restored).not.toHaveProperty('terminalThemeDark')
+    expect(restored).toHaveProperty('terminalThemeLight', 'custom:warp:dusk')
   })
 
   it('leaves slots showing another theme untouched', () => {

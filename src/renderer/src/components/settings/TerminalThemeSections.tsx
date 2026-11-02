@@ -119,7 +119,9 @@ export function TerminalThemeCatalogSection({
     if (!themeId) {
       return
     }
-    const { updates, undo } = terminalCustomThemeRemoval(settings, themeId)
+    // Why latest: settings props trail the async write, so a second quick delete would revive the first.
+    const latestSettings = (): GlobalSettings => useAppStore.getState().settings ?? settings
+    const { updates, undo } = terminalCustomThemeRemoval(latestSettings(), themeId)
     updateSettings(updates)
     toast(
       translate(
@@ -130,7 +132,7 @@ export function TerminalThemeCatalogSection({
       {
         action: {
           label: translate('auto.components.settings.TerminalThemeSections.undo', 'Undo'),
-          onClick: () => updateSettings(undo(useAppStore.getState().settings ?? settings))
+          onClick: () => updateSettings(undo(latestSettings()))
         }
       }
     )

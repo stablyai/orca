@@ -121,8 +121,13 @@ export function resolveTerminalPalette(
 
 export type TerminalCustomThemeRemoval = {
   updates: Partial<GlobalSettings>
-  /** Puts the theme back into the then-current list and its slots back as they were. */
-  undo: (current: Pick<GlobalSettings, 'terminalCustomThemes'>) => Partial<GlobalSettings>
+  /** Puts the theme back into the then-current list, and back into slots nobody changed since. */
+  undo: (
+    current: Pick<
+      GlobalSettings,
+      'terminalCustomThemes' | 'terminalThemeDark' | 'terminalThemeLight'
+    >
+  ) => Partial<GlobalSettings>
 }
 
 /** Deleting an imported theme moves each slot showing it to that slot's default, dropping the slot's overrides like any theme change. */
@@ -140,27 +145,35 @@ export function terminalCustomThemeRemoval(
   const updates: Partial<GlobalSettings> = {
     terminalCustomThemes: themes.filter(({ id }) => id !== themeId)
   }
-  const restoredSlots: Partial<GlobalSettings> = {}
-  if (settings.terminalThemeDark === selection) {
+  const showedDark = settings.terminalThemeDark === selection
+  const showedLight = settings.terminalThemeLight === selection
+  if (showedDark) {
     updates.terminalThemeDark = DEFAULT_TERMINAL_THEME_DARK
     updates.terminalColorOverrides = undefined
-    restoredSlots.terminalThemeDark = settings.terminalThemeDark
-    restoredSlots.terminalColorOverrides = settings.terminalColorOverrides
   }
-  if (settings.terminalThemeLight === selection) {
+  if (showedLight) {
     updates.terminalThemeLight = DEFAULT_TERMINAL_THEME_LIGHT
     updates.terminalColorOverridesLight = undefined
-    restoredSlots.terminalThemeLight = settings.terminalThemeLight
-    restoredSlots.terminalColorOverridesLight = settings.terminalColorOverridesLight
   }
   return {
     updates,
     undo: (current) => ({
-      ...restoredSlots,
       terminalCustomThemes: normalizeTerminalCustomThemes([
         ...normalizeTerminalCustomThemes(current.terminalCustomThemes),
         ...(removed ? [removed] : [])
-      ])
+      ]),
+      ...(showedDark && current.terminalThemeDark === DEFAULT_TERMINAL_THEME_DARK
+        ? {
+            terminalThemeDark: selection,
+            terminalColorOverrides: settings.terminalColorOverrides
+          }
+        : {}),
+      ...(showedLight && current.terminalThemeLight === DEFAULT_TERMINAL_THEME_LIGHT
+        ? {
+            terminalThemeLight: selection,
+            terminalColorOverridesLight: settings.terminalColorOverridesLight
+          }
+        : {})
     })
   }
 }

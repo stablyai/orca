@@ -41,6 +41,7 @@ export function ThemePicker({
   importedHighlightSignal
 }: ThemePickerProps): React.JSX.Element {
   const importedGroupRef = useRef<HTMLDivElement | null>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
   const [highlightImported, setHighlightImported] = useState(false)
 
   // Imported themes sit below the fixed-height built-in list; reveal them after import.
@@ -90,6 +91,7 @@ export function ThemePicker({
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
       <Input
+        ref={searchInputRef}
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
         placeholder={translate(
@@ -152,7 +154,7 @@ export function ThemePicker({
                     >
                       <button
                         onClick={() => onSelectTheme(theme.value)}
-                        className="flex min-w-0 flex-1 items-center justify-between gap-3 px-3 py-2 text-left text-sm"
+                        className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm"
                       >
                         <span className="min-w-0 flex-1">
                           <span className="block truncate">{theme.label}</span>
@@ -212,8 +214,12 @@ export function ThemePicker({
                             <Button
                               variant="ghost"
                               size="icon-xs"
-                              className="mr-1.5 shrink-0 text-muted-foreground opacity-0 group-hover/theme-row:opacity-100 focus-visible:opacity-100"
-                              onClick={() => onDeleteImportedTheme(theme)}
+                              className="mr-1.5 shrink-0 text-muted-foreground opacity-0 group-focus-within/theme-row:opacity-100 group-hover/theme-row:opacity-100 [@media(hover:none)]:opacity-100"
+                              onClick={() => {
+                                onDeleteImportedTheme(theme)
+                                // The row unmounts with focus inside it; keep keyboard users in the picker.
+                                searchInputRef.current?.focus()
+                              }}
                               aria-label={translate(
                                 'auto.components.settings.SettingsFormControls.delete_imported_theme',
                                 'Delete {{value0}}',
