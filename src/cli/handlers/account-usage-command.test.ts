@@ -121,7 +121,7 @@ describe('orca account usage', () => {
     ])
   })
 
-  it('says to retry, not to pass --fresh, when the host skipped an unread account', async () => {
+  it('says to retry, not to pass --fresh, when an account is still unread', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
     await showAccountUsage(context([['fresh', true]]).ctx)
 
@@ -129,7 +129,7 @@ describe('orca account usage', () => {
       (row: { accountId: string | null }) => row.accountId === 'a1'
     )
     expect(unread.error).toBe(
-      'No usage read yet; Orca reads unselected accounts at most once a minute, so try again shortly.'
+      'No usage read yet: the host reads unselected accounts at most once a minute, or this read failed. Try again in a minute.'
     )
   })
 

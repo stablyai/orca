@@ -67,9 +67,10 @@ export type AccountsUsageSnapshot = {
 
 const SYSTEM_DEFAULT_LABEL = 'System default'
 const NOT_READ_YET = 'No usage read yet; run with --fresh.'
-// The host skips an unselected-account read within a minute of the last one, so --fresh can still leave a row unread.
+// The host reads a provider's unselected accounts at most once a minute and caches nothing for a failed read,
+// so --fresh can still leave a row unread.
 const NOT_READ_AFTER_FRESH =
-  'No usage read yet; Orca reads unselected accounts at most once a minute, so try again shortly.'
+  'No usage read yet: the host reads unselected accounts at most once a minute, or this read failed. Try again in a minute.'
 const BEING_READ = 'Usage is still being read; try again shortly.'
 
 function isoTime(ms: number | null | undefined): string | null {

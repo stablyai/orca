@@ -174,7 +174,7 @@ describe('account usage rows', () => {
     )
   })
 
-  it('does not point back to --fresh for an account the host had read within the last minute', () => {
+  it('does not point back to --fresh for an account the host skipped or failed to read', () => {
     const rows = buildAccountUsageRows(
       snapshot({ claude: limits('claude', { session: SESSION }) }),
       {
@@ -183,7 +183,7 @@ describe('account usage rows', () => {
     )
 
     expect(rows.find((row) => row.accountId === 'a2')?.error).toBe(
-      'No usage read yet; Orca reads unselected accounts at most once a minute, so try again shortly.'
+      'No usage read yet: the host reads unselected accounts at most once a minute, or this read failed. Try again in a minute.'
     )
     expect(rows.find((row) => row.accountId === 'a1')?.error).toBeNull()
   })
