@@ -578,16 +578,13 @@ type RawSeedRow =
 
 /** Seed raw legacy rows, then reopen to exercise current read bounds. */
 async function reopenWithRawRows(rows: readonly RawSeedRow[]): Promise<AgentSessionJournal> {
-  const full = rows.map(
-    (row) =>
-      ({
-        ...row,
-        v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-        epoch: fixture.journal.epoch,
-        fence: 1,
-        ts: tick()
-      }) as JournalRow
-  )
+  const full = rows.map((row): JournalRow => ({
+    ...row,
+    v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
+    epoch: fixture.journal.epoch,
+    fence: 1,
+    ts: tick()
+  }))
   await fixture.journal.close()
   const opened = openTestJournalHostDatabase(fixture.root)
   try {

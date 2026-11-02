@@ -677,6 +677,7 @@ describe('mobile queued Edit captured origin', () => {
   }): null {
     hook = useMobileNativeChatSessionLane({
       client: transport,
+      pairedHostClient: transport,
       structured: true,
       hostId: 'host-a',
       resolution: {

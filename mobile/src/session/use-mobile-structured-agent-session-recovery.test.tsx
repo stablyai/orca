@@ -145,6 +145,7 @@ describe('current recovery publication and normal Resume', () => {
   }): React.JSX.Element | null {
     hook = useMobileStructuredAgentSession({
       client,
+      pairedHostClient: client,
       sessionId,
       sourceIdentity: 'host-a\0workspace-a',
       enabled: true,

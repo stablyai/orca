@@ -1,5 +1,7 @@
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
-import type { CodexSession } from './codex-structured-session-state'
+import { codexSessionLifecycle, type CodexSession } from './codex-structured-session-state'
+import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
+import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -386,15 +388,33 @@ describe('codex turn lifecycle rows', () => {
   it('replays an oversized backpressured notification with its original receipt time', async () => {
     vi.useFakeTimers()
     const connection = {
+      pid: 4321,
+      closed: false,
+      request: async () => ({}),
+      notify: () => {},
+      respond: () => {},
+      respondWithError: () => {},
+      close: async () => true,
       pauseReading: vi.fn(),
       resumeReading: vi.fn()
-    } as unknown as CodexAppServerConnection
+    } satisfies CodexAppServerConnection
+    const session: CodexSession = {
+      ...codexSessionLifecycle(1, 'generation-1'),
+      connection,
+      threadId: THREAD_ID,
+      prompts: new CodexPromptRegistry(),
+      options: new Map(),
+      reportedOptions: {},
+      dispatchEchoes: createCodexDispatchEchoes(),
+      translator: null,
+      backgroundTasks: new CodexBackgroundTaskTracker(THREAD_ID)
+    }
     const translate = vi
       .fn<Parameters<typeof createCodexStructuredNotificationRetry>[0]['translate']>()
       .mockReturnValueOnce({ accepted: false, reason: 'backpressure' })
       .mockReturnValue({ accepted: true })
     const retries = createCodexStructuredNotificationRetry({
-      sessionFor: () => ({ connection, ended: false }) as CodexSession,
+      sessionFor: () => session,
       translate
     })
 
