@@ -5,6 +5,7 @@ import { Input } from '../ui/input'
 import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover'
 import { ScrollArea } from '../ui/scroll-area'
 import { filterFontSuggestions, getRenderedFontSuggestions } from './settings-form-option-filter'
+import { useInstalledFontsUnavailable } from './installed-font-list-status'
 import { translate } from '@/i18n/i18n'
 
 type FontAutocompleteProps = {
@@ -43,6 +44,7 @@ export function FontAutocomplete({
   const lastCommittedValueRef = useRef(value)
   const previewFontFamilyRef = useRef(onPreviewFontFamily)
   const listboxId = useId()
+  const installedFontsUnavailable = useInstalledFontsUnavailable()
 
   useEffect(() => {
     previewFontFamilyRef.current = onPreviewFontFamily
@@ -372,6 +374,14 @@ export function FontAutocomplete({
               )}
             </div>
           </ScrollArea>
+          {installedFontsUnavailable ? (
+            <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.FontAutocomplete.installedFontsUnavailable',
+                'Couldn’t list installed fonts. Type any installed font name to use it.'
+              )}
+            </p>
+          ) : null}
         </PopoverContent>
       </Popover>
     </div>

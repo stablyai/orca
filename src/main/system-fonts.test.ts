@@ -27,16 +27,6 @@ const timedOut: ProcessResult = {
   timedOut: true
 }
 
-function expectedFallbackFont(platform = process.platform): string {
-  if (platform === 'darwin') {
-    return 'SF Mono'
-  }
-  if (platform === 'win32') {
-    return 'Cascadia Mono'
-  }
-  return 'JetBrains Mono'
-}
-
 async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
   const originalPlatform = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
@@ -53,55 +43,16 @@ describe('listSystemFontFamilies', () => {
     runProcessMock.mockReset()
   })
 
-  it('sets UTF-8 stdout encoding as the first statement of the Windows font script', async () => {
-    await withPlatform('win32', async () => {
-      runProcessMock.mockResolvedValue(ok('Consolas\n'))
-      const { listSystemFontFamilies } = await import('./system-fonts')
-      await listSystemFontFamilies()
+  it('returns no fonts when the platform font command never exits', async () => {
+    await withPlatform('linux', async () => {
+      runProcessMock.mockResolvedValue(timedOut)
 
-      const args = runProcessMock.mock.calls[0]?.[0].args ?? []
-      const script = args[args.indexOf('-Command') + 1] ?? ''
-      // Output before this statement would still use the OEM encoding.
-      expect(script.trim().split(/\r?\n/)[0]).toBe(
-        '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)'
-      )
+      const { listSystemFontFamilies } = await import('./system-fonts')
+      await expect(listSystemFontFamilies()).resolves.toEqual([])
     })
   })
 
-  it('spawns the Windows font script without an -ExecutionPolicy switch', async () => {
-    await withPlatform('win32', async () => {
-      runProcessMock.mockResolvedValue(ok('Consolas\n'))
-      const { listSystemFontFamilies } = await import('./system-fonts')
-      await listSystemFontFamilies()
-
-      const args = runProcessMock.mock.calls[0]?.[0].args ?? []
-      expect(args).toContain('-Command')
-      expect(args).not.toContain('-ExecutionPolicy')
-      expect(args).not.toContain('Bypass')
-    })
-  })
-
-  it('runs PowerShell by absolute path on Windows', async () => {
-    await withPlatform('win32', async () => {
-      runProcessMock.mockResolvedValue(ok('Consolas\n'))
-      const { listSystemFontFamilies } = await import('./system-fonts')
-      await listSystemFontFamilies()
-
-      const program = runProcessMock.mock.calls[0]?.[0].program ?? ''
-      expect(program).toMatch(/^[A-Za-z]:[\\/]/)
-      expect(program.toLowerCase()).toContain('system32')
-      expect(program.toLowerCase()).toContain('powershell.exe')
-    })
-  })
-
-  it('falls back when the platform font command never exits', async () => {
-    runProcessMock.mockResolvedValue(timedOut)
-
-    const { listSystemFontFamilies } = await import('./system-fonts')
-    await expect(listSystemFontFamilies()).resolves.toContain(expectedFallbackFont())
-  })
-
-  it('falls back when the platform font command reports failure', async () => {
+  it('returns no fonts when the platform font command reports failure', async () => {
     runProcessMock.mockResolvedValue({
       code: 1,
       signal: null,
@@ -110,14 +61,15 @@ describe('listSystemFontFamilies', () => {
       timedOut: false
     })
 
-    const { listSystemFontFamilies } = await import('./system-fonts')
-    await expect(listSystemFontFamilies()).resolves.toContain(expectedFallbackFont())
+    await withPlatform('linux', async () => {
+      const { listSystemFontFamilies } = await import('./system-fonts')
+      await expect(listSystemFontFamilies()).resolves.toEqual([])
+    })
   })
 
   it.each([
     ['darwin' as NodeJS.Platform, 45_000],
-    ['linux' as NodeJS.Platform, 15_000],
-    ['win32' as NodeJS.Platform, 15_000]
+    ['linux' as NodeJS.Platform, 15_000]
   ])('asks for the %s font command timeout of %dms', async (platform, timeoutMs) => {
     await withPlatform(platform, async () => {
       runProcessMock.mockResolvedValue(ok('Consolas\n'))

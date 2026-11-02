@@ -1,5 +1,5 @@
 import { runProcess } from '@orca/process-host'
-import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
+import { listWindowsInstalledFontFamilies } from './windows-installed-font-families'
 
 let cachedFonts: string[] | null = null
 let fontsPromise: Promise<string[]> | null = null
@@ -7,6 +7,7 @@ const SYSTEM_FONT_LIST_TIMEOUT_MS = 15_000
 // Large macOS font catalogs need more time in system_profiler.
 const MAC_SYSTEM_FONT_LIST_TIMEOUT_MS = 45_000
 
+/** Empty when the OS list is unreadable; the renderer then shows its curated fonts and says so. */
 export async function listSystemFontFamilies(): Promise<string[]> {
   if (cachedFonts) {
     return cachedFonts
@@ -16,13 +17,13 @@ export async function listSystemFontFamilies(): Promise<string[]> {
   }
 
   fontsPromise = loadSystemFontFamilies()
-    .then((fonts) => {
-      cachedFonts = fonts.length > 0 ? fonts : fallbackFonts()
-      return cachedFonts
+    .catch((error: unknown) => {
+      console.warn('[system-fonts] failed to list installed fonts:', error)
+      return []
     })
-    .catch(() => {
-      cachedFonts = fallbackFonts()
-      return cachedFonts
+    .then((fonts) => {
+      cachedFonts = fonts
+      return fonts
     })
     .finally(() => {
       fontsPromise = null
@@ -36,7 +37,7 @@ function loadSystemFontFamilies(): Promise<string[]> {
     return listMacFonts()
   }
   if (process.platform === 'win32') {
-    return listWindowsFonts()
+    return listWindowsInstalledFontFamilies().then(uniqueSorted)
   }
   return listLinuxFonts()
 }
@@ -76,29 +77,6 @@ function listLinuxFonts(): Promise<string[]> {
   )
 }
 
-function listWindowsFonts(): Promise<string[]> {
-  // Pin UTF-8 before output; PowerShell 5.1 otherwise uses the OEM code page.
-  const script = `
-[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-Add-Type -AssemblyName System.Drawing
-$fonts = New-Object System.Drawing.Text.InstalledFontCollection
-$fonts.Families | ForEach-Object { $_.Name }
-`
-
-  return execFileText(
-    windowsPowerShellPath(),
-    ['-NoProfile', '-NonInteractive', '-Command', script],
-    8 * 1024 * 1024
-  ).then((output) =>
-    uniqueSorted(
-      output
-        .split('\n')
-        .map((name) => name.trim())
-        .filter(Boolean)
-    )
-  )
-}
-
 async function execFileText(
   command: string,
   args: string[],
@@ -129,21 +107,4 @@ function uniqueSorted(values: (string | undefined)[]): string[] {
         .filter((value) => value.length > 0 && !value.startsWith('.'))
     )
   ).sort((a, b) => a.localeCompare(b))
-}
-
-function fallbackFonts(): string[] {
-  if (process.platform === 'darwin') {
-    return ['SF Mono', 'Menlo', 'Monaco', 'JetBrains Mono', 'Fira Code']
-  }
-  if (process.platform === 'win32') {
-    return ['Cascadia Mono', 'Consolas', 'Lucida Console', 'JetBrains Mono', 'Fira Code']
-  }
-  return [
-    'JetBrains Mono',
-    'Fira Code',
-    'DejaVu Sans Mono',
-    'Liberation Mono',
-    'Ubuntu Mono',
-    'Noto Sans Mono'
-  ]
 }
