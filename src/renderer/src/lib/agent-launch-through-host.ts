@@ -1,4 +1,4 @@
-/** Create the AI-button tab immediately in its requested split; its first pane spawn lets main plan/start the agent at real dimensions without a launch record. The window pastes when ready, and the pane reports startup failure. */
+/** Allocate the prompt’s owning pane before mount; main plans and starts it at the pane’s real size. */
 
 import { useAppStore } from '@/store'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -6,7 +6,6 @@ import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import { rememberAgentLaunchPanePrompt } from '@/lib/agent-launch-pane-prompt'
 import { awaitAgentLaunchPaneStart } from '@/lib/agent-launch-pane-start'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
-import { isNativeChatEnabled } from '../../../shared/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { Tab } from '../../../shared/tab-types'
@@ -27,6 +26,7 @@ export type HostAgentLaunchArgs = {
   quickCommandLabel?: string | null
   /** The launch seeds a workspace being opened, so its spawn must not reshuffle Recent. */
   pendingActivationSpawn?: boolean
+  activate?: boolean
   viewMode?: Tab['viewMode']
   suppressStartupUpdatePrompt?: boolean
 }
@@ -50,11 +50,6 @@ function launchParams(args: HostAgentLaunchArgs) {
   }
 }
 
-/** Keep main’s path when it may choose structured chat; this window’s delayed paste requires a terminal. */
-export function windowMakesHostLaunchTab(): boolean {
-  return !isNativeChatEnabled(useAppStore.getState().settings)
-}
-
 export function launchAgentThroughHost(args: HostAgentLaunchArgs): {
   tabId: string
   /** The tab pane's PTY once its agent started there; null when it could not, or the user closed it. */
@@ -70,6 +65,7 @@ export function launchAgentThroughHost(args: HostAgentLaunchArgs): {
     agentLaunchPane: { leafId },
     launchAgent: args.agent,
     quickCommandLabel: args.quickCommandLabel,
+    ...(args.activate === false ? { activate: false } : {}),
     ...(args.pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
     ...(args.viewMode ? { viewMode: args.viewMode } : {}),
     // Queued before the pane mounts, as "+" queues its command: its first spawn carries the launch.
@@ -88,7 +84,9 @@ export function launchAgentThroughHost(args: HostAgentLaunchArgs): {
   rememberAgentLaunchPanePrompt(tabId, args.prompt)
   seedNativeChatAppliedSessionOptions(tabId, args.agent, args.sessionOptions)
   // An activated launch must reveal Terminal or it can remain hidden behind an editor.
-  store.setActiveTabType('terminal', args.worktreeId)
+  if (args.activate !== false) {
+    store.setActiveTabType('terminal', args.worktreeId)
+  }
   persistAgentLaunchTabOrder(args.worktreeId, tabId)
   return { tabId, started }
 }

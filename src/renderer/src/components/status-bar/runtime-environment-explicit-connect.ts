@@ -48,8 +48,14 @@ export async function connectRuntimeHostForNavigation(args: {
   return true
 }
 
-/** The status bar's Connect for a paired host; also the chat's Reconnect when its host is offline. */
-export async function connectRuntimeHostAndReloadProjects(environmentId: string): Promise<boolean> {
+/**
+ * The status bar's Connect for a paired host; also the chat's Reconnect when its host is offline
+ * and a stopped WSL host’s Start, which passes its own failure message.
+ */
+export async function connectRuntimeHostAndReloadProjects(
+  environmentId: string,
+  failureMessage?: string
+): Promise<boolean> {
   const store = useAppStore.getState()
   const reachable = await connectRuntimeHostForNavigation({
     environmentId,
@@ -60,10 +66,11 @@ export async function connectRuntimeHostAndReloadProjects(environmentId: string)
   })
   if (!reachable) {
     toast.error(
-      translate(
-        'auto.components.status.bar.SshStatusSegment.runtime_connect_unavailable',
-        'Remote host is not reachable'
-      )
+      failureMessage ??
+        translate(
+          'auto.components.status.bar.SshStatusSegment.runtime_connect_unavailable',
+          'Remote host is not reachable'
+        )
     )
   }
   return reachable

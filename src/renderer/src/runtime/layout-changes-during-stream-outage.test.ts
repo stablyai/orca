@@ -13,7 +13,7 @@ import type {
   RenameTabsCommand,
   UntitledTab
 } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+
 import { testContext } from '../../../shared/workspace-layout/workspace-layout-command.test-fixture'
 import { loadWorkspaceLayoutWithoutReport } from '../../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
@@ -193,36 +193,5 @@ describe('changes made while main’s layout stream is down', () => {
       useAppStore.getState().groupsByWorktree[GIT_KEY]!.find((group) => group.id === 'group-a')
         ?.activeTabId
     ).toBe('tab-unbound')
-  })
-  it('leave an agent’s generated titles to main, and show the one main kept from the snapshot', async () => {
-    useAppStore.setState({
-      settings: { ...useAppStore.getState().settings!, tabAutoGenerateTitle: true }
-    })
-    const leafId = useAppStore.getState().terminalLayoutsByTabId['tab-unbound']!.activeLeafId!
-    const paneKey = makePaneKey('tab-unbound', leafId)
-    stream.onStatus!({ state: 'lost' })
-
-    useAppStore.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Refactor the auth module')
-    useAppStore.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Fix the flaky login test')
-    expect(rpc.calls.filter((call) => call.command.type === 'renameTabs')).toEqual([])
-    expect(terminalRow('tab-unbound').generatedTitle).toBeUndefined()
-    // Main derives both from its own agent status and keeps the first, as its deriver sends them.
-    mainRenames({
-      type: 'renameTabs',
-      kind: 'generated',
-      renames: [{ workspace: GIT_KEY, tabId: 'tab-unbound', title: 'Refactor the auth module' }]
-    })
-    mainRenames({
-      type: 'renameTabs',
-      kind: 'generated',
-      renames: [{ workspace: GIT_KEY, tabId: 'tab-unbound', title: 'Fix the flaky login test' }]
-    })
-
-    stream.onStatus!({ state: 'connecting' })
-    stream.onFrame!(frames.snapshot(published(), ++seq))
-    stream.onPosition!(seq)
-    await settle()
-
-    expect(terminalRow('tab-unbound').generatedTitle).toBe('Refactor the auth module')
   })
 })

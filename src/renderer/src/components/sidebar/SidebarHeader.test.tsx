@@ -55,8 +55,7 @@ vi.mock('./SidebarWorkspaceOptionsMenu', () => ({
 vi.mock('./workspace-options-menu-items', () => ({
   useWorkspaceOptionsFilterBadge: () => ({
     hasAnyFilter: false,
-    activeFilterCount: 0,
-    activeFilterLabel: '0 filters'
+    activeFilterCount: 0
   }),
   WorkspaceOptionsMenuItems: () => null
 }))

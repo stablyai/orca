@@ -107,7 +107,8 @@ describe('HostAccountSignInFlows', () => {
     const { flowId } = flows.start('device-a', 'codex')
     expect(await flows.wait('device-a', flowId, 1)).toMatchObject({
       phase: 'failed',
-      error: expect.stringContaining('An account change on this host')
+      error: 'An account change on this host stopped the sign-in. Start it again.',
+      errorCode: 'superseded'
     })
   })
 
@@ -130,6 +131,8 @@ describe('HostAccountSignInFlows', () => {
     const { flowId } = flows.start('device-a', 'codex')
     const status = await flows.wait('device-a', flowId, 1)
     expect(status).toMatchObject({ phase: 'failed', error: 'Codex login failed: boom' })
+    // The login's own text has no Orca code, so clients show it verbatim.
+    expect(status.errorCode).toBeUndefined()
   })
 
   it('ends a sign-in whose client stopped asking about it', async () => {

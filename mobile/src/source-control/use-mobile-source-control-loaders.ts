@@ -185,6 +185,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
         try {
           for (let attempt = 0; attempt <= SELECTOR_RETRY_COUNT; attempt += 1) {
+            // Changes rows show each file's +/- counts, so ask the host for line stats.
             const reply = await gitStatusHostPayloadRead.request(client, {
               worktree: `id:${worktreeId}`
             })

@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
-import { useLiveWorktreeName } from './use-live-worktree-name'
+import { useLiveWorktreeName, type LiveWorktreeName } from './use-live-worktree-name'
 
 vi.mock('expo-router', async () => {
   const React = await import('react')
@@ -15,6 +15,7 @@ vi.mock('expo-router', async () => {
 
 describe('useLiveWorktreeName request volume', () => {
   let renderer: ReactTestRenderer | null = null
+  let live: LiveWorktreeName | undefined
   let eventListener: ((payload: unknown) => void) | null = null
   const unsubscribeStream = vi.fn()
   const sendRequest = vi.fn().mockResolvedValue({
@@ -33,7 +34,7 @@ describe('useLiveWorktreeName request volume', () => {
 
   async function mountHarness(): Promise<void> {
     function Harness(): null {
-      useLiveWorktreeName({
+      live = useLiveWorktreeName({
         client,
         connState: 'connected',
         routeName: 'Route name',
@@ -76,7 +77,21 @@ describe('useLiveWorktreeName request volume', () => {
   })
 
   it('cuts thirty-second idle request volume from eleven calls to one', async () => {
+    sendRequest.mockResolvedValue({
+      id: 'worktree-show',
+      ok: true,
+      result: {
+        worktree: {
+          id: 'repo-1::/worktree',
+          displayName: 'Live name',
+          path: '/srv/project ',
+          hostId: 'ssh:target'
+        }
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    })
     await mountHarness()
+    expect(live).toMatchObject({ name: 'Live name', path: '/srv/project ', hostId: 'ssh:target' })
     expect(subscribe).toHaveBeenCalledWith(
       'runtime.clientEvents.subscribe',
       null,

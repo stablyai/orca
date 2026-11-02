@@ -4,7 +4,10 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { SidebarInputsFeed } from '../../../main/runtime/sidebar-inputs/sidebar-inputs-feed'
 import { testDomain } from '../../../main/runtime/sidebar-inputs/sidebar-inputs-feed.test-fixture'
 import type { SidebarInputsChangedEvent } from '../../../shared/sidebar-list/sidebar-inputs-feed-contract'
-import { makeRepo, makeWorktree } from '@/components/worktree-jump-palette-test-fixtures'
+import {
+  makeRepo,
+  makeWorktree
+} from '@/components/worktree-jump/worktree-jump-palette-test-fixtures'
 import { buildWorkspaceRows } from '../../../shared/sidebar-list/workspace-rows'
 
 function workspaceRow(id: string) {

@@ -1,6 +1,6 @@
 /** The identity an agent must match when starting a stored session. */
 
-import type { AgentSessionProviderTransport } from '../../agent-session-provider-handle'
+import type { AgentSessionProviderTransport } from './agent-session-provider-handle'
 
 /** What an agent's definition says its records pin. */
 export type AgentSessionStoredAgent = {

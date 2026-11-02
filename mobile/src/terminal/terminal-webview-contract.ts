@@ -77,6 +77,7 @@ export type TerminalSelectionEvents = {
   onHaptic?: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
   onTerminalInput?: (bytes: string, input?: TerminalPointerInput) => void
   onTerminalQueryReply?: (bytes: string) => void
+  onTerminalInteraction?: () => void
   onTerminalTap?: () => void
   // Every reading of the tapped text (hard wraps, overlapping detections); like desktop, the longest that exists opens.
   onFileTap?: (candidates: readonly ParsedFileLinkLocation[]) => void
@@ -118,6 +119,7 @@ export type TerminalWebViewHandle = {
   // Rewrap local scrollback after PTY width changes; alternate screens use full repaints instead.
   reflow: (cols: number, rows: number, frame: TerminalFrame | null) => void
   clear: () => void
+  scrollToBottom: () => void
   fitDimensions: (frame: TerminalFrame) => TerminalFitDimensions | null
   resetZoom: () => void
   cancelSelect: () => void

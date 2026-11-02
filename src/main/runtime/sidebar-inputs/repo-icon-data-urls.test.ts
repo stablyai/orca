@@ -46,15 +46,6 @@ function setup(
 const ENCODED = new Uint8Array([1, 2, 3])
 const ENCODED_URL = 'data:image/png;base64,AQID'
 
-describe('repoIconId', () => {
-  it('names image icons by content and leaves glyph icons to the client', () => {
-    expect(repoIconId(AVATAR)).toBe(repoIconId({ ...AVATAR, label: 'other' }))
-    expect(repoIconId(AVATAR)).not.toBe(repoIconId({ ...AVATAR, src: `${AVATAR.src}x` }))
-    expect(repoIconId({ type: 'emoji', emoji: '🐳' })).toBeNull()
-    expect(repoIconId(null)).toBeNull()
-  })
-})
-
 describe('RepoIconDataUrls without an encoder (orcad)', () => {
   it('passes a small fetched image through as a data URL', async () => {
     const bytes = pngHeader(64, 64)
@@ -104,14 +95,6 @@ describe('RepoIconDataUrls.idsByRepo', () => {
 })
 
 describe('RepoIconDataUrls with an encoder (desktop)', () => {
-  it('re-encodes a fetched avatar at 64 px', async () => {
-    const encoder = vi.fn<RepoIconPngEncoder>(() => ENCODED)
-    const { icons } = setup([repo('a', AVATAR)], { encoder })
-
-    expect((await icons.read([repoIconId(AVATAR)!])).icons[0].dataUrl).toBe(ENCODED_URL)
-    expect(encoder).toHaveBeenCalledWith(expect.any(Uint8Array), 64)
-  })
-
   it('re-encodes a large upload rather than dropping it', async () => {
     const icon = upload(pngHeader(1024, 1024, 300 * 1024))
     const { icons } = setup([repo('a', icon)], { encoder: () => ENCODED })

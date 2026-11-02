@@ -1,4 +1,5 @@
 import { defineMethod } from '../core'
+import { clientReadsOptionsWithoutModel } from './structured-agent-session-policy'
 import {
   requireStructuredSessionHost as requireSessionHost,
   structuredCallerFor as callerFor
@@ -35,6 +36,9 @@ export const STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS = [
     permission: 'workspace',
     params: SetOptionParams,
     handler: async (params, ctx) =>
-      requireSessionHost(ctx, params.envelope.sessionId).setOption(callerFor(ctx), params)
+      requireSessionHost(ctx, params.envelope.sessionId).setOption(
+        { ...callerFor(ctx), readsOptionsWithoutModel: clientReadsOptionsWithoutModel(ctx) },
+        params
+      )
   })
 ]

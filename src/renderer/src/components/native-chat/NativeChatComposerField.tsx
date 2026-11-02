@@ -1,10 +1,12 @@
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
+import { notifyNativeChatComposerState } from './native-chat-composer-mount'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
+import { useNotificationCardComposerClearance } from '@/lib/notification-card-composer-clearance'
 import type {
   ComposerAutocomplete,
   NativeChatPickerItem
@@ -28,11 +30,16 @@ import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPre
 import type { NativeChatComposerGoalMode } from './use-native-chat-composer-submit'
 import { translate } from '@/i18n/i18n'
 import { useNativeChatComposerDraftUnsaved } from './use-native-chat-draft-unsaved'
+import { useLatestHandler } from '@/lib/use-latest-handler'
+import type { NativeChatFollowUpBehavior } from '../../../../shared/native-chat-follow-up-behavior'
+
+function noop(): void {}
 
 export type NativeChatComposerFieldProps = {
   editSession?: { cancel: () => void }
   /** Own draft persistence and native-drop routing by this pane so drops cannot land in another composer. */
   draftScopeKey: string
+  positionTarget?: string
   textareaRef: RefObject<NativeChatComposerInput | null>
   draft: string
   disabled: boolean
@@ -52,6 +59,10 @@ export type NativeChatComposerFieldProps = {
   /** Why the send button is disabled, when the user can do something about it. */
   sendBlockedReason?: string | null
   isWorking: boolean
+  /** The draft holds text or images, so Send takes Stop's place while the agent works. */
+  hasDraft?: boolean
+  /** While the agent works: what Cmd/Ctrl+Enter would do instead of a plain send, when it differs. */
+  alternateSend?: NativeChatFollowUpBehavior
   /** This client's Stop request is in flight: the Stop control is disabled and says so. */
   isStopping?: boolean
   /** After Stop, describe whether the host queues the next message as a card or holds the send. */
@@ -120,6 +131,7 @@ function imeComposedSegment(base: string, settled: string): string {
 export function NativeChatComposerField({
   editSession,
   draftScopeKey,
+  positionTarget,
   textareaRef,
   draft,
   disabled,
@@ -136,6 +148,8 @@ export function NativeChatComposerField({
   sendButtonDisabled,
   sendBlockedReason,
   isWorking,
+  hasDraft = false,
+  alternateSend,
   isStopping = false,
   afterStop,
   attachDisabled,
@@ -180,6 +194,61 @@ export function NativeChatComposerField({
   // Remember the editor’s last draft because chip node views can flushSync a render before its onChange publishes.
   const editorDraftRef = useRef<string | null>(null)
 
+  const settleImeValue = (element: NativeChatComposerInput): void => {
+    if (droppedDraftClearRef.current) {
+      droppedDraftClearRef.current = false
+      element.value = imeComposedSegment(compositionBaseRef.current, element.value)
+    }
+    onImeSettled(element)
+  }
+
+  // Why: stable identities let the memoized editor and actions skip the per-keystroke render (#35836).
+  const editorChange = useLatestHandler((input: NativeChatComposerInput) => {
+    const value = input.value
+    editorDraftRef.current = value
+    onDraftChange(value, input)
+  })
+  const editorSelect = useLatestHandler(onTextareaSelect)
+  const editorKeyDownCapture = useLatestHandler((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!imeEnterGesture.ownsKeyDown(event)) {
+      onKeyDown(event)
+    }
+  })
+  const editorKeyUp = useLatestHandler(imeEnterGesture.onKeyUp)
+  const editorBlur = useLatestHandler(() => {
+    const compositionWasActive = imeEnterGesture.isComposing()
+    imeEnterGesture.reset()
+    if (compositionWasActive) {
+      settleImeValue(textareaRef.current!)
+    }
+    notifyNativeChatComposerState()
+  })
+  const editorCompositionStart = useLatestHandler(() => {
+    if (imeEnterGesture.isComposing()) {
+      imeEnterGesture.setComposing(false)
+      // Settle the interrupted composition before the new one takes browser ownership.
+      flushSync(() => settleImeValue(textareaRef.current!))
+    }
+    compositionBaseRef.current = textareaRef.current!.value
+    imeEnterGesture.setComposing(true)
+  })
+  const editorCompositionEnd = useLatestHandler((event: React.CompositionEvent<HTMLDivElement>) => {
+    const compositionWasActive = imeEnterGesture.isComposing()
+    imeEnterGesture.setComposing(false, event.data)
+    if (compositionWasActive) {
+      settleImeValue(textareaRef.current!)
+    }
+    notifyNativeChatComposerState()
+  })
+  const editorPaste = useLatestHandler(onPaste)
+  const attach = useLatestHandler(onAttach)
+  const dictationToggle = useLatestHandler(onDictationToggle)
+  const dictationHoldStart = useLatestHandler(onDictationHoldStart)
+  const dictationHoldEnd = useLatestHandler(onDictationHoldEnd)
+  const send = useLatestHandler(onSend)
+  const stop = useLatestHandler(onStop ?? noop)
+  const exitGoalMode = useLatestHandler(goalMode?.exit ?? noop)
+
   // Browser owns the provisional value; React synchronizes drafts only between IME sessions.
   useLayoutEffect(() => {
     const textarea = textareaRef.current
@@ -198,21 +267,16 @@ export function NativeChatComposerField({
     editorDraftRef.current = draft
   }, [draft, imeEnterGesture, textareaRef])
 
-  const settleImeValue = (element: NativeChatComposerInput): void => {
-    if (droppedDraftClearRef.current) {
-      droppedDraftClearRef.current = false
-      element.value = imeComposedSegment(compositionBaseRef.current, element.value)
-    }
-    onImeSettled(element)
-  }
-
   // Stable so the memoized option pickers keep their identity.
   const focusComposer = useCallback(() => textareaRef.current?.focus(), [textareaRef])
+  const paneRef = useRef<HTMLDivElement>(null)
+  const columnRef = useRef<HTMLDivElement>(null)
+  useNotificationCardComposerClearance(paneRef, columnRef, editSession === undefined)
 
   return (
-    <div className="shrink-0 bg-chat-canvas">
+    <div ref={paneRef} className="shrink-0 bg-chat-pane">
       <div className="px-3 pt-2 pb-4 sm:px-4">
-        <div className="relative mx-auto w-full max-w-(--chat-content-max-width)">
+        <div ref={columnRef} className="relative mx-auto w-full max-w-(--chat-content-max-width)">
           {autocomplete.mode === 'slash' ? (
             <NativeChatPickerMenu
               autocomplete={autocomplete}
@@ -270,46 +334,20 @@ export function NativeChatComposerField({
             <NativeChatPromptEditor
               key={draftScopeKey}
               scopeKey={draftScopeKey}
+              positionTarget={positionTarget}
               imageRow={imageRow}
               inputRef={textareaRef}
+              isComposing={imeEnterGesture.isComposing}
               initialValue={draft}
               disabled={disabled}
-              onChange={(input) => {
-                const value = input.value
-                editorDraftRef.current = value
-                onDraftChange(value, input)
-              }}
-              onKeyDownCapture={(event) => {
-                if (!imeEnterGesture.ownsKeyDown(event)) {
-                  onKeyDown(event)
-                }
-              }}
-              onKeyUp={imeEnterGesture.onKeyUp}
-              onBlur={() => {
-                const compositionWasActive = imeEnterGesture.isComposing()
-                imeEnterGesture.reset()
-                if (compositionWasActive) {
-                  settleImeValue(textareaRef.current!)
-                }
-              }}
-              onCompositionStart={() => {
-                if (imeEnterGesture.isComposing()) {
-                  imeEnterGesture.setComposing(false)
-                  // Settle the interrupted composition before the new one takes browser ownership.
-                  flushSync(() => settleImeValue(textareaRef.current!))
-                }
-                compositionBaseRef.current = textareaRef.current!.value
-                imeEnterGesture.setComposing(true)
-              }}
-              onCompositionEnd={(event) => {
-                const compositionWasActive = imeEnterGesture.isComposing()
-                imeEnterGesture.setComposing(false, event.data)
-                if (compositionWasActive) {
-                  settleImeValue(textareaRef.current!)
-                }
-              }}
-              onPasteCapture={onPaste}
-              onSelect={onTextareaSelect}
+              onChange={editorChange}
+              onKeyDownCapture={editorKeyDownCapture}
+              onKeyUp={editorKeyUp}
+              onBlur={editorBlur}
+              onCompositionStart={editorCompositionStart}
+              onCompositionEnd={editorCompositionEnd}
+              onPasteCapture={editorPaste}
+              onSelect={editorSelect}
               aria-expanded={autocomplete.mode !== 'none'}
               aria-controls={autocomplete.mode !== 'none' ? pickerListboxId : undefined}
               aria-activedescendant={
@@ -344,21 +382,23 @@ export function NativeChatComposerField({
                 sendBlockedReason={sendBlockedReason}
                 draftNotSaved={draftNotSaved}
                 isWorking={isWorking}
+                hasDraft={hasDraft}
+                alternateSend={alternateSend}
                 isStopping={isStopping}
                 isDictating={isDictating}
                 isDictationHoldMode={isDictationHoldMode}
-                onAttach={onAttach}
-                onDictationToggle={onDictationToggle}
-                onDictationHoldStart={onDictationHoldStart}
-                onDictationHoldEnd={onDictationHoldEnd}
-                onSend={onSend}
-                onStop={onStop}
+                onAttach={attach}
+                onDictationToggle={dictationToggle}
+                onDictationHoldStart={dictationHoldStart}
+                onDictationHoldEnd={dictationHoldEnd}
+                onSend={send}
+                onStop={onStop ? stop : undefined}
                 sessionOptionsSurface={sessionOptionsSurface}
                 sessionOptionsSnapshot={sessionOptionsSnapshot}
                 contextUsage={contextUsage}
                 sessionOptionsPickerRequest={sessionOptionsPickerRequest}
                 focusComposer={focusComposer}
-                onExitGoalMode={goalMode?.active ? goalMode.exit : undefined}
+                onExitGoalMode={goalMode?.active ? exitGoalMode : undefined}
                 {...(agent ? { agent } : {})}
               />
             </div>

@@ -6,9 +6,13 @@ export { resolve } from 'node:path'
 export type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 export type {
   LinearCurrentIssueContextHints,
+  LinearAttachRequest,
   LinearAttachResult,
+  LinearCommentAddRequest,
   LinearCommentAddResult,
+  LinearCommentDeleteRequest,
   LinearCommentDeleteResult,
+  LinearCommentEditRequest,
   LinearCommentEditResult,
   LinearCreateResult,
   LinearErrorCode,

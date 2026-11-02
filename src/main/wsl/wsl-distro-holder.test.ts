@@ -463,3 +463,77 @@ describe('createWslDistroHolder', () => {
     expect(onHolderExit).toHaveBeenCalledWith('Alpine', { code: 1, signal: null })
   })
 })
+
+describe('releaseAll for uninstall', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('kills a matching holder with no start time on either side, and logs its pid', async () => {
+    host.processes.set(77, { commandLine: HOLDER_COMMAND('Alpine'), startedAtMs: 5_000 })
+    await writeRecord(record({ creationTimeMs: null }))
+    host.processes.set(88, { commandLine: HOLDER_COMMAND('Debian'), startedAtMs: null })
+    await writeRecord(record({ distro: 'Debian', pid: 88, creationTimeMs: 6_000 }))
+    const released = await makeHolder().releaseAll({ forUninstall: true })
+    expect(released.sort((a, b) => a.distro.localeCompare(b.distro))).toEqual([
+      { distro: 'alpine', state: 'exited' },
+      { distro: 'debian', state: 'exited' }
+    ])
+    expect(host.killed.sort()).toEqual([77, 88])
+    expect(await recordFiles()).toEqual([])
+    expect(console.warn).toHaveBeenCalledWith(
+      '[wsl] uninstall: Alpine holder pid 77 was live, now exited'
+    )
+  })
+
+  it('never kills a pid whose command line is not the holder for the recorded distro', async () => {
+    host.processes.set(77, { commandLine: 'C:\\Windows\\notepad.exe', startedAtMs: 5_000 })
+    await writeRecord(record({ creationTimeMs: null }))
+    host.processes.set(88, { commandLine: HOLDER_COMMAND('Ubuntu'), startedAtMs: null })
+    await writeRecord(record({ distro: 'Debian', pid: 88, creationTimeMs: null }))
+    const released = await makeHolder().releaseAll({ forUninstall: true })
+    expect(released.sort((a, b) => a.distro.localeCompare(b.distro))).toEqual([
+      { distro: 'alpine', state: 'exited' },
+      { distro: 'debian', state: 'exited' }
+    ])
+    expect(host.killed).toEqual([])
+  })
+
+  it('still trusts a known start time that contradicts the record', async () => {
+    host.processes.set(77, { commandLine: HOLDER_COMMAND('Alpine'), startedAtMs: 9_999 })
+    await writeRecord(record())
+    expect(await makeHolder().releaseAll({ forUninstall: true })).toEqual([
+      { distro: 'alpine', state: 'exited' }
+    ])
+    expect(host.killed).toEqual([])
+  })
+
+  it('reads an unavailable process table once more before giving up', async () => {
+    host.processes.set(77, { commandLine: HOLDER_COMMAND('Alpine'), startedAtMs: 5_000 })
+    await writeRecord(record())
+    host.tableFails = true
+    const sleep = vi.fn(async () => {
+      host.tableFails = false
+    })
+    expect(await makeHolder({ sleep }).releaseAll({ forUninstall: true })).toEqual([
+      { distro: 'alpine', state: 'exited' }
+    ])
+    expect(host.killed).toEqual([77])
+
+    host.processes.set(78, { commandLine: HOLDER_COMMAND('Alpine'), startedAtMs: 5_000 })
+    await writeRecord(record({ pid: 78 }))
+    host.tableFails = true
+    expect(await makeHolder().releaseAll({ forUninstall: true })).toEqual([
+      { distro: 'alpine', state: 'unverifiable' }
+    ])
+    expect(host.killed).toEqual([77])
+    expect(await recordFiles()).toEqual(['alpine.json'])
+    expect(console.warn).toHaveBeenCalledWith(
+      '[wsl] uninstall: Alpine holder pid 78 was unverifiable, now unverifiable'
+    )
+  })
+})

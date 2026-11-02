@@ -1,4 +1,5 @@
 import { runProcess } from '@orca/process-host'
+import { inProcessSliceMs, runPsInProcess } from '../../shared/libproc-process-table'
 
 const PROCESS_TABLE_LOOKUP_TIMEOUT_MS = 250
 const PROCESS_TABLE_QUERY_TIMEOUT_MS = PROCESS_TABLE_LOOKUP_TIMEOUT_MS / 2
@@ -10,6 +11,7 @@ export type PosixPtyForegroundGroupDeps = {
   readProcessTable?: () => Promise<string>
   /** False once the root has exited; a stale table could then name a recycled group. */
   ownsRoot?: () => boolean
+  readForegroundGroup?: () => number | null | undefined
 }
 
 type ProcessRow = {
@@ -28,12 +30,22 @@ function hasUsableTty(tty: string): boolean {
 }
 
 async function runPs(pid: number): Promise<string> {
-  const result = await runProcess({
-    program: 'ps',
-    args: ['-p', String(pid), '-o', 'pid=,tpgid=,tty='],
-    timeoutMs: PROCESS_TABLE_QUERY_TIMEOUT_MS,
-    maxOutputBytes: PROCESS_TABLE_MAX_BYTES
+  const args = ['-p', String(pid), '-o', 'pid=,tpgid=,tty=']
+  // A native read stuck behind a busy pool leaves ps its full timeout before signalling.
+  const inProcess = await runPsInProcess(args, {
+    timeoutMs: inProcessSliceMs(PROCESS_TABLE_QUERY_TIMEOUT_MS),
+    maxOutputBytes: PROCESS_TABLE_MAX_BYTES,
+    callerRunsPs: true
   })
+  const result =
+    inProcess && !inProcess.timedOut
+      ? inProcess
+      : await runProcess({
+          program: 'ps',
+          args,
+          timeoutMs: PROCESS_TABLE_QUERY_TIMEOUT_MS,
+          maxOutputBytes: PROCESS_TABLE_MAX_BYTES
+        })
   if (result.code !== 0 || result.timedOut || result.outputTruncated) {
     throw new Error('PTY foreground group is unavailable')
   }
@@ -115,12 +127,27 @@ export async function signalPosixPtyForegroundGroup(
   const currentPid = deps.currentPid ?? process.pid
   let pgid: number | null
   try {
-    pgid = getPosixPtyForegroundGroup(
-      await (deps.readProcessTable ?? (() => readForegroundGroupTable(rootPid, currentPid)))(),
-      rootPid,
-      ptsName,
-      currentPid
-    )
+    const masterGroup = deps.readForegroundGroup?.()
+    if (masterGroup !== undefined) {
+      const own = parseProcessRows(await readOwnProcessRow(currentPid)).find(
+        (row) => row.pid === currentPid
+      )
+      pgid =
+        masterGroup !== null &&
+        masterGroup > 1 &&
+        deps.readForegroundGroup?.() === masterGroup &&
+        own !== undefined &&
+        normalizeTty(own.tty) !== normalizeTty(ptsName)
+          ? masterGroup
+          : null
+    } else {
+      pgid = getPosixPtyForegroundGroup(
+        await (deps.readProcessTable ?? (() => readForegroundGroupTable(rootPid, currentPid)))(),
+        rootPid,
+        ptsName,
+        currentPid
+      )
+    }
   } catch {
     pgid = null
   }

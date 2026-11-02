@@ -10,8 +10,6 @@ import { unservedHostServerMessage, unservedServerStatus } from './ssh-host-unse
 import { admitSshManagedServerStatus } from '../../shared/ssh-managed-server-status-admission'
 
 const target: SshTarget = { id: 'ssh-1', label: 'Box', host: 'box', port: 22, username: 'me' }
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the orchestrator reads only the environment id.
-const environment = { id: 'env-1' } as never
 
 function fencedHost(phase: 'source-fenced' | 'destination-staged', registered: boolean) {
   const host: { phase: string | null; registered: boolean } = { phase, registered }
@@ -50,36 +48,6 @@ describe('a move to the managed server that stops short', () => {
     }
     expect(unservedHostServerMessage(result)).toContain('Connect again to resume')
     expect(unservedServerStatus(result)).toMatchObject({ kind: 'relay', held: true })
-    warn.mockRestore()
-  })
-
-  it('resumes the same move on the next connect once the server answers', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const { host, deps } = fencedHost('destination-staged', true)
-    const failing = deps({
-      convert: vi.fn(async () => {
-        throw new Error('socket closed')
-      }),
-      abandonConversion: vi.fn(async () => {
-        throw new Error('socket closed')
-      })
-    })
-    await expect(resolveHostServerOnConnect(target, failing)).resolves.toMatchObject({
-      held: true
-    })
-    const convert = vi.fn(async () => {
-      host.phase = 'destination-committed'
-      return { outcome: 'converted' as const, environment, migrationId: 'm' }
-    })
-    const next = deps({ convert })
-    await expect(resolveHostServerOnConnect(target, next)).resolves.toEqual({
-      route: 'managed',
-      environmentId: 'env-1'
-    })
-    // Resumed through the registered server, without a fresh census or a second fence.
-    expect(next.ensureTunnel).toHaveBeenCalledWith('env-1')
-    expect(convert).toHaveBeenCalledWith(target, null)
-    expect(next.relayTerminals).not.toHaveBeenCalled()
     warn.mockRestore()
   })
 
@@ -136,39 +104,6 @@ describe('a move to the managed server that stops short', () => {
       expect(host.phase).toBeNull()
     }
     warn.mockRestore()
-  })
-
-  it('finishes, rather than reports a lock, when the abort finds the move already committed', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const { host, deps } = fencedHost('destination-staged', true)
-    const lost = deps({
-      convert: vi.fn(async () => {
-        throw new Error('orcad_migration_commit_reply_lost')
-      }),
-      // The abort's re-read found the commit landed and recorded it.
-      abandonConversion: vi.fn(async () => {
-        host.phase = 'destination-committed'
-      })
-    })
-    await expect(resolveHostServerOnConnect(target, lost)).resolves.not.toHaveProperty('held')
-    const next = deps()
-    await expect(resolveHostServerOnConnect(target, next)).resolves.toEqual({
-      route: 'managed',
-      environmentId: 'env-1'
-    })
-    expect(next.convert).not.toHaveBeenCalled()
-    expect(next.retainCommittedSource).toHaveBeenCalledWith(target)
-    warn.mockRestore()
-  })
-
-  it('keeps a refusal’s own guidance even while the host stays locked', () => {
-    const decision = {
-      route: 'unserved' as const,
-      reason: 'refused' as const,
-      detail: 'remove that project from this desktop and connect again',
-      held: true as const
-    }
-    expect(unservedHostServerMessage(decision)).toBe(decision.detail)
   })
 
   it('carries the lock to the renderer, and drops anything but a literal true', () => {

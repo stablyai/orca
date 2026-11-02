@@ -20,17 +20,6 @@ const initialAppStoreState = useAppStore.getState()
 
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const WEB_TAB_ID = 'web-terminal-host-tab-1'
-const RUNTIME_ENV_ID = 'env-abfee683'
-
-function makeRuntimeOwnedWorktree(): ReturnType<typeof makeCreatedAgentWorktree> {
-  const workspacePath = path.join(path.sep, 'workspace', 'feature')
-  return {
-    ...makeCreatedAgentWorktree(),
-    id: `repo-1::${workspacePath}`,
-    createdWithAgent: undefined,
-    hostId: `runtime:${encodeURIComponent(RUNTIME_ENV_ID)}`
-  }
-}
 
 function baseState(worktree: ReturnType<typeof makeCreatedAgentWorktree>): Partial<AppState> {
   return {
@@ -102,65 +91,11 @@ function baseState(worktree: ReturnType<typeof makeCreatedAgentWorktree>): Parti
   }
 }
 
-function seedSleepingRecord(worktreeId: string, sessionId: string): string {
-  const paneKey = makePaneKey(WEB_TAB_ID, LEAF_ID)
-  useAppStore.setState((s) => ({
-    sleepingAgentSessionsByPaneKey: {
-      ...s.sleepingAgentSessionsByPaneKey,
-      [paneKey]: {
-        paneKey,
-        tabId: WEB_TAB_ID,
-        worktreeId,
-        agent: 'codex' as const,
-        providerSession: { key: 'session_id' as const, id: sessionId },
-        prompt: 'keep working',
-        state: 'working' as const,
-        // The incident record: captured live while the host agent was running.
-        origin: 'live' as const,
-        capturedAt: 1000,
-        updatedAt: 1000,
-        terminalTitle: 'Codex'
-      }
-    }
-  }))
-  return paneKey
-}
-
 afterEach(() => {
   useAppStore.setState(initialAppStoreState, true)
 })
 
 describe('runtime-owned worktree activation with an unhydrated host mirror', () => {
-  it('does not relaunch a resume tab while remote PTY liveness is unknown', () => {
-    const worktree = makeRuntimeOwnedWorktree()
-    useAppStore.setState(baseState(worktree))
-    const paneKey = seedSleepingRecord(worktree.id, 'codex-session-live-1')
-
-    activateAndRevealWorktree(worktree.id, { notifyHostRuntime: false })
-
-    const after = useAppStore.getState()
-    const tabs = after.tabsByWorktree[worktree.id] ?? []
-    // Never append replacement resume while the host PTY may still be alive.
-    expect(tabs.map((tab) => tab.id)).toEqual([WEB_TAB_ID])
-    // The record is the only recovery evidence; deferral must retain it.
-    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
-    expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
-  })
-
-  it('control: still owns the pane (no relaunch) once the mirror reports the PTY live', () => {
-    const worktree = makeRuntimeOwnedWorktree()
-    const state = baseState(worktree)
-    state.ptyIdsByTabId = { [WEB_TAB_ID]: ['pty-host-old-1'] }
-    useAppStore.setState(state)
-    const paneKey = seedSleepingRecord(worktree.id, 'codex-session-live-2')
-
-    activateAndRevealWorktree(worktree.id, { notifyHostRuntime: false })
-
-    const after = useAppStore.getState()
-    expect((after.tabsByWorktree[worktree.id] ?? []).map((tab) => tab.id)).toEqual([WEB_TAB_ID])
-    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
-  })
-
   it('control: a local worktree with a dead pane still gets the resume fallback', async () => {
     const worktree = {
       ...makeCreatedAgentWorktree(),

@@ -1,5 +1,5 @@
+import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
-import { resolveStructuredWorkerAuthority } from '../../structured-worker-authority'
 import { OrcaRuntimeWithAdoptTerminalOrphansFromInventory } from '../adoption/adopt-terminal-orphans-from-inventory'
 import type {
   RuntimeTerminalAgentStatus,
@@ -35,9 +35,7 @@ import { resolveAgentLaunchRuntime } from '../../agent-launch-scope-runtime'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
 import { resolveOpenCodeModelLaunchRoute } from '../../../opencode/opencode-model-startup-plan'
-
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
-
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 
 export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAdoptTerminalOrphansFromInventory {
@@ -65,7 +63,10 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
 
   protected abstract getLeafKey(tabId: string, leafId: string): string
 
-  protected abstract getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null
+  protected abstract getPtyRecordForPaneKey(
+    paneKey: string,
+    context?: TerminalIdentityReadContext
+  ): RuntimePtyWorktreeRecord | null
 
   protected abstract getOrchestrationDbIfAvailable(): OrchestrationDb | null
 
@@ -171,27 +172,6 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     }
   }
 
-  getTerminalProcessIncarnation(handle: string): string | null {
-    const structured = resolveStructuredWorkerAuthority(
-      handle,
-      this.getOrchestrationDbIfAvailable?.() ?? null
-    )
-    if (structured) {
-      return structured.identity.processIncarnation
-    }
-    const live = this.getLivePtyForHandle(handle)
-    const record = live?.record ?? this.handles.get(handle)
-    if (!record?.ptyId) {
-      return this.getOrchestrationCompatibilitySshTerminal(handle)?.processIncarnation ?? null
-    }
-    const incarnationId = live?.pty.incarnationId ?? this.ptysById.get(record.ptyId)?.incarnationId
-    if (incarnationId) {
-      return `${record.ptyId}:${incarnationId}`
-    }
-    // Why: legacy providers may omit process incarnation; retain the prior restart-degraded fence.
-    return `${this.runtimeId}:${record.ptyId}:${record.ptyGeneration}`
-  }
-
   getExactWorkerProviderSession(
     handle: string,
     observedAfter: number
@@ -215,9 +195,6 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
         : (this.wslDistroByPtyId.get(ptyId) ?? pty?.wslDistro ?? undefined)
     } catch {
       // Exact worker validation rejects this in production; test/legacy providers may not expose PTY metadata.
-      connectionId = undefined
-      launchToken = undefined
-      wslDistro = undefined
     }
     return selectExactWorkerProviderSession({
       paneKey,

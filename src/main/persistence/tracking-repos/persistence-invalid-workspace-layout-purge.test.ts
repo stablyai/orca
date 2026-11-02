@@ -194,6 +194,15 @@ describe('main drops the layout of workspaces the catalog no longer validates', 
         store,
         listing([KEPT], { authoritative: false, source: 'metadata-fallback' })
       )
+      // Stored rows from a stopped WSL distro are not a scan either.
+      dropWorkspacesTheListingInvalidates(
+        store,
+        listing([KEPT], {
+          authoritative: false,
+          source: 'metadata-fallback',
+          wslDistroStopped: { distro: 'Ubuntu', state: 'stopped' }
+        })
+      )
       dropWorkspacesTheListingInvalidates(store, null)
       dropWorkspacesTheListingInvalidates(store, { providerAbortStatus: 'timed-out' })
 

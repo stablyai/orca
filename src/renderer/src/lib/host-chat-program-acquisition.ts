@@ -14,7 +14,7 @@ import {
   firstHostStructuredAgentAvailability
 } from '@/runtime/host-structured-agent-availability'
 import { onRuntimeEnvironmentsRetired } from '@/runtime/runtime-environment-revision'
-import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import {

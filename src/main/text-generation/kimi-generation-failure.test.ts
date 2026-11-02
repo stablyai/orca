@@ -135,3 +135,22 @@ it.each([
     expect(result.failureOutput).toEqual({ label: 'Kimi', exitCode: code, stdout, stderr })
   }
 })
+
+it('codes a diagnosed failure so clients can translate it, keeping the English error', () => {
+  const result = finalizeFromAgentOutput({
+    stdout: '',
+    stderr: 'error: Cannot combine --prompt with --auto.',
+    code: 1,
+    includeLocalMacDnsHint: false,
+    label: 'Kimi',
+    operation: 'commit-message',
+    outputFormat: 'kimi-stream-json'
+  })
+  expect(result).toMatchObject({
+    success: false,
+    error:
+      'Kimi received conflicting options: --prompt with --auto. Correct the generation recipe or CLI arguments before retrying.',
+    errorCode: 'kimiConflictingOptions',
+    errorParams: { option: '--prompt', otherOption: '--auto' }
+  })
+})

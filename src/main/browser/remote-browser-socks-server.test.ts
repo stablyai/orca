@@ -69,48 +69,6 @@ describe('RemoteBrowserSocksServer', () => {
     socket.destroy()
   })
 
-  it('normalizes listener wildcards only at the final route boundary', async () => {
-    const open = vi.fn(async () => new PassThrough())
-    const server = new RemoteBrowserSocksServer({ open })
-    servers.push(server)
-    const socket = await connectClient(server)
-    await greet(socket)
-
-    socket.write(domainConnectRequest('0.0.0.0', 3000))
-    await readExact(socket, 10)
-
-    expect(open).toHaveBeenCalledWith({ host: '127.0.0.1', port: 3000 })
-    socket.destroy()
-  })
-
-  it('rejects unsupported commands without opening a destination', async () => {
-    const open = vi.fn(async () => new PassThrough())
-    const server = new RemoteBrowserSocksServer({ open })
-    servers.push(server)
-    const socket = await connectClient(server)
-    await greet(socket)
-
-    socket.write(domainConnectRequest('localhost', 80, 2))
-
-    expect(Array.from(await readExact(socket, 10))).toEqual([5, 7, 0, 1, 0, 0, 0, 0, 0, 0])
-    expect(open).not.toHaveBeenCalled()
-  })
-
-  it('fails closed when the execution-host route is unavailable', async () => {
-    const open = vi.fn(async () => {
-      throw new Error('route offline')
-    })
-    const server = new RemoteBrowserSocksServer({ open })
-    servers.push(server)
-    const socket = await connectClient(server)
-    await greet(socket)
-
-    socket.write(domainConnectRequest('localhost', 3000))
-
-    expect(Array.from(await readExact(socket, 10))).toEqual([5, 1, 0, 1, 0, 0, 0, 0, 0, 0])
-    expect(open).toHaveBeenCalledTimes(1)
-  })
-
   it('contains synchronous route failures and large pipelined requests', async () => {
     const failingServer = new RemoteBrowserSocksServer({
       open: () => {

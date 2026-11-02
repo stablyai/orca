@@ -116,11 +116,13 @@ export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) 
       }
       const startPointSelection = { kind: 'gitlab-mr', repoId: runRepo.id, item } as const
       smartSourceSelectionRef.current = startPointSelection
+      // Picking an MR to create from is a user act: it may start the repo's stopped WSL distro.
       const resolveMrBase =
         target.kind === 'local'
           ? window.api.worktrees.resolveMrBase({
               repoId: runRepo.id,
               mrIid: item.number,
+              wakeWslDistro: true,
               ...(item.branchName ? { sourceBranch: item.branchName } : {}),
               ...(item.baseRefName ? { targetBranch: item.baseRefName } : {}),
               ...(item.isCrossRepository !== undefined
@@ -136,6 +138,7 @@ export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) 
               {
                 repo: runRepo.id,
                 mrIid: item.number,
+                wakeWslDistro: true,
                 ...(item.branchName ? { sourceBranch: item.branchName } : {}),
                 ...(item.baseRefName ? { targetBranch: item.baseRefName } : {}),
                 ...(item.isCrossRepository !== undefined

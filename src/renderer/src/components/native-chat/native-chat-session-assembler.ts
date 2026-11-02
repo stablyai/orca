@@ -1,16 +1,16 @@
 import {
   isTextBlock,
   NATIVE_CHAT_SOURCE_PRIORITY,
-  type AgentType,
   type NativeChatMessage,
   type NativeChatSession,
   type NativeChatSessionStatus
-} from '../../../../shared/native-chat-types'
+} from '../../../../shared/native-chat/native-chat-types'
+import type { AgentType } from '../../../../shared/agent-status-types'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat/native-chat-streaming'
 import {
   compareNativeChatTranscriptMessages,
   orderNativeChatTranscriptEntries
-} from '../../../../shared/native-chat-transcript-projection'
+} from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import {
   hasImagePromptMarker,
   isImageSourceUserTurn,

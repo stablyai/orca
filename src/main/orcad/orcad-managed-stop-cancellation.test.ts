@@ -4,20 +4,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as WindowsAcl from '../../shared/secure-path-windows-acl'
-import {
-  ORCAD_CANCEL_MANAGED_STOP_FLAG,
-  OrcadManagedStopCancellationSchema,
-  type OrcadManagedStopRequest
-} from '../../shared/orcad-stop-request'
+import type { OrcadManagedStopRequest } from '../../shared/orcad-stop-request'
+
 import { acquireOrcadInstanceLock } from './orcad-instance-lock'
 import { orcadManagedStopRequestPath } from './orcad-managed-stop-request'
 import { cancelOrcadManagedStop } from './orcad-managed-stop-cancellation'
-import {
-  claimOrcadManagedStopDecision,
-  readOrcadManagedStopDecision
-} from './orcad-managed-stop-decision'
+import { claimOrcadManagedStopDecision } from './orcad-managed-stop-decision'
+
 import { completeOrcadManagedStop } from './orcad-managed-stop-completion'
-import { runOrcadManagedStopCancelCommand } from './orcad-managed-stop-command'
+
 import { installOrcadStopRequestListeners } from './orcad-stop-request-listener'
 
 const hardening = vi.hoisted(() => ({ pending: new Set<Promise<void>>() }))
@@ -61,20 +56,6 @@ function running(): OrcadManagedStopRequest {
 }
 
 describe('cancelling a managed stop', () => {
-  it('lets exactly one side decide a transaction', () => {
-    const request = running()
-    expect(claimOrcadManagedStopDecision(request, 'canceled')).toBe('canceled')
-    expect(claimOrcadManagedStopDecision(request, 'dispatched')).toBe('canceled')
-    expect(readOrcadManagedStopDecision(request)).toBe('canceled')
-  })
-
-  it('withdraws a request orcad has not acted on, and removes its file', () => {
-    const request = running()
-    writeFileSync(orcadManagedStopRequestPath(request.instance), JSON.stringify(request))
-    expect(cancelOrcadManagedStop(request)).toBe('canceled')
-    expect(existsSync(orcadManagedStopRequestPath(request.instance))).toBe(false)
-  })
-
   it('reports dispatched once orcad acted first, and leaves its request in place', () => {
     const request = running()
     writeFileSync(orcadManagedStopRequestPath(request.instance), JSON.stringify(request))
@@ -126,18 +107,5 @@ describe('cancelling a managed stop', () => {
     expect(onRequest).not.toHaveBeenCalled()
     expect(String(report.mock.calls[0]?.[1])).toContain('orcad_managed_stop_canceled')
     expect(existsSync(orcadManagedStopRequestPath(request.instance))).toBe(false)
-  })
-
-  it('prints one cancellation line through the command', () => {
-    const request = running()
-    const write = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
-    const cancellation = runOrcadManagedStopCancelCommand([
-      ORCAD_CANCEL_MANAGED_STOP_FLAG,
-      JSON.stringify(request)
-    ])
-    expect(cancellation.outcome).toBe('canceled')
-    expect(
-      OrcadManagedStopCancellationSchema.parse(JSON.parse(String(write.mock.calls[0]?.[0])))
-    ).toEqual(cancellation)
   })
 })

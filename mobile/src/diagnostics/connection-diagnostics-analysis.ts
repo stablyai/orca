@@ -254,6 +254,9 @@ function diagnosticEvidence(entry: ConnectionLogEntry): string {
 }
 
 function isDiagnosticFailure(entry: ConnectionLogEntry): boolean {
+  if (entry.code === 'native-render-failed') {
+    return false
+  }
   return /suspended-dial|relay director resolve failed \((?:401|503)\)|liveness-timeout|liveness timeout|connection health check failed|relay-dial-failed|relay dial failed|relay-session-failed|active relay session failed|authentication-rejected|unauthorized|pairing may be revoked|connect-timeout|websocket connect timeout|handshake-timeout|handshake timeout/i.test(
     diagnosticEvidence(entry)
   )

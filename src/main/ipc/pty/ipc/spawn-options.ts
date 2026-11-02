@@ -50,6 +50,12 @@ export async function buildPtyIpcSpawnOptions(ctx: PtyIpcSpawnState): Promise<vo
     claudeAuth: ctx.claudeAuth
   })
   ctx.spawnOptions = launch.spawnOptions
+  if (args.wslPassiveRestore === true) {
+    ctx.spawnOptions.wslPassiveRestore = true
+  }
+  if (ctx.wslHoldReadAnchor !== undefined) {
+    ctx.spawnOptions.wslHoldReadAnchor = ctx.wslHoldReadAnchor
+  }
   ctx.spawnEnv = launch.env
   ctx.launchCommand = launch.launchCommand
   ctx.provisionalPtySize = seedPtySpawnSize({

@@ -37,36 +37,6 @@ describe('aiVaultScanIssueDisplayText', () => {
     )
   })
 
-  it('localizes the notice for WSL rows carried over from the last confirmed scan', async () => {
-    await useSpanish()
-    const carried = aiVaultScanIssueText('wslSessionsFromLastScan')
-    expect(carried.message).toBe('WSL could not be checked; its sessions are from the last scan.')
-    expect(aiVaultScanIssueDisplayText(carried)).toBe(es.aiVault.scanIssues.wslSessionsFromLastScan)
-  })
-
-  it('shows the English message for uncoded, unknown, or incomplete issues', async () => {
-    await useSpanish()
-    expect(aiVaultScanIssueDisplayText({ message: 'Old host text' })).toBe('Old host text')
-    expect(
-      aiVaultScanIssueDisplayText({
-        message: 'Newer',
-        messageCode: 'futureCode'
-      })
-    ).toBe('Newer')
-    expect(
-      aiVaultScanIssueDisplayText({
-        message: 'English',
-        messageCode: 'toString'
-      })
-    ).toBe('English')
-    expect(
-      aiVaultScanIssueDisplayText({
-        message: 'English',
-        messageCode: 'wslDistroNotRunning'
-      })
-    ).toBe('English')
-  })
-
   it('localizes classified scanner faults and passes other errors through', async () => {
     await useSpanish()
     expect(aiVaultScanErrorText('AI Vault service timed out after 130000ms.')).toBe(

@@ -9,7 +9,7 @@ import type {
 import type { ExecutionHostId, ExecutionHostScope } from '../../../../shared/execution-host'
 import { searchHit, searchResults } from '../../../../shared/ai-vault-search-test-fixture'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
-import type { AgentSessionStatusEvent } from '../../../../shared/agent-session-wire'
+import type { AgentSessionStatusEvent } from '../../../../shared/agent-session/agent-session-wire'
 import { useAiVaultPanelSearch, useAiVaultSearch } from './use-ai-vault-search'
 
 const mockSettings: { aiVaultSearch?: { enabled: boolean } } = {}

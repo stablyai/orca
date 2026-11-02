@@ -152,9 +152,11 @@ const ghosttyMock = {
     unsupportedKeys: []
   },
   loading: false,
+  choosingFile: false,
   applied: true,
   applyError: null,
   handleClick: vi.fn(),
+  handleChooseFile: vi.fn(),
   handleApply: vi.fn(),
   handleOpenChange: vi.fn()
 }

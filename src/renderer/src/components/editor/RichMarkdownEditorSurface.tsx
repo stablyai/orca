@@ -43,6 +43,7 @@ type RichMarkdownEditorSurfaceProps = {
   rootRef: (node: HTMLDivElement | null) => void
   onFocusLeave: (event: React.FocusEvent<HTMLDivElement>) => void
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
+  scrollContainerCallbackRef: (node: HTMLDivElement | null) => void
   headerSlot?: React.ReactNode
   reviewRailExpanded: boolean
   reviewRailVisible: boolean
@@ -110,6 +111,8 @@ type RichMarkdownEditorSurfaceProps = {
   onImagePick: () => void
   onEmojiPick: (menu: SlashMenuState) => void
   onCloseEmojiMenu: () => void
+  onCloseSlashMenu: () => void
+  onCloseDocLinkMenu: () => void
   onOpenAnnotationPopover: () => void
   onCancelAnnotationPopover: () => void
   onSubmitAnnotation: (body: string) => Promise<void>
@@ -132,6 +135,7 @@ export function RichMarkdownEditorSurface({
   rootRef,
   onFocusLeave,
   scrollContainerRef,
+  scrollContainerCallbackRef,
   headerSlot,
   reviewRailExpanded,
   reviewRailVisible,
@@ -170,6 +174,8 @@ export function RichMarkdownEditorSurface({
   onImagePick,
   onEmojiPick,
   onCloseEmojiMenu,
+  onCloseSlashMenu,
+  onCloseDocLinkMenu,
   onOpenAnnotationPopover,
   onCancelAnnotationPopover,
   onSubmitAnnotation,
@@ -209,7 +215,7 @@ export function RichMarkdownEditorSurface({
         {headerSlot}
         <div className="relative min-h-0 flex-1">
           <div
-            ref={scrollContainerRef}
+            ref={scrollContainerCallbackRef}
             // Image layout must not anchor-scroll over the restored tab position.
             className="relative h-full overflow-auto scrollbar-editor [overflow-anchor:none]"
             onMouseDown={(event) => {
@@ -291,11 +297,13 @@ export function RichMarkdownEditorSurface({
             selectedIndex={selectedCommandIndex}
             onImagePick={onImagePick}
             onEmojiPick={() => onEmojiPick(slashMenu)}
+            onClose={onCloseSlashMenu}
           />
         ) : null}
         {emojiMenu ? (
           <RichMarkdownEmojiMenu
             editor={editor}
+            anchorElement={rootElement}
             left={emojiMenu.left}
             top={emojiMenu.top}
             onClose={onCloseEmojiMenu}
@@ -308,6 +316,7 @@ export function RichMarkdownEditorSurface({
             rows={docLinkRows}
             totalMatches={docLinkTotalMatches}
             selectedIndex={selectedDocLinkIndex}
+            onClose={onCloseDocLinkMenu}
           />
         ) : null}
         <RichMarkdownAnnotationOverlay

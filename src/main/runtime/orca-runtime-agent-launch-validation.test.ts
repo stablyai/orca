@@ -171,7 +171,7 @@ describe('validateOrchestrationAgentLauncherForRepo', () => {
     }
   )
 
-  it.each(['wrapper --flag', 'npx codex', '"unfinished'])(
+  it.each(['wrapper && codex', 'npx codex | cat', '"unfinished'])(
     'rejects the same invalid structured Command as the launcher: %s',
     async (command) => {
       const settings = { agentCmdOverrides: { codex: command } }
@@ -190,7 +190,7 @@ describe('validateOrchestrationAgentLauncherForRepo', () => {
   )
 
   it.each([false, true])(
-    'matches structured launch resolution for quoted paths (executable exists: %s)',
+    'matches structured launch resolution for quoted paths and prefix arguments (executable exists: %s)',
     async (exists) => {
       const root = mkdtempSync(join(tmpdir(), 'orca-worker-structured-command-'))
       temporaryRoots.push(root)
@@ -199,7 +199,7 @@ describe('validateOrchestrationAgentLauncherForRepo', () => {
         writeFileSync(executable, '#!/bin/sh\nexit 0\n')
         chmodSync(executable, 0o755)
       }
-      const settings = { agentCmdOverrides: { codex: `"${executable}"` } }
+      const settings = { agentCmdOverrides: { codex: `"${executable}" --profile work` } }
       const runtime = createRuntime(settings)
       detectInstalledAgents.mockResolvedValue(['codex'])
       const validation = runtime.validateOrchestrationAgentLauncherForRepo(
@@ -211,7 +211,10 @@ describe('validateOrchestrationAgentLauncherForRepo', () => {
         ? expect(validation).resolves.toBeUndefined()
         : expect(validation).rejects.toMatchObject({ code: 'agent_not_available' }))
       if (exists) {
-        expect(resolveStructuredAgentCommand('codex', settings)).toBe(executable)
+        expect(resolveStructuredAgentCommand('codex', settings)).toEqual({
+          command: executable,
+          prefixArgs: ['--profile', 'work']
+        })
       }
     }
   )

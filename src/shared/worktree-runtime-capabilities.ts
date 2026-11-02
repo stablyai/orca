@@ -29,6 +29,8 @@ export const FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY =
 // Replay ambiguous creates only with advertised idempotency support; older hosts strip clientMutationId. status.worktreeCreateIdempotency supplies optional retention policy.
 export const WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'worktree.create-idempotency.v1' as const
+export const WORKTREE_REMOVE_BRANCH_POLICY_RUNTIME_CAPABILITY =
+  'worktree.remove-branch-policy.v1' as const
 // A failed running archive hook blocks deletion. This does not prove a hook was found: unreadable SSH orca.yaml is indistinguishable from absence (#20196).
 // Advertise the gate so callers need not risk their checkout by probing a failure (#19334).
 export const WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY =
@@ -40,6 +42,10 @@ export const WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY =
 // Capable clients wait for deletion and display removing rows. Legacy clients receive acceptance early, so hosts hide those rows to avoid showing them as normal workspaces.
 export const WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY =
   'worktree.background-removal.v1' as const
+
+// Hosts that record another owner's verified automation run on the workspaces it creates there.
+export const WORKTREE_CLIENT_AUTOMATION_PROVENANCE_RUNTIME_CAPABILITY =
+  'worktree.create.client-automation-provenance.v1' as const
 
 export const WORKTREE_RUNTIME_CAPABILITIES = [
   WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY,
@@ -57,6 +63,8 @@ export const WORKTREE_RUNTIME_CAPABILITIES = [
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY,
+  WORKTREE_REMOVE_BRANCH_POLICY_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
-  WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
+  WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
+  WORKTREE_CLIENT_AUTOMATION_PROVENANCE_RUNTIME_CAPABILITY
 ] as const

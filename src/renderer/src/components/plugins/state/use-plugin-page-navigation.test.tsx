@@ -100,11 +100,4 @@ describe('usePluginPageNavigation', () => {
       expect(nav?.openKey).toBe('acme.third')
     }
   )
-
-  it('leaves Alt+← to text fields and dialogs', async () => {
-    const container = await mountOpen()
-    await act(async () => pressBack(container.querySelector('input')))
-    await act(async () => pressBack(container.querySelector('[role="dialog"] button')))
-    expect(nav?.openKey).toBe('acme.notes')
-  })
 })

@@ -186,6 +186,9 @@ it('preserves actual badge DOM/controller outputs and no extra reads while avoid
   act(() =>
     exited.forEach((callback) => callback({ id: 'ssh-remote', code: 0, hostId: 'ssh:host' }))
   )
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(50)
+  })
   expect(current.triggerSessionCount).toBe(1)
   expect(
     current.unifiedRepos

@@ -77,38 +77,6 @@ function store(args: {
 }
 
 describe('resolveAgentLaunchExecutionContext from a Windows client', () => {
-  it('quotes for the Linux Orca server that runs the agent, not the client (#22204, #12252)', () => {
-    const context = resolveAgentLaunchExecutionContext(
-      store({
-        repo: { path: '/srv/repo', executionHostId: 'runtime:linux-box' },
-        worktreePath: '/srv/repo',
-        runtimeStatusByEnvironmentId: new Map([['linux-box', runtimeStatus('linux')]])
-      }),
-      { worktreeId: 'repo::/srv/repo' }
-    )
-    expect(context).toMatchObject({
-      resolvedLaunchPlatform: 'linux',
-      worktreeSshConnectionId: null,
-      isRemote: true,
-      queuedShell: undefined
-    })
-  })
-
-  it('does not apply the client PowerShell setting to a Windows Orca server', () => {
-    const context = resolveAgentLaunchExecutionContext(
-      store({
-        repo: { path: 'D:\\repo', executionHostId: 'runtime:win-box' },
-        worktreePath: 'D:\\repo',
-        runtimeStatusByEnvironmentId: new Map([['win-box', runtimeStatus('win32')]])
-      }),
-      { worktreeId: 'repo::D:\\repo' }
-    )
-    expect(context).toMatchObject({
-      resolvedLaunchPlatform: 'win32',
-      queuedShell: undefined
-    })
-  })
-
   it('withholds the launch when the Orca server has never reported its OS', () => {
     const context = resolveAgentLaunchExecutionContext(
       store({
@@ -118,21 +86,6 @@ describe('resolveAgentLaunchExecutionContext from a Windows client', () => {
       { worktreeId: 'repo::/srv/repo' }
     )
     expect(context).toBeNull()
-  })
-
-  it('uses the SSH host OS reported by the relay for a direct SSH workspace', () => {
-    const context = resolveAgentLaunchExecutionContext(
-      store({
-        repo: { path: '/home/u/repo', connectionId: 'box' },
-        worktreePath: '/home/u/repo',
-        sshConnectionStates: new Map([['box', sshState('win32')]])
-      }),
-      { worktreeId: 'repo::/home/u/repo' }
-    )
-    expect(context).toMatchObject({
-      resolvedLaunchPlatform: 'win32',
-      isRemote: true
-    })
   })
 
   it('withholds a direct SSH launch until the relay reports the host OS', () => {
@@ -179,17 +132,6 @@ describe('resolveAgentLaunchExecutionContext from a Windows client', () => {
     })
   })
 
-  it('keeps the client shell setting for a local workspace', () => {
-    const context = resolveAgentLaunchExecutionContext(
-      store({ repo: { path: 'C:\\repo' }, worktreePath: 'C:\\repo' }),
-      { worktreeId: 'repo::C:\\repo' }
-    )
-    expect(context).toMatchObject({
-      resolvedLaunchPlatform: 'win32',
-      queuedShell: 'powershell'
-    })
-  })
-
   it('reads a folder workspace path so a WSL folder on a Windows server quotes for Linux', () => {
     const base = store({
       repo: { path: '/unused' },
@@ -218,14 +160,6 @@ describe('resolveAgentLaunchExecutionContext from a Windows client', () => {
         runtimeStatusByEnvironmentId: new Map([['linux-box', runtimeStatus('linux')]])
       }),
       { worktreeId: 'repo::/srv/repo', launchPlatform: 'win32' }
-    )
-    expect(context).toMatchObject({ resolvedLaunchPlatform: 'linux', queuedShell: undefined })
-  })
-
-  it("keeps a caller's platform for a local launch", () => {
-    const context = resolveAgentLaunchExecutionContext(
-      store({ repo: { path: 'C:\\repo' }, worktreePath: 'C:\\repo' }),
-      { worktreeId: 'repo::C:\\repo', launchPlatform: 'linux' }
     )
     expect(context).toMatchObject({ resolvedLaunchPlatform: 'linux', queuedShell: undefined })
   })

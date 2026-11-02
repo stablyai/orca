@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { expect, it } from 'vitest'
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
@@ -15,7 +15,7 @@ it.each([null, 'second-page'])(
     let signal: AbortSignal | undefined
     const probe = createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({ PATH: '/fixture', HOME: '/fixture' }),
-      resolveCommand: () => '/fixture/codex',
+      resolveCommand: () => ({ command: '/fixture/codex', prefixArgs: [] }),
       runSession: async (invocation, body) => {
         signal = invocation.signal
         try {

@@ -177,6 +177,7 @@ export function useFileExplorerTreePaneState({
   })
 
   useFileExplorerTreeLoadEffects({
+    workspaceKey: activeWorktreeId,
     visibleFilesWorktreePath,
     displayRootPath,
     expanded: effectiveExpanded,

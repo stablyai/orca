@@ -78,16 +78,9 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: async () => null, setItem: async () => {} }
 }))
 vi.mock('lucide-react-native', () => ({ X: 'Icon' }))
-vi.mock('react-native-safe-area-context', async () => {
-  const { createContext } = await import('react')
-  return {
-    useSafeAreaInsets: () => ({ bottom: 8, left: 0, right: 0, top: 44 }),
-    useSafeAreaFrame: () => ({ x: 0, y: 0, width: 390, height: 844 }),
-    SafeAreaFrameContext: createContext(null),
-    SafeAreaInsetsContext: createContext(null),
-    SafeAreaProvider: ({ children }: { children: unknown }) => children
-  }
-})
+vi.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ bottom: 8, left: 0, right: 0, top: 44 })
+}))
 vi.mock('expo-router', () => ({
   router: { replace: vi.fn() },
   useLocalSearchParams: () => dependencies.params,

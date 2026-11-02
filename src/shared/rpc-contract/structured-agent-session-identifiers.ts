@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { isAgentSessionId } from '../agent-session-record'
-import { AGENT_SESSION_ID_MAX_LENGTH } from '../agent-session-wire'
+import { isAgentSessionId } from '../agent-session/lifecycle/agent-session-record'
+import { AGENT_SESSION_ID_MAX_LENGTH } from '../agent-session/agent-session-wire'
 
 export const MAX_ID_LENGTH = AGENT_SESSION_ID_MAX_LENGTH
 
