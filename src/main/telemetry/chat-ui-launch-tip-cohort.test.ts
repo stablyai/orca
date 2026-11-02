@@ -72,17 +72,31 @@ describe('ensureChatUiLaunchTipCohort', () => {
     { draw: 4, cohort: 'control' },
     { draw: 5, cohort: 'control' },
     { draw: 6, cohort: 'control' },
-    { draw: 7, cohort: 'treatment-swapped-buttons' },
+    { draw: 7, cohort: 'treatment-center' },
     { draw: 8, cohort: 'treatment' },
     { draw: 9, cohort: 'treatment-live-switch' }
   ])('assigns draw $draw to $cohort and keeps the frozen cohort', ({ draw, cohort }) => {
-    vi.mocked(crypto.randomInt).mockImplementation(() => draw)
+    vi.mocked(crypto.randomInt).mockImplementationOnce(() => draw)
     const store = makeStore({})
     expect(ensureChatUiLaunchTipCohort(store)).toBe(cohort)
-    expect(crypto.randomInt).toHaveBeenCalledWith(10)
+    expect(crypto.randomInt).toHaveBeenNthCalledWith(1, 10)
     expect(store.getSettings().telemetry?.chatUiLaunchTipCohort).toBe(cohort)
     expect(store.getSettings().telemetry?.installId).toBe('install')
     expect(ensureChatUiLaunchTipCohort(store)).toBe(cohort)
+    expect(store.updateSettings).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([0, 1])('freezes button emphasis draw %s independently', (draw) => {
+    vi.mocked(crypto.randomInt)
+      .mockImplementationOnce(() => 7)
+      .mockImplementationOnce(() => 0)
+      .mockImplementationOnce(() => draw)
+    const store = makeStore({})
+    expect(ensureChatUiLaunchTipCohort(store)).toBe('treatment-center')
+    expect(store.getSettings().telemetry?.chatUiLaunchTipButtonEmphasis).toBe(
+      draw === 0 ? 'normal' : 'swapped'
+    )
+    ensureChatUiLaunchTipCohort(store)
     expect(store.updateSettings).toHaveBeenCalledTimes(1)
   })
 
@@ -100,7 +114,9 @@ describe('ensureChatUiLaunchTipCohort', () => {
         expect(crypto.randomInt).toHaveBeenNthCalledWith(2, 2)
         const targeting = store.getSettings().telemetry?.chatUiLaunchTipTargeting
         expect(targeting).toEqual(
-          draw === 0 ? { mode: 'all' } : { mode: 'eligible-harnesses', eligible: true }
+          draw === 0
+            ? { mode: 'all' }
+            : { mode: 'not-switched', eligible: variant === 'chat-ui-off' }
         )
         store.getSettings().agentDefaultSurface = 'chat'
         expect(ensureChatUiLaunchTipCohort(store)).toBe('treatment')
@@ -165,47 +181,24 @@ describe('ensureChatUiLaunchTipCohort', () => {
         (agent) => !enabled.some((candidate) => candidate === agent)
       )
     })
-    ensureChatUiLaunchTipCohort(store)
-    expect(store.getSettings().telemetry?.chatUiLaunchTipTargeting).toEqual({
-      mode: 'eligible-harnesses',
-      eligible
-    })
-  })
-
-  it.each(['control', 'treatment', 'treatment-live-switch', 'treatment-swapped-buttons'] as const)(
-    'preserves existing %s assignments',
-    (cohort) => {
-      const store = makeStore({ chatUiLaunchTipCohort: cohort })
-      expect(ensureChatUiLaunchTipCohort(store)).toBe(cohort)
-      expect(crypto.randomInt).not.toHaveBeenCalled()
-      expect(store.updateSettings).not.toHaveBeenCalled()
-    }
-  )
-
-  it('keeps failed capability checks in the filtered arm without showing everyone instead', () => {
-    vi.mocked(crypto.randomInt)
-      .mockImplementationOnce(() => 8)
-      .mockImplementationOnce(() => 1)
-    const resolve = vi.fn(() => {
-      throw new Error('capability check unavailable')
-    })
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      const store = makeStore({})
-      expect(assignCohort(store, resolve)).toBe('treatment')
-      expect(store.getSettings().telemetry?.chatUiLaunchTipTargeting).toEqual({
-        mode: 'eligible-harnesses',
-        eligible: false
-      })
-      expect(assignCohort(store, resolve)).toBe('treatment')
-      expect(resolve).toHaveBeenCalledOnce()
-    } finally {
-      warn.mockRestore()
-    }
+    expect(hasChatUiLaunchTipEligibleHarness(store.getSettings())).toBe(eligible)
   })
 
   it.each([
-    { draw: 7, cohort: 'treatment-swapped-buttons' },
+    'control',
+    'treatment-center',
+    'treatment',
+    'treatment-live-switch',
+    'treatment-swapped-buttons'
+  ] as const)('preserves existing %s assignments', (cohort) => {
+    const store = makeStore({ chatUiLaunchTipCohort: cohort })
+    expect(ensureChatUiLaunchTipCohort(store)).toBe(cohort)
+    expect(crypto.randomInt).not.toHaveBeenCalled()
+    expect(store.updateSettings).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { draw: 7, cohort: 'treatment-center' },
     { draw: 8, cohort: 'treatment' },
     { draw: 9, cohort: 'treatment-live-switch' }
   ])(
@@ -219,7 +212,8 @@ describe('ensureChatUiLaunchTipCohort', () => {
       expect(props).toEqual({
         onboarding_language_v1: 'treatment',
         chat_ui_launch_tip_v1: cohort,
-        chat_ui_launch_tip_targeting_v1: 'eligible-harnesses'
+        chat_ui_launch_tip_targeting_v1: 'not-switched',
+        chat_ui_launch_tip_button_emphasis_v1: 'normal'
       })
       expect(commonPropsSchema.safeParse({ ...BASE_COMMON, ...props }).success).toBe(true)
     }

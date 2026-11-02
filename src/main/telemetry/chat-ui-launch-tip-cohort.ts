@@ -21,7 +21,7 @@ let deferredForConsent = false
  */
 export function ensureChatUiLaunchTipCohort(
   store: Store,
-  resolveEligibility: ChatUiLaunchTipEligibility
+  _resolveEligibility: ChatUiLaunchTipEligibility
 ): ChatUiLaunchTipCohort | undefined {
   deferredForConsent = false
   try {
@@ -32,7 +32,8 @@ export function ensureChatUiLaunchTipCohort(
       saved === 'control' ||
       saved === 'treatment' ||
       saved === 'treatment-live-switch' ||
-      saved === 'treatment-swapped-buttons'
+      saved === 'treatment-swapped-buttons' ||
+      saved === 'treatment-center'
     ) {
       return saved
     }
@@ -53,17 +54,22 @@ export function ensureChatUiLaunchTipCohort(
       draw < 7
         ? 'control'
         : draw === 7
-          ? 'treatment-swapped-buttons'
+          ? 'treatment-center'
           : draw === 8
             ? 'treatment'
             : 'treatment-live-switch'
     const targeting =
-      cohort === 'control' ? undefined : assignTargeting(settings, resolveEligibility)
+      cohort === 'control' ? undefined : assignTargeting(store.getChatUiLaunchTipVariant())
     store.updateSettings({
       telemetry: {
         ...telemetry,
         chatUiLaunchTipCohort: cohort,
-        ...(targeting ? { chatUiLaunchTipTargeting: targeting } : {})
+        ...(targeting
+          ? {
+              chatUiLaunchTipTargeting: targeting,
+              chatUiLaunchTipButtonEmphasis: randomInt(2) === 0 ? 'normal' : 'swapped'
+            }
+          : {})
       }
     })
     return cohort
@@ -80,16 +86,10 @@ export function isChatUiLaunchTipDeferredForConsent(): boolean {
 }
 
 function assignTargeting(
-  settings: GlobalSettings,
-  resolveEligibility: ChatUiLaunchTipEligibility
+  variant: ReturnType<Store['getChatUiLaunchTipVariant']>
 ): ChatUiLaunchTipTargeting {
   if (randomInt(2) === 0) {
     return { mode: 'all' }
   }
-  try {
-    return { mode: 'eligible-harnesses', eligible: resolveEligibility(settings) }
-  } catch (error) {
-    console.warn('[telemetry] chat UI launch tip eligibility failed', error)
-    return { mode: 'eligible-harnesses', eligible: false }
-  }
+  return { mode: 'not-switched', eligible: variant === 'chat-ui-off' }
 }

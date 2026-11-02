@@ -35,7 +35,7 @@ export function getChatUiHereVariantCopy(variant: ShownChatUiLaunchTipVariant): 
         'The terminal stays fully supported too. Switch any agent back anytime.'
       )
     ],
-    secondaryLabel: null,
+    secondaryLabel: translate('featureTips.chatUiHere.switchToTerminal', 'Switch to terminal'),
     primaryLabel: translate('featureTips.gotIt', 'Got it')
   }
 }

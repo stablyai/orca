@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, StrictMode } from 'react'
+import { act, Profiler, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
@@ -14,16 +14,54 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), dismiss: vi.fn() } }))
 vi.mock('@/lib/telemetry', () => ({ track: vi.fn() }))
 vi.mock('@/hooks/usePrefersReducedMotion', () => ({ usePrefersReducedMotion: () => true }))
 
+class LinkVisibilityObserver implements IntersectionObserver {
+  static current: LinkVisibilityObserver | undefined
+  readonly root = null
+  readonly rootMargin = '0px'
+  readonly scrollMargin = '0px'
+  readonly thresholds = [0.5]
+  readonly observe = vi.fn()
+  readonly unobserve = vi.fn()
+  readonly disconnect = vi.fn()
+  readonly takeRecords = (): IntersectionObserverEntry[] => []
+
+  constructor(private readonly callback: IntersectionObserverCallback) {
+    LinkVisibilityObserver.current = this
+  }
+
+  emit(target: Element, intersectionRatio: number): void {
+    const bounds = new DOMRect()
+    this.callback(
+      [
+        {
+          target,
+          isIntersecting: intersectionRatio > 0,
+          intersectionRatio,
+          boundingClientRect: bounds,
+          intersectionRect: bounds,
+          rootBounds: null,
+          time: 0
+        }
+      ],
+      this
+    )
+  }
+}
+
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 let container: HTMLDivElement
 let root: Root
 const updateSettingsOrThrow = vi.fn()
 const onClose = vi.fn()
+const onCardRender = vi.fn()
 const openSettingsTarget = vi.fn()
 const openSettingsPage = vi.fn()
 
 beforeEach(() => {
+  LinkVisibilityObserver.current = undefined
+  vi.stubGlobal('IntersectionObserver', LinkVisibilityObserver)
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({
     settings: createGlobalSettingsFixture({ agentDefaultSurface: 'terminal' }),
@@ -33,6 +71,7 @@ beforeEach(() => {
   })
   updateSettingsOrThrow.mockReset().mockResolvedValue(undefined)
   onClose.mockReset()
+  onCardRender.mockReset()
   openSettingsTarget.mockReset()
   openSettingsPage.mockReset()
   vi.mocked(toast.error).mockReset()
@@ -48,9 +87,10 @@ afterEach(() => {
   act(() => root.unmount())
   container.remove()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
-function renderCard(cohort?: ChatUiLaunchTipCohort): void {
+function renderCard(cohort?: ChatUiLaunchTipCohort, intersectionRatio = 1): void {
   const settings = createGlobalSettingsFixture({ agentDefaultSurface: 'terminal' })
   act(() =>
     useAppStore.setState({
@@ -69,10 +109,18 @@ function renderCard(cohort?: ChatUiLaunchTipCohort): void {
   act(() =>
     root.render(
       <StrictMode>
-        <ChatUiHereCornerCard onClose={onClose} />
+        <Profiler id="chat-ui-corner-card" onRender={onCardRender}>
+          <ChatUiHereCornerCard onClose={onClose} />
+        </Profiler>
       </StrictMode>
     )
   )
+  const link = Array.from(container.querySelectorAll('button')).find(
+    (entry) => entry.textContent === 'Live switching available'
+  )
+  if (link) {
+    act(() => LinkVisibilityObserver.current?.emit(link, intersectionRatio))
+  }
 }
 
 function button(label: string): HTMLButtonElement {
@@ -189,6 +237,70 @@ describe('Chat UI corner card', () => {
       variant: 'chat_ui_off',
       action: 'open_live_switching'
     })
+  })
+
+  it('waits for a visible document and an in-view link, then releases observation', () => {
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    renderCard('treatment-live-switch')
+    expect(track).not.toHaveBeenCalled()
+    const observer = LinkVisibilityObserver.current
+    expect(observer).toBeDefined()
+    act(() => observer?.emit(button('Live switching available'), 0.25))
+    visibility.mockReturnValue('visible')
+    act(() => document.dispatchEvent(new Event('visibilitychange')))
+    expect(track).not.toHaveBeenCalled()
+
+    act(() => observer?.emit(button('Live switching available'), 0.5))
+    expect(track).toHaveBeenCalledExactlyOnceWith('chat_ui_feature_tip_action', {
+      variant: 'chat_ui_off',
+      action: 'live_switching_shown'
+    })
+    expect(observer?.disconnect).toHaveBeenCalledOnce()
+    act(() => {
+      observer?.emit(button('Live switching available'), 1)
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    expect(track).toHaveBeenCalledOnce()
+  })
+
+  it('observes exposure without causing a render or synchronous layout measurement', () => {
+    renderCard('treatment-live-switch', 0)
+    const link = button('Live switching available')
+    const measure = vi.spyOn(link, 'getBoundingClientRect')
+    const rendersBeforeExposure = onCardRender.mock.calls.length
+    act(() => {
+      LinkVisibilityObserver.current?.emit(link, 0.25)
+      LinkVisibilityObserver.current?.emit(link, 0.5)
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    expect(track).toHaveBeenCalledOnce()
+    expect(onCardRender).toHaveBeenCalledTimes(rendersBeforeExposure)
+    expect(measure).not.toHaveBeenCalled()
+  })
+
+  it('records an in-view link when the document becomes visible', () => {
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    renderCard('treatment-live-switch')
+    expect(track).not.toHaveBeenCalled()
+    visibility.mockReturnValue('visible')
+    act(() => document.dispatchEvent(new Event('visibilitychange')))
+    expect(track).toHaveBeenCalledExactlyOnceWith('chat_ui_feature_tip_action', {
+      variant: 'chat_ui_off',
+      action: 'live_switching_shown'
+    })
+  })
+
+  it('releases pending observation on unmount without recording an exposure', () => {
+    renderCard('treatment-live-switch', 0)
+    const link = button('Live switching available')
+    const observer = LinkVisibilityObserver.current
+    act(() => root.render(null))
+    expect(observer?.disconnect).toHaveBeenCalledOnce()
+    act(() => {
+      observer?.emit(link, 1)
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    expect(track).not.toHaveBeenCalled()
   })
 
   it('offers the live-switching demo only in the live-switch arm', () => {

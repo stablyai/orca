@@ -12,7 +12,10 @@ import { FeatureTipActions } from './FeatureTipActions'
 import { FeatureTipSettingsLine } from './FeatureTipDialogFrame'
 import { LiveSwitchingDemoDialog } from './LiveSwitchingDemoDialog'
 import { trackChatUiFeatureTipAction } from './feature-tip-telemetry'
-import { enableChatUiFromFeatureTip, openChatUiFeatureTipSettings } from './chat-ui-here-actions'
+import {
+  setAgentDefaultSurfaceFromFeatureTip,
+  openChatUiFeatureTipSettings
+} from './chat-ui-here-actions'
 
 /** The nonblocking launch card for terminal-default profiles, sharing the tip's copy and a compact chat preview. */
 export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.Element | null {
@@ -26,10 +29,36 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
   const liveSwitchingShownRef = useRef(false)
 
   useEffect(() => {
-    if (liveSwitching && !liveSwitchingShownRef.current) {
+    const button = liveSwitchingButtonRef.current
+    if (!liveSwitching || liveSwitchingShownRef.current || !button) {
+      return
+    }
+    const doc = button.ownerDocument
+    let inView = false
+    let active = true
+    const recordExposure = (): void => {
+      if (!active || !inView || doc.visibilityState !== 'visible') {
+        return
+      }
       liveSwitchingShownRef.current = true
+      cleanup()
       trackChatUiFeatureTipAction('chat-ui-off', 'live_switching_shown')
     }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        inView = entry?.isIntersecting === true && entry.intersectionRatio >= 0.5
+        recordExposure()
+      },
+      { threshold: 0.5 }
+    )
+    const cleanup = (): void => {
+      active = false
+      observer.disconnect()
+      doc.removeEventListener('visibilitychange', recordExposure)
+    }
+    doc.addEventListener('visibilitychange', recordExposure)
+    observer.observe(button)
+    return cleanup
   }, [liveSwitching])
 
   const tip = FEATURE_TIPS.find((entry) => entry.id === 'chat-ui-here')
@@ -45,7 +74,7 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
     }
     setBusy(true)
     try {
-      if ((await enableChatUiFromFeatureTip()) && mountedRef.current) {
+      if ((await setAgentDefaultSurfaceFromFeatureTip('chat')) && mountedRef.current) {
         onClose()
       }
     } finally {
@@ -138,6 +167,7 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
                 currentTip={tip}
                 primaryBusy={busy}
                 swapButtons={
+                  settings?.telemetry?.chatUiLaunchTipButtonEmphasis === 'swapped' ||
                   settings?.telemetry?.chatUiLaunchTipCohort === 'treatment-swapped-buttons'
                 }
                 onPrimaryAction={() => void handleUseChatUi()}

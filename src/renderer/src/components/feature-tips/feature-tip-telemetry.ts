@@ -71,8 +71,10 @@ export function isChatUiLaunchTipHeldOut(
     cohort === 'control' ||
     ((cohort === 'treatment' ||
       cohort === 'treatment-live-switch' ||
-      cohort === 'treatment-swapped-buttons') &&
-      telemetry?.chatUiLaunchTipTargeting?.mode === 'eligible-harnesses' &&
+      cohort === 'treatment-swapped-buttons' ||
+      cohort === 'treatment-center') &&
+      (telemetry?.chatUiLaunchTipTargeting?.mode === 'eligible-harnesses' ||
+        telemetry?.chatUiLaunchTipTargeting?.mode === 'not-switched') &&
       telemetry?.chatUiLaunchTipTargeting?.eligible !== true)
   )
 }

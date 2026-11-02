@@ -8,7 +8,10 @@ import {
 } from '@/lib/orchestration-setup-state'
 import { useAppStore } from '@/store'
 import { ChatUiHereTipDialog } from './ChatUiHereTipDialog'
-import { enableChatUiFromFeatureTip, openChatUiFeatureTipSettings } from './chat-ui-here-actions'
+import {
+  setAgentDefaultSurfaceFromFeatureTip,
+  openChatUiFeatureTipSettings
+} from './chat-ui-here-actions'
 import { CliSetupTipDialog } from './CliSetupTipDialog'
 import { CmdJPaletteTipDialog } from './CmdJPaletteTipDialog'
 import { installCliFromFeatureTip } from './feature-tip-cli-install-action'
@@ -117,7 +120,12 @@ export default function FeatureTipsModal(): JSX.Element | null {
     openSettingsPage()
   }
 
-  const stayInTerminal = (): void => {
+  const handleTerminalChoice = async (): Promise<void> => {
+    if (chatUiLaunchTipVariant === 'chat-ui-on') {
+      handleSkip()
+      await setAgentDefaultSurfaceFromFeatureTip('terminal')
+      return
+    }
     trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'stay_in_terminal')
     handleSkip()
   }
@@ -148,7 +156,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
           trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'dismissed')
           break
         }
-        await enableChatUiFromFeatureTip()
+        await setAgentDefaultSurfaceFromFeatureTip('chat')
         break
       }
       case 'learn-cmd-j-palette': {
@@ -301,9 +309,13 @@ export default function FeatureTipsModal(): JSX.Element | null {
         open={isOpen}
         tip={currentTip}
         variant={chatUiLaunchTipVariant}
+        swapButtons={
+          settings?.telemetry?.chatUiLaunchTipButtonEmphasis === 'swapped' ||
+          settings?.telemetry?.chatUiLaunchTipCohort === 'treatment-swapped-buttons'
+        }
         onOpenChange={handleOpenChange}
         onPrimaryAction={() => void handlePrimaryAction()}
-        onSkip={stayInTerminal}
+        onSkip={() => void handleTerminalChoice()}
         onSettingsClick={openAgentSettings}
       />
     )

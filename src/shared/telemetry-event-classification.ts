@@ -132,9 +132,18 @@ export const commonPropsSchema = z
     orca_channel: z.enum(['stable', 'rc']),
     onboarding_language_v1: z.enum(['control', 'treatment']).optional(),
     chat_ui_launch_tip_v1: z
-      .enum(['control', 'treatment', 'treatment-live-switch', 'treatment-swapped-buttons'])
+      .enum([
+        'control',
+        'treatment',
+        'treatment-live-switch',
+        'treatment-swapped-buttons',
+        'treatment-center'
+      ])
       .optional(),
-    chat_ui_launch_tip_targeting_v1: z.enum(['all', 'eligible-harnesses']).optional()
+    chat_ui_launch_tip_button_emphasis_v1: z.enum(['normal', 'swapped']).optional(),
+    chat_ui_launch_tip_targeting_v1: z
+      .enum(['all', 'eligible-harnesses', 'not-switched'])
+      .optional()
   })
   .strict()
 export type CommonProps = z.infer<typeof commonPropsSchema>

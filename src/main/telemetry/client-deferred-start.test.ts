@@ -75,8 +75,8 @@ describe('deferred PostHog client start', () => {
   })
 
   it.each([
-    { draw: 7, cohort: 'treatment-swapped-buttons', eligible: true },
-    { draw: 7, cohort: 'treatment-swapped-buttons', eligible: false },
+    { draw: 7, cohort: 'treatment-center', eligible: true },
+    { draw: 7, cohort: 'treatment-center', eligible: false },
     { draw: 8, cohort: 'treatment', eligible: true },
     { draw: 8, cohort: 'treatment', eligible: false },
     { draw: 9, cohort: 'treatment-live-switch', eligible: true },
@@ -84,16 +84,17 @@ describe('deferred PostHog client start', () => {
   ] as const)(
     'captures $cohort with local eligibility $eligible through real initialization',
     ({ draw, cohort, eligible }) => {
-      vi.mocked(store.getChatUiLaunchTipVariant).mockReturnValue('chat-ui-off')
+      vi.mocked(store.getChatUiLaunchTipVariant).mockReturnValue(
+        eligible ? 'chat-ui-off' : 'chat-ui-on'
+      )
       vi.mocked(crypto.randomInt)
         .mockImplementationOnce(() => draw)
         .mockImplementationOnce(() => 1)
       const resolveEligibility = vi.fn(() => eligible)
       scheduleClientStart.mockClear()
       initTelemetry(store, scheduleClientStart, resolveEligibility)
-      expect(resolveEligibility).toHaveBeenCalledWith(settings)
       expect(settings.telemetry?.chatUiLaunchTipTargeting).toEqual({
-        mode: 'eligible-harnesses',
+        mode: 'not-switched',
         eligible
       })
       expect(track('app_opened', {})).toBe(true)
@@ -101,7 +102,7 @@ describe('deferred PostHog client start', () => {
         track('chat_ui_feature_tip_exposure', {
           variant: 'chat_ui_off',
           launch_tip_cohort: cohort,
-          targeting: 'eligible-harnesses',
+          targeting: 'not-switched',
           shown: eligible
         })
       ).toBe(true)
@@ -115,7 +116,7 @@ describe('deferred PostHog client start', () => {
         expect.objectContaining({
           properties: expect.objectContaining({
             chat_ui_launch_tip_v1: cohort,
-            chat_ui_launch_tip_targeting_v1: 'eligible-harnesses'
+            chat_ui_launch_tip_targeting_v1: 'not-switched'
           })
         })
       )
@@ -124,6 +125,49 @@ describe('deferred PostHog client start', () => {
       expect(properties).not.toHaveProperty('nativeChatProviders')
     }
   )
+
+  it('queues live-switching exposure and open events with the assigned cohort and identity', () => {
+    vi.mocked(store.getChatUiLaunchTipVariant).mockReturnValue('chat-ui-off')
+    vi.mocked(crypto.randomInt)
+      .mockImplementationOnce(() => 9)
+      .mockImplementationOnce(() => 1)
+    scheduleClientStart.mockClear()
+    initTelemetry(store, scheduleClientStart, () => true)
+
+    for (const action of ['live_switching_shown', 'open_live_switching'] as const) {
+      expect(track('chat_ui_feature_tip_action', { variant: 'chat_ui_off', action })).toBe(true)
+    }
+    expect(sdk.capture).not.toHaveBeenCalled()
+    scheduleClientStart.mock.calls[0][0]()
+    expect(
+      sdk.capture.mock.calls.map(([message]) => ({
+        event: message.event,
+        distinctId: message.distinctId,
+        variant: message.properties.variant,
+        action: message.properties.action,
+        cohort: message.properties.chat_ui_launch_tip_v1,
+        targeting: message.properties.chat_ui_launch_tip_targeting_v1
+      }))
+    ).toEqual(
+      ['live_switching_shown', 'open_live_switching'].map((action) => ({
+        event: 'chat_ui_feature_tip_action',
+        distinctId: BASE_COMMON.install_id,
+        variant: 'chat_ui_off',
+        action,
+        cohort: 'treatment-live-switch',
+        targeting: 'not-switched'
+      }))
+    )
+
+    settings.telemetry!.optedIn = false
+    expect(
+      track('chat_ui_feature_tip_action', {
+        variant: 'chat_ui_off',
+        action: 'live_switching_shown'
+      })
+    ).toBe(false)
+    expect(sdk.capture).toHaveBeenCalledTimes(2)
+  })
 
   it('holds startup events, then replays them in order with their original timestamps', () => {
     expect(track('app_opened', {})).toBe(true)

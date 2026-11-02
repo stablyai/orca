@@ -19,6 +19,7 @@ export function ChatUiHereTipDialog({
   open,
   tip,
   variant,
+  swapButtons = false,
   onOpenChange,
   onPrimaryAction,
   onSkip,
@@ -27,6 +28,7 @@ export function ChatUiHereTipDialog({
   open: boolean
   tip: FeatureTip
   variant: ShownChatUiLaunchTipVariant
+  swapButtons?: boolean
   onOpenChange: (open: boolean) => void
   onPrimaryAction: () => void
   onSkip: () => void
@@ -72,10 +74,11 @@ export function ChatUiHereTipDialog({
         </div>
       </DialogHeader>
 
-      <DialogFooter className="mt-8 flex sm:justify-stretch">
+      <DialogFooter className="mt-8 flex sm:justify-end sm:[&>button]:w-auto sm:[&>button]:flex-none md:justify-stretch md:[&>button[data-variant=default]]:w-full md:[&>button[data-variant=default]]:flex-1">
         <FeatureTipActions
           currentTip={tip}
           primaryBusy={false}
+          swapButtons={swapButtons && variant === 'chat-ui-off'}
           onPrimaryAction={onPrimaryAction}
           onSkip={onSkip}
           showSkip={secondaryLabel !== null}

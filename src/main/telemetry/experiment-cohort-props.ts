@@ -12,7 +12,10 @@ export function experimentCohortProps(
   resolveChatUiEligibility: ChatUiLaunchTipEligibility
 ): Pick<
   CommonProps,
-  'onboarding_language_v1' | 'chat_ui_launch_tip_v1' | 'chat_ui_launch_tip_targeting_v1'
+  | 'onboarding_language_v1'
+  | 'chat_ui_launch_tip_v1'
+  | 'chat_ui_launch_tip_targeting_v1'
+  | 'chat_ui_launch_tip_button_emphasis_v1'
 > {
   const cohort = ensureChatUiLaunchTipCohort(store, resolveChatUiEligibility)
   const telemetry = store.getSettings().telemetry
@@ -20,14 +23,18 @@ export function experimentCohortProps(
   const targeting =
     cohort === 'treatment' ||
     cohort === 'treatment-live-switch' ||
-    cohort === 'treatment-swapped-buttons'
+    cohort === 'treatment-swapped-buttons' ||
+    cohort === 'treatment-center'
       ? telemetry?.chatUiLaunchTipTargeting?.mode
       : undefined
   return {
     onboarding_language_v1:
       language === 'control' || language === 'treatment' ? language : undefined,
     chat_ui_launch_tip_v1: cohort,
+    chat_ui_launch_tip_button_emphasis_v1: telemetry?.chatUiLaunchTipButtonEmphasis,
     chat_ui_launch_tip_targeting_v1:
-      targeting === 'all' || targeting === 'eligible-harnesses' ? targeting : undefined
+      targeting === 'all' || targeting === 'eligible-harnesses' || targeting === 'not-switched'
+        ? targeting
+        : undefined
   }
 }

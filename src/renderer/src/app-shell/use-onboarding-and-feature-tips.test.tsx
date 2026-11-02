@@ -105,6 +105,17 @@ describe('Chat UI launch tip holdout', () => {
     }
   )
 
+  it('opens the center dialog for the center cohort', async () => {
+    await launch('treatment-center', { mode: 'not-switched', eligible: true })
+    expect(container.querySelector('output')?.textContent).toBe('false')
+    expect(useAppStore.getState().modalData).toMatchObject({ tipId: 'chat-ui-here' })
+  })
+
+  it('holds back the not-switched targeting group when ineligible', async () => {
+    await launch('treatment-center', { mode: 'not-switched', eligible: false })
+    expect(useAppStore.getState().modalData).toMatchObject({ tipId: 'cmd-j-palette' })
+  })
+
   it('records control exposure without showing the tip, then lets the next tip open', async () => {
     await launch('control')
     expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_exposure', {

@@ -43,6 +43,7 @@ export function FeatureTipActions({
 }): JSX.Element {
   const skipButton = showSkip ? (
     <Button
+      ref={swapButtons ? primaryButtonRef : undefined}
       variant={swapButtons ? 'default' : 'ghost'}
       className={fullWidth && swapButtons ? 'w-full flex-1' : undefined}
       onClick={onSkip}
@@ -57,7 +58,7 @@ export function FeatureTipActions({
     <>
       {swapButtons ? null : skipButton}
       <Button
-        ref={primaryButtonRef}
+        ref={swapButtons ? undefined : primaryButtonRef}
         variant={swapButtons ? 'ghost' : 'default'}
         className={fullWidth && !swapButtons ? 'w-full flex-1' : undefined}
         onClick={onPrimaryAction}
