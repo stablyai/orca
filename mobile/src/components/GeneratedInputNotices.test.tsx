@@ -8,6 +8,14 @@ import { GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY } from '../../../src/shared
 const writeText = vi.hoisted(() => vi.fn(async () => {}))
 vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText }) }))
 type BannerProps = { message: string; action: { onPress: () => void }; onDismiss: () => void }
+// The per-server feed's host discovery reaches React Native; this case drives one runtime's feed.
+vi.mock('../worktree/relay-hosts-feed', () => ({ useRelayHosts: () => [] }))
+vi.mock('../transport/execution-host-scoped-rpc-client', () => ({
+  scopeRpcClientToExecutionHost: (client: unknown) => client
+}))
+vi.mock('../transport/host-status-gates', () => ({
+  useHostStatusGates: () => ({ hostCapabilities: [] })
+}))
 vi.mock('./HostRouteNoticeBanner', () => ({
   HostRouteNoticeBanner: (props: BannerProps) => createElement('notice', props)
 }))
