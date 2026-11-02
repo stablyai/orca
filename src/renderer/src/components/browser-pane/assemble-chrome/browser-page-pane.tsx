@@ -176,6 +176,8 @@ export function BrowserPagePane({
   })
   const annotationSend = useBrowserPageAnnotationSend({
     browserTabId: browserTab.id,
+    workspaceId,
+    chromeShortcutScope: isActive ? chromeShortcutScope : 'inactive',
     worktreeId
   })
   const grab = useGrabMode(browserTab.id)

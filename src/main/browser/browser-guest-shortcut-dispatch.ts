@@ -46,6 +46,9 @@ export function forwardGuestShortcutInput(
   } = ctx
   const page = ctx.browserPage !== false
   const keybindings = getKeybindings?.()
+  const sendNotesShortcut =
+    Boolean(resolveWorkspaceId?.(browserTabId)) &&
+    keybindingMatchesAction('sourceControl.sendReviewNotes', input, process.platform, keybindings)
   if (action?.type === 'zoom') {
     if (!page) {
       return false
@@ -57,6 +60,7 @@ export function forwardGuestShortcutInput(
     if (
       (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) ||
       action?.type === 'deleteCurrentWorkspace' ||
+      sendNotesShortcut ||
       // Why: Orca claims a held tab chord on every repeat but acts once, so repeats never reach the page.
       matchesGuestTabShortcut(
         input,
@@ -196,6 +200,7 @@ export function forwardGuestShortcutInput(
     }
     renderer.send('ui:dictationKeyDown')
   } else if (
+    sendNotesShortcut ||
     matchesGuestTabShortcut(
       input,
       process.platform,
@@ -206,6 +211,7 @@ export function forwardGuestShortcutInput(
     // Why: replay into the renderer's own tab-shortcut handler so a page answers tab chords exactly as the rest of Orca does.
     const { key, code, alt, meta, control, shift, doubleTapModifier } = input
     const shortcut: BrowserPageTabShortcut = {
+      ...(sendNotesShortcut ? { browserPageId: browserTabId } : {}),
       key,
       code,
       alt,
