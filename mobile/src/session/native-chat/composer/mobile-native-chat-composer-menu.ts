@@ -4,7 +4,7 @@ import {
   getNativeChatAgentProfile,
   type NativeChatAgentProfile
 } from '../../../../../src/shared/native-chat/native-chat-agent-profiles'
-import { nativeChatPickerScannedSkills } from '../../../../../src/shared/native-chat-composer-autocomplete'
+import { nativeChatPickerScannedSkills } from '../../../../../src/shared/native-chat/input/native-chat-composer-autocomplete'
 import {
   buildNativeChatPickerItems,
   type NativeChatPickerItem,
@@ -13,7 +13,7 @@ import {
 import {
   nativeChatPickerCommands,
   nativeChatSessionSkills
-} from '../../../../../src/shared/native-chat-skill-visibility'
+} from '../../../../../src/shared/native-chat/input/native-chat-skill-visibility'
 import type {
   NativeChatSessionSkill,
   SlashCommandSuggestion
