@@ -423,6 +423,19 @@ describe('readTerminalComposerTypedText', () => {
     ).toBe('ship it')
   })
 
+  it("finds the closing frame past dim suggestion rows under Claude's hidden caret", () => {
+    const hidden = { ...suggestionOnly, cursorHidden: true, activeBuffer: 'normal' as const }
+    expect(readTerminalComposerTypedText(hidden)).toBe('')
+    expect(
+      readTerminalComposerTypedText({
+        ...hidden,
+        rows: ['────────', '❯ ship it'],
+        typedRows: ['────────', '❯ ship it'],
+        beforeCursor: '❯ ship it'
+      })
+    ).toBe('ship it')
+  })
+
   it('keeps undimmed text even when it reads like a stock placeholder', () => {
     expect(
       readTerminalComposerTypedText({

@@ -159,8 +159,18 @@ function detectTerminalComposer(
   const codexFooterIndex = findCodexFooterIndex(context)
   let afterCursor = typedOnly ? context.afterCursor : context.afterCursor || context.rawAfterCursor
   let continuationRows = composerContinuationRows(context, afterCursor, codexFooterIndex, typedOnly)
-  // Why: the continuation walk stops at the row that would close the frame, so no second scan.
-  const closedByFrame = COMPOSER_FRAME_LINE.test(context.rowsBelow[continuationRows.length] ?? '')
+  // Why: the continuation walk stops at the row that would close the frame; typed-only walks also
+  // stop at dim suggestion rows, which still sit inside the frame.
+  let frameIndex = continuationRows.length
+  while (
+    typedOnly &&
+    (context.rowsBelow[frameIndex] ?? '').trim() &&
+    !(context.typedRowsBelow[frameIndex] ?? '').trim() &&
+    !COMPOSER_FRAME_LINE.test(context.rowsBelow[frameIndex] ?? '')
+  ) {
+    frameIndex += 1
+  }
+  const closedByFrame = COMPOSER_FRAME_LINE.test(context.rowsBelow[frameIndex] ?? '')
   // Typed-only reads already drop dim placeholders; undimmed text that matches one is the user's.
   const placeholder = !typedOnly && isStockPlaceholder(afterCursor, continuationRows)
   if (placeholder) {
