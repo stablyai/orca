@@ -1,4 +1,4 @@
-import { getClaudeAgentViewService } from '../claude/agent-view-service'
+import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { startCodexHooks } from '../codex/codex-hook-reconcile'
 import { adoptLoginShellAgentHomes } from '../agent-hooks/agent-home-login-shell'

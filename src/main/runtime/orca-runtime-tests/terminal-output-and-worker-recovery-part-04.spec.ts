@@ -1,3 +1,4 @@
+import { CrewChanges } from '../orchestration/crew/crew-changes'
 import { makeRuntimeOrchestrationDb } from '../runtime-orchestration-db.test-fixture'
 import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
@@ -280,6 +281,7 @@ describe('OrcaRuntimeService', () => {
     )
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This isolated recovery path reaches only the supplied planner and missing-terminal settlement methods.
     runtime.setOrchestrationDb({
+      crewChanges: new CrewChanges(),
       listSessionDispatchesForPresentation: () => [],
       reconcileMissingWorkerTerminal: vi.fn(),
       listLegacyWorkerTerminalRecoveryRows: () => [

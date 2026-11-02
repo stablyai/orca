@@ -34,7 +34,7 @@ export type SessionParseCacheEntry = {
   // Retain the transcript-only result so sidecar changes do not force a reparse.
   foldSession?: AiVaultSession | null
   resume: SessionParseResumePoint | null
-  // Keep skipped-record notices after incremental parser state is dropped.
+  // Keep skipped-record diagnostics after incremental parser state is dropped.
   skippedRecords?: SkippedTranscriptRecord[]
   // Parser identity is runtime-only; persisted sessions carry their agent.
   agent?: AiVaultAgent

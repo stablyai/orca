@@ -48,11 +48,15 @@ export function hostJournalFrames(
       publicRead: () => view,
       cursor: () => snapshot.cursor,
       canonicalItemId: (itemId: string) => aliases[upTo - 1]!.get(itemId) ?? itemId,
-      readSince: (cursor: AgentJournalCursor, limit?: number) => ({
-        ok: true as const,
-        rows: rows.slice(cursor.sequence, upTo).slice(0, limit),
-        cursor: snapshot.cursor
-      })
+      readSince: (cursor: AgentJournalCursor, limit?: number) => {
+        const read = rows.slice(cursor.sequence, upTo).slice(0, limit)
+        // Like the store, a read cut by the limit covers only its last row; a complete one covers the tip.
+        const through =
+          limit !== undefined && read.length >= limit
+            ? (read.at(-1)?.seq ?? cursor.sequence)
+            : snapshot.cursor.sequence
+        return { ok: true as const, rows: read, through, cursor: snapshot.cursor }
+      }
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the history readers call only the members above.
     return journal as unknown as AgentSessionJournal
