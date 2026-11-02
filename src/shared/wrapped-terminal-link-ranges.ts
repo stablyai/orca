@@ -1,5 +1,6 @@
 import {
   canStartHardWrappedPath,
+  isClosedPathWrapper,
   getHardWrappedPathPrefix,
   getHardWrappedPathSuffix,
   isHardWrappedPathContinuation,
@@ -209,8 +210,8 @@ export function buildHardWrappedPathLogicalLineCandidates(
     if (!start) {
       continue
     }
-    const canStartWholeRow = canStartHardWrappedPath(start.text)
     const startSuffix = getHardWrappedPathSuffix(start)
+    const canStartWholeRow = canStartHardWrappedPath(start.text)
     const canStartBoundary = Boolean(
       startSuffix &&
       (canStartHardWrappedPath(startSuffix.text) ||
@@ -218,11 +219,12 @@ export function buildHardWrappedPathLogicalLineCandidates(
     )
     // Why: hover calls this for every terminal row; reject non-path starts
     // before translating their possible continuation rows.
-    if (!canStartWholeRow && !canStartBoundary) {
+    if (!(canStartWholeRow || canStartBoundary) || isClosedPathWrapper(startSuffix?.text ?? '')) {
       continue
     }
 
     const sourceRows: { row: HardWrappedPathFragmentRow; y: number }[] = [{ row: start, y: startY }]
+    let accumulated = startSuffix?.text ?? start.text
     for (let rowY = startY + 1; rowY < startY + maxRows; rowY++) {
       const line = buffer.getLine(rowY)
       const row = line ? trimHardWrappedPathRow(line) : null
@@ -230,7 +232,8 @@ export function buildHardWrappedPathLogicalLineCandidates(
         break
       }
       sourceRows.push({ row, y: rowY })
-      if (!isHardWrappedPathContinuation(row.text)) {
+      accumulated += row.text
+      if (isClosedPathWrapper(accumulated) || !isHardWrappedPathContinuation(row.text)) {
         break
       }
     }
