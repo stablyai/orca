@@ -74,7 +74,7 @@ export const PLUGIN_AUTHORING_COMMAND_SPECS: CommandSpec[] = [
       "Not sandboxed: this runs the plugin's code on this machine with your user's full access, outside Orca's plugin sandbox. Check only code you trust.",
       'Validates like `orca plugin validate`, then mounts each `ui: "components"` panel in Node against a stand-in host with the capabilities the manifest declares, and reports runtime errors (with file:line), layouts Orca would refuse, and props it would drop.',
       'Runs on the `node` on PATH when it is 20.6 or newer, else on the Node built into Orca. It does not reach the Orca app.',
-      'Exit codes: 0 ok, 1 a panel failed to render, 2 the plugin is invalid (plugin_invalid).'
+      'Exit codes: 0 ok, 1 a panel failed to render or an editor failed its static check (plugin_check_failed), 2 the plugin is invalid (plugin_invalid).'
     ],
     examples: ['orca plugin check .', 'orca plugin check ./todo-panel --json']
   },

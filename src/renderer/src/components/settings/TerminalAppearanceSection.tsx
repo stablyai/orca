@@ -1,3 +1,4 @@
+import { Cat } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalThemeSlot } from '../../../../shared/terminal-color-overrides'
@@ -12,7 +13,7 @@ import {
   getTerminalAdvancedTypographySearchEntries,
   getTerminalCursorSearchEntries,
   getTerminalDarkThemeSearchEntries,
-  getTerminalGhosttyImportSearchEntries,
+  getTerminalConfigImportSearchEntries,
   getTerminalLightThemeSearchEntries,
   getTerminalPaneAppearanceSearchEntries,
   getTerminalThemeTargetSearchEntries,
@@ -31,8 +32,8 @@ import { TerminalWindowSection } from './TerminalWindowSection'
 import { TerminalCursorAppearanceSection } from './TerminalCursorAppearanceSection'
 import { TerminalPaneAppearanceSection } from './TerminalPaneAppearanceSection'
 import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
-import { GhosttyImportModal } from './GhosttyImportModal'
-import type { UseGhosttyImportReturn } from './useGhosttyImport'
+import { TerminalConfigImportModal } from './TerminalConfigImportModal'
+import type { UseTerminalConfigImportReturn } from './useTerminalConfigImport'
 import { WarpThemeImportModal } from './WarpThemeImportModal'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
 import { isWebClientLocation } from '@/lib/web-client-location'
@@ -45,7 +46,7 @@ type TerminalAppearanceSectionProps = {
   systemPrefersDark: boolean
   terminalFontSuggestions: string[]
   onRequestFontSuggestions?: () => void
-  ghostty: UseGhosttyImportReturn
+  terminalConfigImport: UseTerminalConfigImportReturn
   warpThemes: UseWarpThemeImportReturn
   forceVisiblePrimary?: boolean
 }
@@ -74,7 +75,7 @@ export function TerminalAppearanceSection({
   systemPrefersDark,
   terminalFontSuggestions,
   onRequestFontSuggestions,
-  ghostty,
+  terminalConfigImport,
   warpThemes,
   forceVisiblePrimary = false
 }: TerminalAppearanceSectionProps): React.JSX.Element {
@@ -86,7 +87,7 @@ export function TerminalAppearanceSection({
   const darkThemeSearchEntries = getTerminalDarkThemeSearchEntries()
   const lightThemeSearchEntries = getTerminalLightThemeSearchEntries()
   const terminalTypographyEntries = getTerminalTypographySearchEntries()
-  const ghosttyImportEntries = getTerminalGhosttyImportSearchEntries()
+  const configImportEntries = getTerminalConfigImportSearchEntries()
   const themeCatalogSearchEntries = [
     ...getTerminalThemeTargetSearchEntries(),
     ...darkThemeSearchEntries,
@@ -114,16 +115,16 @@ export function TerminalAppearanceSection({
     searchQuery,
     terminalTypographyEntries.slice(0, 2)
   )
-  const ghosttyImportMatches =
-    showDesktopThemeImports && matchesSettingsSearch(searchQuery, ghosttyImportEntries)
+  const configImportMatches =
+    showDesktopThemeImports && matchesSettingsSearch(searchQuery, configImportEntries)
   const showPrimaryTypography =
     !isSearching ||
     forceVisiblePrimary ||
     primaryTypographyMatches ||
     typographyMatches ||
-    ghosttyImportMatches
-  const showGhosttyImport =
-    showDesktopThemeImports && (!isSearching || forceVisiblePrimary || ghosttyImportMatches)
+    configImportMatches
+  const showConfigImports =
+    showDesktopThemeImports && (!isSearching || forceVisiblePrimary || configImportMatches)
   const showTypographyAdvancedDisclosure = !isSearching || typographyMatches
 
   const advancedGroups = (colorOverrideSlot: TerminalThemeSlot) =>
@@ -191,19 +192,33 @@ export function TerminalAppearanceSection({
               'Terminal Typography'
             )}
             action={
-              showGhosttyImport ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() => void ghostty.handleClick()}
-                >
-                  <img src={ghosttyIcon} alt="" aria-hidden="true" className="size-4" />
-                  {translate(
-                    'auto.components.settings.TerminalAppearanceSection.855a76343a',
-                    'Import from Ghostty'
-                  )}
-                </Button>
+              showConfigImports ? (
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => void terminalConfigImport.handleClick('ghostty')}
+                  >
+                    <img src={ghosttyIcon} alt="" aria-hidden="true" className="size-4" />
+                    {translate(
+                      'auto.components.settings.TerminalAppearanceSection.855a76343a',
+                      'Import from Ghostty'
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => void terminalConfigImport.handleClick('kitty')}
+                  >
+                    <Cat className="size-4" aria-hidden="true" />
+                    {translate(
+                      'auto.components.settings.TerminalAppearanceSection.kitty_import',
+                      'Import from Kitty'
+                    )}
+                  </Button>
+                </div>
               ) : null
             }
           />
@@ -276,14 +291,17 @@ export function TerminalAppearanceSection({
 
       {showDesktopThemeImports ? (
         <>
-          <GhosttyImportModal
-            open={ghostty.open}
-            onOpenChange={ghostty.handleOpenChange}
-            preview={ghostty.preview}
-            loading={ghostty.loading}
-            onApply={ghostty.handleApply}
-            applied={ghostty.applied}
-            applyError={ghostty.applyError}
+          <TerminalConfigImportModal
+            format={terminalConfigImport.format}
+            open={terminalConfigImport.open}
+            onOpenChange={terminalConfigImport.handleOpenChange}
+            preview={terminalConfigImport.preview}
+            loading={terminalConfigImport.loading}
+            choosingFile={terminalConfigImport.choosingFile}
+            onApply={terminalConfigImport.handleApply}
+            onChooseFile={terminalConfigImport.handleChooseFile}
+            applied={terminalConfigImport.applied}
+            applyError={terminalConfigImport.applyError}
           />
           <WarpThemeImportModal
             open={warpThemes.open}

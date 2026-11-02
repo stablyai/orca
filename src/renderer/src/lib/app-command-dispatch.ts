@@ -1,6 +1,10 @@
 import { isKeybindingActionId, type KeybindingActionId } from '../../../shared/keybindings'
 
-export type AppCommandSource = 'plugin-keybinding' | 'plugin-palette' | 'plugin-host'
+export type AppCommandSource =
+  | 'plugin-keybinding'
+  | 'plugin-palette'
+  | 'plugin-host'
+  | 'plugin-replacement'
 export type AppCommandDispatcher = (
   actionId: KeybindingActionId,
   source: AppCommandSource

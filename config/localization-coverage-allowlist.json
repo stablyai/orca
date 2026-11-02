@@ -70,6 +70,27 @@
     "count": 2
   },
   {
+    "filePath": "src/renderer/src/components/settings/terminal-advanced-platform-search.ts",
+    "kind": "object-property:keywords",
+    "text": "Kitty",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-advanced-platform-search.ts",
+    "kind": "object-property:keywords",
+    "text": "kitty",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-advanced-platform-search.ts",
+    "kind": "object-property:keywords",
+    "text": "kitty.conf",
+    "dynamic": false,
+    "count": 1
+  },
+  {
     "filePath": "src/renderer/src/components/settings/terminal-pane-appearance-search.ts",
     "kind": "object-property:keywords",
     "text": "ghostty",

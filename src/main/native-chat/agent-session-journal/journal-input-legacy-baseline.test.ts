@@ -34,7 +34,8 @@ const message = (text: string): AgentJournalMessageItem => ({
   blocks: [{ type: 'text', text }]
 })
 
-it.each([10, 100])(
+// Bounds are linear in n plus small constants; 4x already exposes superlinear indexing.
+it.each([10, 40])(
   'indexes the initial legacy writer shape without promoting foreign/null comparison N=%i',
   async (n) => {
     const root = await mkdtemp(join(tmpdir(), 'orca-legacy-baseline-'))
