@@ -166,22 +166,41 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     if (client.isRemote) {
       if (worktreeFlag === 'auto' || worktreeFlag === 'active' || worktreeFlag === 'current') {
         try {
-          const listing = await client.call<{ terminals?: Array<{ worktreeId?: string }> }>(
-            'terminal.list',
-            { limit: 10 }
-          )
-          const remoteWorktrees = Array.from(
+          const listing = await client.call<{
+            terminals?: Array<{ worktreeId?: string }>
+            topologyRevisions?: Record<string, number>
+          }>('terminal.list', { limit: 50 })
+          const terminalWorktrees = Array.from(
             new Set(
               listing.result?.terminals
                 ?.map((t) => t.worktreeId)
                 .filter((id): id is string => Boolean(id))
             )
           )
-          if (remoteWorktrees.length > 0) {
-            worktree = remoteWorktrees[0]
+          if (terminalWorktrees.length > 0) {
+            worktree = terminalWorktrees[0]
+          } else if (listing.result?.topologyRevisions) {
+            const topologyWorktrees = Object.keys(listing.result.topologyRevisions)
+            if (topologyWorktrees.length > 0) {
+              worktree = topologyWorktrees[0]
+            }
           }
         } catch {
           // If remote terminal listing is unavailable or fails, fall through
+        }
+        if (!worktree) {
+          try {
+            const worktreeListing = await client.call<{ worktrees?: Array<{ id: string }> }>(
+              'worktree.list',
+              {}
+            )
+            const availableWorktrees = worktreeListing.result?.worktrees?.map((w) => w.id)
+            if (availableWorktrees && availableWorktrees.length > 0) {
+              worktree = availableWorktrees[0]
+            }
+          } catch {
+            // Mobile or restricted clients might not have worktree.list permission
+          }
         }
         if (!worktree) {
           throw new RuntimeClientError(

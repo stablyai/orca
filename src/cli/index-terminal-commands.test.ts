@@ -393,6 +393,34 @@ describe('orca cli worktree awareness', () => {
     )
   })
 
+  it('auto-resolves remote terminal create worktree via topologyRevisions when terminals list is empty', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_list', {
+        terminals: [],
+        topologyRevisions: {
+          'folder:cold-host-folder': 1
+        }
+      }),
+      okFixture('req_terminal_create', {
+        terminal: {
+          handle: 'term_cold',
+          worktreeId: 'folder:cold-host-folder'
+        }
+      })
+    )
+
+    await main(
+      ['terminal', 'create', '--pairing-code', 'remote-runtime', '--worktree', 'auto', '--json'],
+      '/tmp/client/repo/src'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'terminal.create',
+      expect.objectContaining({ worktree: 'folder:cold-host-folder' })
+    )
+  })
+
   it('rejects an empty --terminal instead of sending to the active pane', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
