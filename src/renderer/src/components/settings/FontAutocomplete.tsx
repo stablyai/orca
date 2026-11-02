@@ -8,6 +8,26 @@ import { filterFontSuggestions, getRenderedFontSuggestions } from './settings-fo
 import { translate } from '@/i18n/i18n'
 import { buildAppFontFamily } from '@/lib/app-font-family'
 
+// Why: these OS-shipped fonts draw pictographs or Greek for Latin letters, so their own name would be unreadable.
+const SYMBOL_FONT_FAMILIES = new Set([
+  'webdings',
+  'wingdings',
+  'wingdings 2',
+  'wingdings 3',
+  'marlett',
+  'symbol',
+  'mt extra',
+  'bookshelf symbol 7',
+  'd050000l',
+  'standard symbols ps'
+])
+
+function fontPreviewStyle(font: string): React.CSSProperties | undefined {
+  return font && !SYMBOL_FONT_FAMILIES.has(font.toLowerCase())
+    ? { fontFamily: buildAppFontFamily(font) }
+    : undefined
+}
+
 type FontAutocompleteProps = {
   value: string
   suggestions: string[]
@@ -360,10 +380,7 @@ export function FontAutocomplete({
                         : 'hover:bg-muted/60'
                     }`}
                   >
-                    <span
-                      className="truncate"
-                      style={font ? { fontFamily: buildAppFontFamily(font) } : undefined}
-                    >
+                    <span className="truncate" style={fontPreviewStyle(font)}>
                       {font || defaultOptionLabel}
                     </span>
                     {font === value ? <Check className="ml-3 size-4 shrink-0" /> : null}
