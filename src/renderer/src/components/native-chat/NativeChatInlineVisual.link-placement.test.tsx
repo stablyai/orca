@@ -52,7 +52,12 @@ function OwnedVisual() {
 function showVisual() {
   render(
     <TooltipProvider>
-      <NativeChatVisualOwnerProvider target={{ kind: 'local' }} sessionId="session" tabId="source">
+      <NativeChatVisualOwnerProvider
+        target={{ kind: 'local' }}
+        sessionId="session"
+        tabId="source"
+        isFocusedGroup
+      >
         <OwnedVisual />
       </NativeChatVisualOwnerProvider>
     </TooltipProvider>
