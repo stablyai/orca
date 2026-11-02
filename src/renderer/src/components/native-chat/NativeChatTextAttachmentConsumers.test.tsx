@@ -472,7 +472,7 @@ it('opens draft and sent sources, exports exact bytes and scrolls a giant-line p
     // Visit real source blocks through the shipping wheel/demand/read path, without a prefilled index.
     for (let block = 1; block < 100; block++) {
       await act(async () => {
-        fireEvent.wheel(classic, { deltaY: (block === 1 ? 15348 : 15352) * rowHeight })
+        fireEvent.wheel(classic, { deltaY: (block === 1 ? 15292 : 15352) * rowHeight })
       })
     }
     fireEvent.keyDown(classic, { key: 'End' })
