@@ -267,7 +267,10 @@ export function reduceStructuredAgentSession(
   const merged = journalUnchanged
     ? state.items
     : mergeItems(state.items, liveItems, event.batch.removedItemIds)
-  const items = trimRetainedItems(merged, state.retainedOwnItemLimit, state.retainedItemCap)
+  // Retained items already fit the limits, which only grow, so an unchanged journal skips the scan.
+  const items = journalUnchanged
+    ? merged
+    : trimRetainedItems(merged, state.retainedOwnItemLimit, state.retainedItemCap)
   const outsideWindow = [
     ...(liveItems.length < event.batch.items.length
       ? event.batch.items.filter((item) => !liveItems.includes(item))

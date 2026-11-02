@@ -836,6 +836,8 @@
       "claudeRemoveFolder": "Orca, bu hesabın Claude klasörünü ve oturum açma bilgilerini bu bilgisayardan siler. Sistem varsayılanı ile paylaşılan sohbet geçmişi korunur. Bu hesap seçiliyse bir sonraki Claude başlatılışında Sistem varsayılanı kullanılır."
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "Git işlemi başka yerde çalışıyor",
+      "remoteOperationInAnotherWorkspace": "Başka bir çalışma alanında Git işlemi (push, pull veya force push gibi) çalışıyor. İşlemlerin çakışmaması için bitmesini bekleyip bu eylemi kullanın.",
       "actionModel": {
         "on": "Açık",
         "off": "Kapalı",
@@ -1740,7 +1742,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "Yapılandırılmış ajan oturumu henüz kullanılamıyor. Bir süre sonra tekrar deneyin.",
         "gone": "Bu sohbet artık bu sunucuda değil, bu yüzden burada yeniden açılamıyor.",
-        "hostCannotOpen": "Orca güncellenene kadar bu sohbet yeniden açılamaz."
+        "hostCannotOpen": "Orca güncellenene kadar bu sohbet yeniden açılamaz.",
+        "worktreeDeleted": "Çalışma ağacı silindi.",
+        "folderWorkspaceRemoved": "Klasör çalışma alanı kaldırıldı."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Sağlanmış kök tarifleri sparse checkout'u desteklemez."
@@ -1750,7 +1754,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "Çalışma alanı dışındaki dosyalar eşlenen bir sunucuda henüz önizlenemiyor.",
           "webClientUnavailable": "Belge önizlemeleri web istemcisinde kullanılamıyor."
         }
       },
@@ -4520,7 +4523,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "Başka hesap yok",
-            "9332ba8684": "Şuna geç",
             "d450654fa2": "Claude Hesabı",
             "11e2354daf": "Claude kullanım çalışma zamanı",
             "3dd7ddfae1": "Claude ayrıntılarını ve hesap değiştiriciyi aç",
@@ -6386,11 +6388,7 @@
           "dbe2d18972": "Daha fazla {{value0}} işlemi",
           "openInOrcaBrowser": "Orca tarayıcısında aç",
           "2c67730e07": "Orca'da aç",
-          "e42941631a": "Linear'da görüntüle",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "Sorunu düzenle",
-          "b22f058067": "GitHub'da görüntüle",
-          "e97d8f2876": "Sorun #{{value0}}",
           "moreIssueActions": "Daha fazla sorun işlemi",
           "copyLink": "Bağlantıyı kopyala",
           "copyLinkSuccess": "{{value0}} kopyalandı",
@@ -6413,8 +6411,6 @@
           "cliCreatedFromShell": "`orca worktree create` ile oluşturuldu",
           "cliStartupAgent": "{{value0}} ile başlatıldı",
           "cliCreated": "Orca CLI tarafından oluşturuldu",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "Jira'da görüntüle",
           "linkedJira": "Bağlı Jira {{value0}}"
         },
         "WorktreeCardMetadataStatusBadges": {
@@ -7319,6 +7315,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "Hesap konumu kaydedilemedi. Tekrar deneyin.",
           "c2d2751587": "Hesabı Kaldır",
           "dbb9626ed1": "İptal",
           "63843e37e2": "Claude Hesabı Kaldırılsın mı?",
@@ -19733,6 +19730,8 @@
         "unnamedSender": "bir ajan",
         "messageFromCoordinator": "Koordinatörden mesaj",
         "startedWorker": "Çalışan başlatıldı",
+        "handedOffToAgent": "Ajana devredildi",
+        "startedAgent": "Ajan başlatıldı",
         "taskFromCoordinator": "Koordinatörden görev",
         "updateFromWorker": "Çalışandan güncelleme"
       },
@@ -20311,6 +20310,7 @@
       "detectingAgents": "Bu çalışma alanı ana makinesindeki Ajanlar tespit ediliyor…",
       "detectionFailed": "Bu çalışma alanı ana makinesinde Ajanlar tespit edilemedi.",
       "noAgents": "Bu çalışma alanı ana makinesinde etkin Ajan tespit edilmedi.",
+      "onlySourceFamilyDetected": "Bu çalışma alanı ana makinesinde yalnızca {{agent}} ile kullanım sınırını paylaşan Ajanlar kullanılabilir. Farklı bir Ajanı etkinleştirin veya yükleyin.",
       "context": "Bağlam",
       "modeFocused": "Odaklı devir (Önerilen)",
       "modeFocusedDescription": "En son durumu ve mevcut çalışma alanını kullanır, eski döküm ayrıntılarını yalnızca gerektiğinde okur.",
@@ -20424,7 +20424,23 @@
     },
     "newWorkspace": {
       "agentOptional": "Ajan [İsteğe bağlı]",
-      "createDescription": "Projeyi ve çalışma alanı adını seçin. Bir ajan başlatmak istiyorsanız ajan seçin."
+      "createDescription": "Projeyi ve çalışma alanı adını seçin. Bir ajan başlatmak istiyorsanız ajan seçin.",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Bu çalışma alanını oluşturmadan önce setup çalıştırılıp çalıştırılmayacağını seçin.",
+        "cancel": "İptal",
+        "retry": "Yeniden dene",
+        "setupScript": "Kurulum betiği",
+        "defaultTabCommands": "Varsayılan sekme komutları",
+        "setupAndDefaultTabs": "Kurulum ve varsayılan sekme komutları",
+        "askRunSetup": "Kurulum şimdi çalıştırılsın mı?",
+        "askRunDefaultTabs": "Varsayılan sekme komutları şimdi çalıştırılsın mı?",
+        "askRunSetupAndDefaultTabs": "Kurulum ve varsayılan sekme komutları şimdi çalıştırılsın mı?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + yerel",
+        "localSource": "yerel ayarlar"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Başka bir sorun değişikliği devam ediyor."
@@ -21156,6 +21172,7 @@
     "scanIssues": {
       "issuesOmitted": "Ek tarama sorunları gösterilmedi.",
       "sessionMetadataUnreadable": "Bu taramada oturum meta verileri okunamadı.",
+      "transcriptTooLarge": "Bir {{label}} konuşması Oturum Geçmişi'nde yüklenemeyecek kadar büyük. Doğrudan {{label}} içinde sürdürmeyi deneyin.",
       "openCodeScannerUnavailable": "Arka plan tarayıcısı başlatılamadığı için OpenCode geçmişi atlandı; uygulama yanıt vermeye devam ediyor.",
       "openCodeScanIncomplete": "OpenCode geçmiş taraması tamamlanamadı: {{detail}}",
       "openCodeWslReaderPreparing": "WSL SQLite okuyucusu hazırlanıyor. Kurulum tamamlandıktan sonra Vault bölümünü yenileyin.",
@@ -21705,7 +21722,8 @@
       "showLinked_other": "Bağlantılı {{count}} inceleme ve görevi göster",
       "showLinked_one": "Bağlantılı {{count}} inceleme ve görevi göster",
       "linkedCount_other": "{{count}} bağlantılı",
-      "linkedCount_one": "{{count}} bağlantılı"
+      "linkedCount_one": "{{count}} bağlantılı",
+      "labels": "Etiketler: {{labels}}"
     },
     "attachments": {
       "updateRuntime": "Çalışma alanı bağlantılarını değiştirmek için uzak çalışma zamanını güncelleyin",
@@ -22946,12 +22964,14 @@
       "serveSimUnavailable": "serve-sim kullanılamıyor.",
       "serveSimNoEndpoints": "serve-sim, akış uç noktalarını döndürmedi.",
       "serveSimEndpointUnreachable": "serve-sim başladı ancak akış uç noktasına erişilemiyor.",
+      "deviceHubInputBlocked": "Xcode'un Device Hub uygulaması bu simülatörün girişini devraldığı için dokunmalar ve yazılanlar ona ulaşmıyor. Device Hub'dan çıkın, ardından simülatörü yeniden bağlayın.",
       "androidSdkMissing": "Android SDK bulunamadı. Android Studio'yu yükleyin ve ANDROID_HOME değişkenini ayarlayın.",
       "adbUnavailable": "adb kullanılamıyor.",
       "noAndroidDevices": "Android cihazı veya AVD bulunamadı. Android Studio'da bir tane oluşturun.",
       "androidDeviceNotRunning": "\"{{device}}\" adlı Android cihazı çalışmıyor. Önce başlatın.",
       "unknownDeviceOrAvd": "\"{{device}}\", çalışan bir cihaz veya bilinen bir AVD değil.",
       "avdBootTimeout": "\"{{avdName}}\" adlı AVD'nin açılışı zamanında tamamlanmadı.",
+      "avdExitedBeforeBoot": "\"{{avdName}}\" adlı AVD açılışı tamamlanmadan durdu: {{detail}}",
       "scrcpyDownloadFailed": "scrcpy sunucusu indirilemedi: {{detail}}",
       "scrcpyServerInvalid": "İndirilen scrcpy sunucusu geçersizdi veya eksikti."
     },

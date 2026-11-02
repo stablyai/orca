@@ -10,8 +10,8 @@ import type {
 import type {
   CodexAppServerLaunch,
   openCodexAppServerConnection
-} from './codex-app-server-connection'
-import { CodexAppServerUnsupportedError } from './codex-app-server-session'
+} from './app-server/codex-app-server-connection'
+import { CodexAppServerUnsupportedError } from './app-server/codex-app-server-session'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import { codexTurnLifecycleFake } from './codex-turn-lifecycle-fake'

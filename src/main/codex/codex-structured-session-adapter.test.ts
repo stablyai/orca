@@ -12,7 +12,7 @@ import {
 } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
-import type { openCodexAppServerConnection } from './codex-app-server-connection'
+import type { openCodexAppServerConnection } from './app-server/codex-app-server-connection'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import type {

@@ -900,6 +900,8 @@
       "claudeRemoveFolder": "Orca удалит с этого компьютера папку Claude и данные входа этой учётной записи. История чатов, общая с системной учётной записью по умолчанию, сохранится. Если выбрана эта учётная запись, следующий запуск Claude использует системную учётную запись по умолчанию."
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "Операция Git идёт в другом месте",
+      "remoteOperationInAnotherWorkspace": "В другом рабочем пространстве выполняется операция Git, например отправка, получение или принудительная отправка. Дождитесь её завершения, прежде чем использовать это действие, чтобы операции не пересекались.",
       "actionModel": {
         "on": "Включено",
         "off": "Выключено",
@@ -1808,7 +1810,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "Структурированная сессия агента пока недоступна. Повторите попытку чуть позже.",
         "gone": "Этого чата больше нет на этом компьютере, поэтому открыть его здесь нельзя.",
-        "hostCannotOpen": "Этот чат нельзя открыть повторно до обновления Orca."
+        "hostCannotOpen": "Этот чат нельзя открыть повторно до обновления Orca.",
+        "worktreeDeleted": "Рабочее дерево удалено.",
+        "folderWorkspaceRemoved": "Рабочее пространство папки удалено."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Рецепты с подготовкой корня проекта не поддерживают выборочную выгрузку."
@@ -1818,7 +1822,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "Просмотр файлов за пределами рабочего пространства пока недоступен на сопряжённом сервере.",
           "webClientUnavailable": "Просмотр документов недоступен в веб-клиенте."
         }
       },
@@ -4668,7 +4671,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "Других учётных записей нет",
-            "9332ba8684": "Переключиться на",
             "d450654fa2": "Учётная запись Claude",
             "11e2354daf": "Среда выполнения для учёта использования Claude",
             "3dd7ddfae1": "Открыть подробности Claude и выбор учётной записи",
@@ -6700,11 +6702,7 @@
           "dbe2d18972": "Другие действия с {{value0}}",
           "openInOrcaBrowser": "Открыть в браузере Orca",
           "2c67730e07": "Открыть в Orca",
-          "e42941631a": "Посмотреть в Linear",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "Изменить задачу",
-          "b22f058067": "Посмотреть в GitHub",
-          "e97d8f2876": "Задача #{{value0}}",
           "moreIssueActions": "Другие действия с задачей",
           "copyLink": "Копировать ссылку",
           "copyLinkSuccess": "Скопировано: {{value0}}",
@@ -6727,8 +6725,6 @@
           "cliCreatedFromShell": "Создано через `orca worktree create`",
           "cliStartupAgent": "Запущено с {{value0}}",
           "cliCreated": "Создано через Orca CLI",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "Посмотреть в Jira",
           "linkedJira": "Связано: Jira {{value0}}"
         },
         "WorktreeCardMetadataStatusBadges": {
@@ -7679,6 +7675,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "Не удалось сохранить расположение аккаунтов. Повторите попытку.",
           "c2d2751587": "Удалить учётную запись",
           "dbb9626ed1": "Отмена",
           "63843e37e2": "Удалить учётную запись Claude?",
@@ -20415,6 +20412,8 @@
         "unnamedSender": "агента",
         "messageFromCoordinator": "Сообщение от координатора",
         "startedWorker": "Исполнитель запущен",
+        "handedOffToAgent": "Передано агенту",
+        "startedAgent": "Агент запущен",
         "taskFromCoordinator": "Задача от координатора",
         "updateFromWorker": "Обновление от исполнителя"
       },
@@ -21014,6 +21013,7 @@
       "detectingAgents": "Поиск агентов на компьютере этого рабочего пространства…",
       "detectionFailed": "Не удалось найти агентов на компьютере этого рабочего пространства.",
       "noAgents": "На компьютере этого рабочего пространства не найдено включённых агентов.",
+      "onlySourceFamilyDetected": "На компьютере этого рабочего пространства доступны только агенты, у которых общий лимит использования с {{agent}}. Включите или установите другого агента.",
       "context": "Контекст",
       "modeFocused": "Краткая передача контекста (рекомендуется)",
       "modeFocusedDescription": "Использует последнее состояние и текущее рабочее пространство; обращается к старой истории только при необходимости.",
@@ -21128,7 +21128,23 @@
     },
     "newWorkspace": {
       "agentOptional": "Агент [необязательно]",
-      "createDescription": "Выберите проект и название рабочего пространства. При желании выберите агента для запуска."
+      "createDescription": "Выберите проект и название рабочего пространства. При желании выберите агента для запуска.",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Выберите, выполнять ли настройку перед созданием этого рабочего пространства.",
+        "cancel": "Отмена",
+        "retry": "Повторить",
+        "setupScript": "Скрипт настройки",
+        "defaultTabCommands": "Команды вкладок по умолчанию",
+        "setupAndDefaultTabs": "Настройка и команды вкладок по умолчанию",
+        "askRunSetup": "Выполнить настройку сейчас?",
+        "askRunDefaultTabs": "Выполнить команды вкладок по умолчанию сейчас?",
+        "askRunSetupAndDefaultTabs": "Выполнить настройку и команды вкладок по умолчанию сейчас?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + локальные",
+        "localSource": "локальные настройки"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Задача уже изменяется другой операцией."
@@ -21874,6 +21890,7 @@
     "scanIssues": {
       "issuesOmitted": "Дополнительные проблемы сканирования не показаны.",
       "sessionMetadataUnreadable": "Не удалось прочитать метаданные сессий при этом сканировании.",
+      "transcriptTooLarge": "Разговор {{label}} слишком большой, чтобы загрузить его в историю сессий. Попробуйте продолжить его прямо в {{label}}.",
       "openCodeScannerUnavailable": "История OpenCode пропущена, так как не удалось запустить фоновый сканер; приложение по-прежнему реагирует на действия.",
       "openCodeScanIncomplete": "Сканирование истории OpenCode не завершено: {{detail}}",
       "openCodeWslReaderPreparing": "Подготовка модуля чтения SQLite в WSL. Обновите Vault после завершения настройки.",
@@ -22445,7 +22462,8 @@
       "linkedCount_one": "Связано: {{count}}",
       "linkedCount_few": "Связано: {{count}}",
       "linkedCount_many": "Связано: {{count}}",
-      "linkedCount_other": "Связано: {{count}}"
+      "linkedCount_other": "Связано: {{count}}",
+      "labels": "Метки: {{labels}}"
     },
     "attachments": {
       "updateRuntime": "Обновите удалённую среду выполнения, чтобы менять ссылки рабочего пространства",
@@ -23716,12 +23734,14 @@
       "serveSimUnavailable": "serve-sim недоступен.",
       "serveSimNoEndpoints": "serve-sim не вернул конечные точки потоковой передачи.",
       "serveSimEndpointUnreachable": "serve-sim запущен, но его конечная точка потоковой передачи недоступна.",
+      "deviceHubInputBlocked": "Device Hub из Xcode перехватил ввод для этого симулятора, поэтому касания и набор текста до него не доходят. Закройте Device Hub, затем снова подключите симулятор.",
       "androidSdkMissing": "Android SDK не найден. Установите Android Studio и задайте ANDROID_HOME.",
       "adbUnavailable": "adb недоступен.",
       "noAndroidDevices": "Устройства Android и AVD не найдены. Создайте устройство в Android Studio.",
       "androidDeviceNotRunning": "Устройство Android «{{device}}» не запущено. Сначала запустите его.",
       "unknownDeviceOrAvd": "«{{device}}» не является ни запущенным устройством, ни известным AVD.",
       "avdBootTimeout": "AVD «{{avdName}}» не завершил загрузку вовремя.",
+      "avdExitedBeforeBoot": "AVD «{{avdName}}» остановился до завершения загрузки: {{detail}}",
       "scrcpyDownloadFailed": "Не удалось скачать сервер scrcpy: {{detail}}",
       "scrcpyServerInvalid": "Скачанный сервер scrcpy оказался некорректным или неполным."
     },

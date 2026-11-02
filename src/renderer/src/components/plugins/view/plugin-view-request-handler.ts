@@ -27,6 +27,7 @@ import {
 } from './plugin-view-panel-settle'
 import { restoreActedPanel, settleAndActOnPanel } from './plugin-view-capture-acts'
 import { pluginPanelNotShownReason } from './plugin-view-shown'
+import { endPluginShotReplay, replayPluginPanel } from './plugin-view-replay'
 
 type Failure = Extract<PluginViewReply, { ok: false }>
 
@@ -187,7 +188,10 @@ export async function handlePluginViewRequest(
         return await openPanel(request)
       case 'open-editor':
         return await openEditor(request)
+      case 'replay-panel':
+        return await replayPluginPanel(request)
       case 'end-capture': {
+        endPluginShotReplay()
         usePluginViewCaptureStore.getState().end()
         const restored = await restoreActedPanel()
         return {

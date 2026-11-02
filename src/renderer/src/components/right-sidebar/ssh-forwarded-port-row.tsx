@@ -2,11 +2,11 @@ import React, { useCallback, useState } from 'react'
 import { Copy, ExternalLink, Pencil, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { getPortOpenBrowserTooltipLabel } from '@/lib/workspace-port-actions'
+import { getPortOpenBrowserTooltipLabel } from '@/lib/workspace-ports/workspace-port-actions'
 import {
   addressForPortForwardEntry,
   advertisedBrowserUrlForForwardedRow
-} from '@/lib/workspace-port-urls'
+} from '@/lib/workspace-ports/workspace-port-urls'
 import type { PortForwardEntry } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 

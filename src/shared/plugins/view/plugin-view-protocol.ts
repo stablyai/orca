@@ -4,6 +4,7 @@
  * renderer state changes: nothing here shows, raises or focuses a window.
  */
 
+import type { PluginDeclarativeNode } from '../declarative/plugin-declarative-catalog'
 import type { PluginShotAct, PluginShotActResult } from './plugin-shot-acts'
 
 export const PLUGIN_VIEW_REQUEST_CHANNEL = 'plugins:viewRequest'
@@ -28,8 +29,18 @@ export type PluginViewCapture = {
 export type PluginViewRequestBody =
   | { kind: 'open-panel'; pluginKey: string; panelId: string; capture?: PluginViewCapture }
   | { kind: 'open-editor'; pluginKey: string; editorId: string; filePath: string }
+  /** `shot --scenario`: draws a validated tree in a detached preview; no plugin panel or guest. */
+  | { kind: 'replay-panel'; replay: PluginViewReplay }
   /** Puts back the width and theme a capture changed. */
   | { kind: 'end-capture' }
+
+export type PluginViewReplay = {
+  tree: PluginDeclarativeNode | null
+  /** CSS pixels; absent takes the right sidebar's current width. */
+  width?: number
+  colorScheme?: PluginViewColorScheme
+  timeoutMs: number
+}
 
 export type PluginViewRequest = PluginViewRequestBody & { requestId: string }
 

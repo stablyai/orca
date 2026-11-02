@@ -46,8 +46,9 @@
 - `customEditors` (CustomEditorContribution[], since 1.4.245): Editors that open files of given types in the editor tab. At most 16.
 - `newFiles` (NewFileContribution[], since 1.4.245): Untitled files the user can create from the + menu and the command palette. At most 16.
 - `settings` (SettingContribution[], since 1.4.246): Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64.
+- `statusBarItems` (StatusBarItemContribution[], since 1.4.248): Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. At most 8.
 
-Reserved (must stay empty arrays): `agentHarnesses`, `skills`, `mcpServers`, `hooks`, `taskSources`, `connections`, `statusBarItems`, `sidebarCards`.
+Reserved (must stay empty arrays): `agentHarnesses`, `skills`, `mcpServers`, `hooks`, `taskSources`, `connections`, `sidebarCards`.
 
 ## PanelContribution
 
@@ -128,6 +129,7 @@ An editor for the listed files, shown in the editor tab beside Source. It must l
 - `entry` (string, required, since 1.4.245): HTML file rendered inside an editor frame, like a panel, or a `.ts`/`.tsx` module that Orca transpiles and loads in a generated page (needs `engines.orca` `>=1.4.246`). It receives the open document and posts edits back; it never gets a file path or file system. It is trusted code: install editors you trust.
 - `priority` ("default" | "option", since 1.4.245): `default` (the default) opens matching files in this editor; `option` only offers it in the view toggle, so files open in Source. Files Orca opens itself (such as `.json`, `.ts`, `.md`, `.csv`, `.yaml`, lockfiles and `.env` files) always behave as `option`.
 - `contentKind` ("text" | "bytes", since 1.4.245): `text` (the default) sends the file as text and accepts full-text edits. `bytes` sends the file's raw bytes, for binary formats such as spreadsheets, and accepts full-byte edits.
+- `frame` ("any" | "isolated", since 1.4.248): `any` (the default) runs in whatever frame the client gives. `isolated` runs only in the desktop app's isolated frame, never the browser-client fallback: browser clients, and desktop with isolated frames switched off, open the file in Source with a notice that the editor needs the Orca desktop app.
 
 ## NewFileContribution
 
@@ -155,6 +157,17 @@ A setting shown under the plugin in Settings. Requires the `settings:own` capabi
 - `maxLength` (integer, since 1.4.246): Strings: most characters.
 - `multiline` (boolean, since 1.4.246): Strings: a multi-line text box.
 - `placeholder` (string, since 1.4.246): Strings and numbers: hint shown while empty.
+
+## StatusBarItemContribution
+
+An item in the status bar. Requires the `declarative` profile; a `trusted-worker` can change it with `statusBar.update`.
+
+- `id` (string, required, since 1.4.248): Item id, unique among this plugin's status bar items; `statusBar.update` names it.
+- `text` (string, since 1.4.248): Short label shown in the status bar.
+- `icon` (one of activity, bar-chart-3, bell, blocks, book, bot, bug, calendar, cloud, code, database, file-text, flag, folder, gauge, globe, hammer, layers, lightbulb, package, plug, puzzle, rocket, star, terminal, wrench, zap, add, remove, delete, edit, refresh, search, settings, check, close, info, warning, error, open-external, copy, download, upload, play, pause, stop, more, expand, collapse, next, filter, branch, file, agent, link, since 1.4.248): Icon shown before the text, from the panel icon set.
+- `tone` ("neutral" | "accent" | "success" | "warning" | "danger", since 1.4.248): Colour of the item. Defaults to `neutral`.
+- `tooltip` (string, since 1.4.248): Shown on hover. Defaults to the plugin name.
+- `command` (string, since 1.4.248): Id of a command this plugin contributes in `contributes.commands`, run when the item is pressed.
 
 ## Capability
 

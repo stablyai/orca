@@ -13,6 +13,8 @@ export const PLUGIN_COMPONENTS_CATALOG_2_SINCE = '1.4.247'
 export const PLUGIN_SOURCE_MODULES_SINCE = PLUGIN_PANEL_UI_SINCE
 /** Panels reach their worker, storage, settings and events; `contributes.settings` arrives. */
 export const PLUGIN_PANEL_BRIDGE_SINCE = PLUGIN_PANEL_UI_SINCE
+/** First release that reads `customEditors[].frame`, so an editor can require isolated frames. */
+export const PLUGIN_EDITOR_FRAME_SINCE = '1.4.248'
 
 type PluginFieldDoc = {
   description: string

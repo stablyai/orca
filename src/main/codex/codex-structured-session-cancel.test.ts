@@ -43,8 +43,8 @@ import type {
 import type {
   CodexAppServerLaunch,
   openCodexAppServerConnection
-} from './codex-app-server-connection'
-import { CodexAppServerUnsupportedError } from './codex-app-server-session'
+} from './app-server/codex-app-server-connection'
+import { CodexAppServerUnsupportedError } from './app-server/codex-app-server-session'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import type {
   CodexStructuredSessionAdapterDeps,

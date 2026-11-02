@@ -6,6 +6,10 @@ export function selectPullRequestDiffBase(requestedBase, headParents, eventName)
   if (eventName === 'pull_request' && headParents.length >= 2) {
     return headParents[0]
   }
+  // A main push has no payload base; its first parent is the main tip it landed on.
+  if (eventName === 'push' && !requestedBase && headParents.length >= 1) {
+    return headParents[0]
+  }
   return requestedBase
 }
 

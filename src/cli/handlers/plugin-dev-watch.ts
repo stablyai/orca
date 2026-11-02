@@ -108,8 +108,16 @@ function bindShotHost(
       if ('notShown' in shot) {
         return { notShown: shot.notShown }
       }
-      const { path: file, width, height, settled, errors } = shot
-      return { panelId, path: file, width, height, settled, errors }
+      const { path: file, width, height, settled, errors, pendingRequests } = shot
+      return {
+        panelId,
+        path: file,
+        width,
+        height,
+        settled,
+        errors,
+        ...(pendingRequests === undefined ? {} : { pendingRequests })
+      }
     }
   }
 }

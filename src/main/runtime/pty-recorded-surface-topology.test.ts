@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import {
   ptyHoldsRecordedSurface as holdsPane,
@@ -105,13 +105,16 @@ describe('ptyHoldsRecordedSurface', () => {
     const graph = topology({ graphSequence: 3, ptyIdHoldingPane: () => undefined })
     expect(ptyHoldsRecordedSurface(record, graph)).toBe(false)
 
-    recordPtySurface(record, TAB, `${TAB}:${LEAF}`, graph.graphSequence)
+    const setRecordedSurface = vi.fn()
+    recordPtySurface({ setRecordedSurface }, record, TAB, `${TAB}:${LEAF}`, graph.graphSequence)
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      expect(record.surfaceRecordedAtGraphSequence).toBe(1)
+      expect(setRecordedSurface).not.toHaveBeenCalled()
       return
     }
-    expect(ptyHoldsRecordedSurface(record, graph)).toBe(true)
-    expect(ptyHoldsRecordedSurface(record, { ...graph, graphSequence: 4 })).toBe(false)
+    expect(setRecordedSurface).toHaveBeenCalledWith(record, TAB, `${TAB}:${LEAF}`, 3)
+    const applied = { ...record, surfaceRecordedAtGraphSequence: 3 }
+    expect(ptyHoldsRecordedSurface(applied, graph)).toBe(true)
+    expect(ptyHoldsRecordedSurface(applied, { ...graph, graphSequence: 4 })).toBe(false)
   })
 
   it('reports no surface when the record never named a pane', () => {

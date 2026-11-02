@@ -125,6 +125,11 @@ export function formatPluginDevWatchEvent(event: PluginDevWatchEvent): string {
     case 'shot':
       return [
         `shot ${event.path} (${event.width}x${event.height})${event.settled ? '' : ', not finished drawing'}`,
+        ...(event.pendingRequests
+          ? [
+              `  note: ${event.pendingRequests} host call(s) were still unanswered; the panel may show its loading state`
+            ]
+          : []),
         ...event.errors.map((error) => `  error: ${error}`)
       ].join('\n')
     case 'shot_skipped':

@@ -57,6 +57,17 @@ re-checks changed commands and shortcuts), `ORCA plugin dev unload <dir>`.
   storage stays written. It needs Orca's window hidden or minimized, so it never
   clicks under the user, and refuses html panels. Acts are not a person's press: a Link's href
   stays closed and `shell.openExternal` / `files.saveAs` are refused.
+- `ORCA plugin shot <dir> --scenario <name> [--panel <id>] [--theme] [--width] [--out]` shoots
+  one scenario of the panel's `<entry>.check.ts` instead of the live panel: the CLI renders it
+  as `plugin check` does (the panel and the worker against a stand-in host, so the scenario's
+  data never reaches the real panel, storage, settings or worker), then Orca draws that tree in
+  a preview apart from the plugin and captures it; the sidebar is not opened or switched. It
+  runs the plugin's code on this machine, unsandboxed, like `plugin check`. A key works only for
+  a dev plugin, run inside its folder. The result adds `replay: true` and `scenario`, and
+  `errors` has what the render reported; an unknown name fails and lists the scenarios. Limits:
+  a still frame (host-owned control values start from the tree's props), images show their
+  placeholder, no `--act`, local only (no `--environment`), and Orca's window must be hidden
+  or minimized. Default file `.orca/shots/<plugin-key>-<panel>.<scenario>.png`.
 - `ORCA plugin open <plugin-key> [--panel <id> | --editor <file>]` shows the panel in the right
   sidebar, or a file in the plugin's custom editor. Neither raises the window.
 - Both need the desktop app with a workspace showing. A shot never changes the view: it fails with

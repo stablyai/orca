@@ -26,17 +26,18 @@ import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
   releaseModuleExport,
-  resolveBaselineReleaseRef,
-  resolveRecentStableReleaseRefs
+  resolveBaselineReleaseRef
 } from './release-checkout'
 
 // A chat this build has written, new or an existing one whose input rows an older build wrote, is
-// refused by each of the two newest releases (the downgrade window) as a newer Orca's, which leaves
+// refused by each of the two last releases before outcome storage as a newer Orca's, which leaves
 // every byte as it was; a build from before that reason opens it read-only, as it does any newer
 // row, and changes no saved row (it only adds a table of its own). The existing chat's input rows
 // stay byte for byte throughout, and this build reads the whole chat again afterwards.
 const SUITE_TIMEOUT_MS = 180_000
 // A main build sharing this database and schema; the releases in the window are probed as well.
+// v1.4.246 shipped outcome storage and reads these chats itself, so the refusing window ends before it.
+const REFUSING_RELEASE_REFS = ['v1.4.245', 'v1.4.244'] as const
 const WRITABLE_BASELINE_REF = '3727100cc9dbcea6201f8a3e506676a3c4b53b18'
 const JOURNAL = 'src/main/native-chat/agent-session-journal'
 
@@ -142,8 +143,8 @@ function savedContent(): Map<string, unknown> {
 
 describe('a chat this build wrote, opened by a shipped build', () => {
   it.each([
-    ['new', 'the newest release'],
-    ['existing', 'the newest release'],
+    ['new', 'the last release before outcome storage'],
+    ['existing', 'the last release before outcome storage'],
     ['new', 'the release before it'],
     ['existing', 'the release before it'],
     ['new', 'the writable baseline'],
@@ -157,10 +158,10 @@ describe('a chat this build wrote, opened by a shipped build', () => {
       expect(before['agent-session-journal.db']).toBeDefined()
       const inWindow = build !== 'the writable baseline'
       const checkout = await materializeReleaseCheckout(
-        build === 'the newest release'
-          ? resolveBaselineReleaseRef()
+        build === 'the last release before outcome storage'
+          ? REFUSING_RELEASE_REFS[0]
           : inWindow
-            ? resolveRecentStableReleaseRefs(2)[1]!
+            ? REFUSING_RELEASE_REFS[1]
             : WRITABLE_BASELINE_REF
       )
       const support = await importReleaseCheckoutModule(

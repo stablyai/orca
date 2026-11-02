@@ -27,6 +27,11 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
 
 export const isMobileTuiAgent: (value: unknown) => value is TuiAgent = isTuiAgent
 
+/** A newer host's agent reads by its id until this build knows its name. */
+export function mobileTuiAgentLabel(agent: string): string {
+  return isTuiAgent(agent) ? MOBILE_TUI_AGENT_LABELS[agent] : agent
+}
+
 function asDisabledList(disabled: unknown): Iterable<unknown> | null {
   return Array.isArray(disabled) ? disabled : null
 }

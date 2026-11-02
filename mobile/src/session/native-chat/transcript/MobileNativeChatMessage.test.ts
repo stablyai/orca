@@ -13,6 +13,8 @@ import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-ove
 import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { projectStructuredAgentStartItem } from '../../../../../src/shared/structured-agent-start-projection'
+import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
 import { useMobileStructuredAgentSession } from '../../use-mobile-structured-agent-session'
 import { snapshotEvent, ok } from '../../use-mobile-structured-agent-session-queued.test-fixture'
 import {
@@ -140,6 +142,37 @@ describe('MobileNativeChatMessage', () => {
     expect(drawn).toContain('AllowResolved · Answered on desktop-renderer')
     expect(markdownIn(renderer!.root)[0]).toBe('Worker assignment')
   })
+
+  it.each([
+    ['en', 'agent-start', 'Worker assignment', 'Started worker'],
+    ['en', 'agent-handoff', 'Fix the stall', 'Handed off to agent'],
+    ['en', 'agent-handoff', '', 'Started agent'],
+    ['de', 'agent-handoff', '', 'Agent gestartet']
+  ] as const)(
+    'heads a %s %s card with task %j as %j, as desktop does',
+    async (locale, kind, task, title) => {
+      const agent = {
+        party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+        name: 'Worker'
+      }
+      const message = projectStructuredAgentStartItem({
+        itemId: 'start',
+        revision: 1,
+        sequence: 1,
+        observedAt: 1,
+        body:
+          kind === 'agent-start'
+            ? { kind, dispatchId: 'dispatch', worker: agent, task }
+            : { kind, launchId: 'launch', agent, task }
+      })!
+      await activateMobileUiLocale(locale)
+      try {
+        expect(textIn(render(message).root)).toContain(title)
+      } finally {
+        await activateMobileUiLocale('en')
+      }
+    }
+  )
 
   it("keeps an answered prompt's receipt when its settled turn folds away, as desktop does", () => {
     const { messages, receipts } = structuredQuestionTranscript(ANSWERED_PROMPT_ITEMS)

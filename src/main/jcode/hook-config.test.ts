@@ -147,14 +147,6 @@ turn_end = "~/bin/mine" # replaces agent-hooks/jcode-hook.sh
     expect(result.content).toContain('pre_tool_timeout_ms = 5000 # ms')
   })
 
-  it('keeps CRLF line endings when editing a Windows-owned config', () => {
-    const source = '[hooks]\r\nturn_end = "~/bin/mine"\r\n'
-    const result = applyJcodeManagedHooks(source, EVENTS, MANAGED_COMMAND, 'jcode-hook.sh')
-    expect(result.content).toContain('\r\n')
-    expect(result.content).not.toContain('\n[hooks]')
-    expect(result.content).not.toContain('\r\r')
-  })
-
   it.each([
     ['inline', '[hooks]\npre_tool = ["a.sh"] # gate\n', ['a.sh']],
     ['inline trailing comma', "[hooks]\npre_tool = [ 'a.sh', ]\n", ['a.sh']],

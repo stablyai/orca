@@ -127,15 +127,17 @@ it('snapshots immediate relations across completion/reload and keeps unknown evi
         }))
       })
     expect(mail('term_coord', ['term_worker']).senders[0].relation).toBe('worker')
-    expect(agentMessageHeading(mail('term_coord', ['term_worker']))).toBe('worker')
+    expect(agentMessageHeading(mail('term_coord', ['term_worker']), { blocks: [] })).toBe('worker')
     expect(mail('term_worker', ['term_coord'], worker.id).senders[0].relation).toBe('coordinator')
-    expect(agentMessageHeading(mail('term_worker', ['term_coord'], worker.id))).toBe('coordinator')
+    expect(
+      agentMessageHeading(mail('term_worker', ['term_coord'], worker.id), { blocks: [] })
+    ).toBe('coordinator')
     expect(mail('term_coord', ['term_child']).senders[0].relation).toBe('none')
     const delivered = mail('term_worker', ['term_child', 'term_peer'], worker.id)
     db.db.prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?").run(child.id)
     const reload = readAgentMessageSource(JSON.parse(JSON.stringify(delivered)))!
     expect(reload.senders.map((sender) => sender.relation)).toEqual(['worker', 'none'])
-    expect(agentMessageHeading(reload)).toBe('generic')
+    expect(agentMessageHeading(reload, { blocks: [] })).toBe('generic')
     expect(mail('term_worker', ['term_child'], worker.id).senders[0].relation).toBeUndefined()
     expect(mail('term_worker', ['term_child'], worker.id, child.id).senders[0].relation).toBe(
       'worker'

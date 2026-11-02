@@ -15,6 +15,7 @@ import {
 } from '../../shared/plugins/view/plugin-shot-acts'
 import { callPlugins, requirePluginKey, resolveHostPluginPath, stringFlag } from './plugin-runtime'
 import { defaultPluginShotsDir } from './plugin-shot-default-dir'
+import { takePluginScenarioShot } from './plugin-shot-scenario'
 
 /** What `plugins.shot` answers; `png` is base64. */
 export type PluginShotReply = {
@@ -56,6 +57,10 @@ export type PluginShotSaved = {
   pendingRequests?: number
   actions?: PluginShotActResult[]
   restored?: boolean
+  /** `--scenario`: a CLI-rendered scenario tree, drawn apart from the plugin. */
+  replay?: true
+  scenario?: string
+  notes?: string[]
 }
 
 type PluginOpenReply =
@@ -173,7 +178,8 @@ export function takePluginShotIfShown(
 
 export function formatPluginShot(shot: PluginShotSaved, requestedTheme?: string): string {
   return [
-    `Saved ${shot.path} (${shot.width}x${shot.height}, ${shot.theme} theme)`,
+    `Saved ${shot.path} (${shot.width}x${shot.height}, ${shot.theme} theme${shot.scenario === undefined ? '' : `, scenario "${shot.scenario}"`})`,
+    ...(shot.notes ?? []).map((note) => `  note: ${note}.`),
     ...(requestedTheme && !shot.themeApplied
       ? [
           `  note: ${requestedTheme} was not applied (${shot.themeReason ?? 'Orca could not paint it'}); it shows ${shot.theme}.`
@@ -209,6 +215,32 @@ function parseActs(ctx: HandlerContext): PluginShotAct[] | undefined {
   return parsed.acts
 }
 
+async function scenarioShot(ctx: HandlerContext, scenario: string): Promise<void> {
+  if (stringFlag(ctx, 'act') !== undefined) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--act drives the live panel and --scenario draws a still frame apart from it; pass one.'
+    )
+  }
+  const target = stringFlag(ctx, 'plugin')
+  if (target === undefined) {
+    throw new RuntimeClientError('invalid_argument', 'Pass the plugin folder or its key.')
+  }
+  const colorScheme = parseTheme(ctx)
+  const out = stringFlag(ctx, 'out')
+  const panelId = stringFlag(ctx, 'panel')
+  const width = parseWidth(ctx)
+  const shot = await takePluginScenarioShot(ctx, {
+    target,
+    scenario,
+    ...(panelId === undefined ? {} : { panelId }),
+    ...(colorScheme === undefined ? {} : { colorScheme }),
+    ...(width === undefined ? {} : { width }),
+    ...(out === undefined ? {} : { out: resolveLocalShotPath(ctx, out) })
+  })
+  printPluginResult(ctx, shot, formatPluginShot(shot, colorScheme))
+}
+
 export const PLUGIN_VIEW_HANDLERS: Record<string, CommandHandler> = {
   'plugin open': async (ctx) => {
     const pluginKey = requirePluginKey(ctx)
@@ -231,6 +263,11 @@ export const PLUGIN_VIEW_HANDLERS: Record<string, CommandHandler> = {
     )
   },
   'plugin shot': async (ctx) => {
+    const scenario = stringFlag(ctx, 'scenario')
+    if (scenario !== undefined) {
+      await scenarioShot(ctx, scenario)
+      return
+    }
     const pluginKey = requirePluginKey(ctx)
     const colorScheme = parseTheme(ctx)
     const out = stringFlag(ctx, 'out')

@@ -6,6 +6,7 @@ import {
   pluginPanelCallerSchema
 } from '../plugins/workers/plugin-panel-bridge-protocol'
 import { pluginShotActsSchema } from '../plugins/view/plugin-shot-acts'
+import { PLUGIN_DECLARATIVE_RENDER_LANE } from '../plugins/declarative/plugin-declarative-limits'
 
 // Why optional: only `approval_required` hands it out; older hosts strip it and older callers omit it.
 const approvalFingerprintParam = z.string().min(1).max(128).optional()
@@ -129,4 +130,33 @@ export const PluginShotParams = z.object({
   ifShown: z.boolean().optional(),
   /** Input to run on a components panel before the capture; older hosts strip it. */
   acts: pluginShotActsSchema.optional()
+})
+
+// Why the render lane's cap: the same bytes a live panel may send Orca for one tree.
+export const PLUGIN_SHOT_REPLAY_MAX_TREE_BYTES = PLUGIN_DECLARATIVE_RENDER_LANE.maxBytes
+
+function jsonBytes(value: unknown): number {
+  try {
+    return Buffer.byteLength(JSON.stringify(value) ?? '', 'utf8')
+  } catch {
+    return Number.POSITIVE_INFINITY
+  }
+}
+
+/** `orca plugin shot --scenario`: a tree the CLI rendered locally, drawn detached from the plugin.
+ *  Its own method so an older host fails `method_not_found` instead of shooting the live panel. */
+export const PluginShotReplayParams = z.object({
+  pluginKey: pluginKeyParam,
+  panelId: contributionIdParam,
+  title: z.string().min(1).max(256).optional(),
+  scenario: z.string().min(1).max(128),
+  /** Re-validated in main with the declarative tree parser. */
+  tree: z
+    .unknown()
+    .refine(
+      (tree) => jsonBytes(tree) <= PLUGIN_SHOT_REPLAY_MAX_TREE_BYTES,
+      `tree is over ${PLUGIN_SHOT_REPLAY_MAX_TREE_BYTES / 1024} KiB`
+    ),
+  colorScheme: z.enum(['light', 'dark']).optional(),
+  width: z.number().int().min(PLUGIN_SHOT_MIN_WIDTH).max(PLUGIN_SHOT_MAX_WIDTH).optional()
 })

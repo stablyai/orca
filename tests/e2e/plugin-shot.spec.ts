@@ -2,15 +2,16 @@
  * Invariant: `orca plugin shot` captures exactly a plugin panel as Orca draws it, from the hidden
  * test window, without showing or focusing it: a components panel (Orca's own DOM) at the asked
  * width and theme, after `--act` input when asked, and an html panel whose isolated guest content
- * is in the image.
+ * is in the image. `--scenario` captures a `.check.ts` scenario drawn apart from the plugin, so
+ * its data never reaches the live panel, the plugin's storage or its worker.
  */
 
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
-import { orcaCliResult } from './helpers/compiled-orca-cli'
+import { orcaCliResult, runCompiledOrcaCli } from './helpers/compiled-orca-cli'
 import { RuntimeClient } from '../../src/cli/runtime/client'
 import { disablePluginSystem, enableDevPlugins } from './helpers/plugin-smoke'
 import { createPluginFromTemplate } from '../../src/cli/plugin-authoring/plugin-create'
@@ -457,6 +458,105 @@ test('plugin shot --act sorts and activates a Table row, then puts the panel bac
     expect(acted.result).toMatchObject({ actions: [{ ok: true }, { ok: true }], restored: true })
     expect(acted.result.png).not.toBe(before.result.png)
     await expect(orcaPage.getByText('Sorted asc, opened none')).toBeVisible()
+  } finally {
+    await disablePluginSystem(orcaPage).catch(() => undefined)
+    await rm(tempRoot, { recursive: true, force: true })
+  }
+})
+
+/** Every file under the plugins' data folder with its bytes: a shot must leave all of it alone. */
+async function pluginDataFiles(root: string): Promise<Record<string, string>> {
+  const files: Record<string, string> = {}
+  const entries = await readdir(root, { recursive: true, withFileTypes: true }).catch(() => [])
+  for (const entry of entries) {
+    if (entry.isFile()) {
+      const path = join(entry.parentPath, entry.name)
+      files[path] = await readFile(path, 'base64')
+    }
+  }
+  return files
+}
+
+test('plugin shot --scenario captures a check scenario apart from the live panel, storage and worker', async ({
+  electronApp,
+  orcaPage
+}) => {
+  await waitForSessionReady(orcaPage)
+  await waitForActiveWorktree(orcaPage)
+  const tempRoot = await mkdtemp(join(tmpdir(), 'orca-plugin-shot-scenario-'))
+  try {
+    const created = await createPluginFromTemplate({
+      dir: join(tempRoot, 'scenario-counter'),
+      template: 'worker-panel',
+      id: 'scenario-counter',
+      name: 'Scenario Counter'
+    })
+    await enableDevPlugins(orcaPage, [created.path])
+    const pluginKey = await devPluginKey(orcaPage, 'Scenario Counter')
+    const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
+    const statusOf = async (): Promise<string | undefined> =>
+      (await orcaPage.evaluate(() => window.api.plugins.list())).find(
+        (plugin) => plugin.pluginKey === pluginKey
+      )?.status
+    const sidebar = () =>
+      orcaPage.evaluate(() => {
+        const state = window.__store?.getState()
+        return { open: state?.rightSidebarOpen, tab: state?.rightSidebarTab }
+      })
+    const dataRoot = join(userDataDir, 'plugins-data')
+    const sidebarBefore = await sidebar()
+    const dataBefore = await pluginDataFiles(dataRoot)
+    const shownBefore = await windowsShown(electronApp)
+    expect(await statusOf()).toBe('idle')
+
+    type ScenarioShot = Shot & { replay: true; scenario: string; notes: string[] }
+    const shot = await orcaCliResult<ScenarioShot>(userDataDir, [
+      'plugin',
+      'shot',
+      created.path,
+      '--scenario',
+      'counted',
+      '--width',
+      '320',
+      '--theme',
+      'dark',
+      '--out',
+      join(tempRoot, 'counted.png')
+    ])
+    expect(shot).toMatchObject({
+      replay: true,
+      scenario: 'counted',
+      width: 320,
+      theme: 'dark',
+      themeApplied: true,
+      errors: []
+    })
+    const stats = await pngStats(electronApp, shot.path)
+    expect(stats).toMatchObject({ width: 320, height: shot.height })
+    // A heading, a badge and buttons: not a blank or single-color capture.
+    expect(stats.colors).toBeGreaterThan(20)
+
+    // The scenario's data stayed in the CLI's stand-in host: no live panel, storage or worker.
+    expect(await sidebar()).toEqual(sidebarBefore)
+    expect(await pluginDataFiles(dataRoot)).toEqual(dataBefore)
+    expect(await statusOf()).toBe('idle')
+    expect(await orcaPage.locator('[data-plugin-shot-replay]').count()).toBe(0)
+    expect(
+      await orcaPage.locator(`[data-plugin-panel-surface^="plugin:${pluginKey}/"]`).count()
+    ).toBe(0)
+    expect(await windowsShown(electronApp)).toEqual(shownBefore)
+
+    // An unknown scenario fails and names the ones the panel has.
+    const unknown = await runCompiledOrcaCli(userDataDir, [
+      'plugin',
+      'shot',
+      created.path,
+      '--scenario',
+      'nope',
+      '--json'
+    ])
+    expect(unknown.code).not.toBe(0)
+    expect(unknown.json?.error?.message).toMatch(/its scenarios: fresh, counted/)
   } finally {
     await disablePluginSystem(orcaPage).catch(() => undefined)
     await rm(tempRoot, { recursive: true, force: true })

@@ -39,6 +39,11 @@ import {
   PLUGIN_SCHEMA_SINCE_V1
 } from '../manifest/plugin-schema-field-docs'
 import {
+  PLUGIN_STATUS_BAR_ITEM_LIMIT,
+  PLUGIN_STATUS_BAR_SINCE,
+  pluginStatusBarItemContributionSchema
+} from './plugin-status-bar-item-contribution'
+import {
   PLUGIN_SETTING_LIMIT,
   pluginSettingContributionSchema
 } from './plugin-settings-contribution'
@@ -57,7 +62,8 @@ export const PLUGIN_CONTRIBUTION_POINTS = [
   'syntaxes',
   'customEditors',
   'newFiles',
-  'settings'
+  'settings',
+  'statusBarItems'
 ] as const
 
 export type PluginContributionPoint = (typeof PLUGIN_CONTRIBUTION_POINTS)[number]
@@ -73,7 +79,6 @@ export const PLUGIN_RESERVED_CONTRIBUTION_POINTS = {
   hooks: 'agent hooks',
   taskSources: 'task sources',
   connections: 'account connections',
-  statusBarItems: 'status bar items',
   sidebarCards: 'sidebar cards'
 } as const
 
@@ -89,8 +94,6 @@ export const PLUGIN_PLANNED_CONTRIBUTION_POINTS: Readonly<
     'Account providers with a host-run sign-in, so a plugin never handles credentials itself.',
   agentHarnesses:
     'New coding-agent harnesses described as data: how to launch them and read their status.',
-  statusBarItems:
-    'Declarative status bar widgets (label, icon, tooltip) whose values a worker updates.',
   sidebarCards: 'Declarative left-sidebar cards with fixed layouts whose values a worker updates.',
   mcpServers: 'MCP server definitions that Orca offers to the agents it launches.',
   skills: 'Agent skills shipped as files that Orca installs for the agents it launches.',
@@ -207,6 +210,12 @@ export const pluginContributesFields = {
     PLUGIN_SETTING_LIMIT,
     'Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`).',
     PLUGIN_PANEL_BRIDGE_SINCE
+  ),
+  statusBarItems: contributionList(
+    pluginStatusBarItemContributionSchema,
+    PLUGIN_STATUS_BAR_ITEM_LIMIT,
+    'Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`.',
+    PLUGIN_STATUS_BAR_SINCE
   )
 } satisfies Record<PluginContributionPoint, z.ZodType>
 
@@ -217,7 +226,6 @@ export const pluginReservedContributesFields = {
   hooks: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.hooks),
   taskSources: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.taskSources),
   connections: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.connections),
-  statusBarItems: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.statusBarItems),
   sidebarCards: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.sidebarCards)
 } satisfies Record<PluginReservedContributionPoint, z.ZodType>
 
@@ -252,5 +260,7 @@ export const PLUGIN_CONTRIBUTION_POINT_POLICY: Record<
   // whatever opens that file (a syntax, an editor) carries its own type.
   newFiles: { execution: 'data', catalogType: null, bindsContent: false },
   // Why sandboxed-ui: only code reads a setting, and panels are the least code there is.
-  settings: { execution: 'sandboxed-ui', catalogType: null, bindsContent: false }
+  settings: { execution: 'sandboxed-ui', catalogType: null, bindsContent: false },
+  // Why declarative: a static item only names its own command; updating it needs a worker.
+  statusBarItems: { execution: 'declarative', catalogType: null, bindsContent: false }
 }

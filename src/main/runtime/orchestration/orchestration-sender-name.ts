@@ -1,13 +1,15 @@
+import { crewDisplayName } from './crew/crew-rules'
 import type { AgentMessageSender } from '../../../shared/agent-session/agent-session-message-source'
 import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import {
   getAgentRowConversationName,
   type ConversationNameTab
 } from '../../../shared/agent-row-conversation-name'
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload, AgentType } from '../../../shared/agent-status-types'
 import { formatAgentTypeLabel } from '../../../shared/agent-type-label'
 import { structuredChatDisplayName } from '../../../shared/structured-chat-row-name'
 import type { Tab } from '../../../shared/tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { OrchestrationDb } from './db'
 import type { DispatchContextRow } from './types'
 import { lineageLiveSession, type AgentSessionRecordReader } from './structured-session-lineage'
@@ -15,6 +17,74 @@ import {
   logWorkerLaunchObservationFailure,
   workerStartOptionsAgent
 } from './worker-launch-observation'
+
+export type SenderHookRow = Pick<
+  AgentStatusIpcPayload,
+  | 'paneKey'
+  | 'worktreeId'
+  | 'agentType'
+  | 'providerSession'
+  | 'receivedAt'
+  | 'connectionId'
+  | 'launchToken'
+>
+
+export type MirroredTabs = {
+  unifiedTabs?: Readonly<
+    Record<string, readonly Pick<Tab, 'contentType' | 'entityId' | 'customLabel' | 'label'>[]>
+  >
+  tabsByWorktree?: Readonly<
+    Record<string, readonly (Pick<TerminalTab, 'id'> & Partial<ConversationNameTab>)[]>
+  >
+  terminalLayoutsByTabId?: Readonly<
+    Record<string, Pick<TerminalLayoutSnapshot, 'root' | 'titlesByLeafId'>>
+  >
+}
+
+type MirroredTerminalTab = Pick<TerminalTab, 'id'> & Partial<ConversationNameTab>
+type MirroredChatTab = Pick<Tab, 'contentType' | 'entityId' | 'customLabel' | 'label'>
+
+/** One read pass's copy of each workspace's mirrored tabs, indexed by tab id on first read. */
+export function captureMirroredTabs(read: (worktreeId: string) => MirroredTabs | null | undefined) {
+  const snapshots = new WeakMap<MirroredTabs, MirroredTabs>()
+  const workspaces = new Map<string, MirroredTabs | null>()
+  const terminalTabs = new Map<string, Map<string, MirroredTerminalTab>>()
+  const chatTabs = new Map<string, Map<string, MirroredChatTab>>()
+  const session = (id: string) => {
+    if (!workspaces.has(id)) {
+      const live = read(id)
+      let captured = live ? snapshots.get(live) : null
+      if (live && !captured) {
+        captured = structuredClone(live)
+        snapshots.set(live, captured)
+      }
+      workspaces.set(id, captured ?? null)
+      const terminals = new Map<string, MirroredTerminalTab>()
+      for (const tab of captured?.tabsByWorktree?.[id] ?? []) {
+        if (!terminals.has(tab.id)) {
+          terminals.set(tab.id, tab)
+        }
+      }
+      terminalTabs.set(id, terminals)
+      const chats = new Map<string, MirroredChatTab>()
+      for (const tab of captured?.unifiedTabs?.[id] ?? []) {
+        if (tab.contentType === 'agent-session' && !chats.has(tab.entityId)) {
+          chats.set(tab.entityId, tab)
+        }
+      }
+      chatTabs.set(id, chats)
+    }
+    return workspaces.get(id)
+  }
+  return {
+    session,
+    terminalTab: (worktreeId: string, tabId: string) => terminalTabs.get(worktreeId)?.get(tabId),
+    chatTab: (worktreeId: string, sessionId: string) => {
+      session(worktreeId)
+      return chatTabs.get(worktreeId)?.get(sessionId) ?? null
+    }
+  }
+}
 
 export type TerminalSenderNaming = {
   /** The tab as this host mirrors the workspace session. */
@@ -83,7 +153,8 @@ export function orchestrationSenderName(
   party: Party,
   sources: SenderNamingSources,
   reportedDispatchId?: string,
-  observation = observeOrchestrationSender(party, sources, reportedDispatchId)
+  observation = observeOrchestrationSender(party, sources, reportedDispatchId),
+  taskName?: string | null
 ): string | null {
   const { chat, terminal } = observation
   const terminalName = terminal?.tab
@@ -95,18 +166,24 @@ export function orchestrationSenderName(
         terminal.providerSessionId
       )
     : null
-  const ownName = chat?.ownName || terminalName
+  const ownName = crewDisplayName(chat?.ownName, terminalName)
   if (ownName) {
     return ownName
   }
-  const dispatch = observation.dispatch
-  const task = dispatch ? sources.db?.getTask(dispatch.task_id) : null
-  return (
-    task?.display_name ||
-    task?.task_title ||
-    chat?.fallback ||
-    (terminal?.agent ? formatAgentTypeLabel(terminal.agent) : null)
+  return crewDisplayName(
+    taskName !== undefined ? taskName : observedTaskName(observation, sources.db),
+    chat?.fallback,
+    terminal?.agent ? formatAgentTypeLabel(terminal.agent) : null
   )
+}
+
+function observedTaskName(
+  observation: SenderObservation,
+  db: OrchestrationDb | null
+): string | null {
+  const dispatch = observation.dispatch
+  const task = dispatch ? db?.getTask(dispatch.task_id) : null
+  return task?.display_name || task?.task_title || null
 }
 
 /** Current live kind wins; exact durable dispatch knowledge survives loss of live observations. */

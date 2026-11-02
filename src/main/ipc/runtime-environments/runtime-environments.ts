@@ -8,7 +8,7 @@ import {
 import { ipcMain } from 'electron'
 import { getRuntimeEnvironmentRegistryRoot } from './runtime-environment-registry-root'
 import { listEnvironments } from '../../../shared/runtime-environment-store'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import { recordRemoteLayoutFrame } from '../../remote-layout-snapshot/remote-layout-snapshot-recorder'
 import {
   isRuntimeEnvironmentManuallyDisconnected,

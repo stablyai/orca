@@ -12,7 +12,7 @@ import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-st
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import { flushUnsavedCloudSessions } from '../orca-profiles/profile-cloud-session-owner'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { closeWorkspaceSpaceWindow } from './workspace-space-window'
 import {
