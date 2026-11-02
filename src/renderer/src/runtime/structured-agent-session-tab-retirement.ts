@@ -117,9 +117,9 @@ function reacceptHostSessionTabs(
   )
 }
 
-/** A chat tab another tab replaced: the host owns the conversation, so this only drops local readers
- *  and holds the tab closed until the host's own frame omits it. */
-export function retireReplacedStructuredAgentSessionTab(args: {
+/** A chat a switch took out of its tab: the host owns the conversation, so this only drops local
+ *  readers and holds the chat closed until the host's own frame omits it. */
+export function retireSwitchedStructuredAgentSessionContent(args: {
   target: RuntimeClientTarget
   worktreeId: string
   sessionId: string
@@ -143,17 +143,11 @@ export function beginStructuredAgentSessionTabClose(args: {
   worktreeId: string
   sessionId: string
   provisional: boolean
-  /** Another tab took this one's slot: the host stopped the chat and keeps its conversation. */
-  replaced?: boolean
   layoutOwner: StructuredLaunchSlotOwner
   onError?: (error: unknown) => void
   /** Main dropped the tab before the host answered: a host still listing the chat shows it again. */
   reopen?: () => void
 }): void {
-  if (args.replaced) {
-    retireReplacedStructuredAgentSessionTab(args)
-    return
-  }
   forgetUnlistedCreatedChat(args.worktreeId, args.sessionId)
   if (args.provisional) {
     markStructuredAgentSessionLaunchCancelled(

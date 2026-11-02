@@ -1,5 +1,4 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { resetInheritedChatPinsForTests } from './web-session-tabs-sync/inherited-chat-pins'
 import type { TabGroupLayoutNode } from '../../../shared/tab-types'
 import { resetWebSessionFocusIntentForTests } from './web-session-focus-intent'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
@@ -26,7 +25,6 @@ export function resetWebSessionTabsSyncTestState(): void {
   resetWebSessionReorderIntentForTests()
   resetWebAgentSessionHandoffsForTests()
   resetWebRuntimeInitialTerminalBootstrapForTests()
-  resetInheritedChatPinsForTests()
 }
 
 export function layoutHasGroup(layout: TabGroupLayoutNode | undefined, groupId: string): boolean {

@@ -32,7 +32,10 @@ import type {
   RuntimeTerminalDriverState,
   RuntimeTerminalPresentation
 } from '../../shared/runtime-types'
-import type { ReplacedTab } from '../../shared/workspace-layout/workspace-layout-command-types'
+import type {
+  WindowTabContentOutcome,
+  WindowTabContentRequest
+} from '../../shared/window-tab-content'
 
 type DriverState = RuntimeTerminalDriverState
 
@@ -40,8 +43,6 @@ type TerminalRevealReply = {
   tabId: string
   title?: string | null
   identity?: TerminalRevealIdentity
-  /** Tabs the same window write closed: a replace's replaced tab. */
-  closed?: string[]
 }
 
 export type RuntimeNotifier = {
@@ -104,10 +105,13 @@ export type RuntimeNotifier = {
         terminalHandle: string
         incarnationId: string
       }
-      /** The tab this terminal takes the slot of, closed by the same window write. */
-      replaces?: ReplacedTab
     }
   ): Promise<TerminalRevealReply> | TerminalRevealReply | void
+  /** A switch: the window's tab holding just `expectSource` now holds `content` in place.
+   *  Resolves whether a tab does, and which. */
+  setTabContent?(
+    request: Omit<WindowTabContentRequest, 'requestId'>
+  ): Promise<WindowTabContentOutcome>
   /** Shows an agent launch's tab before its process exists; the pane attaches when it does. */
   publishAgentLaunchTab?(
     request: Omit<AgentLaunchTabPublishRequest, 'requestId'>

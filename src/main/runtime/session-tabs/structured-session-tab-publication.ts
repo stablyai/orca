@@ -15,7 +15,7 @@ import {
   insertTabIdIntoOrder,
   partitionPinnedTabOrder
 } from '../../../shared/workspace-layout/tab-order'
-import { replaceSessionTabInSnapshot } from './session-tab-replace'
+import { swapSessionTabContent } from './session-tab-content-swap'
 
 export type StructuredSessionTabPublicationInput = {
   workspaceId: string
@@ -40,8 +40,8 @@ export type StructuredSessionTabPublicationInput = {
   /** A switch's open: refused once newer work supersedes it, and its tab write is awaited. */
   check?: () => void
   focusWindow?: boolean
-  /** A same-slot switch: the chat takes this tab's slot and the tab's rows leave, in one write. */
-  replaces?: string
+  /** A switch's chat: the layout tab it now fills, whose rows it takes in place. */
+  inTab?: string
   /** A split pane's switch: the tab the chat opens beside, whose selection it may take. */
   sourceTabId?: string
 }
@@ -131,15 +131,13 @@ export async function admitStructuredSessionTabPublication(
 
 export type StructuredSessionRawPublicationInput = Pick<
   StructuredSessionTabPublicationInput,
-  'workspaceId' | 'sessionId' | 'agent' | 'activate' | 'notify' | 'tabId' | 'placement' | 'replaces'
+  'workspaceId' | 'sessionId' | 'agent' | 'activate' | 'notify' | 'tabId' | 'placement' | 'inTab'
 > & {
   eligible?: () => boolean
-  /** The layout owner's own write already decided `activate` from its source's selection. */
-  selectionDecided?: boolean
 }
 
-/** Publish membership; a listed chat keeps its place, a new one goes last, at its placement, or
- *  into the replaced slot. */
+/** Publish membership; a listed chat keeps its place, a new one goes last or at its placement,
+ *  and a switch's chat takes its tab's rows in place. */
 export function projectStructuredSessionTab(
   runtime: Pick<OrcaRuntimeService, 'mobileSessionTabsByWorktree' | 'storeMobileSessionSnapshot'>,
   input: StructuredSessionRawPublicationInput,
@@ -182,26 +180,23 @@ export function projectStructuredSessionTab(
     }
     return
   }
+  // The chat's layout tab, which a client keeps its own tab by through a switch.
+  const logicalTabId = input.inTab ?? input.tabId ?? chatTabId(input.sessionId)
   const tab: RuntimeMobileSessionAgentTab = {
     type: 'agent-session',
     id,
+    ...(logicalTabId !== id ? { logicalTabId } : {}),
     title: defaultAgentChatLabel(input.agent),
     sessionId: input.sessionId,
     agent: input.agent,
     isActive: input.activate
   }
-  if (input.replaces) {
-    const replaced = replaceSessionTabInSnapshot(existing, {
-      workspaceId: input.workspaceId,
-      replacedTabId: input.replaces,
-      row: tab,
-      activate: input.activate,
-      selectionDecided: input.selectionDecided
-    })
+  const swapped = input.inTab ? swapSessionTabContent(existing, input.inTab, tab) : null
+  if (swapped) {
     if (input.eligible?.() === false) {
       throw new Error('Chat tab publication was superseded')
     }
-    const stored = runtime.storeMobileSessionSnapshot(input.workspaceId, replaced)
+    const stored = runtime.storeMobileSessionSnapshot(input.workspaceId, swapped)
     if (input.notify !== false) {
       emit(stored)
     }

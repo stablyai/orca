@@ -13,7 +13,7 @@ import type { MobileTerminalCommand } from '../../terminal/launch/mobile-termina
 import { canonicalizeAgentSessionIdentity } from '../../agent-session/ownership/agent-session-claim-identity'
 import { OrcaRuntimeWithGetAgentSessionExecutionNamespace } from './get-agent-session-execution-namespace'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
-import { agentSessionRowId } from '../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
+import { logicalTabIdOf } from '../../../../shared/runtime-mobile-session-tab-contracts'
 
 export type SwitchTerminalSpawn = {
   agent: TuiAgent
@@ -26,8 +26,8 @@ export type SwitchTerminalSpawn = {
   resumeSupported?: boolean
   /** Another worktree's terminal holds the conversation's claim: open this one without it. */
   unclaimed?: boolean
-  /** The chat being switched; its admission tells this switch's own terminal from another tab's. */
-  chatSessionId?: string
+  /** The tab being switched; what it shows tells this switch's own terminal from another tab's. */
+  switchedTabId?: string
 }
 
 /** Another worktree's terminal, or several, own the conversation's claim. The switch checks only
@@ -90,12 +90,24 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
         signal: args.signal
       })
     // A holder that took the claim during the stop: its refusal precedes any spawn.
-    return await create(claim).catch((error: unknown) => {
+    const created = await create(claim).catch((error: unknown) => {
       if (claim && isClaimHeldElsewhere(error)) {
         return create(undefined)
       }
       throw error
     })
+    // The create's own adoption is the one point free of a holder appearing during the stop. An
+    // adopted owner another tab shows stays that tab's: the adoption only re-registered it under
+    // its own surface and kept its live size, and this switch opens its own terminal.
+    if (
+      claim &&
+      created.agentSessionDisposition === 'adopted' &&
+      created.ptyId &&
+      !this.isOwnSwitchTerminal(workspace.id, created.ptyId, args.switchedTabId)
+    ) {
+      return create(undefined)
+    }
+    return created
   }
 
   /**
@@ -126,7 +138,7 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
       const preparing = claim ? this.ptyController?.prepareAgentSessionOwner?.(claim) : undefined
       // A join waits on another create; the switch's deadline bounds it, as nothing stopped yet.
       const owner = preparing ? await waitForPromiseWithSignal(preparing, args.signal) : null
-      if (owner && this.isOtherTabsTerminal(workspace.id, owner, args.chatSessionId)) {
+      if (owner && !this.isOwnSwitchTerminal(workspace.id, owner.ptyId, args.switchedTabId)) {
         return { resumeSupported, unclaimed: true }
       }
     } catch (error) {
@@ -139,26 +151,26 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
   }
 
   /**
-   * A terminal another tab shows: adopting it by the claim would pull that tab into the chat's
-   * slot. The switch checks only its own tab (Brennan 11-01), so it opens its own terminal beside
-   * it instead. Its own terminal from an attempt whose answer was lost is parked (no viewer) or
-   * already sits in this chat's slot.
+   * Whether the conversation's live terminal is this switch's own: parked (no tab shows it), as an
+   * attempt whose answer was lost leaves it, or already what the switched tab holds. Any other is
+   * another tab's: adopting it would put one terminal in two tabs, and the switch checks only its
+   * own tab (Brennan 11-01), so it opens its own beside it. Derived from what tabs show; nothing is
+   * kept. Temporary under that ruling (STA-13394): a retry whose first terminal opened in an
+   * ordinary tab (the user closed or split the chat's tab first) starts a second CLI.
    */
-  private isOtherTabsTerminal(
+  private isOwnSwitchTerminal(
     workspaceId: string,
-    owner: { ptyId: string; surface: { tabId: string } },
-    chatSessionId: string | undefined
+    ptyId: string,
+    switchedTabId: string | undefined
   ): boolean {
+    if (!this.hasTerminalViewer(ptyId)) {
+      return true
+    }
+    const shown = this.mobileSessionTabsByWorktree
+      .get(workspaceId)
+      ?.tabs.find((row) => row.type === 'terminal' && row.ptyId === ptyId)
     return (
-      this.hasTerminalViewer(owner.ptyId) &&
-      !(
-        chatSessionId &&
-        this.switchSlotAnchors.replaced(
-          workspaceId,
-          owner.surface.tabId,
-          agentSessionRowId(chatSessionId)
-        )
-      )
+      switchedTabId !== undefined && shown !== undefined && logicalTabIdOf(shown) === switchedTabId
     )
   }
 

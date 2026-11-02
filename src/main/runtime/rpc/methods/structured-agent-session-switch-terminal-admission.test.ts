@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import * as cliTranscript from '../../../ai-vault/structured-chat-cli-fork'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
@@ -18,6 +19,7 @@ import {
 import { executeStructuredSessionSwitch } from './structured-agent-session-switch-execution'
 import { savedTranscript } from './structured-agent-session-switch-execution.test-fixture'
 import { TerminalRevealUnconfirmedError } from '../../session-tabs/terminal-not-placed-error'
+import { chatTabId } from '../../agent-session/agent-session-tab-layout'
 import { ClaimedAgentPtyOwnerRegistry } from '../../../../shared/claimed-agent-pty-owner'
 import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
 import {
@@ -297,12 +299,62 @@ it('leaves another tab\u2019s terminal holding the claim in its tab and opens it
   expect(r.owners().map((listed) => listed.ptyId)).toEqual(['other-pty'])
 })
 
-it('a retry adopts its own terminal that the lost attempt already put in the chat\u2019s slot', async () => {
+it('leaves another tab\u2019s terminal that took the claim during the stop, and opens its own', async () => {
+  let claim: AgentSessionExecutionClaim | undefined
+  const stopForSwitch = rig.host.stopForSwitch.bind(rig.host)
+  const r = await switchRig({ seed: (seen) => (claim ??= seen) })
+  // Nothing held the claim when the switch checked; another tab's terminal took it meanwhile.
+  r.stop.mockImplementation(async (...args) => {
+    r.list({
+      ...ownerOf(claim!, 'other-pty'),
+      surface: {
+        worktreeId: WORKTREE_ID,
+        tabId: randomUUID(),
+        leafId: randomUUID(),
+        terminalHandle: 'other-pty-handle'
+      }
+    })
+    r.view('other-pty')
+    return await stopForSwitch(...args)
+  })
+  const create = vi.spyOn(r.runtime, 'createTerminal')
+  expect(await r.run('to-terminal-late-holder')).toMatchObject({ status: 'completed' })
+  // The create adopted that terminal, which stays its tab's; then it opened its own, unclaimed.
+  expect(
+    (await Promise.all(create.mock.results.map((call) => call.value))).map(
+      (created) => created.ptyId
+    )
+  ).toEqual(['other-pty', 'switch-pty-1'])
+  expect(r.owners().map((listed) => listed.ptyId)).toEqual(['other-pty'])
+  expect(r.started()).toBe(1)
+  expect(r.spawned.map((terminal) => terminal.ptyId)).toEqual(['switch-pty-1'])
+  expect(r.owners().map((listed) => listed.ptyId)).toEqual(['other-pty'])
+})
+
+it('a retry adopts its own terminal that the lost attempt already put in the chat\u2019s tab', async () => {
   const r = await switchRig()
   const t1 = await lostFirstAttempt(r)
   r.view(t1.ptyId!)
-  r.runtime.switchSlotAnchors.record(WORKTREE_ID, t1.tabId!, {
-    replaces: { tabId: `agent-session:${id}` }
+  // The window put T1 in the chat's own tab before the answer was lost: that tab shows it now.
+  r.runtime.storeMobileSessionSnapshot(WORKTREE_ID, {
+    worktree: WORKTREE_ID,
+    publicationEpoch: 'window',
+    snapshotVersion: 1,
+    activeGroupId: null,
+    activeTabId: null,
+    activeTabType: null,
+    tabs: [
+      {
+        type: 'terminal',
+        id: `${t1.tabId}::leaf`,
+        title: 'Codex',
+        parentTabId: t1.tabId!,
+        logicalTabId: chatTabId(id),
+        leafId: 'leaf',
+        ptyId: t1.ptyId,
+        isActive: true
+      }
+    ]
   })
   expect(await r.run('to-terminal-retry')).toMatchObject({
     status: 'completed',

@@ -8,7 +8,6 @@ import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-r
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import type { MirroredTerminalTab, TerminalSurface, ReadyTerminalSurface } from './state'
 import { chooseRemoteTerminalLayout, isTerminalSurfaceTab } from './terminal-surfaces'
-import { replacedTabPinned } from './slot-anchor'
 import type { Tab } from '../../../../shared/tab-types'
 
 function pendingBindingBelongsToEnvironment(
@@ -65,7 +64,8 @@ export function buildMirroredTerminalTabs(
   now: number,
   focusTarget?: { parentTabId: string; leafId: string },
   terminalPtyMode: 'local' | 'remote' = 'remote',
-  currentUnifiedTabs: readonly Tab[] = []
+  /** The local tab a switched host tab showed before (switched-tab-renames.ts). */
+  renamedFrom: (surface: TerminalSurface) => Tab | undefined = () => undefined
 ): MirroredTerminalTab[] {
   const groups = new Map<string, TerminalSurface[]>()
   for (const tab of snapshot.tabs.filter(isTerminalSurfaceTab)) {
@@ -164,12 +164,11 @@ export function buildMirroredTerminalTabs(
       activeSurface.startupCwd || surfaces.find((surface) => surface.startupCwd)?.startupCwd
     // Why: color/pin echo back through host snapshots, so prefer the client's own record and fall back to host only without a prior tab (avoids echo-window reverts).
     const hostColorSurface = surfaces.find((surface) => surface.color != null)
-    const color = existing ? (existing.color ?? null) : (hostColorSurface?.color ?? null)
-    const isPinned = existing
-      ? existing.isPinned === true
-      : (surfaces
-          .map((surface) => replacedTabPinned(currentUnifiedTabs, surface))
-          .find((pinned) => pinned !== undefined) ?? surfaces.some((surface) => surface.isPinned))
+    // A switched tab is the same tab renamed here, so its color and pin are its own too.
+    const renamed = existing ? undefined : surfaces.map(renamedFrom).find(Boolean)
+    const own = existing ?? renamed
+    const color = own ? (own.color ?? null) : (hostColorSurface?.color ?? null)
+    const isPinned = own ? own.isPinned === true : surfaces.some((surface) => surface.isPinned)
     // Why: viewMode echoes back through host snapshots, so prefer the client's record during the echo window and adopt the host value only without a prior tab.
     const hostViewModeSurface = surfaces.find((surface) => surface.viewMode)
     const viewMode = existing ? existing.viewMode : hostViewModeSurface?.viewMode
@@ -201,6 +200,7 @@ export function buildMirroredTerminalTabs(
         ...(launchAgent ? { launchAgent } : {})
       },
       hostTabId: parentTabId,
+      ...(renamed ? { renamedFrom: renamed.id } : {}),
       ptyIds,
       layout,
       ...(retainedSurfaceByPrunedLeafId ? { retainedSurfaceByPrunedLeafId } : {})

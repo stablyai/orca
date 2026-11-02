@@ -10,6 +10,10 @@ import {
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
 import type { StoppedSwitchSource } from '../../shared/stopped-switch-source'
+import type {
+  WindowTabContentReply,
+  WindowTabContentRequest
+} from '../../shared/window-tab-content'
 import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
 import type { PreloadApi } from '../api-types'
@@ -52,6 +56,15 @@ export const uiClipboardAndWindowControlsApi = {
       callback(source)
     ipcRenderer.on('ui:stoppedSwitchSource', listener)
     return () => ipcRenderer.removeListener('ui:stoppedSwitchSource', listener)
+  },
+  onSetTabContent: (callback: (request: WindowTabContentRequest) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: WindowTabContentRequest) =>
+      callback(request)
+    ipcRenderer.on('ui:setTabContent', listener)
+    return () => ipcRenderer.removeListener('ui:setTabContent', listener)
+  },
+  replyTabContent: (reply: WindowTabContentReply): void => {
+    ipcRenderer.send('ui:tabContentReply', reply)
   },
   onTerminalTabCloseRequest: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>

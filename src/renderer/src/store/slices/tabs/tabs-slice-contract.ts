@@ -104,8 +104,6 @@ export type TabsSlice = {
       preserveWorktreeSelection?: boolean
       recordInteraction?: boolean
       terminalRetirementHandled?: boolean
-      /** Another tab took this one's slot; its host already owns what the content does next. */
-      replaced?: boolean
     }
   ) => { closedTabId: string; wasLastTab: boolean; worktreeId: string } | null
   reorderUnifiedTabs: (

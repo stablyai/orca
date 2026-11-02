@@ -170,9 +170,21 @@ export function withHeldTabsAsDrawn(
     const drawnGroups = placement?.groups ?? state.groupsByWorktree[key] ?? []
     const isHeld = (tab: Tab): boolean =>
       held.isTabHeld(key, tab.id) || held.isTabHeld(key, tab.entityId)
-    const heldTabs = [...(drawnTabs ?? []), ...(built.unifiedTabsByWorktree[key] ?? [])].filter(
-      isHeld
-    )
+    const builtTabs = built.unifiedTabsByWorktree[key] ?? []
+    let heldTabs = [...(drawnTabs ?? []), ...builtTabs].filter(isHeld)
+    if (heldTabs.length > 0) {
+      // A tab main shows holding other content was switched: a pending command never hides that.
+      const builtById = new Map(builtTabs.map((tab) => [tab.id, tab]))
+      const switched = new Set(
+        (drawnTabs ?? []).flatMap((tab) => {
+          const main = builtById.get(tab.id)
+          return main && (main.contentType !== tab.contentType || main.entityId !== tab.entityId)
+            ? [tab.id]
+            : []
+        })
+      )
+      heldTabs = heldTabs.filter((tab) => !switched.has(tab.id))
+    }
     const layoutHeld = held.isGroupLayoutHeld(key)
     const slots = launchSlotIds(state, built, key)
     if (heldTabs.length === 0 && slots.length === 0 && !layoutHeld) {

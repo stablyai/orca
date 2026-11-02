@@ -3,7 +3,7 @@ import { OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding } from '../s
 import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
 import { normalizeCompatibleAgentTitleForOwner } from '../../../shared/agent-title-owner'
 import { getLatestPtyTitle } from '../runtime-worktree-status-projection'
-import { replaceSessionTabInSnapshot } from './session-tab-replace'
+import { swapSessionTabContent } from './session-tab-content-swap'
 import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../terminal/query/pty-terminal-summary'
 import type {
   RuntimeMobileSessionTabsSnapshot,
@@ -59,8 +59,8 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
       viewMode?: 'terminal' | 'chat'
       split?: { splitFromLeafId: string; direction: 'horizontal' | 'vertical' }
       notify?: boolean
-      /** A same-slot switch: this row takes that tab's slot and the tab's rows leave, in one write. */
-      replaces?: string
+      /** A switch's terminal: the layout tab it now fills, whose rows it takes in place. */
+      inTab?: string
     }
   ): void {
     if (
@@ -133,20 +133,14 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
       ...(pty.launchAgent ? { launchAgent: pty.launchAgent } : {}),
       ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
       ...(viewMode ? { viewMode } : {}),
+      ...(args.inTab && args.inTab !== args.tabId ? { logicalTabId: args.inTab } : {}),
       parentLayout,
       isActive:
         args.activate || (args.selectIfNoActiveTab !== false && existing?.activeTabId == null)
     }
-    if (args.replaces) {
-      this.storeMobileSessionSnapshot(
-        worktreeId,
-        replaceSessionTabInSnapshot(existing, {
-          workspaceId: worktreeId,
-          replacedTabId: args.replaces,
-          row: tab,
-          activate: args.activate
-        })
-      )
+    const swapped = args.inTab ? swapSessionTabContent(existing, args.inTab, tab) : null
+    if (swapped) {
+      this.storeMobileSessionSnapshot(worktreeId, swapped)
       if (args.notify !== false) {
         this.notifyMobileSessionTabsChanged(worktreeId)
       }

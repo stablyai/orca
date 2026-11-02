@@ -1,20 +1,21 @@
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
-import type { ReplacedTab } from '../../../shared/workspace-layout/workspace-layout-command-types'
+import {
+  tabBarIdOf,
+  type RuntimeMobileSessionSlotTab
+} from '../../../shared/runtime-mobile-session-tab-contracts'
 import { AGENT_SESSION_SWITCH_HOST_MS } from '../../../shared/agent-session-switch-execution'
 import type { ChatTabPlacement } from '../agent-session/agent-session-tab-layout'
 
-type SlotAnchor = { replaces: ReplacedTab } | { after: ReplacedTab }
+type SlotAnchor = { after: RuntimeMobileSessionSlotTab }
 type Entry = { anchor: SlotAnchor; seen: boolean; recordedAt: number }
 type Row = RuntimeMobileSessionTabsSnapshot['tabs'][number]
 
-const tabBarId = (row: Row): string => (row.type === 'terminal' ? row.parentTabId : row.id)
-
 /**
- * Where a switch put its destination, kept in memory for that destination's life. Every frame
- * paired clients get carries it on the destination's rows, so a renderer republish (which never
- * names it) or a renderer frame that lands before main's own write can't expose the destination
- * without it. It dies when the destination's rows leave the snapshot, or when a switch that
- * recorded it never placed the destination.
+ * Where a split pane's switch opened its chat: beside the source's tab. Kept in memory for the
+ * chat's life, so every frame paired clients get carries it on the chat's row and a renderer
+ * republish (which never names it) can't expose the chat without it. It dies when the chat's row
+ * leaves the snapshot, or when a switch that recorded it never placed the chat. (A whole tab's
+ * switch needs none: the tab keeps its id and place.)
  */
 export class SwitchSlotAnchors {
   private readonly byWorkspace = new Map<string, Map<string, Entry>>()
@@ -56,12 +57,6 @@ export class SwitchSlotAnchors {
     }
   }
 
-  /** Whether a switch put this destination in that tab's slot. */
-  replaced(workspaceId: string, destinationTabId: string, tabId: string): boolean {
-    const anchor = this.byWorkspace.get(workspaceId)?.get(destinationTabId)?.anchor
-    return anchor !== undefined && 'replaces' in anchor && anchor.replaces.tabId === tabId
-  }
-
   /** Withdraws an anchor whose destination no frame has shown. */
   forget(workspaceId: string, destinationTabId: string): void {
     const entries = this.byWorkspace.get(workspaceId)
@@ -80,18 +75,14 @@ export class SwitchSlotAnchors {
     const present = new Set<string>()
     let tabs: Row[] | undefined
     snapshot.tabs.forEach((row, index) => {
-      const id = tabBarId(row)
+      const id = tabBarIdOf(row)
       const entry = entries.get(id)
       if (!entry) {
         return
       }
       present.add(id)
       entry.seen = true
-      if (
-        (row.type === 'terminal' || row.type === 'agent-session') &&
-        !row.replaces &&
-        !row.after
-      ) {
+      if ((row.type === 'terminal' || row.type === 'agent-session') && !row.after) {
         tabs ??= [...snapshot.tabs]
         tabs[index] = { ...row, ...entry.anchor }
       }
@@ -111,33 +102,24 @@ export class SwitchSlotAnchors {
   }
 }
 
-/** The source's slot when the destination replaces its whole tab, else the place beside it. */
-export function slotAnchor(replacedTabId: string | undefined, sourceTabId: string): SlotAnchor {
-  return replacedTabId ? { replaces: { tabId: replacedTabId } } : { after: { tabId: sourceTabId } }
-}
-
 /**
- * Where a switch's chat opens: in the slot of the whole tab it replaces, right after the source's
- * tab when it keeps that tab, else at the end with no anchor. A captured split pane's tab also
- * decides the selection (the chat takes it only from that tab); a tab the client could only name
- * (History, or a pane with no binding) just places the chat, which the user asked to see.
+ * Where a switch's chat opens when it can't take the source's tab: right after the source's tab
+ * when it keeps that tab, else at the end with no anchor. A captured split pane's tab also decides
+ * the selection (the chat takes it only from that tab); a tab the client could only name (History,
+ * or a pane with no binding) just places the chat, which the user asked to see.
  */
 export function switchChatSlot(
-  replaces: string | undefined,
   besideTabId: string | undefined,
   capturedPlacement?: () => ChatTabPlacement | undefined
 ): {
   anchor?: SlotAnchor
-  publish: { replaces?: string; placement?: ChatTabPlacement; sourceTabId?: string }
+  publish: { placement?: ChatTabPlacement; sourceTabId?: string }
 } {
-  if (replaces) {
-    return { anchor: slotAnchor(replaces, replaces), publish: { replaces } }
-  }
   if (!besideTabId) {
     return { publish: {} }
   }
   return {
-    anchor: slotAnchor(undefined, besideTabId),
+    anchor: { after: { tabId: besideTabId } },
     publish: capturedPlacement
       ? { placement: capturedPlacement(), sourceTabId: besideTabId }
       : { placement: { afterTabId: besideTabId } }
@@ -145,7 +127,5 @@ export function switchChatSlot(
 }
 
 function sameSlot(a: SlotAnchor, b: SlotAnchor): boolean {
-  return 'replaces' in a
-    ? 'replaces' in b && a.replaces.tabId === b.replaces.tabId
-    : 'after' in b && a.after.tabId === b.after.tabId
+  return a.after.tabId === b.after.tabId
 }

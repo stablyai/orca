@@ -213,6 +213,7 @@ function terminalRows(tab: LayoutTerminalTab, scope: Scope): RuntimeMobileSessio
         ? { generatedTitle: tab.generatedTitle.trim() }
         : {}),
       parentTabId: tab.entityId,
+      ...(tab.id !== tab.entityId ? { logicalTabId: tab.id } : {}),
       leafId,
       ...(leaf?.ptyId ? { ptyId: leaf.ptyId } : {}),
       ...(leaf?.incarnationId ? { incarnationId: leaf.incarnationId } : {}),
@@ -270,6 +271,7 @@ function agentSessionRow(tab: LayoutContentTab, scope: Scope): RuntimeMobileSess
   return {
     type: 'agent-session',
     id: agentSessionRowId(tab.entityId, tab.id),
+    ...(agentSessionRowId(tab.entityId, tab.id) !== tab.id ? { logicalTabId: tab.id } : {}),
     title:
       tab.customTitle?.trim() ||
       scope.facts.tabLabels[scope.key]?.[tab.id] ||

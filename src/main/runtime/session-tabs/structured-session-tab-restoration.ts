@@ -91,22 +91,16 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
       throw new Error('Chat tab publication was superseded')
     }
     input.check?.()
-    // A replace takes the selection only from a tab that still holds it, decided by the layout
-    // owner as it writes: here for main's layout, else by the window applying the replace.
+    // A chat beside a split pane's tab takes the selection only from that tab while it still holds
+    // it, decided as main's layout writes.
     let activate = input.activate
-    let selectionDecided = false
-    // The switch's source: the replaced tab, or the split pane's tab the chat opens beside.
-    const source = input.replaces ?? input.sourceTabId
-    const windowReplaces = Boolean(
-      input.replaces && !ORCA_LAYOUT_OWNER_IS_MAIN && this.getAvailableAuthoritativeWindow()
-    )
+    const source = input.sourceTabId
     if (input.check && (ORCA_LAYOUT_OWNER_IS_MAIN || !this.getAvailableAuthoritativeWindow())) {
       const check = input.check
       const applied = await this.queueChatTabChanges(
         () => {
           const session = this.getWorkspaceSessionForWorktree(input.workspaceId)
           if (source && session) {
-            selectionDecided = true
             activate &&= savedTabHoldsSelection(
               this.getWorkspaceSessionHostIdForWorktree(input.workspaceId),
               session,
@@ -135,13 +129,13 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     }
     input.check?.()
     // The snapshot paired clients mirror says what this write decided, never the request's wish.
-    this.projectStructuredAgentSessionTab({ ...input, tabId, eligible, activate, selectionDecided })
+    this.projectStructuredAgentSessionTab({ ...input, tabId, eligible, activate })
     input.workspaceAuthority?.committed()
     if (!eligible()) {
       throw new Error('Chat tab publication was superseded')
     }
     if (activate && input.check) {
-      // The saved view selects the chat the switch put in the slot; the window draws from it.
+      // The saved view selects the chat the switch opened; the window draws from it.
       this.commitWindowlessChatSession(input.workspaceId, (session) =>
         withSelectedChatTab(
           this.getWorkspaceSessionHostIdForWorktree(input.workspaceId),
@@ -151,7 +145,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
         )
       )
     }
-    if (activate && !windowReplaces && input.focusWindow !== false && input.check) {
+    if (activate && input.focusWindow !== false && input.check) {
       this.notifier?.focusEditorTab?.(tabId, input.workspaceId, source)
     }
     input.capture?.({

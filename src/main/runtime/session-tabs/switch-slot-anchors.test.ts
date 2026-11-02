@@ -23,15 +23,15 @@ const frame = (tabIds: string[]): RuntimeMobileSessionTabsSnapshot => ({
 
 it('names the slot on every frame for the destination’s life, renderer frames first included', () => {
   const anchors = new SwitchSlotAnchors()
-  anchors.record('ws', 'switched', { replaces: { tabId: 'agent-session:chat' } })
+  anchors.record('ws', 'switched', { after: { tabId: 'split-tab' } })
   // The window republished before main's own write: its rows never carry the anchor.
   expect(anchors.stamp(frame(['other'])).tabs).toEqual([terminal('other')])
   const shown = anchors.stamp(frame(['switched', 'other']))
-  expect(shown.tabs[0]).toMatchObject({ replaces: { tabId: 'agent-session:chat' } })
-  expect(anchors.stamp(frame(['switched'])).tabs[0]).toHaveProperty('replaces')
+  expect(shown.tabs[0]).toMatchObject({ after: { tabId: 'split-tab' } })
+  expect(anchors.stamp(frame(['switched'])).tabs[0]).toHaveProperty('after')
   // The destination left: the anchor dies with it and a later tab of that id gets none.
   anchors.stamp(frame(['other']))
-  expect(anchors.stamp(frame(['switched'])).tabs[0]).not.toHaveProperty('replaces')
+  expect(anchors.stamp(frame(['switched'])).tabs[0]).not.toHaveProperty('after')
 })
 
 it('drops an anchor whose switch never placed its destination', () => {
@@ -45,7 +45,7 @@ it('drops an anchor whose switch never placed its destination', () => {
 
 it('keeps the anchor a first attempt left when a retry after a lost answer places nothing', () => {
   const anchors = new SwitchSlotAnchors()
-  const slot = { replaces: { tabId: 'agent-session:chat' } }
+  const slot = { after: { tabId: 'split-tab' } }
   expect(anchors.record('ws', 'switched', slot)).toBe(true)
   anchors.stamp(frame(['switched']))
   // The retry names the same slot; its layout owner reports nothing closed.

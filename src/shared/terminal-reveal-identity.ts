@@ -10,7 +10,5 @@ export type TerminalTabCreateReply = {
   tabId?: string
   title?: string
   identity?: TerminalRevealIdentity
-  /** Tabs this create closed in the same write: a replace's replaced tab. */
-  closed?: string[]
   error?: string
 }

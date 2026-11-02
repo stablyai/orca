@@ -34,7 +34,7 @@ import {
   isTerminalRowRetiredByHost
 } from './host-retired-terminal-rows'
 import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
-import { localTabIndex, slotAnchorLocalTabIds, slotAnchorOf } from './slot-anchor'
+import { switchedTabRenames } from './switched-tab-renames'
 
 export function prepareWebSessionTabsSnapshotBase(
   state: WebSessionTabsSyncState,
@@ -69,10 +69,7 @@ export function prepareWebSessionTabsSnapshotBase(
       }
     : rawSnapshot
   const unifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
-  const shownHere = (tab: RuntimeMobileSessionTabsResult['tabs'][number]): boolean =>
-    tab.type === 'terminal'
-      ? localTabIndex(unifiedTabs).byId.has(toWebTerminalSurfaceTabId(tab.parentTabId))
-      : tab.type === 'agent-session' && localTabIndex(unifiedTabs).chatByEntity.has(tab.sessionId)
+  const renamedFrom = switchedTabRenames(environmentId, snapshot, unifiedTabs)
   // Why: only a caller-recorded create intent may focus its arriving tab; unsolicited server-active must not steal focus (#5435).
   const focusIntent = peekWebSessionFocusIntent({ environmentId }, worktreeId)
   const focusIntentHostTabId = focusIntent?.hostTabId ?? null
@@ -93,10 +90,20 @@ export function prepareWebSessionTabsSnapshotBase(
               (tab.type === 'terminal' && tab.parentTabId === focusIntentHostTabId) ||
               (tab.type === 'browser' && tab.browserPageId === focusIntentHostTabId)
           ) ??
-          // Beside or in place of the source: a chat the host reused still lands for its initiator.
+          // Beside a split pane's tab: the row the host placed there lands for its initiator, but
+          // not a chat this client already shows (the host reused it where it was).
           (afterHostTabId
             ? snapshot.tabs.find(
-                (tab) => slotAnchorOf(tab)?.hostTabId === afterHostTabId && !shownHere(tab)
+                (tab) =>
+                  (tab.type === 'terminal' || tab.type === 'agent-session') &&
+                  tab.after?.tabId === afterHostTabId &&
+                  !(
+                    tab.type === 'agent-session' &&
+                    unifiedTabs.some(
+                      (shown) =>
+                        shown.contentType === 'agent-session' && shown.entityId === tab.sessionId
+                    )
+                  )
               )
             : undefined) ??
           null)
@@ -112,22 +119,13 @@ export function prepareWebSessionTabsSnapshotBase(
     snapshot.navigationIntent === 'follow'
       ? (snapshot.tabs.find((tab) => tab.id === snapshot.activeTabId) ?? null)
       : null
-  // A tab that replaced the one shown here takes its focus in every view, since that tab is gone
-  // everywhere; read from the snapshot, so a client that never got the answer converges. A tab
-  // placed beside a split pane's surviving tab is focused only by its initiator's intent above.
-  const anchoredIntentTab =
-    (currentVisibleLocalTabId !== null &&
-      snapshot.tabs.find((tab) => {
-        const anchor = slotAnchorOf(tab)
-        return (
-          anchor !== undefined &&
-          !anchor.after &&
-          slotAnchorLocalTabIds(unifiedTabs, anchor.hostTabId).includes(currentVisibleLocalTabId) &&
-          !shownHere(tab)
-        )
-      })) ||
-    null
-  const navigationIntentTab = callerFocusIntentTab ?? anchoredIntentTab ?? followIntentTab
+  // A switched host tab is the tab shown here renamed, so it stays shown, in every view (a client
+  // that never got the switch's answer converges from the snapshot).
+  const renamedVisibleTab =
+    currentVisibleLocalTabId === null
+      ? null
+      : (snapshot.tabs.find((row) => renamedFrom(row)?.id === currentVisibleLocalTabId) ?? null)
+  const navigationIntentTab = callerFocusIntentTab ?? renamedVisibleTab ?? followIntentTab
   const honorSnapshotActiveFocus = navigationIntentTab !== null
   if (matchingFocusIntentTab) {
     clearWebSessionFocusIntent({ environmentId }, worktreeId)
@@ -205,7 +203,7 @@ export function prepareWebSessionTabsSnapshotBase(
         }
       : undefined,
     options?.terminalPtyMode,
-    unifiedTabs
+    (surface) => renamedFrom(surface)
   )
   const mirroredTerminalTabEntries = mirroredTerminalTabs.map((entry) => entry.tab)
   const retainedTerminalIds = new Set(retainedTerminalTabs.map((tab) => tab.id))
@@ -269,6 +267,7 @@ export function prepareWebSessionTabsSnapshotBase(
     nextTerminalTabs,
     mirroredTerminalIds,
     removedTerminalIds,
-    removedTerminalResourceIds
+    removedTerminalResourceIds,
+    renamedFrom
   }
 }

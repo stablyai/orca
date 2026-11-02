@@ -18,6 +18,10 @@ import type {
 } from '../../shared/agent-launch-tab-publication'
 import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
 import type { StoppedSwitchSource } from '../../shared/stopped-switch-source'
+import type {
+  WindowTabContentReply,
+  WindowTabContentRequest
+} from '../../shared/window-tab-content'
 import type { PaneLaunchRecipe } from '../../shared/terminal-attachment-launch-result'
 import type {
   TerminalPaneRevealReply,
@@ -206,8 +210,6 @@ export type UiCommandEventApi = {
       splitFromLeafId?: string
       splitDirection?: 'horizontal' | 'vertical'
       splitTelemetrySource?: TerminalPaneSplitSource
-      /** The tab this terminal takes the slot of, closed in the same store write. */
-      replaces?: { tabId: string }
     }) => void
   ) => () => void
   onRequestTerminalCreate: (
@@ -292,6 +294,9 @@ export type UiCommandEventApi = {
   onCloseTerminal: (callback: (target: TerminalSurfaceCloseTarget) => void) => () => void
   /** A switch stopped this pane's process and no replace removed it: show it exited. */
   onStoppedSwitchSource?: (callback: (source: StoppedSwitchSource) => void) => () => void
+  /** A switch: one of this window's tabs changes what it holds, answered by `replyTabContent`. */
+  onSetTabContent?: (callback: (request: WindowTabContentRequest) => void) => () => void
+  replyTabContent?: (reply: WindowTabContentReply) => void
   onTerminalTabCloseRequest: (callback: (request: TerminalTabCloseRequest) => void) => () => void
   respondTerminalTabClose: (response: TerminalTabCloseResponse) => void
   /** Follow main's workspace sleep even when another client requested it. */

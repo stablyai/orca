@@ -26,22 +26,21 @@ import {
   resolveStructuredSwitchRetainedOwner
 } from './structured-agent-session-switch-source'
 import { executeStructuredSessionTerminalSwitch } from './structured-agent-session-switch-terminal-execution'
-import { agentLaunchMovesHostWindow } from './agent-launch-tab-publication'
 import { stopStructuredSwitchTerminalSource } from './structured-agent-session-switch-terminal-stop'
 import { agentSessionLeasePossiblyWriting } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import { mainAgentState } from '../../../../shared/main-agent-status'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { isAiVaultAgent } from '../../../../shared/ai-vault-types'
-import { switchChatSlot } from '../../session-tabs/switch-slot-anchors'
-import { agentSessionRowId } from '../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
+import { placeSwitchChat } from './structured-agent-session-switch-chat-placement'
 
 type Prepared = Awaited<ReturnType<typeof prepareStructuredSessionSwitch>>
 
 /**
  * One switch, both directions: stop the exact source with proof, prepare the destination at
- * rest with no tab, then one layout replace. A failure before the replace leaves the source tab
- * untouched with its agent stopped; nothing was shown that could need withdrawing.
+ * rest with no tab, then one layout write: the source's tab holds the destination in place. A
+ * failure before that write leaves the source tab untouched with its agent stopped; nothing was
+ * shown that could need withdrawing.
  */
 export async function executeStructuredSessionSwitch(
   params: z.infer<typeof SwitchToChatParams> | z.infer<typeof SwitchToTerminalParams>,
@@ -51,8 +50,8 @@ export async function executeStructuredSessionSwitch(
   const deadline = agentSessionSwitchDeadline()
   let sessionId = params.sessionId
   let commandOwned = false
-  // A source kept on screen for a replace is settled when this switch settles, by its own result
-  // or the deadline, even while work it started is still running; a later proven stop settles then.
+  // A source a failed switch keeps on screen is settled when this switch settles, by its own
+  // result or the deadline, even while work it started still runs; a later proven stop settles then.
   let switchSettled = false
   let settleSource: (() => void) | undefined
   const keepSource = (settle: () => void): void => {
@@ -283,37 +282,27 @@ async function switchToChat(
   if (!revealed.readable && revealed.openRefusal) {
     throw new AgentSessionRefusalError(revealed.openRefusal)
   }
-  // The one layout write: the chat takes the terminal tab's slot. A split sibling keeps the tab,
-  // so the chat opens beside it; a source in another workspace keeps its tab untouched. A source
-  // the client couldn't capture is only named, so the chat opens right after it.
   const sameWorkspace =
     close !== undefined && worktreeIdsEqual(close.source.worktreeId, record.location.workspaceId)
-  const replaces = sameWorkspace && close.wholeTab() ? close.source.tabId : undefined
-  const slot = switchChatSlot(
-    replaces,
-    close ? (sameWorkspace ? close.source.tabId : undefined) : execution.sourceTabId,
-    close?.placement
+  check()
+  const retargeted = await placeSwitchChat(
+    ctx,
+    revealed,
+    {
+      terminalId: sameWorkspace ? close.source.tabId : undefined,
+      wholeTab: sameWorkspace && close.wholeTab(),
+      besideTabId: close ? (sameWorkspace ? close.source.tabId : undefined) : execution.sourceTabId,
+      placement: close?.placement
+    },
+    check
   )
-  await ctx.runtime.switchSlotAnchors.recordFor(
-    record.location.workspaceId,
-    agentSessionRowId(sessionId),
-    slot.anchor,
-    () =>
-      ctx.runtime.publishStructuredAgentSessionTab({
-        ...revealed,
-        activate: true,
-        check,
-        focusWindow: agentLaunchMovesHostWindow(ctx),
-        ...slot.publish
-      })
-  )
-  replacedBy = replaces ? sessionId : undefined
+  replacedBy = retargeted ? sessionId : undefined
   deadline.check()
   if (sameWorkspace) {
-    // Whole tab: the layout owner's replace removed it (main's model, or the window applying the
-    // snapshot's hint). Split pane: the window retired it on exit, or shows it exited once this
-    // switch settles if the stop kept it; main's model closes it here.
-    await close.retire(replaces !== undefined || !ORCA_LAYOUT_OWNER_IS_MAIN)
+    // Whole tab: its terminal left the tab in the layout owner's write. Split pane: the window
+    // retired it on exit, or shows it exited once this switch settles if the stop kept it; main's
+    // model closes it here.
+    await close.retire(retargeted || !ORCA_LAYOUT_OWNER_IS_MAIN)
   }
   deadline.check()
   // Publication is complete; a first new send may already own the ordinary start.

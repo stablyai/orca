@@ -24,8 +24,6 @@ export type ChatTabChange =
         agent: AgentType
         tabId: string
         placement?: ChatTabPlacement
-        /** A same-slot switch: the chat takes this tab's slot and the tab closes, in one write. */
-        replaces?: string
       }
     }
   | { close: string; tabId?: string }
@@ -83,8 +81,7 @@ export function chatTabLayoutCommand(
       ? { afterTabId }
       : placement?.index !== undefined
         ? { index: placement.index }
-        : {}),
-    ...(change.open.replaces ? { replaces: { tabId: change.open.replaces } } : {})
+        : {})
   }
 }
 
@@ -138,8 +135,7 @@ export function chatTabId(sessionId: string): string {
   )
 }
 
-/** Select in the existing view without rebuilding membership from a partial runtime snapshot. */
-/** Whether a same-slot replace may take the selection from this tab in the saved view: unless
+/** Whether a chat opened beside this tab may take the selection from it in the saved view: unless
  *  another tab of its group holds it. */
 export function savedTabHoldsSelection(
   hostId: ExecutionHostId,

@@ -247,6 +247,23 @@ describe('session.tabs translations', () => {
     }
   })
 
+  it('closes the tab a switch left holding the terminal a phone or paired client names', () => {
+    const { model, tabA, leafA } = setup()
+    const workspace = model.workspaces[WS]!
+    const switched = {
+      ...workspace,
+      tabs: workspace.tabs.map((tab) =>
+        tab.id === tabA ? { ...tab, entityId: 'terminal-2' } : tab
+      )
+    }
+    // Its row names the terminal (`terminal::leaf`); the close reaches the tab holding it.
+    expect(
+      commandsOf(
+        translateSessionTabClose(WS, switched, { tabId: terminalRowId('terminal-2', leafA) })
+      )
+    ).toEqual([{ type: 'closeTabs', workspace: WS, tabIds: [tabA], refusePinned: true }])
+  })
+
   it('sets props on the tab a pane row names', () => {
     const { model, tabA, leafA } = setup()
     expect(

@@ -309,6 +309,8 @@ describe('projectSessionTabs', () => {
           {
             type: 'agent-session',
             id: 'agent-session:session-1',
+            // The chat's layout tab, which a client keeps its tab by through a switch.
+            logicalTabId: 'id-8',
             title: 'Codex Chat',
             sessionId: 'session-1',
             agent: 'codex',

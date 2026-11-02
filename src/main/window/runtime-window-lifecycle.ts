@@ -18,6 +18,7 @@ import { createRuntimeRendererNotificationSender } from './runtime-renderer-noti
 import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-relay'
 import { revealTerminalPaneInWindow } from './terminal-pane-reveal-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
+import { requestTabContentFromRenderer } from './tab-content-request-relay'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 
 let runtimeNotifierTokenCounter = 0
@@ -122,8 +123,7 @@ export function registerRuntimeWindowLifecycle(
           resolve({
             tabId: reply.tabId!,
             title: reply.title,
-            ...(reply.identity ? { identity: reply.identity } : {}),
-            ...(reply.closed ? { closed: reply.closed } : {})
+            ...(reply.identity ? { identity: reply.identity } : {})
           })
         }
         ipcMain.on('terminal:tabCreateReply', handler)
@@ -152,8 +152,7 @@ export function registerRuntimeWindowLifecycle(
           ...(opts.splitTelemetrySource !== undefined
             ? { splitTelemetrySource: opts.splitTelemetrySource }
             : {}),
-          ...(opts.focus !== undefined ? { focus: opts.focus } : {}),
-          ...(opts.replaces ? { replaces: opts.replaces } : {})
+          ...(opts.focus !== undefined ? { focus: opts.focus } : {})
         })
         if (!sent) {
           clearTimeout(timer)
@@ -161,6 +160,7 @@ export function registerRuntimeWindowLifecycle(
           reject(new Error('runtime_unavailable'))
         }
       }),
+    setTabContent: (request) => requestTabContentFromRenderer(mainWindow, request),
     publishAgentLaunchTab: (request) =>
       requestAgentLaunchTabPublishFromRenderer(mainWindow, request),
     agentLaunchPaneVerdict: (event) => send('ui:agentLaunchPaneVerdict', event),

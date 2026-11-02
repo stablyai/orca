@@ -117,6 +117,8 @@ export function buildMobileTerminalSurfaceTabs(
         ? { generatedTitle: terminal.generatedTitle.trim() }
         : {}),
       parentTabId: terminal.id,
+      // The tab a switch left this terminal in keeps its own id; clients keep their tab by it.
+      ...(unifiedTabId && unifiedTabId !== terminal.id ? { logicalTabId: unifiedTabId } : {}),
       leafId,
       ptyId,
       ...(inputs.terminalTheme ? { terminalTheme: inputs.terminalTheme } : {}),

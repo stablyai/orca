@@ -22,12 +22,6 @@ import type {
   MirroredAgentTab
 } from './state'
 import type { Tab } from '../../../../shared/tab-types'
-import {
-  adoptInheritedChatPin,
-  inheritedChatPinHolds,
-  pruneInheritedChatPins
-} from './inherited-chat-pins'
-import { replacedTabPinned } from './slot-anchor'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
@@ -75,7 +69,9 @@ export function buildMirroredAgentTabs(
   fallbackGroupId: string,
   sortOffset: number,
   currentUnifiedTabs: readonly Tab[],
-  now: number
+  now: number,
+  /** The local tab a switched host tab showed before (switched-tab-renames.ts). */
+  renamedFrom: (row: RuntimeMobileSessionAgentTab) => Tab | undefined = () => undefined
 ): MirroredAgentTab[] {
   const agentTabs = snapshot.tabs
     .filter(isAgentSessionTab)
@@ -120,14 +116,11 @@ export function buildMirroredAgentTabs(
       replacementIds.add(existing.id)
     }
   }
-  const pinScope = `${executionHostId}\0${snapshot.worktree}`
-  pruneInheritedChatPins(pinScope, new Set(agentTabs.map((tab) => tab.sessionId)))
   return agentTabs.map((tab, index) => {
     const existing = replacementTabs.get(tab.sessionId) ?? firstUnreplaced(tab.sessionId)
-    const inheritedPin = existing ? undefined : replacedTabPinned(currentUnifiedTabs, tab)
-    if (inheritedPin !== undefined) {
-      adoptInheritedChatPin(pinScope, tab.sessionId, tab.isPinned === true)
-    }
+    // A switched tab is the same tab renamed here, so its color and pin are its own too.
+    const renamed = existing ? undefined : renamedFrom(tab)
+    const own = existing ?? renamed
     const launch = readStructuredAgentLaunchRecord(tab.sessionId)
     const address =
       executionHostId === 'local' &&
@@ -147,6 +140,7 @@ export function buildMirroredAgentTabs(
     assignedIds.add(localId)
     return {
       hostTabId: tab.id,
+      ...(renamed ? { renamedFrom: renamed.id } : {}),
       unifiedTab: {
         id: localId,
         entityId: tab.sessionId,
@@ -164,17 +158,10 @@ export function buildMirroredAgentTabs(
         label: tab.title?.trim() || defaultAgentChatLabel(tab.agent),
         // Manual rename is client-owned; host snapshots must not null it.
         customLabel: existing?.customLabel ?? null,
-        color: tab.color !== undefined ? tab.color : (existing?.color ?? null),
+        color: tab.color !== undefined ? tab.color : (own?.color ?? null),
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + sortOffset + index,
-        // A chat in a replaced tab's slot keeps the pin it took from that tab here until the
-        // host's own flag on it changes (inherited-chat-pins.ts).
-        isPinned: existing
-          ? tab.isPinned !== undefined &&
-            !inheritedChatPinHolds(pinScope, tab.sessionId, tab.isPinned)
-            ? tab.isPinned
-            : existing.isPinned === true
-          : (inheritedPin ?? tab.isPinned === true)
+        isPinned: tab.isPinned !== undefined ? tab.isPinned : own?.isPinned === true
       }
     }
   })

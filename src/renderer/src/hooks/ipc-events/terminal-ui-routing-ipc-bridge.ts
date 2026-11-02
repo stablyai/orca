@@ -11,7 +11,7 @@ import type { AppState } from '../../store/types'
 import { resolveBrowserSessionTabTarget } from './browser-session-tab-target'
 import { resolveWindowTabIdForHostTab } from './host-session-tab-target'
 import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
-import { replacedTabGroupInView, replacedTabHoldsSelection } from '@/lib/replaced-tab-selection'
+import { sourceTabGroupInView, sourceTabHoldsSelection } from '@/lib/switch-source-selection'
 import { focusTerminalInitiatedTab } from './terminal-command-state'
 import { applyRuntimePaneTitle } from './terminal-pane-title-ipc-bridge'
 import { holdsTerminal } from '../../../../shared/tab-types'
@@ -172,8 +172,8 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
       if (
         sourceTabId &&
         tab &&
-        (!replacedTabGroupInView(store, worktreeId, tab.groupId) ||
-          !replacedTabHoldsSelection(store, worktreeId, {
+        (!sourceTabGroupInView(store, worktreeId, tab.groupId) ||
+          !sourceTabHoldsSelection(store, worktreeId, {
             id: resolveWindowTabIdForHostTab(worktreeId, sourceTabId),
             groupId: tab.groupId
           }))

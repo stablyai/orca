@@ -51,6 +51,7 @@ import {
 } from './workspace-layout-tab-commands'
 import { moveTabToWorkspace } from './workspace-layout-workspace-move'
 import { applyDefaultTabs } from './workspace-layout-default-tabs'
+import { setTabContent } from './workspace-layout-tab-content'
 
 const CREATES_WORKSPACE = new Set<LayoutCommand['type']>([
   'createTerminalTab',
@@ -166,6 +167,8 @@ function applyCommand(
       return setBrowserTabProfile(model, command)
     case 'openAgentSessionTab':
       return openInNewGroup(model, command, (next) => openAgentSessionTab(next, command, context))
+    case 'setTabContent':
+      return setTabContent(model, command, context)
     case 'startPane':
       return startPane(model, command, context)
     case 'restartPane':

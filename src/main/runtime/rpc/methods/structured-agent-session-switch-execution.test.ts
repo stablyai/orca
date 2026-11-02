@@ -165,6 +165,9 @@ it.each(['single', 'split', 'other-workspace', 'reselected'] as const)(
       focusEditorTab
     })
     const acquisitions = rig.adapter.acquire.mock.calls.length
+    const selectedBefore = session().tabGroups?.[WORKTREE_ID]?.find((row) =>
+      row.tabOrder.includes(TAB_ID)
+    )?.activeTabId
     const operation = executeStructuredSessionSwitch(
       {
         sessionId,
@@ -209,8 +212,13 @@ it.each(['single', 'split', 'other-workspace', 'reselected'] as const)(
         ...(elsewhere ? [] : ['agent-session:later-tab'])
       ]
     )
+    // The tab the chat now fills keeps its selection; a chat opened beside a split takes it.
     expect(group?.activeTabId).toBe(
-      shape === 'reselected' ? 'agent-session:later-tab' : savedDestination
+      shape === 'reselected'
+        ? 'agent-session:later-tab'
+        : shape === 'single'
+          ? selectedBefore
+          : savedDestination
     )
     if (existingDestination) {
       expect(
@@ -220,18 +228,20 @@ it.each(['single', 'split', 'other-workspace', 'reselected'] as const)(
       ).toBe(existingDestination.tabId)
     }
     const published = await runtime.listMobileSessionTabs(`id:${destinationWorkspace}`)
-    // Paired clients put the chat where they showed its source: its slot, or beside a split pane.
+    // Paired clients keep their tab by the layout id the chat now fills, or put it beside a split.
     expect(published.tabs.find((tab) => tab.id === destination)).toMatchObject(
-      elsewhere ? {} : split ? { after: { tabId: TAB_ID } } : { replaces: { tabId: TAB_ID } }
+      elsewhere ? {} : split ? { after: { tabId: TAB_ID } } : { logicalTabId: TAB_ID }
     )
     if (split) {
       // The window's focus is judged against the split pane's tab the chat opened beside.
       expect(focusEditorTab).toHaveBeenCalledWith(expect.any(String), WORKTREE_ID, TAB_ID)
     }
     // What paired clients mirror is the write's decision: a user who picked another tab keeps it.
-    expect(published.activeTabId === destination).toBe(shape !== 'reselected')
+    expect(published.activeTabId === destination).toBe(
+      shape === 'single' ? selectedBefore === TAB_ID : shape !== 'reselected'
+    )
     if (!split && !elsewhere) {
-      // A whole tab is replaced in the one write: its rows are gone from the published snapshot.
+      // A whole tab now holds the chat: its terminal's rows are gone from the published snapshot.
       expect(
         published.tabs.some((tab) => tab.type === 'terminal' && tab.parentTabId === TAB_ID)
       ).toBe(false)
@@ -244,15 +254,15 @@ it.each(['single', 'split', 'other-workspace', 'reselected'] as const)(
       expect(layout?.ptyIdsByLeafId?.[LEAF_B]).toBe(PTY_B)
       expect(layout?.root).toEqual({ type: 'leaf', leafId: LEAF_B })
     } else {
-      // Replaced in place, or (in another workspace, where nothing replaces it) exited as any
-      // stopped pane does.
+      // Left its tab in the switch's write, or (in another workspace, where nothing takes its tab)
+      // exited as any stopped pane does.
       expect(session().tabsByWorktree[WORKTREE_ID]?.some((tab) => tab.id === TAB_ID)).toBe(false)
     }
     expect(rig.adapter.dispatch).not.toHaveBeenCalled()
   }
 )
 
-it('keeps the stopped source when destination publication fails before retirement', async () => {
+it('keeps the stopped source when the layout write that would take its tab fails', async () => {
   await savedTranscript(rig)
   const { runtime, session } = setupMainOwnedWorkspace()
   const incarnationId = '11111111-1111-4111-8111-111111111111'
@@ -275,9 +285,9 @@ it('keeps the stopped source when destination publication fails before retiremen
     stopAndWait: stop,
     getForegroundProcess: async () => null
   })
-  const publish = vi
-    .spyOn(runtime, 'publishStructuredAgentSessionTab')
-    .mockRejectedValue(new Error('fixture publication failure'))
+  const write = vi
+    .spyOn(runtime, 'setSwitchedTabContent')
+    .mockRejectedValue(new Error('fixture layout write failure'))
   const result = await executeStructuredSessionSwitch(
     {
       sessionId: id,
@@ -302,28 +312,7 @@ it('keeps the stopped source when destination publication fails before retiremen
     expect.objectContaining({ expectedIncarnationId: incarnationId })
   )
   expect(runtime.getPtyLivenessVerdict(PTY_A)).toMatchObject({ status: 'exited' })
-  expect(publish).toHaveBeenCalledOnce()
-  // The slot anchor is withdrawn: a later open of the chat is not stamped into the stopped tab.
-  const later = runtime.switchSlotAnchors.stamp({
-    worktree: WORKTREE_ID,
-    publicationEpoch: 'later',
-    snapshotVersion: 1,
-    activeGroupId: null,
-    activeTabId: null,
-    activeTabType: null,
-    tabs: [
-      {
-        type: 'agent-session',
-        id: `agent-session:${id}`,
-        title: 'Codex',
-        sessionId: id,
-        agent: 'codex',
-        isActive: false
-      }
-    ]
-  })
-  expect(later.tabs[0]).not.toHaveProperty('replaces')
-  expect(later.tabs[0]).not.toHaveProperty('after')
+  expect(write).toHaveBeenCalledOnce()
   expect(session().tabsByWorktree[WORKTREE_ID]).toEqual(originalSourceTabs)
   expect(session().terminalLayoutsByTabId[TAB_ID]).toEqual(originalSourceLayout)
   expect(rig.adapter.acquire).toHaveBeenCalledTimes(acquisitions)
@@ -388,7 +377,7 @@ it('reports a dispatched terminal with a lost answer as uncertain, preserving it
   expect(rig.store.getSessionTabId(id)).toBe('source-chat')
 })
 
-it('puts the switched terminal in the chat tab’s slot and closes the chat tab, in one write', async () => {
+it('puts the switched terminal in the chat’s own tab, which keeps its id and place', async () => {
   const { runtime, session } = setupMainOwnedWorkspace()
   const chatTab = chatTabId(id)
   for (const [sessionId, tabId] of [
@@ -432,14 +421,16 @@ it('puts the switched terminal in the chat tab’s slot and closes the chat tab,
   expect(result).toMatchObject({ status: 'completed', sessionId: id, sourceRetained: false })
   expect(spawn).toHaveBeenCalledOnce()
   const terminal = result.status === 'completed' ? result.terminal : undefined
-  const group = session().tabGroups?.[WORKTREE_ID]?.find((row) =>
-    row.tabOrder.includes(terminal ?? '')
-  )
-  expect(group?.tabOrder).toEqual([TAB_ID, terminal, 'agent-session:later-tab'])
+  const group = session().tabGroups?.[WORKTREE_ID]?.find((row) => row.tabOrder.includes(chatTab))
+  expect(group?.tabOrder).toEqual([TAB_ID, chatTab, 'agent-session:later-tab'])
+  expect(session().unifiedTabs?.[WORKTREE_ID]?.find((tab) => tab.id === chatTab)).toMatchObject({
+    contentType: 'terminal',
+    entityId: terminal
+  })
   const published = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
   expect(
     published.tabs.find((tab) => tab.type === 'terminal' && tab.parentTabId === terminal)
-  ).toMatchObject({ replaces: { tabId: `agent-session:${id}` } })
+  ).toMatchObject({ logicalTabId: chatTab })
   expect(
     session().unifiedTabs?.[WORKTREE_ID]?.some(
       (tab) => tab.contentType === 'agent-session' && tab.entityId === id

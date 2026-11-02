@@ -64,8 +64,6 @@ export const uiTerminalAndSessionTabsApi = {
       splitFromLeafId?: string
       splitDirection?: 'horizontal' | 'vertical'
       splitTelemetrySource?: TerminalPaneSplitSource
-      /** The tab this terminal takes the slot of, closed in the same store write. */
-      replaces?: { tabId: string }
     }) => void
   ): (() => void) => {
     const listener = (
@@ -96,7 +94,6 @@ export const uiTerminalAndSessionTabsApi = {
         splitFromLeafId?: string
         splitDirection?: 'horizontal' | 'vertical'
         splitTelemetrySource?: TerminalPaneSplitSource
-        replaces?: { tabId: string }
       }
     ) => callback(data)
     ipcRenderer.on('ui:createTerminal', listener)

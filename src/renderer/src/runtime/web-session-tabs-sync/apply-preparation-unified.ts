@@ -8,6 +8,7 @@ import {
 } from '../web-session-focus-intent'
 import { isWebSessionBrowserPlacementGroupReserved } from '../web-session-browser-placement'
 import { buildHostToLocalTabIdMap, updateHostSessionTabIdMappings } from './layout-groups'
+import { logicalTabIdOf, tabBarIdOf } from '../../../../shared/runtime-mobile-session-tab-contracts'
 
 export function prepareWebSessionTabsSnapshotUnified(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotBrowser>
@@ -166,6 +167,18 @@ export function prepareWebSessionTabsSnapshotUnified(
       ? (activeMirroredEditorFileId ?? mirroredEditorTabs[0]?.file.id)
       : mirroredEditorTabs[0]?.file.id) ??
     null
+  // A switched host tab is this client's tab renamed: it keeps its place (client-owned groups).
+  const switchedTabRekeys = new Map<string, string>()
+  for (const entry of mirroredTerminalTabs) {
+    if (entry.renamedFrom) {
+      switchedTabRekeys.set(entry.renamedFrom, entry.tab.id)
+    }
+  }
+  for (const entry of mirroredAgentTabs) {
+    if (entry.renamedFrom) {
+      switchedTabRekeys.set(entry.renamedFrom, entry.unifiedTab.id)
+    }
+  }
   const currentVisibleUnifiedTabId = resolveWebSessionVisibleTabId(
     state,
     worktreeId,
@@ -231,7 +244,14 @@ export function prepareWebSessionTabsSnapshotUnified(
     browserTabs: mirroredBrowserTabs,
     editorTabs: mirroredEditorTabs,
     agentTabs: mirroredAgentTabs,
-    hostGroupIdByTabId
+    hostGroupIdByTabId,
+    logicalTabIdByHostTabId: new Map(
+      snapshot.tabs.flatMap((row) =>
+        row.type === 'terminal' || row.type === 'agent-session'
+          ? [[tabBarIdOf(row), logicalTabIdOf(row)] as const]
+          : []
+      )
+    )
   })
 
   return {
@@ -274,6 +294,7 @@ export function prepareWebSessionTabsSnapshotUnified(
     intentUnifiedTabId,
     nextActiveUnifiedTabId,
     mirroredUnifiedIds,
-    hostToLocalTabId
+    hostToLocalTabId,
+    switchedTabRekeys
   }
 }

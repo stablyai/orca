@@ -58,13 +58,16 @@ export function updateHostSessionTabIdMappings(args: {
   editorTabs: readonly MirroredEditorTab[]
   agentTabs: readonly MirroredAgentTab[]
   hostGroupIdByTabId: ReadonlyMap<string, string>
+  /** Each row's layout id by its tab-bar id; a later frame finds a switched tab's local tab by it. */
+  logicalTabIdByHostTabId: ReadonlyMap<string, string>
 }): void {
   clearHostSessionTabIdMappings(args.environmentId, args.worktreeId)
   const map = (tabId: string, hostTabId: string): void =>
     setHostSessionTabIdMapping(
       { ...args, tabId },
       hostTabId,
-      args.hostGroupIdByTabId.get(hostTabId)
+      args.hostGroupIdByTabId.get(hostTabId),
+      args.logicalTabIdByHostTabId.get(hostTabId)
     )
 
   const mirroredTerminalIds = new Set(args.terminalTabs.map((tab) => tab.id))

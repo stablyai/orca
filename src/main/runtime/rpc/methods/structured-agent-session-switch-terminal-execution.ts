@@ -13,8 +13,10 @@ import { agentSessionRefusalError } from '../../../../shared/agent-session/failu
 import { nativeConversationContent } from '../../../ai-vault/structured-chat-cli-fork'
 import { prepareSwitchCliTranscript } from './structured-agent-session-switch-transcript'
 import { TerminalNotPlacedError } from '../../session-tabs/terminal-not-placed-error'
+import { logicalTabHolding } from '../../session-tabs/session-tab-content-swap'
+import { chatTabId } from '../../agent-session/agent-session-tab-layout'
 
-/** Stop the chat with proof, spawn the terminal parked, then one layout replace into the chat's slot. */
+/** Stop the chat with proof, spawn the terminal parked, then the chat's tab holds it in place. */
 export async function executeStructuredSessionTerminalSwitch(
   params: z.infer<typeof SwitchToTerminalParams>,
   record: AgentSessionRecord,
@@ -37,6 +39,15 @@ export async function executeStructuredSessionTerminalSwitch(
     nativeConversationContent(await host.journalSnapshot(sessionId)) === 'saved'
       ? await prepareSwitchCliTranscript(ctx.runtime, sessionId, record.location.workspaceId, true)
       : undefined
+  // The chat's tab, read before the stop: the window's own id when it asked, else the tab the
+  // published snapshot shows holding the chat, else its recorded tab.
+  const switchedTabId =
+    execution?.sourceTabId ??
+    logicalTabHolding(ctx.runtime.mobileSessionTabsByWorktree.get(record.location.workspaceId), {
+      kind: 'agent-session',
+      sessionId
+    }) ??
+    chatTabId(sessionId)
   // Admission before the chat stops: the create's own ownership decision. The switch checks only
   // its own tab (Brennan 11-01, temporary; a cross-tab check is a follow-up), so a terminal
   // elsewhere holding this conversation refuses nothing and is never moved: the new terminal then
@@ -47,7 +58,7 @@ export async function executeStructuredSessionTerminalSwitch(
         source: saved,
         commandOverride: execution?.commandOverride,
         signal: deadline.signal,
-        chatSessionId: sessionId
+        switchedTabId
       })
     : {}
   deadline.check()
@@ -89,6 +100,7 @@ export async function executeStructuredSessionTerminalSwitch(
       signal: deadline.signal,
       // The answer the admission took, so the spawn decides the claim the same way.
       resumeSupported: adoption.resumeSupported,
+      switchedTabId,
       ...(adoption.unclaimed ? { unclaimed: true } : {})
     })
   )
@@ -100,7 +112,7 @@ export async function executeStructuredSessionTerminalSwitch(
     placed = await ctx.runtime.placeSwitchTerminal(record.location.workspaceId, {
       terminal,
       chatSessionId: sessionId,
-      windowTabId: execution?.sourceTabId,
+      chatTabId: switchedTabId,
       activate: true,
       focusWindow: agentLaunchMovesHostWindow(ctx)
     })
@@ -113,14 +125,15 @@ export async function executeStructuredSessionTerminalSwitch(
     }
     throw error
   }
-  // A chat tab the layout owner kept stays listed; only a replaced one leaves the saved tabs.
-  if (placed.replaced) {
+  // The commit point: once the layout owner put the terminal in the chat's tab, the chat leaves
+  // the saved chat tabs. A chat tab the owner kept stays listed.
+  if (placed.retargeted) {
     await host.setSessionTabVisibility(sessionId, false)
   }
   return {
     status: 'completed',
     sessionId,
     terminal: placed.tabId,
-    sourceRetained: !placed.replaced
+    sourceRetained: !placed.retargeted
   }
 }

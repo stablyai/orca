@@ -1,4 +1,3 @@
-import type { ReplacedTab } from './workspace-layout/workspace-layout-command-types'
 import type { AgentStatusEntry } from './agent-status-types'
 import type { BrowserCertificateFailure, BrowserLoadError } from './browser-workspace-types'
 import type { RuntimeBrowserPlacement } from './runtime-browser-placement'
@@ -8,11 +7,15 @@ import type { TuiAgent } from './tui-agent'
 import type { StructuredAgentId } from './agent-session/lifecycle/agent-session-provider-handle'
 import type { StoppedSwitchSourceFact } from './stopped-switch-source'
 
+/** A switch's tab, by the id the publisher's layout gives it. */
+export type RuntimeMobileSessionSlotTab = { tabId: string }
+
 export type RuntimeMobileSessionTerminalTab = {
-  /** Published in the tab it replaced's slot; a client whose order differs puts it where that tab was. */
-  replaces?: ReplacedTab
+  /** The layout tab this row's terminal sits in, when it differs from `parentTabId`: a switch
+   *  changed what that tab holds and the tab kept its id. Old clients ignore it. */
+  logicalTabId?: string
   /** Published beside a split pane's tab it came from; a client puts it right after that tab. */
-  after?: ReplacedTab
+  after?: RuntimeMobileSessionSlotTab
   type: 'terminal'
   id: string
   title: string
@@ -114,8 +117,9 @@ export type RuntimeMobileSessionBrowserTab = {
 }
 
 export type RuntimeMobileSessionAgentTab = {
-  replaces?: ReplacedTab
-  after?: ReplacedTab
+  /** The layout tab this chat sits in, when it differs from `id` (any chat but a reopened one). */
+  logicalTabId?: string
+  after?: RuntimeMobileSessionSlotTab
   type: 'agent-session'
   id: string
   title: string
@@ -147,6 +151,18 @@ export type RuntimeMobileSessionSnapshotTab =
   | RuntimeMobileSessionFileTab
   | RuntimeMobileSessionBrowserTab
   | RuntimeMobileSessionAgentTab
+
+/** The tab-bar id a row's tab has in its snapshot's group orders. */
+export function tabBarIdOf(row: RuntimeMobileSessionSnapshotTab): string {
+  return row.type === 'terminal' ? row.parentTabId : row.id
+}
+
+/** The publisher's layout id for a row's tab: kept through a switch, unlike its tab-bar id. */
+export function logicalTabIdOf(row: RuntimeMobileSessionSnapshotTab): string {
+  return (row.type === 'terminal' || row.type === 'agent-session') && row.logicalTabId
+    ? row.logicalTabId
+    : tabBarIdOf(row)
+}
 
 export type RuntimeMobileSessionTerminalClientTab =
   | (RuntimeMobileSessionTerminalTab & { status: 'pending-handle'; terminal: null })

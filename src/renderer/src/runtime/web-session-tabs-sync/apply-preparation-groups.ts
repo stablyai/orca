@@ -9,7 +9,8 @@ import { peekWebSessionTerminalPlacementGroup } from '../web-session-terminal-pl
 import { reconcileClientOwnedTabPlacement } from '../web-session-client-owned-tab-placement'
 import { buildMirroredHostGroups, retainClientPlacedMirroredTabs } from './layout-groups'
 import { sanitizeRecentTabIds, pushRecentTabId } from './state-equality-core'
-import { slotAnchorLocalTabIds, slotAnchorOf } from './slot-anchor'
+import { tabBarIdOf } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import { holdsTerminal } from '../../../../shared/tab-types'
 
 export function prepareWebSessionTabsSnapshotGroups(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotUnified>
@@ -32,6 +33,7 @@ export function prepareWebSessionTabsSnapshotGroups(
     retainedUnifiedTabs,
     targetGroupId,
     hostToLocalTabId,
+    switchedTabRekeys,
     provisionalHandoffHostTabIds,
     existingTabIndex,
     honorSnapshotActiveFocus,
@@ -50,8 +52,9 @@ export function prepareWebSessionTabsSnapshotGroups(
     if (!nextUnifiedTabs || (currentGroups.length === 0 && !options?.preserveLocalLayout)) {
       return null
     }
-    // Entity-identical local/provisional-to-mirror replacements are renames; preserve position and focus.
-    const rekeyedTabIds = new Map<string, string>()
+    // Entity-identical local/provisional-to-mirror replacements are renames, as is a switched tab;
+    // preserve position and focus.
+    const rekeyedTabIds = new Map<string, string>(switchedTabRekeys)
     for (const [provisionalTabId, hostTabId] of provisionalHandoffHostTabIds) {
       const mirroredId = toWebTerminalSurfaceTabId(hostTabId)
       if (mirroredId !== provisionalTabId) {
@@ -94,19 +97,17 @@ export function prepareWebSessionTabsSnapshotGroups(
         })
       }
     }
-    // A switch's destination goes where this client showed its source, on first appearance.
-    const anchors = new Map(
+    // A split pane's switch opens its destination right after the tab holding its source
+    // terminal, once: found by that terminal (a host tab id here, or this window's own terminal).
+    const afterTabIds = new Map(
       snapshot.tabs.flatMap((row) => {
-        const anchor = slotAnchorOf(row)
-        const tabId = hostToLocalTabId.get(row.type === 'terminal' ? row.parentTabId : row.id)
-        const tabIds =
-          anchor &&
-          slotAnchorLocalTabIds(
-            state.unifiedTabsByWorktree[worktreeId] ?? [],
-            anchor.hostTabId,
-            hostToLocalTabId
-          )
-        return anchor && tabId && tabIds ? [[tabId, { tabIds, after: anchor.after }] as const] : []
+        const after = (row.type === 'terminal' || row.type === 'agent-session') && row.after?.tabId
+        const tabId = after && hostToLocalTabId.get(tabBarIdOf(row))
+        const afterTabId =
+          after &&
+          (hostToLocalTabId.get(after) ??
+            state.unifiedTabsByWorktree[worktreeId]?.find((tab) => holdsTerminal(tab, after))?.id)
+        return tabId && afterTabId ? [[tabId, afterTabId] as const] : []
       })
     )
     const adoptedTabs = mirroredUnifiedTabs
@@ -114,7 +115,7 @@ export function prepareWebSessionTabsSnapshotGroups(
       .map((tab) => ({
         tabId: tab.id,
         groupId: clientGroupIdByLocalTabId.get(tab.id) ?? tab.groupId,
-        anchor: anchors.get(tab.id)
+        afterTabId: afterTabIds.get(tab.id)
       }))
     return reconcileClientOwnedTabPlacement({
       currentGroups,
