@@ -74,7 +74,6 @@
         "administratorDialogScope": "Esto cambia los permisos de toda la aplicación. SSH y WSL conservan sus propios permisos.",
         "administratorDocumentation": "Leer la guía",
         "administratorLabel": "Modo administrador",
-        "administratorPromptCancellation": "Si cancelas el aviso de Windows, Orca se vuelve a abrir con sus terminales conservadas. Los permisos de SSH y WSL siguen controlándose en sus hosts.",
         "administratorRestartConsequences": "Guarda tu trabajo primero. Tras la aprobación, las terminales y los agentes del host de terminal local actual se cierran. Las pestañas restauradas abren nuevos shells de administrador.",
         "administratorRestartFailed": "Orca no pudo reiniciarse. Vuelve a intentarlo o usa las instrucciones manuales.",
         "administratorScope": "Permisos de la aplicación Orca. Las terminales existentes pueden diferir.",
@@ -101,7 +100,9 @@
         "returnStandardHelp": "Guía del modo estándar",
         "runAdministratorHelp": "Guía de administrador",
         "standardStatus": "Usuario estándar",
-        "unknownAdministrator": "No se puede determinar"
+        "unknownAdministrator": "No se puede determinar",
+        "administratorPromptCancellationKeepsOpen": "Si cancelas el aviso de Windows, Orca sigue abierto y conserva sus terminales. Los permisos de SSH y WSL siguen controlándose en sus hosts.",
+        "administratorRestartCanceled": "Se canceló la aprobación de Windows. Orca y sus terminales siguen en ejecución."
       },
       "limit": {
         "label": "Máximo de terminales en ejecución",

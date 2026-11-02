@@ -26,11 +26,12 @@ export const appApi = {
   getIdentity: (): Promise<AppIdentity> => ipcRenderer.invoke('app:getIdentity'),
   getWindowsAdministratorStatus: (): Promise<boolean | null> =>
     ipcRenderer.invoke('app:getWindowsAdministratorStatus'),
-  restartAsAdministrator: (): Promise<void> =>
+  restartAsAdministrator: (): Promise<boolean> =>
     prepareAndInvokeAppRestart(
       window,
-      () => ipcRenderer.invoke('app:restartAsAdministrator'),
-      awaitBeforeUnloadCheckpoint
+      (): Promise<boolean> => ipcRenderer.invoke('app:restartAsAdministrator'),
+      awaitBeforeUnloadCheckpoint,
+      (restarting) => restarting
     ),
   getFeatureWallAssetBaseUrl: (): Promise<string> =>
     ipcRenderer.invoke('app:getFeatureWallAssetBaseUrl'),

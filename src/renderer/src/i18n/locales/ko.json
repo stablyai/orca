@@ -74,7 +74,6 @@
         "administratorDialogScope": "이 변경은 앱 전체의 권한에 적용됩니다. SSH와 WSL은 각자의 권한을 유지합니다.",
         "administratorDocumentation": "가이드 읽기",
         "administratorLabel": "관리자 모드",
-        "administratorPromptCancellation": "Windows 프롬프트를 취소하면 Orca가 유지된 터미널과 함께 다시 열립니다. SSH와 WSL 권한은 각자의 호스트에서 계속 제어됩니다.",
         "administratorRestartConsequences": "먼저 작업을 저장하세요. 승인 후 현재 로컬 터미널 호스트의 터미널과 에이전트가 닫힙니다. 복원된 탭은 새 관리자 셸을 엽니다.",
         "administratorRestartFailed": "Orca를 다시 시작할 수 없습니다. 다시 시도하거나 수동 지침을 사용하세요.",
         "administratorScope": "Orca 앱의 권한입니다. 기존 터미널은 다를 수 있습니다.",
@@ -101,7 +100,9 @@
         "returnStandardHelp": "표준 모드 가이드",
         "runAdministratorHelp": "관리자 가이드",
         "standardStatus": "표준 사용자",
-        "unknownAdministrator": "확인할 수 없음"
+        "unknownAdministrator": "확인할 수 없음",
+        "administratorPromptCancellationKeepsOpen": "Windows 프롬프트를 취소하면 Orca가 열린 상태로 유지되고 터미널도 그대로 유지됩니다. SSH와 WSL 권한은 계속 각 호스트에서 관리됩니다.",
+        "administratorRestartCanceled": "Windows 승인이 취소되었습니다. Orca와 터미널은 계속 실행 중입니다."
       },
       "limit": {
         "label": "실행 중인 터미널 최대 개수",

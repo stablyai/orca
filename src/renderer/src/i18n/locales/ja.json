@@ -74,7 +74,6 @@
         "administratorDialogScope": "これによりアプリ全体の権限が変更されます。SSH と WSL はそれぞれ独自の権限を保持します。",
         "administratorDocumentation": "ガイドを読む",
         "administratorLabel": "管理者モード",
-        "administratorPromptCancellation": "Windows のプロンプトをキャンセルすると、保持されているターミナルとともに Orca が再び開きます。SSH と WSL の権限はそれぞれのホストで管理されたままです。",
         "administratorRestartConsequences": "先に作業を保存してください。承認後、現在のローカルターミナルホスト上のターミナルと Agent が閉じられます。復元されたタブは新規管理者シェルを開きます。",
         "administratorRestartFailed": "Orca を再起動できませんでした。もう一度試すか、マニュアルの手順を使用してください。",
         "administratorScope": "Orca アプリの権限。既存のターミナルでは異なる場合があります。",
@@ -101,7 +100,9 @@
         "returnStandardHelp": "標準モードガイド",
         "runAdministratorHelp": "管理者ガイド",
         "standardStatus": "標準ユーザー",
-        "unknownAdministrator": "判定できません"
+        "unknownAdministrator": "判定できません",
+        "administratorPromptCancellationKeepsOpen": "Windows のプロンプトをキャンセルした場合、Orca は開いたままとなり、ターミナルも保持されます。SSH と WSL の権限は引き続き各ホストで管理されます。",
+        "administratorRestartCanceled": "Windows の承認がキャンセルされました。Orca とそのターミナルは引き続き実行中です。"
       },
       "limit": {
         "label": "実行中のターミナルの上限",

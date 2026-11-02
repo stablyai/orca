@@ -24,7 +24,8 @@ export type AppApi = {
   /** Local Windows desktop elevation; null when unavailable. Does not describe remote hosts. */
   getWindowsAdministratorStatus: () => Promise<boolean | null>
   /** Restarts the installed Windows desktop with administrator approval and replaces its local terminal host. */
-  restartAsAdministrator: () => Promise<void>
+  /** False when the Windows approval prompt was canceled; Orca keeps running. */
+  restartAsAdministrator: () => Promise<boolean>
   /** Append filenames to this base: Vite /@fs in dev, file:// resources when packaged. */
   getFeatureWallAssetBaseUrl: () => Promise<string>
   /** Uses app.exit(0), bypassing normal quit handling. */
