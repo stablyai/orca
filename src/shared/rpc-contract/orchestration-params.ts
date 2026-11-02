@@ -111,6 +111,11 @@ export const SessionAddressParams = z.object({
   sessionId: requiredString('Missing sessionId')
 })
 
+export const SessionChildrenParams = SessionAddressParams.extend({
+  dispatchId: z.string().min(1).optional(),
+  cursor: z.string().min(1).optional()
+})
+
 /** Resolve earlier-run mailbox handles through the message’s recorded sender pane. */
 export const PartyLocationParams = z.object({
   address: requiredString('Missing address'),

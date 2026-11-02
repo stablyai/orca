@@ -138,13 +138,23 @@ describe('MobileNativeChatBackgroundTasks', () => {
     )
   }
 
-  it('draws nothing while no child work runs', () => {
+  it('draws nothing without child work', () => {
     expect(mount(tasksFor(null)).toJSON()).toBeNull()
-    expect(
-      mount(
-        tasksFor({ state: 'monitoring', settledTasks: [{ id: 'old', kind: 'agent' }] })
-      ).toJSON()
-    ).toBeNull()
+  })
+
+  it('retains completed child work in the expandable history without Stop controls', () => {
+    const mounted = mount(
+      tasksFor({
+        state: 'monitoring',
+        settledTasks: [{ id: 'old', kind: 'agent', description: 'Completed review' }]
+      })
+    )
+    expect(header(mounted).props.accessibilityLabel).toBe('1 agent — done')
+    expand(mounted)
+    const rows = mounted.root.findAll((node) => node.props.testID === 'background-task-row')
+    expect(rows).toHaveLength(1)
+    expect(textOf(rows[0]!)).toContain('Completed review')
+    expect(stopButtons(mounted)).toHaveLength(0)
   })
 
   it('counts by kind on a wide strip and drops to a total once narrow', () => {

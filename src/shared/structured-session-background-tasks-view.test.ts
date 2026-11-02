@@ -50,12 +50,28 @@ describe('structuredSessionBackgroundTasksView', () => {
     expect(shown).toMatchObject({ show: true, tasks: [tasks[1]], children: [agent] })
   })
 
-  it('shows finished children until the next turn, but they hold nothing open', () => {
-    const finished = structuredSessionBackgroundTasksView(
-      { state: 'monitoring', children: [view('settled')] },
-      null
-    )
-    expect(finished).toMatchObject({ show: true, isMonitoring: false, children: [view('settled')] })
+  it.each(['done', 'idle', 'blocked', 'unverifiable'] as const)(
+    'retains settled agents with display state %s without treating them as live work',
+    (state) => {
+      const child = { ...view('settled'), state }
+      const finished = structuredSessionBackgroundTasksView(
+        { state: 'monitoring', children: [child] },
+        null
+      )
+      expect(finished).toMatchObject({
+        show: true,
+        isMonitoring: false,
+        offersStopAll: false,
+        children: [child]
+      })
+    }
+  )
+
+  it('keeps lost contact with a still-live child active', () => {
+    const child = { ...view('live'), state: 'unverifiable' as const }
+    expect(
+      structuredSessionBackgroundTasksView({ state: 'monitoring', children: [child] }, null)
+    ).toMatchObject({ show: true, isMonitoring: true, offersStopAll: true })
   })
 
   // Unrecorded work keeps the strip visible; commands/rewind still follow listed records as host admission does.
@@ -77,15 +93,15 @@ describe('structuredSessionBackgroundTasksView', () => {
     expect(structuredSessionBackgroundTasksView(roster, 'turn-1').isMonitoring).toBe(false)
   })
 
-  it("shows an older host's running tasks only, and nothing once only finished ones are left", () => {
+  it("retains an older host's finished agents without claiming that they still run", () => {
     const tasks = [{ id: 'task-1', kind: 'agent' as const }]
     const settledTasks = [{ id: 'task-2', kind: 'agent' as const }]
     expect(
       structuredSessionBackgroundTasksView({ state: 'monitoring', tasks, settledTasks }, null)
-    ).toMatchObject({ show: true, isMonitoring: true, tasks, settledTasks: [] })
+    ).toMatchObject({ show: true, isMonitoring: true, tasks, settledTasks })
     expect(
       structuredSessionBackgroundTasksView({ state: 'monitoring', settledTasks }, null)
-    ).toMatchObject({ show: false, isMonitoring: false })
+    ).toMatchObject({ show: true, isMonitoring: false, offersStopAll: false, settledTasks })
     // A host that reports state only still says something runs.
     expect(structuredSessionBackgroundTasksView({ state: 'monitoring' }, null).show).toBe(true)
   })
