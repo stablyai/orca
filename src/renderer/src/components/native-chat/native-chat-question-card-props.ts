@@ -1,7 +1,7 @@
 import type { RefObject } from 'react'
 import type { AskAnswerSelection } from '../../../../shared/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../shared/native-chat/input/native-chat-ask-types'
-import type { AgentJournalFreeTextInput } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalFreeTextInput } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 export type NativeChatQuestionCardProps = {
   prompt: AskPrompt
