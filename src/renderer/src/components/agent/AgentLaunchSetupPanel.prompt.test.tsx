@@ -4,12 +4,17 @@ import {
   agentPickerLaunchInputs,
   type AgentPickerEntry
 } from '../../../../shared/agent-launch-picker'
-import { entry, host, root, onUse } from './agent-launch-setup-panel-test-fixture'
+import {
+  AgentLaunchSetupPanel,
+  entry,
+  host,
+  root,
+  onUse
+} from './agent-launch-setup-panel-test-fixture'
 import { act } from 'react'
 import { fireEvent, getByRole, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { AgentLaunchSetupPanel } from './agent-launch-setup-panel-test-fixture'
 import { i18n } from '@/i18n/i18n'
 import de from '../../i18n/locales/de.json'
 import { readLaunchSetupOptions } from '../native-chat/native-chat-launch-draft-source'
