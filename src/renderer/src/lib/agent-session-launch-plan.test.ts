@@ -23,6 +23,7 @@ vi.mock('@/lib/structured-agent-launch-settlement', () => ({
 
 import { planAgentSessionLaunch } from './agent-session-launch-plan'
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the planner reads only settings and repos off the store, and routing inputs are mocked.
 const store = { settings: {} } as unknown as AgentLaunchRouteStore
 const ROUTE_INPUT = { agent: 'codex', executionHostId: 'local' }
 
