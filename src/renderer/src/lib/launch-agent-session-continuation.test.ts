@@ -209,3 +209,22 @@ it('keeps the handoff open, without a message, when the declined chat’s termin
   expect(toast.error).not.toHaveBeenCalled()
   expect(toast.success).not.toHaveBeenCalled()
 })
+
+it('starts nothing when the dialog closed while detection was still running', async () => {
+  const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
+  const detected = Promise.withResolvers<string[]>()
+  ensureDetectedAgentsForWorktree.mockReturnValueOnce(detected.promise)
+  launchAgentInNewTab.mockClear()
+  const abort = new AbortController()
+  const pending = launchAgentSessionContinuation({
+    agent: 'claude',
+    prompt: 'continue',
+    worktreeId: 'wt-1',
+    launchSource: 'sidebar',
+    signal: abort.signal
+  })
+  abort.abort()
+  detected.resolve(['claude'])
+  await expect(pending).resolves.toBe(false)
+  expect(launchAgentInNewTab).not.toHaveBeenCalled()
+})

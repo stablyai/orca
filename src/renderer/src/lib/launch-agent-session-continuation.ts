@@ -150,7 +150,8 @@ export async function launchAgentSessionContinuation({
   const plan = launchChoice
     ? adoptAgentSessionLaunchVerdict({ ...request, ...launchChoice, worktreeId })
     : planAgentSessionLaunch(useAppStore.getState(), request)
-  if (!(await ensureAgentAvailable(agent, worktreeId, plan.route, signal))) {
+  // A dialog closed while detection ran must not start the session the user just left.
+  if (!(await ensureAgentAvailable(agent, worktreeId, plan.route, signal)) || signal?.aborted) {
     return false
   }
   const state = useAppStore.getState()

@@ -312,3 +312,50 @@ it('explains an empty host inventory when the enabled agent has no chat preferen
   fireEvent.click(start)
   expect(mocks.launch).not.toHaveBeenCalled()
 })
+
+it.each(['Cancel', 'Escape'] as const)(
+  'closes on %s while Start is pending and leaves the sent launch to settle',
+  async (dismiss) => {
+    const pending = Promise.withResolvers<boolean>()
+    mocks.launch.mockReturnValueOnce(pending.promise)
+    const props = { request, onOpenChange: vi.fn(), onStarted: vi.fn() }
+    const view = render(<AgentSessionContinuationDialog open {...props} />, {
+      wrapper: TooltipProvider
+    })
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Start New Session' }))
+    )
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Starting…' }).disabled).toBe(true)
+    if (dismiss === 'Cancel') {
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    } else {
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    }
+    expect(props.onOpenChange).toHaveBeenCalledExactlyOnceWith(false)
+    view.rerender(<AgentSessionContinuationDialog open={false} {...props} />)
+    await act(async () => pending.resolve(true))
+    expect(mocks.launch).toHaveBeenCalledOnce()
+    expect(props.onOpenChange).toHaveBeenCalledOnce()
+    expect(props.onStarted).not.toHaveBeenCalled()
+    view.unmount()
+  }
+)
+
+it('leaves a dialog reopened for another request alone when the earlier start succeeds late', async () => {
+  const pending = Promise.withResolvers<boolean>()
+  mocks.launch.mockReturnValueOnce(pending.promise)
+  const props = { onOpenChange: vi.fn(), onStarted: vi.fn() }
+  const view = render(<AgentSessionContinuationDialog open request={request} {...props} />, {
+    wrapper: TooltipProvider
+  })
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
+  view.rerender(<AgentSessionContinuationDialog open={false} request={request} {...props} />)
+  view.rerender(<AgentSessionContinuationDialog open request={{ ...request }} {...props} />)
+  await act(async () => pending.resolve(true))
+  expect(screen.getByRole('dialog')).toBeTruthy()
+  expect(props.onOpenChange).not.toHaveBeenCalled()
+  expect(props.onStarted).not.toHaveBeenCalled()
+  expect(
+    screen.getByRole<HTMLButtonElement>('button', { name: 'Start New Session' }).disabled
+  ).toBe(false)
+})
