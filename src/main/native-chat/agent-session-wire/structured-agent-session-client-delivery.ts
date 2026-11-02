@@ -68,7 +68,8 @@ export class StructuredAgentSessionClientDelivery {
     private readonly publications?: Pick<
       StructuredAgentSessionConversations,
       'publish' | 'endPublications'
-    >
+    >,
+    readUsageLimitContinue?: (id: string) => AgentSessionStatusSummary['usageLimitContinue']
   ) {
     this.requestFailures = createStructuredAgentSessionHostRequestFailures(sessions, deps)
     this.savedStatus = new StructuredAgentSessionSavedStatus(deps)
@@ -80,7 +81,8 @@ export class StructuredAgentSessionClientDelivery {
       currentWork: (sessionId, journal) => this.currentWork(sessionId, journal),
       deps,
       onAgentStarted,
-      onChildWorkChanged
+      onChildWorkChanged,
+      readUsageLimitContinue
     })
     this.turnCompletionFeed = new StructuredAgentSessionTurnCompletionFeed({
       sessions,
@@ -164,6 +166,8 @@ export class StructuredAgentSessionClientDelivery {
         : {})
     }
   }
+
+  readUsageLimitCut = (id: string) => this.statusFeed.journalProjection(id)?.usageLimitCut ?? null
 
   drainStatusWrites = (): Promise<void> => this.savedStatus.drain()
 

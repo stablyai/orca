@@ -65,8 +65,14 @@ import { registerWslMoveHandlers } from './wsl-move-handlers'
 import { registerWslMoveOrchestrator } from './wsl-move-orchestrator-wiring'
 import { createWslMoveUndoPorts } from './wsl-move-undo-wiring'
 import { connectWslMoveHostService, type WslMoveHostConnectMode } from './wsl-move-host-connect'
-import { wslMoveReloadableWindow } from './wsl-move-reloadable-window'
-import { setWslMoveReloadableWindow } from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
+import {
+  leaveSettingsForWslMoveReload,
+  wslMoveReloadableWindow
+} from './wsl-move-reloadable-window'
+import {
+  setWslMoveReloadLanding,
+  setWslMoveReloadableWindow
+} from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
 import {
   commitRemoteOrcadMigrationCatalog,
   listRemoteOrcadRepositories,
@@ -88,6 +94,7 @@ export function registerWslMoveWiring(store: Store, runtime: OrcaRuntimeService)
     const contents = getTrustedUIRendererWebContents()
     return contents && wslMoveReloadableWindow(contents)
   })
+  setWslMoveReloadLanding(() => leaveSettingsForWslMoveReload(store))
   registerWslMoveHandlers(
     () => app.getPath('userData'),
     (senderId) => getTrustedUIRendererWebContents()?.id === senderId,

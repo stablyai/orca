@@ -175,6 +175,11 @@ export type StructuredAgentSessionHostDeps = {
   resolveWorkspacePath?: (workspaceId: string) => Promise<string>
   now?: () => number
   idleSweep?: { intervalMs?: number; idleMs?: number }
+  usageLimitAutoContinue?: {
+    isEnabled: () => boolean
+    subscribe: (changed: () => void) => () => void
+    isWorkspaceAsleep: (workspaceId: string) => boolean
+  }
   startupLimits?: Partial<StructuredAgentSessionStartupLimits>
   /** Absent means no dispatch ownership. */
   hasOpenDispatch?: (

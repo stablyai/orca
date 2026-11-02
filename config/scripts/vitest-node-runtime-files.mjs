@@ -118,8 +118,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/**/*expiry*.test.ts',
   'src/renderer/src/lib/flatten-retained-slice.test.ts',
   'src/shared/own-retained-string.test.ts',
-  // Times V8 string flattening, which is what Electron main runs.
-  'src/main/runtime/terminal-tail-redraw-wall-time.test.ts',
   'src/main/agent-hooks/server-transport-interference.test.ts',
   'src/main/plugins/workers/plugin-worker-supervision.integration.test.ts',
   'src/main/plugins/workers/plugin-worker-dev-restart-storage.integration.test.ts',

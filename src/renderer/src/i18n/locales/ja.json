@@ -171,7 +171,7 @@
         "inheritFont": "IDE と同じフォント",
         "fontPreviewLabel": "チャットフォントのプレビュー",
         "fontPreview": "この文章でチャットのフォントを確認できます。",
-        "title": "チャット",
+        "title": "チャット UI",
         "textSize": "テキストサイズ",
         "textSizeDescription": "メッセージ、ツールの動作、メッセージ入力欄。チャット内の {{increase}} / {{decrease}} でも変更できます。",
         "codeTextSize": "コードのテキストサイズ",
@@ -7436,7 +7436,6 @@
           "9d3e56ca36": "変更を適用する",
           "f96688b6bc": "キャンセル",
           "b7ddae600c": "完了",
-          "e4bda7ce6f": "このシステムには Ghostty 構成が見つかりません。",
           "b58d4c9051": "サポートされていないキー",
           "674b5ccd6b": "インポートする新規設定はありません。現在の設定はすでに一致しています。",
           "a4c5dec640": "更新する設定",
@@ -19306,6 +19305,13 @@
         "switchAccount": "アカウントを切り替え",
         "addAccount": "アカウントを追加…",
         "accountUnavailable": "このチャットは別のアカウントに移せません。別の Agent に引き継いでください。"
+      },
+      "usageLimitAutoContinue": {
+        "cancelFailed": "自動続行をキャンセルできませんでした。もう一度お試しください。",
+        "openSetting": "上限がリセットされたら自動的に続ける",
+        "cancelled": "Orca はこのチャットを自動的には続けません。",
+        "scheduled": "Orca は {{time}} にこのチャットを続けます。",
+        "cancel": "続けない"
       }
     },
     "tab": {
@@ -19699,7 +19705,12 @@
         "queueSearchSteer": "今すぐ送信",
         "shellEnvSearchVariables": "環境変数",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "プロキシ"
+        "shellEnvSearchProxy": "プロキシ",
+        "usageLimitContinueTitle": "使用量の上限がリセットされたらチャットを自動的に続ける",
+        "usageLimitContinueCopy": "上限がリセットされると、Orca が「Continue where you left off.」を送信します。リセット時刻がわかっているすべてのチャットに適用されます。",
+        "usageLimitContinueSearchLimit": "使用量の上限",
+        "usageLimitContinueSearchReset": "リセット",
+        "usageLimitContinueToggleLabel": "使用量の上限リセット時にチャットを続けるかを切り替える"
       }
     },
     "agentChildRow": {
@@ -20321,7 +20332,10 @@
       "title": "{{distro}} をホストとして実行（推奨）",
       "why": "Git、ファイル、ターミナルが Windows のファイル共有を経由せず、Linux 上でネイティブに動作します。",
       "accept": "ホストとして実行",
-      "projectNotFound": "移動する追加済みのプロジェクトが見つかりませんでした。サイドバーのプロジェクトで「{{distro}} ホストへ移動…」を使用してください。"
+      "projectNotFound": "移動する追加済みのプロジェクトが見つかりませんでした。サイドバーのプロジェクトで「{{distro}} ホストへ移動…」を使用してください。",
+      "existingTitle": "{{distro}} ホストに追加（推奨）",
+      "existingWhy": "{{distro}} はすでにホストとして実行中のため、Git、ファイル、ターミナルが Windows のファイル共有を経由せず、Linux 上でネイティブに動作します。",
+      "existingAccept": "ホストに追加"
     }
   },
   "editor": {
@@ -22300,7 +22314,9 @@
     "toggleArguments": "引数の表示を切り替え",
     "argumentsTerminalHint": "ターミナル（CLI）からの起動にのみ適用",
     "searchAgentModels": "{{agent}} のモデルを検索…",
-    "legacyModelCount": "{{total}} 個のモデル"
+    "legacyModelCount": "{{total}} 個のモデル",
+    "promptPlaceholder": "プロンプトを追加 (オプション): / でスキル、@ でファイル",
+    "promptPlaceholderFilesOnly": "プロンプトを追加 (オプション): @ でファイル"
   },
   "wslMove": {
     "entry": {
@@ -22330,7 +22346,8 @@
       "changed": "以前に移動した後、古いバージョンの Orca によってここで変更されました。再び移動されることはありません。",
       "chatsStay": "既存のチャットはこのコンピューターに残ります。このプロジェクトの新しいチャットは WSL ホストで開始されます。",
       "browserLoginsConflict": "ホストのブラウザープロファイルがすでに使用中のため、ブラウザーのサインイン状態は引き継がれません。移動後、ホストのブラウザータブで再度サインインしてください。",
-      "browserLoginsNotCarried": "ブラウザーのサインイン状態はこのホストに引き継がれません。移動後、そのブラウザータブで再度サインインしてください。"
+      "browserLoginsNotCarried": "ブラウザーのサインイン状態はこのホストに引き継がれません。移動後、そのブラウザータブで再度サインインしてください。",
+      "why": "作業はファイルと同じ Linux 内で実行されるため、ターミナル、Git、ファイルの変更がより速く安定します。プロジェクトは変わらず、「このコンピューターで再び使用」でいつでも元に戻せます。"
     },
     "cancel": "キャンセル",
     "progress": {
