@@ -37,6 +37,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     handleCompleteMerge,
     handleContextMenu,
     handleOpenDiff,
+    handleOpenWorkingTreeFile,
     handleResolveConflictsWithAI,
     handleSelect,
     handleResolveConflict,
@@ -189,6 +190,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           revealInExplorer={revealInExplorer}
           activeConnectionId={activeConnectionId}
           handleOpenDiff={handleOpenDiff}
+          handleOpenWorkingTreeFile={handleOpenWorkingTreeFile}
           handleStage={handleStage}
           handleResolveConflict={handleResolveConflict}
           handleUnstage={handleUnstage}
