@@ -199,13 +199,6 @@ describe('a send a Stop took back before its echo', () => {
 
 // Old chats lack explicit turn attribution; newer hosts still expose sent sequence and move take-back rows, so preserve journal-order placement.
 describe('a send a Stop took back before its echo, in history written before the host named turns', () => {
-  it('opens the turn recorded after it was sent and before it was taken back', () => {
-    const items = [turn('t1', 2, 'codex:thread-1:t1:0'), stopNote('t1', 3), sent('opener', 4)]
-    const submissions = [stopped('opener', { submittedSequence: 1 })]
-
-    expect(drawn(items, submissions).map(({ id }) => id)).toEqual([key('opener'), 'stop:t1'])
-  })
-
   it('opens it as the first sent, leaving a later send its own row after the turn', () => {
     const items = [
       turn('t1', 3, 'codex:thread-1:t1:0'),

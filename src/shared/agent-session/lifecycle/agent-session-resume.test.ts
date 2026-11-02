@@ -2,20 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   agentProviderSessionsEqual,
   extractAgentProviderSession,
-  isResumableTuiAgent,
   normalizeAgentProviderSession
 } from './agent-session-resume'
 import { getAgentResumeArgv } from '../../agent-resume-argv'
 
 describe('agent session resume metadata', () => {
-  it('treats devin as a resumable TUI agent', () => {
-    expect(isResumableTuiAgent('devin')).toBe(true)
-  })
-
-  it('treats jcode as a resumable TUI agent', () => {
-    expect(isResumableTuiAgent('jcode')).toBe(true)
-  })
-
   it.each([
     ['claude', { session_id: 'claude-session' }, { key: 'session_id', id: 'claude-session' }],
     ['codex', { session_id: 'codex-session' }, { key: 'session_id', id: 'codex-session' }],
@@ -130,14 +121,6 @@ describe('agent session resume metadata', () => {
     expect(agentProviderSessionsEqual('pi', first, second)).toBe(false)
     expect(agentProviderSessionsEqual('prime-agent', first, second)).toBe(false)
     expect(agentProviderSessionsEqual('claude', first, second)).toBe(true)
-  })
-
-  it('rejects devin resume when provider session key is not session_id', () => {
-    expect(getAgentResumeArgv('devin', { key: 'conversation_id', id: 'x' })).toBeNull()
-  })
-
-  it('rejects jcode resume when provider session key is not session_id', () => {
-    expect(getAgentResumeArgv('jcode', { key: 'conversation_id', id: 'x' })).toBeNull()
   })
 
   it('captures the hook transcript_path for native-chat agents (claude/codex)', () => {

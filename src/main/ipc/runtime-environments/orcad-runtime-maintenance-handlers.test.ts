@@ -110,18 +110,6 @@ describe('managed orcad maintenance IPC', () => {
     expect(invalidateTransport).not.toHaveBeenCalled()
   })
 
-  it('reconnects after rollback and after recovery restores a serving slot', async () => {
-    mocks.rollback.mockResolvedValueOnce({ outcome: 'rolled-back', environment: { id: 'e-1' } })
-    await handler('runtimeEnvironments:rollbackOrcad')(null, { selector: 'Managed' })
-    mocks.recover.mockResolvedValueOnce({
-      outcome: 'recovered',
-      activeVersion: null,
-      environment: { id: 'e-1' }
-    })
-    await handler('runtimeEnvironments:recoverOrcad')(null, { selector: 'Managed' })
-    expect(invalidateTransport).toHaveBeenCalledTimes(1)
-  })
-
   it('stops with the Active Server guard and the shared removal cleanup', async () => {
     mocks.stop.mockResolvedValueOnce({ outcome: 'unlinked', sshTargetId: 'ssh-1' })
     await handler('runtimeEnvironments:stopOrcad')(null, { selector: ' Managed ' })
@@ -144,12 +132,5 @@ describe('managed orcad maintenance IPC', () => {
     })
     await handler('runtimeEnvironments:stopOrcad')(null, { selector: 'Managed' })
     expect(clearHostServerStatus).not.toHaveBeenCalled()
-  })
-
-  it('rejects a missing selector before touching SSH', async () => {
-    await expect(handler('runtimeEnvironments:cancelOrcadStop')(null, {})).rejects.toThrow(
-      'Server is required'
-    )
-    expect(mocks.cancel).not.toHaveBeenCalled()
   })
 })

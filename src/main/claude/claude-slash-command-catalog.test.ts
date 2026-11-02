@@ -264,3 +264,61 @@ it('reports a description-only change and lets a later report drop the text', ()
   expect(catalog.observe({ ...changed, commands: [{ name: 'clear' }] })).toBe(true)
   expect(catalog.commands).toEqual([{ name: 'clear', kind: 'command' }])
 })
+
+// Claude 2.1.310 initialize rows; a user skill named goal replaces the built-in row, unmarked.
+const BUILTIN_GOAL = {
+  name: 'goal',
+  description: 'Set a goal — keep working until the condition is met',
+  argumentHint: '',
+  builtin: true
+}
+const BUILTIN_CLEAR = {
+  name: 'clear',
+  description: 'Start a new session with empty context',
+  argumentHint: '[name]',
+  aliases: ['reset', 'new'],
+  builtin: true
+}
+const SKILL_GOAL = {
+  name: 'goal',
+  description: 'Project goal tracker skill (user)',
+  argumentHint: ''
+}
+
+it('marks only the rows Claude reports as its own built-ins', () => {
+  const marked = (commands: unknown[]) =>
+    new ClaudeSlashCommandCatalog(undefined, { commands }).commands?.map(
+      ({ name, builtin }) => `${name}:${builtin === true}`
+    )
+  expect(marked([BUILTIN_CLEAR, BUILTIN_GOAL])).toEqual(['clear:true', 'goal:true'])
+  expect(marked([SKILL_GOAL, BUILTIN_CLEAR])).toEqual(['goal:false', 'clear:true'])
+  expect(marked([BUILTIN_GOAL, SKILL_GOAL])).toEqual(['goal:false'])
+})
+
+it('keeps the built-in mark through stream classification and re-derives it on replacement', () => {
+  const catalog = new ClaudeSlashCommandCatalog(undefined, {
+    commands: [BUILTIN_CLEAR, BUILTIN_GOAL]
+  })
+  const goal = () => catalog.commands?.find((entry) => entry.name === 'goal')
+  expect(goal()).toMatchObject({ kind: 'command', kindUnspecified: true, builtin: true })
+  catalog.observe(init({ slash_commands: ['clear', 'goal'], skills: [] }))
+  expect(goal()).toEqual({
+    name: 'goal',
+    kind: 'command',
+    description: BUILTIN_GOAL.description,
+    builtin: true
+  })
+  const reload = { type: 'system', subtype: 'commands_changed' }
+  expect(catalog.observe({ ...reload, commands: [BUILTIN_CLEAR, BUILTIN_GOAL] })).toBe(false)
+  expect(catalog.observe({ ...reload, slash_commands: ['clear', 'goal'], skills: ['goal'] })).toBe(
+    true
+  )
+  expect(goal()).toMatchObject({ kind: 'skill' })
+  expect(goal()?.builtin).toBeUndefined()
+  catalog.observe(init({ slash_commands: ['clear', 'goal'], skills: [] }))
+  expect(goal()?.builtin).toBe(true)
+  expect(catalog.observe({ ...reload, commands: [BUILTIN_CLEAR, SKILL_GOAL] })).toBe(true)
+  expect(goal()?.builtin).toBeUndefined()
+  catalog.observe({ ...reload, commands: [BUILTIN_CLEAR] })
+  expect(goal()).toBeUndefined()
+})

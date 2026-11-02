@@ -31,7 +31,7 @@ it.each([
   '.github/actions/prepare-native-runtime/action.yml',
   '.github/actions/prepare-orcad-prebuilds/action.yml',
   'src/main/ssh/ssh-provider.ts',
-  'src/main/providers/local-pty-provider.ts',
+  'src/main/providers/local-pty/local-pty-provider.ts',
   'src/packages/process-host/src/run-process.ts',
   'src/packages/process-host/src/growing-byte-buffer.ts',
   'src/packages/process-host/package.json',

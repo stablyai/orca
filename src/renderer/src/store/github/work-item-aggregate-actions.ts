@@ -121,6 +121,7 @@ export const createWorkItemAggregateActions = (
           r.path,
           r.sourceContext
         )
+        const binding = requestState.githubTaskCache.capture(repo, r.sourceContext)
         await acquireWorkItemSlot()
         try {
           const envelope = await listGitHubWorkItemsForRepo(requestContext, {
@@ -154,11 +155,12 @@ export const createWorkItemAggregateActions = (
             r.path,
             r.sourceContext
           )
-          return envelope.items.map((item): GitHubWorkItem => ({
+          const items = envelope.items.map((item): GitHubWorkItem => ({
             ...item,
             repoId: r.repoId,
             ...(repoHostId ? { repoHostId } : {})
           }))
+          return get().githubTaskCache.acceptSearch(items, binding)
         } catch (err) {
           if (isGitHubWorkItemsSshRemoteRequiredError(err)) {
             if (options?.requireComplete) {
