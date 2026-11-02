@@ -33,6 +33,11 @@ import { captureOpenEditor } from './plugin-view-editor-capture'
 import { planEditorShotCleanup, runEditorShotCleanup } from './plugin-view-editor-shot-cleanup'
 import { captureChrome } from './plugin-view-chrome-capture'
 import { pickWorkspaceToShow } from './plugin-view-workspace-pick'
+import {
+  openFolderWorkspace,
+  openWorkspaceFile,
+  runBuiltInAction
+} from './plugin-view-host-actions'
 
 type Failure = Extract<PluginViewReply, { ok: false }>
 
@@ -226,6 +231,12 @@ export async function handlePluginViewRequest(
         return await replayPluginPanel(request)
       case 'capture-chrome':
         return await captureChrome(request)
+      case 'open-file':
+        return openWorkspaceFile(request)
+      case 'run-action':
+        return runBuiltInAction(request)
+      case 'open-folder-workspace':
+        return openFolderWorkspace(request)
       case 'end-capture': {
         endPluginShotReplay()
         usePluginViewCaptureStore.getState().end(request.captureId)

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { useEffect } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
@@ -16,6 +17,7 @@ import {
 } from '@/lib/worktree-activation-created-agent.test-fixture'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { registerNativeChatPane } from '@/components/native-chat/native-chat-composer-mount'
 import { AppWorkspaceShell } from './AppWorkspaceShell'
 import { useAppChromeLayout } from './use-app-chrome-layout'
 import { useFloatingWorkspacePanel } from './use-floating-workspace-panel'
@@ -52,6 +54,16 @@ vi.mock('@/components/native-chat/NativeChatComposer', () => ({
 }))
 vi.mock('../components/Terminal', () => ({
   default: function CreatedChatPane() {
+    const chatTabId = useAppStore((s) =>
+      Object.values(s.unifiedTabsByWorktree)
+        .flat()
+        .find((tab) => tab.contentType === 'agent-session')
+    )?.id
+    // Like the real chat pane, report actionable so handoff need not wait out its fallback.
+    useEffect(
+      () => (chatTabId ? registerNativeChatPane(chatTabId, () => true) : undefined),
+      [chatTabId]
+    )
     const hasChat = useAppStore((s) =>
       (s.unifiedTabsByWorktree[s.activeWorktreeId ?? ''] ?? []).some(
         (tab) => tab.contentType === 'agent-session'
