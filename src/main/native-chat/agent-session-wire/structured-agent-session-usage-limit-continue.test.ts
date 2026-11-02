@@ -329,3 +329,21 @@ it('omits automatic scheduling presentation when the reported reset is stale', a
   const { sweep } = await setup(true)
   expect(sweep.readState(SESSION)).toBeUndefined()
 })
+
+it.each([
+  ['just under a day', 24 * 60 * 60_000 - 1_000, 'scheduled', 1],
+  ['more than a day', 24 * 60 * 60_000 + 1_000, 'off', 0]
+] as const)(
+  'continues a limit whose reset passed %s ago only within a day',
+  async (_age, overdue, state, sends) => {
+    const { current, sweep, resetsAt } = await setup()
+    const send = vi.spyOn(current.host, 'send')
+    current.clock.now = resetsAt + overdue
+    current.host.publishWorkChanged(SESSION)
+    // The row shows the usual manual actions with no scheduled line once it is past the bound.
+    expect(current.host.readStatusSummary(SESSION)?.usageLimitContinue?.state).toBe(state)
+    await sweep.tick()
+    await sweep.tick()
+    expect(send).toHaveBeenCalledTimes(sends)
+  }
+)

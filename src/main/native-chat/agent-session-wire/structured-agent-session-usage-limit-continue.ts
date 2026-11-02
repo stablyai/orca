@@ -16,6 +16,8 @@ import type { sendStructuredAgentSessionTurn } from './structured-agent-session-
 import { RestartContinuationSupersededError } from './structured-agent-session-restart-continuation'
 
 type Cut = NativeChatUsageLimitCut & { resetsAt: number; turnEndedAt: number }
+// A limit whose reset passed more than a day ago is old work: it stays manual, never sent unasked.
+const MAX_OVERDUE_MS = 24 * 60 * 60 * 1000
 type Attempt = { identity: string; count: number; at: number; unconfirmed?: boolean }
 type Deps = {
   host: Pick<StructuredAgentSessionHostDeps, 'usageLimitAutoContinue' | 'logger'> & {
@@ -170,6 +172,7 @@ export class StructuredAgentSessionUsageLimitContinue {
       Number.isFinite(cut.resetsAt) &&
       cut.turnEndedAt !== undefined &&
       cut.resetsAt > cut.turnEndedAt &&
+      this.deps.now() - cut.resetsAt <= MAX_OVERDUE_MS &&
       record !== null &&
       record.location.executionHostId === this.deps.host.store.hostId &&
       !this.deps.host.usageLimitAutoContinue?.isWorkspaceAsleep(record.location.workspaceId) &&
