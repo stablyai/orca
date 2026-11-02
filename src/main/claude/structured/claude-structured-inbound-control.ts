@@ -107,6 +107,8 @@ export function claudeLaunchPermissions(
   launch: Pick<ClaudeStructuredLaunch, 'options' | 'providerSessionId'>
 ): {
   handlers: Pick<ClaudeStreamJsonConnectionHandlers, 'canUseTool' | 'onUserDialog' | 'onStdout'>
+  /** Claude's mode in wire order; null without Full access, whose launches read no stdout. */
+  orderedMode: (() => string | null | undefined) | null
   close: () => void
 } {
   const policy = claudeLaunchSkipsPermissions(launch.options)
@@ -118,6 +120,7 @@ export function claudeLaunchPermissions(
   })
   return {
     handlers: { ...callbacks, ...(policy ? { onStdout: policy.observe } : {}) },
+    orderedMode: policy ? policy.mode : null,
     close: () => policy?.close()
   }
 }

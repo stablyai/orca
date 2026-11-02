@@ -256,12 +256,15 @@ async function outcome(request: ReturnType<typeof askFor>): Promise<unknown> {
 }
 
 /** One stdout chunk, then each request in it, as the SDK asks only after reading the whole chunk. */
-async function overWire(connection: FakeConnection, wire: WireItem[]) {
+function writeWire(connection: FakeConnection, wire: WireItem[]) {
   connection.handlers.onStdout?.(wire.map((frame) => `${JSON.stringify(frame)}\n`).join(''))
-  const asked = wire.flatMap((frame) =>
+  return wire.flatMap((frame) =>
     frame.type === 'control_request' ? [askFor(connection, String(frame.request_id))] : []
   )
-  return Promise.all(asked.map(outcome))
+}
+
+function overWire(connection: FakeConnection, wire: WireItem[]) {
+  return Promise.all(writeWire(connection, wire).map(outcome))
 }
 
 function cards(events: ClaudeStructuredSessionEvent[]): string[] {
@@ -300,9 +303,11 @@ describe('Full access through a Claude process', () => {
     const events: ClaudeStructuredSessionEvent[] = []
     let early: ReturnType<typeof askFor> | undefined
     const connection = await acquireWith('full-access', events, (opened) => {
-      early = askFor(opened, 'before-publish')
+      early = writeWire(opened, [ask('before-publish')])[0]
     })
     await expect(outcome(early!)).resolves.toEqual(allowed('before-publish'))
+    // A request Orca never saw on stdout has no position to inherit Full access from.
+    await expect(outcome(askFor(connection, 'unseen'))).resolves.toBe('card')
 
     const table: [string, WireItem[], unknown[]][] = [
       ['before any report', [ask('first')], [allowed('first')]],
@@ -335,6 +340,7 @@ describe('Full access through a Claude process', () => {
       expect(await overWire(connection, wire), label).toEqual(expected)
     }
     expect(cards(events)).toEqual([
+      'unseen',
       'default',
       'absent',
       'in-plan',

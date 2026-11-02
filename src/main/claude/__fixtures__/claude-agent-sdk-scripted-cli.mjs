@@ -112,7 +112,13 @@ createInterface({ input: process.stdin }).on('line', (line) => {
         response: scenario.controlResponses?.[frame.request?.subtype] ?? {
           commands: [],
           models: []
-        }
+        },
+        // Requests the CLI resends to a client that (re)initializes while they wait.
+        ...(scenario.pendingPermissionRequests?.[frame.request?.subtype]
+          ? {
+              pending_permission_requests: scenario.pendingPermissionRequests[frame.request.subtype]
+            }
+          : {})
       }
     }
     // Write leading frames and the control reply together to exercise SDK delivery reordering.

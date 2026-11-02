@@ -4,7 +4,6 @@ import { createClaudeFullAccessPolicy } from './claude-full-access-policy'
 
 const SESSION = '819cf9f8-e43c-4ad7-b50f-54aa158a726a'
 const CHUNK_BYTES = 1000
-const MAX_PENDING_REQUESTS = 256
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -61,11 +60,9 @@ it.each([300, 3000])('bounds stdout policy work over %i frames and one long line
 
   // Only mode reports and permission requests are parsed; deltas and the long line never are.
   expect(parses).toBe(expected.length * 2)
-  expect(policy.retained()).toEqual({
-    partialChars: 0,
-    requests: Math.min(expected.length, MAX_PENDING_REQUESTS)
-  })
-  for (const [requestId, fullAccess] of expected.slice(-MAX_PENDING_REQUESTS)) {
+  // Unread requests stay until the SDK hands each to canUseTool, however many queue up.
+  expect(policy.retained()).toEqual({ partialChars: 0, requests: expected.length })
+  for (const [requestId, fullAccess] of expected) {
     expect(policy.allows(requestId), requestId).toBe(fullAccess)
   }
   expect(policy.retained()).toEqual({ partialChars: 0, requests: 0 })

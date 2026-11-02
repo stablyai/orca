@@ -272,6 +272,7 @@ export async function acquireClaudeSession({
     session.reportedOptions = observedOptions
     liveSession = session
     session.firstRootInit = firstRootInit
+    session.orderedPermissionMode = permissions.orderedMode
     adoptClaudeStructuredSpawnOptions(session, {
       ...launch.savedOptions,
       sdkOptions: launch.options

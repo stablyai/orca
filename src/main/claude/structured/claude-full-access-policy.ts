@@ -5,14 +5,13 @@ import {
   readClaudeReportedPermissionMode
 } from './claude-structured-init-proof'
 
-/** Backstop for requests the SDK never hands to canUseTool; live asks number a handful. */
-const MAX_PENDING_REQUESTS = 256
-
 export type ClaudeFullAccessPolicy = {
   /** Each raw stdout chunk, no later than the SDK reads it. */
   observe: (chunk: Buffer | string) => void
   /** Whether Claude still ran in Full access where this request appeared on the wire. */
   allows: (requestId: string) => boolean
+  /** Claude's latest reported mode in wire order, decoded; undefined before its first report. */
+  mode: () => string | null | undefined
   close: () => void
   retained: () => { partialChars: number; requests: number }
 }
@@ -27,17 +26,32 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  *  so each request keeps the mode in effect at its own position in the stream. */
 export function createClaudeFullAccessPolicy(providerSessionId: string): ClaudeFullAccessPolicy {
   const decoder = new StringDecoder('utf8')
+  // Kept until the SDK hands the request to canUseTool or the process ends; a cancel still
+  // reaches the callback as an abort, so dropping its entry early would apply a later mode.
   const modeAtRequest = new Map<string, boolean>()
-  let fullAccess = true
+  let mode: string | null | undefined
+  let closed = false
   let partial = ''
+
+  const remember = (request: unknown): void => {
+    if (
+      !isRecord(request) ||
+      request.type !== 'control_request' ||
+      !isRecord(request.request) ||
+      request.request.subtype !== 'can_use_tool'
+    ) {
+      return
+    }
+    const requestId = readClaudeFrameString(request, 'request_id')
+    // A redelivered id keeps its first position.
+    if (requestId && !modeAtRequest.has(requestId)) {
+      modeAtRequest.set(requestId, mode === undefined || mode === 'full-access')
+    }
+  }
 
   const observeLine = (line: string): void => {
     // Each relevant key appears literally in its frame; anything else skips the parse.
-    if (
-      !line.includes('"permissionMode"') &&
-      !line.includes('"can_use_tool"') &&
-      !line.includes('"control_cancel_request"')
-    ) {
+    if (!line.includes('"permissionMode"') && !line.includes('"can_use_tool"')) {
       return
     }
     let frame: unknown
@@ -49,20 +63,15 @@ export function createClaudeFullAccessPolicy(providerSessionId: string): ClaudeF
     if (!isRecord(frame)) {
       return
     }
-    const requestId = readClaudeFrameString(frame, 'request_id')
     if (frame.type === 'control_request') {
-      if (requestId && isRecord(frame.request) && frame.request.subtype === 'can_use_tool') {
-        const oldest = modeAtRequest.keys().next()
-        if (modeAtRequest.size >= MAX_PENDING_REQUESTS && !oldest.done) {
-          modeAtRequest.delete(oldest.value)
-        }
-        modeAtRequest.set(requestId, fullAccess)
-      }
+      remember(frame)
       return
     }
-    if (frame.type === 'control_cancel_request') {
-      if (requestId) {
-        modeAtRequest.delete(requestId)
+    if (frame.type === 'control_response') {
+      // Initialize's reply resends requests still waiting for an answer.
+      const pending = isRecord(frame.response) ? frame.response.pending_permission_requests : null
+      for (const request of Array.isArray(pending) ? pending : []) {
+        remember(request)
       }
       return
     }
@@ -75,12 +84,15 @@ export function createClaudeFullAccessPolicy(providerSessionId: string): ClaudeF
     // Absent keeps the last report; plan, ask, dontAsk and unknown modes all suspend Full access.
     const reported = readClaudeReportedPermissionMode(frame)
     if (reported !== undefined) {
-      fullAccess = reported === 'full-access'
+      mode = reported
     }
   }
 
   return {
     observe: (chunk) => {
+      if (closed) {
+        return
+      }
       const text = typeof chunk === 'string' ? chunk : decoder.write(chunk)
       // Scan only the new text, so a line spanning many chunks costs its length once.
       let start = 0
@@ -94,10 +106,12 @@ export function createClaudeFullAccessPolicy(providerSessionId: string): ClaudeF
     allows: (requestId) => {
       const atRequest = modeAtRequest.get(requestId)
       modeAtRequest.delete(requestId)
-      return atRequest ?? fullAccess
+      // A request Orca never saw on the wire has no position, so it never inherits a later mode.
+      return atRequest ?? false
     },
+    mode: () => mode,
     close: () => {
-      fullAccess = false
+      closed = true
       partial = ''
       modeAtRequest.clear()
     },

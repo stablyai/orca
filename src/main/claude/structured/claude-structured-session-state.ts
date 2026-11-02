@@ -186,6 +186,8 @@ export type ClaudeSession = {
   /** What Orca put on this process's command line, and the first root init's answer; this process only. */
   launchIntent?: { permissionMode?: string; model?: string }
   firstRootInit?: { permissionMode: string | null }
+  /** Full access processes only: Claude's mode in wire order, ahead of `reportedOptions`. */
+  orderedPermissionMode?: (() => string | null | undefined) | null
   /** Fast was omitted from launch settings and must be applied before message input. */
   fastModeAtStart: boolean
   /** Rechecks this child's CLI support; absent where the launch had no flag support to ask. */
