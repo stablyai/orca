@@ -2518,6 +2518,7 @@
       "shrinkQueue": "Elimine un mensaje de la cola o espere a que se entregue uno y vuelva a intentarlo.",
       "startNewChat": "Inicie un chat nuevo para continuar.",
       "terminalAgentHoldsChat": "Este chat sigue abierto en un agente de terminal.",
+      "setupNotCompleted": "La configuración no terminó correctamente, por lo que el agente no se inició. Corrige o vuelve a ejecutar la configuración y luego inicia el agente en este espacio de trabajo.",
       "tryAgain": "Vuelva a intentarlo.",
       "tryAgainComposerSend": "Vuelva a enviarlo.",
       "turnActive": "El agente todavía está respondiendo.",

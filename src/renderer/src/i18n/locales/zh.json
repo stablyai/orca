@@ -18554,6 +18554,7 @@
         "recordUnreadable": "Orca 无法读取此聊天的已保存状态。",
         "chatNotFound": "Orca 找不到此聊天。",
         "startNewChat": "请开始新的聊天以继续。",
+        "setupNotCompleted": "设置脚本未成功完成，因此未启动代理。请修复或重新运行设置脚本，然后在此工作区中启动代理。",
         "tryAgain": "请重试。",
         "agentStillWorking": "智能体仍在工作。",
         "runClearWhenDone": "完成后再运行 /clear。",

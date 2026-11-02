@@ -18587,6 +18587,7 @@
         "recordUnreadable": "Orca はこのチャットの保存済みの状態を読み取れませんでした。",
         "chatNotFound": "Orca はこのチャットを見つけられません。",
         "startNewChat": "続けるには、新しいチャットを開始してください。",
+        "setupNotCompleted": "セットアップが正常に完了しなかったため、エージェントは起動されませんでした。セットアップを修正または再実行してから、このワークスペースでエージェントを起動してください。",
         "tryAgain": "もう一度お試しください。",
         "agentStillWorking": "Agent はまだ作業中です。",
         "runClearWhenDone": "終わったら /clear を実行してください。",

@@ -223,6 +223,8 @@ export function agentSessionWriteNoticeParts(
       return causeParts('historyUnreadable', write)
     case 'structured_agent_session_unsupported':
       return ['unsupported']
+    case 'agent_session_setup_not_completed':
+      return ['setupNotCompleted']
   }
   // A newer host can send a code this client has never heard of.
   return [notDone]

@@ -18587,6 +18587,7 @@
         "recordUnreadable": "Orca가 이 채팅의 저장된 상태를 읽지 못했습니다.",
         "chatNotFound": "Orca에서 이 채팅을 찾을 수 없습니다.",
         "startNewChat": "계속하려면 새 채팅을 시작하세요.",
+        "setupNotCompleted": "설정이 정상적으로 완료되지 않아 에이전트가 시작되지 않았습니다. 설정을 수정하거나 다시 실행한 다음 이 작업 공간에서 에이전트를 시작하세요.",
         "tryAgain": "다시 시도하세요.",
         "agentStillWorking": "에이전트가 아직 작업 중입니다.",
         "runClearWhenDone": "작업이 끝나면 /clear를 실행하세요.",

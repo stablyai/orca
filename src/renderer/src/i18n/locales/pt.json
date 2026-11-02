@@ -20638,6 +20638,7 @@
         "recordUnreadable": "O Orca não conseguiu ler o estado salvo deste chat.",
         "chatNotFound": "O Orca não consegue encontrar este chat.",
         "startNewChat": "Inicie um novo chat para continuar.",
+        "setupNotCompleted": "A configuração não foi concluída com sucesso, por isso o agente não foi iniciado. Corrija ou execute novamente a configuração e depois inicie o agente neste espaço de trabalho.",
         "tryAgain": "Tente novamente.",
         "agentStillWorking": "O agente ainda está trabalhando.",
         "runClearWhenDone": "Execute /clear quando terminar.",

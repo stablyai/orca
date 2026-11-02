@@ -1,5 +1,4 @@
 import { AgentLaunchSetupNotCompletedError, type SetupRun } from '../../../../setup/setup-run'
-import { applySetupRunOutcome } from './worker-topology'
 import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 /** Use the shared executor for new workers; structured worktrees omit startup agent, then resolve host support before chat creation.
  * Keep worker lineage/effects and background presentation in factories; caller passes the pre-decided mode.
@@ -18,6 +17,7 @@ import {
 import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
 import type { WorkerStartInput } from './worker-start-schema'
 import {
+  applySetupRunOutcome,
   createExistingWorktreeWorkerTerminal,
   createStructuredWorkerSessionForWorktree,
   type WorkerEffect,

@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { structuredAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { useAppStore } from '@/store'
 import {
@@ -15,7 +14,10 @@ import { structuredAgentLaunchRecordFor } from './agent-session/launch/structure
 import { restorePersistedStructuredLaunchState } from './agent-session/launch/structured-agent-session-launch-reload'
 import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
 import { resetStructuredAgentLaunchRegistryForTests } from './agent-session/launch/structured-agent-session-launch-registry'
-import { structuredAgentSessionCreateFingerprint } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import {
+  structuredAgentSessionCreateFingerprint,
+  structuredAgentSessionPayloadFingerprint
+} from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { admitStructuredLaunchOnHost } from './agent-session/launch/structured-agent-session-host-admission'
 import {
   clearWebSessionFocusIntent,

@@ -2450,6 +2450,7 @@
       "shrinkQueue": "Kuyruktaki bir mesajı silin veya birinin gönderilmesini bekleyin, ardından yeniden deneyin.",
       "startNewChat": "Devam etmek için yeni bir sohbet başlatın.",
       "terminalAgentHoldsChat": "Bu sohbet bir terminal ajanında hâlâ açık.",
+      "setupNotCompleted": "Kurulum başarıyla tamamlanmadığı için aracı başlatılmadı. Kurulumu düzeltin veya yeniden çalıştırın, ardından bu çalışma alanında aracıyı başlatın.",
       "tryAgain": "Tekrar deneyin.",
       "tryAgainComposerSend": "Yeniden gönderin.",
       "turnActive": "Ajan hâlâ yanıt veriyor.",

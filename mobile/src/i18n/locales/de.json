@@ -2450,6 +2450,7 @@
       "shrinkQueue": "Eine Nachricht aus der Warteschlange löschen oder warten, bis eine Nachricht übermittelt wurde, und anschließend erneut versuchen.",
       "startNewChat": "Zum Fortfahren einen neuen Chat starten.",
       "terminalAgentHoldsChat": "Dieser Chat ist noch in einem Terminal-Agenten geöffnet.",
+      "setupNotCompleted": "Die Einrichtung wurde nicht erfolgreich abgeschlossen, daher wurde der Agent nicht gestartet. Behebe den Fehler oder führe die Einrichtung erneut aus und starte dann den Agenten in diesem Arbeitsbereich.",
       "tryAgain": "Erneut versuchen.",
       "tryAgainComposerSend": "Erneut senden.",
       "turnActive": "Der Agent antwortet noch.",

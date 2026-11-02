@@ -2446,6 +2446,7 @@
       "shrinkQueue": "대기 중인 메시지를 삭제하거나 전달될 때까지 기다린 후 다시 시도하세요.",
       "startNewChat": "계속하려면 새 채팅을 시작하세요.",
       "terminalAgentHoldsChat": "이 채팅은 아직 터미널 에이전트에서 열려 있습니다.",
+      "setupNotCompleted": "설정이 정상적으로 완료되지 않아 에이전트가 시작되지 않았습니다. 설정을 수정하거나 다시 실행한 다음 이 작업 공간에서 에이전트를 시작하세요.",
       "tryAgain": "다시 시도하세요.",
       "tryAgainComposerSend": "다시 보내세요.",
       "turnActive": "에이전트가 아직 응답 중입니다.",

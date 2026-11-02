@@ -2641,6 +2641,7 @@
       "recordUnreadable": "Orca couldn't read this chat's saved state.",
       "chatNotFound": "Orca can't find this chat.",
       "startNewChat": "Start a new chat to continue.",
+      "setupNotCompleted": "Setup did not finish successfully, so the agent was not started. Fix or rerun setup, then start the agent in this workspace.",
       "tryAgain": "Try again."
     },
     "workerAutoClose": {

@@ -18990,6 +18990,7 @@
         "recordUnreadable": "Orca 無法讀取此聊天的已儲存狀態。",
         "chatNotFound": "Orca 找不到此聊天。",
         "startNewChat": "請開始新的聊天以繼續。",
+        "setupNotCompleted": "設定指令碼未成功完成，因此未啟動代理程式。請修正或重新執行設定指令碼，然後在此工作區中啟動代理程式。",
         "tryAgain": "請重試。",
         "agentStillWorking": "代理程式仍在工作。",
         "runClearWhenDone": "完成後再執行 /clear。",
