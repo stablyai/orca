@@ -159,14 +159,101 @@ describe('orca.document.session', () => {
     expect(edits().at(-1)).toMatchObject({ params: { baseVersion: 2 } })
   })
 
-  it('answers editor.flush after posting the change still in its debounce window', async () => {
+  it('answers editor.flush only once the change it posted is accepted', async () => {
     const { session, fromHost, posted } = await open()
+    session.change('b')
+    const flushRequest = { orca: 1, kind: 'req', id: 9, method: 'editor.flush' }
+    fromHost(flushRequest)
+    await settle()
+    expect(posted().at(-1)).toMatchObject({ method: 'editor.applyEdit' })
+    fromHost(accept(0))
+    await settle()
+    expect(posted().at(-1)).toEqual({ orca: 1, kind: 'res', id: 9, result: null })
+  })
+
+  it('keeps one edit in flight through a save, so the baseline never goes back', async () => {
+    const { orca, session, fromHost, edits, posted } = await open({ debounceMs: 0 })
+    session.change('a1')
+    await settle()
+    // `a1` is held by Orca's rate limit; the save must not post `b` beside it.
     session.change('b')
     fromHost({ orca: 1, kind: 'req', id: 9, method: 'editor.flush' })
     await settle()
-    const kinds = posted().map((message) => message.method ?? message.kind)
-    expect(kinds.slice(-2)).toEqual(['editor.applyEdit', 'res'])
-    expect(posted().at(-1)).toEqual({ orca: 1, kind: 'res', id: 9, result: null })
+    expect(edits()).toHaveLength(1)
+    fromHost(accept(0))
+    await settle()
+    expect(edits().at(-1)).toMatchObject({ params: { content: { text: 'b' } } })
+    fromHost(accept(1))
+    await settle()
+    expect(posted().at(-1)).toMatchObject({ kind: 'res', id: 9, result: null })
+    await expect(orca.document!.get()).resolves.toMatchObject({ content: { text: 'b' } })
+  })
+
+  it('answers a save only after a conflict merge commits', async () => {
+    const merge = (_base: string, outside: string, mine: string) => `${outside}+${mine}`
+    const { session, fromHost, edits, posted } = await open({ debounceMs: 0, merge })
+    session.change('mine')
+    await settle()
+    fromHost(doc(2, 'outside'))
+    fromHost({ orca: 1, kind: 'req', id: 9, method: 'editor.flush' })
+    fromHost(refuse(0, 'conflict'))
+    await settle()
+    expect(edits().at(-1)).toMatchObject({ params: { content: { text: 'outside+mine' } } })
+    expect(posted().some((message) => message.kind === 'res' && message.id === 9)).toBe(false)
+    fromHost(accept(1))
+    await settle()
+    expect(posted().at(-1)).toMatchObject({ kind: 'res', id: 9, result: null })
+  })
+
+  it('counts a reused buffer as a new change and sends what it held when sent', async () => {
+    const buffer = new Uint8Array([3])
+    const { session, fromHost, edits } = await open(
+      {
+        debounceMs: 0,
+        decode: () => buffer,
+        encode: (value: Uint8Array) => ({ kind: 'bytes', bytes: value.buffer })
+      },
+      {
+        ...doc(1, ''),
+        payload: {
+          version: 1,
+          readOnly: false,
+          content: { kind: 'bytes', bytes: new ArrayBuffer(1) }
+        }
+      }
+    )
+    session.change(buffer)
+    await settle()
+    buffer[0] = 4
+    session.change(buffer)
+    fromHost(accept(0))
+    await settle()
+    const sent = edits().map((edit) => [...new Uint8Array(edit.params.content.bytes)])
+    expect(sent).toEqual([[3], [4]])
+  })
+
+  it('rejects a waiting flush with conflict when the outside document wins', async () => {
+    const { session, fromHost } = await open({ debounceMs: 0 })
+    session.change('mine')
+    await settle()
+    const flushed = session.flush()
+    fromHost(doc(2, 'outside'))
+    fromHost(refuse(0, 'conflict'))
+    await expect(flushed).rejects.toMatchObject({ code: 'conflict' })
+    expect(session.value).toBe('outside')
+  })
+
+  it('neither merges nor sends after dispose', async () => {
+    const merge = vi.fn((_base: string, outside: string) => outside)
+    const { session, fromHost, edits } = await open({ debounceMs: 0, merge })
+    session.change('mine')
+    await settle()
+    fromHost(doc(2, 'outside'))
+    session.dispose()
+    fromHost(refuse(0, 'conflict'))
+    await settle()
+    expect(merge).not.toHaveBeenCalled()
+    expect(edits()).toHaveLength(1)
   })
 
   it('resends a kept draft on editor.flush, but not one still in flight', async () => {
