@@ -521,8 +521,8 @@ describe('Claude stream-json connection', () => {
     // Real SDK and child; only initialize's answer is held so it can arrive after the exit.
     const { query: sdkQuery } = await import('@anthropic-ai/claude-agent-sdk')
     const answer = Promise.withResolvers<unknown>()
-    const queryImpl = ((args: Parameters<typeof query>[0]) =>
-      Object.assign(sdkQuery(args), { initializationResult: () => answer.promise })) as typeof query
+    const queryImpl: typeof query = (args) =>
+      Object.assign(sdkQuery(args), { initializationResult: () => answer.promise })
     const reports: string[] = []
     const exited = Promise.withResolvers<void>()
     const claude = fakeClaude()
@@ -575,7 +575,7 @@ describe('Claude stream-json connection', () => {
       )
       const failure = await opened
       expect(
-        findInErrorChain(failure, (inner) => (inner as { errorClass?: string }).errorClass)
+        findInErrorChain(failure, (inner) => ('errorClass' in inner ? inner.errorClass : undefined))
       ).toBe('control_request_failed')
       expect(retryableStructuredAgentSessionStart(failure)).toBe(false)
     } finally {
