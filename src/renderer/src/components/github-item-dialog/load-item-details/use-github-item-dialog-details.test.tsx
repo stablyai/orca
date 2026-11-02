@@ -12,6 +12,7 @@ import { requestPRReviewers } from '../land-pull-request/pr-reviewers-request-ac
 import { useGitHubItemDialogDetails } from './use-github-item-dialog-details'
 import {
   invalidateWorkItemDetailsCacheForKey,
+  patchCachedWorkItemBody,
   touchWorkItemDetailsCache,
   workItemDetailsCache
 } from './work-item-details-cache'
@@ -63,6 +64,24 @@ function Harness(): React.JSX.Element | null {
   latest = useGitHubItemDialogDetails({ workItem, repoPath: '/repo', effectiveRepoId: 'repo-1' })
   // Same gate as the Conversation tab's composer (discuss-item/conversation-tab.tsx).
   return latest.detailsLoaded ? <DraftComposer /> : null
+}
+
+const issue: GitHubWorkItem = {
+  ...workItem,
+  id: 'issue:42',
+  type: 'issue',
+  number: 42,
+  url: 'https://github.com/acme/widgets/issues/42'
+}
+const issueDetails: GitHubWorkItemDetails = { item: issue, body: 'Old body', comments: [] }
+
+function IssueHarness(): null {
+  latest = useGitHubItemDialogDetails({
+    workItem: issue,
+    repoPath: '/repo',
+    effectiveRepoId: 'repo-1'
+  })
+  return null
 }
 
 afterEach(() => {
@@ -187,5 +206,43 @@ describe('useGitHubItemDialogDetails reconciliation', () => {
 
     expect(latest?.details?.item.state).toBe('merged')
     expect(latest?.details?.comments.map((c) => c.id)).toContain(102)
+  })
+
+  // A saved issue description retires the post-write read it crossed; one replacement read brings the new reply.
+  it('replaces the post-write read an issue description save retires', async () => {
+    lookup.mockResolvedValueOnce(issueDetails)
+    render(<IssueHarness />)
+    await waitFor(() => expect(latest?.detailsLoaded).toBe(true))
+    const postWrite = Promise.withResolvers<GitHubWorkItemDetails | null>()
+    lookup
+      .mockReturnValueOnce(postWrite.promise)
+      .mockResolvedValueOnce({ ...issueDetails, body: 'Saved body', comments: [comment(201)] })
+    await act(async () => latest!.invalidateCurrentDetailsCache())
+    expect(lookup).toHaveBeenCalledTimes(2)
+
+    await act(async () => patchCachedWorkItemBody(latest!.detailsCacheKey!, 'Saved body'))
+    await act(async () => postWrite.resolve({ ...issueDetails, comments: [comment(201)] }))
+
+    await waitFor(() => expect(latest?.details?.comments.map((c) => c.id)).toContain(201))
+    expect(latest?.details?.body).toBe('Saved body')
+    expect(lookup).toHaveBeenCalledTimes(3)
+  })
+
+  it('owes no retry when the replacement for a retired read fails', async () => {
+    lookup.mockResolvedValueOnce(issueDetails)
+    render(<IssueHarness />)
+    await waitFor(() => expect(latest?.detailsLoaded).toBe(true))
+    const postWrite = Promise.withResolvers<GitHubWorkItemDetails | null>()
+    lookup.mockReturnValueOnce(postWrite.promise).mockRejectedValueOnce(new Error('offline'))
+    await act(async () => latest!.invalidateCurrentDetailsCache())
+
+    await act(async () => patchCachedWorkItemBody(latest!.detailsCacheKey!, 'Saved body'))
+    await waitFor(() => expect(lookup).toHaveBeenCalledTimes(3))
+    await act(async () => postWrite.resolve(issueDetails))
+    await act(async () => {})
+
+    expect(latest?.details?.body).toBe('Saved body')
+    expect(latest?.error).toBeNull()
+    expect(lookup).toHaveBeenCalledTimes(3)
   })
 })

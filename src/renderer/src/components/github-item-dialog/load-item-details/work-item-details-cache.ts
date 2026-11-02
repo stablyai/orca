@@ -146,9 +146,18 @@ export function invalidateWorkItemDetailsCacheByMatch(args: {
   }
 }
 
+// A user-started read (Refresh) retries its own superseded attempt; keyed by the request, so the mark ends with it.
+const userActionDetailsReads = new WeakSet<Promise<GitHubWorkItemDetails | null>>()
+export function markUserActionWorkItemDetailsRead(
+  read: Promise<GitHubWorkItemDetails | null>
+): void {
+  userActionDetailsReads.add(read)
+}
+
 // Why: field writers change only the payload; the entry's request ownership (an owed reread, the current pending
 // read) is copied by construction, so a local update can neither cancel nor orphan the whole-payload read.
-// supersedesRead: the patch is newer than a read already running, which must not restore older content.
+// supersedesRead: the patch is newer than a read already running, which must not restore older content; a retired
+// ordinary read leaves one owed replacement, while a retired Refresh read is retried by its own loop.
 function patchWorkItemDetailsPayload(
   key: string,
   update: (details: GitHubWorkItemDetails) => GitHubWorkItemDetails | null,
@@ -160,11 +169,13 @@ function patchWorkItemDetailsPayload(
   if (!prev || !details) {
     return false
   }
+  const retiresOrdinaryRead =
+    supersedesRead && prev.pending !== undefined && !userActionDetailsReads.has(prev.pending)
   touchWorkItemDetailsCache(key, {
     details,
     fetchedAt: fetchedAt ?? prev.fetchedAt,
     pending: supersedesRead ? undefined : prev.pending,
-    rereadOwed: prev.rereadOwed,
+    rereadOwed: retiresOrdinaryRead ? true : prev.rereadOwed,
     error: undefined
   })
   return true
