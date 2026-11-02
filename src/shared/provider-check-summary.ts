@@ -80,10 +80,21 @@ export function summarizeProviderChecks(
   }
 }
 
+const PIPELINE_CHECKS_LABEL: Record<ProviderCheckSummary['state'], string> = {
+  success: 'Pipeline passed',
+  failure: 'Pipeline failed',
+  pending: 'Pipeline pending',
+  neutral: 'Pipeline unresolved',
+  none: 'No checks'
+}
+
 /** The one checks-pill label; it keys off `state` so the text can never contradict the pill's tone or icon. */
 export function getProviderChecksLabel(summary: ProviderCheckSummary | undefined): string {
   if (!summary) {
     return 'Checks'
+  }
+  if (summary.scope === 'pipeline') {
+    return PIPELINE_CHECKS_LABEL[summary.state]
   }
   if (summary.total === 0) {
     return 'No checks'

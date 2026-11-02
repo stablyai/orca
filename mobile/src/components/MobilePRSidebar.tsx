@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native'
 import {
   ArrowRight,
@@ -17,14 +17,12 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { colors } from '../theme/mobile-theme'
 import type { PrSidebarData } from '../session/mobile-pr-sidebar-state'
 import { isPrSidebarDetailsPlaceholder } from '../session/mobile-pr-sidebar-state'
-import { buildResolveConflictsPrompt } from '../session/pr-ai-triage-prompt'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
 import { ListGroup, ListRow, LIST_LEADING_INSET } from './list/ListGroup'
 import { useNow } from '../hooks/use-now'
 import { commentRelativeTime } from './pr-sidebar/pr-comment-relative-time'
 import { prStateBadge } from './pr-sidebar/pr-checks-presentation'
 import { statusColor } from './pr-sidebar/pr-sidebar-status-color'
-import { PRConflictingFilesSection } from './pr-sidebar/PRConflictingFilesSection'
 import { PrTabEmptyState } from './pr-sidebar/PrTabEmptyState'
 import { PrChangesCard, PrDescription } from './pr-sidebar/PrTabOverviewCards'
 import { PrTabBottomAction } from './pr-sidebar/PrTabBottomAction'
@@ -53,8 +51,8 @@ type BodyProps = {
   /** Opens the Changes segment from the changes card; absent outside the hub. */
   onOpenChanges?: () => void
   branchCompare?: BranchCompare
-  /** The bottom action until the hub's next-step bar replaces it. */
-  showBottomAction?: boolean
+  /** The dock's bottom action. The hub passes none: its next-step bar is the one bottom action there. */
+  footer?: ReactNode
 }
 
 // The PR tab answers "can I merge, and what's blocking it": identity, gates, changes, description.
@@ -64,7 +62,7 @@ export function MobilePrTabBody({
   bottomInset = 0,
   onOpenChanges,
   branchCompare = null,
-  showBottomAction = true
+  footer = null
 }: BodyProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -100,7 +98,6 @@ export function MobilePrTabBody({
       </View>
     )
   }
-  const footer = showBottomAction ? <PrTabBottomAction tab={tab} bottomInset={bottomInset} /> : null
   if (branch === 'none') {
     return (
       <View style={styles.container}>
@@ -150,20 +147,6 @@ function PrTabSections({
       }),
     [data.checks, data.checksError, data.details, pr, tab.botAuthorOverrides]
   )
-  const conflictsTriage = {
-    resolveConflicts: () =>
-      void tab.triage.launch('resolve-conflicts', () =>
-        buildResolveConflictsPrompt({
-          prNumber: pr.number,
-          baseRef: pr.conflictSummary?.baseRef ?? pr.baseRefName ?? null,
-          files: pr.conflictSummary?.files ?? [],
-          worktreeId: tab.worktreeId
-        })
-      ),
-    isBusy: tab.triage.isBusy('resolve-conflicts'),
-    availability: tab.triage.availability,
-    ...tab.triage.noticeFor('resolve-conflicts')
-  }
   const openGate = (row: PrGateRow): (() => void) | undefined => {
     switch (row.target) {
       case 'checks':
@@ -194,7 +177,6 @@ function PrTabSections({
           )
         })}
       </ListGroup>
-      <PRConflictingFilesSection pr={pr} triage={conflictsTriage} />
       <PrChangesCard data={data} onPress={onOpenChanges} />
       <PrDescription tab={tab} data={data} />
     </>
@@ -359,7 +341,12 @@ export function MobilePRSidebar({ onRetry, bottomInset = 0, ...input }: SidebarP
               onClose={() => setMenuOpen(false)}
             />
           </View>
-          <MobilePrTabBody tab={tab} onRetry={onRetry} bottomInset={bottomInset} />
+          <MobilePrTabBody
+            tab={tab}
+            onRetry={onRetry}
+            bottomInset={bottomInset}
+            footer={<PrTabBottomAction tab={tab} bottomInset={bottomInset} />}
+          />
         </>
       )}
       <MobilePrTabSheets tab={tab} />

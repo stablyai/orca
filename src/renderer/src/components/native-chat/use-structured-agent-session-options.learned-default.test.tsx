@@ -238,9 +238,12 @@ describe('declared context at the desktop consumer', () => {
             true
           )
         )
-        expect(chat.frames.at(-1)).toEqual({ model, effort: display ?? null })
+        // A readback without this model's effort menu shows no effort, whatever the declaration.
+        const offersEffort = answer.models.find((row) => row.id === model)!.efforts.length > 0
+        const shown = offersEffort ? display : null
+        expect(chat.frames.at(-1)).toEqual({ model, effort: shown ?? null })
         const effort = chat.result.current.optionSnapshot.find((o) => o.id === 'effort')
-        if (answer.models.find((row) => row.id === model)!.efforts.length > 0) {
+        if (offersEffort) {
           expect(effort?.valueSource).toBe(display ? 'default' : 'unknown')
         } else {
           expect(effort).toBeUndefined()
@@ -248,7 +251,7 @@ describe('declared context at the desktop consumer', () => {
         expect(chat.result.current.capture()).toEqual({ selection: { model } })
         mocks.call.mockImplementation(() => new Promise(() => {}))
         chat.rerender({ running: { fence: 2 } })
-        expect(chat.frames.at(-1)).toEqual({ model, effort: display ?? null })
+        expect(chat.frames.at(-1)).toEqual({ model, effort: shown ?? null })
         expect(chat.result.current.capture()).toEqual({ selection: { model } })
         chat.unmount()
       }

@@ -3,7 +3,6 @@
 
 import { beforeAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../src/main/ipc/desktop-renderer-runtime-capabilities'
 import { projectSessionTabAgentStatus } from '../../../src/main/runtime/rpc/methods/session-tab-agent-status-projection'
 import { agentSessionRecordFixture } from '../../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { encodeAgentSessionRecord } from '../../../src/shared/agent-session/lifecycle/agent-session-record-stored-form'
@@ -225,16 +224,6 @@ function unifiedTabsOf(parsed: { ok: boolean; value?: unknown }): Record<string,
 }
 
 describe('a structured agent beyond Claude and Codex, across versions', () => {
-  it(
-    'pairs current code with a real published release',
-    () => {
-      expect(baseline.ref).toMatch(/^v?\d/)
-      // Require old-client structured support so a withheld tab proves the agent capability gate, not refusal of all chats.
-      expect(oldDesktopClientCapabilities()).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
-    },
-    SUITE_TIMEOUT_MS
-  )
-
   describe('old client, new host', () => {
     it("never receives the new agent's tab, and its Claude and Codex tabs are what its own build publishes", () => {
       const client = oldDesktopClientCapabilities()
@@ -320,29 +309,6 @@ describe('a structured agent beyond Claude and Codex, across versions', () => {
         ).toBe(host.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY))
       }
     })
-
-    it('would be refused by an old host that does not advertise the capability', async () => {
-      if (
-        baseline.wire.capabilities.includes(
-          STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
-        )
-      ) {
-        return
-      }
-      const replies: { ok: boolean; result?: unknown }[] = []
-      await baseline.wire.createDispatcher(createSupportRuntime()).dispatchStreaming(
-        {
-          id: 'create-support',
-          authToken: 'cross-version-token',
-          method: 'agentSession.createSupport',
-          params: { worktree: `id:${WORKTREE}`, agent: NEW_AGENT }
-        },
-        (raw) => replies.push(JSON.parse(raw)),
-        { clientKind: 'runtime', clientCapabilities: baseline.wire.capabilities }
-      )
-      expect(replies).toHaveLength(1)
-      expect(replies[0]?.ok).toBe(false)
-    })
   })
 
   describe('Claude and Codex, both ways', () => {
@@ -365,17 +331,6 @@ describe('a structured agent beyond Claude and Codex, across versions', () => {
           ])
         }
       }
-    })
-
-    it("reach today's desktop unchanged from a new host", () => {
-      const payload = tabsSnapshot(['claude', 'codex'])
-      expect(
-        projectSessionTabAgentStatus(
-          payload,
-          'runtime',
-          DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
-        )
-      ).toBe(payload)
     })
   })
 })

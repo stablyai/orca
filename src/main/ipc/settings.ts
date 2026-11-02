@@ -308,14 +308,14 @@ export function registerSettingsHandlers(
 
   ipcMain.handle('settings:listFonts', () => listSystemFontFamilies())
 
-  ipcMain.handle('settings:previewGhosttyImport', () => {
-    return previewGhosttyImport(store)
-  })
+  // Omitted sources fall back to each importer's auto-discovery default.
+  ipcMain.handle('settings:previewGhosttyImport', (event, source?: unknown) =>
+    previewGhosttyImport(store, source, event.sender)
+  )
 
-  ipcMain.handle('settings:previewWarpThemeImport', (event, args?: unknown) => {
-    const source = args === undefined ? { kind: 'auto' } : args
-    return previewWarpThemeImport(store, source, event.sender)
-  })
+  ipcMain.handle('settings:previewWarpThemeImport', (event, source?: unknown) =>
+    previewWarpThemeImport(store, source, event.sender)
+  )
 
   ipcMain.handle('cache:getGitHub', () => {
     return store.getGitHubCache()

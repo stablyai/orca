@@ -5,8 +5,8 @@ import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { isAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-hook-controls'
 import { isPwshAvailableAsync } from '../../../pwsh'
-import { LocalPtyProvider } from '../../../providers/local-pty-provider'
-import type { LocalPtyProviderOptions } from '../../../providers/local-pty-provider-types'
+import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
+import type { LocalPtyProviderOptions } from '../../../providers/local-pty/local-pty-provider-types'
 import { runAsWslLaunchUserAct } from '../../../wsl/wsl-background-exec-gate'
 import {
   addOrcaWslInteropEnv,

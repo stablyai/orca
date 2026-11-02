@@ -466,7 +466,7 @@ it('keeps an actual composing return through command acceptance, composition set
     )
   }
   const view = render(<JoinedField />)
-  let pending: Promise<void> | undefined
+  let pending: Promise<boolean> | undefined
   act(() => {
     pending = send!('/goal ship it', [])
   })

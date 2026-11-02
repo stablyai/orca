@@ -1,5 +1,9 @@
 import { pairedRuntimeConnectionFromOffer } from '../../../../shared/paired-runtime-connection'
-const pendingSubscriptions = new Map<string, AbortController>()
+import {
+  createWebRuntimeSubscriptionApiControl,
+  type WebRuntimeSubscriptionRegistration
+} from './web-runtime-crew-subscription'
+const pendingSubscriptions = new Map<string, WebRuntimeSubscriptionRegistration>()
 import type { PreloadApi } from '../../../../preload/api-types'
 import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
 import { verifyRemotePairingRuntimeStatus } from '../../../../shared/remote-pairing-verification'
@@ -37,9 +41,7 @@ import {
   updateEnvironmentFromResponse,
   manuallyDisconnectedResponse
 } from './web-runtime-session'
-export function createRuntimeEnvironmentsApi(): NonNullable<
-  Partial<PreloadApi>['runtimeEnvironments']
-> {
+export function createRuntimeEnvironmentsApi(): PreloadApi['runtimeEnvironments'] {
   return {
     onStatusChanged: subscribeWebRuntimeStatus,
     getStatusSnapshots: async () => readWebRuntimeStatusSnapshots(),
@@ -213,9 +215,7 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
     getStatus: getWebRuntimeStatus,
     prepareBrowserClientHostPlacement: async () => ({ kind: 'server' }),
     call: callWebRuntimeEnvironment,
-    cancelSubscription: async ({ subscriptionId }) => {
-      pendingSubscriptions.get(subscriptionId)?.abort()
-    },
+    ...createWebRuntimeSubscriptionApiControl(pendingSubscriptions),
     subscribe: async (
       {
         selector,
@@ -236,7 +236,7 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
         if (pendingSubscriptions.has(subscriptionId)) {
           throw new Error('Subscription id already exists')
         }
-        pendingSubscriptions.set(subscriptionId, controller)
+        pendingSubscriptions.set(subscriptionId, { controller })
       }
       let subscription
       try {
@@ -287,7 +287,7 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
           controller.signal
         )
       } finally {
-        if (subscriptionId && pendingSubscriptions.get(subscriptionId) === controller) {
+        if (subscriptionId && pendingSubscriptions.get(subscriptionId)?.controller === controller) {
           pendingSubscriptions.delete(subscriptionId)
         }
       }

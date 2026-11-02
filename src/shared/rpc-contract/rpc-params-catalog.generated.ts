@@ -333,6 +333,7 @@ import {
   RateLimit,
   WorkItem,
   WorkItemByOwnerRepo,
+  WorkItemDetails,
   WorkItemsCount,
   WorkItemsList
 } from './github-repo-work-item-params'
@@ -354,7 +355,7 @@ import {
   UpdateMrReviewers,
   UpdateMrState,
   WorkItemByPath,
-  WorkItemDetails,
+  WorkItemDetails as WorkItemDetailsOfGitlabParams,
   WorkItemsList as WorkItemsListOfGitlabParams
 } from './gitlab-params'
 import {
@@ -514,6 +515,8 @@ import {
   PluginRpcConsentParams,
   PluginSetEnabledParams,
   PluginSetSystemEnabledParams,
+  PluginShotChromeParams,
+  PluginShotEditorParams,
   PluginShotParams,
   PluginShotReplayParams,
   PluginsPanelActionParams
@@ -971,6 +974,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'emulator.availability': EmulatorAvailabilityParams,
   'emulator.ax': AxParams,
   'emulator.button': ButtonParams,
+  'emulator.checkInput': ListParams,
   'emulator.exec': ExecParams,
   'emulator.gesture': GestureParams,
   'emulator.kill': KillParams,
@@ -1119,7 +1123,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'github.validateAccountBinding': ValidateAccountBinding,
   'github.workItem': WorkItem,
   'github.workItemByOwnerRepo': WorkItemByOwnerRepo,
-  'github.workItemDetails': WorkItem,
+  'github.workItemDetails': WorkItemDetails,
   'gitlab.addIssueComment': AddIssueComment,
   'gitlab.addMRComment': AddMRComment,
   'gitlab.addMRInlineComment': AddMRInlineComment,
@@ -1141,7 +1145,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'gitlab.updateMRReviewers': UpdateMrReviewers,
   'gitlab.updateMRState': UpdateMrState,
   'gitlab.workItemByPath': WorkItemByPath,
-  'gitlab.workItemDetails': WorkItemDetails,
+  'gitlab.workItemDetails': WorkItemDetailsOfGitlabParams,
   'host.declareClient': OrcadDeclareClientParamsSchema,
   'host.gitBash.isAvailable': null,
   'host.peerDesktops': OrcadPeerDesktopsParamsSchema,
@@ -1323,6 +1327,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,
   'plugins.consent': PluginRpcConsentParams,
   'plugins.devEmit': PluginDevEmitParams,
+  'plugins.devHook': PluginDevEmitParams,
   'plugins.devInspect': PluginDevInspectParams,
   'plugins.devLoad': PluginDevLoadParams,
   'plugins.devRequest': PluginDevRequestParams,
@@ -1338,6 +1343,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'plugins.setEnabled': PluginSetEnabledParams,
   'plugins.setSystemEnabled': PluginSetSystemEnabledParams,
   'plugins.shot': PluginShotParams,
+  'plugins.shotChrome': PluginShotChromeParams,
+  'plugins.shotEditor': PluginShotEditorParams,
   'plugins.shotReplay': PluginShotReplayParams,
   'preflight.check': PreflightCheck,
   'preflight.detectAgents': PreflightProjectAgentDetection,

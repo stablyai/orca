@@ -10,6 +10,7 @@ import type { PtyConnectionDeps } from '../pty-connection-types'
 import { registerTerminalPaneRecoveryInstance } from '../terminal-pane-recovery'
 import { captureTabRecoveryGeneration } from '@/store/terminals/terminal-tab-recovery-ledger'
 import { TerminalIdleCursorReset } from '../terminal-idle-cursor-reset'
+import { TerminalResumeEscapeGap } from '../terminal-resume-escape-gap'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { createTerminalStructuralReplayCoordinator } from '@/lib/pane-manager/terminal-structural-replay-coordinator'
 import { makePaneKey } from '../../../../../shared/stable-pane-id'
@@ -121,6 +122,7 @@ export function connectPanePty(
   }
   // Idle callbacks precede deferred setup; switch from the shared scheduler to the PTY writer to preserve hidden-byte ordering and recovery.
   session.idleCursorReset = new TerminalIdleCursorReset()
+  session.resumeEscapeGap = new TerminalResumeEscapeGap()
   session.queueAgentIdleTerminalModeReset = (): void => {
     if (session.disposed) {
       return
@@ -171,10 +173,20 @@ export function connectPanePty(
     tuiAgent: resolvePaneKeyboardProtocolAgent(session.paneStartup, session.tab?.launchAgent)
   }
   // Capture backend policy before the tracker and transport copy xterm's initial capability flags.
+  const keyboardProtocol = buildTerminalKeyboardProtocolOptions(backendContext)
   Object.assign(
     session.pane.terminal.options,
     buildWindowsPtyCompatibilityOptions(backendContext),
-    buildTerminalKeyboardProtocolOptions(backendContext)
+    keyboardProtocol,
+    // Merge: replacing vtExtensions would re-enable xterm's own mode-2031 reports.
+    keyboardProtocol.vtExtensions
+      ? {
+          vtExtensions: {
+            ...session.pane.terminal.options.vtExtensions,
+            ...keyboardProtocol.vtExtensions
+          }
+        }
+      : {}
   )
   // xterm exposes no Kitty read; mirror the flags its encoder applies.
   session.kittyKeyboardModes = (() => {

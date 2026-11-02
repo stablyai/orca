@@ -20,7 +20,7 @@ type ContrastRule = {
 }
 
 const MIN_TEXT_CONTRAST = 4.5
-// Why 3:1: status hues tint file names, and Orca's own light ignored color is 3.3:1.
+// Why 3:1: status hues only tint file names, so a theme's own git palette keeps working.
 const MIN_STATUS_TEXT_CONTRAST = 3
 const textPair = (surface: string, text: string): ContrastRule => ({
   surface,
@@ -131,7 +131,7 @@ export function contrastRatio(a: Rgba, b: Rgba): number {
   return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05)
 }
 
-function over([r, g, b, a]: Rgba, [br, bg, bb]: Rgba): Rgba {
+export function over([r, g, b, a]: Rgba, [br, bg, bb]: Rgba): Rgba {
   return [r * a + br * (1 - a), g * a + bg * (1 - a), b * a + bb * (1 - a), 1]
 }
 

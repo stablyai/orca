@@ -39,6 +39,7 @@ import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 
 export default function DiffViewer({
   modelKey,
+  modelOwnerKey,
   originalModelKey,
   modifiedModelKey,
   originalContent,
@@ -205,6 +206,7 @@ export default function DiffViewer({
   const currentDiffModelPaths = useDiffViewerLargeDiffLifecycle({
     limited: renderLimit.limited,
     modelKey,
+    modelOwnerKey,
     originalModelKey,
     modifiedModelKey,
     diffEditorRef,
