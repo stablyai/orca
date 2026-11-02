@@ -1,6 +1,6 @@
 /** Stage long/multiline launches on the PTY host: ready markers may precede raw mode, so MAX_CANON truncates long lines
  * (1024 bytes on macOS), and raw newlines submit early in bash 3.2. Self-delete scripts before starting the agent. */
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { chmodSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,6 +8,9 @@ import { hasControlByte, TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES } from './startu
 import { quoteStartupArg } from './tui-agent-startup-shell'
 
 export const STAGED_STARTUP_COMMAND_PREFIX = 'orca-launch-'
+const OWNED_STAGING_PREFIX = 'orca-owned-launch-'
+const OWNED_STAGING_BOOT = /^orca-owned-launch-([0-9a-f]{16})-/
+let ownedSweepStarted = false
 
 /** Which delivery ran for a spawn's typed startup line, decided by the host that owns the PTY. */
 export type StartupLineDelivery = 'typed' | 'staged' | 'typed-after-stage-failed'
@@ -87,6 +90,8 @@ export function stageStartupCommand(args: {
   platform?: NodeJS.Platform
   directory?: string
   owned?: true
+  /** The host boot an owned launch runs in; a later boot proves nothing can still read its files. */
+  ownerBoot?: string
 }): StartupCommandStaging {
   const platform = args.platform ?? process.platform
   if (!shouldStageStartupCommand({ ...args, platform })) {
@@ -99,7 +104,16 @@ export function stageStartupCommand(args: {
     setTimeout(() => sweepStaleStagedStartupCommands({ directory }), 0).unref?.()
   }
   const shellName = stagingShellName(args.shellPath)
-  const directoryPath = args.owned ? mkdtempSync(join(directory, 'orca-owned-launch-')) : undefined
+  const bootTag = args.ownerBoot
+    ? createHash('sha256').update(args.ownerBoot).digest('hex').slice(0, 16)
+    : undefined
+  if (args.owned && bootTag && !ownedSweepStarted) {
+    ownedSweepStarted = true
+    setTimeout(() => sweepPriorBootOwnedStaging({ directory, bootTag }), 0).unref?.()
+  }
+  const directoryPath = args.owned
+    ? mkdtempSync(join(directory, `${OWNED_STAGING_PREFIX}${bootTag ? `${bootTag}-` : ''}`))
+    : undefined
   const scriptPath = join(
     directoryPath ?? directory,
     `${STAGED_STARTUP_COMMAND_PREFIX}${randomBytes(8).toString('hex')}.sh`
@@ -180,6 +194,28 @@ export function sweepStaleStagedStartupCommands(args: { directory?: string; now?
       if (now - statSync(path).mtimeMs > STAGED_STARTUP_COMMAND_STALE_MS) {
         rmSync(path, { force: true })
       }
+    } catch {
+      // Raced another instance's sweep.
+    }
+  }
+}
+
+/** Owned launches are never age-swept; only a later host boot proves their reader is gone. */
+export function sweepPriorBootOwnedStaging(args: { directory?: string; bootTag: string }): void {
+  const directory = args.directory ?? tmpdir()
+  let names: string[]
+  try {
+    names = readdirSync(directory)
+  } catch {
+    return
+  }
+  for (const name of names) {
+    const tag = OWNED_STAGING_BOOT.exec(name)?.[1]
+    if (!tag || tag === args.bootTag) {
+      continue
+    }
+    try {
+      rmSync(join(directory, name), { recursive: true, force: true })
     } catch {
       // Raced another instance's sweep.
     }

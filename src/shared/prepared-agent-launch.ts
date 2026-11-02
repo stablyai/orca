@@ -8,6 +8,9 @@ import type {
   AgentSessionSurfaceBinding
 } from './agent-session-host-authority'
 import type { PtyIncarnationId } from './pty-incarnation'
+import type { WorktreeStartupLaunch } from './worktree/launch-types'
+import type { SleepingAgentLaunchConfig } from './agent-session-resume'
+import { tuiAgentDisplayName } from './tui-agent-display-names'
 export type PreparedAgentLaunchIdentity = {
   operationId: string
   fingerprint: string
@@ -63,6 +66,89 @@ export type PreparedAgentLaunchStatus = PreparedAgentLaunchIdentity & {
     | 'cancelled'
     | 'expired'
   published: boolean
+  /** Settled first-prompt handoff; uncertain never authorizes a resend. */
+  input?: PreparedLaunchInputOutcome
+}
+
+export type PreparedLaunchInputOutcome = 'written' | 'uncertain'
+
+/** Accepted presentation the daemon returns to the exact publication observer; never listed or saved. */
+export type PreparedLaunchPublication = {
+  launchConfig?: WorktreeStartupLaunch['launchConfig']
+  viewMode?: 'terminal' | 'chat'
+  launchToken?: string
+}
+
+/** One main process; a replacement can only take over a prompt it proves was never attempted. */
+export type PreparedPromptConsumer = PreparedLaunchIncarnation & { id: string }
+
+/** A process incarnation precise enough that a vanished or reused PID, or another boot, proves its demise. */
+export type PreparedLaunchIncarnation = { pid: number; process?: string; boot?: string }
+
+/** The daemon is authenticated, but a reply still narrows before it reaches a terminal record. */
+export function parsePreparedLaunchPublication(
+  value: unknown
+): PreparedLaunchPublication | undefined {
+  if (typeof value !== 'object' || value === null) {
+    return undefined
+  }
+  const launchConfig: unknown = Reflect.get(value, 'launchConfig')
+  const viewMode: unknown = Reflect.get(value, 'viewMode')
+  const launchToken: unknown = Reflect.get(value, 'launchToken')
+  return {
+    ...(isSleepingAgentLaunchConfig(launchConfig) ? { launchConfig } : {}),
+    ...(viewMode === 'chat' || viewMode === 'terminal' ? { viewMode } : {}),
+    ...(typeof launchToken === 'string' ? { launchToken } : {})
+  }
+}
+
+function isSleepingAgentLaunchConfig(value: unknown): value is SleepingAgentLaunchConfig {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  const agentEnv: unknown = Reflect.get(value, 'agentEnv')
+  return (
+    typeof Reflect.get(value, 'agentArgs') === 'string' &&
+    typeof agentEnv === 'object' &&
+    agentEnv !== null &&
+    Object.values(agentEnv).every((entry) => typeof entry === 'string')
+  )
+}
+
+/** Only the named generation answers this; it holds no current or future work for the operation. */
+export function isPreparedLaunchOperationUnknown(error: unknown): boolean {
+  return error instanceof Error && error.message.startsWith('agent_session_operation_unknown')
+}
+
+/** Final outcome text for an automatic launch that did not produce a usable agent. */
+export function preparedLaunchStatusFailureText(status: PreparedAgentLaunchStatus): string {
+  const setupNeverRan =
+    status.failure === 'spawn-failed' && status.setup !== undefined && !status.setup.incarnationId
+  return preparedLaunchFailureText(
+    status.physical ? 'exited' : setupNeverRan ? 'setup-not-started' : status.failure,
+    status.claim.agent
+  )
+}
+
+export function preparedLaunchFailureText(
+  failure: PreparedAgentLaunchStatus['failure'] | 'exited' | 'setup-not-started',
+  agent: string
+): string {
+  const name = tuiAgentDisplayName(agent) ?? agent
+  switch (failure) {
+    case 'setup-not-started':
+      return `Setup could not start, so ${name} was not started. Check the Setup command, then start ${name} from a new tab.`
+    case 'setup-failed':
+      return `Setup failed, so ${name} was not started. Fix Setup, then start ${name} from a new tab.`
+    case 'setup-timeout':
+      return `Setup did not finish within 2 hours, so ${name} was not started. Start ${name} from a new tab when Setup is done.`
+    case 'setup-ended':
+      return `Setup was closed before it finished, so ${name} was not started. Start ${name} from a new tab.`
+    case 'exited':
+      return `${name} exited right after it started. Start ${name} again from a new tab.`
+    default:
+      return `${name} could not be started. Start ${name} from a new tab.`
+  }
 }
 
 export function isPreparedAgentLaunchStatus(value: unknown): value is PreparedAgentLaunchStatus {
@@ -163,6 +249,8 @@ export function isPreparedAgentLaunchDescriptor(
 
 export type PendingPreparedAgentLaunch = PreparedAgentLaunchIdentity & {
   worktreeId: string
+  /** The tab reserved for the eventual agent, so per-tab launch state lands there and never on Setup. */
+  tabId?: string
   setupTerminalHandle?: string
 }
 

@@ -58,7 +58,9 @@ export async function spawnAndPublishSession(
       command: opts.command,
       shellPath,
       orcaBuiltLine: opts.launchAgent !== undefined,
-      ...(opts.retainOnPublicationFailure ? { owned: true as const } : {})
+      ...(opts.retainOnPublicationFailure
+        ? { owned: true as const, ownerBoot: opts.ownedStagingBoot }
+        : {})
     })
   }
   try {

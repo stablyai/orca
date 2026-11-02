@@ -10,6 +10,8 @@ import type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-hos
 
 export type InternalCreateOrAttachOptions = CreateOrAttachOptions & {
   retainOnPublicationFailure?: true
+  /** The boot that owns this launch's staged files; untagged files are never swept. */
+  ownedStagingBoot?: string
   reservedCapacity?: () => void
   rawSpawnObserver?: () => RawPtySpawnObserver
   agentSessionGeneration?: string

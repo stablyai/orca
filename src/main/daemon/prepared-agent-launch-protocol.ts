@@ -5,7 +5,12 @@ import type {
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
 import type { CreateOrAttachOptions } from './terminal-host-create-contract'
-import type { PreparedAgentLaunchIdentity } from '../../shared/prepared-agent-launch'
+import type {
+  PreparedAgentLaunchIdentity,
+  PreparedLaunchInputOutcome,
+  PreparedLaunchPublication,
+  PreparedPromptConsumer
+} from '../../shared/prepared-agent-launch'
 export { isPreparedAgentLaunchStatus } from '../../shared/prepared-agent-launch'
 export type {
   PreparedAgentLaunchIdentity,
@@ -40,13 +45,32 @@ export type PreparedAgentLaunchRequest = {
         identity: PreparedAgentLaunchIdentity
         launch: PreparedAgentSpawn
         prompts?: PreparedTerminalPrompts
+        publication?: Omit<PreparedLaunchPublication, 'launchToken'>
         setup?: { spawn: PreparedAgentSpawn; attemptId: string; deadline: number }
       }
     | {
-        action: 'status' | 'cancel' | 'ackPublication' | 'retireInput'
+        action: 'status'
+        identity: PreparedAgentLaunchIdentity
+        /** Only the exact publication observer asks; routing probes and lists never carry it. */
+        publication?: true
+      }
+    | {
+        action: 'cancel' | 'ackPublication' | 'retireInput'
         identity: PreparedAgentLaunchIdentity
       }
-    | { action: 'claimPrompt' | 'settlePrompt'; identity: PreparedAgentLaunchIdentity }
+    | {
+        action: 'claimPrompt'
+        identity: PreparedAgentLaunchIdentity
+        consumer: PreparedPromptConsumer
+        /** Acquisition grants nothing; an attempt is the exclusive right to begin writing. */
+        attempt?: true
+      }
+    | {
+        action: 'settlePrompt'
+        identity: PreparedAgentLaunchIdentity
+        consumer: PreparedPromptConsumer
+        outcome: PreparedLaunchInputOutcome
+      }
     | {
         action: 'wait'
         identity: PreparedAgentLaunchIdentity

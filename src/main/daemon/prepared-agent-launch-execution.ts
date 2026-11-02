@@ -15,6 +15,11 @@ import type {
   PreparedAgentLaunchStatus,
   PreparedAgentSpawn
 } from './prepared-agent-launch-protocol'
+import {
+  preparedLaunchFailureText,
+  type PreparedLaunchPublication,
+  type PreparedPromptConsumer
+} from '../../shared/prepared-agent-launch'
 
 export const PREPARED_LAUNCH_CALLER_KEY = 'prepared-agent-launch-v1'
 const CALLER_KEY = PREPARED_LAUNCH_CALLER_KEY
@@ -24,8 +29,13 @@ export type LaunchWork = {
   owner: PreparedAgentPtyOwner
   status: PreparedAgentLaunchStatus
   launch?: PreparedAgentSpawn
+  /** Retained until input retirement so recovery publishes the accepted recipe, view and authority. */
+  publication?: PreparedLaunchPublication
   prompts?: PreparedTerminalPrompts
-  promptClaimed?: boolean
+  promptConsumer?: PreparedPromptConsumer
+  /** Set before any write can begin; only that consumer's settlement or proven demise ends it. */
+  promptAttempted?: boolean
+  stopSetupScan?: () => void
   cancelDeadline?: () => void
   releaseCapacity?: () => void
   changed: Set<() => void>
@@ -37,11 +47,18 @@ export type PreparedLaunchDependencies = {
   create: (options: InternalCreateOrAttachOptions) => Promise<CreateOrAttachResult>
   isAlive: (sessionId: string) => boolean
   reserveCapacity: () => () => void
+  /** Writes a final line into a still-running Setup's own output. */
+  notice?: (sessionId: string, text: string) => void
+  isConsumerGone?: (consumer: PreparedPromptConsumer) => Promise<boolean>
+  /** A host shutting down admits no new preparation or acceptance. */
+  fenced?: () => boolean
   now?: () => number
 }
 
 export abstract class PreparedAgentLaunchExecution {
   protected rows = new Map<string, AgentSessionOperationRow>()
+  /** This host boot, once read; it tags owned staged files for cleanup after a reboot. */
+  protected boot?: string
   protected readonly now: () => number
   constructor(protected readonly deps: PreparedLaunchDependencies) {
     this.now = deps.now ?? Date.now
@@ -75,15 +92,25 @@ export abstract class PreparedAgentLaunchExecution {
         rawSpawnObserver: () => {
           let selected = false
           let ended = false
+          let scanning = work.status.execution === 'not-dispatched'
           let exitCode: number | undefined
+          // Settlement stops the scan; a still-running Setup's later output costs nothing.
+          work.stopSetupScan = () => {
+            scanning = false
+          }
           const scanner = createSetupCompletionScanner(setup.attemptId, (code) => {
             exitCode = code
+            scanning = false
             if (selected) {
               complete(code)
             }
           })
           return {
-            onData: scanner.scan,
+            onData: (data) => {
+              if (scanning) {
+                scanner.scan(data)
+              }
+            },
             onExit: () => {
               ended = true
               if (selected) {
@@ -139,6 +166,7 @@ export abstract class PreparedAgentLaunchExecution {
             },
             agentSessionGeneration: generation,
             retainOnPublicationFailure: true,
+            ...(this.boot ? { ownedStagingBoot: this.boot } : {}),
             onCreationDisposition: (disposition) => {
               creation.resolve(disposition)
               if (disposition.kind === 'physical') {
@@ -205,8 +233,8 @@ export abstract class PreparedAgentLaunchExecution {
     work.status.execution = 'settled'
     work.status.retirement = 'unused-retired'
     work.status.failure = failure
-    work.launch = undefined
-    work.prompts = undefined
+    work.stopSetupScan?.()
+    this.clearLaunchPayload(work)
     work.cancelDeadline?.()
     work.releaseCapacity?.()
     work.releaseCapacity = undefined
@@ -215,15 +243,30 @@ export abstract class PreparedAgentLaunchExecution {
       row.outcome = { status: 'failed', code: failure ?? 'cancelled' }
       delete row.preparedLaunch
     }
+    const setupSessionId = work.status.setup?.sessionId
+    if (setupSessionId && (failure === 'setup-failed' || failure === 'setup-timeout')) {
+      // Main may be absent; the surviving Setup terminal is where the user is looking.
+      const text = `\r\n[orca] ${preparedLaunchFailureText(failure, work.owner.claim.agent)}\r\n`
+      // After the output chunk that carried the marker, so the notice reads below it.
+      queueMicrotask(() => this.deps.notice?.(setupSessionId, text))
+    }
     this.notify(work)
+  }
+
+  /** Command, env, prompts and authority die with the launch obligation; the status stays readable. */
+  protected clearLaunchPayload(work: LaunchWork): void {
+    work.launch = undefined
+    work.publication = undefined
+    work.prompts = undefined
+    work.promptConsumer = undefined
+    work.promptAttempted = undefined
   }
 
   private settlePhysicalEnd(work: LaunchWork): void {
     work.physicalEnded = true
     work.status.execution = 'settled'
     work.status.retirement = 'unused-retired'
-    work.launch = undefined
-    work.prompts = undefined
+    this.clearLaunchPayload(work)
     work.releaseCapacity?.()
     work.releaseCapacity = undefined
     const row = this.rows.get(agentSessionOperationKey(CALLER_KEY, work.status.operationId))
@@ -241,8 +284,7 @@ export abstract class PreparedAgentLaunchExecution {
     work.status.execution = 'settled'
     work.status.retirement = 'unused-retired'
     work.status.failure = 'spawn-failed'
-    work.launch = undefined
-    work.prompts = undefined
+    this.clearLaunchPayload(work)
     work.releaseCapacity?.()
     work.releaseCapacity = undefined
     const row = this.rows.get(agentSessionOperationKey(CALLER_KEY, work.status.operationId))

@@ -73,7 +73,9 @@ export class TerminalHost {
       owners: this.agentSessionOwners,
       create: (options) => this.createOrAttach(options),
       isAlive: (id) => this.sessions.get(id)?.isAlive === true,
-      reserveCapacity: () => opts.spawnGate?.reservePreparedLaunch() ?? (() => {})
+      reserveCapacity: () => opts.spawnGate?.reservePreparedLaunch() ?? (() => {}),
+      notice: (id, text) => this.sessions.get(id)?.startupIngress.accept(text),
+      fenced: () => this.creationFenced
     })
     this.onSessionReaped = opts.onSessionReaped
     this.reportReadinessEvent = opts.reportReadinessEvent
@@ -128,9 +130,6 @@ export class TerminalHost {
   }
 
   preparedAgentLaunch(payload: PreparedAgentLaunchRequest['payload']): Promise<unknown> {
-    if (this.creationFenced && (payload.action === 'prepare' || payload.action === 'accept')) {
-      throw new Error('Terminal host is shutting down')
-    }
     return this.preparedLaunches.handle(payload)
   }
 

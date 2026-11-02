@@ -8,7 +8,17 @@ import {
   fingerprintPreparedAgentLaunch,
   copyPreparedAgentSpawn
 } from './prepared-agent-launch-payload'
-import { randomUUID } from 'node:crypto'
+import {
+  formatPreparedLaunchGeneration,
+  isPreparedLaunchIncarnationGone,
+  readCurrentPreparedLaunchIncarnation
+} from './prepared-agent-launch-incarnation'
+import {
+  claimPreparedPrompt,
+  settlePreparedPrompt,
+  snapshotPreparedLaunch,
+  waitForPreparedLaunch
+} from './prepared-agent-launch-handoff'
 import {
   agentSessionOperationKey,
   claimAgentSessionOperation,
@@ -30,7 +40,9 @@ const SETUP_DEADLINE_MS = 2 * 60 * 60_000
 const CALLER_KEY = PREPARED_LAUNCH_CALLER_KEY
 
 export class PreparedAgentLaunchOwner extends PreparedAgentLaunchExecution {
-  readonly generation = randomUUID()
+  private ready?: Promise<void>
+  /** Assigned before the first preparation; no work exists to address until then. */
+  generation = ''
   private readonly work = new Map<string, LaunchWork>()
 
   get pending(): number {
@@ -51,6 +63,9 @@ export class PreparedAgentLaunchOwner extends PreparedAgentLaunchExecution {
   }
 
   async handle(payload: PreparedAgentLaunchRequest['payload']): Promise<unknown> {
+    if (this.deps.fenced?.() && (payload.action === 'prepare' || payload.action === 'accept')) {
+      throw new Error('Terminal host is shutting down')
+    }
     if (payload.action === 'prepare') {
       return this.prepare(payload)
     }
@@ -69,7 +84,9 @@ export class PreparedAgentLaunchOwner extends PreparedAgentLaunchExecution {
       case 'accept':
         return this.accept(work, payload)
       case 'status':
-        return this.snapshot(work)
+        return payload.publication
+          ? { ...this.snapshot(work), publication: structuredClone(work.publication) }
+          : this.snapshot(work)
       case 'cancel':
         this.retireUnstarted(work, 'cancelled')
         return this.snapshot(work)
@@ -77,25 +94,24 @@ export class PreparedAgentLaunchOwner extends PreparedAgentLaunchExecution {
         work.status.published = true
         this.notify(work)
         return this.snapshot(work)
-      case 'claimPrompt': {
-        if (!work.status.published || work.promptClaimed || !work.prompts) {
-          return null
-        }
-        work.promptClaimed = true
-        return structuredClone(work.prompts)
-      }
+      case 'claimPrompt':
+        return claimPreparedPrompt(work, payload.consumer, payload.attempt === true, {
+          isGone: this.deps.isConsumerGone ?? isPreparedLaunchIncarnationGone,
+          notify: () => this.notify(work)
+        })
       case 'settlePrompt':
-        if (work.promptClaimed) {
-          work.prompts = undefined
+        if (work.promptConsumer?.id === payload.consumer.id && work.promptAttempted) {
+          settlePreparedPrompt(work, payload.outcome)
+          this.notify(work)
         }
-        return this.snapshot(work)
+        return snapshotPreparedLaunch(work)
       case 'retireInput':
         if (
           work.status.retirement === 'unused-retired' ||
           (work.status.physical && work.status.published && !work.prompts)
         ) {
           work.status.retirement = 'unused-retired'
-          work.launch = undefined
+          this.clearLaunchPayload(work)
           const row = this.rows.get(agentSessionOperationKey(CALLER_KEY, work.status.operationId))
           if (row) {
             delete row.preparedLaunch
@@ -103,7 +119,7 @@ export class PreparedAgentLaunchOwner extends PreparedAgentLaunchExecution {
         }
         return this.snapshot(work)
       case 'wait':
-        return this.wait(work, payload.timeoutMs, payload.until)
+        return waitForPreparedLaunch(work, payload.timeoutMs, payload.until)
     }
   }
 
@@ -116,6 +132,12 @@ export class PreparedAgentLaunchOwner extends PreparedAgentLaunchExecution {
     ) {
       throw new Error('agent_session_identity_required')
     }
+    // Read once, lazily: hosts that never prepare a launch pay no process inspection.
+    this.ready ??= readCurrentPreparedLaunchIncarnation().then((incarnation) => {
+      this.generation = formatPreparedLaunchGeneration(incarnation)
+      this.boot = incarnation.boot
+    })
+    await this.ready
     this.rows = pruneAgentSessionOperationRows(this.rows, this.now())
     for (const [id, work] of this.work) {
       if (
@@ -211,6 +233,14 @@ export class PreparedAgentLaunchOwner extends PreparedAgentLaunchExecution {
       ? { ...payload.setup, spawn: copyPreparedAgentSpawn(payload.setup.spawn) }
       : undefined
     const prompts = payload.prompts ? structuredClone(payload.prompts) : undefined
+    const launchToken = launch.env?.ORCA_AGENT_LAUNCH_TOKEN
+    const publication = {
+      ...(payload.publication?.launchConfig
+        ? { launchConfig: structuredClone(payload.publication.launchConfig) }
+        : {}),
+      ...(payload.publication?.viewMode ? { viewMode: payload.publication.viewMode } : {}),
+      ...(launchToken ? { launchToken } : {})
+    }
     const capacity = this.deps.reserveCapacity()
     const claimed = claimAgentSessionOperation(this.rows, {
       callerKey: CALLER_KEY,
@@ -225,6 +255,7 @@ export class PreparedAgentLaunchOwner extends PreparedAgentLaunchExecution {
     work.cancelDeadline?.()
     work.status.accepted = true
     work.launch = launch
+    work.publication = publication
     work.prompts = prompts
     work.releaseCapacity = capacity
     // Copy the complete accepted payload before starting either physical process.
@@ -245,9 +276,12 @@ export class PreparedAgentLaunchOwner extends PreparedAgentLaunchExecution {
   }
 
   private requireIdentity(identity: PreparedAgentLaunchIdentity): LaunchWork {
+    if (identity.daemonGeneration !== this.generation) {
+      throw new Error('agent_session_ownership_unknown')
+    }
+    // This generation holds no current or future work for an operation it does not know.
     const work = this.requireWork(identity.operationId)
     if (
-      identity.daemonGeneration !== this.generation ||
       identity.reservationGeneration !== work.owner.generation ||
       identity.fingerprint !== work.status.fingerprint
     ) {
@@ -265,40 +299,12 @@ export class PreparedAgentLaunchOwner extends PreparedAgentLaunchExecution {
   }
 
   private snapshot(work: LaunchWork): PreparedAgentLaunchStatus {
-    return structuredClone(work.status)
+    return snapshotPreparedLaunch(work)
   }
 
   protected notify(work: LaunchWork): void {
     for (const changed of work.changed) {
       changed()
     }
-  }
-
-  private wait(
-    work: LaunchWork,
-    requestedMs: number,
-    until: 'setup' | 'launch' = 'launch'
-  ): Promise<PreparedAgentLaunchStatus> {
-    const ready = () =>
-      (until === 'setup' && work.status.setup?.incarnationId !== undefined) ||
-      (work.status.execution !== 'not-dispatched' && work.status.execution !== 'dispatching')
-    if (ready()) {
-      return Promise.resolve(this.snapshot(work))
-    }
-    return new Promise((resolve) => {
-      const done = () => {
-        if (!ready()) {
-          return
-        }
-        finish()
-      }
-      const finish = () => {
-        clearTimeout(timer)
-        work.changed.delete(done)
-        resolve(this.snapshot(work))
-      }
-      const timer = setTimeout(finish, Math.max(1, Math.min(10_000, requestedMs)))
-      work.changed.add(done)
-    })
   }
 }

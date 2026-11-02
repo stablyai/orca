@@ -7,6 +7,7 @@ import {
   utimesSync,
   writeFileSync
 } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -14,6 +15,7 @@ import {
   STAGED_STARTUP_COMMAND_STALE_MS,
   discardStagedStartupCommand,
   stageStartupCommand,
+  sweepPriorBootOwnedStaging,
   sweepStaleStagedStartupCommands
 } from './startup-command-staging'
 
@@ -199,6 +201,28 @@ describe('stageStartupCommand', () => {
         owned: true
       })
     ).toThrow()
+  })
+
+  it('reclaims owned launch files only after the host has booted again', () => {
+    const owned = (ownerBoot?: string) =>
+      stageStartupCommand({
+        command: `cx '${'x'.repeat(600)}'`,
+        shellPath: '/bin/zsh',
+        platform: 'darwin',
+        directory,
+        owned: true,
+        ...(ownerBoot ? { ownerBoot } : {})
+      })
+    const crashedBeforeReboot = owned('boot-before')
+    const untagged = owned()
+    const current = owned('boot-now')
+    sweepPriorBootOwnedStaging({
+      directory,
+      bootTag: createHash('sha256').update('boot-now').digest('hex').slice(0, 16)
+    })
+    expect(() => statSync(crashedBeforeReboot.directoryPath!)).toThrow()
+    expect(readFileSync(current.scriptPath!, 'utf8')).toContain('cx ')
+    expect(readFileSync(untagged.scriptPath!, 'utf8')).toContain('cx ')
   })
 
   it('types the full command and says so when the script cannot be written', () => {
