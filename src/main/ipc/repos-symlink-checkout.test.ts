@@ -393,6 +393,34 @@ it('classifies cached rows with no filesystem probes and picks up a retargeted a
     ])
   }
   expect(asyncProbe).not.toHaveBeenCalled()
+
+  // The desktop scan derives once per local Git repo per pass, never for WSL or folder repos.
+  const wsl = savedRepo('fleet-wsl', String.raw`\\wsl.localhost\Ubuntu\home\user\fleet`)
+  const folder: Repo = { ...savedRepo('fleet-folder', join(alias, 'folder')), kind: 'folder' }
+  for (const count of [3, 30]) {
+    const fleet = Array.from({ length: count }, (_, index) => {
+      git(parent, ['init', '-q', join(parent, `fleet-${count}-${index}`)])
+      return savedRepo(`fleet-${count}-${index}`, join(alias, `fleet-${count}-${index}`))
+    })
+    f.repos.push(...fleet)
+    asyncProbe.mockClear()
+    await Promise.all(
+      [...fleet, wsl, folder].map((repo) =>
+        listDetectedGitWorktrees(f.ipcStore, repo).catch(() => null)
+      )
+    )
+    expect(asyncProbe.mock.calls.map(([path]) => path).sort()).toEqual(
+      fleet.map((repo) => repo.path).sort()
+    )
+    asyncProbe.mockClear()
+    for (const repo of fleet) {
+      const cached = await listDetectedGitWorktrees(f.ipcStore, repo)
+      expect(buildDetectedGitWorktrees(f.ipcStore, repo, cached.gitWorktrees)).toEqual([
+        expect.objectContaining({ selectedCheckout: true, visible: true })
+      ])
+    }
+    expect(asyncProbe).not.toHaveBeenCalled()
+  }
   expect(syncProbe).not.toHaveBeenCalled()
 
   const moved = join(root, 'moved')
