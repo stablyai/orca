@@ -28,7 +28,8 @@ describe('the Setup failure line written into a live shell', () => {
     vi.useRealTimers()
   })
 
-  it('lands above the prompt the shell already drew, keeping its typed input and cursor', async () => {
+  /** A prepared Setup in a fake shell, failed with exit 3 and bound to the session main writes into. */
+  async function failedSetup() {
     let emit: (data: string) => void = () => {}
     let statusFile = ''
     const spawnSubprocess = vi.fn<SpawnSubprocess>((opts) => {
@@ -96,8 +97,6 @@ describe('the Setup failure line written into a live shell', () => {
         await host!.preparedAgentLaunch({ action: 'status', identity: prepared })
       ).toHaveProperty('setup.incarnationId')
     )
-
-    // Setup fails, and the interactive shell draws its prompt before main's answer arrives.
     emit('npm install\r\nnpm ERR! missing script\r\n')
     writeFileSync(statusFile, `${attemptId}:3\n`)
     await vi.waitFor(async () =>
@@ -105,23 +104,56 @@ describe('the Setup failure line written into a live shell', () => {
         await host!.preparedAgentLaunch({ action: 'status', identity: prepared })
       ).toMatchObject({ failure: 'setup-failed' })
     )
-    emit('$ git sta')
-    await expect(
-      host.preparedAgentLaunch({ action: 'writeSetupOutcome', identity: prepared, text: FAILED })
-    ).resolves.toEqual({ written: true })
-    emit('tus')
+    const write = () =>
+      host!.preparedAgentLaunch({ action: 'writeSetupOutcome', identity: prepared, text: FAILED })
+    const screen = async () => {
+      const attached = await host!.createOrAttach({
+        sessionId: 'setup',
+        cols: COLS,
+        rows: ROWS,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+      const emulator = new HeadlessEmulator({ cols: COLS, rows: ROWS })
+      emulator.writeSync(attached.snapshot!.snapshotAnsi)
+      const lines = emulator.getVisibleLines()
+      emulator.dispose()
+      return lines
+    }
+    return { emit, write, screen }
+  }
 
-    const screen = new HeadlessEmulator({ cols: COLS, rows: ROWS })
-    const attached = await host.createOrAttach({
-      sessionId: 'setup',
-      cols: COLS,
-      rows: ROWS,
-      streamClient: { onData: vi.fn(), onExit: vi.fn() }
-    })
-    screen.writeSync(attached.snapshot!.snapshotAnsi)
-    const lines = screen.getVisibleLines()
+  it('lands above the prompt the shell already drew, keeping its typed input and cursor', async () => {
+    const setup = await failedSetup()
+    // The interactive shell draws its prompt before main's answer arrives.
+    setup.emit('$ git sta')
+    await expect(setup.write()).resolves.toEqual({ written: true })
+    setup.emit('tus')
+
+    const lines = await setup.screen()
     expect(lines.at(-1)?.trimEnd()).toBe('$ git status')
     expect(lines.slice(-4, -1).join('').trimEnd()).toBe(`[orca] ${FAILED}`)
-    screen.dispose()
+  })
+
+  it('declines a typed line that wraps, so main shows its toast and the input stays whole', async () => {
+    const setup = await failedSetup()
+    const typed = `$ ${'a'.repeat(50)}`
+    setup.emit(typed)
+    await expect(setup.write()).resolves.toEqual({ written: false })
+    // A repeat after a lost reply gets the same answer and still writes nothing.
+    await expect(setup.write()).resolves.toEqual({ written: false })
+
+    const lines = await setup.screen()
+    expect(lines.join('\n')).not.toContain('[orca]')
+    const drawn = lines.map((line) => line.trimEnd()).filter(Boolean)
+    expect(drawn.slice(-2).join('')).toBe(typed)
+  })
+
+  it('declines while a program owns the alternate screen, so the explanation is not lost with it', async () => {
+    const setup = await failedSetup()
+    setup.emit('$ vim notes\r\n\x1b[?1049h\x1b[HEDITOR')
+    await expect(setup.write()).resolves.toEqual({ written: false })
+    setup.emit('\x1b[?1049l$ ')
+
+    expect((await setup.screen()).join('\n')).not.toContain('[orca]')
   })
 })

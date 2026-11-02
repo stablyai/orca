@@ -67,7 +67,6 @@ export function revealCreatedTerminal(args: {
                 }
               }
             : {}),
-          ...(launchOpts.preparedLaunchSetup ? { preparedLaunchSetup: true as const } : {}),
           activate: presentation === 'focused',
           ...(presentation ? { presentation } : {}),
           ...dependencies.terminalRevealViewerOptions(opts),

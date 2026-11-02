@@ -67,6 +67,13 @@ export const uiClipboardAndWindowControlsApi = {
     ipcRenderer.on('ui:preparedAgentLaunchNotice', listener)
     return () => ipcRenderer.removeListener('ui:preparedAgentLaunchNotice', listener)
   },
+  onPreparedLaunchSetups: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, tabs: Parameters<typeof callback>[0]) =>
+      callback(tabs)
+    ipcRenderer.on('ui:preparedLaunchSetups', listener)
+    return () => ipcRenderer.removeListener('ui:preparedLaunchSetups', listener)
+  },
+  getPreparedLaunchSetups: () => ipcRenderer.invoke('ui:getPreparedLaunchSetups'),
   onProjectMovePause: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>
       callback(request)

@@ -1,36 +1,47 @@
+import type { PreparedLaunchSetupTab } from '../../../shared/prepared-agent-launch'
 import type { RuntimeNewTerminalTabPlacement } from '../../../shared/runtime-types'
 import { placeCreatedTerminalTab } from './unified-tab-anchor-insertion'
 
-// Setup tabs of accepted agent launches whose agent has not been shown yet, by tab id → workspace.
-// Session memory only: a restarted window learns them again when main republishes Setup.
-const setupTabWorkspaces = new Map<string, string>()
+// Setup tabs of accepted launches still waiting for their agent, by tab id → workspace. Only a copy of
+// main's list: main sends every change, and a loaded or reloaded window asks for it once.
+let setupTabWorkspaces = new Map<string, string>()
 
-/** What a prepared launch's reveal asks of the tab it shows. */
+function adoptPreparedLaunchSetups(tabs: PreparedLaunchSetupTab[]): void {
+  setupTabWorkspaces = new Map(tabs.map((tab) => [tab.tabId, tab.worktreeId]))
+}
+
+export function registerPreparedLaunchSetupSync(unsubs: (() => void)[]): void {
+  const { onPreparedLaunchSetups, getPreparedLaunchSetups } = window.api.ui
+  let changed = false
+  if (onPreparedLaunchSetups) {
+    unsubs.push(
+      onPreparedLaunchSetups((tabs) => {
+        changed = true
+        adoptPreparedLaunchSetups(tabs)
+      })
+    )
+  }
+  // A change that lands first is newer than this answer.
+  void getPreparedLaunchSetups?.().then((tabs) => {
+    if (!changed) {
+      adoptPreparedLaunchSetups(tabs)
+    }
+  })
+}
+
+/** Only the tab a prepared agent's reveal made takes the launch's initial place; an existing one keeps the user's. */
 export function applyPreparedLaunchReveal(
   worktreeId: string,
   tabId: string,
   created: boolean,
-  reveal: { newTabPlacement?: RuntimeNewTerminalTabPlacement; preparedLaunchSetup?: true }
+  newTabPlacement: RuntimeNewTerminalTabPlacement | undefined
 ): void {
-  if (reveal.preparedLaunchSetup) {
-    setupTabWorkspaces.set(tabId, worktreeId)
-  }
-  if (!reveal.newTabPlacement) {
-    return
-  }
-  // The agent arrived, so its workspace no longer waits on Setup.
-  for (const [setupTabId, workspace] of setupTabWorkspaces) {
-    if (workspace === worktreeId) {
-      setupTabWorkspaces.delete(setupTabId)
-    }
-  }
-  // Only the tab this reveal made takes the launch's initial place; an existing one keeps the user's.
-  if (created) {
-    placeCreatedTerminalTab(worktreeId, tabId, reveal.newTabPlacement.afterTabId ?? null)
+  if (newTabPlacement && created) {
+    placeCreatedTerminalTab(worktreeId, tabId, newTabPlacement.afterTabId ?? null)
   }
 }
 
-/** Closing an accepted launch's Setup leaves its workspace selected, even when that empties it. */
+/** Closing an accepted launch's waiting Setup leaves its workspace selected, even when that empties it. */
 export function closesPreparedLaunchSetup(tabId: string): boolean {
   return setupTabWorkspaces.delete(tabId)
 }

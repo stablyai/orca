@@ -81,6 +81,9 @@ export type PreparedLaunchFailureReason =
   | 'setup-not-started'
   | 'exited'
 
+/** The revealed Setup tab of a launch still waiting for its agent; closing it keeps its workspace selected. */
+export type PreparedLaunchSetupTab = { worktreeId: string; tabId: string }
+
 /** A final launch outcome no surviving terminal shows; the window shows one short notice per operation. */
 export type PreparedAgentLaunchNotice = {
   operationId: string

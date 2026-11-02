@@ -15,6 +15,7 @@ import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-
 import { revealTerminalPaneInWindow } from './terminal-pane-reveal-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
+import { onWaitingPreparedSetupsChanged } from '../runtime/terminal/launch/prepared-setup-waiting'
 
 let runtimeNotifierTokenCounter = 0
 let activeRuntimeNotifierToken: number | null = null
@@ -130,7 +131,6 @@ export function registerRuntimeWindowLifecycle(
           ...(opts.targetGroupId ? { targetGroupId: opts.targetGroupId } : {}),
           ...(opts.afterTabId ? { afterTabId: opts.afterTabId } : {}),
           ...(opts.newTabPlacement ? { newTabPlacement: opts.newTabPlacement } : {}),
-          ...(opts.preparedLaunchSetup ? { preparedLaunchSetup: true } : {}),
           ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
           activate: opts.activate !== false,
           ...(opts.presentation ? { presentation: opts.presentation } : {}),
@@ -260,7 +260,11 @@ export function registerRuntimeWindowLifecycle(
   mainWebContents.on('render-process-gone', () => {
     rendererNotifications.onRendererProcessGone()
   })
+  const detachPreparedLaunchSetups = onWaitingPreparedSetupsChanged((tabs) =>
+    send('ui:preparedLaunchSetups', tabs)
+  )
   mainWindow.on('closed', () => {
+    detachPreparedLaunchSetups()
     detachSidebarInputsNotices?.()
     rendererNotifications.close()
     runtime.markGraphUnavailable(mainWindow.id)

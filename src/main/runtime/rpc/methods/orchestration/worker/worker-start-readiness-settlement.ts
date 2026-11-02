@@ -21,6 +21,7 @@ import {
   type WorkerEffect,
   type WorkerSetupReceipt
 } from './worker-topology'
+import { retainKeptOpenWorkerTerminal } from './created-worker-terminal-custody'
 
 /** Claim ready only for proven turn start or unsupported observation; supported-but-unobserved starts remain start_unknown. */
 export async function deliverAndSettleWorkerStartReadiness(args: {
@@ -47,11 +48,16 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   readinessDeadline: number
   effects: WorkerEffect[]
   terminalRevealWarning: string | undefined
+  /** A keep-open write that failed at custody; tried once more before the task goes in. */
+  retention?: Parameters<typeof retainKeptOpenWorkerTerminal>[0]
   /** Keeps the caller's failure receipt naming the stage that actually failed. */
   onStage: (stage: 'dispatch_input' | 'turn_observation') => void
 }): Promise<unknown> {
   const { runtime, db, run, task, structuredSession, terminalHandle, effects } = args
 
+  if (args.retention) {
+    retainKeptOpenWorkerTerminal(args.retention)
+  }
   args.onStage('dispatch_input')
   const deliveryStartedAt = Date.now()
   const delivery = await deliverWorkerDispatchPreamble({

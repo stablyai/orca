@@ -9,7 +9,7 @@ import type {
 } from '../../shared/claimed-agent-pty-owner'
 import { SETUP_STATUS_FILE_ENV } from '../../shared/observed-setup-launch'
 import { observeSetupStatus } from './prepared-setup-status'
-import { isOneLine, lineAboveCursor } from './setup-outcome-line'
+import { writeSetupOutcomeLine } from './setup-outcome-line'
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import type {
@@ -35,7 +35,7 @@ export type LaunchWork = {
   /** The exact Setup process while it runs; a replacement under its id is never returned. */
   liveSetup?: () => SetupOutputSession | undefined
   /** The one answer to main's Setup line, kept with the launch so a repeat never writes again. */
-  setupOutcomeWritten?: boolean
+  setupOutcomeWritten?: Promise<boolean>
   cancelDeadline?: () => void
   releaseCapacity?: () => void
   changed: Set<() => void>
@@ -49,6 +49,8 @@ export type SetupOutputSession = {
   paneKey?: string
   startupIngress: { accept(data: string): void }
   cols?: number
+  /** Read after the session's output is parsed; false when unknown. */
+  takesLineAboveCursor(): Promise<boolean>
 }
 
 export type PreparedLaunchDependencies = {
@@ -272,16 +274,13 @@ export abstract class PreparedAgentLaunchExecution {
     this.notify(work)
   }
 
-  /** Writes main's explanation into this launch's own Setup, only while that exact process runs. */
-  protected writeSetupOutcome(work: LaunchWork, text: string): boolean {
+  /** Writes main's explanation into this launch's own Setup, only while that exact process runs and the line is safe. */
+  protected writeSetupOutcome(work: LaunchWork, text: string): Promise<boolean> {
     // Decided once: a repeat after a lost reply, even once Setup has closed, gets the same answer.
-    if (work.setupOutcomeWritten === undefined) {
-      const session = work.status.physical ? undefined : work.liveSetup?.()
-      work.setupOutcomeWritten = session !== undefined && isOneLine(text)
-      if (session && work.setupOutcomeWritten) {
-        session.startupIngress.accept(lineAboveCursor(`[orca] ${text}`, session.cols))
-      }
-    }
+    work.setupOutcomeWritten ??= writeSetupOutcomeLine(
+      () => (work.status.physical ? undefined : work.liveSetup?.()),
+      text
+    )
     return work.setupOutcomeWritten
   }
 

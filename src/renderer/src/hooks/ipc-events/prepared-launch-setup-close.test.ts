@@ -35,7 +35,6 @@ vi.mock('../../store', () => ({
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
 
 import { registerTerminalPresentationIpcBridge } from './terminal-presentation-ipc-bridge'
-import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
 
 const WORKTREE = 'repo1::/repo1/main'
 const SETUP = {
@@ -43,23 +42,50 @@ const SETUP = {
   leafId: '11111111-1111-4111-8111-000000000011'
 }
 
-type Listener = (payload: Record<string, unknown>) => void
+type Listener = (payload: unknown) => void
 
-async function revealSetupAndClose(preparedLaunchSetup: boolean): Promise<string | null> {
+/** A window whose main lists `waiting` as the Setup tabs of launches still waiting for their agent. */
+function openWindow(waiting: { worktreeId: string; tabId: string }[]) {
   const listeners = new Map<string, Listener>()
   const ui = new Proxy(
-    {},
+    { getPreparedLaunchSetups: async () => waiting },
     {
-      get: (_target, name) =>
-        typeof name === 'string' && name.startsWith('on')
-          ? (listener: Listener) => {
-              listeners.set(name, listener)
-              return () => {}
-            }
-          : vi.fn()
+      get: (target, name) =>
+        name === 'getPreparedLaunchSetups'
+          ? target.getPreparedLaunchSetups
+          : typeof name === 'string' && name.startsWith('on')
+            ? (listener: Listener) => {
+                listeners.set(name, listener)
+                return () => {}
+              }
+            : vi.fn()
     }
   )
   vi.stubGlobal('window', { dispatchEvent: vi.fn(), api: { ...createStoreSessionMockApi(), ui } })
+  return listeners
+}
+
+/** Loads the window's modules, as a first load or a reload does, and closes the selected tab there. */
+async function loadWindowAndClose(waiting: boolean): Promise<string | null> {
+  const { registerPreparedLaunchSetupSync, holdsPreparedLaunchSetup } =
+    await import('@/lib/prepared-launch-reveal')
+  const { dispatchWorkspaceTabCommand } = await import('@/lib/workspace-tab-commands')
+  registerPreparedLaunchSetupSync([])
+  // The window asks main once as it loads.
+  await vi.waitFor(() => expect(holdsPreparedLaunchSetup(WORKTREE)).toBe(waiting))
+  // The tab bar's close: the user closes Setup while the launch's agent has not appeared yet.
+  dispatchWorkspaceTabCommand({ type: 'close' })
+  await vi.waitFor(() =>
+    expect(testStore().getState().tabsByWorktree[WORKTREE] ?? []).toHaveLength(0)
+  )
+  return testStore().getState().activeWorktreeId
+}
+
+async function revealSetupAndClose(
+  waiting: boolean,
+  options: { reload?: boolean } = {}
+): Promise<string | null> {
+  const listeners = openWindow(waiting ? [{ worktreeId: WORKTREE, tabId: SETUP.tabId }] : [])
   // No panel holds focus: the close comes from the workspace's own tab bar.
   vi.stubGlobal('HTMLElement', class {})
   vi.stubGlobal('document', { activeElement: null })
@@ -77,21 +103,23 @@ async function revealSetupAndClose(preparedLaunchSetup: boolean): Promise<string
     ptyId: 'pty-setup',
     ...SETUP,
     title: 'Setup',
-    presentation: 'focused',
-    ...(preparedLaunchSetup ? { preparedLaunchSetup: true } : {})
+    presentation: 'focused'
   })
   expect(testStore().getState().tabsByWorktree[WORKTREE]).toHaveLength(1)
-  // The tab bar's close: the user closes Setup while the launch's agent has not appeared yet.
-  dispatchWorkspaceTabCommand({ type: 'close' })
-  await vi.waitFor(() =>
-    expect(testStore().getState().tabsByWorktree[WORKTREE] ?? []).toHaveLength(0)
-  )
-  return testStore().getState().activeWorktreeId
+  if (options.reload) {
+    // A reloaded window keeps its restored tabs but none of its module memory, and sees no new reveal.
+    vi.resetModules()
+  }
+  return loadWindowAndClose(waiting)
 }
 
 describe('closing the only Setup tab of an accepted agent launch', () => {
   it('keeps its workspace selected, on its empty state', async () => {
     expect(await revealSetupAndClose(true)).toBe(WORKTREE)
+  })
+
+  it('keeps it selected after the window reloads, from main’s list of waiting Setups', async () => {
+    expect(await revealSetupAndClose(true, { reload: true })).toBe(WORKTREE)
   })
 
   it('still leaves a workspace emptied by closing an ordinary last tab', async () => {

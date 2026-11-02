@@ -19,12 +19,23 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-it.each(['agent', 'shell'] as const)(
-  'keeps the guarded worker continuation after caller timeout: %s',
-  async (foreground) => {
+it.each([
+  ['agent', false],
+  ['shell', false],
+  // Keep-open is bookkeeping: its failed write never stops the accepted task, and its retry still lands first.
+  ['agent', true]
+] as const)(
+  'keeps the guarded worker continuation after caller timeout: %s (keep-open write fails once: %s)',
+  async (foreground, retentionFailsOnce) => {
     vi.useFakeTimers()
     const db = new OrchestrationDb(':memory:')
     database = db
+    if (retentionFailsOnce) {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      vi.spyOn(db, 'retainWorkerTerminalResource').mockImplementationOnce(() => {
+        throw new Error('SQLITE_BUSY: database is locked')
+      })
+    }
     const physical = Promise.withResolvers<RuntimeTerminalCreate>()
     const pending = {
       operationId: 'operation',

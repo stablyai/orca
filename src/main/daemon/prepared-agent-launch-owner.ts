@@ -107,7 +107,7 @@ export class PreparedAgentLaunchOwner extends PreparedAgentLaunchExecution {
       case 'wait':
         return waitForPreparedLaunch(work, payload.timeoutMs, payload.until)
       case 'writeSetupOutcome':
-        return { written: this.writeSetupOutcome(work, payload.text) }
+        return { written: await this.writeSetupOutcome(work, payload.text) }
     }
   }
 
@@ -308,6 +308,7 @@ export function preparedSetupSession(session: Session | undefined): SetupOutputS
     terminalHandle: session.terminalHandle,
     ...(paneKey ? { paneKey } : {}),
     startupIngress: session.startupIngress,
-    ...(size ? { cols: size.cols } : {})
+    ...(size ? { cols: size.cols } : {}),
+    takesLineAboveCursor: () => session.takesLineAboveCursor()
   }
 }

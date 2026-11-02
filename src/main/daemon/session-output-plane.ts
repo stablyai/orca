@@ -131,6 +131,10 @@ export class SessionOutputPlane {
     return this.emulator.isCursorOnEmptyPromptLine()
   }
 
+  isCursorOnWholeNormalLine(): boolean {
+    return !this.disposed && this.emulator.isCursorOnWholeNormalLine()
+  }
+
   getCwd(): string | null {
     return this.emulator.getCwd()
   }

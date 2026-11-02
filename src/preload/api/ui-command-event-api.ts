@@ -63,7 +63,10 @@ import type {
   SessionTabCloseResponse
 } from '../../shared/session-tab-close'
 import type { WorkspaceSleepNotice } from '../../shared/workspace-sleep'
-import type { PreparedAgentLaunchNotice } from '../../shared/prepared-agent-launch'
+import type {
+  PreparedAgentLaunchNotice,
+  PreparedLaunchSetupTab
+} from '../../shared/prepared-agent-launch'
 import type {
   RemoteCliBrowserScopeQuery,
   RemoteCliBrowserScopeReply
@@ -195,7 +198,6 @@ export type UiCommandEventApi = {
       targetGroupId?: string
       afterTabId?: string
       newTabPlacement?: RuntimeNewTerminalTabPlacement
-      preparedLaunchSetup?: true
       shellOverride?: string
       title?: string
       ptyId?: string
@@ -297,6 +299,9 @@ export type UiCommandEventApi = {
   onPreparedAgentLaunchNotice?: (
     callback: (notice: PreparedAgentLaunchNotice) => void
   ) => () => void
+  /** Main's whole list of Setup tabs whose accepted launch still waits, sent on every change. */
+  onPreparedLaunchSetups?: (callback: (tabs: PreparedLaunchSetupTab[]) => void) => () => void
+  getPreparedLaunchSetups?: () => Promise<PreparedLaunchSetupTab[]>
   onProjectMovePause?: (callback: (request: ProjectMovePauseRequest) => void) => () => void
   respondProjectMovePause?: (response: ProjectMovePauseResponse) => void
   onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void) => () => void

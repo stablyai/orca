@@ -287,6 +287,7 @@ export async function startLocalWorker(args: {
         readinessDeadline,
         effects,
         terminalRevealWarning: placed.warning,
+        retention: setupStage,
         onStage
       })
     } catch (error) {

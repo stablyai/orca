@@ -37,6 +37,8 @@ type FixtureOptions = {
   agentCreateFails?: boolean
   /** Whether that Setup's session can take output when main asks; false before registration. */
   setupSessionLive?: () => boolean
+  /** Whether a line fits above its cursor; false under an alternate screen or a wrapped edit line. */
+  setupTakesLine?: boolean
   /** The connection drops once around the Setup line request: before it reaches the daemon, or after. */
   setupWriteFault?: 'request-lost' | 'reply-lost'
 }
@@ -80,7 +82,8 @@ async function fixture(options: FixtureOptions = {}) {
             isAlive: true,
             incarnationId: incarnation,
             terminalHandle: 'term_setup',
-            startupIngress: { accept: (data: string) => setupLines.push(data) }
+            startupIngress: { accept: (data: string) => setupLines.push(data) },
+            takesLineAboveCursor: async () => options.setupTakesLine ?? true
           }
         : undefined
   })
@@ -499,15 +502,17 @@ describe('final outcome explanation', () => {
   )
 
   it.each([
-    ['takes the line', true, { lines: 1, notices: [] }],
-    ['cannot take it yet', false, { lines: 0, notices: ['setup-failed'] }]
+    ['takes the line', true, true, { lines: 1, notices: [] }],
+    ['cannot take it yet', false, true, { lines: 0, notices: ['setup-failed'] }],
+    ['cannot fit it whole', true, false, { lines: 0, notices: ['setup-failed'] }]
   ])(
     'explains a nonzero Setup completion buffered before its session existed exactly once (session %s)',
-    async (_case, live, expected) => {
+    async (_case, live, takesLine, expected) => {
       // Windows native start can deliver the completion before the process is selected.
       const f = await fixture({
         setupStatusBeforeSelected: 9,
-        setupSessionLive: () => live
+        setupSessionLive: () => live,
+        setupTakesLine: takesLine
       })
       const started = await startPreparedWorktreeTerminals({
         worktreeId: 'wt',

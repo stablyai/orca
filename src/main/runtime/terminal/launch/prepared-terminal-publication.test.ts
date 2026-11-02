@@ -29,6 +29,7 @@ import { PreparedAgentLaunchOwner } from '../../../daemon/prepared-agent-launch-
 import { fingerprintPreparedAgentLaunch } from '../../../daemon/prepared-agent-launch-payload'
 import type { RawPtySpawnObserver } from '../../../daemon/pty-subprocess'
 import { reportSetupStatus } from '../../../daemon/prepared-setup-status-test-harness'
+import { listWaitingPreparedSetups } from './prepared-setup-waiting'
 import {
   publishPreparedTerminal,
   reconcilePreparedTerminalPublications,
@@ -134,7 +135,8 @@ async function fixture(
             incarnationId: incarnations.setup,
             terminalHandle: 'term_setup',
             paneKey: `${surfaces.setup.tabId}:${surfaces.setup.leafId}`,
-            startupIngress: { accept: (data: string) => setupLines.push(data) }
+            startupIngress: { accept: (data: string) => setupLines.push(data) },
+            takesLineAboveCursor: async () => true
           }
         : undefined
   })
@@ -312,8 +314,11 @@ describe('prepared terminal publication recovery', () => {
       })
     )
     expect(f.create).toHaveBeenCalledTimes(1)
+    // Main's own live state says this Setup still waits, for any window that loads now.
+    expect(listWaitingPreparedSetups()).toEqual([{ worktreeId: 'wt', tabId: 'tab_setup' }])
     f.zero()
     await publication
+    expect(listWaitingPreparedSetups()).toEqual([])
     expect(f.create).toHaveBeenCalledTimes(2)
     expect(f.createTerminal).toHaveBeenCalledTimes(2)
     expect(f.retire).toHaveBeenCalledTimes(1)
@@ -372,11 +377,6 @@ describe('prepared terminal publication recovery', () => {
     expect(f.createTerminal.mock.calls.map(([, options]) => options.placeNewTab)).toEqual([
       undefined,
       true
-    ])
-    // Only Setup's reveal says its workspace waits for an agent still to come.
-    expect(f.createTerminal.mock.calls.map(([, options]) => options.preparedLaunchSetup)).toEqual([
-      true,
-      undefined
     ])
   })
 

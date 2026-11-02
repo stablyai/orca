@@ -81,7 +81,6 @@ export type RuntimeNotifier = {
       targetGroupId?: string
       afterTabId?: string
       newTabPlacement?: RuntimeNewTerminalTabPlacement
-      preparedLaunchSetup?: true
       shellOverride?: string
       activate?: boolean
       presentation?: RuntimeTerminalPresentation

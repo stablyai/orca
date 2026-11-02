@@ -40,7 +40,6 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         targetGroupId,
         afterTabId,
         newTabPlacement,
-        preparedLaunchSetup,
         shellOverride,
         title,
         ptyId,
@@ -149,10 +148,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           if (afterTabId) {
             placeCreatedTerminalTab(worktreeId, tab.id, afterTabId)
           }
-          applyPreparedLaunchReveal(worktreeId, tab.id, !reusedTab, {
-            ...(newTabPlacement ? { newTabPlacement } : {}),
-            ...(preparedLaunchSetup ? { preparedLaunchSetup } : {})
-          })
+          applyPreparedLaunchReveal(worktreeId, tab.id, !reusedTab, newTabPlacement)
           // Different reused IDs break the PTY’s baked-in paneKey attribution; warn in dev.
           if (tabId !== undefined && tab.id !== tabId) {
             console.warn(

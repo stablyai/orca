@@ -24,6 +24,7 @@ import type { AgentSessionRecordStore } from '../../agent-session/records/agent-
 import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
 import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { setWaitingPreparedSetup } from './prepared-setup-waiting'
 
 export type PreparedPublicationPorts = {
   controller: RuntimePtyController
@@ -78,6 +79,8 @@ export function publishPreparedTerminal(
   const publication = publish(identity, descriptor, ports, currentOptions).finally(() => {
     if (pending.get(key) === publication) {
       pending.delete(key)
+      // The agent is published or the launch is settled: its Setup no longer waits on it.
+      setWaitingPreparedSetup(identity.operationId, undefined)
     }
   })
   pending.set(key, publication)
@@ -245,8 +248,11 @@ async function publishPreparedSetup(
     expectedIncarnationId: status.setup.incarnationId,
     preAllocatedHandle: setup.terminalHandle,
     attachOnly: true,
-    surfaceOwner: false,
-    preparedLaunchSetup: true
+    surfaceOwner: false
+  })
+  setWaitingPreparedSetup(setup.operationId, {
+    worktreeId: descriptor.surface.worktreeId,
+    tabId: pane.tabId
   })
   return true
 }
