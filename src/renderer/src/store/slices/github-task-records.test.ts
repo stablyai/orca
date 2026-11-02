@@ -1,3 +1,4 @@
+import { answered } from '../github/answered-request.test-fixture'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
@@ -74,7 +75,7 @@ async function tasksRow(store: ReturnType<typeof createTestStore>, item: GitHubW
   const copy = () => Object.values(store.getState().workItemsCache).flatMap((e) => e.data ?? [])[0]
   const capture = () => store.getState().githubTaskCache.capture(repo, sourceContext)!
   const search = async () =>
-    (
+    answered(
       await store
         .getState()
         .fetchWorkItems(repo.id, repo.path, 20, '', { sourceContext, force: true })
@@ -394,16 +395,18 @@ describe('shared GitHub task records through production store actions', () => {
       }
     })
     lookup.mockResolvedValue({ ...row, labels: ['current'] })
-    const result = await store
-      .getState()
-      .fetchWorkItemsNextPage([{ repoId: repo.id, path: repo.path }], 20, 20, '', 2)
+    const result = answered(
+      await store
+        .getState()
+        .fetchWorkItemsNextPage([{ repoId: repo.id, path: repo.path }], 20, 20, '', 2)
+    )
     expect(result.items[0].labels).toEqual(['current'])
     mockApi.gh.listWorkItems.mockResolvedValue({
       items: [],
       sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
     })
     expect(
-      (
+      answered(
         await store
           .getState()
           .fetchWorkItemsNextPage([{ repoId: repo.id, path: repo.path }], 20, 20, '', 3)

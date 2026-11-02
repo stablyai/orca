@@ -110,7 +110,9 @@ it('settles an obsolete smart-search result held by no save without clearing or 
   renderHook(() =>
     useSmartWorkspaceGithubSearch({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only these foundation fields; the other providers' fields play no part in GitHub search.
-      foundation: foundation as Parameters<typeof useSmartWorkspaceGithubSearch>[0]['foundation'],
+      foundation: foundation as unknown as Parameters<
+        typeof useSmartWorkspaceGithubSearch
+      >[0]['foundation'],
       sourceQueryWithinLimit: true,
       shouldQueryGithub: true
     })
@@ -167,7 +169,9 @@ it.each([false, true])(
     const { unmount } = renderHook(() =>
       useSmartWorkspaceGithubSearch({
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only these foundation fields; the other providers' fields play no part in GitHub search.
-        foundation: foundation as Parameters<typeof useSmartWorkspaceGithubSearch>[0]['foundation'],
+        foundation: foundation as unknown as Parameters<
+          typeof useSmartWorkspaceGithubSearch
+        >[0]['foundation'],
         sourceQueryWithinLimit: true,
         shouldQueryGithub: true
       })

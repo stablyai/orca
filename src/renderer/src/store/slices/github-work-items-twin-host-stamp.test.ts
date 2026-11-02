@@ -1,3 +1,4 @@
+import { answered } from '../github/answered-request.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore, mockApi, resetRemoteRuntimeMocks } from './github-slice-test-harness'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
@@ -40,9 +41,11 @@ describe('work items fetched for a repo id two hosts share', () => {
     const store = createTestStore()
     store.setState({ repos: [localRow, sshRow] })
 
-    const result = await store
-      .getState()
-      .fetchWorkItemsAcrossRepos([{ repoId: 'twin', path: '/remote/twin' }], 24, 100, '')
+    const result = answered(
+      await store
+        .getState()
+        .fetchWorkItemsAcrossRepos([{ repoId: 'twin', path: '/remote/twin' }], 24, 100, '')
+    )
 
     expect(result.items.map((entry) => entry.repoHostId)).toEqual(['ssh:builder'])
   })
@@ -51,9 +54,11 @@ describe('work items fetched for a repo id two hosts share', () => {
     const store = createTestStore()
     store.setState({ repos: [localRow, sshRow] })
 
-    const result = await store
-      .getState()
-      .fetchWorkItemsNextPage([{ repoId: 'twin', path: '/remote/twin' }], 24, 100, '', 1)
+    const result = answered(
+      await store
+        .getState()
+        .fetchWorkItemsNextPage([{ repoId: 'twin', path: '/remote/twin' }], 24, 100, '', 1)
+    )
 
     expect(result.items.map((entry) => entry.repoHostId)).toEqual(['ssh:builder'])
   })

@@ -1,3 +1,4 @@
+import { answered } from '../github/answered-request.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTestStore,
@@ -49,15 +50,17 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       })
 
     try {
-      const result = await store.getState().fetchWorkItemsNextPage(
-        [
-          { repoId: 'ssh-repo', path: '/server/ssh-repo' },
-          { repoId: 'github-repo', path: '/server/github-repo' }
-        ],
-        24,
-        100,
-        '',
-        1
+      const result = answered(
+        await store.getState().fetchWorkItemsNextPage(
+          [
+            { repoId: 'ssh-repo', path: '/server/ssh-repo' },
+            { repoId: 'github-repo', path: '/server/github-repo' }
+          ],
+          24,
+          100,
+          '',
+          1
+        )
       )
 
       expect(result.failedCount).toBe(0)
@@ -74,11 +77,19 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE)
     )
 
-    const result = await store
-      .getState()
-      .fetchWorkItemsAcrossRepos([{ repoId: 'ssh-repo', path: '/server/ssh-repo' }], 24, 100, '', {
-        requireComplete: true
-      })
+    const result = answered(
+      await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(
+          [{ repoId: 'ssh-repo', path: '/server/ssh-repo' }],
+          24,
+          100,
+          '',
+          {
+            requireComplete: true
+          }
+        )
+    )
 
     expect(result.failedCount).toBe(1)
     expect(result.requestFailureCount).toBe(1)
@@ -90,11 +101,20 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE)
     )
 
-    const result = await store
-      .getState()
-      .fetchWorkItemsNextPage([{ repoId: 'ssh-repo', path: '/server/ssh-repo' }], 24, 100, '', 1, {
-        requireComplete: true
-      })
+    const result = answered(
+      await store
+        .getState()
+        .fetchWorkItemsNextPage(
+          [{ repoId: 'ssh-repo', path: '/server/ssh-repo' }],
+          24,
+          100,
+          '',
+          1,
+          {
+            requireComplete: true
+          }
+        )
+    )
 
     expect(result.failedCount).toBe(1)
   })
@@ -124,11 +144,13 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       errors: { issues: { type: 'permission_denied', message: 'no access' } }
     })
 
-    const result = await store
-      .getState()
-      .fetchWorkItemsNextPage([{ repoId: 'repo-1', path: '/repo' }], 24, 100, '', 2, {
-        requireComplete: true
-      })
+    const result = answered(
+      await store
+        .getState()
+        .fetchWorkItemsNextPage([{ repoId: 'repo-1', path: '/repo' }], 24, 100, '', 2, {
+          requireComplete: true
+        })
+    )
 
     expect(result.items).toEqual([])
     expect(result.failedCount).toBe(1)

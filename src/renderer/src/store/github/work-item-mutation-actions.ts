@@ -73,7 +73,7 @@ export const createWorkItemMutationActions = (
     })
   },
 
-  setIssueSourcePreference: async (repoId, repoPath, preference, hostId) => {
+  setIssueSourcePreference: async (repoId, _repoPath, preference, hostId) => {
     const repo = get().repos.find((row) => repoMatchesHostIdentity(row, repoId, hostId))
     if (!repo) {
       return

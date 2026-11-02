@@ -140,7 +140,12 @@ export class GitHubSourceCollections extends GitHubSourceOwnership {
     }
     this.notify()
   }
-  accept(attempt: Attempt, envelope: ListWorkItemsResult, query: string, firstPage: boolean) {
+  accept(
+    attempt: Attempt,
+    envelope: Pick<ListWorkItemsResult<unknown>, 'sources' | 'issueSourceFellBack'>,
+    query: string,
+    firstPage: boolean
+  ) {
     if (!this.current(attempt)) {
       return false
     }

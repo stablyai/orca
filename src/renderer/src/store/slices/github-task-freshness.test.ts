@@ -1,3 +1,4 @@
+import { answered } from '../github/answered-request.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore, mockApi, resetRemoteRuntimeMocks } from './github-slice-test-harness'
 import { workItemsCacheKey } from '../github/cache-identity'
@@ -35,7 +36,9 @@ describe('GitHub task search freshness at the store boundary', () => {
     store.setState({ workItemsCache: { [key]: { data: [row], fetchedAt: 1 } } })
     const external = { ...row, labels: ['external'], updatedAt: '2026-10-31T12:00:03Z' }
     mockApi.gh.listWorkItems.mockResolvedValue({ items: [external], sources })
-    const returned = await store.getState().fetchWorkItems('repo', '/repo', 20, '', { force: true })
+    const returned = answered(
+      await store.getState().fetchWorkItems('repo', '/repo', 20, '', { force: true })
+    )
     expect(returned[0].labels).toEqual(['external'])
     expect(store.getState().workItemsCache[key].data?.[0].labels).toEqual(['external'])
   })

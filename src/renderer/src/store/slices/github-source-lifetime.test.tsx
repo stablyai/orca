@@ -3,7 +3,7 @@ import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useStore } from 'zustand'
 import { createTestStore, mockApi, resetRemoteRuntimeMocks } from './github-slice-test-harness'
-import { mergeFetchedRepoCatalog } from '../repos/repo-catalog-merge'
+import { mergeFetchedRepoCatalog, type FetchedRepoCatalog } from '../repos/repo-catalog-merge'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import { createRepoUpdateActions } from '../repos/repo-update'
 import { findTaskPageDialogWorkItem } from '@/components/task-page/task-page-dialog-work-item'
@@ -119,7 +119,7 @@ describe('GitHub source collection lifetime', () => {
 
   it('preserves the latest pressed value across intermediate A→B→A save replies', async () => {
     const store = setup()
-    const catalog = {
+    const catalog: FetchedRepoCatalog = {
       repos: [repo],
       reposAtRequest: [repo],
       hostId: 'local',

@@ -127,7 +127,7 @@ export function createRepoUpdateActions(
       const applyRepoUpdate = async () => {
         // Why at dispatch: an earlier queued update (an account change) may legitimately replace the owner.
         const sourceOwner = get().githubSourceCollections?.capture(
-          findRepoForHost(get().repos, projectId, { hostId: ownerHostId }) ?? ownerRepo
+          get().repos.find((r) => repoMatchesHostIdentity(r, projectId, ownerHostId)) ?? ownerRepo
         )
         try {
           const sanitizedUpdates = sanitizeRepoUpdate(updates)

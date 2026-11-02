@@ -143,12 +143,12 @@ function useMountedSourceDisplay(runRequests = false) {
   const detail = useTaskPageGitHubDetail(list)
   const reconciled = useTaskPageGitHubCacheReconciliation(detail)
   useEffect(() => {
-    if (runRequests) {
-      return runTaskPageGitHubLandingRefresh({
-        ...reconciled,
-        githubWorkItemMutationQueryKey: 'mounted-source-flow'
-      })
-    }
+    return runRequests
+      ? runTaskPageGitHubLandingRefresh({
+          ...reconciled,
+          githubWorkItemMutationQueryKey: 'mounted-source-flow'
+        })
+      : undefined
     // The production landing hook keys its subscription by this same request context.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -728,7 +728,7 @@ describe('mounted Tasks source lifetime', () => {
     count.mockReturnValue(nextCount.promise)
     vi.mocked(window.api.repos.update).mockImplementation(async ({ updates }) => ({
       ...repo,
-      ...updates
+      issueSourcePreference: updates.issueSourcePreference
     }))
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Upstream' }))
@@ -798,7 +798,7 @@ describe('mounted Tasks source lifetime', () => {
     vi.mocked(window.api.gh.countWorkItems).mockResolvedValue(120)
     vi.mocked(window.api.repos.update).mockImplementation(async ({ updates }) => ({
       ...repo,
-      ...updates
+      issueSourcePreference: updates.issueSourcePreference
     }))
     await mountUpstream()
     const initialContext = view.githubResumeContextKey

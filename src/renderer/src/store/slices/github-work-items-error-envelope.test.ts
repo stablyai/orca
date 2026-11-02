@@ -1,3 +1,4 @@
+import { answered } from '../github/answered-request.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTestStore,
@@ -275,14 +276,16 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       })
 
     try {
-      const result = await store.getState().fetchWorkItemsAcrossRepos(
-        [
-          { repoId: 'ssh-repo', path: '/server/ssh-repo' },
-          { repoId: 'github-repo', path: '/server/github-repo' }
-        ],
-        24,
-        100,
-        ''
+      const result = answered(
+        await store.getState().fetchWorkItemsAcrossRepos(
+          [
+            { repoId: 'ssh-repo', path: '/server/ssh-repo' },
+            { repoId: 'github-repo', path: '/server/github-repo' }
+          ],
+          24,
+          100,
+          ''
+        )
       )
 
       expect(result.failedCount).toBe(0)
@@ -301,14 +304,16 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     mockApi.gh.listWorkItems.mockRejectedValue(new Error('HTTP 503: Service Unavailable'))
 
     try {
-      const result = await store
-        .getState()
-        .fetchWorkItemsAcrossRepos(
-          [{ repoId: 'github-repo', path: '/server/github-repo' }],
-          24,
-          100,
-          ''
-        )
+      const result = answered(
+        await store
+          .getState()
+          .fetchWorkItemsAcrossRepos(
+            [{ repoId: 'github-repo', path: '/server/github-repo' }],
+            24,
+            100,
+            ''
+          )
+      )
 
       expect(result.items).toEqual([])
       expect(result.failedCount).toBe(1)
@@ -330,14 +335,16 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     store.setState(runtimeOwnedRepoState('env-1', 'runtime-repo-id', '/server/repo'))
 
     try {
-      const result = await store
-        .getState()
-        .fetchWorkItemsAcrossRepos(
-          [{ repoId: 'caller-repo-id', path: '/server/repo' }],
-          24,
-          100,
-          ''
-        )
+      const result = answered(
+        await store
+          .getState()
+          .fetchWorkItemsAcrossRepos(
+            [{ repoId: 'caller-repo-id', path: '/server/repo' }],
+            24,
+            100,
+            ''
+          )
+      )
 
       expect(result.githubUnavailable).toBe(true)
       expect(result.failedCount).toBe(1)
@@ -361,14 +368,16 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     store.setState(runtimeOwnedRepoState('env-1', 'runtime-repo-id', '/server/repo'))
 
     try {
-      const result = await store
-        .getState()
-        .fetchWorkItemsAcrossRepos(
-          [{ repoId: 'caller-repo-id', path: '/server/repo' }],
-          24,
-          100,
-          ''
-        )
+      const result = answered(
+        await store
+          .getState()
+          .fetchWorkItemsAcrossRepos(
+            [{ repoId: 'caller-repo-id', path: '/server/repo' }],
+            24,
+            100,
+            ''
+          )
+      )
 
       expect(result.githubUnavailable).toBe(false)
       expect(result.failedCount).toBe(1)
@@ -404,20 +413,22 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       const repos = [{ repoId: 'github-repo', path: '/server/github-repo' }]
       await store.getState().fetchWorkItemsAcrossRepos(repos, 24, 100, '')
 
-      const result = await store
-        .getState()
-        .fetchWorkItemsAcrossRepos(repos, 24, 100, '', { force: true })
+      const result = answered(
+        await store.getState().fetchWorkItemsAcrossRepos(repos, 24, 100, '', { force: true })
+      )
 
       expect(result.items).toEqual([{ ...item, repoId: 'github-repo' }])
       expect(result.failedCount).toBe(0)
       expect(result.githubUnavailable).toBe(true)
       expect(result.requestFailureCount).toBe(1)
 
-      const completeOnly = await store.getState().fetchWorkItemsAcrossRepos(repos, 24, 100, '', {
-        force: true,
-        requireComplete: true,
-        allowStaleFallback: false
-      })
+      const completeOnly = answered(
+        await store.getState().fetchWorkItemsAcrossRepos(repos, 24, 100, '', {
+          force: true,
+          requireComplete: true,
+          allowStaleFallback: false
+        })
+      )
       expect(completeOnly.items).toEqual([])
       expect(completeOnly.failedCount).toBe(1)
       expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(3)
@@ -434,14 +445,16 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
 
     try {
-      const result = await store.getState().fetchWorkItemsAcrossRepos(
-        [
-          { repoId: 'ssh-repo', path: '/server/ssh-repo' },
-          { repoId: 'github-repo', path: '/server/github-repo' }
-        ],
-        24,
-        100,
-        ''
+      const result = answered(
+        await store.getState().fetchWorkItemsAcrossRepos(
+          [
+            { repoId: 'ssh-repo', path: '/server/ssh-repo' },
+            { repoId: 'github-repo', path: '/server/github-repo' }
+          ],
+          24,
+          100,
+          ''
+        )
       )
 
       expect(result.items).toEqual([])
@@ -475,14 +488,16 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       })
 
     try {
-      const result = await store.getState().fetchWorkItemsAcrossRepos(
-        [
-          { repoId: 'unavailable-repo', path: '/server/unavailable-repo' },
-          { repoId: 'loaded-repo', path: '/server/loaded-repo' }
-        ],
-        24,
-        100,
-        ''
+      const result = answered(
+        await store.getState().fetchWorkItemsAcrossRepos(
+          [
+            { repoId: 'unavailable-repo', path: '/server/unavailable-repo' },
+            { repoId: 'loaded-repo', path: '/server/loaded-repo' }
+          ],
+          24,
+          100,
+          ''
+        )
       )
 
       expect(result.items).toEqual([{ ...item, repoId: 'loaded-repo' }])
@@ -499,14 +514,16 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     mockApi.gh.listWorkItems.mockRejectedValue(new Error('HTTP 404: Not Found'))
 
     try {
-      const result = await store
-        .getState()
-        .fetchWorkItemsAcrossRepos(
-          [{ repoId: 'github-repo', path: '/server/github-repo' }],
-          24,
-          100,
-          ''
-        )
+      const result = answered(
+        await store
+          .getState()
+          .fetchWorkItemsAcrossRepos(
+            [{ repoId: 'github-repo', path: '/server/github-repo' }],
+            24,
+            100,
+            ''
+          )
+      )
 
       expect(result.failedCount).toBe(1)
       expect(result.githubUnavailable).toBe(false)
