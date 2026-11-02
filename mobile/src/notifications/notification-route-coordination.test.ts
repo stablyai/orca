@@ -34,7 +34,7 @@ function rootLayoutScopedState(inner: HostStackNavigationState): HostStackNaviga
 }
 
 describe('notification route coordination', () => {
-  it('mounts the host before replacing it with the notification session, from a cold navigator', () => {
+  it('mounts the host before pushing the notification session onto it, from a cold navigator', () => {
     const target = getNotificationNavigationTarget({
       hostId: 'host/one',
       worktreeId: 'repo::/Users/me/orca/workspaces/feature'
@@ -85,9 +85,8 @@ describe('notification route coordination', () => {
     )
 
     expect(harness.navigation.dispatch).toHaveBeenCalledWith({
-      type: 'REPLACE',
+      type: 'PUSH',
       target: '/h',
-      source: 'host-index',
       payload: target!.sessionTarget
     })
   })

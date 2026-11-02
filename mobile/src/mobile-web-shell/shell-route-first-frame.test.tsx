@@ -43,6 +43,11 @@ vi.mock('../transport/workspace-server', () => ({
 }))
 vi.mock('expo-router', () => ({
   useLocalSearchParams: () => dependencies.params,
+  useNavigation: () => ({
+    getState: () => undefined,
+    addListener: () => () => {},
+    dispatch: () => {}
+  }),
   useRouter: () => ({ setParams: () => {} })
 }))
 

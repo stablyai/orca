@@ -28,6 +28,7 @@ function Screen(props: {
   claimed: boolean
   sendBack: () => boolean
   setOptions: (options: { gestureEnabled: boolean }) => void
+  setParentOptions?: (options: { gestureEnabled: boolean }) => void
 }): null {
   useShellPageBack({ ...props, isFocused: () => true })
   return null
@@ -53,6 +54,7 @@ function render(props: {
   claimed: boolean
   sendBack: () => boolean
   setOptions: (options: { gestureEnabled: boolean }) => void
+  setParentOptions?: (options: { gestureEnabled: boolean }) => void
 }): ReactTestRenderer {
   let tree!: ReactTestRenderer
   act(() => {
@@ -137,7 +139,56 @@ describe('the shell taking the device Back key for a page that claimed it', () =
 
   it('writes no gesture option on Android, where the stack has no swipe to take', () => {
     const setOptions = vi.fn()
-    render({ claimed: true, sendBack: () => true, setOptions })
+    const setParentOptions = vi.fn()
+    render({ claimed: true, sendBack: () => true, setOptions, setParentOptions })
     expect(setOptions).not.toHaveBeenCalled()
+    expect(setParentOptions).not.toHaveBeenCalled()
+  })
+
+  // The host document is the only screen in its stack, so the swipe that reaches the server list is the parent’s.
+  it('takes the parent swipe away on iOS while the claim is live, and gives it back when the claim drops', () => {
+    native.platform.os = 'ios'
+    const setParentOptions = vi.fn()
+    const tree = render({
+      claimed: true,
+      sendBack: () => true,
+      setOptions: vi.fn(),
+      setParentOptions
+    })
+    expect(setParentOptions).toHaveBeenCalledWith({ gestureEnabled: false })
+    act(() => {
+      tree.update(
+        createElement(Screen, {
+          claimed: false,
+          sendBack: () => true,
+          setOptions: vi.fn(),
+          setParentOptions
+        })
+      )
+    })
+    expect(setParentOptions).toHaveBeenLastCalledWith({ gestureEnabled: true })
+  })
+
+  it('gives the parent swipe back when a claimed screen unmounts', () => {
+    native.platform.os = 'ios'
+    const setParentOptions = vi.fn()
+    const tree = render({
+      claimed: true,
+      sendBack: () => true,
+      setOptions: vi.fn(),
+      setParentOptions
+    })
+    act(() => {
+      tree.unmount()
+    })
+    mountedTrees.splice(mountedTrees.indexOf(tree), 1)
+    expect(setParentOptions).toHaveBeenLastCalledWith({ gestureEnabled: true })
+  })
+
+  it('leaves the parent swipe alone on iOS while the page holds nothing', () => {
+    native.platform.os = 'ios'
+    const setParentOptions = vi.fn()
+    render({ claimed: false, sendBack: () => true, setOptions: vi.fn(), setParentOptions })
+    expect(setParentOptions).not.toHaveBeenCalled()
   })
 })

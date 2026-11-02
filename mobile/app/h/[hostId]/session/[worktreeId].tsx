@@ -12,6 +12,7 @@ import {
 } from '../../../../src/mobile-web-shell/shell-screen-route'
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
 import { PageRouteUnavailableScreen } from '../../../../src/mobile-web-shell/PageRouteUnavailableScreen'
+import { useSessionHostListBeneath } from '../../../../src/navigation/use-session-host-list-beneath'
 
 // paneKey selects a tab within the current session, not a new identity; remounting on it reloads the page and loses repeated taps.
 // Deliver it as a route update via repeated init only to supporting pages, then clear the native param so later init cannot replay it (ruling 33.1).
@@ -40,6 +41,7 @@ export default withWorkspaceRoute(function MobileSessionScreen() {
     },
     [paneKey, router]
   )
+  useSessionHostListBeneath(hostId === '' ? null : hostId)
 
   // Omit empty params: created=1 is one-shot, warning is host text, absent name derives a label, and empty paneKey marks a spent tap.
   const routeParams: Record<string, string> = {

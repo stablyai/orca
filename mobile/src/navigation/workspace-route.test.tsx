@@ -23,6 +23,11 @@ const route = vi.hoisted(() => {
 
 vi.mock('expo-router', () => ({
   useLocalSearchParams: () => route.params,
+  useNavigation: () => ({
+    getState: () => undefined,
+    addListener: () => () => {},
+    dispatch: () => {}
+  }),
   useRouter: () => ({ setParams: () => {}, replace: () => {} }),
   Redirect: ({ href }: { href: { params: Record<string, string | undefined> } }) => {
     route.redirects.push(href)

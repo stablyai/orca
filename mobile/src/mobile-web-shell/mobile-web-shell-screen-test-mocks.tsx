@@ -41,6 +41,9 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
           stop: () => {}
         })
       },
+      PanResponder: {
+        create: () => ({ panHandlers: {} })
+      },
       BackHandler: {
         addEventListener: (name: string, listener: () => boolean) => {
           dependencies.backHandlers.set(name, listener)
@@ -122,6 +125,7 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
       usePathname: () => dependencies.pathname,
       useNavigation: () => ({
         setOptions: dependencies.setScreenOptions,
+        getParent: () => ({ setOptions: dependencies.setParentScreenOptions }),
         dispatch: dependencies.dispatch,
         isFocused: () => dependencies.screenFocused
       }),
