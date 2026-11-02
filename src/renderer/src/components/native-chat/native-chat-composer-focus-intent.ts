@@ -1,4 +1,9 @@
-import { getVisibleOverlays } from '@/lib/visible-overlay'
+import {
+  getOverlayFocusOwners,
+  getOverlayFocusSources,
+  isOverlayFocusSourceDismissed,
+  subscribeOverlayFocusChanges
+} from '@/lib/overlay-focus-ownership'
 
 const PENDING_FOCUS_MS = 1000
 
@@ -6,7 +11,10 @@ type ComposerReclaim = (
   onlyIfFocusUnclaimed?: boolean,
   sourceOverlays?: readonly HTMLElement[]
 ) => void
-const revealedComposerReclaims = new Map<string, ComposerReclaim>()
+const revealedComposerReclaims = new Map<
+  string,
+  { reclaim: ComposerReclaim; root: HTMLElement | null }
+>()
 type PendingComposerFocusRequest = {
   tabId: string | null
   cancel: () => void
@@ -26,14 +34,16 @@ export function getNativeChatComposerFocusRequestGeneration(): number {
 
 export function registerNativeChatComposerReclaim(
   tabId: string,
-  reclaim: ComposerReclaim
+  reclaim: ComposerReclaim,
+  root: HTMLElement | null
 ): () => void {
-  revealedComposerReclaims.set(tabId, reclaim)
+  const destination = { reclaim, root }
+  revealedComposerReclaims.set(tabId, destination)
   if (pendingFocusRequest?.tabId === tabId) {
     pendingFocusRequest.deliver()
   }
   return () => {
-    if (revealedComposerReclaims.get(tabId) === reclaim) {
+    if (revealedComposerReclaims.get(tabId) === destination) {
       revealedComposerReclaims.delete(tabId)
     }
   }
@@ -41,27 +51,19 @@ export function registerNativeChatComposerReclaim(
 
 /** Keep a new-chat action's focus intent through source dismissal, destination claim, or expiry. */
 export function captureNativeChatComposerFocusIntent(): NativeChatComposerFocusIntent {
-  return captureFocusIntent(true)
-}
-
-function captureFocusIntent(waitForSourceOverlays: boolean): NativeChatComposerFocusIntent {
   focusRequestGeneration += 1
   pendingFocusRequest?.cancel()
   if (typeof document === 'undefined') {
     return { request: () => undefined, cancel: () => undefined }
   }
-  const sourceOverlays = new Set(
-    waitForSourceOverlays ? getVisibleOverlays({ ignoreDismissed: true }) : []
-  )
-  const originalOverlays = [...sourceOverlays]
-  const watchOverlays = sourceOverlays.size > 0
+  const sourceOverlays = getOverlayFocusSources()
   const cancel = (): void => {
     if (pendingFocusRequest !== pending) {
       return
     }
     pendingFocusRequest = null
     clearTimeout(timeout)
-    observer?.disconnect()
+    unsubscribe()
     document.removeEventListener('pointerdown', cancel, true)
     document.removeEventListener('keydown', cancelForNavigation, true)
   }
@@ -74,37 +76,30 @@ function captureFocusIntent(waitForSourceOverlays: boolean): NativeChatComposerF
     if (pendingFocusRequest !== pending) {
       return
     }
-    if (watchOverlays) {
-      const overlays = getVisibleOverlays({ ignoreDismissed: true })
-      if (overlays.some((overlay) => !sourceOverlays.has(overlay))) {
-        cancel()
-        return
-      }
-      for (const overlay of sourceOverlays) {
-        if (!overlays.includes(overlay)) {
-          sourceOverlays.delete(overlay)
-        }
-      }
-      if (overlays.length > 0) {
-        return
-      }
-    }
-    const reclaim = pending.tabId ? revealedComposerReclaims.get(pending.tabId) : undefined
-    if (reclaim) {
+    const destination = pending.tabId ? revealedComposerReclaims.get(pending.tabId) : undefined
+    const sources = sourceOverlays.filter(
+      (owner) => !destination?.root || !owner.contains(destination.root)
+    )
+    if (
+      getOverlayFocusOwners(destination?.root ?? undefined).some(
+        (owner) => !sourceOverlays.includes(owner)
+      )
+    ) {
       cancel()
-      reclaim(false, originalOverlays)
+      return
+    }
+    if (sources.some((owner) => !isOverlayFocusSourceDismissed(owner))) {
+      return
+    }
+    if (destination) {
+      cancel()
+      destination.reclaim(false, sources)
     }
   }
   const pending: PendingComposerFocusRequest = { tabId: null, cancel, deliver }
-  const observer = watchOverlays ? new MutationObserver(deliver) : null
+  const unsubscribe = subscribeOverlayFocusChanges(deliver)
   const timeout = setTimeout(cancel, PENDING_FOCUS_MS)
   pendingFocusRequest = pending
-  observer?.observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['class', 'style', 'data-state', 'aria-hidden', 'hidden', 'role']
-  })
   document.addEventListener('pointerdown', cancel, true)
   document.addEventListener('keydown', cancelForNavigation, true)
   return {
@@ -126,8 +121,8 @@ export function requestNativeChatComposerFocus(
 ): void {
   if (options.onlyIfFocusUnclaimed) {
     // A rename return is one-shot, not an activation to replay after a hidden composer reveals.
-    revealedComposerReclaims.get(tabId)?.(true)
+    revealedComposerReclaims.get(tabId)?.reclaim(true)
     return
   }
-  captureFocusIntent(false).request(tabId)
+  captureNativeChatComposerFocusIntent().request(tabId)
 }

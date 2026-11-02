@@ -4,6 +4,8 @@ import { ChevronRightIcon, CircleIcon } from 'lucide-react'
 import * as ContextMenuPrimitive from 'radix-ui/context-menu'
 
 import { cn } from '@/lib/utils'
+import { handleOverlayCloseAutoFocus } from '@/lib/overlay-focus-ownership'
+import { useOverlayFocusScope } from './use-overlay-focus-scope'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { keepFocusWhileMenuCloses } from './menu-item-closing-focus'
 import { useMenuPointerHighlight } from './menu-pointer-highlight'
@@ -101,6 +103,7 @@ function ContextMenuContent({
 }: React.ComponentProps<typeof ContextMenuPrimitive.Content> &
   VariantProps<typeof contentAnimationVariants>) {
   const pointerHighlight = useMenuPointerHighlight(props)
+  const focusScopeRef = useOverlayFocusScope(pointerHighlight.ref)
   return (
     <ContextMenuPrimitive.Portal>
       <ContextMenuPrimitive.Content
@@ -113,7 +116,9 @@ function ContextMenuContent({
         // Disable native dragging so overlapping titlebar regions cannot intercept menu clicks.
         style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         {...props}
+        onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, props.onCloseAutoFocus)}
         {...pointerHighlight}
+        ref={focusScopeRef}
         onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       />
     </ContextMenuPrimitive.Portal>

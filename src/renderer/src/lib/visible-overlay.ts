@@ -1,8 +1,10 @@
 // The always-mounted worktree sidebar is page chrome, not an Escape-owning popup.
 const OVERLAY_SELECTOR =
-  '[role="dialog"], [role="alertdialog"], [role="listbox"]:not([data-worktree-sidebar]), [role="menu"]'
+  '[role="dialog"], [role="alertdialog"], [role="listbox"]:not([data-worktree-sidebar]):not([data-focus-behavior="page"]), [role="menu"]'
 
 type VisibleOverlayOptions = {
+  /** Capture source scopes even when a nested modal hides them from accessibility. */
+  includeAriaHidden?: boolean
   /** Overlays inside a match are treated as page content, not as a layer above it. */
   ignoreSelector?: string
   /** Ignore matching chrome itself while retaining overlays nested within it. */
@@ -30,7 +32,7 @@ function isVisibleOverlay(element: Element, options?: VisibleOverlayOptions): bo
   if (!(element instanceof HTMLElement)) {
     return false
   }
-  if (element.closest('[aria-hidden="true"]')) {
+  if (!options?.includeAriaHidden && element.closest('[aria-hidden="true"]')) {
     return false
   }
   if (options?.ignoreSelector && element.closest(options.ignoreSelector)) {

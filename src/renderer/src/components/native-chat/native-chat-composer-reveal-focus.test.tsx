@@ -1,16 +1,24 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, createElement, useRef } from 'react'
+import { act, createElement, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import {
   captureNativeChatComposerFocusIntent,
   requestNativeChatComposerFocus,
   useNativeChatComposerRevealFocus
 } from './use-native-chat-composer-reveal-focus'
+import {
+  handleOverlayCloseAutoFocus,
+  registerOverlayFocusOwner
+} from '@/lib/overlay-focus-ownership'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
+import { NativeChatMentionMenu, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 
 type HarnessProps = {
   tabId?: string
+  suggestions?: 'slash' | 'mention'
   isVisible: boolean
   isFocusedGroup: boolean
   composerReady?: boolean
@@ -79,7 +87,35 @@ function Harness(props: HarnessProps): React.JSX.Element {
     createElement('textarea', { ref: fieldRef, 'data-testid': 'composer' }),
     createElement('button', { type: 'button', 'data-testid': 'in-pane-button' }),
     createElement('input', { 'data-testid': 'find-input' }),
-    createElement('input', { 'data-testid': 'question-input' })
+    createElement('input', { 'data-testid': 'question-input' }),
+    props.suggestions === 'slash' ? (
+      <NativeChatPickerMenu
+        autocomplete={{
+          mode: 'slash',
+          prefix: '/',
+          query: '',
+          triggerKey: '/',
+          items: [],
+          dispatchable: true,
+          grouped: false,
+          commandsEnabled: true,
+          skillsEnabled: false,
+          skillStatus: 'ready'
+        }}
+        activeIndex={0}
+        listboxId="slash-suggestions"
+        onChoose={() => {}}
+        onRetry={() => {}}
+      />
+    ) : null,
+    props.suggestions === 'mention' ? (
+      <NativeChatMentionMenu
+        mention={{ files: [], loading: false, failed: false }}
+        activeIndex={0}
+        listboxId="mention-suggestions"
+        onChoose={() => {}}
+      />
+    ) : null
   )
 }
 
@@ -97,6 +133,16 @@ function mountOverlay(role: 'menu' | 'dialog' = 'menu'): HTMLDivElement {
   document.body.appendChild(overlay)
   overlay.focus()
   return overlay
+}
+
+function dismissOverlay(overlay: HTMLElement, remove = true): void {
+  overlay.setAttribute('data-state', 'closed')
+  const event = new Event('focusScope.autoFocusOnUnmount')
+  overlay.addEventListener(event.type, handleOverlayCloseAutoFocus, { once: true })
+  overlay.dispatchEvent(event)
+  if (remove) {
+    overlay.remove()
+  }
 }
 
 beforeEach(() => {
@@ -366,11 +412,7 @@ describe('useNativeChatComposerRevealFocus', () => {
       expect(focusCalls).toBe(0)
 
       await act(async () => {
-        if (dismissal === 'removed') {
-          menu.remove()
-        } else {
-          menu.setAttribute('data-state', 'closed')
-        }
+        dismissOverlay(menu, dismissal === 'removed')
       })
       drainFrames()
       expect(document.activeElement).toBe(container.querySelector('textarea'))
@@ -386,7 +428,7 @@ describe('useNativeChatComposerRevealFocus', () => {
       if (!lateTab) {
         intent.request('chat-tab')
       }
-      await act(async () => menu.remove())
+      await act(async () => dismissOverlay(menu))
       if (lateTab) {
         intent.request('chat-tab')
       }
@@ -408,12 +450,12 @@ describe('useNativeChatComposerRevealFocus', () => {
     drainFrames()
     const before = focusCalls
 
-    await act(async () => menu.remove())
+    await act(async () => dismissOverlay(menu))
     drainFrames()
     expect(document.activeElement).toBe(setup)
     expect(focusCalls).toBe(before)
 
-    await act(async () => setup.remove())
+    await act(async () => dismissOverlay(setup))
     drainFrames()
     expect(document.activeElement).toBe(container.querySelector('textarea'))
   })
@@ -431,6 +473,7 @@ describe('useNativeChatComposerRevealFocus', () => {
       let newer: HTMLDivElement
       await act(async () => {
         newer = mountOverlay(role)
+        registerOverlayFocusOwner(newer)
       })
       await act(async () => {
         source.remove()
@@ -462,7 +505,7 @@ describe('useNativeChatComposerRevealFocus', () => {
         } else {
           act(() => vi.advanceTimersByTime(1000))
         }
-        await act(async () => menu.remove())
+        await act(async () => dismissOverlay(menu))
         drainFrames()
 
         expect(document.activeElement).toBe(document.body)
@@ -502,6 +545,134 @@ describe('useNativeChatComposerRevealFocus', () => {
       expect(focusCalls).toBe(0)
     }
   )
+
+  it.each(['slash', 'mention'] as const)(
+    'reclaims focus after switching away from %s suggestions',
+    (mode) => {
+      render({ isVisible: true, isFocusedGroup: true, suggestions: mode })
+      drainFrames()
+      expect(document.querySelector('[role="listbox"]')).not.toBeNull()
+      render({ isVisible: false, isFocusedGroup: true, suggestions: mode })
+      const tab = document.createElement('button')
+      document.body.append(tab)
+      tab.focus()
+
+      render({ isVisible: true, isFocusedGroup: true, suggestions: mode })
+      drainFrames()
+      expect(document.activeElement).toBe(container.querySelector('textarea'))
+      tab.focus()
+      act(() => requestNativeChatComposerFocus('chat-tab'))
+      drainFrames()
+      expect(document.activeElement).toBe(container.querySelector('textarea'))
+    }
+  )
+
+  it('launches a floating chat above persistent Skills content while protecting a nested popup', async () => {
+    const page = document.createElement('div')
+    page.setAttribute('role', 'listbox')
+    page.dataset.focusBehavior = 'page'
+    document.body.append(page)
+    render({ isVisible: true, isFocusedGroup: true, composerReady: false })
+    const intent = captureNativeChatComposerFocusIntent()
+    intent.request('chat-tab')
+    render({ isVisible: true, isFocusedGroup: true })
+    drainFrames()
+    expect(document.activeElement).toBe(container.querySelector('textarea'))
+
+    const popup = mountOverlay()
+    page.append(popup)
+    popup.focus()
+    const before = focusCalls
+    render({ isVisible: false, isFocusedGroup: true })
+    render({ isVisible: true, isFocusedGroup: true })
+    drainFrames()
+    expect(document.activeElement).toBe(popup)
+    expect(focusCalls).toBe(before)
+    await act(async () => dismissOverlay(popup))
+    drainFrames()
+    expect(focusCalls).toBe(before)
+  })
+
+  it('delivers an active-tab handoff after both dashboard scopes dismiss and trigger focus restores', async () => {
+    render({ isVisible: true, isFocusedGroup: true })
+    drainFrames()
+    const sheet = mountOverlay('dialog')
+    registerOverlayFocusOwner(sheet)
+    const preview = mountOverlay('dialog')
+    registerOverlayFocusOwner(preview)
+    sheet.setAttribute('aria-hidden', 'true')
+    const trigger = document.createElement('button')
+    document.body.append(trigger)
+    act(() => requestNativeChatComposerFocus('chat-tab'))
+    drainFrames()
+    expect(document.activeElement).toBe(preview)
+
+    await act(async () => {
+      dismissOverlay(preview)
+      sheet.removeAttribute('aria-hidden')
+    })
+    drainFrames()
+    expect(document.activeElement).not.toBe(container.querySelector('textarea'))
+    await act(async () => {
+      dismissOverlay(sheet)
+      trigger.focus()
+    })
+    drainFrames()
+    expect(document.activeElement).toBe(container.querySelector('textarea'))
+  })
+
+  it('hands an existing draft through real sheet and dialog dismissal callbacks', async () => {
+    vi.useFakeTimers()
+    function Dashboard(): React.JSX.Element {
+      const [open, setOpen] = useState(false)
+      return (
+        <>
+          <Harness isVisible isFocusedGroup />
+          <button onClick={() => setOpen(true)}>Dashboard preview</button>
+          <Sheet open={open} onOpenChange={setOpen} modal={false}>
+            <SheetContent aria-describedby={undefined}>
+              <SheetTitle>Dashboard</SheetTitle>
+              <Dialog open={open} onOpenChange={setOpen}>
+                <DialogContent aria-describedby={undefined}>
+                  <DialogTitle>Preview</DialogTitle>
+                  <button
+                    onClick={() => {
+                      requestNativeChatComposerFocus('chat-tab')
+                      setOpen(false)
+                    }}
+                  >
+                    Open worktree
+                  </button>
+                </DialogContent>
+              </Dialog>
+            </SheetContent>
+          </Sheet>
+        </>
+      )
+    }
+    try {
+      act(() => root.render(<Dashboard />))
+      drainFrames()
+      const composer = container.querySelector('textarea')!
+      composer.value = 'Existing draft'
+      await act(async () => {
+        ;[...container.querySelectorAll('button')]
+          .find((button) => button.textContent === 'Dashboard preview')!
+          .click()
+      })
+      expect(document.querySelector('[data-slot="dialog-content"]')).not.toBeNull()
+      const action = [...document.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Open worktree'
+      )!
+      await act(async () => action.click())
+      await act(async () => vi.advanceTimersByTime(0))
+      drainFrames()
+      expect(document.activeElement).toBe(composer)
+      expect(composer.value).toBe('Existing draft')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 
   it('allows focus recovery while a dismissed menu animates out', () => {
     const menu = mountOverlay()

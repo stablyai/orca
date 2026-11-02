@@ -3,6 +3,8 @@ import { CheckIcon, ChevronRightIcon, CircleIcon } from 'lucide-react'
 import * as DropdownMenuPrimitive from 'radix-ui/dropdown-menu'
 
 import { cn } from '@/lib/utils'
+import { handleOverlayCloseAutoFocus } from '@/lib/overlay-focus-ownership'
+import { useOverlayFocusScope } from './use-overlay-focus-scope'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { keepFocusWhileMenuCloses } from './menu-item-closing-focus'
 import { useMenuPointerHighlight } from './menu-pointer-highlight'
@@ -30,6 +32,7 @@ function DropdownMenuContent({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
   const pointerHighlight = useMenuPointerHighlight(props)
+  const focusScopeRef = useOverlayFocusScope(pointerHighlight.ref)
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
@@ -42,7 +45,9 @@ function DropdownMenuContent({
         // Disable native dragging: titlebar drag regions intercept menu clicks regardless of z-index.
         style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         {...props}
+        onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, props.onCloseAutoFocus)}
         {...pointerHighlight}
+        ref={focusScopeRef}
         onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       />
     </DropdownMenuPrimitive.Portal>

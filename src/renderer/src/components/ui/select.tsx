@@ -6,6 +6,8 @@ import * as SelectPrimitive from 'radix-ui/select'
 import { cva, type VariantProps } from 'class-variance-authority'
 
 import { cn } from '@/lib/utils'
+import { handleOverlayCloseAutoFocus } from '@/lib/overlay-focus-ownership'
+import { useOverlayFocusScope } from './use-overlay-focus-scope'
 
 function Select({ ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
   return <SelectPrimitive.Root data-slot="select" {...props} />
@@ -78,6 +80,7 @@ function SelectContent({
 }: React.ComponentProps<typeof SelectPrimitive.Content> & {
   portalContainer?: HTMLElement | null
 }) {
+  const focusScopeRef = useOverlayFocusScope(props.ref)
   return (
     <SelectPrimitive.Portal container={portalContainer ?? undefined}>
       <SelectPrimitive.Content
@@ -92,6 +95,8 @@ function SelectContent({
         position={position}
         align={align}
         {...props}
+        ref={focusScopeRef}
+        onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, props.onCloseAutoFocus)}
       >
         <SelectScrollUpButton />
         <SelectPrimitive.Viewport

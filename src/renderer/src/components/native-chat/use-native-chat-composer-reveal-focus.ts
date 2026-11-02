@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { shouldPreserveEditableFocus } from '@/components/terminal-pane/pane-helpers'
 import { scheduleNextFrame } from '@/components/terminal-pane/terminal-ime-input-context-refresh'
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
+import { getOverlayFocusOwners } from '@/lib/overlay-focus-ownership'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 import { registerNativeChatPane } from './native-chat-composer-mount'
 import {
@@ -76,12 +76,7 @@ export function useNativeChatComposerRevealFocus({
       onlyIfFocusUnclaimed = false,
       sourceOverlays: readonly HTMLElement[] = []
     ): void => {
-      if (
-        hasVisibleOverlay({
-          ignoreContaining: rootRef.current ?? undefined,
-          ignoreDismissed: true
-        })
-      ) {
+      if (getOverlayFocusOwners(rootRef.current ?? undefined).length > 0) {
         claimedRef.current = true
         explicitRef.current = false
         setReclaimCount((count) => count + 1)
@@ -112,7 +107,7 @@ export function useNativeChatComposerRevealFocus({
       }
       setReclaimCount((count) => count + 1)
     }
-    return registerNativeChatComposerReclaim(tabId, reclaim)
+    return registerNativeChatComposerReclaim(tabId, reclaim, rootRef.current)
   }, [composerReady, composerRef, revealed, rootRef, tabId])
 
   useEffect(() => {
@@ -158,13 +153,7 @@ export function useNativeChatComposerRevealFocus({
         stopWatchingUserIntent()
         return
       }
-      if (
-        userInteracted ||
-        hasVisibleOverlay({
-          ignoreContaining: rootRef.current ?? undefined,
-          ignoreDismissed: true
-        })
-      ) {
+      if (userInteracted || getOverlayFocusOwners(rootRef.current ?? undefined).length > 0) {
         finish()
         return
       }

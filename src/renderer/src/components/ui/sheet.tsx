@@ -6,6 +6,8 @@ import * as SheetPrimitive from 'radix-ui/dialog'
 import { cva, type VariantProps } from 'class-variance-authority'
 
 import { cn } from '@/lib/utils'
+import { handleOverlayCloseAutoFocus } from '@/lib/overlay-focus-ownership'
+import { useOverlayFocusScope } from './use-overlay-focus-scope'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { translate } from '@/i18n/i18n'
 
@@ -75,6 +77,7 @@ function SheetContent({
     overlayClassName?: string
     overlayStyle?: React.CSSProperties
   }) {
+  const focusScopeRef = useOverlayFocusScope(props.ref)
   return (
     <SheetPortal>
       <SheetOverlay className={overlayClassName} style={overlayStyle} />
@@ -84,6 +87,8 @@ function SheetContent({
         // Disable native dragging where portaled sheet headers overlap the titlebar.
         style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         {...props}
+        ref={focusScopeRef}
+        onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, props.onCloseAutoFocus)}
         onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       >
         {children}

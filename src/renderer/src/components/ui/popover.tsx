@@ -4,6 +4,8 @@ import * as React from 'react'
 import * as PopoverPrimitive from 'radix-ui/popover'
 
 import { cn } from '@/lib/utils'
+import { handleOverlayCloseAutoFocus } from '@/lib/overlay-focus-ownership'
+import { useOverlayFocusScope } from './use-overlay-focus-scope'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 
 // React delegates wheel passively, so native defaultPrevented may not reflect synthetic cancellation.
@@ -156,6 +158,8 @@ function PopoverContent({
     [forwardedRef, portalContainer]
   )
 
+  const focusScopeRef = useOverlayFocusScope(setContentRef)
+
   return (
     <PopoverPrimitive.Portal container={portalContainer ?? undefined}>
       <PopoverPrimitive.Content
@@ -168,7 +172,7 @@ function PopoverContent({
           wheelScroll && 'popover-wheel-scroll',
           className
         )}
-        ref={setContentRef}
+        ref={focusScopeRef}
         // Disable native dragging: titlebar drag regions intercept overlapping popover clicks regardless of z-index.
         style={
           {
@@ -179,6 +183,7 @@ function PopoverContent({
         onWheel={handleConsumerWheel}
         onWheelCapture={handleConsumerWheelCapture}
         {...props}
+        onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, props.onCloseAutoFocus)}
         onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       />
     </PopoverPrimitive.Portal>
