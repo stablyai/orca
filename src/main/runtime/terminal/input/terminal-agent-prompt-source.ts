@@ -39,7 +39,7 @@ export type AgentPromptRetarget = {
 export type AgentPromptTarget = {
   ptyId: string
   generation: number
-  incarnationId: string | undefined
+  incarnationId: string | null | undefined
   payload: string
   agent: TuiAgent | null
   submitWithPaste: boolean
