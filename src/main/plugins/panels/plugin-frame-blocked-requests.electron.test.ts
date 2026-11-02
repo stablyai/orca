@@ -43,6 +43,7 @@ app.whenReady().then(() => {
       app.exit(0)
     }
   })
+  setTimeout(() => { writeFileSync(resultPath, JSON.stringify({ messages })); app.exit(0) }, 15000)
   void win.loadURL('data:text/html;base64,' + Buffer.from(${JSON.stringify(PAGE)}).toString('base64'))
 })
 `
@@ -64,6 +65,7 @@ describe('content-policy refusals from the bundled Electron', () => {
     const unread = refusals.filter(
       (message) => !pluginFrameCspBlock(message) && !isPluginFrameCancelledRequestEcho(message)
     )
+    console.log('CSP-DIAG', JSON.stringify(messages))
     expect(unread).toEqual([])
     const origins = refusals.flatMap((message) => pluginFrameCspBlock(message)?.origin ?? [])
     expect(new Set(origins)).toEqual(
