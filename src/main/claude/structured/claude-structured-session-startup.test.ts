@@ -226,6 +226,68 @@ describe('Claude host-awaited open', () => {
     expect(errorRows(appendItem)).toHaveLength(rows)
   })
 
+  // Whichever ends the start first is its report: a hidden result is the open's error, else its row stays.
+  it.each(Array.from({ length: 17 }, (_, gap) => gap))(
+    'a startup failure result %i microtasks after initialize rejects is reported once',
+    async (gap) => {
+      const claude = fakeClaude({ holdInit: true, initProof: 'none' })
+      const { adapter } = adapterFor(claude)
+      const appendItem = vi.fn()
+      await adapter.acquire({ ...ACQUIRE, events: { ...recordingJournalSink(), appendItem } })
+      const connection = claude.connections[0]!
+      const open = claudeOpened(adapter, 'session-1').catch((failure: unknown) => failure)
+      connection.initialization.reject(new Error('initialize rejected'))
+      for (let tick = 0; tick < gap; tick++) {
+        await Promise.resolve()
+      }
+      claudeFrame(connection, { ...MISSING, session_id: PROVIDER_SESSION_ID })
+      const error = await open
+      const typed = startupAcquisitionRefusal(error)?.reason === 'savedConversationMissing'
+      expect(errorRows(appendItem)).toHaveLength(typed ? 0 : 1)
+      expect(typed || (error as Error).message === 'initialize rejected').toBe(true)
+    }
+  )
+
+  it.each([
+    ['naming the missing conversation', 0],
+    ['with no stderr', 1]
+  ] as const)(
+    'a transport fault %s during catch-up fails the open and keeps %i rows',
+    async (named, rows) => {
+      const claude = fakeClaude({ initProof: 'none' })
+      const { adapter } = adapterFor(claude, {
+        resumesTranscript: true,
+        resumeLeafUuid: 'saved-leaf'
+      })
+      const appendItem = vi.fn()
+      const catchingUp = Promise.withResolvers<void>()
+      const release = Promise.withResolvers<{ ok: true }>()
+      const written = () => {
+        catchingUp.resolve()
+        return release.promise
+      }
+      await adapter.acquire({
+        ...ACQUIRE,
+        events: { ...recordingJournalSink(), appendItem, written }
+      })
+      const open = claudeOpened(adapter, 'session-1').catch((failure: unknown) => failure)
+      await catchingUp.promise
+      const connection = claude.connections[0]!
+      connection.closed = true
+      const stderr = named === 'with no stderr' ? '' : String(MISSING.errors)
+      const fault = claudeStreamJsonExitError(stderr, {
+        code: null,
+        signal: null,
+        processless: false
+      })
+      connection.handlers.onFault?.(fault)
+      claudeFrame(connection, { ...MISSING, session_id: PROVIDER_SESSION_ID })
+      release.resolve({ ok: true })
+      expect(await open).toBe(fault)
+      expect(errorRows(appendItem)).toHaveLength(rows)
+    }
+  )
+
   it('fails the open with a startup failure Claude reported before publication', async () => {
     const claude = fakeClaude({ initProof: 'none' })
     const openConnection: typeof claude.openConnection = async (...args) => {

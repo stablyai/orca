@@ -34,11 +34,8 @@ export async function openClaudeStructuredSession(
   try {
     return await openStartingClaudeSession(input)
   } catch (error) {
-    // This failure is the start's report; a Stop stays Stop, so a later result is still taken.
-    if (!request.signal.aborted) {
-      session.initialization.startup.fail(error)
-    }
-    throw error
+    // The start's first ending cause is its report; a Stop stays Stop, so a later result is still taken.
+    throw request.signal.aborted ? error : session.initialization.startup.fail(error)
   }
 }
 
@@ -76,7 +73,10 @@ async function openStartingClaudeSession(
       })
   })
   // A failure Claude reports while initialize or catch-up is pending fails this open at once.
-  const result = await waitForPromiseWithSignal(startup.race(opened), request.signal)
+  const result = await waitForPromiseWithSignal(
+    startup.race(opened, request.signal),
+    request.signal
+  )
   const current = () => {
     if (sessions.get(request.sessionId) !== session || request.signal.aborted) {
       throw new Error('claude session closed before startup completed')
@@ -106,7 +106,10 @@ async function openStartingClaudeSession(
       },
       ...(deps.logger ? { logger: deps.logger } : {})
     })
-    history.covered = await waitForPromiseWithSignal(startup.race(catchUp), request.signal)
+    history.covered = await waitForPromiseWithSignal(
+      startup.race(catchUp, request.signal),
+      request.signal
+    )
     current()
   }
   startup.open()

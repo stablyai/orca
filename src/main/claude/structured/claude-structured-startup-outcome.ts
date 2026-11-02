@@ -1,24 +1,33 @@
 import { startupAcquisitionRefusal } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
 
-/** One acquisition's startup: a failure Claude reports before open succeeds fails that open. */
+/** One acquisition's startup: its first ending cause is the one its open rejects with. */
 export type ClaudeStartupOutcome = {
   /** Takes a startup failure only while this start will report it; a start already failed or stopped keeps its own report. */
   accept: (error: Error) => boolean
-  /** Another route (initialize, transport, exit) failed this start, so it reports that cause, not a later result; an exit calls it before buffered results drain. */
-  fail: (error: unknown) => void
-  /** Settles with `work`, or rejects as soon as a startup failure is accepted. */
-  race: <T>(work: Promise<T>) => Promise<T>
-  /** Throws an accepted failure; otherwise later failures belong to the journal for good. */
+  /** Ends this start with `error` unless it already ended, and returns the cause its open rejects with. */
+  fail: (error: unknown) => unknown
+  /** Settles with `work`, or rejects as soon as this start ends; `work`'s own rejection ends it unless stopped. */
+  race: <T>(work: Promise<T>, signal: AbortSignal) => Promise<T>
+  /** Throws the cause that ended this start; otherwise later failures belong to the journal for good. */
   open: () => void
 }
 
 export function createClaudeStartupOutcome(): ClaudeStartupOutcome {
   let state: 'pending' | 'opened' | { accepted: Error } | { failed: unknown } = 'pending'
-  let rejectFailed = (_error: Error): void => {}
+  let rejectFailed = (_error: unknown): void => {}
   const failed = new Promise<never>((_resolve, reject) => {
     rejectFailed = reject
   })
   void failed.catch(() => {})
+  const ended = (): unknown =>
+    typeof state !== 'object' ? undefined : 'accepted' in state ? state.accepted : state.failed
+  const fail = (error: unknown): unknown => {
+    if (state === 'pending') {
+      state = { failed: error }
+      rejectFailed(error)
+    }
+    return ended() ?? error
+  }
   return {
     accept: (error) => {
       if (state === 'pending') {
@@ -36,15 +45,19 @@ export function createClaudeStartupOutcome(): ClaudeStartupOutcome {
       const reason = startupAcquisitionRefusal(error)?.reason
       return reason !== undefined && startupAcquisitionRefusal(state.failed)?.reason === reason
     },
-    fail: (error) => {
-      if (state === 'pending') {
-        state = { failed: error }
-      }
+    fail,
+    race: (work, signal) => {
+      // Registered before the race's own handler, so no result is taken once `work` has failed.
+      work.then(undefined, (error: unknown) => {
+        if (!signal.aborted) {
+          fail(error)
+        }
+      })
+      return Promise.race([work, failed])
     },
-    race: (work) => Promise.race([work, failed]),
     open: () => {
-      if (typeof state === 'object' && 'accepted' in state) {
-        throw state.accepted
+      if (state !== 'pending' && state !== 'opened') {
+        throw ended()
       }
       state = 'opened'
     }
