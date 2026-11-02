@@ -12,6 +12,9 @@ export const PLUGIN_VIEW_REPLY_CHANNEL = 'plugins:viewReply'
 
 export type PluginViewColorScheme = 'light' | 'dark'
 
+/** Orca's chrome a plugin draws into: the status bar, or the whole window. */
+export type PluginChromeRegion = 'status-bar' | 'window'
+
 export type PluginViewCapture = {
   /** The guest URL's `rev` the drawn panel must come from; null takes whatever is drawn. */
   guestRevision: string | null
@@ -56,6 +59,8 @@ export type PluginViewRequestBody =
     }
   /** `shot --scenario`: draws a validated tree in a detached preview; no plugin panel or guest. */
   | { kind: 'replay-panel'; replay: PluginViewReplay }
+  /** `shot --status-bar` / `--window`: measures that part of Orca's own chrome for a capture. */
+  | { kind: 'capture-chrome'; region: PluginChromeRegion; colorScheme?: PluginViewColorScheme }
   /** Puts back the width and theme a capture changed, and undoes editor capture `captureId`. */
   | { kind: 'end-capture'; captureId?: string }
 

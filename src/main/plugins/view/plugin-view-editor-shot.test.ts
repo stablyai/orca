@@ -19,6 +19,7 @@ import type { PluginHostListEntry } from '../../../shared/plugins/plugin-list-en
 import type { ValidDiscoveredPlugin } from '../plugin-discovery'
 import type { PluginViewDesktopDeps } from './plugin-view-desktop'
 import { pluginEditorFileTarget, shootPluginEditor } from './plugin-view-editor-shot'
+import { guestKeyTargetFocusScript, hostWebviewFocusScript } from './plugin-view-editor-key-focus'
 
 const relay = vi.hoisted(() => ({
   requestPluginViewFromRenderer:
@@ -48,7 +49,10 @@ function fakeContents(url = '', id = 1) {
     setBackgroundThrottling: vi.fn(),
     getZoomFactor: () => 1,
     capturePage: vi.fn(async () => CAPTURED),
-    executeJavaScript: vi.fn(async () => true),
+    executeJavaScript: vi.fn(async (script: string) => {
+      sent.push({ script })
+      return true
+    }),
     sendInputEvent: (event: unknown) => sent.push(event)
   } as unknown as WebContents
   return { contents, sent }
@@ -200,6 +204,29 @@ describe('shot --editor', () => {
     })
     expect(other.sent).toEqual([])
     expect(mine.sent.length).toBeGreaterThan(0)
+  })
+
+  it('focuses the guest and the clicked element before each key, never the window', async () => {
+    const guest = fakeContents(GUEST_URL, 8)
+    const host = fakeContents()
+    relay.requestPluginViewFromRenderer.mockImplementation(answer(drawn(true, null, 8)))
+    await shootPluginEditor(deps(guest.contents), host.contents, {
+      pluginKey: KEY,
+      filePath: '/w/a.sketch',
+      acts: [{ click: [10, 20] }, { key: 'r' }],
+      inPlace: true
+    })
+    expect(host.sent).toContainEqual({ script: hostWebviewFocusScript(8) })
+    const focusAt = guest.sent.findIndex(
+      (event) =>
+        JSON.stringify(event) ===
+        JSON.stringify({ script: guestKeyTargetFocusScript({ x: 10, y: 20 }) })
+    )
+    const keyAt = guest.sent.findIndex(
+      (event) => JSON.stringify(event) === JSON.stringify({ type: 'keyDown', keyCode: 'r' })
+    )
+    expect(focusAt).toBeGreaterThan(-1)
+    expect(keyAt).toBeGreaterThan(focusAt)
   })
 
   it('reports a frame that never asked for its document and the errors it logged', async () => {

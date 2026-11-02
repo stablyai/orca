@@ -18,6 +18,7 @@ import {
   withPaintingWhileHidden
 } from './plugin-view-capture'
 import { requestPluginViewFromRenderer } from './plugin-view-renderer-relay'
+import { focusEditorGuestForKeys } from './plugin-view-editor-key-focus'
 import { PLUGIN_SHOT_ACT_WINDOW_SHOWN_MESSAGE, pluginShotThemeDecision } from './plugin-shot-policy'
 import { resolvePluginViewEditor } from './plugin-view-target'
 import type { PluginViewDesktopDeps } from './plugin-view-desktop'
@@ -68,13 +69,21 @@ const MAX_ERRORS = 20
 async function runEditorActs(
   acts: readonly PluginEditorShotAct[],
   target: { contents: WebContents; origin: { x: number; y: number }; scale: number },
-  guest: WebContents | undefined
+  guest: { host: WebContents; contents: WebContents } | undefined
 ): Promise<void> {
+  let lastPoint: { x: number; y: number } | null = null
   for (const act of acts) {
+    if ('key' in act && guest) {
+      // A canvas can keep focus to itself between acts, dropping later keys.
+      await focusEditorGuestForKeys(guest.host, guest.contents, lastPoint)
+    } else if (!('key' in act)) {
+      const [x, y] = 'click' in act ? act.click : act.drag[1]
+      lastPoint = { x, y }
+    }
     for (const event of pluginEditorActInputEvents(act, target.origin, target.scale)) {
       target.contents.sendInputEvent(event)
     }
-    await settlePluginFrameGuest(guest ?? target.contents)
+    await settlePluginFrameGuest(guest?.contents ?? target.contents)
   }
 }
 
@@ -171,7 +180,7 @@ export async function shootPluginEditor(
           guest
             ? { contents: guest, origin: { x: 0, y: 0 }, scale: 1 }
             : { contents, origin: drawn.rect, scale: contents.getZoomFactor() },
-          guest
+          guest && { host: contents, contents: guest }
         )
       }
       const image = await capturePluginPanelPng(

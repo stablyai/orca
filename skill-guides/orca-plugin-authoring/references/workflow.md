@@ -85,11 +85,17 @@ input in the editor's own CSS pixels: `[{"click":[200,150]},{"drag":[[200,150],[
 {"key":"r"}]` (`key` takes a name such as `Enter` and optional `"modifiers":["meta"]`), each
 painted before the next; it needs the window hidden or minimized. A shot never changes your file:
 `--act` runs on a copy in a temporary folder workspace that is removed afterwards (`--in-place`
-acts on the file itself), and a shot without acts closes the tab it opened. It exits 1 and lists `errors` when the editor threw, was blocked by its
+acts on the file itself and keeps its tab open), and a shot without acts closes the tab it
+opened. Before each `key` Orca focuses the editor's guest, so a canvas keeps getting keys. It exits 1 and lists `errors` when the editor threw, was blocked by its
 content policy, or never asked for its document within 5s; the PNG is written anyway. The theme
 and size are put back. Default file `.orca/shots/<plugin-key>-<editor>.png`.
 
-- Both need the desktop app with a workspace showing. A shot never changes the view: it fails with
+`ORCA plugin shot <dir> --status-bar [--theme light|dark]` captures Orca's status bar, where your
+status bar items draw, and `--window` the whole window, both from the hidden window. Default files
+`.orca/shots/<plugin-key>-status-bar.png` and `-window.png`.
+
+- Both need the desktop app with a workspace. With none showing, a shot selects one of this
+  machine's workspaces in the hidden window. A shot never changes the view: it fails with
   `no_workspace` while Orca shows Settings or another full page. Without them, use `plugin check`.
 
 ## Events

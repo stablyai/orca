@@ -17,6 +17,7 @@ import { callPlugins, requirePluginKey, resolveHostPluginPath, stringFlag } from
 import { defaultPluginShotsDir } from './plugin-shot-default-dir'
 import { takePluginScenarioShot } from './plugin-shot-scenario'
 import { runPluginEditorShot } from './plugin-shot-editor'
+import { chromeShotRegion, runPluginChromeShot } from './plugin-shot-chrome'
 
 /** What `plugins.shot` answers; `png` is base64. */
 export type PluginShotReply = {
@@ -264,6 +265,7 @@ export const PLUGIN_VIEW_HANDLERS: Record<string, CommandHandler> = {
     )
   },
   'plugin shot': async (ctx) => {
+    const region = chromeShotRegion(ctx)
     const scenario = stringFlag(ctx, 'scenario')
     if (scenario !== undefined && stringFlag(ctx, 'editor') !== undefined) {
       throw new RuntimeClientError('invalid_argument', 'Pass --scenario or --editor, not both.')
@@ -276,6 +278,9 @@ export const PLUGIN_VIEW_HANDLERS: Record<string, CommandHandler> = {
     const out = stringFlag(ctx, 'out')
     const outPath = out === undefined ? null : resolveLocalShotPath(ctx, out)
     const shotsDir = resolveLocalShotPath(ctx, defaultPluginShotsDir(ctx.cwd))
+    if (region) {
+      return runPluginChromeShot(ctx, { region, colorScheme, out: outPath, shotsDir })
+    }
     const editor = stringFlag(ctx, 'editor')
     if (editor !== undefined) {
       if (stringFlag(ctx, 'panel') !== undefined) {

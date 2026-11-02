@@ -139,6 +139,23 @@ test('plugin shot --editor opens the file, acts in the guest and fails a broken 
     expect(failed.code).toBe(1)
     expect(failed.stdout).toContain('never asked for its document')
     expect(failed.stdout).toContain('editor exploded')
+
+    // Orca's own chrome, where plugins draw status bar items, from the hidden window too.
+    const statusBar = await runCompiledOrcaCli(userDataDir, [
+      'plugin',
+      'shot',
+      'local.red-click',
+      '--status-bar',
+      '--out',
+      join(tempRoot, 'status-bar.png'),
+      '--json'
+    ])
+    expect(statusBar.json?.result).toMatchObject({ region: 'status-bar', height: 24 })
+    expect(
+      await electronApp.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows().some((window) => window.isVisible() || window.isFocused())
+      )
+    ).toBe(false)
   } finally {
     await disablePluginSystem(orcaPage).catch(() => undefined)
     await rm(tempRoot, { recursive: true, force: true })

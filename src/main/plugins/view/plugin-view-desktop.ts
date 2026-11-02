@@ -1,6 +1,9 @@
 import type { WebContents } from 'electron'
 import type { z } from 'zod'
-import type { PluginShotReplayParams } from '../../../shared/rpc-contract/plugins-params'
+import type {
+  PluginShotChromeParams,
+  PluginShotReplayParams
+} from '../../../shared/rpc-contract/plugins-params'
 import {
   PLUGIN_VIEW_NO_WORKSPACE_CODE,
   PLUGIN_VIEW_NOT_SHOWN_CODE,
@@ -28,6 +31,7 @@ import {
   type PluginEditorShotResult
 } from './plugin-view-editor-shot'
 import type { PluginEditorShotAct } from '../../../shared/plugins/view/plugin-editor-shot-acts'
+import { shootPluginChrome, type PluginChromeShotResult } from './plugin-view-chrome-shot'
 import {
   resolvePluginViewEditor,
   resolvePluginViewPanel,
@@ -97,6 +101,8 @@ export type PluginViewDesktop = {
     acts?: PluginEditorShotAct[]
     inPlace?: boolean
   }): Promise<PluginEditorShotResult>
+  /** `shot --status-bar` / `--window`: captures Orca's own chrome, where plugins draw too. */
+  shotChrome(params: z.infer<typeof PluginShotChromeParams>): Promise<PluginChromeShotResult>
 }
 
 export type PluginViewDesktopDeps = {
@@ -188,6 +194,7 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
     },
 
     shotEditor: (params) => shootPluginEditor(deps, requireContents(), params),
+    shotChrome: (params) => shootPluginChrome(deps, requireContents(), params),
 
     shotReplay: (params) =>
       shootPluginReplay({ contents: requireContents(), windowShown: deps.windowShown() }, params),

@@ -6,9 +6,12 @@ import {
   type PluginViewReply,
   type PluginViewRequest
 } from '../../../../../shared/plugins/view/plugin-view-protocol'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { detectLanguage } from '@/lib/language-detect'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { useAppStore } from '@/store'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { usePluginPanelsStore } from '@/store/plugin-panels'
 import {
   collectActivePluginCustomEditors,
@@ -28,6 +31,8 @@ import { endPluginShotReplay, replayPluginPanel } from './plugin-view-replay'
 import { showWorkspaceForFile } from './plugin-view-editor-workspace'
 import { captureOpenEditor } from './plugin-view-editor-capture'
 import { planEditorShotCleanup, runEditorShotCleanup } from './plugin-view-editor-shot-cleanup'
+import { captureChrome } from './plugin-view-chrome-capture'
+import { pickWorkspaceToShow } from './plugin-view-workspace-pick'
 
 type Failure = Extract<PluginViewReply, { ok: false }>
 
@@ -39,7 +44,7 @@ const fail = (requestId: string, code: string, message: string): Failure => ({
 })
 
 const NO_WORKSPACE_MESSAGE =
-  'Orca shows plugin panels and editors beside an open workspace, and none is showing.'
+  'Orca shows plugin panels and editors beside an open workspace, and none is showing or could be selected.'
 const NO_EDITOR_WORKSPACE_MESSAGE =
   'No workspace shows the file, and Orca could not open its folder as a folder workspace.'
 
@@ -48,6 +53,18 @@ function showWorkspace(requestId: string, leaveSettings: boolean): Failure | nul
   const state = useAppStore.getState()
   if (leaveSettings && state.activeView === 'settings') {
     state.closeSettingsPage()
+  }
+  const shown = useAppStore.getState()
+  const pick =
+    canShowRightSidebarForView(shown.activeView) && !shown.activeWorktreeId
+      ? pickWorkspaceToShow(selectWorktreesByRepo(shown), selectFolderWorkspaces(shown))
+      : null
+  if (pick) {
+    // Renderer state only: the hidden window stays hidden, and no terminal is started.
+    activateAndRevealWorkspace(pick, {
+      providesInitialSurface: true,
+      executionHostId: LOCAL_EXECUTION_HOST_ID
+    })
   }
   const next = useAppStore.getState()
   if (!canShowRightSidebarForView(next.activeView) || !next.activeWorktreeId) {
@@ -203,6 +220,8 @@ export async function handlePluginViewRequest(
         return await openEditor(request)
       case 'replay-panel':
         return await replayPluginPanel(request)
+      case 'capture-chrome':
+        return await captureChrome(request.requestId, request.region, request.colorScheme)
       case 'end-capture': {
         endPluginShotReplay()
         usePluginViewCaptureStore.getState().end()
