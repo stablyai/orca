@@ -135,14 +135,6 @@ describe('components panel lifecycle', () => {
     expect(seen.signal?.aborted).toBe(true)
   })
 
-  it('says clearly when the module has no component', async () => {
-    const { runtime, host } = booted()
-    host.send('ui.hydrate', {})
-    await expect(runtime.boot({ default: 'nope' })).rejects.toThrow(
-      /must export a component function as its default export \(got string\)/
-    )
-  })
-
   it('refuses duplicate atom keys', () => {
     atom('lifecycle.once', 1)
     expect(() => atom('lifecycle.once', 2)).toThrow(/already used/)

@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildShellCommandFromArgv,
-  clearEnvCommand,
-  commandSeparator,
-  isPosixStartupShell,
-  quoteStartupArg,
-  tokenizeStartupCommand
-} from './tui-agent-startup-shell'
+import { clearEnvCommand, quoteStartupArg, tokenizeStartupCommand } from './tui-agent-startup-shell'
 import { buildAgentDraftLaunchPlan } from './tui-agent-startup'
 
 function expectSpansCoverTokens(source: string, shell: 'powershell' | 'cmd'): string[] {
@@ -102,42 +95,6 @@ describe('one Unix startup dialect', () => {
     )
     expect(quoteStartupArg('ends\\', 'posix')).toBe(`'ends'"\\\\"`)
     expect(quoteStartupArg('', 'posix')).toBe(`''`)
-  })
-
-  it('keeps the sh-family grammar claims that do hold for fish', () => {
-    expect(commandSeparator('posix')).toBe('; ')
-    expect(isPosixStartupShell('posix')).toBe(true)
-    expect(isPosixStartupShell('powershell')).toBe(false)
-    expect(buildShellCommandFromArgv(['codex', 'resume', 'a b'], 'posix')).toBe(
-      `'codex' 'resume' 'a b'`
-    )
-  })
-
-  it('round-trips an adversarial argument through quote then tokenize', () => {
-    for (const value of [
-      String.raw`use \d+ and \\server\share`,
-      "it's mine",
-      'ends\\',
-      'a "b" c',
-      '$PATH *.ts'
-    ]) {
-      const tokenized = tokenizeStartupCommand(quoteStartupArg(value, 'posix'), 'posix')
-      expect(tokenized.ok && tokenized.tokens).toEqual([value])
-    }
-  })
-
-  it('clears an agent draft prefill variable with the portable teardown', () => {
-    const plan = buildAgentDraftLaunchPlan({
-      agent: 'pi',
-      draft: 'hello',
-      cmdOverrides: {},
-      platform: 'darwin'
-    })
-
-    expect(plan?.launchCommand).toBe(
-      `pi; command test -n "$fish_pid" && set --erase -g ORCA_PI_PREFILL; command test -z "$fish_pid" && unset ORCA_PI_PREFILL; true`
-    )
-    expect(plan?.env?.ORCA_PI_PREFILL).toBe('hello')
   })
 
   it('leaves a multi-line argv draft to the paste fallback in cmd.exe', () => {

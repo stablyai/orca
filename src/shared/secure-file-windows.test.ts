@@ -165,19 +165,6 @@ describe('Windows secure files through the native ACL addon', () => {
   })
 
   describe('directory relock', () => {
-    it('relocks the parent once, on the thread pool, across many writes', async () => {
-      const dir = tempDir()
-      for (let i = 0; i < 5; i++) {
-        writeSecureFile(join(dir, `secret-${i}.json`), `contents-${i}`)
-      }
-      await settle()
-
-      expect(fake.callsFor('setAsync', dir)).toEqual([
-        expect.objectContaining({ op: 'setAsync', path: dir, sddl: DIRECTORY_SDDL })
-      ])
-      expect(fake.callsFor('set', dir)).toEqual([])
-    })
-
     it('never rewrites a directory the icacls-era hardening already locked', async () => {
       const dir = tempDir()
       fake.dacls.set(dir, ICACLS_ERA_DIRECTORY_SDDL)

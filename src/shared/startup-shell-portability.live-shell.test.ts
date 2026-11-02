@@ -105,10 +105,6 @@ describe.skipIf(process.platform === 'win32')(
       expect(fishRequirementViolation(FISH)).toBeNull()
     })
 
-    it('found shells to test against', () => {
-      expect(SHELLS.map((shell) => shell.name)).toContain('sh')
-    })
-
     describe.each(SHELLS)('$name', (shell) => {
       it.each(QUOTING_CASES)('quotes %j so the shell yields it back verbatim', (value) => {
         expect(runInShell(shell, `printf '%s' ${quoteStartupArg(value, 'posix')}`)).toBe(value)

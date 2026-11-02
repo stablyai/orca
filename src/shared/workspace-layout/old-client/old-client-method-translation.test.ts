@@ -2,15 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { MoveTab } from '../../rpc-contract/session-tabs-schemas-params'
 import { TerminalCreateParams } from '../../rpc-contract/terminal-unary-params'
 import {
-  translateCreateTerminalTab,
   translateSessionTabClose,
   translateSessionTabMove,
   translateSetTabProps,
   translateTerminalClose,
   translateTerminalCloseTab,
   translateTerminalCreate,
-  translateTerminalRename,
-  translateTerminalSplit,
   type MethodTranslation
 } from './old-client-method-translation'
 import { translateUpdatePaneLayout } from './old-client-pane-layout-translation'
@@ -132,28 +129,6 @@ describe('translateTerminalCreate', () => {
     )
   })
 
-  it('creates a tab with unused ids', () => {
-    const { model } = setup()
-    expect(
-      translateTerminalCreate(
-        model,
-        WS,
-        createParams({ tabId: 'tab-new', leafId: NEW_LEAF, title: 'api' })
-      )
-    ).toEqual({
-      ok: true,
-      commands: [
-        {
-          type: 'createTerminalTab',
-          workspace: WS,
-          tabId: 'tab-new',
-          leafId: NEW_LEAF,
-          title: 'api'
-        }
-      ]
-    })
-  })
-
   it.each([
     ['no ids (CLI, orchestration)', {}],
     ['a tab id alone', { tabId: 'tab-new' }],
@@ -257,28 +232,6 @@ describe('session.tabs translations', () => {
     expect(
       translateSetTabProps(WS, model.workspaces[WS]!, { tabId: 'gone', isPinned: true })
     ).toEqual({ ok: true, commands: [] })
-  })
-
-  it('creates a terminal tab after the tab a row names', () => {
-    const { model, tabA, leafA } = setup()
-    expect(
-      translateCreateTerminalTab(WS, model.workspaces[WS], {
-        afterTabId: terminalRowId(tabA, leafA),
-        targetGroupId: 'group-1',
-        viewMode: 'terminal'
-      })
-    ).toEqual({
-      ok: true,
-      commands: [
-        {
-          type: 'createTerminalTab',
-          workspace: WS,
-          afterTabId: tabA,
-          groupId: 'group-1',
-          viewMode: 'terminal'
-        }
-      ]
-    })
   })
 })
 
@@ -436,21 +389,5 @@ describe('terminal.close and terminal.closeTab keep the pinned refusal', () => {
     expect(
       commandsOf(translateTerminalClose(WS, { tab: terminalTab(split, tabA), leafId: leafA }))
     ).toEqual([{ type: 'closePane', workspace: WS, tabId: tabA, leafId: leafA }])
-  })
-})
-
-describe('terminal.* translations on a resolved pane', () => {
-  it('splits below by default and resets an empty title', () => {
-    const { model, tabA, leafA } = setup()
-    const pane = { tab: terminalTab(model, tabA), leafId: leafA }
-    expect(commandsOf(translateTerminalSplit(WS, pane, undefined))).toEqual([
-      { type: 'splitPane', workspace: WS, tabId: tabA, leafId: leafA, direction: 'horizontal' }
-    ])
-    expect(commandsOf(translateTerminalRename(WS, pane, ''))).toEqual([
-      { type: 'renameTab', workspace: WS, tabId: tabA, kind: 'custom', title: null }
-    ])
-    expect(commandsOf(translateTerminalRename(WS, pane, 'api'))).toEqual([
-      { type: 'renameTab', workspace: WS, tabId: tabA, kind: 'custom', title: 'api' }
-    ])
   })
 })

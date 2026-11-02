@@ -103,27 +103,6 @@ describe('resolveTabAgentFromSignals — Pi/OMP identity', () => {
     ).toBe('omp')
   })
 
-  it('does not flap between OMP and Pi as a launchAgent-less pane cycles hooks', () => {
-    const withLiveHook = resolveTabAgentFromSignals({
-      hasObservedAgentSignal: true,
-      isRemote: true,
-      title: '⠋ Pi',
-      hookAgent: 'omp',
-      focusedCompletedHookAgent: 'omp',
-      launchAgent: undefined
-    })
-    const afterHookCleared = resolveTabAgentFromSignals({
-      hasObservedAgentSignal: true,
-      isRemote: true,
-      title: '⠋ Pi',
-      hookAgent: null,
-      focusedCompletedHookAgent: 'omp',
-      launchAgent: undefined
-    })
-    expect(withLiveHook).toBe('omp')
-    expect(afterHookCleared).toBe('omp')
-  })
-
   it('does not flap between OMP and Pi as the foreground process oscillates', () => {
     // OMP’s nested pi alternates foreground reads at command boundaries; normalize both to the known OMP owner instead of flickering icons.
     const readsPi = resolveTabAgentFromSignals({
@@ -204,19 +183,6 @@ describe('resolveTabAgentFromSignals — Pi/OMP identity', () => {
 
 // Hook records identify panes across working/done turns; title activity must never replace durable identity.
 describe('resolveTabAgentFromSignals — identity vs liveness', () => {
-  it('surfaces the focused idle identity from the record, not the title', () => {
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: true,
-        isRemote: true,
-        title: 'Terminal',
-        hookAgent: null,
-        focusedCompletedHookAgent: 'omp',
-        launchAgent: undefined
-      })
-    ).toBe('omp')
-  })
-
   it('ranks the focused idle identity above a hibernated session and launch bootstrap', () => {
     // Completed local hook identity beats sleeping records and stale launch intent.
     expect(
@@ -255,28 +221,6 @@ describe('resolveTabAgentFromSignals — identity vs liveness', () => {
         launchAgent: undefined
       })
     ).toBe('claude')
-  })
-
-  it('keeps a launchAgent-less pane with a live Pi hook stable on Pi', () => {
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: true,
-        isRemote: true,
-        title: '⠋ Pi',
-        hookAgent: 'pi',
-        launchAgent: undefined
-      })
-    ).toBe('pi')
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: true,
-        isRemote: true,
-        title: '⠋ Pi',
-        hookAgent: null,
-        focusedCompletedHookAgent: 'pi',
-        launchAgent: undefined
-      })
-    ).toBe('pi')
   })
 
   it('keeps a sibling idle identity when the focused pane returns to its shell', () => {

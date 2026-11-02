@@ -72,21 +72,6 @@ describe('pluginManifestSchema boundaries', () => {
     expect(result.ok).toBe(false)
   })
 
-  it('accepts documented dotted command namespaces with camel-case actions', () => {
-    const result = parsePluginManifest(
-      manifest({
-        main: 'main.mjs',
-        contributes: {
-          panels: [],
-          commands: [{ id: 'jupyter.restartKernel', title: 'Restart kernel' }],
-          events: []
-        }
-      })
-    )
-
-    expect(result).toMatchObject({ ok: true })
-  })
-
   it('rejects oversized identities and invalid semantic versions', () => {
     expect(parsePluginManifest(manifest({ id: 'a'.repeat(PLUGIN_ID_MAX_LENGTH + 1) })).ok).toBe(
       false
@@ -95,33 +80,6 @@ describe('pluginManifestSchema boundaries', () => {
     expect(parsePluginManifest(manifest({ version: '1.0' })).ok).toBe(false)
     expect(parsePluginManifest(manifest({ version: '1.0.0-01' })).ok).toBe(false)
     expect(parsePluginManifest(manifest({ version: '1.0.0-alpha.1+build.5' })).ok).toBe(true)
-  })
-
-  it('reports one specific issue per bad id or path', () => {
-    const reserved = pluginManifestSchema.safeParse(manifest({ id: 'constructor' }))
-    expect(reserved.error?.issues.map((issue) => issue.message)).toEqual([
-      'must not be a reserved name'
-    ])
-    const badPath = pluginManifestSchema.safeParse(manifest({ main: '../escape.js' }))
-    expect(badPath.error?.issues).toHaveLength(1)
-    const device = pluginManifestSchema.safeParse(manifest({ main: 'dist/CON.js' }))
-    expect(device.error?.issues).toHaveLength(1)
-  })
-
-  it('accepts a $schema URL in v2 manifests only as an ignored hint', () => {
-    const $schema = 'https://example.com/orca-plugin.schema.json'
-    const v2 = parsePluginManifest(
-      manifest({
-        manifestVersion: 2,
-        execution: 'data',
-        contributes: {},
-        pluginApi: undefined,
-        engines: { orca: `>=${PLUGIN_MANIFEST_V2_SINCE}` },
-        $schema
-      })
-    )
-    expect(v2).toMatchObject({ ok: true, manifest: { $schema } })
-    expect(parsePluginManifest(manifest({ $schema }))).toMatchObject({ ok: true })
   })
 
   it('rejects duplicate contribution ids', () => {

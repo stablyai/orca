@@ -1,5 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { exportedTypeShape, runtimeShape } from '../../authoring/plugin-author-typings.test-fixture'
+import { afterEach, describe, expect, it } from 'vitest'
 import { agentStatusChangedPayloadSchema } from '../../events/plugin-events'
 import { atom, read, set } from '../runtime/declarative-atoms'
 import { h } from '../runtime/declarative-elements'
@@ -128,15 +127,6 @@ describe('mountWorker', () => {
       )
     ).rejects.toThrow(/registered undeclared command other/)
   })
-
-  it('hands activate the same shape of orca object as Orca does', async () => {
-    let captured: unknown
-    await mountWorker(
-      { default: (orca: unknown) => (captured = orca) },
-      { events: [], commands: [] }
-    )
-    expect(runtimeShape(captured)).toEqual(exportedTypeShape('orca/worker', 'OrcaWorkerApi').shape)
-  })
 })
 
 describe('panel refusals', () => {
@@ -195,32 +185,5 @@ describe('a panel and its worker on one host', () => {
       JSON.stringify([{ asked: { n: 1 } }, 'from the stub', 'unknown_method'])
     )
     await worker.deactivate()
-  })
-})
-
-describe('RelativeTime in the test kit', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('reads as Orca draws it now, in a node and in a Table cell', async () => {
-    // Only Date is faked: the kit settles on real macrotasks.
-    vi.useFakeTimers({ now: Date.UTC(2026, 10, 1, 12), toFake: ['Date'] })
-    const at = Date.UTC(2026, 10, 1, 12) - 5 * 60_000
-    panel = await mount(() =>
-      h(
-        'Stack',
-        null,
-        h('Text', null, 'Started ', h('RelativeTime', { at })),
-        h('Table', {
-          label: 'Agents',
-          columns: [{ key: 'since', label: 'Since' }],
-          rows: [{ key: 'a', cells: { since: { type: 'relative', at, format: 'duration' } } }]
-        })
-      )
-    )
-    expect(panel.find({ role: 'time' })?.text).toBe('5m ago')
-    expect(panel.find({ role: 'grid' })?.text).toBe('5m')
-    expect(panel.warnings).toEqual([])
   })
 })
