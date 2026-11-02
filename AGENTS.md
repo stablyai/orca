@@ -10,12 +10,14 @@ Optional: `pnpm check:changed --maxWorkers=2`; if selection fans out excessively
 > Always lint changed files before making/pushing-to PRs (so CI never fails on it)
 
 # Don't Poll the CI
+
 Use `gh run watch <run-id> --compact --exit-status` or `gh pr checks --watch` to prevent token waste
 
 # Repo Rules
-  * Ensure main is always releasable
-  * Never break the CI. If it's broken borken, merge fixes.
-  * Avoid low-value tests (see [Anti-patterns](./docs/agents-md-refs/test-antipatterns.md))
+
+- Ensure main is always releasable
+- Never break the CI. If it's broken borken, merge fixes.
+- Avoid low-value tests (see [Anti-patterns](./docs/agents-md-refs/test-antipatterns.md))
 
 # Design System
 
@@ -23,12 +25,12 @@ All UI work — layout, color, typography, spacing, component selection, UX beha
 
 # Electron UI Validation
 
-  * Always run tests and agent-launched apps in the background with `ORCA_BACKGROUND_LAUNCH=1`.
-  * Never steal monitor focus or reveal test windows: no `show()`, `showInactive()`, `bringToFront()`, `app.focus()`, or OS activation. Use CDP screenshots of hidden renderers.
-  * Keep native-focus and visible-window tests paused on the user's desktop; run them on an isolated display or CI.
-  * Rebuild modified launch-policy code before running an app (stale build wrappers are not safe).
-  * Use the `$electron` skill and Playwright CDP for rendered Orca UI checks. Do not use computer-use for Orca UI validation.
-  * Screenshot presentational components without Electron: `pnpm fixtures:shot <id>` ([fixtures](docs/agents-md-refs/component-fixtures.md)).
+- Always run tests and agent-launched apps in the background with `ORCA_BACKGROUND_LAUNCH=1`.
+- Never steal monitor focus or reveal test windows: no `show()`, `showInactive()`, `bringToFront()`, `app.focus()`, or OS activation. Use CDP screenshots of hidden renderers.
+- Keep native-focus and visible-window tests paused on the user's desktop; run them on an isolated display or CI.
+- Rebuild modified launch-policy code before running an app (stale build wrappers are not safe).
+- Use the `$electron` skill and Playwright CDP for rendered Orca UI checks. Do not use computer-use for Orca UI validation.
+- Screenshot presentational components without Electron: `pnpm fixtures:shot <id>` ([fixtures](docs/agents-md-refs/component-fixtures.md)).
 
 # Code Style
 
@@ -52,15 +54,14 @@ Avoid type assertions except `as const`. Unavoidable casts need a line-specific 
 # First Class Citizens
 
 Every change must consider these areas:
-  1. Cross-Platform Support (mac/linux/windows)
-    * Guard platform-specific behavior at runtime; use platform-aware shortcuts, paths, and existing process wrappers. Before changing platform-specific code, processes, shells, shortcuts, paths, or native modules, read [`docs/agents-md-refs/cross-platform-support.md`](./docs/agents-md-refs/cross-platform-support.md).
-  2. Remote hosts
-    * Features should work locally and on remote hosts
-  3. Mobile
-  4. Folder Workspaces
-    * Don't assume every workspace is a git worktree.
+
+1. Cross-Platform Support (mac/linux/windows) * Guard platform-specific behavior at runtime; use platform-aware shortcuts, paths, and existing process wrappers. Before changing platform-specific code, processes, shells, shortcuts, paths, or native modules, read [`docs/agents-md-refs/cross-platform-support.md`](./docs/agents-md-refs/cross-platform-support.md).
+2. Remote hosts * Features should work locally and on remote hosts
+3. Mobile
+4. Folder Workspaces * Don't assume every workspace is a git worktree.
 
 # Footguns
+
 ## Git / GitHub
 
 If changing code around `git`, `gh`, source-control, or review behavior read [`docs/agents-md-refs/git-workflow.md`](./docs/agents-md-refs/git-workflow.md).
