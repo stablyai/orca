@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type Ref,
+  type RefCallback,
   type RefObject
 } from 'react'
 import { useComposedRefs } from 'radix-ui/internal'
@@ -12,7 +13,10 @@ import { registerOverlayFocusOwner } from '@/lib/overlay-focus-ownership'
 
 export const OverlayFocusScope = createContext<RefObject<HTMLDivElement | null> | null>(null)
 
-export function useOverlayFocusScope(forwardedRef?: Ref<HTMLDivElement>) {
+export function useOverlayFocusScope(forwardedRef?: Ref<HTMLDivElement>): {
+  ref: RefCallback<HTMLDivElement>
+  scope: RefObject<HTMLDivElement | null>
+} {
   const parent = useContext(OverlayFocusScope)
   const scope = useRef<HTMLDivElement>(null)
   const [owner, setOwner] = useState<HTMLDivElement | null>(null)
