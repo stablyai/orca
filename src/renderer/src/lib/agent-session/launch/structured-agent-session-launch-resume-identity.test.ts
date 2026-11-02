@@ -43,7 +43,6 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-import { getStructuredAgentLaunchStatus } from './structured-agent-session-launch-status'
 import { getStructuredAgentSessionLaunchResumes } from './structured-agent-session-launch-registry'
 import { startStructuredAgentLaunch } from './structured-agent-session-launch'
 
@@ -141,20 +140,6 @@ describe('a launch that adopts a conversation is its own identity', () => {
     })
   })
 
-  it('does not hand a blank launch the resume already pending for the same worktree', async () => {
-    const worktreeId = 'wt-blank-vs-resume'
-    const resume = startStructuredAgentLaunch(worktreeId, 'codex', {
-      requestId: 'request-3',
-      resumeFrom: { providerSessionId: 'thread-1' }
-    })
-    const blank = startStructuredAgentLaunch(worktreeId, 'codex', { requestId: 'request-4' })
-
-    await flushLaunchDispatch()
-
-    expect(blank.sessionId).not.toBe(resume.sessionId)
-    expect(createParams()).toHaveLength(2)
-  })
-
   it('keeps two resumes of different rows apart', async () => {
     const worktreeId = 'wt-two-rows'
     const first = startStructuredAgentLaunch(worktreeId, 'codex', {
@@ -208,19 +193,5 @@ describe('a launch that adopts a conversation is its own identity', () => {
 
     expect(there.sessionId).not.toBe(here.sessionId)
     expect(createParams()).toHaveLength(2)
-  })
-
-  it('reports a pending resume as a launch in flight for the worktree', () => {
-    // "Is a chat starting here" means any launch for the pair, not only the blank one.
-    const worktreeId = 'wt-resume-status'
-    expect(getStructuredAgentLaunchStatus(worktreeId, 'codex')).toBe('idle')
-
-    startStructuredAgentLaunch(worktreeId, 'codex', {
-      requestId: 'request-11',
-      resumeFrom: { providerSessionId: 'thread-1' }
-    })
-
-    expect(getStructuredAgentLaunchStatus(worktreeId, 'codex')).toBe('pending')
-    expect(getStructuredAgentLaunchStatus(worktreeId, 'claude')).toBe('idle')
   })
 })

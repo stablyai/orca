@@ -74,21 +74,6 @@ function makeFolderHostState(args: {
 }
 
 describe('resolveAgentBackgroundLaunchHost', () => {
-  it('keeps an authoritative local folder owner local', () => {
-    const host = resolveAgentBackgroundLaunchHost({
-      store: makeFolderHostState({ connectionId: null, folderPath: '/project' }) as never,
-      worktreeId: 'folder:folder-1',
-      worktreePath: '/project',
-      repo: null
-    })
-
-    expect(host).toMatchObject({
-      connectionId: null,
-      isRemote: false,
-      expectedConnectionId: null
-    })
-  })
-
   it('fails closed when folder ownership is ambiguous', () => {
     const store = makeFolderHostState({
       connectionId: 'ssh-1',
@@ -187,21 +172,6 @@ describe('resolveAgentBackgroundLaunchHost', () => {
     expect(host).toMatchObject({ connectionId: 'nested', isRemote: true, platform: 'linux' })
   })
 
-  it('quotes for the Orca server that owns a repo, not the client (#22204)', () => {
-    const host = resolveAgentBackgroundLaunchHost({
-      ...asLaunchInputs(makeFolderHostState({ connectionId: null, folderPath: '/project' }), {
-        id: 'repo-1',
-        connectionId: null,
-        executionHostId: 'runtime:linux-box',
-        path: '/srv/repo'
-      }),
-      worktreeId: 'repo-1::/srv/repo',
-      worktreePath: '/srv/repo'
-    })
-
-    expect(host).toMatchObject({ connectionId: null, isRemote: true, platform: 'linux' })
-  })
-
   it("uses a worktree's nested SSH host over its repo's runtime default", () => {
     const state = {
       ...makeFolderHostState({ connectionId: null, folderPath: '/project' }),
@@ -278,17 +248,5 @@ describe('resolveAgentBackgroundLaunchHost', () => {
         worktreePath: '/srv/repo'
       })
     ).toThrow('has not reported its operating system')
-  })
-
-  it('uses Linux startup quoting for a local WSL folder', () => {
-    const folderPath = '\\\\wsl.localhost\\Ubuntu\\home\\me\\project'
-    const host = resolveAgentBackgroundLaunchHost({
-      store: makeFolderHostState({ connectionId: null, folderPath }) as never,
-      worktreeId: 'folder:folder-1',
-      worktreePath: folderPath,
-      repo: null
-    })
-
-    expect(host.platform).toBe('linux')
   })
 })

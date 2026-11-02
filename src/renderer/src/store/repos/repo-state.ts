@@ -174,6 +174,8 @@ export type RepoSlice = {
   /** Local projects a WSL host now owns: never in `repos`/`folderWorkspaces`, read-only, chats only. */
   wslMovedProjects: readonly WslMovedProject[]
   fetchWslMovedProjects: () => Promise<void>
+  /** Startup only: a stopped WSL host's saved project list, before its live catalog is asked for. */
+  seedReposFromHostCatalogSnapshots: () => Promise<void>
   folderWorkspacePathStatuses: Record<string, FolderWorkspacePathStatusCacheEntry>
   /** Host-resolved floating workspace directory; null until the host has answered. */
   floatingWorkspacePath: string | null

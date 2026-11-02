@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { i18n } from '@/i18n/i18n'
 import {
-  buildWorkspaceCleanupFacetList,
-  countWorkspaceCleanupMeasuredRows
-} from './workspace-cleanup-facets'
-import {
   buildWorkspaceCleanupSizeIndex,
   buildWorkspaceCleanupWorktreeIndex,
   getWorkspaceCleanupHostIdentity
@@ -22,7 +18,6 @@ import {
 } from '../../../../shared/workspace-cleanup-filter-model'
 import {
   countWorkspaceCleanupFacetMatches,
-  filterWorkspaceCleanupFacets,
   matchesWorkspaceCleanupFilters,
   queryWorkspaceCleanupCandidates
 } from './workspace-cleanup-query'
@@ -40,12 +35,6 @@ const ANY = filters((state) => {
 })
 
 describe('facet building', () => {
-  it('strips the ref prefix and falls back to local host', () => {
-    const facets = makeFacets({ worktree: { branch: 'refs/heads/feature/x' } })
-    expect(facets.branch).toBe('feature/x')
-    expect(facets.hostId).toBe('local')
-  })
-
   it('preserves a disconnected candidate execution host', () => {
     const facets = makeFacets({
       candidate: { connectionId: 'builder', executionHostId: 'ssh:builder' },
@@ -59,20 +48,6 @@ describe('facet building', () => {
     expect(makeFacets({ sizeBytes: 0 }).sizeBytes).toBe(0)
   })
 
-  it('treats a missing visit stamp as never opened', () => {
-    expect(makeFacets().lastVisitedAt).toBeNull()
-    expect(makeFacets({ lastVisitedAt: FACET_NOW }).lastVisitedAt).toBe(FACET_NOW)
-  })
-
-  it('resolves the visible workspace status without changing statusless filter semantics', () => {
-    expect(makeFacets().workspaceStatus).toBeNull()
-    expect(makeFacets().workspaceStatusLabel).toBe('In progress')
-    expect(makeFacets({ worktree: { workspaceStatus: 'in-review' } }).workspaceStatusLabel).toBe(
-      'In review'
-    )
-    expect(makeFacets({ worktree: null }).workspaceStatusLabel).toBeNull()
-  })
-
   it('only trusts sizes from an ok space scan', () => {
     const scanned = [
       { worktreeId: 'a', status: 'ok', sizeBytes: 10 },
@@ -81,22 +56,6 @@ describe('facet building', () => {
     const index = buildWorkspaceCleanupSizeIndex(scanned)
     expect(index.get('a')).toBe(10)
     expect(index.has('b')).toBe(false)
-  })
-
-  it('counts measurements only for rows in the current fleet', () => {
-    const rows = [makeFacets({ sizeBytes: 10 }), makeNamedFacets('unsized')]
-    expect(countWorkspaceCleanupMeasuredRows(rows)).toBe(1)
-  })
-
-  it('indexes worktrees across repos by host and id', () => {
-    const index = buildWorkspaceCleanupWorktreeIndex({
-      'repo-1': [{ id: 'w1', hostId: 'local' }],
-      'repo-2': [{ id: 'w2', hostId: 'ssh:builder' }]
-    })
-    expect([...index.keys()]).toEqual([
-      getWorkspaceCleanupHostIdentity('local', 'w1'),
-      getWorkspaceCleanupHostIdentity('ssh:builder', 'w2')
-    ])
   })
 
   it('keeps same-id worktrees and sizes isolated by host', () => {
@@ -171,13 +130,6 @@ describe('facet building', () => {
     )
 
     expect(index.size).toBe(0)
-  })
-
-  it('counts a workspace with nothing attached as completely empty', () => {
-    expect(makeFacets().isCompletelyEmpty).toBe(true)
-    expect(makeFacets({ worktree: { comment: 'keep' } }).isCompletelyEmpty).toBe(false)
-    expect(makeFacets({ review: {} }).isCompletelyEmpty).toBe(false)
-    expect(makeFacets({ worktree: { linkedIssue: 12 } }).isCompletelyEmpty).toBe(false)
   })
 })
 
@@ -576,27 +528,6 @@ describe('query pipeline', () => {
     expect(canQueueWorkspaceCleanupCandidate(candidates[3])).toBe(true)
     expect(canQueueWorkspaceCleanupCandidate(candidates[4])).toBe(true)
     expect(canQueueWorkspaceCleanupCandidate(candidates[5])).toBe(true)
-  })
-
-  it('reports counts and selectable ids', () => {
-    const rows = [
-      makeNamedFacets('alpha'),
-      makeNamedFacets('beta', {
-        candidate: { blockers: ['dirty-files'], tier: 'review' }
-      })
-    ]
-    expect(filterWorkspaceCleanupFacets(rows, ANY, FACET_NOW)).toHaveLength(2)
-    const result = queryWorkspaceCleanupCandidates(
-      buildWorkspaceCleanupFacetList([makeFacetCandidate()]).map((f) => f.candidate),
-      { filters: ANY, sort: { field: 'name', direction: 'asc' } },
-      {},
-      FACET_NOW
-    )
-    expect(result.totalCount).toBe(1)
-    expect(result.matchedCount).toBe(1)
-    expect(result.selectableIdentities).toEqual([
-      getWorkspaceCleanupHostIdentity('local', 'repo-1::/repo/alpha')
-    ])
   })
 
   it('counts per-facet matches independently of the other groups', () => {

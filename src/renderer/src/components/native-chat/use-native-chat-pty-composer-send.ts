@@ -19,7 +19,7 @@ import type { NativeChatResolvedTarget } from './native-chat-composer-target'
 import { isSlashCommandDraft } from '../../../../shared/native-chat/input/native-chat-slash-commands'
 import type { NativeChatPickerState } from './use-native-chat-picker-state'
 import type { NativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
-import type { NativeChatPtySessionOptionsSurface } from '../../../../shared/native-chat-pty-session-options'
+import type { NativeChatPtySessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-pty-session-options'
 import type { NativeChatOptimisticSendOutcome } from './native-chat-composer-types'
 import {
   answerNativeChatCommandInComposer,
@@ -35,7 +35,7 @@ export function useNativeChatPtyComposerSend(args: {
   isDispatchingSessionOption: boolean
   launchDraft?: NativeChatLaunchDraft | null
   launchDraftResolved: boolean
-  readTerminalScreen?: () => string | null
+  readTerminalDraft?: () => string | null
   resolveTarget: () => NativeChatResolvedTarget | null
   classifySend: NativeChatPickerState['classifySend']
   onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
@@ -79,7 +79,7 @@ export function useNativeChatPtyComposerSend(args: {
       launchDraft: args.launchDraft,
       launchDraftResolved: args.launchDraftResolved,
       agent: args.agent,
-      readScreen: () => args.readTerminalScreen?.()
+      readInputLine: () => args.readTerminalDraft?.()
     })
     let pendingId: string | undefined
     const sendOptions =
@@ -103,7 +103,7 @@ export function useNativeChatPtyComposerSend(args: {
     if (classification !== 'chat' && imagePaths.length === 0) {
       pendingHandle =
         args.agent === 'codex' && isSlashCommandDraft(text)
-          ? sendNativeChatTypedCommand(target.ptyId, text)
+          ? sendNativeChatTypedCommand(target.ptyId, text, launchSendOptions)
           : sendNativeChatMessage(target.ptyId, text, sendOptions)
     } else if (imagePaths.length > 0) {
       pendingHandle = sendNativeChatMessageWithImageAttachments(
