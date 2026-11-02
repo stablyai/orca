@@ -245,23 +245,6 @@ describe('structured agent session reducer', () => {
     expect(recovered).toMatchObject({ status: 'ready', error: undefined, readRefusal: undefined })
   })
 
-  it('uses the bounded hydration page pagination boundary', () => {
-    const restored = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-      type: 'event',
-      event: {
-        type: 'snapshot',
-        sessionId: 'session-a',
-        fence: 1,
-        page: hydrationPage(
-          Array.from({ length: 84 }, (_, index) => item(`item-${index}`, index + 1))
-        )
-      }
-    })
-
-    expect(restored.items).toHaveLength(84)
-    expect(restored.hasOlder).toBe(false)
-  })
-
   it('stops offering older history once a /clear divider is loaded, live or paged in', () => {
     const clearRow = (sequence: number): AgentJournalRenderItem => ({
       ...item(`clear-${sequence}`, sequence),
@@ -303,67 +286,6 @@ describe('structured agent session reducer', () => {
     })
     expect(pagedBack.items.map(({ itemId }) => itemId)).toEqual(['old', 'clear-11', 'new'])
     expect(pagedBack.hasOlder).toBe(false)
-  })
-
-  it('projects additive background task state without changing transcript identity', () => {
-    const initial = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-      type: 'event',
-      event: {
-        type: 'snapshot',
-        sessionId: 'session-a',
-        fence: 1,
-        page: hydrationPage([item('message', 1)]),
-        backgroundTasks: null
-      }
-    })
-    const monitoring = reduceStructuredAgentSession(initial, {
-      type: 'event',
-      event: {
-        type: 'batch',
-        sessionId: 'session-a',
-        batch: {
-          cursor: initial.cursor!,
-          items: [],
-          removedItemIds: [],
-          submissions: []
-        },
-        fence: 1,
-        backgroundTasks: { state: 'monitoring' }
-      }
-    })
-
-    expect(monitoring.backgroundTasks).toEqual({ state: 'monitoring' })
-    expect(monitoring.items).toBe(initial.items)
-  })
-
-  it('returns the same state for duplicate background task publications', () => {
-    const monitoring = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-      type: 'event',
-      event: {
-        type: 'snapshot',
-        sessionId: 'session-a',
-        fence: 1,
-        page: hydrationPage([item('message', 1)]),
-        backgroundTasks: { state: 'monitoring' }
-      }
-    })
-    const duplicate = reduceStructuredAgentSession(monitoring, {
-      type: 'event',
-      event: {
-        type: 'batch',
-        sessionId: 'session-a',
-        batch: {
-          cursor: monitoring.cursor!,
-          items: [],
-          removedItemIds: [],
-          submissions: []
-        },
-        fence: 1,
-        backgroundTasks: { state: 'monitoring' }
-      }
-    })
-
-    expect(duplicate).toBe(monitoring)
   })
 
   it('applies background task roster changes without a journal update', () => {

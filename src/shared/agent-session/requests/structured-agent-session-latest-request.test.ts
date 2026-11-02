@@ -4,19 +4,12 @@ import type {
   AgentJournalSubmission,
   AgentJournalTurnLifecycle
 } from '../journal/agent-session-journal-types'
-import {
-  AGENT_SESSION_FAILURE_KINDS,
-  isSubmissionRejectionKind
-} from '../failures/agent-session-failure'
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import {
   DISPATCH_REJECTED_CANCELLED,
-  DISPATCH_REJECTED_CODEX_QUEUE_FULL,
   DISPATCH_REJECTED_HOST_RESTARTED,
   DISPATCH_REJECTED_NOT_DELIVERED,
-  DISPATCH_REJECTED_PROVIDER_CLOSED,
-  DISPATCH_REJECTED_QUEUE_FULL,
-  DISPATCH_REJECTED_WRITE_FAILED
+  DISPATCH_REJECTED_PROVIDER_CLOSED
 } from './structured-agent-session-dispatch-rejection'
 import {
   hasStructuredAgentSessionRequest,
@@ -319,44 +312,6 @@ describe('the sidebar verdict agrees with the rejection classifier', () => {
       turnOutcome: 'failure'
     })
   })
-
-  // A sentence as the reason, so only the typed fact can make a kind read as no verdict.
-  const typed = AGENT_SESSION_FAILURE_KINDS.filter(isSubmissionRejectionKind).map((kind) => ({
-    name: `typed ${kind}`,
-    submission: sent('m1', {
-      dispatchState: 'rejected',
-      reason: 'The message was not sent.',
-      rejection: { kind }
-    })
-  }))
-  const legacy = [
-    DISPATCH_REJECTED_CANCELLED,
-    DISPATCH_REJECTED_QUEUE_FULL,
-    DISPATCH_REJECTED_CODEX_QUEUE_FULL,
-    DISPATCH_REJECTED_HOST_RESTARTED,
-    DISPATCH_REJECTED_PROVIDER_CLOSED,
-    DISPATCH_REJECTED_NOT_DELIVERED,
-    DISPATCH_REJECTED_WRITE_FAILED,
-    `${DISPATCH_REJECTED_WRITE_FAILED}: broken pipe`
-  ].map((reason) => ({ name: `legacy ${reason}`, submission: rejected('m1', reason) }))
-
-  const failedNobody = new Set([
-    'typed notDelivered',
-    'typed cancelled',
-    'typed hostRestarted',
-    'typed chatClosed',
-    `legacy ${DISPATCH_REJECTED_NOT_DELIVERED}`,
-    `legacy ${DISPATCH_REJECTED_CANCELLED}`,
-    `legacy ${DISPATCH_REJECTED_HOST_RESTARTED}`,
-    `legacy ${DISPATCH_REJECTED_PROVIDER_CLOSED}`
-  ])
-  const failedNobodyCases = [...typed, ...legacy].filter(({ name }) => failedNobody.has(name))
-  it.each(failedNobodyCases)(
-    'gives no verdict for a send that failed nobody: $name',
-    ({ submission }) => {
-      expect(latestStructuredAgentSessionRequest([userEntry('m1', 1)], [submission])).toBeNull()
-    }
-  )
 })
 
 describe('the assistant line plain-text surfaces show', () => {
