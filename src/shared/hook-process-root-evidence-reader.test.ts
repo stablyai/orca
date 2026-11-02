@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as PresenceProbe from './agent-process-presence-probe'
 import type { AgentProcessObservation } from './agent-process-presence-probe'
+import type { AgentProcessIdentity } from './agent-process-presence'
 import { createLocalHookRootEvidenceReader } from './hook-process-root-evidence-reader'
 import type { HookRootEvidenceRequest } from './hook-process-root-evidence'
 import { PrioritySemaphore } from './priority-semaphore'
@@ -18,6 +19,8 @@ async function occupy<T>(result: () => T): Promise<T> {
 }
 
 const START = 'Sun Nov  1 00:00:00 2026'
+// The suite skips Windows; a process here runs on one of the platforms the reader verifies.
+const PLATFORM: AgentProcessIdentity['platform'] = process.platform === 'linux' ? 'linux' : 'darwin'
 // Pane i: login root 1000+10i, its shell, and Claude in the foreground on ttys<i>.
 function paneRows(pane: number): string[] {
   const root = 1000 + pane * 10
@@ -63,7 +66,7 @@ function request(pane: number, signal?: AbortSignal): HookRootEvidenceRequest {
     agent: 'claude',
     process: {
       pid: 1000 + pane * 10 + 2,
-      platform: process.platform as 'darwin' | 'linux',
+      platform: PLATFORM,
       startTime: START
     },
     ...(signal ? { signal } : {})
