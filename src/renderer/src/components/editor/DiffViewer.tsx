@@ -112,7 +112,9 @@ export default function DiffViewer({
 
   // A draft keeps its captured owner across a same-tab rename but saves under the file's current path.
   const relativePathRef = useRef(relativePath)
-  relativePathRef.current = relativePath
+  useLayoutEffect(() => {
+    relativePathRef.current = relativePath
+  }, [relativePath])
   const handleCreateComment = useCallback(
     async ({
       lineNumber,
