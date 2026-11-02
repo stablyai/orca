@@ -1,21 +1,53 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import captures from './__fixtures__/declined-permission-hooks.json'
 import { normalizeHookPayload } from '../agent-hook-listener'
 import { createHookListenerState, clearPaneCacheState, movePaneCacheState } from './listener-state'
 import { makePaneKey } from '../stable-pane-id'
-import * as PermissionTable from './claude-permission-table'
+import { invalidateRejectedClaudeHook, type ClaudePermissionTable } from './claude-permission-table'
 import { markClaudeLeadTurnInterrupted } from './providers/claude-roster-state'
 
-// Count the reducer's correlation operations without production instrumentation; behavior is unchanged.
-vi.mock('./claude-permission-table', async (importOriginal) => {
-  const actual = await importOriginal<typeof PermissionTable>()
-  return {
-    ...actual,
-    sameClaudeCall: vi.fn(actual.sameClaudeCall),
-    admitClaudeCall: vi.fn(actual.admitClaudeCall),
-    retireClaudePermissions: vi.fn(actual.retireClaudePermissions)
+type Visits = { visits: number }
+
+/** Counts each element production code reads from a Map by lookup or iteration; it still behaves as the Map. */
+function countMapVisits<T extends Map<unknown, unknown>>(map: T, counter: Visits): T {
+  function* counted(items: Iterable<unknown>): Generator<unknown> {
+    for (const item of items) {
+      counter.visits++
+      yield item
+    }
   }
-})
+  return new Proxy(map, {
+    get(target, property) {
+      const value: unknown = Reflect.get(target, property, target)
+      if (typeof value !== 'function') {
+        return value
+      }
+      if (property === 'get' || property === 'has') {
+        return (key: unknown) => {
+          counter.visits++
+          return value.call(target, key)
+        }
+      }
+      if (
+        property === Symbol.iterator ||
+        ['entries', 'keys', 'values'].includes(String(property))
+      ) {
+        return () => counted(value.call(target))
+      }
+      return value.bind(target)
+    }
+  })
+}
+
+/** Counts property reads on one record, so every scan that inspects it is visible. */
+function countReads<T extends object>(record: T, counter: Visits): T {
+  return new Proxy(record, {
+    get(target, property, receiver) {
+      counter.visits++
+      return Reflect.get(target, property, receiver)
+    }
+  })
+}
 
 const pane = makePaneKey('permission', '11111111-1111-4111-8111-111111111111')
 const session = '11111111-1111-4111-8111-111111111111'
@@ -193,7 +225,7 @@ describe('Claude permission lifetime', () => {
     send('SessionStart', { source: 'resume' })
     send('PreToolUse', { ...request, tool_use_id: 'read' })
     send('PermissionRequest', request)
-    PermissionTable.invalidateRejectedClaudeHook(state, { 'x-orca-pane-key': pane })
+    invalidateRejectedClaudeHook(state, { 'x-orca-pane-key': pane })
     expect(
       send('PreToolUse', {
         tool_name: 'Bash',
@@ -335,20 +367,13 @@ describe('Claude permission lifetime', () => {
     expect(ended?.claudePermissionState?.pending).toBeUndefined()
   })
 
-  it('keeps per-event correlation work and retained state bounded from N to 10N completed calls and inventory entries', () => {
-    const spies = {
-      compare: vi.mocked(PermissionTable.sameClaudeCall),
-      admit: vi.mocked(PermissionTable.admitClaudeCall),
-      retire: vi.mocked(PermissionTable.retireClaudePermissions)
+  it('keeps correlation work independent of completed history and inventory work linear in the current roster (N vs 10N)', () => {
+    const counters = () => ({ calls: { visits: 0 }, pending: { visits: 0 } })
+    const instrument = (table: ClaudePermissionTable, visits: ReturnType<typeof counters>) => {
+      table.calls = countMapVisits(table.calls, visits.calls)
+      table.pending = table.pending.map((entry) => countReads(entry, visits.pending))
     }
-    const count = (run: () => void) => {
-      Object.values(spies).forEach((spy) => spy.mockClear())
-      run()
-      return Object.fromEntries(
-        Object.entries(spies).map(([name, spy]) => [name, spy.mock.calls.length])
-      )
-    }
-    const measure = (n: number) => {
+    const correlation = (n: number) => {
       const { state, send } = harness()
       const complete = (prompt_id: string) => {
         for (let i = 0; i < n / 2; i++) {
@@ -362,35 +387,98 @@ describe('Claude permission lifetime', () => {
       send('Stop', { prompt_id: 'earlier' })
       send('UserPromptSubmit', { prompt: 'Current', prompt_id: 'current' })
       complete('current')
-      const probe = { ...request, prompt_id: 'current' }
-      const siblings = [1, 2, 3].map((i) => ({ ...request, tool_use_id: `sibling-${i}` }))
-      const correlation = count(() => {
-        send('PreToolUse', { ...probe, tool_use_id: 'probe' })
-        send('PermissionRequest', probe)
-        send('PostToolBatch', {
-          prompt_id: 'current',
-          tool_calls: [{ ...request, tool_use_id: 'probe' }, ...siblings]
-        })
-      })
       const table = state.claudePermissionByPaneKey.get(pane)
-      const retained = { calls: table?.calls.size, pending: table?.pending.length }
-      const children = (status: string) =>
-        Array.from({ length: n }, (_, i) => ({ id: `agent-${i}`, type: 'subagent', status }))
-      send('Stop', { background_tasks: children('running') })
-      const inventory = count(() => send('Stop', { background_tasks: children('completed') }))
-      return { correlation, inventory, retained }
+      if (!table) {
+        throw new Error('completed history produced no table')
+      }
+      const visits = counters()
+      instrument(table, visits)
+      const probe = { ...request, prompt_id: 'current' }
+      send('PreToolUse', { ...probe, tool_use_id: 'probe' })
+      send('PermissionRequest', probe)
+      send('PostToolBatch', {
+        prompt_id: 'current',
+        tool_calls: [1, 2, 3].map((i) => ({ ...request, tool_use_id: `sibling-${i}` }))
+      })
+      send('PostToolBatch', {
+        prompt_id: 'current',
+        tool_calls: [{ ...request, tool_use_id: 'probe' }]
+      })
+      return {
+        calls: visits.calls.visits,
+        retained: table.calls.size,
+        pending: table.pending.length
+      }
     }
-    const small = measure(600)
-    const large = measure(6000)
-    for (const { retained } of [small, large]) {
-      expect(retained.calls).toBeLessThanOrEqual(512)
-      expect(retained.pending).toBe(0)
+    // Constructed: n running children; eight hold open requests with completed calls, and half the roster ends.
+    const inventory = (n: number) => {
+      const { state, send } = harness()
+      const children = Array.from({ length: n }, (_, i) => `agent-${i}`)
+      const tasks = (ended: (i: number) => boolean) =>
+        children.map((id, i) => ({
+          id,
+          type: 'subagent',
+          status: ended(i) ? 'completed' : 'running'
+        }))
+      send('Stop', { background_tasks: tasks(() => false) })
+      for (const agent_id of [...children.slice(0, 4), ...children.slice(n - 4)]) {
+        for (let i = 0; i < 20; i++) {
+          const tool = { tool_name: 'Bash', tool_input: { command: `echo ${i}` }, agent_id }
+          send('PreToolUse', { ...tool, tool_use_id: `${agent_id}-${i}` })
+          send('PostToolUse', { ...tool, tool_use_id: `${agent_id}-${i}` })
+        }
+        const ask = { tool_name: 'Read', tool_input: { file_path: `/${agent_id}` }, agent_id }
+        send('PreToolUse', { ...ask, tool_use_id: `${agent_id}-read` })
+        send('PermissionRequest', ask)
+      }
+      const table = state.claudePermissionByPaneKey.get(pane)
+      const roster = state.claudeSubagentRosterByPaneKey.get(pane)
+      if (!table || !roster) {
+        throw new Error('child setup produced no table or roster')
+      }
+      const visits = { ...counters(), roster: { visits: 0 }, tasks: { visits: 0 } }
+      instrument(table, visits)
+      state.claudeSubagentRosterByPaneKey.set(pane, countMapVisits(roster, visits.roster))
+      const ending = tasks((i) => i < n / 2).map((task) => countReads(task, visits.tasks))
+      send('Stop', { background_tasks: ending })
+      const owners = table.pending.map((entry) => entry.call.owner)
+      return {
+        visits: Object.fromEntries(
+          Object.entries(visits).map(([name, { visits: v }]) => [name, v])
+        ),
+        retained: {
+          calls: table.calls.size,
+          owners,
+          roster: state.claudeSubagentRosterByPaneKey.get(pane)?.size
+        }
+      }
     }
-    // Three probe hooks, each scanning at most the call cap plus the pending cap.
-    expect(large.correlation.compare).toBeLessThanOrEqual(3 * (512 + 64))
-    expect(large.correlation.compare).toBeLessThan(10 * small.correlation.compare)
-    expect(large.correlation.admit).toBe(small.correlation.admit)
-    expect(large.inventory).toEqual(small.inventory)
+    const history = [correlation(600), correlation(6000)]
+    const children = [inventory(100), inventory(1000)]
+    for (const { retained, pending } of history) {
+      expect(retained).toBeLessThanOrEqual(512)
+      expect(pending).toBe(0)
+    }
+    // The probe visits the capped table, never the 6000 completed calls behind it.
+    expect(history[1].calls).toBeLessThanOrEqual(2 * 512)
+    const [few, many] = children
+    expect(many.visits.calls).toBe(few.visits.calls)
+    expect(many.visits.pending).toBe(few.visits.pending)
+    for (const population of ['roster', 'tasks']) {
+      const growth = many.visits[population] / few.visits[population]
+      expect(growth).toBeGreaterThan(5)
+      expect(growth).toBeLessThan(20)
+    }
+    for (const [n, { retained }] of [
+      [100, few],
+      [1000, many]
+    ] as const) {
+      expect(retained).toEqual({
+        calls: 4 * 21,
+        owners: [n - 4, n - 3, n - 2, n - 1].map((i) => `agent-${i}`),
+        roster: n / 2
+      })
+    }
   })
 
   it('preserves the recorded Codex decline Interrupt and next-turn approval contract', () => {
