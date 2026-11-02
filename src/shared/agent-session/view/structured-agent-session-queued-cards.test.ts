@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalSubmission } from './agent-session/journal/agent-session-journal-types'
-import type { AgentSessionQueuedMessage } from './agent-session/requests/agent-session-queued-message-wire'
+import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
+import type { AgentSessionQueuedMessage } from '../requests/agent-session-queued-message-wire'
 import {
   headSteerableQueuedMessageCard,
   projectQueuedMessageCards,

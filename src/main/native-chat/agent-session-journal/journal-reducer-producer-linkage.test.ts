@@ -3,7 +3,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalMessageItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { applyJournalRow, createJournalReducerState, renderJournalState } from './journal-reducer'
 import { buildJournalItemRow, journalLifecycleBatchRowBuilder } from './journal-row-builders'
 

@@ -6,7 +6,7 @@ import type { AgentJournalItemBody } from '../../../shared/agent-session/journal
 import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-identity'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { openAgentSessionJournal } from './journal-store-factory'
 import {
   createTrackedJournalOpener,

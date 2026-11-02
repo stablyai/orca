@@ -9,7 +9,7 @@ import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-
 import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-identity'
+} from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalDispatchRejection } from '../../shared/agent-session/failures/agent-session-failure-words'
 import type { AcpLaunchSpec } from './acp-launch-specs'
 import type { ConnectAcpAgent } from './acp-structured-connection'

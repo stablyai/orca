@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { clearSearch, handlers, sshSearch, sshHostInfos, runtimeSearch } = vi.hoisted(() => ({

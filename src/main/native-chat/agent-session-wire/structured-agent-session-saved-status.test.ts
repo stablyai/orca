@@ -1,7 +1,7 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import * as journalFactory from '../agent-session-journal/journal-store-factory'
 import { afterEach, expect, it, vi } from 'vitest'
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import type {
   AgentSessionStatusEvent,
@@ -34,7 +34,7 @@ import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import { structuredAgentSessionAgentStatus } from '../../../shared/agent-session/view/structured-agent-session-agent-status'
 import { agentVerdictDisplayMark } from '../../../shared/agent-main-agent-verdict'
-import { savedStatusContracts } from '../../../shared/agent-session-saved-status.test-fixture'
+import { savedStatusContracts } from '../../../shared/agent-session/lifecycle/agent-session-saved-status.test-fixture'
 
 afterEach(() => vi.restoreAllMocks())
 

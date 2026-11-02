@@ -1,4 +1,4 @@
-import { STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES } from './structured-agent-session-renderer-client-capabilities'
+import { STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES } from './agent-session/structured-agent-session-renderer-client-capabilities'
 import { AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY } from './agent-session/agent-session-runtime-capabilities'
 import {
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,

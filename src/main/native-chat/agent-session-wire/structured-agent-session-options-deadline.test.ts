@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { it, expect, vi } from 'vitest'
 import { createClaudeModelCatalogProbe } from '../../claude/claude-model-catalog-probe'
 import { createAgentModelCatalogService } from '../agent-model-catalog/agent-model-catalog-service'

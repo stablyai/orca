@@ -1,4 +1,4 @@
-import { resolveAgentSessionStartedAt } from '../../../../shared/agent-session-start-time'
+import { resolveAgentSessionStartedAt } from '../../../../shared/agent-session/lifecycle/agent-session-start-time'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { withMirroredEvidenceReceipt } from '../../../../shared/agent-status-freshness'
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'

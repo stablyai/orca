@@ -1,6 +1,6 @@
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type {
   AgentJournalSnapshot,
   AgentJournalItemBody,

@@ -3,7 +3,7 @@ import {
   type AgentSessionLease,
   type AgentSessionRecord,
   agentSessionScopeKey
-} from './agent-session/lifecycle/agent-session-record'
+} from './agent-session-record'
 
 const path = z
   .string()

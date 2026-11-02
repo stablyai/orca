@@ -27,7 +27,7 @@ import {
   projectQueuedMessageCards,
   queuedMessagesQueuePause,
   type QueuedMessageCard
-} from '../../../../shared/structured-agent-session-queued-cards'
+} from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import {
   pendingQueueSendsOnTheirWay,
   sendingQueuedMessageCards

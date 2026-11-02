@@ -755,7 +755,7 @@ describe('useStructuredAgentSessionOptions', () => {
 import type {
   PiRefreshFixtureModule,
   PiRefreshMount
-} from '../../../../shared/structured-agent-session-option-refresh.test-fixture-contract'
+} from '../../../../shared/agent-session/options/structured-agent-session-option-refresh.test-fixture-contract'
 const { piOptionRefreshContract } = await vi.importActual<PiRefreshFixtureModule>(
   '../../../../main/native-chat/agent-session-wire/structured-agent-session-option-refresh.test-fixture'
 )

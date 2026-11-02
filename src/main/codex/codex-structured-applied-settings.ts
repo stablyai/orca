@@ -1,5 +1,5 @@
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../shared/agent-session-goal-control-copy'
+import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../shared/agent-session/view/agent-session-goal-control-copy'
 import { isCodexAppServerUnsupportedError } from './app-server/codex-app-server-session'
 import { readRecord } from './codex-item-field-readers'
 import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'

@@ -15,7 +15,7 @@ import type {
 
 // Use plain JSON and optional additions after structured.v1; hosts/clients update independently (docs/reference/remote-wire-compatibility.md).
 
-import type { AgentJournalCursor } from '../agent-session-journal-identity'
+import type { AgentJournalCursor } from './journal/agent-session-journal-identity'
 import type {
   AgentJournalRenderItem,
   AgentJournalResetReason,

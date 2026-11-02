@@ -1,6 +1,6 @@
 // Compose shared admission, cwd, environment, visuals and child sealing; agent parts add only agent-specific inputs and never set cwd/sealed env.
 
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { isNativeLocalLocation } from '../../shared/execution-host'

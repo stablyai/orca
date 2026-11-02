@@ -21,7 +21,7 @@ import { mobileCreatedStructuredSession } from './mobile-created-structured-sess
 import {
   acceptedStructuredSessionSelectionOutcome,
   createStructuredAgentSessionOptionsWriteOwner
-} from '../../../src/shared/structured-agent-session-options-write-owner'
+} from '../../../src/shared/agent-session/options/structured-agent-session-options-write-owner'
 import { useMobileStructuredOptionSurface } from './use-mobile-structured-option-surface'
 
 const NO_COMMANDS: readonly AgentSessionConversationCommand[] = []

@@ -6,7 +6,7 @@ import { sourceControlActionLaunchOptions } from '../../src/shared/source-contro
 import { agentLaunchNeedsPreparedCommand } from '../../src/shared/agent-launch-preferences'
 import { resolveAgentStartupPlanInputs } from '../../src/shared/agent-startup-plan-inputs'
 import { buildAgentStartupPlan } from '../../src/shared/tui-agent-startup'
-import { resolveAgentSessionOptionLaunch } from '../../src/shared/agent-session-option-launch-legacy.test-fixture'
+import { resolveAgentSessionOptionLaunch } from '../../src/shared/agent-session/options/agent-session-option-launch-legacy.test-fixture'
 import {
   OrcaRuntimeWithResolveMobileSessionTerminalCommand,
   type MobileTerminalCommandOptions

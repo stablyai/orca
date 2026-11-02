@@ -17,7 +17,7 @@ import type { StructuredAgentSessionHostSession } from './structured-agent-sessi
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { failedProviderChildStart } from './structured-agent-session-provider-child'
 import { structuredAgentSessionEndedChildFailure } from './structured-agent-session-ended-child-failure'
 

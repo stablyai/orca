@@ -8,8 +8,8 @@ import { AgentStatusObservedPaneIdentities } from './agent-status-observed-pane-
 import { projectRuntimeMobileSessionTabs } from './runtime-mobile-session-projection'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
-import type { AgentSessionLastTurn } from '../../shared/agent-session-last-turn'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionLastTurn } from '../../shared/agent-session/lifecycle/agent-session-last-turn'
 import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 

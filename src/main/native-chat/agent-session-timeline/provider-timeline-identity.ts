@@ -1,6 +1,6 @@
 // Pure identity spelling preserves existing legacy shapes; the assembler decides row equivalence.
 
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentType } from '../../../shared/agent-status-types'
 import { boundPayload, digestPayload } from '../agent-session-journal/journal-payload-bounds'
 

@@ -4,7 +4,7 @@ import {
   type AgentSessionOperationOutcome
 } from '../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import { nextAgentSessionFence } from '../../../shared/agent-session/lifecycle/agent-session-next-fence'
-import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-death-evidence'
+import type { AgentSessionDeathEvidence } from '../../../shared/agent-session/lifecycle/agent-session-death-evidence'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { assertFence, withLease } from './ownership/agent-session-lease-transitions'
 import type { AgentSessionStoreState } from './records/agent-session-store-state'

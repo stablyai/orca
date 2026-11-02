@@ -5,7 +5,7 @@ import type {
   AgentSessionResumeFailureInput,
   AgentSessionResumeFailureRecord
 } from '../../runtime/agent-session/records/agent-session-recovery-capsule-entries'
-import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type {
   AgentSessionResumeFailureOutcome,
   AgentSessionResumeMarker

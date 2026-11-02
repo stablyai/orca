@@ -8,7 +8,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../../agent-session/journal/agent-session-journal-turn-scope'
 import { nativeChatRowsInDrawOrder } from './native-chat-turn-grouping'
 import { nativeChatTurnMembership, structuredAgentTurnAnchors } from './native-chat-turn-membership'
 import { isNativeChatRowInLiveWorkingTurn } from '../../native-chat-live-turn-membership'

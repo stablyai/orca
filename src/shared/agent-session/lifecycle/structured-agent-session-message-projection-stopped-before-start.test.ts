@@ -8,7 +8,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../journal/agent-session-journal-turn-scope'
 import {
   NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION,
   NATIVE_CHAT_STOPPED_BEFORE_START_TEXT

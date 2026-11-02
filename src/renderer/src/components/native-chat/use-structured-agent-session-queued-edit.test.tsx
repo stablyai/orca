@@ -34,7 +34,7 @@ import type {
 } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { captureInsertionTarget, insertText } from '../dictation/dictation-insertion-target'
 import { useStructuredAgentSessionQueuedEdit } from './use-structured-agent-session-queued-edit'
-import { projectQueuedMessageCards } from '../../../../shared/structured-agent-session-queued-cards'
+import { projectQueuedMessageCards } from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import { useNativeChatComposerEditSession } from './use-native-chat-composer-edit-session'
 import {
   readNativeChatComposerDraft,

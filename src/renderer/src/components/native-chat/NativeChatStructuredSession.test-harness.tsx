@@ -5,7 +5,7 @@ import {
 import { useImperativeHandle } from 'react'
 import { vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { QueuedMessageCard } from '../../../../shared/structured-agent-session-queued-cards'
+import type { QueuedMessageCard } from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session/agent-session-background-task-wire'
 import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session/failures/agent-session-write-failure'
 import type { AgentSessionUnavailable } from '../../../../shared/agent-session/agent-session-availability'

@@ -738,7 +738,7 @@ it('refuses a typed literal at an unresolved fence and accepts it when that fenc
   await view.unmount()
 })
 
-import type { PiRefreshFixtureModule } from '../../../src/shared/structured-agent-session-option-refresh.test-fixture-contract'
+import type { PiRefreshFixtureModule } from '../../../src/shared/agent-session/options/structured-agent-session-option-refresh.test-fixture-contract'
 const { piOptionRefreshContract } = await vi.importActual<PiRefreshFixtureModule>(
   '../../../src/main/native-chat/agent-session-wire/structured-agent-session-option-refresh.test-fixture'
 )

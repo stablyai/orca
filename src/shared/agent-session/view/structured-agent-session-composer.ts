@@ -14,7 +14,7 @@ import {
   structuredComposerFailure,
   type StructuredComposerFailureCode,
   type StructuredComposerFailureParams
-} from '../../structured-agent-session-composer-failure'
+} from '../failures/structured-agent-session-composer-failure'
 
 const MODEL_COMMAND: SlashCommandSuggestion = {
   name: 'model',

@@ -24,7 +24,7 @@ import {
 } from '../../acp/acp-command-discovery.test-fixture'
 
 import { AtRestCommandCatalog } from './at-rest-command-catalog'
-import { startAgentSessionCommandMenuQuery } from '../../../shared/agent-session-command-menu-query'
+import { startAgentSessionCommandMenuQuery } from '../../../shared/agent-session/agent-session-command-menu-query'
 import { createCodexAtRestSkillCatalog } from '../../codex/codex-at-rest-skills-probe'
 import {
   bindAtRestCommandContexts,

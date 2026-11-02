@@ -21,7 +21,7 @@ import type { StructuredAgentSessionState } from '../../../src/shared/agent-sess
 import {
   structuredAgentSessionFollowUpsQueue,
   structuredAgentSessionQueueEnabled
-} from '../../../src/shared/structured-agent-session-queued-cards'
+} from '../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import type { RpcClient } from '../transport/rpc-client'
 import type {
   MobileNativeChatSendIntent,

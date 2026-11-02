@@ -15,7 +15,7 @@ import {
   type AgentSessionFailureCopyId,
   type AgentSessionFailureSay
 } from './agent-session-failure-copy'
-import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../agent-session-goal-control-copy'
+import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../view/agent-session-goal-control-copy'
 import { START_REFUSAL_RESUMABLE } from './agent-session-start-refusal-resumable'
 import { providerRetryWords, withRetryCause } from './agent-session-provider-retry-words'
 import {
@@ -25,7 +25,7 @@ import {
 import { commandRefusedByReason } from './agent-session-command-refusal-words'
 import { agent, attachmentProblemSentence } from './agent-session-attachment-failure-words'
 import { joinSentences } from '../../sentence-joining'
-import { quotingPersonDetail } from '../../agent-session-failure-quoted-detail'
+import { quotingPersonDetail } from './agent-session-failure-quoted-detail'
 import { requestTimeoutSeconds } from '../agent-session-request-timeout'
 import {
   DISPATCH_REJECTED_CANCELLED,

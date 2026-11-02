@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   acquiredAgentSessionAccount,
   withAcquiredAgentSessionAccount
-} from '../../shared/agent-session-acquired-account'
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+} from '../../shared/agent-session/lifecycle/agent-session-acquired-account'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture

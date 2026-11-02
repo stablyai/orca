@@ -1,4 +1,4 @@
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import { claudeRecord, claudeText } from './structured/journal/claude-structured-item-translation'
 
 // Stream and final frames have different UUIDs; reconcile by message.id and block order to avoid duplicate rows.

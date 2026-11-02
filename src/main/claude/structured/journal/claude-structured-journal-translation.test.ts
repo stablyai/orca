@@ -9,7 +9,7 @@ import type {
 import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../../shared/agent-session-journal-identity'
+} from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { activeStructuredAgentSessionTurnId } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { openAgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store-factory'

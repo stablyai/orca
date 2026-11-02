@@ -6,7 +6,7 @@ import {
   AGENT_SESSION_JOURNAL_QUEUE_SCHEMA_VERSION,
   type AgentJournalMessageItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   readAgentJournalMessageBody,
   type AgentJournalContentVerdict

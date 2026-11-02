@@ -11,7 +11,7 @@ import {
 import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-identity'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'

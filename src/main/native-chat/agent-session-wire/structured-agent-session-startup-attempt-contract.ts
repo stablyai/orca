@@ -1,6 +1,6 @@
 // Adapter-reachable contract must remain free of host and Node-only process dependencies.
 
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentSessionRecord,
   AgentSessionExecutionLocation,

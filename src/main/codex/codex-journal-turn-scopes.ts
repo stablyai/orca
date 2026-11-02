@@ -2,7 +2,7 @@
 
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { codexTurnLifecycleIdentity } from './codex-structured-journal-translation-turns'
 
 export class CodexJournalTurnScopes {

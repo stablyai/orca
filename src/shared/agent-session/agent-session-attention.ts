@@ -5,7 +5,7 @@ import {
   isAgentSessionExecutionLocation,
   type AgentSessionExecutionLocation
 } from './lifecycle/agent-session-record'
-import type { AgentJournalCursor } from '../agent-session-journal-identity'
+import type { AgentJournalCursor } from './journal/agent-session-journal-identity'
 import type { AgentSessionTurnCompletionEvent } from './view/agent-session-turn-completion-wire'
 import { AGENT_JOURNAL_TURN_OUTCOMES, type AgentJournalTurnOutcome } from '../agent-turn-outcome'
 

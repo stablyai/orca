@@ -1,7 +1,7 @@
 import {
   agentSessionConversationView,
   type AgentSessionConversationView
-} from '../../../../shared/agent-session-conversation-view'
+} from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionOperationRow } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'

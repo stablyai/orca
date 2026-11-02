@@ -9,7 +9,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   isSubagentGroupFallbackText,
   normalizeSubagentState,

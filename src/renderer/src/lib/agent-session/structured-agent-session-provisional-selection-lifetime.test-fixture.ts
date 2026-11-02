@@ -20,7 +20,7 @@ import { holdStructuredAgentSessionLaunchOption } from './launch/structured-agen
 import * as sessionClient from '@/runtime/structured-agent-session-client'
 import * as runtimeRpc from '@/runtime/runtime-rpc-client'
 import { structuredSessionSelectionController } from '../structured-agent-session-selection-controller'
-import type { SelectionOperation } from '../../../../shared/structured-agent-session-selection-operations'
+import type { SelectionOperation } from '../../../../shared/agent-session/options/structured-agent-session-selection-operations'
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 
 export async function assertProvisionalSelectionLifetime({

@@ -1,7 +1,7 @@
 import { journalInputOrder } from './journal-input-order'
 // Latch handoff outcomes before rewind can retire their rows; requeue only proven-undelivered sends.
 
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'

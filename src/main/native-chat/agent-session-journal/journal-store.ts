@@ -18,7 +18,7 @@ import type {
   AgentJournalCursor,
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-identity'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
 import { latestStructuredAgentContextFacts } from '../../../shared/agent-session/structured-agent-session-context-usage'

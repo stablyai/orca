@@ -12,7 +12,7 @@ import {
 } from './pty/pane/spawn-reservation'
 import { makePaneKey } from '../../shared/stable-pane-id'
 
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionRecordFixture,

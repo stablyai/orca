@@ -1,6 +1,6 @@
 // Project every journal user row, including unloaded pages, with the transcript projection so rail identity, order and preview cannot disagree.
 
-import type { AgentJournalCursor } from '../agent-session-journal-identity'
+import type { AgentJournalCursor } from './journal/agent-session-journal-identity'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission

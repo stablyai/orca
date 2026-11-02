@@ -6,7 +6,7 @@ import type { AgentJournalMessageItem } from '../../../src/shared/agent-session/
 import type {
   AgentSessionJournalIdentity,
   AgentSessionJournalProviderHandle
-} from '../../../src/shared/agent-session-journal-identity'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import { claudeProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { USER_MESSAGE_SOURCE } from '../../../src/shared/agent-session/agent-session-message-source'
 import { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'

@@ -1,14 +1,14 @@
-import type { AgentSessionOptionCatalog } from './agent-session/options/agent-session-option-catalog-types'
-import type { AgentSessionModelCatalogResult } from './agent-session/agent-session-wire'
-import type { AgentSessionOptionsResult } from './agent-session/options/agent-session-options-result'
-import { createCoalescingKeyedRunner } from './coalescing-keyed-runner'
-import { cloneStructuredAgentSessionOptionRecord } from './agent-session/options/structured-agent-session-option-state'
+import type { AgentSessionOptionCatalog } from './agent-session-option-catalog-types'
+import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
+import type { AgentSessionOptionsResult } from './agent-session-options-result'
+import { createCoalescingKeyedRunner } from '../../coalescing-keyed-runner'
+import { cloneStructuredAgentSessionOptionRecord } from './structured-agent-session-option-state'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
   settleStructuredAgentSessionBuiltinCatalog,
   type StructuredAgentSessionOptionState
-} from './agent-session/options/structured-agent-session-options'
+} from './structured-agent-session-options'
 import type { StructuredSessionSelectionController } from './structured-agent-session-selection-operations'
 
 type ReadContext = {

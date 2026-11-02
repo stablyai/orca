@@ -11,7 +11,7 @@ import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-sess
 import { OrcaRuntimeService } from './orca-runtime'
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   createSessionCallerHarness,
   orchestrationRequest,

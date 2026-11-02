@@ -3,7 +3,7 @@ import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
 } from '../../../../shared/agent-session/structured-agent-session-reducer'
-import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionCurrentRequestsMarker } from '../../../../shared/agent-session/requests/agent-session-current-requests-wire'
 import type {
   AgentSessionHistoryPage,

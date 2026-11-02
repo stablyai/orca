@@ -1,4 +1,4 @@
-import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../shared/agent-session-goal-control-copy'
+import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../shared/agent-session/view/agent-session-goal-control-copy'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { resolvedCodexGoalSettings } from './codex-structured-message-options'
 import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
