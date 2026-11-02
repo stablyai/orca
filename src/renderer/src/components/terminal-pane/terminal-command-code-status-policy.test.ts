@@ -1,3 +1,4 @@
+// Command Code output/status fixtures are synthetic output, not a recorded CLI session.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'

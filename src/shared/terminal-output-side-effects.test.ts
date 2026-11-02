@@ -183,3 +183,64 @@ describe('createTerminalTitleTracker transient-fact scanning suppression', () =>
     expect(events).toEqual([['2031-subscribe']])
   })
 })
+
+describe('recorded hookless Pi output', () => {
+  it('observes titles and OSC 133 without inventing a hookless turn status', () => {
+    // Recorded real Pi 0.73.1 on macOS with --no-extensions; unrelated screen content omitted.
+    const chunks = [
+      '\u001b]133;A\u0007',
+      '\u001b]133;C\u0007',
+      '\u001b]0;π - qa-repo\u0007',
+      '\u001b]133;A\u0007',
+      '\u001b]133;B\u0007',
+      '\u001b]133;C\u0007',
+      '\u001b]133;A\u0007',
+      '\u001b]133;B\u0007',
+      '\u001b]133;C\u0007',
+      '\u001b]133;B\u0007',
+      '\u001b]133;C\u0007',
+      'PI-FIRST-OK',
+      '\u001b]133;A\u0007',
+      '\u001b]133;B\u0007',
+      '\u001b]133;C\u0007',
+      '\u001b]133;A\u0007',
+      '\u001b]133;B\u0007',
+      '\u001b]133;C\u0007',
+      '\u001b]133;B\u0007',
+      '\u001b]133;C\u0007',
+      'PI-SECOND-OK',
+      '\u001b]0;π - qa-repo\u0007',
+      '\u001b]133;D;0\u0007',
+      '\u001b]133;A\u0007',
+      '\u001b]133;C\u0007',
+      'PI-SHELL-OK',
+      '\u001b]133;D;0\u0007',
+      '\u001b]133;A\u0007'
+    ]
+    const activity: string[] = []
+    const { events, tracker } = createRecordingTracker({
+      onAgentBecameWorking: () => activity.push('working'),
+      onAgentBecameIdle: () => activity.push('idle'),
+      onAgentExited: () => activity.push('exited')
+    })
+    const output: string[] = []
+    for (const chunk of chunks) {
+      tracker.handleChunk(chunk)
+      if (!chunk.startsWith('\x1b]')) {
+        output.push(chunk)
+      }
+    }
+    expect(output).toEqual(['PI-FIRST-OK', 'PI-SECOND-OK', 'PI-SHELL-OK'])
+    expect(activity).toEqual([])
+    expect(events.filter(([kind]) => kind === 'title')).toEqual([
+      ['title', 'π - qa-repo'],
+      ['title', 'π - qa-repo']
+    ])
+    expect(events.filter(([kind]) => kind === 'finished')).toEqual([
+      ['finished', 0],
+      ['finished', 0]
+    ])
+    expect(events.filter(([kind]) => kind === 'bell')).toEqual([])
+    tracker.dispose()
+  })
+})

@@ -1,3 +1,4 @@
+// Command Code output/status fixtures are synthetic output, not a recorded CLI session.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   COMMAND_CODE_OUTPUT_DONE_SETTLE_MS,

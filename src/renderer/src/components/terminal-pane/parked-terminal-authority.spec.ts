@@ -117,6 +117,7 @@ export function registerParkedTerminalAuthorityTests(context: {
       dispose()
     })
 
+    // Command Code status facts here are synthetic output.
     it('settles Command Code facts through the execution policy', async () => {
       enableMainAuthority()
       const { dispose } = await startWatcher()
