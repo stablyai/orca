@@ -320,7 +320,7 @@ export async function executeWorktreeCreation(
     structuredLaunchAccepted,
     activation,
     primaryTabId,
-    startupTerminalTabId: result.startupTerminal?.tabId,
+    startupTerminalTabId: windowStartup.startupTerminalTabId,
     backendSpawned,
     hostPlannedStartup: result.hostPlannedStartup === true,
     focusOnCompletion: shouldActivateOnCompletion

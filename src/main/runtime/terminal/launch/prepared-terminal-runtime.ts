@@ -1,12 +1,19 @@
 import type { WorktreeSetupLaunch } from '../../../../shared/worktree/launch-types'
 import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
 import {
+  preparedPromptUncertainText,
+  readPreparedTerminalStatus,
   reconcilePreparedTerminalPublications,
   publishPreparedTerminal
 } from './prepared-terminal-publication'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { PreparedTerminalPrompts } from '../../../daemon/prepared-agent-launch-protocol'
-import type { PreparedAgentLaunchIdentity } from '../../../../shared/prepared-agent-launch'
-import { isPreparedAgentLaunchDescriptor } from '../../../../shared/prepared-agent-launch'
+import {
+  isPreparedAgentLaunchDescriptor,
+  preparedLaunchStatusFailureText,
+  type PreparedAgentLaunchIdentity,
+  type PreparedAgentLaunchStatus
+} from '../../../../shared/prepared-agent-launch'
 import { PreparedTerminalPendingError } from './prepared-terminal-pending'
 import {
   startPreparedWorktreeTerminals,
@@ -100,10 +107,14 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
     })
   }
 
+  /** Joins the exact launch: a descriptor still owed publishes it; a retired one reads the owner's result. */
   async waitForPreparedAgentTerminal(
     identity: PreparedAgentLaunchIdentity
   ): Promise<dependencies.RuntimeTerminalCreate> {
     const controller = this.ptyController
+    if (!controller) {
+      throw new PreparedTerminalPendingError(identity)
+    }
     const store = await this.openAgentSessionRecordStore()
     const row = store
       .listOperationRows()
@@ -111,31 +122,63 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
         (row) =>
           row.operationId === identity.operationId && row.fingerprint === identity.fingerprint
       )
-    if (!controller || !isPreparedAgentLaunchDescriptor(row?.preparedLaunch)) {
+    let status: PreparedAgentLaunchStatus
+    try {
+      const terminal = isPreparedAgentLaunchDescriptor(row?.preparedLaunch)
+        ? await publishPreparedTerminal(identity, row.preparedLaunch, {
+            controller,
+            store,
+            createTerminal: (selector, options) => this.createTerminal(selector, options),
+            setTabColor: (handle, color) =>
+              this.getWorktreeTerminalProvisioningHost().setTabColor(handle, color),
+            placePrimary: this.placePreparedPrimary.bind(this),
+            deliverPrompts: this.deliverPreparedTerminalPrompts.bind(this)
+          })
+        : null
+      if (terminal) {
+        return terminal
+      }
+      status = await readPreparedTerminalStatus(controller, identity)
+      const published = this.publishedPreparedTerminal(status)
+      if (published) {
+        return published
+      }
+    } catch {
       throw new PreparedTerminalPendingError(identity)
     }
-    try {
-      const terminal = await publishPreparedTerminal(identity, row.preparedLaunch, {
-        controller,
-        store,
-        createTerminal: (selector, options) => this.createTerminal(selector, options),
-        setTabColor: (handle, color) =>
-          this.getWorktreeTerminalProvisioningHost().setTabColor(handle, color),
-        placePrimary: this.placePreparedPrimary.bind(this),
-        deliverPrompts: this.deliverPreparedTerminalPrompts.bind(this)
-      })
-      if (!terminal) {
-        throw new Error('The agent was not started because Setup did not complete successfully.')
-      }
-      return terminal
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message === 'The agent was not started because Setup did not complete successfully.'
-      ) {
-        throw error
-      }
+    if (status.retirement !== 'unused-retired' || (!status.physical && !status.failure)) {
       throw new PreparedTerminalPendingError(identity)
+    }
+    throw new Error(preparedLaunchStatusFailureText(status))
+  }
+
+  /** An already published agent is read from this runtime's own records, never attached again. */
+  private publishedPreparedTerminal(
+    status: PreparedAgentLaunchStatus
+  ): dependencies.RuntimeTerminalCreate | null {
+    const { physical, surface } = status
+    if (!physical || !status.published || status.execution !== 'started') {
+      return null
+    }
+    const live = this.getLivePtyForHandle(surface.terminalHandle)
+    if (
+      !live ||
+      live.pty.ptyId !== physical.sessionId ||
+      live.pty.incarnationId !== physical.incarnationId
+    ) {
+      return null
+    }
+    return {
+      handle: surface.terminalHandle,
+      worktreeId: surface.worktreeId,
+      ptyId: physical.sessionId,
+      incarnationId: physical.incarnationId,
+      tabId: surface.tabId,
+      paneKey: makePaneKey(surface.tabId, surface.leafId),
+      title: null,
+      ...(status.input === 'uncertain'
+        ? { warning: preparedPromptUncertainText(status.claim.agent) }
+        : {})
     }
   }
 

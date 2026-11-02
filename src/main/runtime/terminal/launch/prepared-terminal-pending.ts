@@ -8,3 +8,10 @@ export class PreparedTerminalPendingError extends Error {
     )
   }
 }
+
+/** Nothing was accepted, so the created workspace keeps its shipped startup-failure result. */
+export class PreparedLaunchNotAcceptedError extends Error {
+  constructor(readonly reason: unknown) {
+    super(reason instanceof Error ? reason.message : String(reason))
+  }
+}

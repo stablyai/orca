@@ -6,9 +6,11 @@ import type {
 } from '../../../../shared/agent-session-host-authority'
 import {
   isPreparedAgentLaunchStatus,
+  preparedLaunchStatusFailureText,
   type PreparedAgentLaunchDescriptor,
   type PreparedAgentLaunchIdentity
 } from '../../../../shared/prepared-agent-launch'
+import { PreparedLaunchNotAcceptedError } from './prepared-terminal-pending'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
 import type {
   PreparedAgentSpawn,
@@ -36,6 +38,7 @@ export type PreparedTerminalStart = {
 
 export type PendingWorktreeAgentLaunch = PreparedAgentLaunchIdentity & {
   worktreeId: string
+  tabId: string
   setupTerminalHandle?: string
 }
 
@@ -63,7 +66,11 @@ export async function startPreparedWorktreeTerminals(args: {
     ) => Promise<boolean>
     onAgentPublished?: (terminal: RuntimeTerminalCreate) => void
   }
-}): Promise<{ pending: PendingWorktreeAgentLaunch; setupTerminal?: RuntimeTerminalCreate }> {
+}): Promise<{
+  pending: PendingWorktreeAgentLaunch
+  setupTerminal?: RuntimeTerminalCreate
+  warning?: string
+}> {
   const { ports } = args
   const controller = ports.controller
   if (!controller.preparedAgentLaunch) {
@@ -82,7 +89,9 @@ export async function startPreparedWorktreeTerminals(args: {
         args.setup.shell
       )
     : undefined
-  const launch = await ports.prepare(args.startupOptions)
+  const launch = await ports.prepare(args.startupOptions).catch((error: unknown) => {
+    throw new PreparedLaunchNotAcceptedError(error)
+  })
   let setup: PreparedTerminalStart | undefined
   let accepted = false
   let identity: PreparedAgentLaunchIdentity | undefined
@@ -100,6 +109,10 @@ export async function startPreparedWorktreeTerminals(args: {
     const payload = {
       launch: launch.spawn,
       prompts: args.prompts,
+      publication: {
+        ...(launch.options.launchConfig ? { launchConfig: launch.options.launchConfig } : {}),
+        ...(launch.options.viewMode ? { viewMode: launch.options.viewMode } : {})
+      },
       ...(setup ? { setup: { spawn: setup.spawn, attemptId, deadline } } : {})
     }
     const fingerprint = fingerprintPreparedAgentLaunch(payload)
@@ -193,6 +206,7 @@ export async function startPreparedWorktreeTerminals(args: {
         pending: {
           ...identity,
           worktreeId: args.worktreeId,
+          tabId: launch.surface.tabId,
           ...(setup ? { setupTerminalHandle: setup.surface.terminalHandle } : {})
         }
       }
@@ -203,11 +217,13 @@ export async function startPreparedWorktreeTerminals(args: {
         pending: {
           ...identity,
           worktreeId: args.worktreeId,
+          tabId: launch.surface.tabId,
           ...(setup ? { setupTerminalHandle: setup.surface.terminalHandle } : {})
         }
       }
     }
     let setupTerminal: RuntimeTerminalCreate | undefined
+    let warning: string | undefined
     try {
       let observed = receipt
       if (setup && !observed.setup?.incarnationId && observed.execution === 'not-dispatched') {
@@ -220,6 +236,10 @@ export async function startPreparedWorktreeTerminals(args: {
         if (isPreparedAgentLaunchStatus(next)) {
           observed = next
         }
+      }
+      // A Setup that never ran has no terminal to explain itself; the create result carries why.
+      if (setup && observed.failure === 'spawn-failed' && !observed.setup?.incarnationId) {
+        warning = preparedLaunchStatusFailureText(observed)
       }
       if (setup && observed.setup?.incarnationId) {
         setupTerminal = await ports.createTerminal(`id:${args.worktreeId}`, {
@@ -239,12 +259,16 @@ export async function startPreparedWorktreeTerminals(args: {
       pending: {
         ...identity,
         worktreeId: args.worktreeId,
+        tabId: launch.surface.tabId,
         ...(setup
           ? { setupTerminalHandle: setupTerminal?.handle ?? setup.surface.terminalHandle }
           : {})
       },
-      setupTerminal
+      setupTerminal,
+      ...(warning ? { warning } : {})
     }
+  } catch (error) {
+    throw accepted ? error : new PreparedLaunchNotAcceptedError(error)
   } finally {
     if (!accepted) {
       let unused = !identity

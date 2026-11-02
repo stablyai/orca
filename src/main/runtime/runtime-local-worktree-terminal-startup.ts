@@ -30,6 +30,7 @@ type Ports = {
   ) => Promise<{
     pending: PendingPreparedAgentLaunch
     setupTerminal?: RuntimeTerminalCreate
+    warning?: string
   } | null>
   provisionInBackground?: () => boolean
   createTerminal: (
@@ -93,7 +94,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   let startupTerminalPaneKey: string | null = null
   let startupTerminalPtyId: string | null = null
   const prepared = await startPreparedLocalWorktreeTerminals(args, provisionArgs(args, null, true))
-  if (prepared) {
+  if (prepared && !(prepared instanceof Error)) {
     return prepared
   }
   let sequencedStartup = startup
@@ -118,7 +119,8 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   // Main owns failed agent startup too, keeping its reason visible without a terminal service.
   if (sequencedStartup && (ports.canSpawn || ORCA_LAYOUT_OWNER_IS_MAIN)) {
     try {
-      const launchRuntime = args.startupLaunchRuntime
+      // Nothing was accepted: report it the way the shipped start reports a failed agent terminal.
+      const launchRuntime = prepared ?? args.startupLaunchRuntime
       if (launchRuntime instanceof Error && !ORCA_LAYOUT_OWNER_IS_MAIN) {
         throw launchRuntime
       }

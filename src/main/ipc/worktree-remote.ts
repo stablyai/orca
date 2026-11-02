@@ -154,6 +154,7 @@ import {
   type WorktreeCreatePathClaim
 } from '../worktree-create-in-flight'
 import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { PreparedLaunchNotAcceptedError } from '../runtime/terminal/launch/prepared-terminal-pending'
 import {
   hostWorktreeTarget,
   type HostWorktreeTarget
@@ -331,26 +332,35 @@ export async function spawnLocalStartupAndSetupTerminals(args: {
   let { setup } = args
   if (startup && args.preparedAgentLaunch && isTuiAgent(createdWithAgent)) {
     const first = defaultTabs?.tabs[0]
-    const prepared = await runtime.startSetupAgentTerminals(
-      `id:${worktree.id}`,
-      setup?.waitForAgentStartup ? setup : undefined,
-      {
-        command: startup.command,
-        env: startup.env,
-        launchConfig: startup.launchConfig,
-        launchAgent: createdWithAgent,
-        viewMode: startup.viewMode,
-        startupCommandDelivery: startup.startupCommandDelivery,
-        telemetry: startup.telemetry,
-        ...(first?.title ? { title: first.title } : {}),
-        surfaceOwner: false,
-        ...userAct
-      },
-      () => {},
-      worktree,
-      undefined,
-      first?.color
-    )
+    const prepared = await runtime
+      .startSetupAgentTerminals(
+        `id:${worktree.id}`,
+        setup?.waitForAgentStartup ? setup : undefined,
+        {
+          command: startup.command,
+          env: startup.env,
+          launchConfig: startup.launchConfig,
+          launchAgent: createdWithAgent,
+          viewMode: startup.viewMode,
+          startupCommandDelivery: startup.startupCommandDelivery,
+          telemetry: startup.telemetry,
+          ...(first?.title ? { title: first.title } : {}),
+          surfaceOwner: false,
+          ...userAct
+        },
+        () => {},
+        worktree,
+        undefined,
+        first?.color
+      )
+      .catch((error: unknown) => {
+        // Nothing was accepted, so the shipped start below owns this agent instead.
+        if (error instanceof PreparedLaunchNotAcceptedError) {
+          console.warn('[worktree-create] prepared agent start was not accepted', error.message)
+          return null
+        }
+        throw error
+      })
     if (prepared) {
       const provisioned = await runtime.provisionManagedWorktreeTerminals(
         {
@@ -371,7 +381,8 @@ export async function spawnLocalStartupAndSetupTerminals(args: {
       return {
         didSpawnSetup: setup?.waitForAgentStartup === true || provisioned.setupSpawned,
         defaultTabsHandled: true,
-        startupTerminal: { spawned: false, pending: prepared.pending }
+        startupTerminal: { spawned: false, pending: prepared.pending },
+        ...(prepared.warning ? { warning: prepared.warning } : {})
       }
     }
   }

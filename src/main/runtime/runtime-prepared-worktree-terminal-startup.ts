@@ -3,15 +3,16 @@ import type {
   RuntimeLocalWorktreeTerminalStartupResult
 } from './runtime-local-worktree-terminal-startup'
 import { paneIdentity } from './runtime-terminal-pane-identity'
+import { PreparedLaunchNotAcceptedError } from './terminal/launch/prepared-terminal-pending'
 import type { WorktreeTerminalProvisioningArgs } from './runtime-worktree-terminal-provisioning'
 
 export async function startPreparedLocalWorktreeTerminals(
   args: Parameters<typeof startRuntimeLocalWorktreeTerminals>[0],
   provisionArgs: WorktreeTerminalProvisioningArgs
-): Promise<RuntimeLocalWorktreeTerminalStartupResult | null> {
+): Promise<RuntimeLocalWorktreeTerminalStartupResult | PreparedLaunchNotAcceptedError | null> {
   const { request, repo, worktree, defaultTabs, startup, ports, setup } = args
   const shouldActivate = request.activate === true || request.runHooks === true
-  const warning = args.warning
+  let warning = args.warning
   if (
     startup &&
     request.preparedAgentLaunch &&
@@ -21,27 +22,40 @@ export async function startPreparedLocalWorktreeTerminals(
     !(args.startupLaunchRuntime instanceof Error)
   ) {
     const first = defaultTabs?.tabs[0]
-    const prepared = await ports.startPrepared(
-      {
-        command: startup.command,
-        env: startup.env,
-        launchConfig: startup.launchConfig,
-        launchAgent: args.createdWithAgent,
-        launchRuntime: args.startupLaunchRuntime,
-        ...paneIdentity(request.startupPaneKey),
-        ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
-        ...(first?.title ? { title: first.title } : {}),
-        viewMode: startup.viewMode,
-        startupCommandDelivery: startup.startupCommandDelivery,
-        telemetry: startup.telemetry,
-        ...(shouldActivate ? {} : { surfaceOwner: false as const })
-      },
-      {
-        ...(args.draftPaste ? { draft: args.draftPaste } : {}),
-        ...(args.startupFollowup ? { followup: args.startupFollowup } : {})
-      }
-    )
+    const prepared = await ports
+      .startPrepared(
+        {
+          command: startup.command,
+          env: startup.env,
+          launchConfig: startup.launchConfig,
+          launchAgent: args.createdWithAgent,
+          launchRuntime: args.startupLaunchRuntime,
+          ...paneIdentity(request.startupPaneKey),
+          ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
+          ...(first?.title ? { title: first.title } : {}),
+          viewMode: startup.viewMode,
+          startupCommandDelivery: startup.startupCommandDelivery,
+          telemetry: startup.telemetry,
+          ...(shouldActivate ? {} : { surfaceOwner: false as const })
+        },
+        {
+          ...(args.draftPaste ? { draft: args.draftPaste } : {}),
+          ...(args.startupFollowup ? { followup: args.startupFollowup } : {})
+        }
+      )
+      .catch((error: unknown) => {
+        if (error instanceof PreparedLaunchNotAcceptedError) {
+          return error
+        }
+        throw error
+      })
+    if (prepared instanceof Error) {
+      return prepared
+    }
     if (prepared) {
+      if (prepared.warning) {
+        warning = warning ? `${warning} ${prepared.warning}` : prepared.warning
+      }
       // The first template belongs to the eventual agent; extras run once while Setup is interactive.
       const provisioned = await ports.provision({
         ...provisionArgs,

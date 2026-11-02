@@ -1,12 +1,25 @@
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { createHash } from 'node:crypto'
+import {
+  deliverPreparedPrompts,
+  forgetPreparedPromptDelivery,
+  preparedPromptUncertainText
+} from './prepared-terminal-prompt-delivery'
+import {
+  isPreparedLaunchIncarnationGone,
+  parsePreparedLaunchGeneration
+} from '../../../daemon/prepared-agent-launch-incarnation'
 import type { PreparedTerminalPrompts } from '../../../daemon/prepared-agent-launch-protocol'
+export { preparedPromptUncertainText } from './prepared-terminal-prompt-delivery'
 import type { AgentSessionOperationRow } from '../../../../shared/agent-session-operation-ledger'
 import {
   isPreparedAgentLaunchDescriptor,
   isPreparedAgentLaunchStatus,
+  isPreparedLaunchOperationUnknown,
+  parsePreparedLaunchPublication,
   type PreparedAgentLaunchIdentity,
   type PreparedAgentLaunchDescriptor,
-  type PreparedAgentLaunchStatus
+  type PreparedAgentLaunchStatus,
+  type PreparedLaunchPublication
 } from '../../../../shared/prepared-agent-launch'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
 import type { AgentSessionRecordStore } from '../../agent-session-record-store'
@@ -57,7 +70,13 @@ export function publishPreparedTerminal(
   const pending =
     publications.get(ports.controller) ?? new Map<string, Promise<RuntimeTerminalCreate | null>>()
   publications.set(ports.controller, pending)
-  const key = JSON.stringify(identity)
+  // Callers may pass a wider pending receipt; only the exact launch identity joins a publication.
+  const key = [
+    identity.operationId,
+    identity.fingerprint,
+    identity.daemonGeneration,
+    identity.reservationGeneration
+  ].join('\0')
   const existing = pending.get(key)
   if (existing) {
     return existing
@@ -100,26 +119,32 @@ async function publish(
   }
   if (!status.physical) {
     if (status.retirement === 'unused-retired') {
-      await ports.store.retirePreparedAgentLaunch(identity)
+      await retirePreparedDescriptor(ports, identity)
       return null
     }
     throw new Error('agent_session_ownership_unknown')
   }
   if (status.execution === 'settled') {
-    await controller.preparedAgentLaunch({ action: 'ackPublication', identity })
-    await controller.preparedAgentLaunch({ action: 'claimPrompt', identity })
-    await controller.preparedAgentLaunch({ action: 'settlePrompt', identity })
+    // The agent started and ended before publication; physical end already settled its input.
     const retired = await controller.preparedAgentLaunch({ action: 'retireInput', identity })
     if (isPreparedAgentLaunchStatus(retired) && retired.retirement === 'unused-retired') {
-      await ports.store.retirePreparedAgentLaunch(identity)
+      await retirePreparedDescriptor(ports, identity)
     }
     return null
   }
+  const publication = await readPreparedPublication(controller, identity, descriptor)
   if (!status.published && descriptor.presentation.primary) {
     await ports.placePrimary?.(descriptor)
   }
+  // Recipe, view and authority come only from the daemon's accepted launch, initial or recovered.
+  const {
+    launchConfig: _launchConfig,
+    viewMode: _viewMode,
+    launchToken: _launchToken,
+    ...attachOptions
+  } = currentOptions
   const terminal = await ports.createTerminal(`id:${descriptor.surface.worktreeId}`, {
-    ...currentOptions,
+    ...attachOptions,
     command: undefined,
     env: undefined,
     tabId: descriptor.surface.tabId,
@@ -129,6 +154,10 @@ async function publish(
     expectedIncarnationId: status.physical.incarnationId,
     attachOnly: true,
     launchAgent: descriptor.claim.agent,
+    ...(publication.launchConfig ? { launchConfig: publication.launchConfig } : {}),
+    ...(publication.launchToken ? { launchToken: publication.launchToken } : {}),
+    // A later user view change belongs to the tab; only the first publication applies the request.
+    ...(publication.viewMode && !status.published ? { viewMode: publication.viewMode } : {}),
     ...(descriptor.presentation.title ? { title: descriptor.presentation.title } : {}),
     ...(descriptor.presentation.groupId ? { targetGroupId: descriptor.presentation.groupId } : {}),
     ...(descriptor.presentation.splitPlacement?.afterTabId
@@ -146,15 +175,62 @@ async function publish(
     await ports.setTabColor(terminal.handle, descriptor.presentation.color)
   }
   await controller.preparedAgentLaunch({ action: 'ackPublication', identity })
-  const prompts = await controller.preparedAgentLaunch({ action: 'claimPrompt', identity })
-  if (isPreparedTerminalPrompts(prompts) && (await ports.deliverPrompts(terminal, prompts))) {
-    await controller.preparedAgentLaunch({ action: 'settlePrompt', identity })
-  }
+  const input = await deliverPreparedPrompts(identity, terminal, ports)
   const retirement = await controller.preparedAgentLaunch({ action: 'retireInput', identity })
   if (isPreparedAgentLaunchStatus(retirement) && retirement.retirement === 'unused-retired') {
-    await ports.store.retirePreparedAgentLaunch(identity)
+    await retirePreparedDescriptor(ports, identity)
   }
-  return terminal
+  return input === 'uncertain'
+    ? { ...terminal, warning: preparedPromptUncertainText(descriptor.claim.agent) }
+    : terminal
+}
+
+async function readPreparedPublication(
+  controller: RuntimePtyController,
+  identity: PreparedAgentLaunchIdentity,
+  descriptor: PreparedAgentLaunchDescriptor
+): Promise<PreparedLaunchPublication> {
+  const status = await controller.preparedAgentLaunch?.({
+    action: 'status',
+    identity,
+    publication: true
+  })
+  const publication =
+    typeof status === 'object' && status !== null && 'publication' in status
+      ? parsePreparedLaunchPublication(status.publication)
+      : undefined
+  const token = publication?.launchToken
+  // The saved hash is the authority this launch was recorded with; a different token is not ours.
+  if (
+    token !== undefined &&
+    createHash('sha256').update(token).digest('hex') !== descriptor.launchTokenHash
+  ) {
+    throw new Error('agent_session_ownership_unknown')
+  }
+  return publication ?? {}
+}
+
+async function retirePreparedDescriptor(
+  ports: PreparedPublicationPorts,
+  identity: PreparedAgentLaunchIdentity
+): Promise<void> {
+  await ports.store.retirePreparedAgentLaunch(identity)
+  forgetPreparedPromptDelivery(identity.operationId)
+}
+
+/** Retire only on positive owner demise: the exact generation's answer, another boot, or a gone process. */
+async function provesPreparedLaunchOwnerGone(
+  error: unknown,
+  descriptor: PreparedAgentLaunchDescriptor
+): Promise<boolean> {
+  if (isPreparedLaunchOperationUnknown(error)) {
+    return true
+  }
+  const incarnation =
+    descriptor.hostScope.hostId === 'local'
+      ? parsePreparedLaunchGeneration(descriptor.daemonGeneration)
+      : null
+  return incarnation !== null && (await isPreparedLaunchIncarnationGone(incarnation))
 }
 
 async function publishPreparedSetup(
@@ -207,31 +283,16 @@ export async function reconcilePreparedTerminalPublications(
         daemonGeneration: row.preparedLaunch.daemonGeneration,
         reservationGeneration: row.preparedLaunch.reservationGeneration
       }
+      const descriptor = row.preparedLaunch
       // Observation detaches on connection failure; the saved obligation remains authoritative.
       try {
-        await publishPreparedTerminal(identity, row.preparedLaunch, ports)
-      } catch {
-        // Retain the exact owner for the next connection reconciliation.
+        await publishPreparedTerminal(identity, descriptor, ports)
+      } catch (error) {
+        // Unreachable is not gone: retain the exact owner unless its demise is proven.
+        if (await provesPreparedLaunchOwnerGone(error, descriptor).catch(() => false)) {
+          await retirePreparedDescriptor(ports, identity).catch(() => {})
+        }
       }
     })
   )
-}
-
-function isPreparedTerminalPrompts(value: unknown): value is PreparedTerminalPrompts {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-  for (const key of ['draft', 'followup'] as const) {
-    if (!(key in value)) {
-      continue
-    }
-    const prompt = Reflect.get(value, key)
-    if (typeof prompt !== 'object' || prompt === null || !isTuiAgent(prompt.agent)) {
-      return false
-    }
-    if (typeof (key === 'draft' ? prompt.content : prompt.prompt) !== 'string') {
-      return false
-    }
-  }
-  return true
 }

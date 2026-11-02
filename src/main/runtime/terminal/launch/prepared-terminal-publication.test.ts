@@ -1,4 +1,11 @@
 import type { InternalCreateOrAttachOptions } from '../../../daemon/terminal-host-agent-session-claim'
+import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import {
+  formatPreparedLaunchGeneration,
+  readCurrentPreparedLaunchIncarnation
+} from '../../../daemon/prepared-agent-launch-incarnation'
 import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ClaimedAgentPtyOwnerRegistry } from '../../../../shared/claimed-agent-pty-owner'
@@ -19,7 +26,14 @@ import {
 const NOW = 1_800_000_000_000
 afterEach(() => vi.useRealTimers())
 
-async function fixture(withSetup = false) {
+async function fixture(
+  withSetup = false,
+  accepted: {
+    env?: Record<string, string>
+    publication?: { launchConfig?: SleepingAgentLaunchConfig; viewMode?: 'terminal' | 'chat' }
+    launchTokenHash?: string
+  } = {}
+) {
   vi.useFakeTimers({ now: NOW })
   const surfaces = {
     agent: { tabId: 'tab_agent', leafId: randomUUID(), terminalHandle: 'term_agent' },
@@ -48,8 +62,15 @@ async function fixture(withSetup = false) {
     reserveCapacity: () => () => {}
   })
   const payload = {
-    launch: { sessionId: 'agent', cols: 80, rows: 24, command: 'cx' },
+    launch: {
+      sessionId: 'agent',
+      cols: 80,
+      rows: 24,
+      command: 'cx',
+      ...(accepted.env ? { env: accepted.env } : {})
+    },
     prompts: { followup: { agent: 'codex' as const, prompt: 'full guarded prompt' } },
+    ...(accepted.publication ? { publication: accepted.publication } : {}),
     ...(withSetup
       ? {
           setup: {
@@ -84,7 +105,7 @@ async function fixture(withSetup = false) {
     claim: prepared.claim,
     surface: prepared.surface,
     targetKind: 'new-git',
-    launchTokenHash: null,
+    launchTokenHash: accepted.launchTokenHash ?? null,
     presentation: {
       tabId: surfaces.agent.tabId,
       leafId: surfaces.agent.leafId,
@@ -112,7 +133,9 @@ async function fixture(withSetup = false) {
     }),
     preparedLaunch: descriptor
   }
-  const retire = vi.fn(async () => {})
+  const retire = vi.fn(async () => {
+    Reflect.deleteProperty(row, 'preparedLaunch')
+  })
   const createTerminal = vi.fn<PreparedPublicationPorts['createTerminal']>(
     async (_selector, options) => ({
       handle: options.sessionId === 'agent' ? 'term_agent' : 'term_setup',
@@ -241,14 +264,157 @@ describe('prepared terminal publication recovery', () => {
     })
   })
 
-  it('retains a refused guarded prompt and never blindly submits it on reconnect', async () => {
+  it('settles a refused guarded prompt as uncertain once and never resubmits it', async () => {
     const f = await fixture()
     vi.mocked(f.ports.deliverPrompts).mockResolvedValue(false)
-    await publishPreparedTerminal(f.identity, f.descriptor, f.ports)
+    const terminal = await publishPreparedTerminal(f.identity, f.descriptor, f.ports)
     await reconcilePreparedTerminalPublications(f.ports)
     expect(f.ports.deliverPrompts).toHaveBeenCalledTimes(1)
-    expect(f.retire).not.toHaveBeenCalled()
-    expect(f.owner.pending).toBe(1)
+    expect(terminal?.warning).toContain(
+      'Codex started, but its first prompt may not have been delivered'
+    )
+    expect(await f.owner.handle({ action: 'status', identity: f.identity })).toMatchObject({
+      input: 'uncertain'
+    })
+    expect(f.retire).toHaveBeenCalledTimes(1)
+    expect(f.owner.pending).toBe(0)
     expect(f.create).toHaveBeenCalledTimes(1)
+  })
+
+  it('recovers a prompt whose acquisition reply was lost and delivers it exactly once', async () => {
+    const f = await fixture()
+    const handle = f.ports.controller.preparedAgentLaunch!
+    let dropped = 0
+    f.ports.controller.preparedAgentLaunch = async (request) => {
+      const reply = await handle(request)
+      if (request.action === 'claimPrompt' && !request.attempt && dropped++ === 0) {
+        throw new Error('daemon connection closed')
+      }
+      return reply
+    }
+    await expect(publishPreparedTerminal(f.identity, f.descriptor, f.ports)).rejects.toThrow(
+      'daemon connection closed'
+    )
+    expect(f.ports.deliverPrompts).not.toHaveBeenCalled()
+    await reconcilePreparedTerminalPublications(f.ports)
+    await reconcilePreparedTerminalPublications(f.ports)
+    expect(f.ports.deliverPrompts).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ handle: 'term_agent' }),
+      { followup: { agent: 'codex', prompt: 'full guarded prompt' } }
+    )
+    expect(await f.owner.handle({ action: 'status', identity: f.identity })).toMatchObject({
+      input: 'written'
+    })
+    expect(f.retire).toHaveBeenCalledTimes(1)
+    expect(f.owner.pending).toBe(0)
+    expect(f.create).toHaveBeenCalledTimes(1)
+  })
+
+  it('recovery after a main restart publishes the accepted recipe, view and authority', async () => {
+    const token = 'launch-token'
+    const launchConfig = {
+      agentCommand: 'custom-cx',
+      agentArgs: '--model o3',
+      agentEnv: { CUSTOM_MODE: 'true' }
+    }
+    const f = await fixture(true, {
+      env: { ORCA_AGENT_LAUNCH_TOKEN: token },
+      publication: { launchConfig, viewMode: 'chat' },
+      launchTokenHash: createHash('sha256').update(token).digest('hex')
+    })
+    // A restarted main has only the saved descriptor and no in-memory launch options.
+    const publication = reconcilePreparedTerminalPublications(f.ports)
+    await vi.advanceTimersByTimeAsync(0)
+    f.zero()
+    await publication
+    expect(f.createTerminal).toHaveBeenLastCalledWith(
+      'id:wt',
+      expect.objectContaining({
+        sessionId: 'agent',
+        attachOnly: true,
+        launchConfig,
+        viewMode: 'chat',
+        launchToken: token
+      })
+    )
+  })
+
+  it.each([1, 10])(
+    'retires %i descriptors once their daemon process is proven gone and stops probing them',
+    async (count) => {
+      // A daemon process that has exited, named the way a generation records its owner.
+      const gone = spawnSync(process.execPath, ['-e', ''])
+      const generation = formatPreparedLaunchGeneration({
+        pid: gone.pid!,
+        process: `${process.platform}:exited-daemon`
+      })
+      const f = await fixture()
+      const rows = Array.from({ length: count }, (_, index) => ({
+        ...pendingAgentSessionOperationRow({
+          callerKey: 'worktree-startup',
+          operationId: `${NOW}-${String(index).padStart(32, '0')}`,
+          fingerprint: 'fingerprint',
+          now: NOW
+        }),
+        preparedLaunch: { ...f.descriptor, daemonGeneration: generation }
+      }))
+      const retire = vi.fn(async (identity: { operationId: string }) => {
+        const row = rows.find((row) => row.operationId === identity.operationId)
+        if (row) {
+          Reflect.deleteProperty(row, 'preparedLaunch')
+        }
+      })
+      const probes = vi.fn(async () => {
+        throw new Error('agent_session_ownership_unknown')
+      })
+      const ports: PreparedPublicationPorts = {
+        ...f.ports,
+        controller: { preparedAgentLaunch: probes },
+        store: { listOperationRows: () => rows, retirePreparedAgentLaunch: retire }
+      }
+      vi.useRealTimers()
+      await reconcilePreparedTerminalPublications(ports)
+      await reconcilePreparedTerminalPublications(ports)
+      expect(retire).toHaveBeenCalledTimes(count)
+      // Each dead owner is asked once; a retired descriptor is never probed again.
+      expect(probes).toHaveBeenCalledTimes(count)
+    }
+  )
+
+  it("keeps a descriptor whose daemon is unreachable but alive, and retires on that generation's answer", async () => {
+    const f = await fixture()
+    const live = await readCurrentPreparedLaunchIncarnation()
+    const descriptor = {
+      ...f.descriptor,
+      daemonGeneration: formatPreparedLaunchGeneration(live)
+    }
+    const rows = [
+      {
+        ...pendingAgentSessionOperationRow({
+          callerKey: 'worktree-startup',
+          operationId: f.identity.operationId,
+          fingerprint: f.identity.fingerprint,
+          now: NOW
+        }),
+        preparedLaunch: descriptor
+      }
+    ]
+    const reply = { error: new Error('agent_session_ownership_unknown') }
+    const retire = vi.fn(async () => {})
+    const ports: PreparedPublicationPorts = {
+      ...f.ports,
+      controller: {
+        preparedAgentLaunch: async () => {
+          throw reply.error
+        }
+      },
+      store: { listOperationRows: () => rows, retirePreparedAgentLaunch: retire }
+    }
+    vi.useRealTimers()
+    await reconcilePreparedTerminalPublications(ports)
+    expect(retire).not.toHaveBeenCalled()
+    reply.error = new Error('agent_session_operation_unknown')
+    await reconcilePreparedTerminalPublications(ports)
+    expect(retire).toHaveBeenCalledOnce()
   })
 })

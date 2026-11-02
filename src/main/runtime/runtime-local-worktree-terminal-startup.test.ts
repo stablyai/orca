@@ -1,3 +1,4 @@
+import { PreparedLaunchNotAcceptedError } from './terminal/launch/prepared-terminal-pending'
 import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
@@ -115,6 +116,30 @@ describe('host-owned startup', () => {
       expect(ports.activate).toHaveBeenCalledWith(repo.id, worktree.id)
     }
   )
+
+  it('returns the created workspace with the shipped warning when preparation fails before acceptance', async () => {
+    const { ports, createTerminal } = createPorts()
+    ports.startPrepared = vi
+      .fn()
+      .mockRejectedValue(
+        new PreparedLaunchNotAcceptedError(new Error('terminal_held_wsl_distro_stopped:Ubuntu'))
+      )
+    const result = await startRuntimeLocalWorktreeTerminals({
+      request: { repoSelector: repo.id, name: 'worker', preparedAgentLaunch: true },
+      repo,
+      worktree,
+      createdWithAgent: 'codex',
+      startup: { command: 'cx' },
+      ports
+    })
+    expect(createTerminal).not.toHaveBeenCalledWith(
+      `id:${worktree.id}`,
+      expect.objectContaining({ command: 'cx' })
+    )
+    expect(result).toMatchObject({ didSpawnStartup: false, startupTerminalHandle: null })
+    expect(result.warning).toContain(`Failed to create the startup terminal for ${worktree.path}`)
+    expect(result.warning).toContain('Ubuntu')
+  })
 
   it('selects the unchanged legacy path when the actual owner lacks the capability', async () => {
     const { ports, createTerminal } = createPorts()

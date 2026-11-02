@@ -110,18 +110,22 @@ export function agentLaunchWorkspaceFactory(
           ...(startupAgent ? { preparedAgentLaunch: true } : {}),
           observeSetupCompletion: true
         })
-        const startupTerminal = result.startupTerminal?.pending
+        const preparedTerminal = result.startupTerminal?.pending
           ? await runtime.waitForPreparedAgentTerminal(result.startupTerminal.pending)
-          : result.startupTerminal
+          : undefined
+        const startupTerminal = preparedTerminal ?? result.startupTerminal
         if (!startupAgent) {
           await waitForStructuredSetup(runtime, result.setupReceipt)
         }
         finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
-        const warning =
+        const createWarning =
           result.warnings?.reduce(
             (combined, lineage) => combineLaunchWarnings(combined, lineage.message),
             result.warning
           ) ?? result.warning
+        const warning = preparedTerminal?.warning
+          ? combineLaunchWarnings(createWarning, preparedTerminal.warning)
+          : createWarning
         return {
           worktreeId: result.worktree.id,
           workspacePath: result.worktree.path,
