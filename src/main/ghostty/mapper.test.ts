@@ -17,9 +17,9 @@ describe('mapGhosttyToOrca — font & cursor', () => {
   })
 
   it('imports the primary font-family from a repeated fallback list, honoring "" resets', () => {
-    expect(mapGhosttyToOrca({ 'font-family': ['Menlo', 'Monaco'] }).diff).toEqual({
-      terminalFontFamily: 'Menlo'
-    })
+    const fallbackList = mapGhosttyToOrca({ 'font-family': ['Menlo', 'Monaco'] })
+    expect(fallbackList.diff).toEqual({ terminalFontFamily: 'Menlo' })
+    expect(fallbackList.unsupportedKeys).toEqual(['font-family (fallback fonts not preserved)'])
     expect(mapGhosttyToOrca({ 'font-family': ['Fira Code', '', 'Menlo', 'Monaco'] }).diff).toEqual({
       terminalFontFamily: 'Menlo'
     })
