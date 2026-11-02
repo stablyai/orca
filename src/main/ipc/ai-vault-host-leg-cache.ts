@@ -63,6 +63,7 @@ export async function scanHostLegWithCache(args: {
   dependency?: AiVaultProjectionDependency
   depth: AiVaultSessionDepth
   scopePaths?: readonly string[]
+  selectedSessionId?: string
   force: boolean
   afterFingerprint?: string | null
   scan: () => Promise<AiVaultListResult>
@@ -80,7 +81,12 @@ export async function scanHostLegWithCache(args: {
     (!cached.result.unchanged ||
       (cached.depth === args.depth && cached.result.fingerprint === args.afterFingerprint))
   ) {
-    return truncateAiVaultListResult(cached.result, args.depth, args.scopePaths)
+    return truncateAiVaultListResult(
+      cached.result,
+      args.depth,
+      args.scopePaths,
+      args.selectedSessionId
+    )
   }
   const result = await args.scan()
   // A delete's invalidation landed while this leg was scanning; caching a

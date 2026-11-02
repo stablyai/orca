@@ -327,7 +327,8 @@
       "hideDetails": "Hide details",
       "showDetails": "Show details",
       "dismissNotice": "Dismiss",
-      "loading": "Loading agent sessions…"
+      "loading": "Loading agent sessions…",
+      "conversationUnavailable": "This conversation's history is unavailable on this host."
     },
     "resumeTarget": {
       "runtimeUnavailable": "Resume from history is not available in runtime-hosted workspaces.",

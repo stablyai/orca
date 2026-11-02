@@ -115,7 +115,13 @@ describe('discoverFiles containment for a stalled WSL root', () => {
 
       await expect(Promise.all([discovery, healthy])).resolves.toEqual([
         { agent: 'codex', rootDir: UNC_ROOT, files: [] },
-        { agent: 'codex', rootDir: '/home/ada/.codex/sessions', files: [] }
+        {
+          agent: 'codex',
+          rootDir: '/home/ada/.codex/sessions',
+          files: [],
+          scopeFiles: undefined,
+          selectedFiles: []
+        }
       ])
       expect(issues).toEqual([
         {
@@ -146,7 +152,13 @@ describe('discoverFiles containment for a stalled WSL root', () => {
       // Route quarantine makes later stats fail fast; only the first stalled operations reach deadlines.
       await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS * 2 + 2)
 
-      await expect(discovery).resolves.toEqual({ agent: 'codex', rootDir: UNC_ROOT, files: [] })
+      await expect(discovery).resolves.toEqual({
+        agent: 'codex',
+        rootDir: UNC_ROOT,
+        files: [],
+        scopeFiles: undefined,
+        selectedFiles: []
+      })
       expect(issues).toHaveLength(names.length)
       expect(issues.every((issue) => issue.path.startsWith(UNC_ROOT))).toBe(true)
     }

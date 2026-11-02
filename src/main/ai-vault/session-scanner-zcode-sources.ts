@@ -7,6 +7,7 @@ import { listZcodeSqliteSessionsViaWorker } from './session-scanner-opencode-sql
 import { scanIssueTextFromError } from './session-scan-issues'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
 import { scopeWalksAgentFiles } from './session-scope-cwd'
+import { isSelectedSessionFile } from './session-scanner-selection'
 
 // Keep ZCode discovery separate so OpenCode cannot absorb its database rows.
 export function zcodeDiscoveries(
@@ -28,6 +29,7 @@ export function zcodeDiscoveries(
         limit,
         issues,
         scopePaths,
+        selectedSessionId: options.selectedSessionId,
         signal: options.signal
       }).then((candidates) => candidates.map((candidate) => candidate.file))
     const [files, scopeFiles] = await Promise.all([
@@ -38,6 +40,9 @@ export function zcodeDiscoveries(
       agent: 'zcode' as const,
       rootDir: dbPath,
       files,
+      selectedFiles: files.filter((file) =>
+        isSelectedSessionFile(options.selectedSessionId, 'zcode', file.path)
+      ),
       ...(scopeFiles ? { scopeFiles } : {})
     }
   })
