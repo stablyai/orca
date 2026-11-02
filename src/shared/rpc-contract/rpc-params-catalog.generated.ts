@@ -1291,6 +1291,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.gateResolve': GateResolveParams,
   'orchestration.inbox': InboxParams,
   'orchestration.partyLocation': PartyLocationParams,
+  'orchestration.partyOpen': PartyLocationParams,
   'orchestration.reply': ReplyParams,
   'orchestration.requestShow': RequestShowParams,
   'orchestration.reset': ResetParams,

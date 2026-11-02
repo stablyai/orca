@@ -109,7 +109,7 @@ it('reloads a positioned worker start into the shared card with full task, Copy 
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Build cards' })))
   expect(navigation.rpc).toHaveBeenCalledWith(
     { kind: 'local' },
-    'orchestration.partyLocation',
+    'orchestration.partyOpen',
     {
       address: 'term_0'
     },
@@ -450,7 +450,7 @@ it.each(['task', 'mail'] as const)(
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Build cards' })))
     expect(navigation.rpc).toHaveBeenCalledWith(
       { kind: 'local' },
-      'orchestration.partyLocation',
+      'orchestration.partyOpen',
       {
         address: 'term_0'
       },
@@ -459,7 +459,7 @@ it.each(['task', 'mail'] as const)(
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Other sender' })))
     expect(navigation.rpc).toHaveBeenLastCalledWith(
       { kind: 'local' },
-      'orchestration.partyLocation',
+      'orchestration.partyOpen',
       { address: 'term_1' },
       { timeoutMs: 5000 }
     )

@@ -106,7 +106,7 @@ it('uses the receiving host and only this sender’s mail, then focuses the actu
   await open()
   expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith(
     host,
-    'orchestration.partyLocation',
+    'orchestration.partyOpen',
     { address: 'term_worker', messageIds: ['m1'] },
     { timeoutMs: 5000 }
   )
@@ -139,7 +139,7 @@ it('a known root outranks a terminal and selects only the actual owner-qualified
     'wt-chat': [tab('wrong', ROOT, 'local'), tab('actual-issued', ROOT)]
   }
   mocks.rpc.mockImplementation(async (_host, method) => {
-    if (method === 'orchestration.partyLocation') {
+    if (method.startsWith('orchestration.party')) {
       throw { code: 'method_not_found' }
     }
     return { ok: true }
@@ -148,6 +148,7 @@ it('a known root outranks a terminal and selects only the actual owner-qualified
   expect(mocks.activate).toHaveBeenCalledExactlyOnceWith('actual-issued', { worktreeId: 'wt-chat' })
   expect(mocks.focus).not.toHaveBeenCalled()
   expect(mocks.rpc.mock.calls.map((call) => call[1])).toEqual([
+    'orchestration.partyOpen',
     'orchestration.partyLocation',
     'session.tabs.activate'
   ])
@@ -158,14 +159,18 @@ it('never guesses a missing root or falls through to its terminal', async () => 
   await open({ ...party, orcaSessionId: ROOT })
   expect(mocks.activate).not.toHaveBeenCalled()
   expect(mocks.focus).not.toHaveBeenCalled()
-  expect(mocks.rpc).toHaveBeenCalledOnce()
+  // An older host refuses the opening call, then answers the plain lookup.
+  expect(mocks.rpc.mock.calls.map((call) => call[1])).toEqual([
+    'orchestration.partyOpen',
+    'orchestration.partyLocation'
+  ])
 })
 it('authoritative continuation overrides the stored root and keeps the actual returned tab identity', async () => {
   mocks.state.unifiedTabsByWorktree = {
     'wt-chat': [tab('historical', ROOT), tab('actual-successor', 'successor')]
   }
   mocks.rpc.mockImplementation(async (_host, method) =>
-    method === 'orchestration.partyLocation'
+    method === 'orchestration.partyOpen'
       ? { location: { kind: 'chat', sessionId: 'successor', worktreeId: 'wt-chat' } }
       : { ok: true }
   )
@@ -235,7 +240,7 @@ it.each([
     }
     expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith(
       host,
-      'orchestration.partyLocation',
+      'orchestration.partyOpen',
       { address: 'term_worker', messageIds: ['m1'] },
       { timeoutMs: 5000 }
     )

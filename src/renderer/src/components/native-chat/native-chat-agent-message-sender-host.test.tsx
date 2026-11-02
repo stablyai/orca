@@ -201,7 +201,7 @@ beforeEach(() => {
   transport.bridge.mockReset()
   transport.bridge.mockImplementation(
     async ({ method, params }: { method: string; params?: { address?: string } }) => {
-      if (method === 'orchestration.partyLocation' && transport.olderLookup) {
+      if (method.startsWith('orchestration.party') && transport.olderLookup) {
         return {
           id: 'reply',
           ok: false,
@@ -220,7 +220,7 @@ beforeEach(() => {
                 ? []
                 : [AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY]
             }
-          : method === 'orchestration.partyLocation'
+          : method === 'orchestration.partyOpen'
             ? {
                 location:
                   params?.address === 'term-sender'
@@ -278,7 +278,7 @@ it.each([false, true])(
     for (const link of links) {
       await act(async () => fireEvent.click(link))
       expect(transport.bridge).toHaveBeenCalledWith(
-        expect.objectContaining({ selector: 'server-1', method: 'orchestration.partyLocation' })
+        expect.objectContaining({ selector: 'server-1', method: 'orchestration.partyOpen' })
       )
       expect(transport.bridge).toHaveBeenCalledWith(
         expect.objectContaining({ selector: 'server-1', method: 'session.tabs.activate' })
