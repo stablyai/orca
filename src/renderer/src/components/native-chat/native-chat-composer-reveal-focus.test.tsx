@@ -89,6 +89,16 @@ function render(props: HarnessProps): void {
   })
 }
 
+function mountOverlay(role: 'menu' | 'dialog' = 'menu'): HTMLDivElement {
+  const overlay = document.createElement('div')
+  overlay.setAttribute('role', role)
+  overlay.setAttribute('data-state', 'open')
+  overlay.tabIndex = -1
+  document.body.appendChild(overlay)
+  overlay.focus()
+  return overlay
+}
+
 beforeEach(() => {
   container = document.createElement('div')
   document.body.appendChild(container)
@@ -313,6 +323,76 @@ describe('useNativeChatComposerRevealFocus', () => {
     expect(focusCalls).toBe(2)
     expect(container.querySelector('textarea')).toBe(document.activeElement)
     outside.remove()
+  })
+
+  it.each(['menu', 'dialog'] as const)(
+    'preserves an open %s when the composer becomes ready',
+    (role) => {
+      render({ isVisible: true, isFocusedGroup: true, composerReady: false })
+      const intent = captureNativeChatComposerFocusIntent()
+      intent.request('chat-tab')
+      const overlay = mountOverlay(role)
+
+      render({ isVisible: true, isFocusedGroup: true, composerReady: true })
+      drainFrames()
+
+      expect(document.activeElement).toBe(overlay)
+      expect(focusCalls).toBe(0)
+      overlay.remove()
+      render({ isVisible: true, isFocusedGroup: true, nonce: 1 })
+      drainFrames()
+      expect(document.activeElement).toBe(document.body)
+    }
+  )
+
+  it('cancels queued focus recovery when a menu opens between frames', () => {
+    render({ isVisible: true, isFocusedGroup: true })
+    drainFrames(1)
+    const menu = mountOverlay()
+
+    drainFrames(1)
+
+    expect(document.activeElement).toBe(menu)
+    expect(focusCalls).toBe(1)
+    menu.remove()
+    drainFrames()
+    expect(document.activeElement).toBe(document.body)
+  })
+
+  it.each([false, true])(
+    'yields an immediate focus request to a menu (onlyIfFocusUnclaimed: %s)',
+    (onlyIfFocusUnclaimed) => {
+      render({ isVisible: true, isFocusedGroup: true })
+      const menu = mountOverlay()
+      menu.blur()
+
+      act(() => requestNativeChatComposerFocus('chat-tab', { onlyIfFocusUnclaimed }))
+      menu.remove()
+      drainFrames()
+
+      expect(document.activeElement).toBe(document.body)
+      expect(focusCalls).toBe(0)
+    }
+  )
+
+  it('allows focus recovery while a dismissed menu animates out', () => {
+    const menu = mountOverlay()
+    menu.setAttribute('data-state', 'closed')
+
+    render({ isVisible: true, isFocusedGroup: true })
+    drainFrames()
+
+    expect(document.activeElement).toBe(container.querySelector('textarea'))
+  })
+
+  it('allows a chat hosted inside a dialog to claim its composer', () => {
+    const dialog = mountOverlay('dialog')
+    dialog.appendChild(container)
+
+    render({ isVisible: true, isFocusedGroup: true })
+    drainFrames()
+
+    expect(document.activeElement).toBe(container.querySelector('textarea'))
   })
 
   it('does not chase focus after the user moves to a control outside the pane', () => {
