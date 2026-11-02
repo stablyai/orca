@@ -7,6 +7,7 @@ import { BrowserManagerGuestCleanup } from './browser-manager-guest-cleanup'
 import { allowPageUnload } from './browser-guest-unload-policy'
 import { installDocPreviewGuestPolicy } from './doc-preview-guest-policy'
 import { installGuestDevToolsCloseShortcut } from './browser-guest-devtools-close-shortcut'
+import { setupGuestShortcutForwarding } from './browser-guest-shortcut-forwarding'
 
 export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestCleanup {
   attachGuestPolicies(
@@ -79,6 +80,15 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     host: Electron.WebContents
   ): void {
     const disposeDocPolicy = installDocPreviewGuestPolicy(guest, host)
+    // Why: a focused preview swallows keys, so Orca's window shortcuts (Ctrl+Tab, close tab) are
+    // forwarded to its own host as for plugin frames; browser-page chords stay with the document.
+    const disposeShortcutForwarding = setupGuestShortcutForwarding({
+      browserTabId: `workspace-doc:${guest.id}`,
+      guest,
+      resolveRenderer: () => (host.isDestroyed() ? null : host),
+      getKeybindings: () => this.settingsResolver?.().keybindings,
+      browserPage: false
+    })
     const handleDestroyed = (): void => {
       this.cleanupGuestPolicyAttachment(guest.id)
     }
@@ -86,6 +96,7 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     guest.on('will-prevent-unload', allowPageUnload)
     this.policyCleanupByGuestId.set(guest.id, () => {
       disposeDocPolicy()
+      disposeShortcutForwarding()
       try {
         guest.off('destroyed', handleDestroyed)
         guest.off('will-prevent-unload', allowPageUnload)
