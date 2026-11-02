@@ -69,13 +69,26 @@ export async function awaitAcceptedLaunchSetup(
   assertAcceptedLaunchOpen(acceptance)
 }
 
+/** Where the caller's plan puts the held message. The plan's own draft owns the agent's input, so a
+ *  held message it would paste or type there stays unsent, as the creation's own terminal leaves it. */
+export function acceptedHeldMessagePlan(
+  startup: AgentLaunchTerminalStartupParams | undefined
+): AgentLaunchTerminalStartupParams['prompt'] | undefined {
+  const plan = startup?.prompt
+  return startup?.kind === 'command' &&
+    startup.draftPrompt &&
+    (plan === 'submit' || plan === 'draft')
+    ? 'none'
+    : plan
+}
+
 /** The launch prompt as the caller's plan has its terminal take it: sent after start, or left unsent
  *  in the agent's input. Text the command carries, or that the plan leaves out, keeps its own word. */
 export function acceptedTerminalIntent(
   intent: AgentLaunchIntent,
   acceptance: AgentLaunchAcceptance | undefined
 ): AgentLaunchIntent {
-  const plan = acceptance?.terminalStartup?.prompt
+  const plan = acceptedHeldMessagePlan(acceptance?.terminalStartup)
   if ((plan !== 'submit' && plan !== 'draft') || !intent.prompt) {
     return intent
   }

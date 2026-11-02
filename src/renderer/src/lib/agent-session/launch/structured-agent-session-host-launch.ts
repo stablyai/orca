@@ -23,7 +23,7 @@ import {
 } from '../../launch-structured-agent-session'
 import { StructuredAgentSessionCreateRefusalError } from './structured-agent-session-launch-errors'
 import {
-  structuredChatUnavailableText,
+  structuredChatNotStartedText,
   type StructuredLaunchFailure
 } from './structured-agent-session-launch-failure'
 import { structuredAgentLabel } from './structured-agent-session-launch-label'
@@ -204,9 +204,8 @@ function notStartedFailure(
   // No terminal was planned for a chat the host cannot run, as the same create opens none.
   return code === 'agent_launch_surface_unavailable'
     ? {
-        kind: 'refused',
-        code: 'structured_agent_session_unsupported',
-        causeText: structuredChatUnavailableText()
+        kind: 'not-started',
+        causeText: structuredChatNotStartedText(structuredAgentLabel(intent.agent))
       }
     : undefined
 }

@@ -10,6 +10,7 @@ import {
   readAgentSessionErrorRefusal,
   type AgentSessionWriteRefusal
 } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
+import { joinSentences } from '../../../../../shared/sentence-joining'
 import { wslHostsAvailable } from '@/components/sidebar/use-wsl-hosts-enabled'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
@@ -76,6 +77,20 @@ export function structuredChatUnavailableText(reason?: string): string {
           'components.native-chat.explicitChatUnavailable',
           'This workspace cannot run the chat. Check the agent installation or open it in a terminal.'
         )
+}
+
+/** A host that cannot run the chat, with no terminal planned in its place: nothing started. */
+export function structuredChatNotStartedText(agentLabel: string): string {
+  return joinSentences([
+    translate(
+      'auto.components.terminal.pane.AgentLaunchPaneNotice.notStarted',
+      "{{agent}} couldn't start.",
+      {
+        agent: agentLabel
+      }
+    ),
+    structuredChatUnavailableText()
+  ])
 }
 
 /** The host's refusal behind a failed launch; undefined when the failure carried none. */

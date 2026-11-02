@@ -9,6 +9,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createSetupRun, type SetupRun } from '../../setup/setup-run'
 import { buildAgentStartupPlan } from '../../../../shared/tui-agent-startup'
+import {
+  CODEX_DRAFT_ONLY_TERMINAL_STARTUP,
+  CODEX_PLANNED_DRAFT
+} from '../../../../shared/rpc-contract/agent-launch-accept-terminal-plan.test-fixture'
 import type * as StructuredCreate from './structured-agent-session-create'
 import { sharedPromiseSettlementWaiters } from '../../../../shared/promise-settlement-waiters'
 import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
@@ -327,6 +331,10 @@ describe('overlapping and changed accepts of one operation', () => {
   it.each([
     ['terminal command', { terminalStartup: { ...ACCEPTED.terminalStartup, command: 'claude' } }],
     ['message id', { prompt: { ...ACCEPTED.prompt, clientMessageId: 'message-other' } }],
+    [
+      'planned draft',
+      { terminalStartup: { ...ACCEPTED.terminalStartup, draftPrompt: 'Run lint' } }
+    ],
     ['Setup receipt', { setupReceipt: { required: true, runId: 'run-other' } }]
   ])('refuses the same id with a different %s, running or recorded', async (_label, changed) => {
     const run = setupRun()
@@ -445,6 +453,66 @@ describe('the terminal alternative runs the caller’s plan once', () => {
       env: { ORCA_LAUNCH: '1', ...accountEnv }
     })
   })
+})
+
+describe('the unsent draft a new workspace planned for its own terminal', () => {
+  const { prompt: _held, ...withoutMessage } = ACCEPTED
+  /** The window's real plan for a Codex workspace whose composer left only that draft. */
+  const DRAFT_ONLY = {
+    ...withoutMessage,
+    agent: 'codex',
+    sessionId: 'codex_9b1deb4d_3b7d_4bad_9bdd_2b0d7b3dcb6d',
+    terminalStartup: CODEX_DRAFT_ONLY_TERMINAL_STARTUP
+  }
+  const PASTED_ONCE = [['term_1', { agent: 'codex', content: CODEX_PLANNED_DRAFT }]]
+
+  function chatUnavailable(): HostRuntime {
+    return hostRuntime(undefined, { createSupport: { supported: false, reason: 'agent' } })
+  }
+
+  it('pastes it once without Enter, and a later read or accept of the launch pastes nothing more', async () => {
+    const runtime = chatUnavailable()
+    await accept(runtime, DRAFT_ONLY)
+    const settled = await status(runtime, 5_000)
+    expect(settled).toMatchObject({ state: 'succeeded', result: { outcome: { kind: 'terminal' } } })
+    // No message was held, and the draft is never reported as one.
+    expect(settled.state === 'succeeded' && settled.result).not.toHaveProperty('prompt')
+    const options = runtime.createTerminal.mock.calls[0]?.[1]
+    expect(options).toMatchObject({
+      command: CODEX_DRAFT_ONLY_TERMINAL_STARTUP.command,
+      launchAgent: 'codex'
+    })
+    expect(options).not.toHaveProperty('draftPrompt')
+    expect(options).not.toHaveProperty('startupPrompt')
+    expect(runtime.pasteStartupDraftWhenReady.mock.calls).toEqual(PASTED_ONCE)
+    expect(runtime.deliverStartupFollowup).not.toHaveBeenCalled()
+
+    // A reloaded window only reads the launch, and a retried accept answers from its record.
+    await expect(status(runtime)).resolves.toEqual(settled)
+    await expect(accept(runtime, DRAFT_ONLY)).resolves.toMatchObject({ state: 'succeeded' })
+    expect(runtime.createTerminal).toHaveBeenCalledOnce()
+    expect(runtime.pasteStartupDraftWhenReady.mock.calls).toEqual(PASTED_ONCE)
+  })
+
+  it.each(['none', 'draft'] as const)(
+    'keeps it the draft beside a different held message (planned %s), which stays unsent and undelivered',
+    async (held) => {
+      const runtime = chatUnavailable()
+      await accept(runtime, {
+        ...DRAFT_ONLY,
+        prompt: { text: HELD_MESSAGE, delivery: 'submit', clientMessageId: MESSAGE_ID },
+        terminalStartup: { ...CODEX_DRAFT_ONLY_TERMINAL_STARTUP, prompt: held }
+      })
+      // Not delivered: the window keeps the held message for the user.
+      await expect(status(runtime, 5_000)).resolves.toMatchObject({
+        state: 'succeeded',
+        result: { prompt: { delivery: 'submit', outcome: 'not-delivered' } }
+      })
+      expect(runtime.pasteStartupDraftWhenReady.mock.calls).toEqual(PASTED_ONCE)
+      expect(runtime.deliverStartupFollowup).not.toHaveBeenCalled()
+      expect(JSON.stringify(runtime.createTerminal.mock.calls)).not.toContain(HELD_MESSAGE)
+    }
+  )
 })
 
 describe('a close while the accepted launch prepares its surface', () => {

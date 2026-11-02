@@ -28,6 +28,9 @@ export const AgentLaunchTerminalStartup = z.discriminatedUnion('kind', [
     env: z.record(z.string(), z.string()).optional(),
     launchConfig: sleepingAgentLaunchConfigSchema,
     startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
+    /** The plan's own unsent input, pasted once without Enter. It is not the held message: it
+     *  outranks a held message the plan would put in the same input, which then stays unsent. */
+    draftPrompt: z.string().min(1).optional(),
     prompt: z.enum(['carried', 'submit', 'draft', 'none'])
   })
 ])

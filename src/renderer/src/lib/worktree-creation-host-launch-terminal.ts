@@ -12,10 +12,13 @@ import type {
   PendingWorktreeCreation,
   WorktreeCreationRequest
 } from '@/lib/pending-worktree-creation'
+import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import { resolveAgentStartupPlanInputs } from '../../../shared/agent-startup-plan-inputs'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { AgentLaunchTerminalStartupParams } from '../../../shared/rpc-contract/agent-launch-accept-params'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { AgentStartupPlan } from '../../../shared/tui-agent-startup'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
 export type PlannedHostLaunchTerminal = NonNullable<
@@ -23,6 +26,98 @@ export type PlannedHostLaunchTerminal = NonNullable<
 >
 
 type Disposition = 'carried' | 'submit' | 'draft' | 'none'
+type CommandFields = Omit<
+  Extract<AgentLaunchTerminalStartupParams, { kind: 'command' }>,
+  'kind' | 'prompt'
+>
+
+/** How one key of an ordinary startup plan reaches the host's terminal. `carried`: under its own
+ *  name, which the command arm must take with the same type; `carried-local`: only where this
+ *  machine's ordinary terminal consumes it; `command`: it is the command. The rest name why the key
+ *  is not sent, and what stands in for it on the host. */
+type Treatment<T, K extends keyof T> =
+  | (K extends keyof CommandFields
+      ? NonNullable<T[K]> extends NonNullable<CommandFields[K]>
+        ? 'carried' | 'carried-local'
+        : never
+      : never)
+  | (K extends 'launchCommand' ? 'command' : never)
+  | 'host-derived'
+  | 'host-minted'
+  | 'excluded'
+  | 'not-set'
+  | 'resolved-into-command'
+  | 'delivered-by-plan'
+  | 'not-forwarded'
+
+/** Every key of a startup plan type: a key added to the plan fails to compile until classified. */
+type Classification<T> = { [K in keyof Required<T>]: Treatment<T, K> }
+
+/** The background plan, buildWorktreeCreationStartupOpt's output, as its ordinary terminal runs it. */
+const BACKGROUND_STARTUP = {
+  command: 'carried',
+  // The host still lays the selected account's environment over it.
+  env: 'carried',
+  launchConfig: 'carried',
+  startupCommandDelivery: 'carried',
+  // This machine's terminal pastes it unsent; a paired workspace's after-wake terminal never has.
+  draftPrompt: 'carried-local',
+  // The host starts the accepted launch's agent, the one this plan was built for.
+  launchAgent: 'host-derived',
+  // The host's terminal create mints one for a configured launch, as the ordinary create does.
+  launchToken: 'host-minted',
+  // The builder's agent_kind/launch_source/request_kind:'new' are what the host's agent_started
+  // derives from the agent and the launchSource sent beside this plan.
+  telemetry: 'host-derived',
+  // Seeded only for Command Code, which no host offers as a chat, so no accepted launch reaches
+  // this; revisit when a status-seeding agent gains chat support.
+  initialAgentStatus: 'excluded',
+  // This builder never sets these.
+  resumeProviderSession: 'not-set',
+  sessionOptions: 'not-set'
+} as const satisfies Classification<WorktreeStartupPayload>
+
+/** The foreground plan, as the new-tab launcher hands it to its terminal. */
+const FOREGROUND_STARTUP = {
+  launchCommand: 'command',
+  env: 'carried',
+  launchConfig: 'carried',
+  startupCommandDelivery: 'carried',
+  agent: 'host-derived',
+  launchToken: 'host-minted',
+  // The planner's paste-after-launch/submit decision is the one delivery (the disposition below).
+  followupPrompt: 'delivered-by-plan',
+  draftPrompt: 'delivered-by-plan',
+  // The new-tab and paired handoffs never forward it either.
+  expectedProcess: 'not-forwarded',
+  // Built from this workspace's host launch preferences, whose flags the command already holds.
+  sessionOptions: 'resolved-into-command'
+} as const satisfies Classification<AgentStartupPlan>
+
+/** The command arm's fields, exactly those the classification sends. */
+function classifiedStartup<T extends object>(
+  plan: T,
+  classes: Classification<T>,
+  host: RuntimeClientTarget
+): CommandFields {
+  const fields: Record<string, unknown> = {}
+  for (const [key, treatment] of Object.entries(classes)) {
+    const value: unknown = Reflect.get(plan, key)
+    if (value === undefined || value === null) {
+      continue
+    }
+    if (treatment === 'command') {
+      fields.command = value
+    } else if (
+      treatment === 'carried' ||
+      (treatment === 'carried-local' && host.kind === 'local')
+    ) {
+      fields[key] = value
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Classification admits carried keys only where the command arm takes that type, and both plans have a required command.
+  return fields as CommandFields
+}
 
 // A declined chat's terminal opened through the new-tab launcher, counted under its default label.
 const FOREGROUND_LAUNCH_SOURCE = 'tab_bar_quick_launch'
@@ -31,7 +126,8 @@ const FOREGROUND_LAUNCH_SOURCE = 'tab_bar_quick_launch'
 function foregroundTerminal(
   worktreeId: string,
   agent: TuiAgent,
-  prompt: string
+  prompt: string,
+  host: RuntimeClientTarget
 ): PlannedHostLaunchTerminal {
   const store = useAppStore.getState()
   // Nothing is said yet: the host may well run the chat, and only then is the terminal needed.
@@ -70,20 +166,16 @@ function foregroundTerminal(
   return {
     startup: {
       kind: 'command',
-      command: plan.launchCommand,
-      ...(plan.env ? { env: plan.env } : {}),
-      launchConfig: plan.launchConfig,
-      ...(plan.startupCommandDelivery
-        ? { startupCommandDelivery: plan.startupCommandDelivery }
-        : {}),
+      ...classifiedStartup(plan, FOREGROUND_STARTUP, host),
       prompt: disposition
     },
     launchSource: FOREGROUND_LAUNCH_SOURCE
   }
 }
 
-/** Out of view, the submit-time plan runs unchanged; a message held during creation stays unsent
- *  in this machine's terminal, and a paired one's after-wake terminal takes none. */
+/** Out of view, the submit-time plan runs unchanged, its own draft pasted unsent on this machine; a
+ *  message held during creation stays unsent in this machine's terminal unless the plan has a draft,
+ *  and a paired one's after-wake terminal takes neither. */
 function backgroundTerminal(
   request: WorktreeCreationRequest,
   prompt: string,
@@ -111,12 +203,7 @@ function backgroundTerminal(
   return {
     startup: {
       kind: 'command',
-      command: built.command,
-      ...(built.env ? { env: built.env } : {}),
-      ...(built.launchConfig ? { launchConfig: built.launchConfig } : {}),
-      ...(built.startupCommandDelivery
-        ? { startupCommandDelivery: built.startupCommandDelivery }
-        : {}),
+      ...classifiedStartup(built, BACKGROUND_STARTUP, host),
       prompt: disposition
     },
     ...attribution
@@ -138,7 +225,7 @@ export function planWorktreeHostLaunchTerminal(args: {
     return {}
   }
   return args.foreground
-    ? foregroundTerminal(args.worktreeId, args.agent, args.prompt)
+    ? foregroundTerminal(args.worktreeId, args.agent, args.prompt, args.owner.target)
     : backgroundTerminal(
         args.request,
         args.prompt,

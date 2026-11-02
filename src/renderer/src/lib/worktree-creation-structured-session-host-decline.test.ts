@@ -32,6 +32,11 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { launchStructuredWorktreeSession } from './worktree-creation-structured-session'
 import { worktreeHostLaunch } from './worktree-creation-host-launch'
 import { buildAgentStartupPlan } from './tui-agent-startup'
+import { buildQuickComposerStartup } from '@/hooks/composer-state/quick-startup-plan'
+import {
+  CODEX_DRAFT_ONLY_TERMINAL_STARTUP,
+  CODEX_PLANNED_DRAFT
+} from '../../../shared/rpc-contract/agent-launch-accept-terminal-plan.test-fixture'
 import { pendingCreationChatDraftScopeKey } from './pending-worktree-creation'
 import {
   readNativeChatComposerDraft,
@@ -356,13 +361,14 @@ describe('the terminal a host launch becomes, planned as this creation would ope
     held?: string
     foreground: boolean
     worktreeId?: string
+    agent?: 'codex'
   }) {
     return worktreeHostLaunch({
       creationId: 'creation-1',
       identity: IDENTITY,
       request: args.request,
       worktreeId: args.worktreeId ?? LOCAL_CREATED.id,
-      agent: 'claude',
+      agent: args.agent ?? 'claude',
       prompt: args.prompt,
       heldChatMessage: args.held,
       foreground: args.foreground
@@ -426,5 +432,63 @@ describe('the terminal a host launch becomes, planned as this creation would ope
       command: 'claude --model opus',
       prompt: 'draft'
     })
+  })
+
+  /** A Codex workspace created from a linked issue, its context left unsent: the real composer plan. */
+  function codexDraftOnlyRequest(): WorktreeCreationRequest {
+    const { startupPlan, telemetry } = buildQuickComposerStartup({
+      agent: 'codex',
+      prompt: '',
+      draftPrompt: CODEX_PLANNED_DRAFT,
+      settings: useAppStore.getState().settings,
+      launchHost: { kind: 'known', platform: 'darwin', hostKind: 'local' },
+      shell: 'posix',
+      isRemote: false,
+      telemetrySource: undefined
+    })
+    expect(startupPlan?.draftPrompt).toBe(CODEX_PLANNED_DRAFT)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the planner reads only these request fields.
+    return {
+      ...REQUEST,
+      agent: 'codex',
+      quickPrompt: '',
+      promptDelivery: 'auto-submit',
+      startupPlan,
+      quickTelemetry: telemetry
+    } as unknown as WorktreeCreationRequest
+  }
+
+  it.each([
+    ['with no message held', undefined],
+    ['beside a different message held while it was created', 'Explain the failure']
+  ])(
+    "out of view on this machine, sends the plan's own draft to paste unsent, %s",
+    async (_case, held) => {
+      seedThisMachine()
+      const accept = plan({
+        request: codexDraftOnlyRequest(),
+        prompt: held ?? '',
+        ...(held ? { held } : {}),
+        foreground: false,
+        agent: 'codex'
+      })
+      // The planned draft stays the draft; a held message is left unsent beside it.
+      expect(accept.terminalStartup).toEqual(CODEX_DRAFT_ONLY_TERMINAL_STARTUP)
+      expect(accept.prompt?.text).toBe(held)
+      expect(accept.launchSource).toBe('new_workspace_composer')
+    }
+  )
+
+  it('out of view on a paired server, sends no planned draft, as its after-wake terminal pastes none', async () => {
+    seedPairedServer()
+    const accept = plan({
+      request: codexDraftOnlyRequest(),
+      prompt: '',
+      foreground: false,
+      worktreeId: CREATED.id,
+      agent: 'codex'
+    })
+    expect(accept.terminalStartup).toMatchObject({ kind: 'command', prompt: 'none' })
+    expect(accept.terminalStartup).not.toHaveProperty('draftPrompt')
   })
 })

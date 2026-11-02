@@ -55,7 +55,7 @@ export type AgentLaunchSurfaceFactory = {
     /** The caller's own command, run verbatim instead of the configured launcher. */
     startup?: Omit<
       Extract<AgentLaunchTerminalStartupParams, { kind: 'command' }>,
-      'kind' | 'prompt'
+      'kind' | 'prompt' | 'draftPrompt'
     >
     /** Left unsent in the agent's input once it is ready. */
     draft?: string

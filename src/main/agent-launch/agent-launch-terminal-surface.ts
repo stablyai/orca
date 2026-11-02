@@ -1,5 +1,6 @@
 import { argvLaunchPrompt } from './agent-launch-prompt-delivery'
 import {
+  acceptedHeldMessagePlan,
   acceptedTerminalIntent,
   assertAcceptedTerminalAlternative
 } from './agent-launch-acceptance'
@@ -17,11 +18,15 @@ export async function createTerminalSurface(
   const { surfaces, acceptance } = execution
   assertAcceptedTerminalAlternative(acceptance, execution.intent.agent)
   const plan = acceptance?.terminalStartup
+  const held = acceptedHeldMessagePlan(plan)
   const intent = acceptedTerminalIntent(execution.intent, acceptance)
   // Only the host's own launcher is offered the text: a caller's command carries what its planner put there.
   const startupPrompt =
-    plan?.kind === 'command' || plan?.prompt === 'none' ? undefined : argvLaunchPrompt(intent)
-  const draft = plan?.prompt === 'draft' ? intent.prompt?.text : undefined
+    plan?.kind === 'command' || held === 'none' ? undefined : argvLaunchPrompt(intent)
+  // The plan's own draft is pasted once here, never as the held message, so it earns no receipt.
+  const draft =
+    (plan?.kind === 'command' ? plan.draftPrompt : undefined) ??
+    (held === 'draft' ? intent.prompt?.text : undefined)
   const terminal = await surfaces.createTerminalAgent({
     worktreeId: workspace.worktreeId,
     agent: intent.agent,
@@ -33,8 +38,7 @@ export async function createTerminalSurface(
     viewMode: 'terminal'
   })
   // The caller's command already holds the message: that handoff is the delivery, never repeated.
-  const carried =
-    plan?.prompt === 'carried' || Boolean(startupPrompt && terminal.promptRodeLaunchCommand)
+  const carried = held === 'carried' || Boolean(startupPrompt && terminal.promptRodeLaunchCommand)
   return {
     outcome: {
       kind: 'terminal',
@@ -44,13 +48,15 @@ export async function createTerminalSurface(
     terminalCreation: terminal.terminalCreation,
     ...(terminal.warning ? { warning: terminal.warning } : {}),
     ...(carried ? { promptRodeLaunchCommand: true } : {}),
-    ...(plan?.prompt === 'none' ? { promptLeftUnsent: true } : {})
+    ...(held === 'none' ? { promptLeftUnsent: true } : {})
   }
 }
 
+/** What runs; where its input goes (held message, planned draft) is delivered here, not by the spawn. */
 function callerCommand({
   kind: _kind,
   prompt: _prompt,
+  draftPrompt: _draftPrompt,
   ...command
 }: Extract<AgentLaunchTerminalStartupParams, { kind: 'command' }>) {
   return command

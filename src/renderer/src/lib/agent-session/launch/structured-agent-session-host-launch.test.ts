@@ -166,11 +166,22 @@ describe('a chat its host launches after the workspace’s Setup', () => {
   })
 
   it.each([
-    ['Setup did not succeed', 'agent_launch_setup_not_completed', true],
-    ['the chat was closed first', 'agent_launch_tab_closed', false]
+    [
+      'Setup did not succeed',
+      'agent_launch_setup_not_completed',
+      () => requiredSetupLaunchFailureText('Codex')
+    ],
+    ['the chat was closed first', 'agent_launch_tab_closed', () => 'Chat could not be started.'],
+    [
+      'the host cannot run the chat and no terminal was planned',
+      'agent_launch_surface_unavailable',
+      // Names the agent once, with no second generic "could not be started" before it.
+      () =>
+        "Codex couldn't start. This workspace cannot run the chat. Check the agent installation or open it in a terminal."
+    ]
   ])(
     'keeps the first message when %s, and starts nothing else',
-    async (_case, code, explainsSetup) => {
+    async (_case, code, noticeText) => {
       const status = deferred<AgentLaunchStatusResult>()
       host.status.mockReturnValue(status.promise)
       startHostLaunch()
@@ -195,8 +206,15 @@ describe('a chat its host launches after the workspace’s Setup', () => {
         sessionError: null,
         composerError: null
       })
-      expect(notices.map((notice) => notice.text)).toEqual([
-        explainsSetup ? requiredSetupLaunchFailureText('Codex') : 'Chat could not be started.'
+      // One whole notice: what happened, what to do, and Retry.
+      expect(notices).toEqual([
+        {
+          content: undefined,
+          key: 'launch',
+          kind: 'error',
+          text: noticeText(),
+          action: { label: 'Retry', onClick: expect.any(Function) }
+        }
       ])
     }
   )
