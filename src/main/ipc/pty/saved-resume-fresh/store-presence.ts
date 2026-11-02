@@ -17,14 +17,45 @@ const MAX_CONCURRENT_CHECKS = 2
 const waiting: (() => void)[] = []
 let running = 0
 
+/** A slot before the check's deadline, or false; a released slot passes straight to the next waiter. */
+function acquireCheckSlot(deadline: number): Promise<boolean> {
+  if (running < MAX_CONCURRENT_CHECKS) {
+    running += 1
+    return Promise.resolve(true)
+  }
+  return new Promise((resolve) => {
+    const granted = () => {
+      clearTimeout(expiry)
+      resolve(true)
+    }
+    const expiry = setTimeout(
+      () => {
+        waiting.splice(waiting.indexOf(granted), 1)
+        resolve(false)
+      },
+      Math.max(0, deadline - Date.now())
+    )
+    waiting.push(granted)
+  })
+}
+
+function releaseCheckSlot(): void {
+  const next = waiting.shift()
+  if (next) {
+    next()
+  } else {
+    running -= 1
+  }
+}
+
 /** found / missing / unknown for the conversation in the store this launch's agent reads. Only
- *  this launch's own store is read; a store another account or host keeps is never consulted. */
+ *  this launch's own store is read; a store another account or host keeps is never consulted.
+ *  Every wait, queued or in a worker, ends by the check's deadline as unknown. */
 export async function probeSavedResumeStore(query: SavedResumeStoreQuery): Promise<StorePresence> {
   const budget = newStoreReadBudget()
-  if (running >= MAX_CONCURRENT_CHECKS) {
-    await new Promise<void>((resolve) => waiting.push(resolve))
+  if (!(await acquireCheckSlot(budget.deadline))) {
+    return 'unknown'
   }
-  running += 1
   try {
     const reported = query.providerSession.transcriptPath
     if (reported && isAbsolute(reported) && (await statStoreFile(reported)) === 'found') {
@@ -34,8 +65,7 @@ export async function probeSavedResumeStore(query: SavedResumeStoreQuery): Promi
   } catch {
     return 'unknown'
   } finally {
-    running -= 1
-    waiting.shift()?.()
+    releaseCheckSlot()
   }
 }
 

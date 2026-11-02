@@ -1,10 +1,15 @@
-import { realpath } from 'node:fs/promises'
+import { readFile, realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { basename, isAbsolute, join, win32 } from 'node:path'
 import { encodeClaudeProjectPaths } from '../../../ai-vault/claude-project-dir-encoding'
 import {
+  CLAUDE_INJECTED_CONFIG_DIR_ENV,
+  CLAUDE_PROFILE_POINTER_ENV,
+  CLAUDE_USER_CONFIG_DIR_ENV
+} from '../../../../shared/claude-profile-routing'
+import {
   listStoreDirectory,
-  readStoreHead,
+  statStoreFile,
   type StorePresence,
   type StoreReadBudget
 } from './store-walk'
@@ -12,17 +17,56 @@ import { shellStartupAssigns, type SavedResumeStoreQuery } from './store-query'
 
 // Claude truncates longer project folder names and appends a hash Orca does not reproduce.
 const MAX_PROJECT_DIR_NAME = 200
-const TRANSCRIPT_HEAD_BYTES = 8 * 1024
+const MAX_PROJECT_DIRS = 5_000
 
-/** Transcript filenames can differ from the session id, so every transcript is classified by the
- *  id its records carry; one Claude cannot classify keeps a miss unknown. */
+const trimSlash = (value: string) => value.replace(/[\\/]+$/, '')
+const defaultHome = () => join(homedir(), '.claude')
+
+/** The config folder the launch's `claude` runs with: an account pane's shell function reads its
+ *  pointer file at launch, so this follows the same chain; anything it cannot settle is null. */
+async function resolveClaudeHome(env: NodeJS.ProcessEnv): Promise<string | null> {
+  const configured = env.CLAUDE_CONFIG_DIR?.trim()
+  const user = env[CLAUDE_USER_CONFIG_DIR_ENV]?.trim()
+  const pointer = env[CLAUDE_PROFILE_POINTER_ENV]?.trim()
+  if (!pointer) {
+    return configured || (shellStartupAssigns('CLAUDE_CONFIG_DIR', env) ? null : defaultHome())
+  }
+  if (
+    configured &&
+    configured !== env[CLAUDE_INJECTED_CONFIG_DIR_ENV] &&
+    (!user || trimSlash(configured) !== trimSlash(user))
+  ) {
+    return configured
+  }
+  if (pointer.startsWith('~/') || !isAbsolute(pointer)) {
+    return null
+  }
+  let profile: string
+  try {
+    profile = (await readFile(pointer, 'utf8')).replace(/\n+$/, '')
+  } catch (error) {
+    // A missing pointer is System default, as the shell function treats it.
+    if ((error as NodeJS.ErrnoException | null)?.code !== 'ENOENT') {
+      return null
+    }
+    profile = ''
+  }
+  if (!profile) {
+    return (configured && user) || defaultHome()
+  }
+  return isAbsolute(profile) || win32.isAbsolute(profile) ? profile : null
+}
+
+/** The common pattern's check: `<id>.jsonl` in any project folder of the launch's own store.
+ *  A miss proves absence only when every project folder was checked and the launch folder's own
+ *  project exists to have held it. */
 export async function claudeStorePresence(
   query: SavedResumeStoreQuery,
   budget: StoreReadBudget
 ): Promise<StorePresence> {
-  const configured = query.launchEnv.CLAUDE_CONFIG_DIR?.trim()
   const cwd = query.providerSession.cwd ?? query.cwd
-  if ((!configured && shellStartupAssigns('CLAUDE_CONFIG_DIR', query.launchEnv)) || !cwd) {
+  const root = await resolveClaudeHome(query.launchEnv)
+  if (!root || !cwd) {
     return 'unknown'
   }
   const resolvedCwd = await realpath(cwd).catch(() => cwd)
@@ -30,38 +74,33 @@ export async function claudeStorePresence(
   if ([...ownProjects].some((name) => name.length > MAX_PROJECT_DIR_NAME)) {
     return 'unknown'
   }
-  const projects = join(configured || join(homedir(), '.claude'), 'projects')
-  const id = query.providerSession.id
+  // A recorded transcript can carry another name; it is the same conversation wherever it moved.
+  const names = new Set([`${query.providerSession.id}.jsonl`])
+  const reported = query.providerSession.transcriptPath
+  if (reported) {
+    names.add(basename(reported))
+  }
+  const projects = join(root, 'projects')
   let ownProjectSeen = false
-  let classified = true
+  let projectDirs = 0
   try {
     for await (const project of listStoreDirectory(projects, budget)) {
-      if (!project.isDirectory()) {
-        classified &&= !project.isSymbolicLink()
+      if (!project.isDirectory() && !project.isSymbolicLink()) {
         continue
       }
+      if ((projectDirs += 1) > MAX_PROJECT_DIRS || Date.now() > budget.deadline) {
+        return 'unknown'
+      }
       ownProjectSeen ||= ownProjects.has(project.name)
-      for await (const entry of listStoreDirectory(join(projects, project.name), budget)) {
-        if (!entry.name.endsWith('.jsonl')) {
-          continue
+      for (const name of names) {
+        const presence = await statStoreFile(join(projects, project.name, name))
+        if (presence !== 'missing') {
+          return presence
         }
-        if (entry.name === `${id}.jsonl`) {
-          return 'found'
-        }
-        const head = await readStoreHead(
-          join(projects, project.name, entry.name),
-          TRANSCRIPT_HEAD_BYTES,
-          budget
-        )
-        if (head.includes(`"sessionId":"${id}"`)) {
-          return 'found'
-        }
-        classified &&= head.includes('"sessionId":"')
       }
     }
   } catch {
     return 'unknown'
   }
-  // A miss proves absence only where the launch folder's own project could have held it.
-  return ownProjectSeen && classified ? 'missing' : 'unknown'
+  return ownProjectSeen ? 'missing' : 'unknown'
 }

@@ -1,4 +1,6 @@
 import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { open, opendir, stat } from 'node:fs/promises'
+import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -24,12 +26,29 @@ import { probeSavedResumeStore } from './store-presence'
 import type { SavedResumeStoreQuery } from './store-query'
 import { findStoreFile, newStoreReadBudget } from './store-walk'
 
+const worker = vi.hoisted(() => ({
+  read: null as
+    | null
+    | ((request: { dbPath: string; sessionId: string }, signal?: AbortSignal) => Promise<unknown>)
+}))
 vi.mock('../../../ai-vault/session-scanner-opencode-sqlite-worker-spawn', () => ({
   getSharedClient: () => ({
-    readNativeChat: async (request: { dbPath: string; sessionId: string }) =>
-      readOpenCodeSessionPresence(request.dbPath, request.sessionId)
+    readNativeChat: async (request: { dbPath: string; sessionId: string }, signal?: AbortSignal) =>
+      worker.read
+        ? worker.read(request, signal)
+        : readOpenCodeSessionPresence(request.dbPath, request.sessionId)
   })
 }))
+// Count the store operations a check performs, to hold its cost to its trigger's population.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual: typeof FsPromises = await importOriginal()
+  return {
+    ...actual,
+    stat: vi.fn(actual.stat),
+    opendir: vi.fn(actual.opendir),
+    open: vi.fn(actual.open)
+  }
+})
 
 let root: string
 const posixIt = process.platform === 'win32' || process.getuid?.() === 0 ? it.skip : it
@@ -39,6 +58,9 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  worker.read = null
+  vi.mocked(stat).mockClear()
+  vi.mocked(open).mockClear()
   rmSync(root, { recursive: true, force: true })
 })
 
@@ -112,6 +134,28 @@ describe('Codex store', () => {
   })
 })
 
+describe('Codex check cost', () => {
+  it('opens the same folders for N and 10N rollouts through the restore check', async () => {
+    const opens = async (count: number) => {
+      const home = join(root, `codex-${count}`)
+      for (let index = 0; index < count; index += 1) {
+        writeStoreFile(
+          join(codexSessionsDay(home), `rollout-2026-06-30T10-00-00-${index}.jsonl`),
+          ''
+        )
+      }
+      vi.mocked(opendir).mockClear()
+      const probe = query({
+        launchEnv: { HOME: root, SHELL: '/bin/zsh', CODEX_HOME: home, ORCA_CODEX_HOME: home },
+        codexHome: { selected: home, verified: false }
+      })
+      await expect(probeSavedResumeStore(probe)).resolves.toBe('missing')
+      return vi.mocked(opendir).mock.calls.length
+    }
+    expect([await opens(40), await opens(400)]).toEqual([5, 5])
+  })
+})
+
 describe('bounded walk', () => {
   function writeRollouts(count: number): string {
     const day = codexSessionsDay(join(root, `codex-${count}`))
@@ -147,7 +191,8 @@ describe('Claude store', () => {
       launchEnv: { HOME: root, SHELL: '/bin/zsh', CLAUDE_CONFIG_DIR: join(root, 'claude') },
       ...overrides
     })
-  const project = (cwd = root) => join(root, 'claude', 'projects', encodeClaudeProjectPath(cwd))
+  const project = (cwd = root, home = join(root, 'claude')) =>
+    join(home, 'projects', encodeClaudeProjectPath(cwd))
 
   it('finds a transcript named for the session in any project folder', async () => {
     writeStoreFile(join(project('/moved/elsewhere'), `${CLAUDE_ID}.jsonl`), CLAUDE_HEADER)
@@ -155,16 +200,29 @@ describe('Claude store', () => {
     await expect(probeSavedResumeStore(claudeQuery())).resolves.toBe('found')
   })
 
-  it('finds a differently named transcript by the session id its records carry', async () => {
-    writeStoreFile(join(project(), 'renamed.jsonl'), CLAUDE_HEADER)
-    await expect(probeSavedResumeStore(claudeQuery())).resolves.toBe('found')
+  it('finds a recorded transcript of another name after it moved to another project', async () => {
+    writeStoreFile(join(project('/moved/elsewhere'), 'renamed.jsonl'), CLAUDE_HEADER)
+    mkdirSync(project(), { recursive: true })
+    const moved = claudeQuery({
+      providerSession: {
+        key: 'session_id',
+        id: CLAUDE_ID,
+        transcriptPath: join(project(), 'renamed.jsonl')
+      }
+    })
+    await expect(probeSavedResumeStore(moved)).resolves.toBe('found')
   })
 
-  it('misses only when every transcript names another session and the folder project exists', async () => {
-    writeStoreFile(join(project(), 'other.jsonl'), CLAUDE_HEADER.replaceAll(CLAUDE_ID, 'other-id'))
-    await expect(probeSavedResumeStore(claudeQuery())).resolves.toBe('missing')
+  it('misses by filename alone, whatever the other transcripts begin with or how many there are', async () => {
     writeStoreFile(join(project(), 'older.jsonl'), CLAUDE_SUMMARY_HEADER)
-    await expect(probeSavedResumeStore(claudeQuery())).resolves.toBe('unknown')
+    for (let index = 0; index < 1_100; index += 1) {
+      writeStoreFile(
+        join(project(), `other-${index}.jsonl`),
+        CLAUDE_HEADER.replaceAll(CLAUDE_ID, `x${index}`)
+      )
+    }
+    await expect(probeSavedResumeStore(claudeQuery())).resolves.toBe('missing')
+    expect(open).not.toHaveBeenCalled()
   })
 
   it('stays unknown without the launch folder project or an existing store', async () => {
@@ -176,6 +234,122 @@ describe('Claude store', () => {
     rmSync(join(root, 'claude'), { recursive: true, force: true })
     await expect(probeSavedResumeStore(claudeQuery())).resolves.toBe('unknown')
   })
+
+  it('costs one check per project folder, so 10N folders cost 10x, and too many is unknown', async () => {
+    const checks = async (folders: number) => {
+      rmSync(join(root, 'claude'), { recursive: true, force: true })
+      mkdirSync(project(), { recursive: true })
+      for (let index = 1; index < folders; index += 1) {
+        mkdirSync(project(`/p/${index}`), { recursive: true })
+      }
+      vi.mocked(stat).mockClear()
+      await expect(probeSavedResumeStore(claudeQuery())).resolves.toBe('missing')
+      return vi.mocked(stat).mock.calls.length
+    }
+    expect([await checks(50), await checks(500)]).toEqual([50, 500])
+    for (let index = 500; index <= 5_000; index += 1) {
+      mkdirSync(project(`/p/${index}`), { recursive: true })
+    }
+    await expect(probeSavedResumeStore(claudeQuery())).resolves.toBe('unknown')
+    expect(open).not.toHaveBeenCalled()
+  })
+
+  describe('an account pane, whose shell function reads its profile pointer at launch', () => {
+    const profileHome = () => join(root, 'profile')
+    const pointer = () => join(root, 'pointer')
+    const accountQuery = (env: Record<string, string> = {}) =>
+      claudeQuery({
+        launchEnv: {
+          HOME: root,
+          SHELL: '/bin/zsh',
+          ORCA_CLAUDE_PROFILE_POINTER: pointer(),
+          ...env
+        }
+      })
+
+    beforeEach(() => {
+      // The profile keeps its own projects; the folder the spawn env names does not have it.
+      writeStoreFile(join(project(root, profileHome()), `${CLAUDE_ID}.jsonl`), CLAUDE_HEADER)
+      mkdirSync(project(), { recursive: true })
+    })
+
+    it('reads the profile the pointer names, not the injected folder', async () => {
+      writeStoreFile(pointer(), `${profileHome()}\n`)
+      const injected = join(root, 'claude')
+      await expect(
+        probeSavedResumeStore(
+          accountQuery({ CLAUDE_CONFIG_DIR: injected, ORCA_CLAUDE_INJECTED_CONFIG_DIR: injected })
+        )
+      ).resolves.toBe('found')
+    })
+
+    it.each<[string, () => void, Record<string, string>]>([
+      ['a relative pointer target', () => writeStoreFile(pointer(), 'profile'), {}],
+      ['a guest-home pointer', () => {}, { ORCA_CLAUDE_PROFILE_POINTER: '~/.orca/pointer' }]
+    ])('stays unknown for %s', async (_label, write, env) => {
+      write()
+      await expect(probeSavedResumeStore(accountQuery(env))).resolves.toBe('unknown')
+    })
+
+    posixIt('stays unknown when the pointer cannot be read', async () => {
+      writeStoreFile(pointer(), profileHome())
+      chmodSync(pointer(), 0o000)
+      try {
+        await expect(probeSavedResumeStore(accountQuery())).resolves.toBe('unknown')
+      } finally {
+        chmodSync(pointer(), 0o600)
+      }
+    })
+  })
+})
+
+describe('the check limiter', () => {
+  const openCodeQuery = () =>
+    query({
+      agent: 'opencode',
+      providerSession: { key: 'session_id', id: OPENCODE_ID },
+      launchEnv: {
+        HOME: root,
+        SHELL: '/bin/zsh',
+        XDG_DATA_HOME: join(root, 'data'),
+        OPENCODE_DB: 'opencode.db'
+      }
+    })
+  beforeEach(() => {
+    writeOpenCodeDatabase(join(root, 'data', 'opencode', 'opencode.db'), 'session_v2', [])
+  })
+
+  it('runs at most two checks at once and hands each freed slot on', async () => {
+    let inFlight = 0
+    let most = 0
+    const signals: unknown[] = []
+    worker.read = async (_request, signal) => {
+      signals.push(signal)
+      most = Math.max(most, (inFlight += 1))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      inFlight -= 1
+      return 'missing'
+    }
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => probeSavedResumeStore(openCodeQuery()))
+    )
+    expect(results).toEqual(Array(5).fill('missing'))
+    expect(most).toBe(2)
+    expect(signals.every((signal) => signal instanceof AbortSignal)).toBe(true)
+  })
+
+  it('ends a check waiting behind stuck worker reads as unknown by its deadline', async () => {
+    worker.read = (_request, signal) =>
+      new Promise((_resolve, reject) =>
+        signal?.addEventListener('abort', () => reject(signal.reason))
+      )
+    const started = Date.now()
+    const results = await Promise.all(
+      Array.from({ length: 3 }, () => probeSavedResumeStore(openCodeQuery()))
+    )
+    expect(results).toEqual(['unknown', 'unknown', 'unknown'])
+    expect(Date.now() - started).toBeLessThan(newStoreReadBudget().deadline - Date.now() + 1_000)
+  }, 10_000)
 })
 
 describe('OpenCode store', () => {

@@ -36,10 +36,11 @@ export async function openCodeStorePresence(
     }
   }
   // The presence request answers with a bare verdict string, not a transcript value.
-  const presence: unknown = await getSharedClient().readNativeChat({
-    kind: 'native-presence',
-    dbPath,
-    sessionId: query.providerSession.id
-  })
-  return presence === 'found' || presence === 'missing' ? presence : 'unknown'
+  const presence: unknown = await getSharedClient().readNativeChat(
+    { kind: 'native-presence', dbPath, sessionId: query.providerSession.id },
+    AbortSignal.timeout(Math.max(0, budget.deadline - Date.now()))
+  )
+  return (presence === 'found' || presence === 'missing') && Date.now() <= budget.deadline
+    ? presence
+    : 'unknown'
 }

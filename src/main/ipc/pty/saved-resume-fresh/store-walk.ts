@@ -1,5 +1,5 @@
 import type { Dirent } from 'node:fs'
-import { open, opendir, stat } from 'node:fs/promises'
+import { opendir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 /** `missing` only after the whole relevant store was read; any doubt is `unknown`. */
@@ -9,12 +9,11 @@ export type StorePresence = 'found' | 'missing' | 'unknown'
 export type StoreReadBudget = {
   entries: number
   directories: number
-  headBytes: number
   deadline: number
 }
 
 export function newStoreReadBudget(now = Date.now()): StoreReadBudget {
-  return { entries: 20_000, directories: 2_000, headBytes: 8 * 1024 * 1024, deadline: now + 3_000 }
+  return { entries: 20_000, directories: 2_000, deadline: now + 3_000 }
 }
 
 export class StoreReadIncomplete extends Error {}
@@ -81,24 +80,5 @@ export async function statStoreFile(path: string): Promise<StorePresence> {
     return (await stat(path)).isFile() ? 'found' : 'unknown'
   } catch (error) {
     return isDefinitiveAbsence(error) ? 'missing' : 'unknown'
-  }
-}
-
-/** The first `maxBytes` of a file, charged to the budget. */
-export async function readStoreHead(
-  path: string,
-  maxBytes: number,
-  budget: StoreReadBudget
-): Promise<string> {
-  if ((budget.headBytes -= maxBytes) < 0 || Date.now() > budget.deadline) {
-    throw new StoreReadIncomplete()
-  }
-  const handle = await open(path, 'r')
-  try {
-    const buffer = Buffer.alloc(maxBytes)
-    const { bytesRead } = await handle.read(buffer, 0, maxBytes, 0)
-    return buffer.toString('utf8', 0, bytesRead)
-  } finally {
-    await handle.close()
   }
 }
