@@ -109,6 +109,26 @@ function inactiveAccountHasWindows(limits: ProviderRateLimits): boolean {
   )
 }
 
+export function previewAccountRowUsage(input: {
+  active: boolean
+  activeLimits: ProviderRateLimits | null | undefined
+  inactive: { isFetching: boolean; rateLimits: ProviderRateLimits | null } | null | undefined
+}): InactiveAccountUsagePreview {
+  // Why: the header already has this login's session/weekly/Fable windows.
+  // iOS paints them on the active row, including system default while that
+  // row is the selection. Other rows keep their own cached read.
+  if (input.active) {
+    if (!input.activeLimits) {
+      return { kind: 'empty' }
+    }
+    return previewInactiveAccountUsage({
+      isFetching: input.activeLimits.status === 'fetching',
+      rateLimits: input.activeLimits
+    })
+  }
+  return previewInactiveAccountUsage(input.inactive)
+}
+
 export function previewInactiveAccountUsage(
   entry: { isFetching: boolean; rateLimits: ProviderRateLimits | null } | null | undefined
 ): InactiveAccountUsagePreview {

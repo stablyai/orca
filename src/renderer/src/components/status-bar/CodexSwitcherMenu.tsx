@@ -20,7 +20,7 @@ import {
   InlineUsageSignInAction,
   InlineUsageSkeleton
 } from './InlineProviderUsage'
-import { previewInactiveAccountUsage } from './usage-roster-row-state'
+import { previewAccountRowUsage } from './usage-roster-row-state'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { AccountSwitchList } from './AccountSwitchList'
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
@@ -182,14 +182,22 @@ export function CodexSwitcherMenu({
               const inactiveUsage = target.id
                 ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
                 : null
-              const inactivePreview = previewInactiveAccountUsage(inactiveUsage)
+              // Why: rows follow this desktop's codexTarget, so a remote owner's usage stays off this row.
+              const rowPreview = previewAccountRowUsage({
+                active: target.active && !hasActiveRuntimeEnvironment,
+                activeLimits: codex,
+                inactive: inactiveUsage
+              })
+              const rowFetching = target.active
+                ? codex.status === 'fetching'
+                : Boolean(inactiveUsage?.isFetching)
               // Why: sign-in spawns a local `codex login`, so a remote-owned account can't be re-authed from this desktop.
               // A probe that failed for any other reason keeps its status line instead of a login button.
               const showSignInAction =
                 !hasActiveRuntimeEnvironment &&
                 !target.active &&
                 target.id !== null &&
-                inactivePreview.kind === 'sign-in'
+                rowPreview.kind === 'sign-in'
               const isSigningIn = reauthenticatingAccountId === target.id
               const isBusy = isSwitching || reauthenticatingAccountId !== null
 
@@ -225,20 +233,15 @@ export function CodexSwitcherMenu({
                   {!showSignInAction ? (
                     <div className="flex w-full min-w-0 flex-col gap-0.5">
                       {/* Why: rows follow this desktop's codexTarget, so a remote owner's usage could land on the wrong row. */}
-                      {target.active && !hasActiveRuntimeEnvironment ? (
-                        <InlineUsageBars limits={codex} isFetching={codex.status === 'fetching'} />
-                      ) : inactivePreview.kind === 'loading' ? (
+                      {rowPreview.kind === 'loading' ? (
                         <InlineUsageSkeleton />
-                      ) : inactivePreview.kind === 'usage' ? (
-                        <InlineUsageBars
-                          limits={inactivePreview.limits}
-                          isFetching={inactiveUsage?.isFetching ?? false}
-                        />
-                      ) : inactivePreview.kind === 'message' || inactivePreview.kind === 'sign-in' ? (
+                      ) : rowPreview.kind === 'usage' ? (
+                        <InlineUsageBars limits={rowPreview.limits} isFetching={rowFetching} />
+                      ) : rowPreview.kind === 'message' || rowPreview.kind === 'sign-in' ? (
                         <span
-                          className={`text-[10px] text-muted-foreground ${inactiveUsage?.isFetching ? 'animate-pulse' : ''}`}
+                          className={`text-[10px] text-muted-foreground ${rowFetching ? 'animate-pulse' : ''}`}
                         >
-                          {inactivePreview.label}
+                          {rowPreview.label}
                         </span>
                       ) : null}
                     </div>

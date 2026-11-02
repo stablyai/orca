@@ -40,7 +40,7 @@ import {
   InlineUsageSignInAction,
   InlineUsageSkeleton
 } from './InlineProviderUsage'
-import { previewInactiveAccountUsage } from './usage-roster-row-state'
+import { previewAccountRowUsage } from './usage-roster-row-state'
 import { AccountSwitchList } from './AccountSwitchList'
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
@@ -289,7 +289,14 @@ export function ClaudeSwitcherForOwner({
           const inactiveUsage = target.id
             ? inactiveClaudeAccounts.find((a) => a.accountId === target.id)
             : null
-          const inactivePreview = previewInactiveAccountUsage(inactiveUsage)
+          const rowPreview = previewAccountRowUsage({
+            active: target.active && !hasActiveRuntimeEnvironment,
+            activeLimits: claude,
+            inactive: inactiveUsage
+          })
+          const rowFetching = target.active
+            ? claude?.status === 'fetching'
+            : Boolean(inactiveUsage?.isFetching)
           // Why local only: the hidden sign-in runs on this device, not a remote server.
           const signInId = target.needsSignIn && !hasActiveRuntimeEnvironment ? target.id : null
 
@@ -329,18 +336,15 @@ export function ClaudeSwitcherForOwner({
                   {target.hint ? (
                     <span className="text-3xs leading-4 text-muted-foreground">{target.hint}</span>
                   ) : null}
-                  {inactivePreview.kind === 'loading' ? (
+                  {rowPreview.kind === 'loading' ? (
                     <InlineUsageSkeleton />
-                  ) : inactivePreview.kind === 'usage' ? (
-                    <InlineUsageBars
-                      limits={inactivePreview.limits}
-                      isFetching={inactiveUsage?.isFetching ?? false}
-                    />
-                  ) : inactivePreview.kind === 'message' || inactivePreview.kind === 'sign-in' ? (
+                  ) : rowPreview.kind === 'usage' ? (
+                    <InlineUsageBars limits={rowPreview.limits} isFetching={rowFetching} />
+                  ) : rowPreview.kind === 'message' || rowPreview.kind === 'sign-in' ? (
                     <span
-                      className={`text-[10px] text-muted-foreground ${inactiveUsage?.isFetching ? 'animate-pulse' : ''}`}
+                      className={`text-[10px] text-muted-foreground ${rowFetching ? 'animate-pulse' : ''}`}
                     >
-                      {inactivePreview.label}
+                      {rowPreview.label}
                     </span>
                   ) : null}
                 </div>
