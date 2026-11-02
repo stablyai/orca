@@ -3,6 +3,7 @@ import {
   PREVIOUS_MESSAGE_ALIGN_PX,
   endAnchoredScrollTopForRow,
   isPreviousMessageStop,
+  previousMessageChained,
   previousMessageTarget,
   trailingStopAboveViewport,
   type PreviousMessageStop
@@ -102,5 +103,27 @@ describe('trailing stop above the viewport', () => {
     expect(
       trailingStopAboveViewport(stops(undefined, -20), 'm1', at({ m0: 1, m1: 4 }), 8)
     ).toBeNull()
+  })
+})
+
+describe('chained previous message', () => {
+  const settled = stops(-400, -120, -40, 80)
+
+  it('steps one message past the in-flight target while that target is still above the fold', () => {
+    const midJump = stops(-390, -110, -30, 90)
+    expect(previousMessageTarget(midJump)).toEqual({ key: 'm2' })
+    expect(previousMessageChained(midJump, 'm2')).toEqual({ key: 'm1' })
+    expect(previousMessageChained(settled, 'm2')).toEqual({ key: 'm1' })
+  })
+
+  it('keeps stepping one message per tap from the committed target', () => {
+    expect(previousMessageChained(settled, 'm1')).toEqual({ key: 'm0' })
+    expect(previousMessageChained(settled, 'm0')).toBeNull()
+  })
+
+  it('steps back from an unmeasured in-flight target by document order', () => {
+    expect(previousMessageChained(stops(-20, undefined), 'm1')).toEqual({ key: 'm0' })
+    expect(previousMessageChained(stops(undefined, undefined), 'm1')).toEqual({ pendingKey: 'm0' })
+    expect(previousMessageChained(stops(undefined), 'm0')).toBeNull()
   })
 })

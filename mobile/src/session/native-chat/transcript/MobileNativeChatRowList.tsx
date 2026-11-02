@@ -23,6 +23,7 @@ import type { MobileNativeChatRowKeys } from './mobile-native-chat-row-keys'
 import { MobileNativeChatPageList } from './MobileNativeChatPageList'
 import {
   PREVIOUS_MESSAGE_ALIGN_PX,
+  previousMessageChained,
   previousMessageTarget,
   trailingStopAboveViewport
 } from './mobile-native-chat-previous-message'
@@ -36,11 +37,24 @@ type NativeJumpBag = {
   layouts: Map<string, number>
   contentOffsetY: number
   retry: { key: string; index: number; left: number; animated: boolean } | null
+  /** Row this jump is bringing to the top. A second tap steps from it, not the live offset. */
+  inflightKey: string | null
+  /** Programmatic stop and jump scrolls are not a finger drag. */
+  ownScroll: boolean
   refreshFrame: number
   rows: readonly NativeChatMessage[]
   keyOf: (row: NativeChatMessage) => string
   refresh: () => void
   flatRef: RefObject<FlatList<NativeChatMessage> | null>
+}
+
+function withOwnedScroll(jump: NativeJumpBag, run: () => void): void {
+  jump.ownScroll = true
+  try {
+    run()
+  } finally {
+    jump.ownScroll = false
+  }
 }
 
 const NativeJumpContext = createContext<NativeJumpBag | null>(null)
@@ -97,7 +111,9 @@ function PreviousMessageCell({
           const pending = bag.retry
           if (pending?.key === key) {
             bag.retry = null
-            bag.flatRef.current?.scrollToOffset({ offset: y, animated: false })
+            withOwnedScroll(bag, () => {
+              bag.flatRef.current?.scrollToOffset({ offset: y, animated: false })
+            })
           }
         }
         if (bag.refreshFrame === 0) {
@@ -170,6 +186,8 @@ function MobileNativeChatNativeRowList({
       layouts: new Map(),
       contentOffsetY: 0,
       retry: null,
+      inflightKey: null,
+      ownScroll: false,
       refreshFrame: 0,
       rows,
       keyOf: rowKeys.keyOf,
@@ -193,57 +211,83 @@ function MobileNativeChatNativeRowList({
       scrollToEnd: (params) => {
         // A later layout of the old row must not pull the reader back.
         jump.retry = null
+        jump.inflightKey = null
         flatRef.current?.scrollToEnd(params)
       },
       scrollToOffset: (params) => {
         jump.retry = null
+        jump.inflightKey = null
         flatRef.current?.scrollToOffset(params)
       },
       hasPreviousMessage: (keys) => previousMessageTarget(measure(keys)) !== null,
       revealPreviousMessage: (keys, animated) => {
+        const fromKey = jump.inflightKey
+        if (!fromKey) {
+          // Stop a fling or streaming follow before reading tops, or the target moves under the tap.
+          withOwnedScroll(jump, () => {
+            flatRef.current?.scrollToOffset({ offset: jump.contentOffsetY, animated: false })
+          })
+        }
         const measured = measure(keys)
-        const target = previousMessageTarget(measured)
+        const target = fromKey
+          ? previousMessageChained(measured, fromKey)
+          : previousMessageTarget(measured)
         if (!target) {
           return
         }
         const rowIndex = new Map(jump.rows.map((row, index) => [jump.keyOf(row), index]))
-        let visibleAt: number | null = null
-        for (const [index, row] of jump.rows.entries()) {
-          const y = jump.layouts.get(jump.keyOf(row))
-          if (y !== undefined && y - jump.contentOffsetY >= -PREVIOUS_MESSAGE_ALIGN_PX) {
-            visibleAt = index
-            break
+        let chosen = target
+        if (!fromKey && 'key' in target) {
+          let visibleAt: number | null = null
+          for (const [index, row] of jump.rows.entries()) {
+            const y = jump.layouts.get(jump.keyOf(row))
+            if (y !== undefined && y - jump.contentOffsetY >= -PREVIOUS_MESSAGE_ALIGN_PX) {
+              visibleAt = index
+              break
+            }
+          }
+          const trailing =
+            visibleAt === null
+              ? null
+              : trailingStopAboveViewport(
+                  measured,
+                  target.key,
+                  (key) => rowIndex.get(key) ?? -1,
+                  visibleAt
+                )
+          if (trailing !== null) {
+            chosen = { pendingKey: trailing }
           }
         }
-        const trailing =
-          visibleAt !== null && 'key' in target
-            ? trailingStopAboveViewport(
-                measured,
-                target.key,
-                (key) => rowIndex.get(key) ?? -1,
-                visibleAt
-              )
-            : null
-        const chosen = trailing === null ? target : { pendingKey: trailing }
         const key = 'key' in chosen ? chosen.key : chosen.pendingKey
         const index = rowIndex.get(key) ?? -1
         if (index === -1) {
           return
         }
         const y = jump.layouts.get(key)
-        if (y !== undefined && 'key' in chosen && (y > 0 || index === 0)) {
-          jump.retry = null
-          flatRef.current?.scrollToOffset({ offset: y, animated })
-          return
+        // Commit the next row before stopping, so the stop's momentum end is not "landed".
+        jump.inflightKey = key
+        if (fromKey) {
+          withOwnedScroll(jump, () => {
+            flatRef.current?.scrollToOffset({ offset: jump.contentOffsetY, animated: false })
+          })
         }
-        jump.retry = { key, index, left: 2, animated }
-        flatRef.current?.scrollToIndex({ index, viewPosition: 0, animated })
+        withOwnedScroll(jump, () => {
+          if (y !== undefined && 'key' in chosen && (y > 0 || index === 0)) {
+            jump.retry = null
+            flatRef.current?.scrollToOffset({ offset: y, animated })
+            return
+          }
+          jump.retry = { key, index, left: 2, animated }
+          flatRef.current?.scrollToIndex({ index, viewPosition: 0, animated })
+        })
       }
     }
     attach(handle)
     return () => {
       attach(null)
       jump.retry = null
+      jump.inflightKey = null
       if (jump.refreshFrame !== 0) {
         cancelAnimationFrame(jump.refreshFrame)
         jump.refreshFrame = 0
@@ -276,29 +320,46 @@ function MobileNativeChatNativeRowList({
           pending.left -= 1
           // averageItemLength 0 would scroll to the top and drop the pending row.
           if (info.averageItemLength > 0) {
-            flatRef.current?.scrollToOffset({
-              offset: info.averageItemLength * info.index,
-              animated: pending.animated
+            withOwnedScroll(jump, () => {
+              flatRef.current?.scrollToOffset({
+                offset: info.averageItemLength * info.index,
+                animated: pending.animated
+              })
             })
           }
           requestAnimationFrame(() => {
             if (jump.retry !== pending) {
               return
             }
-            flatRef.current?.scrollToIndex({
-              index: info.index,
-              viewPosition: 0,
-              animated: pending.animated
+            withOwnedScroll(jump, () => {
+              flatRef.current?.scrollToIndex({
+                index: info.index,
+                viewPosition: 0,
+                animated: pending.animated
+              })
             })
           })
         }}
         onScrollBeginDrag={() => {
+          if (jump.ownScroll) {
+            return
+          }
           jump.retry = null
+          jump.inflightKey = null
           tail.beginUserScroll()
         }}
         onScrollEndDrag={tail.endUserDrag}
         onMomentumScrollBegin={tail.beginMomentum}
-        onMomentumScrollEnd={tail.endMomentum}
+        onMomentumScrollEnd={(event) => {
+          const offset = event.nativeEvent.contentOffset.y
+          jump.contentOffsetY = offset
+          const landed = jump.inflightKey ? jump.layouts.get(jump.inflightKey) : undefined
+          // The stop along the way is short of the committed row. Only a real landing ends the chain.
+          if (landed !== undefined && Math.abs(offset - landed) <= PREVIOUS_MESSAGE_ALIGN_PX) {
+            jump.inflightKey = null
+          }
+          tail.endMomentum(event)
+        }}
         scrollEventThrottle={32}
         onContentSizeChange={tail.pinToTailAfterContentResize}
         onLayout={tail.pinToTail}

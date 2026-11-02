@@ -102,6 +102,44 @@ export function trailingStopAboveViewport(
   return pending
 }
 
+/**
+ * Pose once `alignedKey` sits on the viewport top. Relative tops stay put, so a second tap
+ * during the jump steps from the destination instead of the in-between offset.
+ */
+export function stopsAsIfAligned(
+  stops: readonly PreviousMessageStop[],
+  alignedKey: string
+): PreviousMessageStop[] | null {
+  const aligned = stops.find((stop) => stop.key === alignedKey)
+  if (aligned?.top === undefined) {
+    return null
+  }
+  const shift = aligned.top
+  return stops.map((stop) =>
+    stop.top === undefined ? stop : { key: stop.key, top: stop.top - shift }
+  )
+}
+
+/** The previous message after `fromKey` has been brought to the viewport top. */
+export function previousMessageChained(
+  stops: readonly PreviousMessageStop[],
+  fromKey: string
+): PreviousMessageTarget | null {
+  const posed = stopsAsIfAligned(stops, fromKey)
+  if (posed) {
+    return previousMessageTarget(posed)
+  }
+  const index = stops.findIndex((stop) => stop.key === fromKey)
+  if (index <= 0) {
+    return null
+  }
+  const earlier = stops[index - 1]
+  if (!earlier) {
+    return null
+  }
+  return earlier.top === undefined ? { pendingKey: earlier.key } : { key: earlier.key }
+}
+
 /** End-anchored scrollTop: more negative moves toward older rows. `rowTop` and `viewTop` share a viewport. */
 export function endAnchoredScrollTopForRow(
   scrollTop: number,
