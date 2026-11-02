@@ -16,6 +16,8 @@ import {
 import { callPlugins, requirePluginKey, resolveHostPluginPath, stringFlag } from './plugin-runtime'
 import { defaultPluginShotsDir } from './plugin-shot-default-dir'
 import { takePluginScenarioShot } from './plugin-shot-scenario'
+import { runPluginEditorShot } from './plugin-shot-editor'
+import { chromeShotRegion, runPluginChromeShot } from './plugin-shot-chrome'
 
 /** What `plugins.shot` answers; `png` is base64. */
 export type PluginShotReply = {
@@ -263,16 +265,42 @@ export const PLUGIN_VIEW_HANDLERS: Record<string, CommandHandler> = {
     )
   },
   'plugin shot': async (ctx) => {
+    const region = chromeShotRegion(ctx)
     const scenario = stringFlag(ctx, 'scenario')
+    if (scenario !== undefined && stringFlag(ctx, 'editor') !== undefined) {
+      throw new RuntimeClientError('invalid_argument', 'Pass --scenario or --editor, not both.')
+    }
     if (scenario !== undefined) {
       await scenarioShot(ctx, scenario)
       return
     }
-    const pluginKey = requirePluginKey(ctx)
     const colorScheme = parseTheme(ctx)
     const out = stringFlag(ctx, 'out')
     const outPath = out === undefined ? null : resolveLocalShotPath(ctx, out)
     const shotsDir = resolveLocalShotPath(ctx, defaultPluginShotsDir(ctx.cwd))
+    if (region) {
+      return runPluginChromeShot(ctx, { region, colorScheme, out: outPath, shotsDir })
+    }
+    const editor = stringFlag(ctx, 'editor')
+    if (editor !== undefined) {
+      if (stringFlag(ctx, 'panel') !== undefined) {
+        throw new RuntimeClientError('invalid_argument', 'Pass --panel or --editor, not both.')
+      }
+      await runPluginEditorShot(ctx, {
+        editor,
+        ...(colorScheme === undefined ? {} : { colorScheme }),
+        out: outPath,
+        shotsDir
+      })
+      return
+    }
+    if (stringFlag(ctx, 'height') !== undefined || ctx.flags.has('in-place')) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--height and --in-place are for an editor shot (--editor).'
+      )
+    }
+    const pluginKey = requirePluginKey(ctx)
     const panelId = stringFlag(ctx, 'panel')
     const width = parseWidth(ctx)
     const acts = parseActs(ctx)

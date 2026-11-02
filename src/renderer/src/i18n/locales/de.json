@@ -1764,7 +1764,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "Die strukturierte Agenten-Sitzung ist noch nicht verfügbar. In Kürze erneut versuchen.",
         "gone": "Dieser Chat befindet sich nicht mehr auf diesem Host und kann hier daher nicht erneut geöffnet werden.",
-        "hostCannotOpen": "Dieser Chat kann erst nach einer Aktualisierung von Orca erneut geöffnet werden."
+        "hostCannotOpen": "Dieser Chat kann erst nach einer Aktualisierung von Orca erneut geöffnet werden.",
+        "worktreeDeleted": "Der Worktree wurde gelöscht.",
+        "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Rezepte mit bereitgestelltem Stammverzeichnis unterstützen keinen Sparse-Checkout."
@@ -13990,6 +13992,7 @@
                 "baseCommitLabel": "Basis-Commit:",
                 "failingChecks_one": "{{count}} fehlgeschlagener Check",
                 "failingChecks_other": "{{count}} fehlgeschlagene Checks",
+                "pipelineFailed": "{{name}} fehlgeschlagen",
                 "pendingChecks_one": "{{count}} Check ausstehend",
                 "pendingChecks_other": "{{count}} Checks ausstehend",
                 "unresolvedChecks_one": "{{count}} Check ungeklärt",
@@ -20439,7 +20442,23 @@
     "newWorkspace": {
       "agentOptional": "Agent [optional]",
       "createDescription": "Projekt und Namen des Arbeitsbereichs auswählen. Optional einen Agenten zum Starten auswählen.",
-      "setupOnly": "Nur Einrichtung"
+      "setupOnly": "Nur Einrichtung",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Auswählen, ob die Einrichtung vor dem Erstellen dieses Arbeitsbereichs ausgeführt werden soll.",
+        "cancel": "Abbrechen",
+        "retry": "Erneut versuchen",
+        "setupScript": "Einrichtungsskript",
+        "defaultTabCommands": "Standard-Tab-Befehle",
+        "setupAndDefaultTabs": "Einrichtung und Standard-Tab-Befehle",
+        "askRunSetup": "Einrichtung jetzt ausführen?",
+        "askRunDefaultTabs": "Standard-Tab-Befehle jetzt ausführen?",
+        "askRunSetupAndDefaultTabs": "Einrichtung und Standard-Tab-Befehle jetzt ausführen?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + lokal",
+        "localSource": "Lokale Einstellungen"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Eine weitere Issue-Änderung ist in Bearbeitung."
@@ -21172,6 +21191,7 @@
     "scanIssues": {
       "issuesOmitted": "Weitere Probleme beim Scannen wurden ausgelassen.",
       "sessionMetadataUnreadable": "Sitzungsmetadaten konnten bei diesem Scan nicht gelesen werden.",
+      "transcriptTooLarge": "Eine Unterhaltung mit {{label}} ist zu groß, um im Sitzungsverlauf geladen zu werden. Stattdessen direkt in {{label}} fortsetzen, falls möglich.",
       "openCodeScannerUnavailable": "Der OpenCode-Verlauf wurde übersprungen, weil der Hintergrundscanner nicht starten konnte; die App reagiert weiterhin.",
       "openCodeScanIncomplete": "Der Scan des OpenCode-Verlaufs wurde nicht abgeschlossen: {{detail}}",
       "openCodeWslReaderPreparing": "Das SQLite-Leseprogramm für WSL wird vorbereitet. Nach Abschluss der Einrichtung Vault aktualisieren.",

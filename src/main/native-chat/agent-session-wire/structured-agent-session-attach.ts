@@ -1,7 +1,7 @@
 import { activeProviderContext } from '../../../shared/agent-session/agent-session-provider-context'
 // Store CAS and idempotency rows make retried create/ensure replay instead of reserving another owner.
 
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import type {
   StructuredAgentId,

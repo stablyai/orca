@@ -1742,7 +1742,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "Yapılandırılmış ajan oturumu henüz kullanılamıyor. Bir süre sonra tekrar deneyin.",
         "gone": "Bu sohbet artık bu sunucuda değil, bu yüzden burada yeniden açılamıyor.",
-        "hostCannotOpen": "Orca güncellenene kadar bu sohbet yeniden açılamaz."
+        "hostCannotOpen": "Orca güncellenene kadar bu sohbet yeniden açılamaz.",
+        "worktreeDeleted": "Çalışma ağacı silindi.",
+        "folderWorkspaceRemoved": "Klasör çalışma alanı kaldırıldı."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Sağlanmış kök tarifleri sparse checkout'u desteklemez."
@@ -13976,6 +13978,7 @@
                 "baseCommitLabel": "temel commit:",
                 "failingChecks_one": "{{count}} başarısız kontrol",
                 "failingChecks_other": "{{count}} başarısız kontrol",
+                "pipelineFailed": "{{name}} başarısız oldu",
                 "pendingChecks_one": "{{count}} kontrol bekliyor",
                 "pendingChecks_other": "{{count}} kontrol bekliyor",
                 "unresolvedChecks_one": "{{count}} çözülmemiş kontrol",
@@ -20423,7 +20426,23 @@
     "newWorkspace": {
       "agentOptional": "Ajan [İsteğe bağlı]",
       "createDescription": "Projeyi ve çalışma alanı adını seçin. Bir ajan başlatmak istiyorsanız ajan seçin.",
-      "setupOnly": "Yalnızca kurulum"
+      "setupOnly": "Yalnızca kurulum",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Bu çalışma alanını oluşturmadan önce setup çalıştırılıp çalıştırılmayacağını seçin.",
+        "cancel": "İptal",
+        "retry": "Yeniden dene",
+        "setupScript": "Kurulum betiği",
+        "defaultTabCommands": "Varsayılan sekme komutları",
+        "setupAndDefaultTabs": "Kurulum ve varsayılan sekme komutları",
+        "askRunSetup": "Kurulum şimdi çalıştırılsın mı?",
+        "askRunDefaultTabs": "Varsayılan sekme komutları şimdi çalıştırılsın mı?",
+        "askRunSetupAndDefaultTabs": "Kurulum ve varsayılan sekme komutları şimdi çalıştırılsın mı?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + yerel",
+        "localSource": "yerel ayarlar"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Başka bir sorun değişikliği devam ediyor."
@@ -21155,6 +21174,7 @@
     "scanIssues": {
       "issuesOmitted": "Ek tarama sorunları gösterilmedi.",
       "sessionMetadataUnreadable": "Bu taramada oturum meta verileri okunamadı.",
+      "transcriptTooLarge": "Bir {{label}} konuşması Oturum Geçmişi'nde yüklenemeyecek kadar büyük. Doğrudan {{label}} içinde sürdürmeyi deneyin.",
       "openCodeScannerUnavailable": "Arka plan tarayıcısı başlatılamadığı için OpenCode geçmişi atlandı; uygulama yanıt vermeye devam ediyor.",
       "openCodeScanIncomplete": "OpenCode geçmiş taraması tamamlanamadı: {{detail}}",
       "openCodeWslReaderPreparing": "WSL SQLite okuyucusu hazırlanıyor. Kurulum tamamlandıktan sonra Vault bölümünü yenileyin.",

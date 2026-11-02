@@ -1543,7 +1543,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "La session d'agent structuré n'est pas encore disponible. Réessayez dans un instant.",
         "gone": "Ce chat n'est plus sur cet hôte, il ne peut donc pas être rouvert ici.",
-        "hostCannotOpen": "Ce chat ne peut pas être rouvert tant qu'Orca n'est pas mis à jour."
+        "hostCannotOpen": "Ce chat ne peut pas être rouvert tant qu'Orca n'est pas mis à jour.",
+        "worktreeDeleted": "Le worktree a été supprimé.",
+        "folderWorkspaceRemoved": "L’espace de travail de type dossier a été retiré."
       },
       "worktreeJumpNavigation": {
         "filteredNotice": "Cet arbre de travail est masqué par les filtres de la barre latérale. L'espace de travail a été ouvert, mais il n'est pas affiché dans Spaces."
@@ -13911,6 +13913,7 @@
                 "failingChecks_one": "{{count}} vérification en échec",
                 "failingChecks_other": "{{count}} vérifications en échec",
                 "failingChecks_many": "{{count}} vérifications en échec",
+                "pipelineFailed": "{{name}} a échoué",
                 "pendingChecks_one": "{{count}} vérification en attente",
                 "pendingChecks_other": "{{count}} vérifications en attente",
                 "pendingChecks_many": "{{count}} vérifications en attente",
@@ -20542,7 +20545,23 @@
     "newWorkspace": {
       "agentOptional": "Agent (facultatif)",
       "createDescription": "Choisissez le projet et le nom de l'espace de travail. Sélectionnez un agent si vous souhaitez en démarrer un.",
-      "setupOnly": "Configuration uniquement"
+      "setupOnly": "Configuration uniquement",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Choisissez si le setup doit être exécuté avant de créer cet espace de travail.",
+        "cancel": "Annuler",
+        "retry": "Réessayer",
+        "setupScript": "Script de setup",
+        "defaultTabCommands": "Commandes des onglets par défaut",
+        "setupAndDefaultTabs": "Setup et commandes des onglets par défaut",
+        "askRunSetup": "Exécuter le setup maintenant ?",
+        "askRunDefaultTabs": "Exécuter les commandes des onglets par défaut maintenant ?",
+        "askRunSetupAndDefaultTabs": "Exécuter le setup et les commandes des onglets par défaut maintenant ?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + local",
+        "localSource": "paramètres locaux"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Une autre modification d'issue est en cours."
@@ -21481,6 +21500,7 @@
     "scanIssues": {
       "issuesOmitted": "D’autres problèmes d’analyse ont été omis.",
       "sessionMetadataUnreadable": "Les métadonnées des sessions n’ont pas pu être lues lors de cette analyse.",
+      "transcriptTooLarge": "Une conversation {{label}} est trop volumineuse pour être chargée dans l'historique des sessions. Essayez de la reprendre directement dans {{label}}.",
       "openCodeScannerUnavailable": "L’historique OpenCode a été ignoré, car son analyseur en arrière-plan n’a pas pu démarrer ; l’application reste réactive.",
       "openCodeScanIncomplete": "L’analyse de l’historique OpenCode ne s’est pas terminée : {{detail}}",
       "openCodeWslReaderPreparing": "Préparation du lecteur SQLite WSL. Actualisez Vault une fois la configuration terminée.",

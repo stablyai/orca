@@ -46,6 +46,7 @@ export type {
   PluginHostStatus
 } from '../../shared/plugins/plugin-list-entry'
 import type { PluginHostListEntry } from '../../shared/plugins/plugin-list-entry'
+import type { PluginStatusBarOverrides } from '../../shared/plugins/contributions/plugin-status-bar-state'
 import type { PluginDeclaredSettingsSnapshot } from '../../shared/plugins/contributions/plugin-settings-values'
 import type { PluginJsonValue } from '../../shared/plugins/workers/plugin-host-api'
 
@@ -178,6 +179,8 @@ export type PluginsApi = {
     pluginKey: string
     commandId: string
     args?: unknown
+    /** Refused unless the worker can start it within this many ms; older hosts ignore it. */
+    timeoutMs?: number
   }) => Promise<unknown>
   /** One frame host call; main enforces consented capabilities and the frame's surface. */
   panelAction: (args: {
@@ -260,6 +263,9 @@ export type PluginsApi = {
   onInstallCountsChanged: (callback: () => void) => () => void
   /** Fires after each automatic update pass, with the plugins it just updated. */
   onAutoUpdateChanged: (callback: (event: PluginAutoUpdateEvent) => void) => () => void
+  /** What workers set with `statusBar.update`. Desktop only; older hosts reject. */
+  statusBarState?: () => Promise<PluginStatusBarOverrides>
+  onStatusBarChanged?: (callback: (overrides: PluginStatusBarOverrides) => void) => () => void
 }
 
 export type PluginAutoUpdateEvent = {

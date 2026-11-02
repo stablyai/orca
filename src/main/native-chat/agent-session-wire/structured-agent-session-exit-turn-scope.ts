@@ -3,7 +3,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   journalLifecycleMutationItemId,

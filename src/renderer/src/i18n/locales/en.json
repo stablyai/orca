@@ -1854,7 +1854,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "The structured agent session is not available yet. Retry in a moment.",
         "gone": "This chat is no longer on this host, so it cannot be reopened here.",
-        "hostCannotOpen": "This chat can't be reopened until Orca is updated."
+        "hostCannotOpen": "This chat can't be reopened until Orca is updated.",
+        "worktreeDeleted": "The worktree was deleted.",
+        "folderWorkspaceRemoved": "The folder workspace was removed."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Provisioned-root recipes do not support sparse checkout."
@@ -2145,6 +2147,9 @@
         "fcbee32f08": "Telemetry notice"
       },
       "GitHubItemDialog": {
+        "refreshTask": "Refresh task",
+        "refreshTaskFailed": "Unable to refresh this task. Try again.",
+        "refreshTaskUnsupported": "Update Orca on this server to refresh tasks here.",
         "3cd5ae5b7b": "No files changed.",
         "filesUnavailable": "Couldn't load changed files.",
         "filesRetry": "Retry",
@@ -12023,7 +12028,10 @@
             "secrets": "Store its own encrypted secrets",
             "settingsOwn": "Read and change its own settings",
             "agentsRead": "Get notified when agent status changes",
-            "terminalRun": "Run commands in your terminals, including SSH"
+            "terminalRun": "Run commands in your terminals, including SSH",
+            "terminalRead": "Read the output of your terminals, including SSH",
+            "workspaceWrite": "Open your workspaces and files, and run built-in commands",
+            "agentLaunch": "Start agents in your workspaces, including SSH"
           },
           "decisionFailed": "Could not save the permission decision. Try again.",
           "fullAccessWarning": "Full access: runs as a normal program and can read your files, use the network and run other programs.",
@@ -13303,7 +13311,8 @@
           "newContributions": "Features that act for you",
           "allAccess": "See all access",
           "update": "Update",
-          "review": "Review"
+          "review": "Review",
+          "replacesAction": "{{value0}} runs instead of Orca’s {{value1}}"
         },
         "PluginDetailInfo": {
           "previous": "Previous",
@@ -13327,7 +13336,8 @@
           "languageCoverage": "Interface language · {{value0}}% translated",
           "newFileMenu": "Adds to the + menu",
           "editorReplacesViewer": "Opens {{value0}} instead of Orca’s viewer",
-          "editorMayReplaceViewer": "May open {{value0}} instead of Orca’s viewer"
+          "editorMayReplaceViewer": "May open {{value0}} instead of Orca’s viewer",
+          "statusBar": "Status bar"
         },
         "PluginCardAction": {
           "installed": "Installed",
@@ -13343,7 +13353,8 @@
           "replacesShortcut": "{{value0}} ({{value1}}) replaces your shortcut for {{value2}}.",
           "updatesKeepApproval": "Updates ask again only for new access",
           "fullAccessUpdates": "Updates can change its code without asking",
-          "editsFileTypes": "Opens and edits {{value0}} files in Orca. It can read the files it opens."
+          "editsFileTypes": "Opens and edits {{value0}} files in Orca. It can read the files it opens.",
+          "replacesAction": "{{value0}} runs instead of Orca’s {{value1}}. You can switch it back in its plugin page."
         },
         "PluginPageAction": {
           "failedTitle": "Couldn’t install {{value0}}",
@@ -14180,6 +14191,7 @@
                 "baseCommitLabel": "base commit:",
                 "failingChecks_one": "{{count}} failing check",
                 "failingChecks_other": "{{count}} failing checks",
+                "pipelineFailed": "{{name}} failed",
                 "pendingChecks_one": "{{count}} check pending",
                 "pendingChecks_other": "{{count}} checks pending",
                 "unresolvedChecks_one": "{{count}} check unresolved",
@@ -17044,6 +17056,12 @@
         },
         "richMarkdownBlobImagePaste": {
           "saveFailed": "Couldn't save a pasted image beside the document. It may not load after Orca restarts."
+        },
+        "PluginEditorNeedsDesktopNotice": {
+          "browser": "{{value0}} runs only in an isolated frame, which browser clients cannot give it.",
+          "isolationOff": "{{value0}} runs only in an isolated frame, and isolated plugin frames are turned off.",
+          "heading": "This editor needs the Orca desktop app",
+          "openSource": "Open Source"
         }
       },
       "diff": {
@@ -19126,6 +19144,12 @@
           "Tree": {
             "loading": "Loading…"
           }
+        },
+        "PluginCommandReplacementRow": {
+          "title": "{{value0}} runs instead of Orca’s {{value1}}",
+          "conflict": "Not used: {{value0}}, installed first, replaces it",
+          "detail": "From its shortcut, the palette and menus. If the plugin fails, Orca’s own runs.",
+          "switch": "Use {{value0}} instead of Orca’s {{value1}}"
         }
       }
     },
@@ -20712,7 +20736,24 @@
     "newWorkspace": {
       "agentOptional": "Agent [Optional]",
       "createDescription": "Choose the project and workspace name. Select an agent if you want to start one.",
-      "setupOnly": "Setup only"
+      "setupOnly": "Setup only",
+      "setupCheckFailed": "Could not check setup configuration. Try again.",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Choose whether to run setup before creating this workspace.",
+        "cancel": "Cancel",
+        "retry": "Retry",
+        "setupScript": "Setup script",
+        "askRunSetup": "Run setup now?",
+        "defaultTabCommands": "Default tab commands",
+        "askRunDefaultTabs": "Run default tab commands now?",
+        "setupAndDefaultTabs": "Setup and default tab commands",
+        "askRunSetupAndDefaultTabs": "Run setup and default tab commands now?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + local",
+        "localSource": "local settings"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Another issue change is in progress."
@@ -21457,6 +21498,7 @@
     "scanIssues": {
       "issuesOmitted": "Additional scan issues were omitted.",
       "sessionMetadataUnreadable": "Session metadata could not be read this scan.",
+      "transcriptTooLarge": "A {{label}} conversation is too large to load in Session History. Try resuming it in {{label}} directly.",
       "openCodeScannerUnavailable": "OpenCode history was skipped because its background scanner could not start; the app remains responsive.",
       "openCodeScanIncomplete": "OpenCode history scan did not complete: {{detail}}",
       "openCodeWslReaderPreparing": "Preparing the WSL SQLite reader. Refresh Vault after setup finishes.",

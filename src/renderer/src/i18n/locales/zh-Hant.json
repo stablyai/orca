@@ -1714,7 +1714,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "結構化代理程式工作階段尚不可用。稍後重試。",
         "gone": "此聊天不再在此主機上，因此無法在此處重新開啟。",
-        "hostCannotOpen": "在 Orca 更新之前，無法重新開啟此聊天。"
+        "hostCannotOpen": "在 Orca 更新之前，無法重新開啟此聊天。",
+        "worktreeDeleted": "工作樹已刪除。",
+        "folderWorkspaceRemoved": "資料夾工作區已移除。"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "使用已佈建根目錄的配方不支援稀疏檢出。"
@@ -13803,6 +13805,7 @@
                 "baseCommitLabel": "基準提交：",
                 "failingChecks_one": "{{count}} 項檢查失敗",
                 "failingChecks_other": "{{count}} 項檢查失敗",
+                "pipelineFailed": "{{name}} 失敗",
                 "pendingChecks_one": "{{count}} 項檢查待處理",
                 "pendingChecks_other": "{{count}} 項檢查待處理",
                 "unresolvedChecks_one": "{{count}} 項檢查尚未解決",
@@ -20125,7 +20128,23 @@
     "newWorkspace": {
       "agentOptional": "代理程式 [選填]",
       "createDescription": "選擇專案和工作區名稱。如果想啟動代理程式，請選擇一個。",
-      "setupOnly": "僅設定"
+      "setupOnly": "僅設定",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "選擇是否在建立此工作區前執行設定。",
+        "cancel": "取消",
+        "retry": "重試",
+        "setupScript": "設定指令碼",
+        "defaultTabCommands": "預設分頁指令",
+        "setupAndDefaultTabs": "設定及預設分頁指令",
+        "askRunSetup": "立即執行設定？",
+        "askRunDefaultTabs": "立即執行預設分頁指令？",
+        "askRunSetupAndDefaultTabs": "立即執行設定及預設分頁指令？",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + 本機",
+        "localSource": "本機設定"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "另一個議題更改正在進行中。"
@@ -20852,6 +20871,7 @@
     "scanIssues": {
       "issuesOmitted": "已省略其他掃描問題。",
       "sessionMetadataUnreadable": "本次掃描無法讀取工作階段後設資料。",
+      "transcriptTooLarge": "有一個 {{label}} 對話過大，無法在工作階段歷史記錄中載入。請嘗試直接在 {{label}} 中繼續該對話。",
       "openCodeScannerUnavailable": "由於無法啟動背景掃描器，已跳過 OpenCode 歷史記錄；應用程式仍可正常回應。",
       "openCodeScanIncomplete": "OpenCode 歷史記錄掃描未完成：{{detail}}",
       "openCodeWslReaderPreparing": "正在準備 WSL SQLite 讀取器。設定完成後請重新整理 Vault。",

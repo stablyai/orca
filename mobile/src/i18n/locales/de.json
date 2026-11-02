@@ -2497,6 +2497,10 @@
       "terminal": "Terminal",
       "tapToFocusPane": "{{title}}, zum Fokussieren tippen",
       "inputPane": "{{title}} · Eingabe"
+    },
+    "structuredOpen": {
+      "worktreeDeleted": "Der Worktree wurde gelöscht.",
+      "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt."
     }
   },
   "settings": {

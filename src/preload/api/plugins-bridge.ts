@@ -8,6 +8,10 @@ import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-p
 import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
 import type { PluginChangeEvent } from '../../shared/plugins/events/plugin-change-event'
 import {
+  PLUGIN_STATUS_BAR_CHANGED_CHANNEL,
+  type PluginStatusBarOverrides
+} from '../../shared/plugins/contributions/plugin-status-bar-state'
+import {
   PLUGIN_VIEW_REPLY_CHANNEL,
   PLUGIN_VIEW_REQUEST_CHANNEL,
   type PluginViewRequest
@@ -46,8 +50,12 @@ export const pluginsApi = {
   }): Promise<PluginFrameEntry | null> => ipcRenderer.invoke('plugins:readCustomEditorEntry', args),
   readNewFileTemplate: (args: { pluginKey: string; newFileId: string }): Promise<string | null> =>
     ipcRenderer.invoke('plugins:readNewFileTemplate', args),
-  invokeCommand: (args: { pluginKey: string; commandId: string; args?: unknown }) =>
-    ipcRenderer.invoke('plugins:invokeCommand', args),
+  invokeCommand: (args: {
+    pluginKey: string
+    commandId: string
+    args?: unknown
+    timeoutMs?: number
+  }) => ipcRenderer.invoke('plugins:invokeCommand', args),
   panelAction: (args: {
     sessionToken: string
     action: string
@@ -106,6 +114,15 @@ export const pluginsApi = {
     ipcRenderer.on('plugins:installCountsChanged', listener)
     return () => {
       ipcRenderer.removeListener('plugins:installCountsChanged', listener)
+    }
+  },
+  statusBarState: () => ipcRenderer.invoke('plugins:statusBarState'),
+  onStatusBarChanged: (callback): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, overrides: PluginStatusBarOverrides) =>
+      callback(overrides)
+    ipcRenderer.on(PLUGIN_STATUS_BAR_CHANGED_CHANNEL, listener)
+    return () => {
+      ipcRenderer.removeListener(PLUGIN_STATUS_BAR_CHANGED_CHANNEL, listener)
     }
   },
   onAutoUpdateChanged: (callback): (() => void) => {
