@@ -24,10 +24,18 @@ import {
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import {
   clearNativeChatComposerDraftsForTests,
+  hydrateNativeChatComposerDrafts,
+  flushNativeChatComposerDrafts,
+  isNativeChatComposerDraftUnsaved,
+  nativeChatComposerDraftWritesSettled,
   readNativeChatComposerDraft,
   structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
 } from '@/components/native-chat/native-chat-composer-draft-store'
+import {
+  createMemoryNativeChatComposerDraftStorage,
+  setNativeChatComposerDraftStorageForTests
+} from '@/components/native-chat/native-chat-composer-draft-storage'
 import { pendingCreationChatDraftScopeKey } from './pending-worktree-creation'
 import { hasStagedStructuredLaunchPrompt } from './agent-session/launch/structured-agent-session-launch-prompt'
 
@@ -53,6 +61,10 @@ vi.mock('@/runtime/runtime-layout-client', async (original) =>
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await original())
 )
+vi.mock('@/components/native-chat/native-chat-composer-mount', () => ({
+  nativeChatComposerSelection: () => undefined,
+  waitForNativeChatComposerHandoff: async () => {}
+}))
 
 const initialState = useAppStore.getState()
 const worktree = makeCreatedAgentWorktree()
@@ -98,11 +110,79 @@ beforeEach(async () => {
 afterEach(() => {
   main.close()
   clearNativeChatComposerDraftsForTests()
+  vi.restoreAllMocks()
   resetStructuredAgentLaunchRegistryForTests()
   useAppStore.setState(initialState, true)
 })
 
 describe('creation chat handoff', () => {
+  it.each(['slow', 'refused', 'background'] as const)(
+    'hands the live draft to the published chat independently of persistence: %s',
+    async (scenario) => {
+      const storage = createMemoryNativeChatComposerDraftStorage()
+      setNativeChatComposerDraftStorageForTests(storage)
+      await hydrateNativeChatComposerDrafts()
+      const source = pendingCreationChatDraftScopeKey('creation-1')
+      updateNativeChatComposerDraft(source, { text: 'Unsent follow-up' }, 'immediate')
+      await nativeChatComposerDraftWritesSettled()
+      const committed = Promise.withResolvers<void>()
+      const started = Promise.withResolvers<string>()
+      const write = storage.write
+      storage.write = async (scope, draft) => {
+        if (scope.startsWith('agent-session:')) {
+          started.resolve(scope)
+          await committed.promise
+        }
+        await write(scope, draft)
+      }
+      vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+        throw new DOMException('refused', 'QuotaExceededError')
+      })
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      if (scenario === 'background') {
+        useAppStore.setState({ activeView: 'tasks' })
+      }
+
+      const completion = executeWorktreeCreation('creation-1', request)
+      const destination = await started.promise
+      await completion
+
+      const state = useAppStore.getState()
+      expect(state.pendingWorktreeCreations['creation-1']).toBeUndefined()
+      expect(state.activePendingCreationId).toBeNull()
+      expect(state.activeWorktreeId).toBe(
+        scenario === 'background' ? 'previous-worktree' : worktree.id
+      )
+      expect(state.activeView).toBe(scenario === 'background' ? 'tasks' : 'terminal')
+      expect(state.getActiveTab(worktree.id)).toMatchObject({
+        contentType: 'agent-session',
+        entityId: destination.slice('agent-session:'.length)
+      })
+      expect(readNativeChatComposerDraft(source).text).toBe('')
+      expect(readNativeChatComposerDraft(destination).text).toBe('Unsent follow-up')
+      expect(storage.drafts.get(source)?.text).toBe('Unsent follow-up')
+      expect(storage.drafts.has(destination)).toBe(false)
+
+      const latest = 'Unsent follow-up with newer typing in the replacement'
+      updateNativeChatComposerDraft(destination, { text: latest }, 'immediate')
+      storage.refuseWrites = scenario === 'refused'
+      committed.resolve()
+      await nativeChatComposerDraftWritesSettled()
+      expect(readNativeChatComposerDraft(destination).text).toBe(latest)
+      if (scenario === 'refused') {
+        expect(isNativeChatComposerDraftUnsaved(destination)).toBe(true)
+        expect(storage.drafts.get(source)?.text).toBe('Unsent follow-up')
+        storage.refuseWrites = false
+        flushNativeChatComposerDrafts()
+        await nativeChatComposerDraftWritesSettled()
+      }
+      expect(storage.drafts.get(destination)?.text).toBe(latest)
+      expect(storage.drafts.has(source)).toBe(false)
+      expect(state.createWorktree).toHaveBeenCalledOnce()
+      expect(mocks.createSession).toHaveBeenCalledOnce()
+    }
+  )
+
   it.skipIf(!ORCA_LAYOUT_OWNER_IS_MAIN)(
     'owns input through delayed host admission and replacement tab publication',
     async () => {
@@ -134,7 +214,8 @@ describe('creation chat handoff', () => {
       expect(hasStagedStructuredLaunchPrompt(intent.sessionId)).toBe(true)
       expect(
         readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(intent.sessionId)).text
-      ).toBe('Unsent follow-up')
+      ).toBe('')
+      expect(readNativeChatComposerDraft(scope).text).toBe('Unsent follow-up')
       expect(useAppStore.getState().activePendingCreationId).toBe('creation-1')
       expect(
         useAppStore.getState().pendingWorktreeCreations['creation-1']?.chatInputHandedOff

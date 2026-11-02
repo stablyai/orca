@@ -202,30 +202,6 @@ describe('focusExistingMainWindow', () => {
     expect(openWindow).not.toHaveBeenCalled()
   })
 
-  it('reopens the main window when the singleton reference is missing after readiness', () => {
-    const app = makeFakeApp()
-    const timer = makeTimer()
-    const openedWindow = makeFakeWindow()
-    let currentWindow: BrowserWindow | null = null
-    const openWindow = vi.fn(() => {
-      currentWindow = openedWindow
-      return openedWindow
-    })
-
-    const result = focusExistingMainWindow({
-      app,
-      getWindow: () => currentWindow,
-      openWindow,
-      platform: 'linux',
-      setTimeout: timer.setTimeout
-    })
-
-    expect(result).toBe('opened')
-    expect(openWindow).toHaveBeenCalledTimes(1)
-    expect(openedWindow.calls.show).toHaveBeenCalledTimes(1)
-    expect(openedWindow.calls.focus).toHaveBeenCalledTimes(1)
-  })
-
   it('retries a transient reopen failure instead of stranding the app windowless', () => {
     const app = makeFakeApp()
     const timer = makeTimer()

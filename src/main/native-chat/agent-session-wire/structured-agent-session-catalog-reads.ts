@@ -6,7 +6,6 @@ import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
-import { structuredAgentSessionReceivingAccount } from './structured-agent-session-receiving-account'
 
 /** The caller already owns the conversation; every projection of this invocation shares this scope. */
 export function structuredAgentSessionCatalogScopeOwned(
@@ -20,8 +19,7 @@ export function structuredAgentSessionCatalogScopeOwned(
       getRecord: (id) => deps.store.getRecord(id) ?? undefined,
       drivesRecord: () => true,
       liveAccountHome: () => session?.child?.accountHome,
-      launchAccountHome: async (record) =>
-        (await structuredAgentSessionReceivingAccount(deps, record, session)).home
+      launchAccountHome: async (record) => (await deps.launchAccountHome?.(record)) ?? null
     },
     params
   )

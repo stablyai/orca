@@ -2,7 +2,7 @@ import { worktreeMatchesGitHubNumber } from './github-work-item-workspace-attach
 import { describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../shared/worktree/types'
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
-import { makeFolderWorkspace } from '@/components/worktree-jump-palette-test-fixtures'
+import { makeFolderWorkspace } from '@/components/worktree-jump/worktree-jump-palette-test-fixtures'
 import {
   referenceWorkspace,
   referenceRepo

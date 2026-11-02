@@ -2,13 +2,8 @@ import { useClaudeSwitcherState } from './use-claude-switcher-state'
 import type { ClaudeSwitcherMenuProps } from './ClaudeSwitcherMenu'
 import { useProviderAccountList } from './use-provider-account-list'
 import { providerChatAccountControl } from './ProviderAccountChatButton'
-import { ChevronDown, ChevronRight } from 'lucide-react'
 import React, { useCallback, useRef, useState } from 'react'
-import {
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator
-} from '@/components/ui/dropdown-menu'
+import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../../store'
 import type { AccountOwner } from '@/lib/wsl-host-account-owner'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
@@ -43,9 +38,10 @@ import { AccountRuntimeToggle } from './StatusBarAccountControls'
 import {
   InlineUsageBars,
   InlineUsageSignInAction,
-  InlineUsageSkeleton,
-  isUnavailableInactiveUsage
+  InlineUsageSkeleton
 } from './InlineProviderUsage'
+import { AccountSwitchList } from './AccountSwitchList'
+import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { signInToClaudeAccount } from '@/lib/claude-account-sign-in'
 
@@ -60,7 +56,6 @@ export function ClaudeSwitcherForOwner({
   owner
 }: ClaudeSwitcherMenuProps & { owner: AccountOwner }): React.JSX.Element | null {
   const [open, setOpen] = useState(false)
-  const [accountsExpanded, setAccountsExpanded] = useState(false)
   const [isSwitching, setIsSwitching] = useState(false)
   const [signingInId, setSigningInId] = useState<string | null>(null)
   const signingInRef = useRef(false)
@@ -110,41 +105,18 @@ export function ClaudeSwitcherForOwner({
     (nextOpen: boolean): void => {
       setOpen(nextOpen)
       if (!nextOpen) {
-        setAccountsExpanded(false)
         return
       }
-      if (chatAction) {
-        setAccountsExpanded(true)
-      }
-      // Why: an account that needs a sign-in is the reason to open; show its inline Sign in.
-      if (accounts.accounts.some((account) => account.needsSignIn)) {
-        setAccountsExpanded(true)
-        if (!hasActiveRuntimeEnvironment) {
-          void fetchInactiveClaudeAccountUsage()
-        }
+      if (!hasActiveRuntimeEnvironment) {
+        void fetchInactiveClaudeAccountUsage()
       }
       // Why reload: the login each account folder holds changes without a settings change.
       void loadAccounts().catch((error) => {
         console.error('Failed to load Claude accounts for status bar:', error)
       })
     },
-    [
-      accounts.accounts,
-      fetchInactiveClaudeAccountUsage,
-      hasActiveRuntimeEnvironment,
-      loadAccounts,
-      chatAction
-    ]
+    [fetchInactiveClaudeAccountUsage, hasActiveRuntimeEnvironment, loadAccounts]
   )
-
-  // Why: fetch inactive-account usage only on switcher expansion; remote-owned accounts have no local cache to fill.
-  const handleAccountsExpandedToggle = useCallback((): void => {
-    const nextExpanded = !accountsExpanded
-    setAccountsExpanded(nextExpanded)
-    if (nextExpanded && !hasActiveRuntimeEnvironment) {
-      void fetchInactiveClaudeAccountUsage()
-    }
-  }, [accountsExpanded, fetchInactiveClaudeAccountUsage, hasActiveRuntimeEnvironment])
 
   const handleSelectAccount = async (
     accountId: string | null,
@@ -177,9 +149,6 @@ export function ClaudeSwitcherForOwner({
       // Why: remote selections live on the server; local GlobalSettings are untouched, so refetching is pure churn.
       if (!hasActiveRuntimeEnvironment) {
         await fetchSettings()
-      }
-      if (mountedRef.current) {
-        setAccountsExpanded(false)
       }
       const nextActiveAccountId = getClaudeStatusActiveId(next, target)
       if (!chatAction && previousActiveAccountId !== nextActiveAccountId) {
@@ -232,7 +201,6 @@ export function ClaudeSwitcherForOwner({
     if (group.key === currentKey) {
       return
     }
-    setAccountsExpanded(false)
     try {
       await refreshClaudeRateLimitsForTarget(group.runtimeTarget)
     } catch (error) {
@@ -285,6 +253,13 @@ export function ClaudeSwitcherForOwner({
         'auto.components.status.bar.StatusBar.3dd7ddfae1',
         'Open Claude details and account switcher'
       )}
+      variant="account"
+      accountLabel={
+        !hasActiveRuntimeEnvironment
+          ? (selectedGroup?.targets.find((target) => target.active)?.label ??
+            translate('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
+          : undefined
+      }
       topContent={
         chatAction ? undefined : (
           <AccountRuntimeToggle
@@ -301,99 +276,71 @@ export function ClaudeSwitcherForOwner({
       open={open}
       onOpenChange={handleOpenChange}
     >
-      <DropdownMenuLabel>
-        {translate('auto.components.status.bar.StatusBar.d450654fa2', 'Claude Account')}
-      </DropdownMenuLabel>
-      <DropdownMenuItem
-        onSelect={(event) => {
-          event.preventDefault()
-          handleAccountsExpandedToggle()
-        }}
+      <AccountSwitchList
+        heading={translate('auto.components.status.bar.StatusBar.d450654fa2', 'Claude Account')}
       >
-        <span className="max-w-[180px] truncate text-[12px] text-foreground">
-          {selectedGroup?.targets.find((target) => target.active)?.label ??
-            translate('auto.components.status.bar.StatusBar.c676918adc', 'System default')}
-        </span>
-        {accountsExpanded ? (
-          <ChevronDown className="ml-auto size-3.5 text-muted-foreground/85" />
-        ) : (
-          <ChevronRight className="ml-auto size-3.5 text-muted-foreground/85" />
-        )}
-      </DropdownMenuItem>
-      {accountsExpanded ? (
-        <div className="px-1 pb-1">
-          <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-            {translate('auto.components.status.bar.StatusBar.9332ba8684', 'Switch to')}
+        {selectedGroup?.targets.length === 0 ? (
+          <div className="px-2 py-1.5 text-2xs text-muted-foreground">
+            {translate('auto.components.status.bar.StatusBar.c98ea88392', 'No other accounts')}
           </div>
-          <div className="max-h-[220px] overflow-y-auto rounded-md border border-border/60 bg-accent/5 p-1 scrollbar-sleek">
-            {selectedGroup?.targets.length === 0 ? (
-              <div className="px-2 py-1.5 text-[11px] text-muted-foreground">
-                {translate('auto.components.status.bar.StatusBar.c98ea88392', 'No other accounts')}
-              </div>
-            ) : null}
-            {selectedGroup?.targets.map((target) => {
-              const inactiveUsage = target.id
-                ? inactiveClaudeAccounts.find((a) => a.accountId === target.id)
-                : null
-              // Why local only: the hidden sign-in runs on this device, not a remote server.
-              const signInId = target.needsSignIn && !hasActiveRuntimeEnvironment ? target.id : null
+        ) : null}
+        {selectedGroup?.targets.map((target) => {
+          const inactiveUsage = target.id
+            ? inactiveClaudeAccounts.find((a) => a.accountId === target.id)
+            : null
+          // Why local only: the hidden sign-in runs on this device, not a remote server.
+          const signInId = target.needsSignIn && !hasActiveRuntimeEnvironment ? target.id : null
 
-              return (
-                <DropdownMenuItem
-                  key={`${selectedGroup.key}:${target.id ?? 'system'}`}
-                  disabled={
-                    isSwitching ||
-                    signingInId !== null ||
-                    (signInId === null && (target.active || target.disabled))
-                  }
-                  onSelect={(event) => {
-                    event.preventDefault()
-                    if (signInId) {
-                      void handleSignIn(signInId)
-                    } else if (!target.active) {
-                      void handleSelectAccount(target.id, target.runtimeTarget)
-                    }
-                  }}
-                >
-                  <div className="flex w-full flex-col gap-0.5">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="min-w-0 flex-1 truncate">{target.label}</span>
-                      {target.active ? (
-                        <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
-                          {translate('auto.components.status.bar.StatusBar.ff0fbe9311', 'Active')}
-                        </span>
-                      ) : null}
-                    </div>
-                    {signInId ? (
-                      <InlineUsageSignInAction
-                        isFetching={false}
-                        isSigningIn={signingInId === signInId}
-                        disabled={isSwitching || signingInId !== null}
-                        reason={target.hint ?? undefined}
-                        onSignIn={() => void handleSignIn(signInId)}
-                      />
-                    ) : target.hint ? (
-                      <span className="text-[10px] leading-4 text-muted-foreground">
-                        {target.hint}
-                      </span>
-                    ) : null}
-                    {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
-                      <InlineUsageSkeleton />
-                    ) : inactiveUsage?.rateLimits &&
-                      // Why: the sign-in note above already says this; skip the repeat.
-                      !(signInId && isUnavailableInactiveUsage(inactiveUsage.rateLimits)) ? (
-                      <InlineUsageBars
-                        limits={inactiveUsage.rateLimits}
-                        isFetching={inactiveUsage.isFetching}
-                      />
-                    ) : null}
-                  </div>
-                </DropdownMenuItem>
-              )
-            })}
-          </div>
-        </div>
-      ) : null}
+          return (
+            <AccountSwitchRowItem
+              label={target.label}
+              active={target.active}
+              key={`${selectedGroup.key}:${target.id ?? 'system'}`}
+              disabled={
+                isSwitching ||
+                signingInId !== null ||
+                (signInId === null && (target.active || target.disabled))
+              }
+              onSelect={(event) => {
+                event.preventDefault()
+                if (signInId) {
+                  void handleSignIn(signInId)
+                } else if (!target.active) {
+                  void handleSelectAccount(target.id, target.runtimeTarget)
+                }
+              }}
+              action={
+                signInId ? (
+                  <InlineUsageSignInAction
+                    accountLabel={target.label}
+                    isFetching={false}
+                    isSigningIn={signingInId === signInId}
+                    disabled={isSwitching || signingInId !== null}
+                    reason={target.hint ?? undefined}
+                    onSignIn={() => void handleSignIn(signInId)}
+                  />
+                ) : undefined
+              }
+            >
+              {!signInId ? (
+                <div className="flex w-full flex-col gap-0.5">
+                  {target.hint ? (
+                    <span className="text-3xs leading-4 text-muted-foreground">{target.hint}</span>
+                  ) : null}
+                  {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
+                    <InlineUsageSkeleton />
+                  ) : inactiveUsage?.rateLimits ? (
+                    <InlineUsageBars
+                      limits={inactiveUsage.rateLimits}
+                      isFetching={inactiveUsage.isFetching}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+            </AccountSwitchRowItem>
+          )
+        })}
+      </AccountSwitchList>
       <DropdownMenuSeparator />
       <DropdownMenuItem
         onSelect={() => {

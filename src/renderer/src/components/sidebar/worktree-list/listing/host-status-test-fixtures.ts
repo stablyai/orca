@@ -1,6 +1,6 @@
 import type { useVisibleSidebarWorktrees } from './use-visible-worktrees'
 import type { useSidebarSectionRows } from './use-section-rows'
-import { makeRepo, makeWorktree } from '../../../worktree-jump-palette-test-fixtures'
+import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
 import { useAppStore } from '@/store'

@@ -74,7 +74,7 @@ async function launchHomes(f: ReturnType<typeof coveredAccount>) {
       .CLAUDE_CONFIG_DIR,
     chat: await resolveClaudeStructuredLaunchHome(f.router, chatEnv, '/recorded'),
     chatEnv: chatEnv.CLAUDE_CONFIG_DIR,
-    chatRecord: resolveStructuredClaudeAccountHomePath({
+    chatRecord: await resolveStructuredClaudeAccountHomePath({
       launchEnv: {},
       wslDistro: null,
       getClaudeConfigDirectory: () => f.router.systemDefaultHome()

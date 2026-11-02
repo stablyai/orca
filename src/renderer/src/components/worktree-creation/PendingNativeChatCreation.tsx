@@ -71,6 +71,7 @@ export default function PendingNativeChatCreation({
   const composerRef = React.useRef<NativeChatComposerHandle>(null)
   const { composerError, reportComposerError } = useNativeChatComposerError(NO_COMMAND_CAUSES)
   const status = entry?.status
+  const handedOff = entry?.chatInputHandedOff === true
   const heldMessage = entry ? pendingCreationHeldChatMessage(entry) : null
   const held = heldMessage !== null
   // Like t3code, progress shows only in the steps card after a send, never above the composer.
@@ -78,8 +79,12 @@ export default function PendingNativeChatCreation({
   const suppressFocus = entry?.request.suppressTerminalFocusOnCompletion === true
 
   const transport = React.useMemo((): NativeChatStructuredComposerTransport => {
-    const sendBlockedReason =
-      status === 'error'
+    const sendBlockedReason = handedOff
+      ? translate(
+          'auto.components.worktree.creation.PendingNativeChatCreation.openingChat',
+          'Opening chat…'
+        )
+      : status === 'error'
         ? translate(
             'auto.components.worktree.creation.PendingNativeChatCreation.sendBlockedFailed',
             'Retry creating the worktree to send'
@@ -117,7 +122,7 @@ export default function PendingNativeChatCreation({
       sessionId: pendingCreationChatDraftScopeKey(creationId),
       runtimeEnvironmentId: null
     }
-  }, [creationId, held, reportComposerError, status])
+  }, [creationId, handedOff, held, reportComposerError, status])
 
   const notices = React.useMemo(
     (): NativeChatComposerNotice[] =>
@@ -196,14 +201,6 @@ export default function PendingNativeChatCreation({
           terminalTabId={tabId}
           paneKey={`${tabId}:composer`}
           draftScopeKey={pendingCreationChatDraftScopeKey(creationId)}
-          unavailableHint={
-            entry.chatInputHandedOff
-              ? translate(
-                  'auto.components.worktree.creation.PendingNativeChatCreation.openingChat',
-                  'Opening chat…'
-                )
-              : undefined
-          }
           targetPtyId={null}
           agent={agent}
           structuredTransport={transport}

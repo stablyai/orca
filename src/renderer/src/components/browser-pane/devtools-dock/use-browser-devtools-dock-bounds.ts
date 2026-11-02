@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { hasVisibleOverlayOver } from '@/lib/visible-overlay'
 import { registerBrowserClientPagePositionSync } from '../browser-client-page-position-driver'
-import { isWebviewDragPassthroughActive } from '../host-guest/webview-drag-passthrough'
+import {
+  isWebviewDragPassthroughActive,
+  registerWebviewDragPassthroughSurface
+} from '../host-guest/webview-drag-passthrough'
 
 export type BrowserDevToolsDockSnapshot = { url: string; width: number; height: number }
 
@@ -18,7 +21,7 @@ export function useBrowserDevToolsDockBounds(
       return
     }
     let applied = ''
-    // Per frame: a pane can move without resizing, and overlays open without any event here.
+    // Driver frames follow DOM, style, viewport and input changes: pane moves and overlays opening.
     const sync = (): void => {
       const rect = placeholder.getBoundingClientRect()
       const visible =
@@ -54,9 +57,11 @@ export function useBrowserDevToolsDockBounds(
       })
     }
     const releaseSync = registerBrowserClientPagePositionSync(sync)
+    const releaseDragPassthrough = registerWebviewDragPassthroughSurface(sync)
     sync()
     return () => {
       releaseSync()
+      releaseDragPassthrough()
       void window.api.browser.setDevToolsDockBounds({ browserPageId, bounds: null })
     }
   }, [browserPageId, placeholder])

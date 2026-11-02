@@ -255,6 +255,15 @@ export async function validatePluginInstallContent(
   return { ok: true }
 }
 
+/** Every check install runs on a plugin's files, in install's order. */
+export async function validatePluginInstallTree(
+  rootDir: string,
+  manifest: PluginManifest
+): Promise<PluginArtifactValidationResult> {
+  const declared = await validateDeclaredPluginArtifacts(rootDir, manifest)
+  return declared.ok ? validatePluginInstallContent(rootDir, manifest) : declared
+}
+
 /** A new-file template's text; refuses bytes that are not UTF-8 so a file never starts garbled. */
 export async function readPluginNewFileTemplate(
   rootDir: string,

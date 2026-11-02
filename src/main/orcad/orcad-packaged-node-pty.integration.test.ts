@@ -28,7 +28,7 @@ describe.skipIf(skip)('packaged node-pty under the pinned Node', () => {
       await build({
         stdin: {
           contents: `
-              import { LocalPtyProvider } from './src/main/providers/local-pty-provider'
+              import { LocalPtyProvider } from './src/main/providers/local-pty/local-pty-provider'
               import { setAppEnvironment } from './src/shared/app-environment'
               import { getCmdExePath } from './src/shared/windows-batch-spawn'
               const loaded = require('fs').realpathSync(require.resolve('node-pty'))

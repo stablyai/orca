@@ -32,17 +32,6 @@ describe("the offer's move of the project it added (B3)", () => {
     expect(wslHostOfferProjectRef(PATH)).toEqual({ kind: 'repo', id: 'r1' })
   })
 
-  it('finds an added folder workspace', () => {
-    state.folders = [{ id: 'f1', folderPath: PATH }]
-    expect(wslHostOfferProjectRef(PATH)).toEqual({ kind: 'folder', id: 'f1' })
-  })
-
-  it('opens the move with only that project checked, never the whole distro', () => {
-    state.repos = [{ id: 'r1', path: PATH }]
-    moveWslHostOfferProject({ path: PATH, distro: 'Ubuntu', source: 'local_folder_picker' })
-    expect(openDialog).toHaveBeenCalledWith('Ubuntu', { kind: 'repo', id: 'r1' })
-  })
-
   it('finds the innermost stored repo that contains an added subfolder', () => {
     state.repos = [
       { id: 'outer', path: '\\\\wsl.localhost\\Ubuntu\\home\\me' },

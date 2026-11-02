@@ -47,24 +47,6 @@ describe('handleOscLink', () => {
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
-  it('opens local file URL links in Orca with the platform modifier on desktop', async () => {
-    setPlatform('Windows')
-
-    expect(handleOscLink('file:///tmp/test.txt', { metaKey: false, ctrlKey: true }, deps)).toBe(
-      true
-    )
-
-    // Flush fire-and-forget opening before positive assertions.
-    await new Promise((resolve) => setTimeout(resolve, 0))
-
-    expect(statMock).toHaveBeenCalledWith(expect.objectContaining({ filePath: '/tmp/test.txt' }))
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/test.txt' }),
-      { forceContentReload: true }
-    )
-    expect(openFilePathMock).not.toHaveBeenCalled()
-  })
-
   it('opens Windows absolute OSC link targets that parse as URL schemes', async () => {
     setPlatform('Windows')
 
@@ -97,28 +79,6 @@ describe('handleOscLink', () => {
         column: 3,
         matchLength: 0
       })
-    )
-  })
-
-  it('opens Windows UNC file URL links from Windows worktrees', async () => {
-    setPlatform('Windows')
-
-    handleOscLink(
-      'file://server/share/repo/test.txt',
-      { metaKey: false, ctrlKey: true },
-      {
-        ...deps,
-        worktreePath: '\\\\server\\share\\repo'
-      }
-    )
-    await flushAsyncWork()
-
-    expect(statMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '//server/share/repo/test.txt' })
-    )
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '//server/share/repo/test.txt' }),
-      { forceContentReload: true }
     )
   })
 

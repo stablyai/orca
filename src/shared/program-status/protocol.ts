@@ -1,6 +1,8 @@
 // Program Status Protocol (OSC 7501) wire grammar: a program reports idle/working/blocked/done/error
 // for itself (root record) or for ids beneath it. Spec: https://www.superlogical.com/rex/docs/build/program-status
 
+import { isUtf8ByteLengthWithinLimit } from '../utf8-byte-limits'
+
 export const PROGRAM_STATUS_OSC_PREFIX = '\x1b]7501;'
 
 /** Negotiate replies: probing programs change rendering (Claude drops title glyphs), so clients cannot answer for glyph-only hosts. */
@@ -16,8 +18,8 @@ export type ProgramStatusKind = (typeof PROGRAM_STATUS_KINDS)[number]
  *  program can tell exactly which states and kinds this terminal accepts. */
 export const PROGRAM_STATUS_QUERY_REPLY = `${PROGRAM_STATUS_OSC_PREFIX}?:states=${PROGRAM_STATUS_STATES.join(',')}:kinds=${PROGRAM_STATUS_KINDS.join(',')}\x1b\\`
 
-/** Whole sequence cap, OSC through ST. */
-export const PROGRAM_STATUS_MAX_SEQUENCE_BYTES = 4096
+/** The spec caps the whole sequence at 4096 bytes; `ESC ] 7501 ;` and `ESC \\` take 9 of them. */
+export const PROGRAM_STATUS_MAX_BODY_BYTES = 4087
 const MAX_KEY_BYTES = 16
 const MAX_MSG_ENCODED = 2732
 const MAX_MSG_DECODED = 2048
@@ -46,7 +48,7 @@ const KEY_RE = /^[a-z]+$/
 const VALUE_RE = /^[A-Za-z0-9_.,+/=-]*$/
 const SEGMENT_RE = /^[A-Za-z0-9_.+-]{1,32}$/
 const APP_RE = /^[A-Za-z0-9_.+-]+$/
-const PROGRESS_RE = /^\d{1,3}$/
+const PROGRESS_RE = /^0*(\d{1,3})$/
 const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/
 // oxlint-disable-next-line no-control-regex -- the spec refuses decoded C0/DEL/C1 controls
 const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f]/
@@ -89,9 +91,8 @@ function isValidId(id: string): boolean {
 }
 
 /** Decoded single-line text, or null when the report must be discarded whole. */
-function decodeText(encoded: string, maxEncoded: number, maxDecoded: number): string | null {
-  // Why before decoding: the encoded cap bounds the work a hostile program can cause.
-  if (encoded.length > maxEncoded || !BASE64_RE.test(encoded)) {
+function decodeText(encoded: string, maxDecoded: number): string | null {
+  if (!BASE64_RE.test(encoded)) {
     return null
   }
   const unpadded = encoded.replace(/=+$/, '')
@@ -120,7 +121,7 @@ function decodeText(encoded: string, maxEncoded: number, maxDecoded: number): st
 /** Parse the body between `OSC 7501;` and ST. Null means ignore (no state, bad id, over a limit). */
 export function parseProgramStatusBody(body: string): ProgramStatusMessage | null {
   // Why: the scanner already caps bodies, but this is exported and must stay bounded on its own.
-  if (body.length > PROGRAM_STATUS_MAX_SEQUENCE_BYTES) {
+  if (!isUtf8ByteLengthWithinLimit(body, PROGRAM_STATUS_MAX_BODY_BYTES)) {
     return null
   }
   if (isProgramStatusQueryBody(body)) {
@@ -135,10 +136,13 @@ export function parseProgramStatusBody(body: string): ProgramStatusMessage | nul
     }
     const key = pair.slice(0, equals).trim()
     const value = pair.slice(equals + 1).trim()
-    // Why per occurrence: a hard cap broken anywhere voids the report, even if a duplicate follows.
+    // Why per occurrence and before the grammar skip: a broken cap voids the report, even if a duplicate follows.
+    // The encoded text caps also bound decoding work.
     if (
-      key.length > MAX_KEY_BYTES ||
-      (key === 'app' && value.length > MAX_APP_BYTES) ||
+      !isUtf8ByteLengthWithinLimit(key, MAX_KEY_BYTES) ||
+      (key === 'app' && !isUtf8ByteLengthWithinLimit(value, MAX_APP_BYTES)) ||
+      (key === 'msg' && !isUtf8ByteLengthWithinLimit(value, MAX_MSG_ENCODED)) ||
+      (key === 'title' && !isUtf8ByteLengthWithinLimit(value, MAX_TITLE_ENCODED)) ||
       (key === 'id' && !isValidId(value))
     ) {
       return null
@@ -149,9 +153,7 @@ export function parseProgramStatusBody(body: string): ProgramStatusMessage | nul
     }
     if (key === 'msg' || key === 'title') {
       // Every occurrence is checked, so a later duplicate cannot launder an over-limit one.
-      const [maxEncoded, maxDecoded] =
-        key === 'msg' ? [MAX_MSG_ENCODED, MAX_MSG_DECODED] : [MAX_TITLE_ENCODED, MAX_TITLE_DECODED]
-      const text = decodeText(value, maxEncoded, maxDecoded)
+      const text = decodeText(value, key === 'msg' ? MAX_MSG_DECODED : MAX_TITLE_DECODED)
       if (text === null) {
         return null
       }
@@ -173,9 +175,9 @@ export function parseProgramStatusBody(body: string): ProgramStatusMessage | nul
   if (state === 'blocked' && kind !== undefined && isProgramStatusKind(kind)) {
     report.kind = kind
   }
-  const progress = pairs.get('progress')
-  if (programStatusStateCarriesProgress(state) && progress && PROGRESS_RE.test(progress)) {
-    const value = Number.parseInt(progress, 10)
+  const progressDigits = PROGRESS_RE.exec(pairs.get('progress') ?? '')?.[1]
+  if (programStatusStateCarriesProgress(state) && progressDigits !== undefined) {
+    const value = Number.parseInt(progressDigits, 10)
     if (value <= 100) {
       report.progress = value
     }

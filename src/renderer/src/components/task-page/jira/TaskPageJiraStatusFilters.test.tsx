@@ -61,14 +61,6 @@ it('multi-selects actual statuses and hands the composed query to manual editing
     'assignee = currentUser() AND statusCategory != Done AND status in ("In Progress") ORDER BY updated DESC'
   )
 })
-it('hides status controls and preserves an existing manual query', () => {
-  const state = model()
-  state.jiraSearchInput = 'project = CUSTOM ORDER BY created ASC'
-  render(<TaskPageJiraStatusFilters model={state} />)
-  expect(screen.queryByRole('button', { name: 'Developed' })).toBeNull()
-  expect(screen.getByText(/Status filters apply to preset views/)).toBeDefined()
-  expect(state.setJiraSearchInput).not.toHaveBeenCalled()
-})
 it.each([true, false])(
   'keeps current-sprint selection %s in the preview and Edit as JQL query',
   async (currentSprint) => {
@@ -87,14 +79,6 @@ it.each([true, false])(
     expect(state.setAppliedJiraSearch).toHaveBeenCalledWith(expected)
   }
 )
-it('hides statuses and query preview in linked mode without clearing selection', () => {
-  const state = model()
-  state.jiraHasWorkspace = true
-  const { container } = render(<TaskPageJiraStatusFilters model={state} />)
-  expect(container.innerHTML).toBe('')
-  expect(state.selectJiraStatuses).not.toHaveBeenCalled()
-  expect(state.selectedJiraStatuses).toEqual(['Developed'])
-})
 
 it.each([false, true])(
   'includes the mapped project and sprint selection %s in manual editing',

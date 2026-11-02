@@ -15,7 +15,7 @@ import { readWorkspaceReferenceDetails } from '../../sidebar/workspace-reference
 import { getWorkspaceReferenceRequest } from '../../sidebar/workspace-reference-details'
 import { referenceWorkspace } from '../../sidebar/workspace-reference-fixtures.test-support'
 import { LinearIssueSubIssues } from '../../linear-issue-sub-issues'
-import { createWorktreeJumpPaletteWorktreeHandler } from '../../worktree-jump-palette-create-worktree'
+import { createWorktreeJumpPaletteWorktreeHandler } from '../../worktree-jump/worktree-jump-palette-create-worktree'
 import {
   mapLinearIssueRead,
   pendingLinearIssueWrites
