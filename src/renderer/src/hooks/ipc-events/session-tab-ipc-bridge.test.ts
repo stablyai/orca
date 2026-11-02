@@ -97,3 +97,74 @@ it('moves a switched tab by its terminal’s id, and nothing by an id it no long
   move!({ worktreeId: WORKTREE, tabId: 'E', targetGroupId: 'g2', kind: 'move-to-group', index: 0 })
   expect(groupOf('T')).toBe('g2')
 })
+
+// A chat reopened under its own host row publishes only that row; its retired session row is a
+// History address (typed activation), never one a move can name.
+it('moves a reopened chat by the row it publishes, and nothing by its retired session row', async () => {
+  const { setHostSessionTabIdMapping, clearHostSessionTabIdMappings } =
+    await import('@/runtime/web-session-tabs-sync/tracking-mappings')
+  const local = 'structured-agent-session-chat-S'
+  const reopened = 'agent-chat-tab-v1-reopened'
+  seedStore(store, {
+    activeWorktreeId: WORKTREE,
+    worktreesByRepo: {
+      'repo-1': [makeWorktree({ id: WORKTREE, repoId: 'repo-1', path: '/tmp/wt-switch' })]
+    },
+    unifiedTabsByWorktree: {
+      [WORKTREE]: [
+        makeUnifiedTab({
+          id: local,
+          entityId: 'chat-S',
+          groupId: 'g1',
+          worktreeId: WORKTREE,
+          contentType: 'agent-session',
+          agentSessionAgent: 'codex'
+        })
+      ]
+    },
+    groupsByWorktree: {
+      [WORKTREE]: [
+        makeTabGroup({ id: 'g1', worktreeId: WORKTREE, tabOrder: [local] }),
+        makeTabGroup({ id: 'g2', worktreeId: WORKTREE, tabOrder: [] })
+      ]
+    },
+    layoutByWorktree: {
+      [WORKTREE]: {
+        type: 'split',
+        direction: 'horizontal',
+        first: { type: 'leaf', groupId: 'g1' },
+        second: { type: 'leaf', groupId: 'g2' }
+      }
+    },
+    activeGroupIdByWorktree: { [WORKTREE]: 'g1' },
+    openFiles: [],
+    browserTabsByWorktree: {}
+  })
+  setHostSessionTabIdMapping(
+    { environmentId: 'local', worktreeId: WORKTREE, tabId: local },
+    reopened
+  )
+  registerSessionTabIpcBridge([])
+  const groupOf = () =>
+    store.getState().unifiedTabsByWorktree[WORKTREE]?.find((entry) => entry.id === local)?.groupId
+  try {
+    move!({
+      worktreeId: WORKTREE,
+      tabId: 'agent-session:chat-S',
+      targetGroupId: 'g2',
+      kind: 'move-to-group',
+      index: 0
+    })
+    expect(groupOf()).toBe('g1')
+    move!({
+      worktreeId: WORKTREE,
+      tabId: reopened,
+      targetGroupId: 'g2',
+      kind: 'move-to-group',
+      index: 0
+    })
+    expect(groupOf()).toBe('g2')
+  } finally {
+    clearHostSessionTabIdMappings('local', WORKTREE)
+  }
+})
