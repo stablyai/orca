@@ -514,6 +514,8 @@ import {
   PluginRpcConsentParams,
   PluginSetEnabledParams,
   PluginSetSystemEnabledParams,
+  PluginShotChromeParams,
+  PluginShotEditorParams,
   PluginShotParams,
   PluginShotReplayParams,
   PluginsPanelActionParams
@@ -1339,6 +1341,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'plugins.setEnabled': PluginSetEnabledParams,
   'plugins.setSystemEnabled': PluginSetSystemEnabledParams,
   'plugins.shot': PluginShotParams,
+  'plugins.shotChrome': PluginShotChromeParams,
+  'plugins.shotEditor': PluginShotEditorParams,
   'plugins.shotReplay': PluginShotReplayParams,
   'preflight.check': PreflightCheck,
   'preflight.detectAgents': PreflightProjectAgentDetection,
