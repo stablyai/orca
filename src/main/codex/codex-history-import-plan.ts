@@ -6,8 +6,8 @@ import {
   type AgentJournalItemBody,
   type AgentJournalRenderItem
 } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
-import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { codexJournalItem } from './codex-structured-item-translation'
 import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/journal-row-builders'

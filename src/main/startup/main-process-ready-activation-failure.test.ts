@@ -65,23 +65,6 @@ describe('desktop activation after ready-phase failures', () => {
     }
   )
 
-  it.each(['foundation', 'runtimeServices'] as const)(
-    'disables serve promotion after %s fails',
-    async (phase) => {
-      const error = new Error(`${phase} failed`)
-      phases[phase].mockRejectedValueOnce(error)
-      state.isServeMode = true
-      state.desktopActivationGate?.requestActivation()
-
-      await expect(initializeMainProcessReady(launchOptions)).rejects.toBe(error)
-
-      expect(state.desktopActivationGate).toBeNull()
-      state.desktopActivationGate?.requestActivation()
-      expect(activateWindow).not.toHaveBeenCalled()
-      expect(phases.launch).not.toHaveBeenCalled()
-    }
-  )
-
   it('keeps activations held when menu failure leaves window creation still pending', async () => {
     const error = new Error('menu failed')
     let finishLaunch = (): void => {

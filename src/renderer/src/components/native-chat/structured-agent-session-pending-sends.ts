@@ -1,5 +1,5 @@
 import type { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 // Keep unanswered sends in memory only for the sender and mounted views.
 
 export type StructuredAgentSessionPendingSend = {

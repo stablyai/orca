@@ -30,7 +30,7 @@ import {
 } from '../../runtime/rpc/methods/structured-agent-session-queued-image-capability'
 import { openStructuredAgentSessionConversationJournal } from '../agent-session-wire/structured-agent-session-conversation-open'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 
 function retainExpectedRecords(database: JournalHostDatabase): () => void {
   const records = () =>

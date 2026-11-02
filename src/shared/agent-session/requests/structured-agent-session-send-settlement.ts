@@ -1,4 +1,4 @@
-import type { AgentJournalCursor } from '../../agent-session-journal-identity'
+import type { AgentJournalCursor } from '../journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
 import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from './structured-agent-session-send-evidence'
 import { handedOffQueuedMessageIds } from '../view/structured-agent-session-draft-hand-off'

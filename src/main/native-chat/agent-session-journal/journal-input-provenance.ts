@@ -1,5 +1,5 @@
 import type Database from '../../sqlite/sync-database'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { readCommandReceipt } from './command-receipt-table'
 
 /** Only the original send's accepted coordinate can compare a retired enqueue boundary. */

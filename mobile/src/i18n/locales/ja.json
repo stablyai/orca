@@ -2493,6 +2493,10 @@
       "terminal": "ターミナル",
       "tapToFocusPane": "{{title}}、タップしてフォーカス",
       "inputPane": "{{title}} · 入力"
+    },
+    "structuredOpen": {
+      "worktreeDeleted": "ワークツリーは削除されました。",
+      "folderWorkspaceRemoved": "フォルダーワークスペースは削除されました。"
     }
   },
   "settings": {

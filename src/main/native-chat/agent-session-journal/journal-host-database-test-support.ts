@@ -1,5 +1,5 @@
 import { prepareJournalOutcomeWrite } from './journal-outcome-write'
-import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { journalRowSchemaVersion } from '../../../shared/agent-session/journal/agent-session-journal-types'

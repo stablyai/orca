@@ -15,7 +15,7 @@ import type {
 
 // Use plain JSON and optional additions after structured.v1; hosts/clients update independently (docs/reference/remote-wire-compatibility.md).
 
-import type { AgentJournalCursor } from '../agent-session-journal-identity'
+import type { AgentJournalCursor } from './journal/agent-session-journal-identity'
 import type {
   AgentJournalRenderItem,
   AgentJournalResetReason,
@@ -419,6 +419,8 @@ export type AgentSessionSlashCommand = {
   description?: string
   /** Provider-authored argument sketch, e.g. `<issue-url>`. */
   argumentHint?: string
+  /** The provider's own built-in command, not a user command or skill of the same name. */
+  builtin?: true
   /** The skill file the provider selects this skill by; two skills may share a name. */
   path?: string
 }

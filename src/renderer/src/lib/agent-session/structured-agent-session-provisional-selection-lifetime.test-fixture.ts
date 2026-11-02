@@ -17,7 +17,7 @@ import {
 import { trackStructuredLaunchConfirmationDeadline } from './launch/structured-agent-session-launch-prompt-outcome'
 import { holdStructuredAgentSessionLaunchOption } from './launch/structured-agent-session-launch-options'
 import { structuredSessionSelectionController } from '../structured-agent-session-selection-controller'
-import type { SelectionOperation } from '../../../../shared/structured-agent-session-selection-operations'
+import type { SelectionOperation } from '../../../../shared/agent-session/options/structured-agent-session-selection-operations'
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import type * as launchModule from './launch/structured-agent-session-launch-create-call'
 import * as sessionClient from '@/runtime/structured-agent-session-client'

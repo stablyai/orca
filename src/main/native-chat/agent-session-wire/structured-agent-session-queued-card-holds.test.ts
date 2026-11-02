@@ -9,7 +9,7 @@ import {
   projectQueuedMessageCards,
   queuedMessageCardSteers,
   queuedMessagesQueuePause
-} from '../../../shared/structured-agent-session-queued-cards'
+} from '../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   readQueuePublication,

@@ -27,7 +27,7 @@ import {
 import {
   projectQueuedMessageCards,
   queuedMessagesQueuePause
-} from '../../../shared/structured-agent-session-queued-cards'
+} from '../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import {
   SESSION,
   db,

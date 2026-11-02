@@ -27,7 +27,9 @@ export async function closeCliChatResumeTerminal(
   source: CliChatResumeSource,
   isCurrent: () => boolean,
   hooks: CliChatResumeCloseHooks,
-  signal: AbortSignal
+  signal: AbortSignal,
+  /** False when the pane runs a job other than the agent, so the running-process prompt asks. */
+  consents = true
 ): Promise<boolean> {
   const target = structuredAgentSessionTargetForHost(source.executionHostId)
   const leafId = source.paneKey.slice(source.tabId.length + 1)
@@ -81,7 +83,7 @@ export async function closeCliChatResumeTerminal(
     signal.addEventListener('abort', cancel, { once: true })
     closeTerminalTab(source.tabId, {
       // Continuing is the user's consent to stop this pane's agent, so only other panes' work asks.
-      ...(bindings[leafId] ? { consentedPtyId: bindings[leafId] } : {}),
+      ...(consents && bindings[leafId] ? { consentedPtyId: bindings[leafId] } : {}),
       // The chat opens in this worktree, so emptying it must not leave it.
       preserveWorktreeSelection: true,
       onCancel: cancel,

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ChatUiHereFeatureTipVisual } from './ChatUiHereFeatureTipVisual'
+import { ChatUiDemoCard, ChatUiHereFeatureTipVisual } from './ChatUiHereFeatureTipVisual'
 
 function motion(initial: boolean): (matches: boolean) => void {
   const target = new EventTarget()
@@ -48,6 +48,24 @@ describe('chat tip visual lifetime', () => {
     expect(vi.getTimerCount()).toBe(1)
     unmount()
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('holds the finished one-shot frame without leaving a timer running', () => {
+    vi.useFakeTimers()
+    const changeMotion = motion(false)
+    const { container } = render(<ChatUiDemoCard loop={false} />)
+    for (let beat = 0; vi.getTimerCount() > 0 && beat < 250; beat++) {
+      act(() => vi.advanceTimersToNextTimer())
+    }
+    expect(vi.getTimerCount()).toBe(0)
+    expect(container.querySelectorAll('[data-on="true"]').length).toBeGreaterThan(10)
+    const finished = container.innerHTML
+    act(() => vi.advanceTimersByTime(30_000))
+    expect(container.innerHTML).toBe(finished)
+    act(() => changeMotion(true))
+    act(() => changeMotion(false))
+    expect(vi.getTimerCount()).toBe(0)
+    expect(container.innerHTML).toBe(finished)
   })
 
   it('starts as a complete still with reduced motion and no timer', () => {

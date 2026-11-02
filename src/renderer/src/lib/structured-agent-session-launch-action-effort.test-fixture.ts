@@ -1,4 +1,4 @@
-import { structuredAgentSessionStopControl } from '../../../shared/structured-agent-session-stop-control'
+import { structuredAgentSessionStopControl } from '../../../shared/agent-session/view/structured-agent-session-stop-control'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 import { expect, it, vi, type Mock } from 'vitest'
 import { CreateIntentParams } from '../../../shared/rpc-contract/structured-agent-session-params'

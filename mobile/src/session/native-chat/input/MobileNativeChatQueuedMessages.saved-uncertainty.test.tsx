@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { ActionSheetAction } from '../../../components/ActionSheetModal'
 import { MobileNativeChatQueuedMessages } from './MobileNativeChatQueuedMessages'
 import { mobileQueuedMessageCards } from '../../mobile-structured-queued-message-cards'
-import { queuedMessagesQueuePause } from '../../../../../src/shared/structured-agent-session-queued-cards'
+import { queuedMessagesQueuePause } from '../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import type { AgentSessionQueuedMessage } from '../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 
 const fontScale = 1

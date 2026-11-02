@@ -5,7 +5,7 @@ import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage
 } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
-import { queuedMessagesQueuePause } from '../../../src/shared/structured-agent-session-queued-cards'
+import { queuedMessagesQueuePause } from '../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import type { AgentJournalSubmission } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../src/shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { mobileQueuedMessageCards } from './mobile-structured-queued-message-cards'

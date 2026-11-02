@@ -217,7 +217,6 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/agent-session/requests/structured-agent-session-send-mutation.ts',
   'src/shared/agent-session-record',
   'src/shared/agent-session-provider-handle',
-  'src/shared/agent-session-journal-',
   'src/shared/agent-session/journal/',
   'src/main/ai-vault/structured-session-ownership.ts',
   'src/main/native-chat/agent-session-journal/',
@@ -259,7 +258,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/agent-lead-status-fold',
   'src/shared/agent-session-turn-record',
   'src/shared/agent-session/view/structured-agent-session-agent-status',
-  'src/shared/structured-agent-session-projection',
+  'src/shared/agent-session/view/structured-agent-session-projection',
   'src/shared/agent-session/requests/structured-agent-session-projection-sender.spec.ts',
   'src/shared/workspace-session-sleeping-agents',
   // A current desktop's launch route against a released server's capabilities (cross-version-paired-structured-launch).

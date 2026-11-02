@@ -1,7 +1,7 @@
 import { structuredAgentSessionSettledSends } from '../../../../../shared/agent-session/requests/structured-agent-session-send-settlement'
 import type { AgentSessionWriteFailure } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
 import type { AgentSessionHistoryResult } from '../../../../../shared/agent-session/agent-session-wire'
-import type { AgentJournalCursor } from '../../../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   launchStructuredAgentSession,

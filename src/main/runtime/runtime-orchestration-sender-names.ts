@@ -7,7 +7,7 @@ import {
 } from '../../shared/agent-row-conversation-name'
 import type { AgentType } from '../../shared/agent-status-types'
 import { parsePaneKey } from '../../shared/stable-pane-id'
-import { structuredAgentSessionIdFromTabId } from '../../shared/structured-agent-session-tab-id'
+import { structuredAgentSessionIdFromTabId } from '../../shared/agent-session/view/structured-agent-session-tab-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../shared/terminal-tab-types'
 import type { OrchestrationDb } from './orchestration/db'
 import {

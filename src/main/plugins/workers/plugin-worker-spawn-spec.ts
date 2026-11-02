@@ -17,6 +17,7 @@ export function buildPluginWorkerSpawnSpec(
     manifestRevision: JSON.stringify(plugin.manifest),
     reviewedContentHash: plugin.contentHash ?? plugin.consentContentHash ?? null,
     ...(plugin.isDev ? { devRevision: plugin.devRevision ?? null } : {}),
+    ...(plugin.manifest.contributes.hooks.length > 0 ? { keepWarm: true as const } : {}),
     grantedCapabilities
   }
 }

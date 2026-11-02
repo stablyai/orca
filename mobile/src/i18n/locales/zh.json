@@ -2493,6 +2493,10 @@
       "terminal": "终端",
       "tapToFocusPane": "{{title}}，点按以聚焦",
       "inputPane": "{{title}} · 输入"
+    },
+    "structuredOpen": {
+      "worktreeDeleted": "工作树已删除。",
+      "folderWorkspaceRemoved": "文件夹工作区已移除。"
     }
   },
   "settings": {

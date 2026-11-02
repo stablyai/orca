@@ -12,7 +12,7 @@ import {
   queuedMessageCardNeedsAttention,
   queuedMessageReturnedNotice,
   type QueuedMessageCard
-} from '../../../src/shared/structured-agent-session-queued-cards'
+} from '../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import { agentMessageAttribution } from './mobile-agent-message-attribution'
 // The shared projection decides each card's hold; this layer words it for the phone.
 

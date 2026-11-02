@@ -1,4 +1,4 @@
-import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 
 export type StructuredAgentSessionWorkEvidence = {
   record: Pick<AgentSessionConversationView, 'ownerObservation' | 'currentFence'> | null

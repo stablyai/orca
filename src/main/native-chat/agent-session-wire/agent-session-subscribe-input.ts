@@ -1,5 +1,5 @@
 import type { HistoryReader } from './agent-session-history-page-bounds'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import type { SubscriberFieldState } from './agent-session-subscriber-frame-fields'
 

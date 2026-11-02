@@ -199,6 +199,7 @@ function structuredAgentLaunchState(
   )
   intent.explicitLaunchOptions = options.launchOptions ? { ...options.launchOptions } : undefined
   intent.beforeCreate = options.beforeCreate
+  intent.createAfter = options.createAfter
   intent.surfaceAddress = options.surfaceAddress
   const text = launchPromptText(options)
   const stagedPrompt = text

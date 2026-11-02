@@ -3,7 +3,7 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { snapshotLatestTurn } from './agent-session-history-latest-turn'
 
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot

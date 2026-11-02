@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { makeGroup, makeUnifiedTab } from '../worktree-jump-palette-test-fixtures'
+import { makeGroup, makeUnifiedTab } from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import { useStructuredNativeChatPaneCommands } from './use-structured-native-chat-pane-commands'
 import { emptyNativeChatContextMenuActions } from './use-native-chat-context-menu'
 import { runNativeChatSplitTarget } from './native-chat-layout-actions'

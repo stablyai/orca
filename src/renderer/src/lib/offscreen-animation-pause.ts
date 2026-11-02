@@ -16,10 +16,10 @@ function getObserver(): IntersectionObserver | null {
   return observer
 }
 
-/** Marks the element while it is outside the viewport so CSS can stop its animation. */
-export function observeOffscreenAnimation(element: Element): () => void {
+/** Ref callback: marks the element while it is outside the viewport so CSS can stop its animation. */
+export function observeOffscreenAnimation(element: Element | null): () => void {
   const shared = getObserver()
-  if (shared === null) {
+  if (element === null || shared === null) {
     return () => {}
   }
   shared.observe(element)

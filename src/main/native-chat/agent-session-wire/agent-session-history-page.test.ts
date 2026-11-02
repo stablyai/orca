@@ -9,7 +9,7 @@ import {
   type AgentJournalMessageItem,
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session/agent-session-wire'
 import {
   openTestJournalHostDatabase,

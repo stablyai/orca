@@ -45,6 +45,7 @@
       "scannerStopped": "The session scanner stopped unexpectedly. Refresh to try again.",
       "scopePathsTruncated": "Only the first {{limit}} project paths were scanned.",
       "sessionMetadataUnreadable": "Session metadata could not be read this scan.",
+      "transcriptTooLarge": "A {{label}} conversation is too large to load in Session History. Try resuming it in {{label}} directly.",
       "wslDistroNotRunning": "WSL transcript files are unavailable because WSL distro '{{distro}}' is not running. Open a terminal in it to start it.",
       "wslDistroUnverifiable": "WSL transcript files are unavailable because WSL didn't answer whether '{{distro}}' is running. Try again shortly.",
       "wslSessionsFromLastScan": "WSL could not be checked; its sessions are from the last scan.",
@@ -1251,6 +1252,10 @@
         "permissionDenied": "Permission denied.",
         "symlink": "Symbolic links cannot be attached.",
         "unsupported": "Unsupported file type."
+      },
+      "activateAiVaultStructuredSession": {
+        "worktreeDeleted": "The worktree was deleted.",
+        "folderWorkspaceRemoved": "The folder workspace was removed."
       }
     },
     "runtime": {
@@ -1966,6 +1971,7 @@
       "androidSdkMissing": "Android SDK not found. Install Android Studio and set ANDROID_HOME.",
       "avdBootTimeout": "AVD \"{{avdName}}\" did not finish booting in time.",
       "avdExitedBeforeBoot": "AVD \"{{avdName}}\" stopped before it finished booting: {{detail}}",
+      "deviceHubInputBlocked": "Xcode's Device Hub has taken over input for this simulator, so taps and typing won't reach it. Quit Device Hub, then attach the simulator again.",
       "disabled": "Mobile Emulator is disabled in Settings.",
       "noAndroidDevices": "No Android devices or AVDs found. Create one in Android Studio.",
       "noDeviceSpecified": "No emulator device specified. Choose a default device in Settings > Mobile Emulator or pass a device.",
@@ -1976,7 +1982,6 @@
       "scrcpyDownloadFailed": "Could not download scrcpy server: {{detail}}",
       "scrcpyServerInvalid": "Downloaded scrcpy server was invalid or truncated.",
       "serveSimEndpointUnreachable": "serve-sim started but its stream endpoint is not reachable.",
-      "deviceHubInputBlocked": "Xcode's Device Hub has taken over input for this simulator, so taps and typing won't reach it. Quit Device Hub, then attach the simulator again.",
       "serveSimNoEndpoints": "serve-sim did not return stream endpoints.",
       "serveSimUnavailable": "serve-sim is unavailable.",
       "simctlUnavailable": "xcrun simctl is unavailable.",

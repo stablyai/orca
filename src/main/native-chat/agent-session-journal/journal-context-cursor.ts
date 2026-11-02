@@ -1,7 +1,7 @@
 import type Database from '../../sqlite/sync-database'
 import { createHash } from 'node:crypto'
 import type { AgentJournalAcceptanceReceipt } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalReducerState } from './journal-reducer'
 import {
   journalRowsAfterReader,

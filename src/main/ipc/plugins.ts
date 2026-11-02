@@ -18,6 +18,7 @@ import type { PluginService } from '../plugins/plugin-service'
 import { registerPluginFrameEntryHandlers, rendererPanelOwner } from './plugin-frame-entry-ipc'
 import { registerPluginPanelPushHandlers } from './plugin-panel-push-ipc'
 import { registerPluginSettingsHandlers } from './plugin-settings-ipc'
+import { registerPluginStatusBarHandlers } from './plugin-status-bar-ipc'
 import { readPluginPanelImage } from '../plugins/panels/plugin-panel-image'
 import {
   bindPluginFrameGuests,
@@ -53,7 +54,9 @@ const readNewFileTemplateArgsSchema = z.object({
 const invokeCommandArgsSchema = z.object({
   pluginKey: z.string().min(1),
   commandId: z.string().min(1),
-  args: z.unknown().optional()
+  args: z.unknown().optional(),
+  /** Run only if the worker can start it within this many ms (a replacement's fallback). */
+  timeoutMs: z.number().int().positive().max(60_000).optional()
 })
 
 const installArgsSchema = z.discriminatedUnion('kind', [
@@ -153,6 +156,7 @@ export function registerPluginHandlers(
   bindPluginFrameGuests(pluginService)
   registerPluginFrameEntryHandlers(store, pluginService)
   registerPluginPanelPushHandlers(pluginService)
+  registerPluginStatusBarHandlers(pluginService)
   registerPluginSettingsHandlers(pluginService)
 
   ipcMain.handle('plugins:readNewFileTemplate', async (_event, args: unknown) => {
@@ -202,7 +206,8 @@ export function registerPluginHandlers(
   ipcMain.handle('plugins:invokeCommand', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = invokeCommandArgsSchema.parse(args)
-    return pluginService.invokeCommand(parsed.pluginKey, parsed.commandId, parsed.args)
+    const startBy = parsed.timeoutMs === undefined ? undefined : Date.now() + parsed.timeoutMs
+    return pluginService.invokeCommand(parsed.pluginKey, parsed.commandId, parsed.args, startBy)
   })
 
   ipcMain.handle('plugins:resolveGitSource', async (_event, args: unknown) =>

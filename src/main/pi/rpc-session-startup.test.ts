@@ -270,7 +270,7 @@ it('paces Pi reading from journal pressure only after startup, and keeps every r
       { turnScope: { kind: 'thread' } }
     )
   try {
-    for (let index = 0; index < 1025; index++) {
+    for (let index = 0; index < 1024; index++) {
       status(`received-${index}`)
     }
     reply.resolve(state)
@@ -307,12 +307,41 @@ it('paces Pi reading from journal pressure only after startup, and keeps every r
     const texts = reopened
       .snapshot()
       .items.flatMap((row) => (row.body.kind === 'status' ? [row.body.text] : []))
-    expect(texts.filter((text) => text.startsWith('received-'))).toHaveLength(1025)
+    expect(texts.filter((text) => text.startsWith('received-'))).toHaveLength(1024)
     expect(texts.filter((text) => text.startsWith('held-'))).toHaveLength(1025)
   } finally {
     gate.resolve()
     reply.resolve(state)
     compacted.resolve({})
+    await opening.catch(() => {})
+    deferred.close()
+  }
+})
+
+it('bounds live status transitions while Pi startup has no journal reading control', async () => {
+  const h = await setup()
+  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+  const reply = Promise.withResolvers<unknown>()
+  const { acquired, child } = await restart(
+    h,
+    (connection) => {
+      connection.requestOverride = (command) =>
+        command === 'get_state' ? reply.promise : undefined
+    },
+    { events: deferred.sink }
+  )
+  const opening = openAt8(h, acquired.acquisitionGeneration)
+  try {
+    for (let index = 0; index < 1_025; index++) {
+      child.receive({ type: 'auto_compaction_start' })
+    }
+    expect(deferred.state().failed).toBe(true)
+    expect(deferred.state().queuedOperations).toBe(0)
+    reply.resolve(state)
+    await expect(opening).rejects.toThrow('failed')
+    await expect(deferred.drained()).resolves.toMatchObject({ ok: false })
+  } finally {
+    reply.resolve(state)
     await opening.catch(() => {})
     deferred.close()
   }
