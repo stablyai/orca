@@ -27,7 +27,7 @@ export function recoveryContinuationRequired(
   record: AgentSessionRecord
 ): boolean {
   const state = deriveContextTransferState(
-    journal.contextTransfers.read(),
+    journal.contextTransfers.facts(),
     record.providerHandleChain
   )
   return state.kind === 'uncertain' || state.kind === 'unpublished'

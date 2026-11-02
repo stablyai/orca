@@ -1,13 +1,4 @@
-import {
-  contextTransferIndex,
-  invalidateContextTransferIndex,
-  recordContextTransferWrite
-} from './journal-context-transfer'
-import {
-  contextTransferLookup,
-  deriveContextTransferState,
-  contextTransferDelivered
-} from './context-transfer-state'
+import { deriveContextTransferState } from './context-transfer-state'
 export { currentContextTransferTarget, contextTransferDelivered } from './context-transfer-state'
 import type { JournalHostDatabase } from './journal-host-database'
 import { isPersistedAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
@@ -15,9 +6,14 @@ import { decodePersistedAgentSessionRecord } from '../../../shared/agent-session
 import { isDeepStrictEqual } from 'node:util'
 import { randomUUID } from 'node:crypto'
 import type Database from '../../sqlite/sync-database'
-import { journalOpenRefusalError } from './journal-open-failure'
-import { AgentSessionJournalError } from './journal-write-guards'
 import { contextTransferRecordSchema, type ContextTransferRecord } from './context-transfer-record'
+import {
+  CONTEXT_TRANSFER_INDEX_SQL,
+  ContextTransferFacts,
+  decodeContextTransferRow,
+  forgetContextTransferRow,
+  unreadableContextTransfer
+} from './context-transfer-facts'
 
 export const CONTEXT_TRANSFER_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS agent_session_context_transfers (
@@ -26,63 +22,42 @@ CREATE TABLE IF NOT EXISTS agent_session_context_transfers (
 );
 CREATE INDEX IF NOT EXISTS agent_session_context_transfer_owner
   ON agent_session_context_transfers(session_id, handoff_id, kind);
-`
+${CONTEXT_TRANSFER_INDEX_SQL}`
 
-function unreadable(): never {
-  throw journalOpenRefusalError(
-    new AgentSessionJournalError(
-      'journal_read_only',
-      'Saved context transfer cannot be read by this Orca'
-    )
-  )
+/** Databases written by earlier builds of this table gain its lookup indexes; without them queries only slow. */
+export function ensureContextTransferIndexes(db: Database.Database): void {
+  try {
+    db.exec(CONTEXT_TRANSFER_INDEX_SQL)
+  } catch (error) {
+    console.warn('[agent-session-journal] context transfer indexes could not be created', error)
+  }
 }
 
+/** Every decoded row of one chat, in write order; for inspection, never a decision path. */
 export function readContextTransfers(
   db: Database.Database,
   sessionId: string
 ): readonly ContextTransferRecord[] {
-  return contextTransferIndex(db, sessionId, () => loadContextTransfers(db, sessionId))
-}
-
-function loadContextTransfers(db: Database.Database, sessionId: string): ContextTransferRecord[] {
-  const rows = db
+  new ContextTransferFacts(db, sessionId).checkFormat()
+  return db
     .prepare(
       'SELECT id, session_id, handoff_id, kind, format, record_json FROM agent_session_context_transfers WHERE session_id = ? ORDER BY rowid'
     )
     .all(sessionId)
-  return rows.map((row) => {
-    if (row.format !== 1 || typeof row.record_json !== 'string') {
-      return unreadable()
-    }
-    let value: unknown
-    try {
-      value = JSON.parse(row.record_json)
-    } catch {
-      return unreadable()
-    }
-    const decoded = contextTransferRecordSchema.safeParse(value)
-    if (!decoded.success) {
-      return unreadable()
-    }
-    const record = decoded.data
-    if (
-      record.id !== row.id ||
-      record.sessionId !== row.session_id ||
-      record.handoffId !== row.handoff_id ||
-      record.kind !== row.kind
-    ) {
-      return unreadable()
-    }
-    return record
-  })
+    .map(decodeContextTransferRow)
 }
 
 export function writeContextTransfer(db: Database.Database, record: ContextTransferRecord): void {
   contextTransferRecordSchema.parse(record)
-  const records = readContextTransfers(db, record.sessionId)
-  const lookup = contextTransferLookup(records)
-  const previous = lookup.byId.get(record.id)
-  if (previous && (previous.kind !== record.kind || previous.handoffId !== record.handoffId)) {
+  const facts = new ContextTransferFacts(db, record.sessionId)
+  const owned = db
+    .prepare('SELECT session_id FROM agent_session_context_transfers WHERE id = ?')
+    .get(record.id)
+  const previous = facts.record(record.id)
+  if (
+    (owned && owned.session_id !== record.sessionId) ||
+    (previous && (previous.kind !== record.kind || previous.handoffId !== record.handoffId))
+  ) {
     throw new Error('Context transfer identity changed')
   }
   if (previous?.kind === 'handoff' && JSON.stringify(previous) !== JSON.stringify(record)) {
@@ -95,7 +70,7 @@ export function writeContextTransfer(db: Database.Database, record: ContextTrans
   ) {
     throw new Error('Frozen delivery changed')
   }
-  if (record.kind !== 'handoff' && !lookup.handoffs.has(record.handoffId)) {
+  if (record.kind !== 'handoff' && !facts.handoff(record.handoffId)) {
     throw new Error('Context transfer has no source')
   }
   if (record.kind === 'target') {
@@ -122,19 +97,15 @@ export function writeContextTransfer(db: Database.Database, record: ContextTrans
       }
     } else {
       const owner = contextTransferOwner(db, record.sessionId)
-      const state = deriveContextTransferState(records, owner?.providerHandleChain ?? [])
+      const state = deriveContextTransferState(facts, owner?.providerHandleChain ?? [])
       const current = state.kind === 'none' ? undefined : state.target
-      const handoff = lookup.handoffs.get(record.handoffId)
+      const handoff = facts.handoff(record.handoffId)
       const sameHandoff = current?.handoffId === record.handoffId
       const successor = current && handoff?.supersedesHandoffId === current.handoffId
       if ((sameHandoff || successor ? current?.id : null) !== record.predecessorTargetId) {
         throw new Error('Context target predecessor changed')
       }
-      if (
-        current &&
-        !sameHandoff &&
-        (!successor || !contextTransferDelivered(records, current.id))
-      ) {
+      if (current && !sameHandoff && (!successor || !facts.delivered(current.id))) {
         throw new Error('An unfinished context source already owns this conversation')
       }
     }
@@ -143,7 +114,7 @@ export function writeContextTransfer(db: Database.Database, record: ContextTrans
     }
   }
   if (record.kind === 'delivery') {
-    const target = lookup.targets.get(record.targetId)
+    const target = facts.target(record.targetId)
     if (!target || target.handoffId !== record.handoffId || !target.targetLink) {
       throw new Error('Context delivery has no published target')
     }
@@ -167,7 +138,7 @@ export function writeContextTransfer(db: Database.Database, record: ContextTrans
     record.kind,
     JSON.stringify(record)
   )
-  recordContextTransferWrite(db, record)
+  forgetContextTransferRow(db, record.id)
 }
 
 export function closeContextTransfers(
@@ -178,10 +149,8 @@ export function closeContextTransfers(
   at: number,
   successorHandoffId?: string
 ): void {
-  // Copied: each closure write removes its handoff from the open set.
-  for (const handoffId of Array.from(
-    contextTransferLookup(readContextTransfers(db, sessionId)).openHandoffs
-  )) {
+  // Listed before writing: each closure moves the newest-closure boundary past the rest.
+  for (const handoffId of new ContextTransferFacts(db, sessionId).openHandoffs()) {
     writeContextTransfer(db, {
       kind: 'closure',
       id: randomUUID(),
@@ -200,21 +169,21 @@ export class ContextTransferRepository {
     private readonly database: JournalHostDatabase,
     readonly sessionId: string
   ) {}
+  /** Opening refuses a chat holding rows in a format this build doesn't write. */
   reopen(): void {
-    invalidateContextTransferIndex(this.database.db, this.sessionId)
-    this.read()
+    this.facts().checkFormat()
+  }
+  facts(): ContextTransferFacts {
+    return new ContextTransferFacts(this.database.db, this.sessionId)
   }
   read(): readonly ContextTransferRecord[] {
     return readContextTransfers(this.database.db, this.sessionId)
   }
   commit(run: (db: Database.Database) => void): void {
     if (this.database.readOnly) {
-      return unreadable()
+      return unreadableContextTransfer()
     }
-    this.database.transaction((db) => {
-      readContextTransfers(db, this.sessionId)
-      run(db)
-    })
+    this.database.transaction(run)
   }
   write(record: ContextTransferRecord): void {
     this.commit((db) => writeContextTransfer(db, record))

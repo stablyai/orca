@@ -4,11 +4,8 @@ import { agentSessionProviderHandleChainHead } from '../../../shared/agent-sessi
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import {
-  readContextTransfers,
-  writeContextTransfer,
-  contextTransferDelivered
-} from '../agent-session-journal/context-transfer-repository'
+import { writeContextTransfer } from '../agent-session-journal/context-transfer-repository'
+import { ContextTransferFacts } from '../agent-session-journal/context-transfer-facts'
 import type {
   ContextTransferHandoff,
   ContextTransferTarget
@@ -39,14 +36,12 @@ export function prepareNativeRecovery(input: {
   }
   let permit: RecoveryConstructionPermit | undefined
   journal.contextTransfers.commit((db) => {
-    const records = readContextTransfers(db, record.sessionId)
-    const state = deriveContextTransferState(records, record.providerHandleChain)
+    const facts = new ContextTransferFacts(db, record.sessionId)
+    const state = deriveContextTransferState(facts, record.providerHandleChain)
     const current = state.kind === 'none' ? undefined : state.target
     const prior = current
     let handoff =
-      state.kind !== 'none' && !contextTransferDelivered(records, state.target.id)
-        ? state.handoff
-        : undefined
+      state.kind !== 'none' && !facts.delivered(state.target.id) ? state.handoff : undefined
     if (!handoff) {
       const frozen = captureRecoveryContext(journal.snapshot(), journal.canonicalItemId)
       const id = randomUUID()
@@ -111,7 +106,7 @@ export function hasPreparedRecoveryAttempt(
   record: AgentSessionRecord
 ): boolean {
   const state = deriveContextTransferState(
-    journal.contextTransfers.read(),
+    journal.contextTransfers.facts(),
     record.providerHandleChain
   )
   const source = agentSessionProviderHandleChainHead(record.providerHandleChain)

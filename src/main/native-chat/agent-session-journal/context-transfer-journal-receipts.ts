@@ -1,5 +1,6 @@
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
-import { contextTransferLookup, deriveContextTransferState } from './context-transfer-state'
+import { deriveContextTransferState } from './context-transfer-state'
+import { forgetContextTransferRows, type ContextTransferFacts } from './context-transfer-facts'
 import type { ContextTransferDelivery, ContextTransferRecord } from './context-transfer-record'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { matchesContextTransferTarget } from './context-transfer-echo'
@@ -7,7 +8,6 @@ import type Database from '../../sqlite/sync-database'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import {
-  readContextTransfers,
   writeContextTransfer,
   closeContextTransfers,
   contextTransferOwner
@@ -23,7 +23,7 @@ export function writeContextTransferJournalReceipts(
   next: JournalReducerState,
   rows: readonly JournalRow[],
   at: number,
-  indexed: readonly ContextTransferRecord[]
+  facts: ContextTransferFacts
 ): void {
   for (const row of rows) {
     if (
@@ -40,14 +40,6 @@ export function writeContextTransferJournalReceipts(
       )
     }
   }
-  const base = rows.some(
-    (row) =>
-      row.kind === 'item' &&
-      row.body.kind === 'status' &&
-      isAgentSessionProviderContextBoundary(row.body.contextClear)
-  )
-    ? readContextTransfers(db, next.sessionId)
-    : indexed
   const write = (record: ContextTransferRecord) => writeContextTransfer(db, record)
   // A lost outcome leaves the started write uncertain, so it can neither replay nor end the provider's events.
   const settle = (delivery: ContextTransferDelivery) => {
@@ -58,6 +50,8 @@ export function writeContextTransferJournalReceipts(
     } catch (error) {
       db.exec(`ROLLBACK TO ${RECEIPT_SAVEPOINT}`)
       db.exec(`RELEASE ${RECEIPT_SAVEPOINT}`)
+      // Rows decoded inside the undone savepoint may no longer exist as read.
+      forgetContextTransferRows(db)
       console.warn('[agent-session-journal] saving a context delivery outcome failed:', {
         sessionId: next.sessionId,
         deliveryId: delivery.id,
@@ -66,22 +60,22 @@ export function writeContextTransferJournalReceipts(
     }
   }
   const owner = contextTransferOwner(db, next.sessionId)
-  const state = deriveContextTransferState(base, owner?.providerHandleChain ?? [])
+  const state = deriveContextTransferState(facts, owner?.providerHandleChain ?? [])
   const target = state.kind !== 'none' && state.kind !== 'unpublished' ? state.target : undefined
   if (!target) {
     return
   }
-  const lookup = contextTransferLookup(base)
   for (const row of rows) {
     if (
       row.kind === 'dispatch' &&
       row.state === 'pending' &&
       row.fence === (owner?.lease.runtimeFence ?? target.fence)
     ) {
-      if (!target.firstInputId) {
-        write({ ...target, firstInputId: row.clientMessageId })
+      const current = facts.target(target.id)
+      if (current && !current.firstInputId) {
+        write({ ...current, firstInputId: row.clientMessageId })
       }
-      for (const delivery of lookup.carriers.get(row.clientMessageId) ?? []) {
+      for (const delivery of facts.carriers(row.clientMessageId)) {
         if (delivery.targetId === target.id && !delivery.writeStartedAt && !delivery.outcome) {
           write({ ...delivery, writeStartedAt: row.ts })
         }
@@ -93,7 +87,7 @@ export function writeContextTransferJournalReceipts(
     rows.flatMap((row) => (row.kind === 'dispatch' ? [row.clientMessageId] : []))
   )
   for (const carrierInputId of carriers) {
-    const deliveries = lookup.carriers.get(carrierInputId) ?? []
+    const deliveries = facts.carriers(carrierInputId)
     const receipt = next.receipts.get(carrierInputId)
     const submission = next.submissions.get(carrierInputId)
     const accepted = receipt !== undefined && previous.receipts.get(carrierInputId) !== receipt
@@ -108,7 +102,7 @@ export function writeContextTransferJournalReceipts(
       if (!delivery.writeStartedAt) {
         continue
       }
-      const recipient = lookup.targets.get(delivery.targetId)
+      const recipient = facts.target(delivery.targetId)
       const identity = accepted ? parseAgentJournalItemKey(receipt.providerItemId) : null
       const directCarrier =
         identity?.provider === 'orca' &&

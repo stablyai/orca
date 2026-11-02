@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, it } from 'vitest'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { encodeAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
@@ -14,6 +14,11 @@ import {
   openTestJournalHostDatabase
 } from './journal-host-database-test-support'
 import { createJournalReducerState } from './journal-reducer'
+import { ContextTransferFacts } from './context-transfer-facts'
+import {
+  expectSameKeyedWork,
+  instrumentContextTransferFacts
+} from './context-transfer-scaling.test-support'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 const SESSION = 'chat-retained-carriers'
@@ -45,8 +50,8 @@ const link = (i: number): AgentSessionProviderHandleLink => ({
     : {})
 })
 
-/** Counts target-identity reads while one unrelated accepted dispatch passes N retained carriers. */
-async function targetReadsForUnrelatedBatch(retained: number): Promise<number> {
+/** Counts decoded rows and transfer queries while one unrelated accepted dispatch passes N retained carriers. */
+async function unrelatedBatchWork(retained: number) {
   const root = await mkdtemp(join(tmpdir(), 'orca-transfer-receipts-'))
   roots.push(root)
   const { db } = openTestJournalHostDatabase(root)
@@ -91,7 +96,6 @@ async function targetReadsForUnrelatedBatch(retained: number): Promise<number> {
       capture
     }
   ]
-  let reads = 0
   for (let i = 1; i <= retained; i++) {
     const targetLink = link(i)
     chain.push(targetLink)
@@ -108,13 +112,6 @@ async function targetReadsForUnrelatedBatch(retained: number): Promise<number> {
       targetLink,
       firstInputId: `P${i}`
     }
-    Object.defineProperty(target, 'id', {
-      enumerable: true,
-      get: () => {
-        reads += 1
-        return `T${i}`
-      }
-    })
     records.push(target, {
       kind: 'delivery',
       id: `D${i}`,
@@ -139,7 +136,13 @@ async function targetReadsForUnrelatedBatch(retained: number): Promise<number> {
     SESSION,
     JSON.stringify(encodeAgentSessionRecord(owner))
   )
-  reads = 0
+  const insert = db.prepare(
+    'INSERT INTO agent_session_context_transfers (id,session_id,handoff_id,kind,format,record_json) VALUES (?,?,?,?,1,?)'
+  )
+  for (const record of records) {
+    insert.run(record.id, SESSION, record.handoffId, record.kind, JSON.stringify(record))
+  }
+  const work = instrumentContextTransferFacts(db)
   writeContextTransferJournalReceipts(
     db,
     createJournalReducerState(SESSION, 'e'),
@@ -159,13 +162,13 @@ async function targetReadsForUnrelatedBatch(retained: number): Promise<number> {
       }
     ],
     retained + 2,
-    records
+    new ContextTransferFacts(db, SESSION)
   )
-  return reads
+  return { ...work.counts }
 }
 
-it('passes retained unresolved carriers without per-carrier target scans', async () => {
-  const small = await targetReadsForUnrelatedBatch(20)
-  const large = await targetReadsForUnrelatedBatch(200)
-  expect(large).toBeLessThanOrEqual(small * 10)
+it('passes retained unresolved carriers with the same keyed work at any count', async () => {
+  const small = await unrelatedBatchWork(20)
+  const large = await unrelatedBatchWork(200)
+  expectSameKeyedWork(small, large)
 })

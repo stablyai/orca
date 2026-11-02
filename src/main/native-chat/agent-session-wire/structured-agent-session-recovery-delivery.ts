@@ -41,7 +41,7 @@ export function prepareRecoveryDelivery(
           throw new Error('Context delivery lost its owner')
         }
         const current = deriveContextTransferState(
-          ctx.journal.contextTransfers.read(),
+          ctx.journal.contextTransfers.facts(),
           ctx.record()?.providerHandleChain ?? []
         )
         if (

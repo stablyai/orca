@@ -1,7 +1,8 @@
-import { vi } from 'vitest'
-import type Database from '../../sqlite/sync-database'
+import { expect, vi } from 'vitest'
+import Database from '../../sqlite/sync-database'
+import { CONTEXT_TRANSFER_TABLE_SQL } from './context-transfer-repository'
+import { ContextTransferFacts } from './context-transfer-facts'
 import { contextTransferRecordSchema, type ContextTransferRecord } from './context-transfer-record'
-import * as transferState from './context-transfer-state'
 
 /** Seeds closed earlier histories, as clear and rewind retain them, around a chat's live facts. */
 export function seedClosedContextHistories(
@@ -61,51 +62,59 @@ export function seedClosedContextHistories(
   return old.length + live.length
 }
 
-/** Decodes, fact loads, and record-kind reads made outside load passes (a load reads each record once by design). */
 let instrumented: { mockRestore(): void }[] = []
 
+/** Rows decoded, their JSON bytes, and statements that read the transfer table. */
 export function instrumentContextTransferFacts(db: Database.Database) {
   // Each scale instruments afresh; a spy over a spy would wrap itself.
   for (const spy of instrumented.splice(0)) {
     spy.mockRestore()
   }
-  const counts = { decodes: 0, loads: 0, kindReads: 0, transferSelects: 0 }
-  let counting = true
+  const counts = { decodes: 0, decodedBytes: 0, transferQueries: 0 }
   const parse = contextTransferRecordSchema.safeParse.bind(contextTransferRecordSchema)
   const decode = vi
     .spyOn(contextTransferRecordSchema, 'safeParse')
     .mockImplementation((value: unknown) => {
-      counting = false
       counts.decodes += 1
-      const result = parse(value)
-      if (result.success) {
-        const record = result.data
-        const kind = record.kind
-        Object.defineProperty(record, 'kind', {
-          enumerable: true,
-          get: () => {
-            counts.kindReads += counting ? 1 : 0
-            return kind
-          }
-        })
-      }
-      return result
-    })
-  const track = transferState.trackContextTransferLookup
-  const load = vi
-    .spyOn(transferState, 'trackContextTransferLookup')
-    .mockImplementation((records) => {
-      counts.loads += 1
-      track(records)
-      counting = true
+      counts.decodedBytes += Buffer.byteLength(JSON.stringify(value), 'utf8')
+      return parse(value)
     })
   const prepare = db.prepare.bind(db)
   const select = vi.spyOn(db, 'prepare').mockImplementation((sql: string) => {
-    counts.transferSelects += sql.startsWith('SELECT id, session_id, handoff_id') ? 1 : 0
+    counts.transferQueries += /^SELECT\b[\s\S]*\bagent_session_context_transfers\b/.test(sql)
+      ? 1
+      : 0
     return prepare(sql)
   })
-  instrumented = [decode, load, select]
-  const reset = () =>
-    Object.assign(counts, { decodes: 0, loads: 0, kindReads: 0, transferSelects: 0 })
+  instrumented = [decode, select]
+  const reset = () => Object.assign(counts, { decodes: 0, decodedBytes: 0, transferQueries: 0 })
   return { counts, reset }
+}
+
+/** Keyed facts over the given rows, stored in write order in a private in-memory table. */
+export function contextTransferFactsOf(
+  records: readonly ContextTransferRecord[],
+  sessionId = records[0]?.sessionId ?? 'session'
+): ContextTransferFacts {
+  const db = new Database(':memory:')
+  db.exec(CONTEXT_TRANSFER_TABLE_SQL)
+  const insert = db.prepare(
+    'INSERT INTO agent_session_context_transfers (id,session_id,handoff_id,kind,format,record_json) VALUES (?,?,?,?,1,?)'
+  )
+  for (const record of records) {
+    insert.run(record.id, record.sessionId, record.handoffId, record.kind, JSON.stringify(record))
+  }
+  return new ContextTransferFacts(db, sessionId)
+}
+
+/** Same rows and queries at both scales; decoded bytes may differ only by longer identifiers and numbers. */
+export function expectSameKeyedWork(
+  small: { decodes: number; decodedBytes: number; transferQueries: number },
+  large: { decodes: number; decodedBytes: number; transferQueries: number }
+): void {
+  expect({ decodes: large.decodes, transferQueries: large.transferQueries }).toEqual({
+    decodes: small.decodes,
+    transferQueries: small.transferQueries
+  })
+  expect(Math.abs(large.decodedBytes - small.decodedBytes)).toBeLessThanOrEqual(16 * small.decodes)
 }

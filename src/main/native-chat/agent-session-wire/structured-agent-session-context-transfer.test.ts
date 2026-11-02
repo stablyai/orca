@@ -29,6 +29,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { deriveContextTransferState } from '../agent-session-journal/context-transfer-state'
+import { contextTransferRecordSchema } from '../agent-session-journal/context-transfer-record'
 
 let fixture: Awaited<ReturnType<typeof contextTransferFixture>>
 beforeEach(async () => {
@@ -116,10 +117,13 @@ describe('native saved-context recovery delivery', () => {
     const db = openTestJournalHostDatabase(fixture.root).db
     const prepare = vi.spyOn(db, 'prepare')
     const decode = vi.spyOn(storedAgentRecord, 'decodePersistedAgentSessionRecord')
+    const rows = vi.spyOn(contextTransferRecordSchema, 'safeParse')
+    // A whole-chat read lists every row; keyed reads name an ID, kind or key.
+    const wholeChatReads = () =>
+      prepare.mock.calls.filter(([sql]) => sql.endsWith('WHERE session_id = ? ORDER BY rowid'))
     journal.contextTransfers.reopen()
-    expect(
-      prepare.mock.calls.filter(([sql]) => sql.startsWith('SELECT id, session_id, handoff_id'))
-    ).toHaveLength(1)
+    expect(wholeChatReads()).toHaveLength(0)
+    expect(rows).not.toHaveBeenCalled()
     prepare.mockClear()
     await journal.appendLifecycleBatch({
       settlementId: 'late-carrier-batch',
@@ -131,24 +135,20 @@ describe('native saved-context recovery delivery', () => {
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       }))
     })
-    expect(
-      prepare.mock.calls.filter(([sql]) => sql.startsWith('SELECT id, session_id, handoff_id'))
-    ).toHaveLength(0)
+    expect(wholeChatReads()).toHaveLength(0)
+    // Eight echoes of one carrier decode its delivery, target and handoff once in the batch.
+    expect(rows.mock.calls.length).toBeLessThanOrEqual(6)
     expect(
       prepare.mock.calls.filter(([sql]) =>
         sql.startsWith('SELECT record_json FROM agent_session_records')
-      )
-    ).toHaveLength(1)
-    prepare.mockClear()
-    expect(decode).toHaveBeenCalledOnce()
-    // The committed receipt updated the cached facts, so reading them reloads nothing.
+      ).length
+    ).toBeLessThanOrEqual(2)
+    expect(decode.mock.calls.length).toBeLessThanOrEqual(2)
     const committedFacts = journal.contextTransfers.read()
-    expect(
-      prepare.mock.calls.filter(([sql]) => sql.startsWith('SELECT id, session_id, handoff_id'))
-    ).toHaveLength(0)
     expect(committedFacts.find((row) => row.id === delivery.id)).toMatchObject({
       outcome: { kind: 'inline-accepted' }
     })
+    rows.mockRestore()
     decode.mockRestore()
     prepare.mockRestore()
     expect((await fixture.submission(id))?.dispatchState).toBe('accepted')
@@ -199,11 +199,78 @@ describe('native saved-context recovery delivery', () => {
     })
     expect(
       deriveContextTransferState(
-        records,
+        journal.contextTransfers.facts(),
         fixture.store.requireWritableRecord(SESSION).providerHandleChain
       ).kind
     ).toBe('uncertain')
   })
+  it.each([true, false])(
+    'decides from what committed when the receipt savepoint is undone at release (indexes %s)',
+    async (indexed) => {
+      const { journal, native } = await fixture.recoverSavedChat(async () => ({
+        kind: 'unsupported'
+      }))
+      const db = openTestJournalHostDatabase(fixture.root).db
+      if (!indexed) {
+        for (const { name } of db
+          .prepare(
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'agent_session_context_transfer_%' AND name != 'agent_session_context_transfer_owner'"
+          )
+          .all()) {
+          db.exec(`DROP INDEX ${String(name)}`)
+        }
+      }
+      fixture.dispatch.mockResolvedValueOnce({ state: 'admitted' })
+      const p = await fixture.accept('Unknown request must not run again')
+      await eventually(() => expect(fixture.dispatch).toHaveBeenCalledTimes(2))
+      const encoded = fixture.dispatch.mock.calls.at(-1)![0].body
+      const exec = db.exec.bind(db)
+      let failed = 0
+      const release = vi.spyOn(db, 'exec').mockImplementation((sql) => {
+        if (sql === 'RELEASE context_transfer_receipt' && failed++ === 0) {
+          throw new Error('receipt release failed')
+        }
+        return exec(sql)
+      })
+      try {
+        fixture.acquire.mock.calls
+          .at(-1)![0]
+          .events!.appendItem(
+            { provider: 'codex', threadId: native(), turnId: 'echo', ordinal: 0 },
+            encoded,
+            { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+          )
+        await fixture.host.flushStreamedEvents(SESSION)
+      } finally {
+        release.mockRestore()
+      }
+      expect(failed).toBe(2)
+      expect((await fixture.submission(p))?.dispatchState).toBe('accepted')
+      expect(
+        journal.contextTransfers
+          .read()
+          .find((row) => row.kind === 'delivery' && row.mode === 'inline')
+      ).toMatchObject({ carrierInputId: p, outcome: null })
+      expect(
+        deriveContextTransferState(
+          journal.contextTransfers.facts(),
+          fixture.store.requireWritableRecord(SESSION).providerHandleChain
+        ).kind
+      ).toBe('uncertain')
+      const oldNative = native()
+      const before = fixture.dispatch.mock.calls.length
+      const q = await fixture.accept('Continue with the saved number')
+      await eventually(async () =>
+        expect((await fixture.submission(q))?.dispatchState).toBe('accepted')
+      )
+      expect(native()).not.toBe(oldNative)
+      expect(fixture.dispatch).toHaveBeenCalledTimes(before + 1)
+      const words = JSON.stringify(fixture.dispatch.mock.calls.at(-1)![0].body)
+      expect(words).toContain('42')
+      expect(words).toContain('Continue with the saved number')
+      expect(words).not.toContain('Unknown request must not run again')
+    }
+  )
   it('words a failed context write as an Orca fault and an unproved history write as undelivered', async () => {
     const inject = vi.fn<NonNullable<StructuredAgentSessionAdapter['injectHistoricalContext']>>(
       async () => {

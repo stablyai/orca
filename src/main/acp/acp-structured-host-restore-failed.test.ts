@@ -8,6 +8,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as contextTransferEcho from '../native-chat/agent-session-journal/context-transfer-echo'
 import {
+  expectSameKeyedWork,
   instrumentContextTransferFacts,
   seedClosedContextHistories
 } from '../native-chat/agent-session-journal/context-transfer-scaling.test-support'
@@ -377,14 +378,10 @@ describe('a created Grok session Grok reports missing on the first reopen', () =
     }
     const small = await work(20, 0)
     const large = await work(200, 10)
-    // Reopening loads each retained record once; classifying the replay adds no load or scan.
-    for (const counts of [small, large]) {
-      expect(counts).toMatchObject({ decodes: counts.retained, loads: 1 })
-    }
     expect(small.echoes).toBeGreaterThanOrEqual(10)
+    expect(large.retained).toBe(small.retained + 720)
     expect(large.echoes).toBe(small.echoes)
-    expect(large.kindReads).toBe(small.kindReads)
-    expect(large.transferSelects).toBe(small.transferSelects)
+    expectSameKeyedWork(small, large)
     await host.close(SESSION, 'user-close')
   })
 

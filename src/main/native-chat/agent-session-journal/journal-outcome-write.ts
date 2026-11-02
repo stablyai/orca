@@ -1,5 +1,4 @@
 import { rebaseCompletedContextRewind } from './context-transfer-rebase'
-import { readContextTransfers } from './context-transfer-repository'
 import { participateContextTransferJournal } from './journal-context-transfer'
 import { journalInputAcceptance } from './journal-input-provenance'
 import { copyJournalNativeState } from './journal-input-conversion'
@@ -49,7 +48,6 @@ export function publishJournalOutcomeEpoch(
   rows: readonly JournalRow[],
   previous?: JournalReducerState
 ): { adopt: () => JournalReducerState } {
-  readContextTransfers(db, sessionId)
   const first = rows[0]
   if (!first || first.seq !== 1 || first.kind !== 'epoch') {
     throw new Error('missing founding epoch')

@@ -15,8 +15,7 @@ import {
   renderRecoveryCoverage,
   withRecoveryContext
 } from '../agent-session-context-transfer-text'
-import type { ContextTransferRecord } from './context-transfer-record'
-import { contextTransferLookup } from './context-transfer-state'
+import type { ContextTransferFacts } from './context-transfer-facts'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 
 // Every rendered history block and carrier starts with its saved delivery ID.
@@ -30,7 +29,7 @@ export type ContextTransferEcho =
 export function matchContextTransferEcho(input: {
   owner: () => AgentSessionRecord | null
   sessionId: string
-  records: readonly ContextTransferRecord[]
+  facts: ContextTransferFacts
   identity: AgentJournalItemIdentity
   body: AgentJournalItemBody
   fence?: number
@@ -41,18 +40,13 @@ export function matchContextTransferEcho(input: {
   if (body.kind !== 'message') {
     return null
   }
-  const records = input.records
-  if (!records.length) {
-    return null
-  }
   const text = body.blocks
     .flatMap((block) => (block.type === 'text' ? [block.text] : []))
     .join('\n')
-  const lookup = contextTransferLookup(records)
   const ids = new Set(Array.from(text.matchAll(MARKER_ID), (match) => match[1]))
   for (const id of ids) {
-    const delivery = id === undefined ? undefined : lookup.deliveries.get(id)
-    const target = delivery && lookup.targets.get(delivery.targetId)
+    const delivery = id === undefined ? undefined : input.facts.delivery(id)
+    const target = delivery && input.facts.target(delivery.targetId)
     if (
       !delivery ||
       !target?.targetLink ||
@@ -60,7 +54,7 @@ export function matchContextTransferEcho(input: {
     ) {
       continue
     }
-    const handoff = lookup.handoffs.get(target.handoffId)
+    const handoff = input.facts.handoff(target.handoffId)
     if (
       !handoff ||
       delivery.writeStartedAt === undefined ||

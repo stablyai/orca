@@ -29,7 +29,7 @@ export function prepareRecoveryCarrier(
 ) {
   const { clientMessageId } = submission
   const chain = ctx.record()?.providerHandleChain ?? []
-  const state = deriveContextTransferState(ctx.journal.contextTransfers.read(), chain)
+  const state = deriveContextTransferState(ctx.journal.contextTransfers.facts(), chain)
   // Slash-led input goes as typed, like Compact; the next ordinary input carries the context.
   const required =
     state.kind !== 'none' &&
@@ -95,7 +95,7 @@ export function prepareRecoveryCarrier(
 function historyWriteUncertain(ctx: AgentSessionHandoverContext, prepared: ContextTransferState) {
   try {
     const current = deriveContextTransferState(
-      ctx.journal.contextTransfers.read(),
+      ctx.journal.contextTransfers.facts(),
       ctx.record()?.providerHandleChain ?? []
     )
     return (

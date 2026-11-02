@@ -1,4 +1,5 @@
-import { contextTransferLookup, deriveContextTransferState } from './context-transfer-state'
+import { deriveContextTransferState } from './context-transfer-state'
+import { ContextTransferFacts } from './context-transfer-facts'
 import { randomUUID } from 'node:crypto'
 import type Database from '../../sqlite/sync-database'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
@@ -7,7 +8,6 @@ import { captureRecoveryContext } from './context-transfer-capture'
 import {
   closeContextTransfers,
   contextTransferOwner,
-  readContextTransfers,
   writeContextTransfer
 } from './context-transfer-repository'
 import { restoreJournal } from './journal-open'
@@ -21,12 +21,12 @@ export function rebaseContextTransfers(
   commandId: string,
   at: number
 ): void {
-  const records = readContextTransfers(db, snapshot.sessionId)
-  if (contextTransferLookup(records).closureCommands.has(commandId)) {
+  const facts = new ContextTransferFacts(db, snapshot.sessionId)
+  if (facts.closedByCommand(commandId)) {
     return
   }
   const owner = contextTransferOwner(db, snapshot.sessionId)
-  const state = deriveContextTransferState(records, owner?.providerHandleChain ?? [])
+  const state = deriveContextTransferState(facts, owner?.providerHandleChain ?? [])
   if (state.kind === 'none') {
     return
   }
@@ -76,8 +76,8 @@ export function rebaseCompletedContextRewind(
   sessionId: string,
   publishedEpoch?: string
 ): void {
-  const records = readContextTransfers(db, sessionId)
-  if (!records.length) {
+  const facts = new ContextTransferFacts(db, sessionId)
+  if (!facts.any()) {
     return
   }
   const owner = contextTransferOwner(db, sessionId)
@@ -87,8 +87,8 @@ export function rebaseCompletedContextRewind(
     !rewind.epoch ||
     (publishedEpoch !== undefined && rewind.epoch !== publishedEpoch) ||
     // Settle before restoring the kept journal: a repeated publication or nothing applicable needs no rebase.
-    contextTransferLookup(records).closureCommands.has(rewind.operationId) ||
-    deriveContextTransferState(records, owner?.providerHandleChain ?? []).kind === 'none'
+    facts.closedByCommand(rewind.operationId) ||
+    deriveContextTransferState(facts, owner?.providerHandleChain ?? []).kind === 'none'
   ) {
     return
   }

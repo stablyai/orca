@@ -6,14 +6,9 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session/record
 import { recordAgentSessionProviderHandle } from '../../runtime/agent-session/ownership/agent-session-provider-handle-transition'
 import { requireWritableAgentSessionRecord } from '../../runtime/agent-session/records/agent-session-store-state'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import {
-  readContextTransfers,
-  writeContextTransfer
-} from '../agent-session-journal/context-transfer-repository'
-import {
-  contextTransferLookup,
-  deriveContextTransferState
-} from '../agent-session-journal/context-transfer-state'
+import { writeContextTransfer } from '../agent-session-journal/context-transfer-repository'
+import { deriveContextTransferState } from '../agent-session-journal/context-transfer-state'
+import { ContextTransferFacts } from '../agent-session-journal/context-transfer-facts'
 import type { RecoveryConstructionPermit } from './structured-agent-session-construction'
 import type { StructuredAgentSessionProviderOpenResult } from './structured-agent-session-provider-open-contract'
 import type { StructuredAgentSessionProviderStartedContext } from './structured-agent-session-provider-started'
@@ -43,8 +38,8 @@ export async function publishNativeRecovery(input: {
   let committed: AgentSessionRecord | undefined
   const receipt = store.recordReceipt((draft) => {
     const record = requireWritableAgentSessionRecord(draft, sessionId)
-    const records = journal.contextTransfers.read()
-    const state = deriveContextTransferState(records, record.providerHandleChain)
+    const facts = journal.contextTransfers.facts()
+    const state = deriveContextTransferState(facts, record.providerHandleChain)
     const target = state.kind === 'unpublished' ? state.target : undefined
     const source = agentSessionProviderHandleChainHead(record.providerHandleChain)
     if (
@@ -59,12 +54,9 @@ export async function publishNativeRecovery(input: {
     ) {
       throw new Error('Recovery target changed before publication')
     }
-    const lookup = contextTransferLookup(records)
     const prior =
-      target.predecessorTargetId === null
-        ? undefined
-        : lookup.targets.get(target.predecessorTargetId)
-    const handoff = lookup.handoffs.get(target.handoffId)
+      target.predecessorTargetId === null ? undefined : facts.target(target.predecessorTargetId)
+    const handoff = facts.handoff(target.handoffId)
     const key = agentSessionProviderHandleKey(source.handle)
     const recovered = {
       ...link,
@@ -92,8 +84,8 @@ export async function publishNativeRecovery(input: {
   await store.commitOperationReceipt({
     write: (db, row) => {
       receipt.write(db, row)
-      const lookup = contextTransferLookup(readContextTransfers(db, sessionId))
-      const target = lookup.targets.get(permit.targetAttemptId)
+      const facts = new ContextTransferFacts(db, sessionId)
+      const target = facts.target(permit.targetAttemptId)
       const published =
         committed && agentSessionProviderHandleChainHead(committed.providerHandleChain)
       if (!target || !published) {
@@ -104,7 +96,7 @@ export async function publishNativeRecovery(input: {
         targetLink: published,
         acquisitionGeneration: generation
       })
-      const handoff = lookup.handoffs.get(target.handoffId)
+      const handoff = facts.handoff(target.handoffId)
       if (handoff && handoff.capture.coverage.eligibleCount === 0) {
         writeContextTransfer(db, {
           kind: 'delivery',
@@ -151,7 +143,7 @@ export async function recordStartedHandle(
     const state =
       journal &&
       deriveContextTransferState(
-        journal.contextTransfers.read(),
+        journal.contextTransfers.facts(),
         store.requireWritableRecord(event.sessionId).providerHandleChain
       )
     if (!event.recoveryPermit && state?.kind === 'unpublished') {

@@ -1,4 +1,6 @@
+import { rm } from 'node:fs/promises'
 import { afterEach, expect, it, vi } from 'vitest'
+import { agentSessionRecoveryExportRoot } from '../agent-session-context-recovery-exports'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -6,10 +8,6 @@ import {
   type AgentJournalSnapshot
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { selectRecoveryDelivery } from '../agent-session-context-transfer-text'
-import {
-  contextTransferRecordSchema,
-  type ContextTransferRecord
-} from '../agent-session-journal/context-transfer-record'
 import { closeContextTransfers } from '../agent-session-journal/context-transfer-repository'
 import { deriveContextTransferState } from '../agent-session-journal/context-transfer-state'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
@@ -25,6 +23,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import { prepareNativeRecovery } from './structured-agent-session-recovery'
 import {
+  expectSameKeyedWork,
   instrumentContextTransferFacts,
   seedClosedContextHistories
 } from '../agent-session-journal/context-transfer-scaling.test-support'
@@ -64,38 +63,18 @@ async function withClosedHistories(closed: number) {
   return { fixture, journal, native, lose, db, retained }
 }
 
-function countKindReads(records: readonly ContextTransferRecord[]) {
-  const reads = { count: 0 }
-  for (const record of records) {
-    const kind = record.kind
-    Object.defineProperty(record, 'kind', {
-      enumerable: true,
-      get: () => {
-        reads.count += 1
-        return kind
-      }
-    })
-  }
-  return reads
-}
-
 async function retainedHistoryWork(closed: number) {
   const { fixture, journal, native, db } = await withClosedHistories(closed)
-  const decode = vi.spyOn(contextTransferRecordSchema, 'safeParse')
+  const facts = instrumentContextTransferFacts(db)
   journal.contextTransfers.reopen()
-  const reopenDecodes = decode.mock.calls.length
-  const chain = () => fixture.store.requireWritableRecord(SESSION).providerHandleChain
-  // Reopen rederives once; later work must reuse that derivation.
-  deriveContextTransferState(journal.contextTransfers.read(), chain())
-  const reads = countKindReads(journal.contextTransfers.read())
-  decode.mockClear()
+  const reopen = { ...facts.counts }
+  facts.reset()
   const send = await fixture.accept('One ordinary send after the historical handoffs closed')
   await eventually(async () =>
     expect((await fixture.submission(send))?.dispatchState).toBe('accepted')
   )
-  const sendDecodes = decode.mock.calls.length
-  const sendReads = reads.count
-  const marked = countKindReads(journal.contextTransfers.read())
+  const sent = { ...facts.counts }
+  facts.reset()
   await journal.appendItem(
     { provider: 'codex', threadId: native(), turnId: 'marked-output', ordinal: 0 },
     {
@@ -107,7 +86,7 @@ async function retainedHistoryWork(closed: number) {
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     }
   )
-  const markedReads = marked.count
+  const marked = { ...facts.counts }
   const inserts = vi.spyOn(db, 'prepare')
   journal.contextTransfers.commit((tx) =>
     closeContextTransfers(tx, SESSION, 'clear-now', 'context-clear', 2)
@@ -115,23 +94,18 @@ async function retainedHistoryWork(closed: number) {
   const clearWrites = inserts.mock.calls.filter(([sql]) =>
     sql.startsWith('INSERT INTO agent_session_context_transfers')
   ).length
-  decode.mockRestore()
-  return { reopenDecodes, sendDecodes, sendReads, markedReads, clearWrites }
+  return { reopen, sent, marked, clearWrites }
 }
 
-it('keeps send, marked output and clear independent of retained closed histories', async () => {
+it('keeps reopen, send, marked output and clear independent of retained closed histories', async () => {
   const small = await retainedHistoryWork(20)
   const large = await retainedHistoryWork(200)
-  // Reopen decodes each retained record once (3 live + 4 per closed history).
-  expect(small.reopenDecodes).toBe(83)
-  expect(large.reopenDecodes).toBe(803)
-  expect(large).toMatchObject({
-    sendDecodes: 0,
-    sendReads: small.sendReads,
-    markedReads: small.markedReads,
-    clearWrites: 1
-  })
-  expect(small).toMatchObject({ sendDecodes: 0, clearWrites: 1 })
+  // Reopen only checks the stored format; nothing decodes until a keyed read needs a row.
+  expect(small.reopen).toMatchObject({ decodes: 0, transferQueries: 1 })
+  for (const phase of ['reopen', 'sent', 'marked'] as const) {
+    expectSameKeyedWork(small[phase], large[phase])
+  }
+  expect({ small: small.clearWrites, large: large.clearWrites }).toEqual({ small: 1, large: 1 })
 })
 
 function savedView(base: AgentJournalSnapshot, items: number, text: string) {
@@ -189,7 +163,7 @@ async function recoveryWork(items: number) {
   prepare()
   const reentryReads = view.reads.count
   const state = deriveContextTransferState(
-    journal.contextTransfers.read(),
+    journal.contextTransfers.facts(),
     record.providerHandleChain
   )
   if (state.kind === 'none') {
@@ -264,18 +238,15 @@ async function reattachedRecovery(closed: number) {
   return { ...setup, journal, facts }
 }
 
-it('publishes a recovery target with one fact load whatever history is retained', async () => {
+it('publishes a recovery target with keyed reads whatever history is retained', async () => {
   const work = async (closed: number) => {
     const { facts, retained } = await reattachedRecovery(closed)
     return { retained, ...facts.counts }
   }
   const small = await work(20)
   const large = await work(200)
-  // Reopening loads each retained record once; publication itself adds no load or scan.
-  for (const counts of [small, large]) {
-    expect(counts).toMatchObject({ decodes: counts.retained, loads: 1, transferSelects: 1 })
-  }
-  expect(large.kindReads).toBe(small.kindReads)
+  expect(large.retained).toBe(small.retained + 720)
+  expectSameKeyedWork(small, large)
 })
 
 it('carries owed history through occupancy, encoding and selection independent of retained history', async () => {
@@ -296,8 +267,11 @@ it('carries owed history through occupancy, encoding and selection independent o
   }
   const small = await work(20)
   const large = await work(200)
-  expect(small).toMatchObject({ decodes: 0, loads: 0, transferSelects: 0 })
-  expect(large).toEqual(small)
+  expectSameKeyedWork(small, large)
+  expect({ encodings: large.encodings, usage: large.usage }).toEqual({
+    encodings: small.encodings,
+    usage: small.usage
+  })
   expect(small.encodings).toBeGreaterThan(1)
 })
 
@@ -319,8 +293,8 @@ it('classifies marked Codex history imports without scanning retained history', 
   const small = await work(20)
   const large = await work(200)
   expect(small.echoes).toBeGreaterThanOrEqual(10)
-  expect(small).toMatchObject({ decodes: 0, loads: 0 })
-  expect(large).toEqual(small)
+  expect(large.echoes).toBe(small.echoes)
+  expectSameKeyedWork(small, large)
 })
 
 it('rebases a rewind once, without restoring the journal again for a repeated publication', async () => {
@@ -365,21 +339,19 @@ it('rebases a rewind once, without restoring the journal again for a repeated pu
   }
   const small = await work(20)
   const large = await work(200)
-  expect(small.rewound).toMatchObject({ decodes: 0, loads: 0, transferSelects: 0 })
-  expect(large.rewound).toEqual(small.rewound)
-  expect(small.repeated).toEqual({
-    decodes: 0,
-    loads: 0,
-    kindReads: 0,
-    transferSelects: 0,
-    restores: 0
+  expectSameKeyedWork(small.rewound, large.rewound)
+  expect({ small: small.repeated.restores, large: large.repeated.restores }).toEqual({
+    small: 0,
+    large: 0
   })
-  expect(large.repeated).toEqual(small.repeated)
+  expectSameKeyedWork(small.repeated, large.repeated)
 })
 
 it('authenticates an export with no retained-history work and source reads linear in the source', async () => {
   const work = async (closed: number, items: number) => {
-    const { journal, db } = await withClosedHistories(closed)
+    const { fixture, journal, db } = await withClosedHistories(closed)
+    // Recovery's own export may hold this key's slot; the contract measures work, not slot choice.
+    await rm(agentSessionRecoveryExportRoot(fixture.root), { recursive: true, force: true })
     const facts = instrumentContextTransferFacts(db)
     journal.contextTransfers.reopen()
     const base = journal.snapshot()
@@ -406,13 +378,14 @@ it('authenticates an export with no retained-history work and source reads linea
   const small = await work(20, 20)
   const retained = await work(200, 20)
   const source = await work(20, 200)
-  expect(small).toMatchObject({ decodes: 0, loads: 0, kindReads: 0, transferSelects: 0 })
-  expect(retained).toEqual(small)
+  expect(small).toMatchObject({ decodes: 0, transferQueries: 0 })
+  expectSameKeyedWork(small, retained)
+  expect(retained.sourceReads).toBe(small.sourceReads)
   // Authentication must re-read the whole source, so this alone grows with it.
   expect(source.sourceReads).toBe(small.sourceReads * 10)
 })
 
-it('leaves no cached fact behind a rolled-back write', async () => {
+it('leaves no fact behind a rolled-back write', async () => {
   const { fixture, journal } = await settledRecovery()
   const chain = () => fixture.store.requireWritableRecord(SESSION).providerHandleChain
   const before = [...journal.contextTransfers.read()]
@@ -423,5 +396,5 @@ it('leaves no cached fact behind a rolled-back write', async () => {
     })
   ).toThrow('clear failed after closing')
   expect(journal.contextTransfers.read()).toEqual(before)
-  expect(deriveContextTransferState(journal.contextTransfers.read(), chain()).kind).toBe('settled')
+  expect(deriveContextTransferState(journal.contextTransfers.facts(), chain()).kind).toBe('settled')
 })

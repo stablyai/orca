@@ -1,3 +1,4 @@
+import { contextTransferFactsOf } from '../native-chat/agent-session-journal/context-transfer-scaling.test-support'
 import { deriveContextTransferState } from '../native-chat/agent-session-journal/context-transfer-state'
 import { contextTransferDigest } from '../native-chat/agent-session-context-transfer-text'
 import type { ContextTransferRecord } from '../native-chat/agent-session-journal/context-transfer-record'
@@ -256,7 +257,9 @@ describe('Pi host launch resolution', () => {
         firstInputId: null
       }
     ]
-    expect(deriveContextTransferState(facts, [targetLink, actualFork])).toMatchObject({
+    expect(
+      deriveContextTransferState(contextTransferFactsOf(facts), [targetLink, actualFork])
+    ).toMatchObject({
       kind: 'uncertain',
       handoff: { id: 'handoff' },
       target: { id: 'target' }

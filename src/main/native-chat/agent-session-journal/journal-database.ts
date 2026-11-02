@@ -1,5 +1,8 @@
 import { finishContextTransferTransaction } from './journal-context-transfer'
-import { CONTEXT_TRANSFER_TABLE_SQL } from './context-transfer-repository'
+import {
+  CONTEXT_TRANSFER_TABLE_SQL,
+  ensureContextTransferIndexes
+} from './context-transfer-repository'
 // Read user_version before persistent pragmas/DDL: even enabling WAL mutates newer databases.
 
 import { ensureJournalOutcomeTables } from './journal-outcome-format'
@@ -79,6 +82,7 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
     // An earlier build indexed clear successors for a query that no longer exists; writes stop paying for it.
     probe.exec('DROP INDEX IF EXISTS idx_agent_session_clear_successor')
     ensureAgentSessionAttachmentClaimTables(probe)
+    ensureContextTransferIndexes(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true
     return { db: probe, readOnly: false }
@@ -126,14 +130,12 @@ export function runJournalTransaction<T>(
   onStranded: () => void = () => undefined
 ): T {
   db.exec('BEGIN IMMEDIATE')
-  let committed = false
   try {
     const result = run(db)
     if (result instanceof Promise) {
       throw new Error('a chat journal transaction must not await')
     }
     db.exec('COMMIT')
-    committed = true
     return result
   } catch (error) {
     if (db.isTransaction) {
@@ -149,6 +151,6 @@ export function runJournalTransaction<T>(
     }
     throw error
   } finally {
-    finishContextTransferTransaction(db, committed)
+    finishContextTransferTransaction(db)
   }
 }
