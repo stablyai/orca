@@ -43,7 +43,8 @@ describe('typecheck project coverage', () => {
       'src/renderer/src/runtime/observed-provider-accounts.test.tsx',
       'src/renderer/src/components/status-bar/ClaudeSwitcherMenu.observation.test.tsx',
       'src/renderer/src/components/status-bar/ClaudeSwitcherMenu.owner-lifetime.test.tsx',
-      'src/renderer/src/runtime/provider-account-observation.test-fixture.ts'
+      'src/renderer/src/runtime/provider-account-observation.test-fixture.ts',
+      'src/renderer/src/lib/agent-generated-input-safety.test.ts'
     ]
     for (const file of files) {
       expect(

@@ -1,8 +1,41 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { GeneratedAgentInputNotices } from '../../../main/runtime/generated-agent-input-notices'
+import {
+  generatedInputNoticeFrames,
+  type GeneratedAgentInputNotice,
+  type GeneratedInputNoticesPage
+} from '../../../shared/generated-agent-input-notice'
+
+/** The runtime's notice owner as its page method answers: small notices, one page. */
+class FakeNoticeHost {
+  readonly session = 'session-1'
+  revision = 0
+  private readonly notices = new Map<string, GeneratedAgentInputNotice>()
+
+  add(notice: Omit<GeneratedAgentInputNotice, 'id'>): void {
+    this.revision += 1
+    const id = `n${this.revision}`
+    this.notices.set(id, { ...notice, id })
+  }
+
+  dismiss(id: string): void {
+    this.revision += 1
+    this.notices.delete(id)
+  }
+
+  page(): GeneratedInputNoticesPage {
+    return {
+      session: this.session,
+      revision: this.revision,
+      frames: [...this.notices.values()].flatMap(
+        (notice) => generatedInputNoticeFrames(notice).frames
+      ),
+      next: null
+    }
+  }
+}
 
 const state = vi.hoisted(() => ({
-  host: null as GeneratedAgentInputNotices | null,
+  host: null as FakeNoticeHost | null,
   holdPages: false,
   pageReads: [] as (() => void)[],
   shown: [] as string[],
@@ -15,18 +48,14 @@ vi.mock('@/lib/launch-agent-paste-timeout-notice', () => ({
 }))
 vi.mock('./runtime-rpc-client', () => ({
   runtimeEnvironmentSupportsCapability: async () => true,
-  callRuntimeRpc: async (
-    _target: unknown,
-    method: string,
-    from: { cursor?: number; offset?: number }
-  ) => {
+  callRuntimeRpc: async (_target: unknown, method: string) => {
     if (method !== 'terminal.generatedInputNotices.page') {
       return {}
     }
     if (state.holdPages) {
       await new Promise<void>((resolve) => state.pageReads.push(resolve))
     }
-    return state.host!.page(from.cursor, from.offset)
+    return state.host!.page()
   }
 }))
 vi.mock('./runtime-environment-pairing-refresh', () => ({ subscribeRuntimeEnvironment: vi.fn() }))
@@ -61,7 +90,7 @@ function connect(): () => void {
 }
 
 beforeEach(() => {
-  state.host = new GeneratedAgentInputNotices()
+  state.host = new FakeNoticeHost()
   state.holdPages = false
   state.pageReads = []
   state.shown = []
