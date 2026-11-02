@@ -177,8 +177,14 @@ async function switchToChat(
         adopt ? undefined : sessionId,
         before,
         // Any open turn the switch ends is the user's stop, also one waiting on a permission
-        // prompt or a question; the Escape before the stop stays for a working agent only.
-        Boolean(row && mainAgentState(row) !== 'done'),
+        // prompt or a question; the Escape before the stop stays for a working agent only. A row
+        // naming another conversation is that conversation's (panel R146-3); one naming none yet
+        // still counts, as a resumed CLI reports its id only with its first hook.
+        Boolean(
+          row &&
+          mainAgentState(row) !== 'done' &&
+          (!row.providerSession?.id || row.providerSession.id === before.sessionId)
+        ),
         deadline
       )
     : undefined

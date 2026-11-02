@@ -199,64 +199,80 @@ it.each([
   {
     agent: 'Codex, asking a question',
     row: () => codexHookEventState('PreToolUse', 'request_user_input')
+  },
+  // Panel R146-3: the pane's row names another conversation, so it isn't this turn's stop.
+  {
+    agent: 'Codex, its row naming another conversation',
+    row: () => codexHookEventState('PermissionRequest', 'shell'),
+    names: 'another-conversation'
   }
-])('a turn waiting on the user that the switch ends reads Interrupted: $agent', async (c) => {
-  const rowState = c.row()
-  expect(rowState).toBe('waiting')
-  await openCliTurn()
-  const { runtime } = setupMainOwnedWorkspace()
-  const incarnationId = '11111111-1111-4111-8111-111111111111'
-  runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
-  const source = runtime.resolveTerminalPane(`${TAB_ID}:${LEAF_A}`, WORKTREE_ID)
-  if (!source.presentation) {
-    throw new Error('missing captured source')
-  }
-  const stopped = vi.fn(async () => {
-    await runtime.onPtyExit(PTY_A, 0, incarnationId, { hostExitConfirmed: true })
-    return true
-  })
-  runtime.setPtyController({
-    write: () => true,
-    kill: () => false,
-    stopAndWait: stopped,
-    getForegroundProcess: async () => 'codex'
-  })
-  const sent = vi.spyOn(runtime, 'sendTerminal')
-  vi.spyOn(runtime.agentTransitions, 'latestRow').mockImplementation((paneKey) => ({
-    state: rowState as 'waiting',
-    prompt: '',
-    paneKey,
-    connectionId: null,
-    receivedAt: 0,
-    stateStartedAt: 0
-  }))
-  const answer = await executeStructuredSessionSwitch(
-    {
-      sessionId: id,
-      execution: {
-        invocationId: 'waiting',
-        source: {
-          terminal: source.handle,
-          expectedIncarnationId: incarnationId,
-          originalPresentation: source.presentation
+] as { agent: string; row: () => string | undefined; names?: string }[])(
+  'a turn waiting on the user that the switch ends reads Interrupted: $agent',
+  async (c) => {
+    const rowState = c.row()
+    expect(rowState).toBe('waiting')
+    await openCliTurn()
+    const { runtime } = setupMainOwnedWorkspace()
+    const incarnationId = '11111111-1111-4111-8111-111111111111'
+    runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
+    const source = runtime.resolveTerminalPane(`${TAB_ID}:${LEAF_A}`, WORKTREE_ID)
+    if (!source.presentation) {
+      throw new Error('missing captured source')
+    }
+    const stopped = vi.fn(async () => {
+      await runtime.onPtyExit(PTY_A, 0, incarnationId, { hostExitConfirmed: true })
+      return true
+    })
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait: stopped,
+      getForegroundProcess: async () => 'codex'
+    })
+    const sent = vi.spyOn(runtime, 'sendTerminal')
+    vi.spyOn(runtime.agentTransitions, 'latestRow').mockImplementation((paneKey) => ({
+      state: rowState as 'waiting',
+      prompt: '',
+      paneKey,
+      connectionId: null,
+      receivedAt: 0,
+      stateStartedAt: 0,
+      ...(c.names ? { providerSession: { key: 'session_id', id: c.names } } : {})
+    }))
+    const answer = await executeStructuredSessionSwitch(
+      {
+        sessionId: id,
+        execution: {
+          invocationId: 'waiting',
+          source: {
+            terminal: source.handle,
+            expectedIncarnationId: incarnationId,
+            originalPresentation: source.presentation
+          }
         }
-      }
-    },
-    { runtime },
-    'chat'
-  )
-  expect(answer).toEqual({ status: 'completed', sessionId: id })
-  expect(sent).not.toHaveBeenCalled()
-  expect(stopped).toHaveBeenCalledOnce()
-  const { journal } = await rig.host.collaboratorsForTests().lifetime.conversation(id)
-  const turns = journal
-    .snapshot()
-    .items.flatMap(({ body }) => (body.kind === 'turn' ? [body] : []))
-    .filter((turn) => turn.turnId === 'cli-turn')
-  expect(turns).toEqual([
-    expect.objectContaining({ state: 'interrupted', outcome: 'cancellation' })
-  ])
-})
+      },
+      { runtime },
+      'chat'
+    )
+    expect(answer).toEqual({ status: 'completed', sessionId: id })
+    expect(sent).not.toHaveBeenCalled()
+    expect(stopped).toHaveBeenCalledOnce()
+    const { journal } = await rig.host.collaboratorsForTests().lifetime.conversation(id)
+    const turns = journal
+      .snapshot()
+      .items.flatMap(({ body }) => (body.kind === 'turn' ? [body] : []))
+      .filter((turn) => turn.turnId === 'cli-turn')
+    if (c.names) {
+      // Settled as over, not as the user's stop.
+      expect(turns).toEqual([expect.objectContaining({ state: 'interrupted' })])
+      expect(turns[0]).not.toHaveProperty('outcome')
+      return
+    }
+    expect(turns).toEqual([
+      expect.objectContaining({ state: 'interrupted', outcome: 'cancellation' })
+    ])
+  }
+)
 
 it.each([false, true])(
   'stops a replying terminal agent and switches, without asking (replying from the start=%s)',
