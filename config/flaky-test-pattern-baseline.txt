@@ -1043,9 +1043,9 @@
 3 test-no-wall-clock:src/main/wsl/wsl-orcad-real-distro-lane.test.ts
 4 test-no-wall-clock:src/main/wsl/wsl-runner.wsl.test.ts
 1 test-no-wall-clock:src/renderer/src/app-shell/visible-review-reporting.test.ts
-7 test-no-wall-clock:src/renderer/src/components/WorktreeJumpPalette.recent-tabs.behavior.test.tsx
-15 test-no-wall-clock:src/renderer/src/components/WorktreeJumpPalette.recent-tabs.test.tsx
-1 test-no-wall-clock:src/renderer/src/components/WorktreeJumpPalette.test.tsx
+7 test-no-wall-clock:src/renderer/src/components/worktree-jump/WorktreeJumpPalette.recent-tabs.behavior.test.tsx
+15 test-no-wall-clock:src/renderer/src/components/worktree-jump/WorktreeJumpPalette.recent-tabs.test.tsx
+1 test-no-wall-clock:src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx
 3 test-no-wall-clock:src/renderer/src/components/activity/activity-auto-mark-read-loop.react185.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/artifacts/ArtifactCollection.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/artifacts/artifact-list-windowing.test.tsx

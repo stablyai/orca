@@ -5,7 +5,10 @@ import type { FolderWorkspacePathStatusReason } from '../../../shared/folder-wor
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { getDefaultSettings } from '../../../shared/constants'
 import { getFolderWorkspaceStatusRequestSnapshot } from '@/store/folder-workspaces/folder-path-status'
-import { makeGroup, makeUnifiedTab } from '@/components/worktree-jump-palette-test-fixtures'
+import {
+  makeGroup,
+  makeUnifiedTab
+} from '@/components/worktree-jump/worktree-jump-palette-test-fixtures'
 
 // Drive real activation/store/path guarding; replace only singleton/toast/path IPC so mocking cannot hide dispatch or guard regressions.
 
