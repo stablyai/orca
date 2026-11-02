@@ -1,15 +1,5 @@
-import {
-  findIndexedProjectGroupOwner,
-  findIndexedWorktreeOwner,
-  getCatalogOwnerHostId
-} from '../../worktree-runtime-owner-index'
-import { findIndexedRepoOwner } from '../../repo-owner-index'
-import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspace-worktree'
 import type { Tab } from '../../../../../shared/tab-types'
-import {
-  toRuntimeExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import { defaultAgentChatLabel } from '../../../../../shared/agent-session/agent-session-chat-label'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
@@ -40,7 +30,6 @@ import {
   peekWebSessionFocusIntent,
   resolveWebSessionVisibleTabId
 } from '@/runtime/web-session-focus-intent'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 type LaunchSurface = {
   sessionId: string
@@ -249,62 +238,5 @@ export function materializeStructuredLaunchSurface(launch: LaunchSurface, activa
   })
   if (activate !== false) {
     clearWebSessionFocusIntentIfMatches(owner, address.worktreeId, hostTabId)
-  }
-}
-
-export function restoreStructuredLaunchSurfaces(): void {
-  const state = useAppStore.getState()
-  const catalog = {
-    workspaces: [
-      ...state.allWorktrees(),
-      ...selectFolderWorkspaces(state).flatMap((workspace) => {
-        const group = findIndexedProjectGroupOwner(state.projectGroups, workspace.projectGroupId)
-        const host = workspace.executionHostId || workspace.connectionId ? workspace : group
-        const owned = host && { ...workspace, executionHostId: getCatalogOwnerHostId(host) }
-        return owned ? [folderWorkspaceToWorktree(owned)] : []
-      })
-    ]
-  }
-  for (const record of readStructuredAgentLaunchRecords()) {
-    // A host launch's chat comes back failed or unknown, on its own host; others only as before.
-    const hostLaunch = record.hostLaunchOperationId !== undefined
-    if (
-      !record.surfaceAddress ||
-      (!hostLaunch &&
-        (record.executionHostId !== 'local' || record.lifecycle !== 'visibility-unknown'))
-    ) {
-      continue
-    }
-    const workspace = findIndexedWorktreeOwner(catalog, record.surfaceAddress.worktreeId)
-    const environmentId = workspace?.runtimeOwnerEnvironmentId?.trim()
-    if (!workspace || (environmentId && !hostLaunch)) {
-      continue
-    }
-    const repo = findIndexedRepoOwner(state.repos, workspace.repoId)
-    const host = environmentId
-      ? toRuntimeExecutionHostId(environmentId)
-      : (workspace.hostId ?? (repo ? getCatalogOwnerHostId(repo) : undefined))
-    if (
-      host !== getStructuredAgentSessionLaunchOwner(record.sessionId) ||
-      !structuredAgentSessionTargetForHost(record.executionHostId)
-    ) {
-      continue
-    }
-    reserveStructuredLaunchSlot(record)
-    if (record.executionHostId === 'local') {
-      materializeStructuredLaunchSurface(record, false)
-    } else {
-      // A paired host's own slot bookkeeping is not this window's; its chat is drawn as at launch.
-      openStructuredAgentSessionProvisionalTab({
-        worktreeId: record.surfaceAddress.worktreeId,
-        executionHostId: record.executionHostId,
-        sessionId: record.sessionId,
-        agent: record.agent,
-        ...(record.surfaceAddress.targetGroupId
-          ? { targetGroupId: record.surfaceAddress.targetGroupId }
-          : {}),
-        activate: false
-      })
-    }
   }
 }

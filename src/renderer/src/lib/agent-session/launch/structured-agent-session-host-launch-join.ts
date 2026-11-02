@@ -11,7 +11,7 @@ import {
 } from './structured-agent-session-launch-registry'
 
 /** A host launch this window still holds, whatever became of it: a start of it again only shows
- *  it, and an unknown one is read again; nothing is staged or accepted a second time. */
+ *  it, and an unknown or failed one is read again; nothing is staged or accepted a second time. */
 export function joinHeldHostLaunch(
   worktreeId: string,
   agent: TuiAgent,
@@ -28,7 +28,7 @@ export function joinHeldHostLaunch(
   ) {
     return undefined
   }
-  if (held.visibilityUnknown) {
+  if (held.visibilityUnknown || held.callers.outcome === 'failed') {
     readAgain(held)
   }
   if (options.draftFromScope) {

@@ -156,7 +156,8 @@ function buildStructuredAgentSessionLaunchIntent(
 }
 
 /** A definitive refusal consumed its operation id, but the provisional tab still owns its session.
- *  A host launch that ended is not run again: its chat's Retry is an ordinary create. */
+ *  Only an ordinary create is rebuilt: a host launch keeps its operation, and its Retry reads that
+ *  same launch again and never starts another agent. */
 export function retryStructuredAgentSessionLaunchIntent(
   intent: StructuredAgentSessionLaunchIntent
 ): StructuredAgentSessionLaunchIntent {

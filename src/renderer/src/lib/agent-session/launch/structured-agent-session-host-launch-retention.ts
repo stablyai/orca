@@ -3,8 +3,18 @@
  *  the row's address. Only the chat showing here, or the user's own Close, ends that; a refused
  *  tab, a settlement or a reload never does. */
 
-import { useAppStore } from '@/store/index'
+import type { AppState } from '@/store/types'
 import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
+
+// Inject store access to break launch registry → store initialization cycles: store slices import
+// the registry, which reads this.
+let tabsAccessor: (() => Pick<AppState, 'unifiedTabsByWorktree'>) | null = null
+
+export function registerHostLaunchTabsAccessor(
+  fn: () => Pick<AppState, 'unifiedTabsByWorktree'>
+): void {
+  tabsAccessor = fn
+}
 
 export function hostLaunchAwaitsItsTab(launch: {
   cancelled: boolean
@@ -17,7 +27,7 @@ export function hostLaunchAwaitsItsTab(launch: {
   if (!hostLaunch || !surfaceAddress || launch.cancelled) {
     return false
   }
-  return !(useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).some(
+  return !(tabsAccessor?.().unifiedTabsByWorktree[worktreeId] ?? []).some(
     (tab) =>
       tab.contentType === 'agent-session' &&
       tab.entityId === sessionId &&

@@ -75,6 +75,7 @@ import {
 } from '@/lib/renderer-memory-profile'
 import { estimateStateCollectionKB } from '@/lib/state-collection-byte-estimate'
 import { registerWindowsPathAccessEnvironments } from '@/lib/windows-path-access'
+import { registerHostLaunchTabsAccessor } from '@/lib/agent-session/launch/structured-agent-session-host-launch-retention'
 
 // Dev-only churn probe cannot be armed in shipped builds; avoid its per-write wrapper. Cascade probe stays enabled for field crash telemetry.
 const withDevelopmentStoreProbes = (createState: StateCreator<AppState, [], []>) =>
@@ -160,6 +161,7 @@ registerStructuredSelectionCatalogStore({
   subscribe: useAppStore.subscribe
 })
 registerHttpLinkStoreAccessor(() => useAppStore.getState(), useAppStore.subscribe)
+registerHostLaunchTabsAccessor(() => useAppStore.getState())
 registerHttpLinkGroupActionAvailability((request) =>
   canOfferHttpLinkGroupAction(useAppStore.getState(), request)
 )

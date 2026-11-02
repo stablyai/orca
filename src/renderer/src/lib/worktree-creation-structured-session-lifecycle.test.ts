@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 
-import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
@@ -22,8 +21,13 @@ import {
   resetStructuredAgentLaunchRegistryForTests
 } from './agent-session/launch/structured-agent-session-launch-registry'
 import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
-import { retryStructuredAgentSessionLaunch } from './agent-session/launch/structured-agent-session-launch'
-import { restoreStructuredLaunchSurfaces } from './agent-session/launch/structured-agent-session-launch-surface'
+import {
+  retryStructuredAgentSessionLaunch,
+  startStructuredAgentLaunch
+} from './agent-session/launch/structured-agent-session-launch'
+import { newAgentLaunchRequestId } from './agent-launch-request-id'
+import { requiredSetupLaunchFailureText } from './required-setup-launch-failure'
+import { restoreStructuredLaunchSurfaces } from './agent-session/launch/structured-agent-session-launch-restore'
 import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
 import { closeDismissedHostLaunch, pendingChatDraftScopeKey } from './worktree-creation-host-launch'
 import { StructuredAgentSessionCreateRefusalError } from './agent-session/launch/structured-agent-session-launch-errors'
@@ -41,7 +45,6 @@ import {
 import { pendingCreationChatDraftScopeKey } from './pending-worktree-creation'
 import { hasStagedStructuredLaunchPrompt } from './agent-session/launch/structured-agent-session-launch-prompt'
 import { toast } from 'sonner'
-import { buildWorktreePurgeState } from '@/store/slices/worktrees/teardown/worktree-purge-state'
 
 const mocks = vi.hoisted(() => ({
   admission: vi.fn<typeof admissionModule.admitStructuredLaunchOnHost>(),
@@ -500,6 +503,75 @@ function expectNothingStartedTwice(createWorktree: ReturnType<typeof vi.fn>): vo
   expect(state.pendingStartupByTabId).toEqual({})
 }
 
+/** Retry twice on a failed host launch's chat: each only reads launch `operationId` again, which
+ *  stays failed, and the held message is given back once. */
+async function expectRetryRereadsOnly(sessionId: string, operationId: string): Promise<void> {
+  for (const _click of [1, 2]) {
+    const before = mocks.hostLaunch.mock.calls.length
+    expect(retryStructuredAgentSessionLaunch(worktree.id, sessionId)).toBe(true)
+    await vi.waitFor(() => expect(lifecycleOf(sessionId)).toBe('failed'))
+    expect(mocks.hostLaunch.mock.calls.slice(before)).toEqual([
+      ['agent.launchStatus', expect.objectContaining({ operationId })]
+    ])
+    // The host's own recorded failure: Setup did not finish.
+    expect(getStructuredAgentSessionLaunchFailure(worktree.id, sessionId)).toEqual({
+      kind: 'not-started',
+      causeText: requiredSetupLaunchFailureText('Codex')
+    })
+    expect(sessionDraft(sessionId).split(HELD)).toHaveLength(2)
+    expect(sessionDraft(sessionId)).toContain(FOLLOW_UP)
+  }
+}
+
+describe('retrying a host launch that failed', () => {
+  afterEach(() => {
+    resetStructuredAgentLaunchPersistenceForTests()
+    localStorage.removeItem(LAUNCHES)
+  })
+
+  it('reads that same launch again, while a new chat still starts in the workspace', async () => {
+    mocks.hostAccepts = true
+    const emptyRequest = { ...request, quickPrompt: '' }
+    useAppStore.getState().updatePendingWorktreeCreation('creation-1', {
+      request: emptyRequest,
+      heldChatMessage: HELD
+    })
+    updateNativeChatComposerDraft(
+      pendingCreationChatDraftScopeKey('creation-1'),
+      { text: FOLLOW_UP, images: [] },
+      'immediate'
+    )
+    const createWorktree = vi.fn().mockResolvedValue({ worktree })
+    useAppStore.setState({ createWorktree })
+    hostReplies(async () => hostAnswer('failed', ''))
+    await executeWorktreeCreation('creation-1', emptyRequest)
+    await main.settle()
+    const { sessionId, operationId } = acceptCalls()[0] as {
+      sessionId: string
+      operationId: string
+    }
+    await vi.waitFor(() => expect(lifecycleOf(sessionId)).toBe('failed'))
+    expect(chatTabs(sessionId)).toHaveLength(1)
+
+    await expectRetryRereadsOnly(sessionId, operationId)
+    expectNothingStartedTwice(createWorktree)
+
+    // After fixing Setup, the user's own new chat is a separate launch with its own create.
+    const reads = mocks.hostLaunch.mock.calls.length
+    const manual = startStructuredAgentLaunch(worktree.id, 'codex', {
+      requestId: newAgentLaunchRequestId(),
+      prompt: 'Setup is fixed now'
+    })
+    expect(manual.sessionId).not.toBe(sessionId)
+    await vi.waitFor(() => expect(mocks.createSession).toHaveBeenCalledOnce())
+    const created = mocks.createSession.mock.calls[0]![0]
+    expect(created).toMatchObject({ worktreeId: worktree.id, sessionId: manual.sessionId })
+    expect(created.hostLaunch).toBeUndefined()
+    expect(mocks.hostLaunch.mock.calls).toHaveLength(reads)
+    expect(lifecycleOf(sessionId)).toBe('failed')
+  })
+})
+
 describe.skipIf(!ORCA_LAYOUT_OWNER_IS_MAIN)('a host launch whose chat the layout refused', () => {
   afterEach(() => {
     resetStructuredAgentLaunchPersistenceForTests()
@@ -551,8 +623,14 @@ describe.skipIf(!ORCA_LAYOUT_OWNER_IS_MAIN)('a host launch whose chat the layout
     // Kept: the failure settled while no tab showed it.
     expect(savedLaunch(launch.sessionId)).toMatchObject({ lifecycle: 'failed' })
 
+    const reads = mocks.hostLaunch.mock.calls.length
     retryBackgroundWorktreeCreation('creation-1')
     await vi.waitFor(() => expect(chatTabs(launch.sessionId)).toHaveLength(1))
+    // Showing it reads that same launch again, which is still failed.
+    await vi.waitFor(() => expect(lifecycleOf(launch.sessionId)).toBe('failed'))
+    expect(mocks.hostLaunch.mock.calls.slice(reads)).toEqual([
+      ['agent.launchStatus', expect.objectContaining({ operationId: launch.operationId })]
+    ])
     expect(sessionDraft(launch.sessionId)).toContain(HELD)
     expect(sessionDraft(launch.sessionId)).toContain(FOLLOW_UP)
     expectNothingStartedTwice(createWorktree)
@@ -614,6 +692,12 @@ describe.skipIf(!ORCA_LAYOUT_OWNER_IS_MAIN)('a host launch whose chat the layout
       if (answer === 'failed') {
         expect(lifecycleOf(launch.sessionId)).toBe('failed')
         expect(sessionDraft(launch.sessionId)).toContain(HELD)
+        hostReplies(async () => hostAnswer(answer, launch.sessionId))
+        await expectRetryRereadsOnly(launch.sessionId, launch.operationId)
+        expect(savedLaunch(launch.sessionId)).toMatchObject({
+          hostLaunchOperationId: launch.operationId,
+          lifecycle: 'failed'
+        })
       } else {
         hostReplies(async () => hostAnswer(answer, launch.sessionId))
         expect(retryStructuredAgentSessionLaunch(worktree.id, launch.sessionId)).toBe(true)
@@ -639,181 +723,4 @@ describe.skipIf(!ORCA_LAYOUT_OWNER_IS_MAIN)('a host launch whose chat the layout
     expect(chatTabs(launch.sessionId)).toEqual([])
     expect(lifecycleOf(launch.sessionId)).toBeNull()
   })
-})
-
-describe('restoring held host launches at startup', () => {
-  afterEach(() => {
-    resetStructuredAgentLaunchPersistenceForTests()
-    localStorage.removeItem(LAUNCHES)
-  })
-
-  const row = (
-    sessionId: string,
-    executionHostId: string,
-    extra: Record<string, unknown> = {}
-  ) => ({
-    sessionId,
-    executionHostId,
-    agent: 'codex',
-    lifecycle: 'failed',
-    clientOperationId: `op-${sessionId}`,
-    payloadFingerprint: 'fingerprint',
-    expectedRuntimeFence: null,
-    surfaceAddress: { worktreeId: worktree.id, precedingTabIds: [] },
-    ...extra
-  })
-
-  it('draws a paired launch only on the host it ran on, and no ordinary failed launch', async () => {
-    // The workspace is the paired server's, as its catalog says.
-    useAppStore.setState({
-      worktreesByRepo: { [worktree.repoId]: [{ ...worktree, runtimeOwnerEnvironmentId: 'env-1' }] }
-    })
-    localStorage.setItem(
-      LAUNCHES,
-      JSON.stringify([
-        row('codex-owned', 'runtime:env-1', { hostLaunchOperationId: 'host-op-1' }),
-        row('codex-elsewhere', 'runtime:env-2', { hostLaunchOperationId: 'host-op-2' }),
-        row('codex-here', 'local', { hostLaunchOperationId: 'host-op-3' }),
-        row('codex-ordinary', 'runtime:env-1')
-      ])
-    )
-    resetStructuredAgentLaunchPersistenceForTests()
-
-    restoreStructuredLaunchSurfaces()
-    await main.settle()
-    expect(chatTabs('codex-owned')).toMatchObject([{ executionHostId: 'runtime:env-1' }])
-    for (const sessionId of ['codex-elsewhere', 'codex-here', 'codex-ordinary']) {
-      expect(chatTabs(sessionId)).toEqual([])
-      // Not shown here, never retired: its own host can still show it.
-      expect(savedLaunch(sessionId)).toBeDefined()
-    }
-    expect(mocks.rpc).toEqual([])
-  })
-
-  const TERMINAL_TAB = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
-  const terminalAnswer = (outcome: 'handed-to-terminal' | 'not-delivered') => ({
-    state: 'succeeded',
-    result: {
-      outcome: {
-        kind: 'terminal',
-        handle: 'term_1',
-        paneKey: `${TERMINAL_TAB}:3f2504e0-4f89-41d3-9a0c-0305e82c3301`
-      },
-      worktreeId: worktree.id,
-      receipt: {
-        mode: 'terminal',
-        preferred: 'structured',
-        reason: 'structured_unsupported_on_host',
-        detail: ''
-      },
-      prompt: { delivery: 'submit', outcome }
-    }
-  })
-
-  it.each([
-    ['handed the held message to it', 'handed-to-terminal', false],
-    ['did not deliver the held message', 'not-delivered', true]
-  ] as const)(
-    "puts the host's terminal in a restored chat's place once it %s",
-    async (_case, outcome, chatStays) => {
-      // A launch from before the reload, with no saved tab: its row holds the message.
-      localStorage.setItem(
-        LAUNCHES,
-        JSON.stringify([
-          row('codex-restored', 'local', {
-            lifecycle: 'pending',
-            hostLaunchOperationId: 'host-op-1',
-            firstMessage: {
-              clientMessageId: 'held-message',
-              body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: HELD }] }
-            }
-          })
-        ])
-      )
-      resetStructuredAgentLaunchPersistenceForTests()
-      restoreStructuredLaunchSurfaces()
-      await main.settle()
-      expect(chatTabs('codex-restored')).toHaveLength(1)
-
-      // The host's terminal reaches this window; its record says that is what it started.
-      useAppStore.getState().createTab(worktree.id, undefined, undefined, { id: TERMINAL_TAB })
-      hostReplies(async () => terminalAnswer(outcome))
-      expect(retryStructuredAgentSessionLaunch(worktree.id, 'codex-restored')).toBe(true)
-
-      const tabIds = () =>
-        (useAppStore.getState().unifiedTabsByWorktree[worktree.id] ?? []).map((tab) => tab.id)
-      if (chatStays) {
-        // The text is still the user's: the chat holds it right beside the terminal.
-        await vi.waitFor(() => expect(sessionDraft('codex-restored')).toBe(HELD))
-        await vi.waitFor(() =>
-          expect(getStructuredAgentSessionLaunchFailure(worktree.id, 'codex-restored')).toEqual(
-            expect.objectContaining({ code: 'structured_agent_session_unsupported' })
-          )
-        )
-        await main.settle()
-        const chat = chatTabs('codex-restored')[0]!
-        const order = useAppStore
-          .getState()
-          .groupsByWorktree[worktree.id]?.find((group) => group.id === chat.groupId)?.tabOrder
-        expect(order?.indexOf(TERMINAL_TAB)).toBe((order?.indexOf(chat.id) ?? -2) + 1)
-        expect(savedLaunch('codex-restored')).toMatchObject({ lifecycle: 'failed' })
-      } else {
-        await vi.waitFor(() => expect(chatTabs('codex-restored')).toEqual([]))
-        await main.settle()
-        expect(tabIds()).toContain(TERMINAL_TAB)
-        expect(savedLaunch('codex-restored')).toBeUndefined()
-        // Closed as any chat is: a window-owned build keeps its usual close tombstone.
-        expect(lifecycleOf('codex-restored')).toBe(ORCA_LAYOUT_OWNER_IS_MAIN ? null : 'cancelled')
-      }
-      // Only read: nothing accepted, created, sent or typed into a terminal again.
-      expect(acceptCalls()).toEqual([])
-      expect(mocks.createSession).not.toHaveBeenCalled()
-      expect(mocks.rpc).not.toContain('agentSession.create')
-      expect(mocks.rpc).not.toContain('agentSession.send')
-      expect(useAppStore.getState().pendingStartupByTabId).toEqual({})
-      expect(useAppStore.getState().tabsByWorktree[worktree.id]?.map((tab) => tab.id)).toEqual([
-        TERMINAL_TAB
-      ])
-    }
-  )
-
-  it.each([
-    ['its host lists the workspace no more', true],
-    ['its host cannot be read', false]
-  ] as const)(
-    'retires a paired launch whose chat never showed only when %s',
-    async (_case, hostListed) => {
-      useAppStore.setState({
-        worktreesByRepo: {
-          [worktree.repoId]: [{ ...worktree, runtimeOwnerEnvironmentId: 'env-1' }]
-        }
-      })
-      localStorage.setItem(
-        LAUNCHES,
-        JSON.stringify([row('codex-paired', 'runtime:env-1', { hostLaunchOperationId: 'host-op' })])
-      )
-      // After a reload, before anything drew its chat.
-      resetStructuredAgentLaunchPersistenceForTests()
-      if (hostListed) {
-        // The host's own listing, as its refresh applies one that dropped the workspace.
-        const state = useAppStore.getState()
-        useAppStore.setState(
-          buildWorktreePurgeState(state, [
-            hostWorktreeTarget({ id: worktree.id, hostId: 'runtime:env-1' })
-          ])
-        )
-        expect(savedLaunch('codex-paired')).toBeUndefined()
-        restoreStructuredLaunchSurfaces()
-        await main.settle()
-        expect(chatTabs('codex-paired')).toEqual([])
-      } else {
-        // No listing came: nothing proves the workspace gone, so the launch still shows.
-        restoreStructuredLaunchSurfaces()
-        await main.settle()
-        expect(savedLaunch('codex-paired')).toBeDefined()
-        expect(chatTabs('codex-paired')).toHaveLength(1)
-      }
-      expect(mocks.rpc).toEqual([])
-    }
-  )
 })

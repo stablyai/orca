@@ -127,7 +127,8 @@ function resetStructuredLaunchCallers(state: StructuredLaunchState): void {
 
 function restartStructuredLaunchState(state: StructuredLaunchState): void {
   const wasVisibilityUnknown = state.visibilityUnknown
-  if (!wasVisibilityUnknown) {
+  // A host launch keeps its operation whatever became of it: restarting it only reads it again.
+  if (!wasVisibilityUnknown && !state.intent.hostLaunch) {
     const surfaceAddress = state.intent.surfaceAddress
     state.intent = retryStructuredAgentSessionLaunchIntent(state.intent)
     state.intent.surfaceAddress = surfaceAddress
@@ -301,8 +302,9 @@ export function retryStructuredAgentSessionLaunch(worktreeId: string, sessionId:
   ) {
     return false
   }
-  // Only reads the host's record of its launch; whatever that started shows in the chat's place.
-  const rereadsHostLaunch = state.visibilityUnknown && state.intent.hostLaunch !== undefined
+  // Only reads the host's record of its launch, unknown or failed; whatever that started shows in
+  // the chat's place.
+  const rereadsHostLaunch = state.intent.hostLaunch !== undefined
   restartStructuredLaunchState(state)
   if (rereadsHostLaunch) {
     adoptRereadHostLaunchTerminal(state)

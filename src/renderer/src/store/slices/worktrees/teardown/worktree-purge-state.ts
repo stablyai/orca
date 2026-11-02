@@ -90,7 +90,11 @@ export function buildFullWorktreePurgeState(
   const worktreeIdSet = new Set(normalizedTargets.map((target) => target.id))
   forgetCombinedDiffViewsForWorktrees(worktreeIdSet)
   // Why: bulk purges bypass close actions, so provisional ownership must die before tab state does.
-  const cancelledSessionIds = cancelStructuredLaunchesForWorktrees(worktreeIdSet)
+  const cancelledSessionIds = cancelStructuredLaunchesForWorktrees(
+    worktreeIdSet,
+    undefined,
+    normalizedTargets
+  )
   for (const worktreeId of worktreeIdSet) {
     retirePurgedTabLaunches(
       s,
