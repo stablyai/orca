@@ -160,7 +160,11 @@ describe('a saved restore whose conversation is gone', () => {
     }
   })
 
-  it('gives a request that joined the claim the same fresh start, never the replaced resume', async () => {
+  const TYPED = `codex  resume ${ID}   --search`
+  it.each<[string, Record<string, unknown>]>([
+    ['a saved restore of it starts fresh too', {}],
+    ['an explicit resume of it keeps its own command', { resumeOrigin: undefined, command: TYPED }]
+  ])('a request that joined the claim: %s', async (_label, joinerOverrides) => {
     hooks.captureLaunchSeed.mockReset().mockReturnValue(() => true)
     let reportMissing: (presence: string) => void = () => {}
     probe.mockReset().mockImplementation(() => new Promise((resolve) => (reportMissing = resolve)))
@@ -179,7 +183,7 @@ describe('a saved restore whose conversation is gone', () => {
     const spawn = vi
       .spyOn(localProvider, 'spawn')
       .mockImplementation(async () => ({ id: `pty-${spawn.mock.calls.length}` }))
-    const request = () =>
+    const request = (overrides: Record<string, unknown> = {}) =>
       spawnPtyFromRuntimeController(deps(host()), {
         cols: 80,
         rows: 24,
@@ -191,24 +195,29 @@ describe('a saved restore whose conversation is gone', () => {
         resumeProviderSession: { key: 'session_id', id: ID },
         launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} },
         env: {},
-        agentSessionEnsure: ensure
+        agentSessionEnsure: ensure,
+        ...overrides
       })
     try {
       const creator = request()
       await vi.waitFor(() => expect(probe).toHaveBeenCalledOnce())
-      const joiner = request()
+      const joiner = request(joinerOverrides)
       await new Promise((resolve) => setTimeout(resolve, 10))
       reportMissing('missing')
       const results = await Promise.all([creator, joiner])
-      expect(spawn.mock.calls.map(([options]) => options.command)).toEqual([
-        expect.not.stringContaining(ID),
-        expect.not.stringContaining(ID)
-      ])
-      for (const result of results) {
-        expect(result).toMatchObject({ agentResumeUnavailable: true })
-        expect(result.resumeProviderSession).toBeUndefined()
+      const [creatorCommand, joinerCommand] = spawn.mock.calls.map(([options]) => options.command)
+      expect(creatorCommand).not.toContain(ID)
+      expect(results[0]).toMatchObject({ agentResumeUnavailable: true })
+      expect(results[0].resumeProviderSession).toBeUndefined()
+      if (joinerOverrides.command) {
+        expect(joinerCommand).toBe(TYPED)
+        expect(results[1]).not.toHaveProperty('agentResumeUnavailable')
+      } else {
+        expect(joinerCommand).not.toContain(ID)
+        expect(results[1]).toMatchObject({ agentResumeUnavailable: true })
+        expect(results[1].resumeProviderSession).toBeUndefined()
       }
-      // The joiner applied the creator's verdict; it neither read the seed nor the store again.
+      // The joiner never read the seed or the store itself.
       expect(hooks.captureLaunchSeed).toHaveBeenCalledOnce()
       expect(probe).toHaveBeenCalledOnce()
     } finally {

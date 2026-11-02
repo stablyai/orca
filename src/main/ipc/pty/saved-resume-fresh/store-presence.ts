@@ -1,5 +1,6 @@
 import { dirname, basename, isAbsolute, join } from 'node:path'
 import { getSystemCodexHomePath } from '../../../codex/codex-home-paths'
+import { codexHomePathsEqual } from '../host-env/codex-home'
 import { hasCustomCodexHomeOverrideForLaunch } from '../../../codex/codex-real-home-path'
 import { isCodexHistorySharedAcrossAccounts } from '../../../codex-accounts/codex-history-sharing'
 import {
@@ -104,7 +105,13 @@ async function codexStorePresence(
   if (bridged || hasCustomCodexHomeOverrideForLaunch(query.launchEnv)) {
     return 'unknown'
   }
-  const home = query.codexHome.selected ?? getSystemCodexHomePath()
+  // The spawn's own CODEX_HOME is what Codex reads; a routed home it disagrees with is unsettled.
+  const launchHome = query.launchEnv.CODEX_HOME?.trim()
+  const selected = query.codexHome.selected
+  if (launchHome && selected && !codexHomePathsEqual(launchHome, selected)) {
+    return 'unknown'
+  }
+  const home = selected ?? launchHome ?? getSystemCodexHomePath()
   // Reverting a thread adds `_<rollout>`; compressed rollouts still count as the conversation.
   const name = new RegExp(
     `-${escapeRegExp(query.providerSession.id)}(?:_[\\w-]+)?\\.jsonl(?:\\.zst)?$`,

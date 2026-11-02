@@ -110,25 +110,30 @@ export async function startSavedResumeFreshWhenMissing(
   )
 }
 
-/** A request that joined a claim whose creator started fresh applies that verdict to its own
- *  request; the creator consumed the seed, and the joiner never runs the replaced resume. */
+/** A saved restore that joined a claim whose creator started fresh applies that verdict to its
+ *  own request; the creator consumed the seed, so it never runs the replaced resume. Any other
+ *  joiner, such as an explicit resume of the same conversation, keeps its own command. */
 export async function startJoinedSavedResumeFresh(
   ctx: PtySpawnOperationState,
   launch: SavedResumeLaunchFacts | undefined,
   verdict: SavedResumeStartedFresh
-): Promise<boolean> {
+): Promise<'started-fresh' | 'not-a-saved-restore' | 'failed'> {
   const eligible = eligibleSavedRestore(ctx, launch)
-  return Boolean(
-    eligible &&
-    launch &&
-    eligible.agent === verdict.replaced.agent &&
-    agentProviderSessionsEqual(
+  if (
+    !eligible ||
+    !launch ||
+    eligible.agent !== verdict.replaced.agent ||
+    !agentProviderSessionsEqual(
       eligible.agent,
       eligible.providerSession,
       verdict.replaced.providerSession
-    ) &&
-    (await applyFreshLaunch(ctx, launch, eligible.agent, ctx.args.launchConfig, () => true))
-  )
+    )
+  ) {
+    return 'not-a-saved-restore'
+  }
+  return (await applyFreshLaunch(ctx, launch, eligible.agent, ctx.args.launchConfig, () => true))
+    ? 'started-fresh'
+    : 'failed'
 }
 
 function effectiveLaunchEnv(ctx: PtySpawnOperationState): Record<string, string> {

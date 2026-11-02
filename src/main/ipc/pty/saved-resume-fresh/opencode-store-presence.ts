@@ -18,10 +18,16 @@ export async function openCodeStorePresence(
   query: SavedResumeStoreQuery,
   budget: StoreReadBudget
 ): Promise<StorePresence> {
-  const env = query.launchEnv
+  const accountData = query.launchEnv.ORCA_DATA_ACCOUNT_DATA_HOME?.trim()
+  // An account pane's shell re-exports its data folder after startup files run; otherwise a
+  // startup file's assignment replaces the spawn's value.
+  const env = accountData
+    ? { ...query.launchEnv, XDG_DATA_HOME: accountData, OPENCODE_DB: 'opencode.db' }
+    : query.launchEnv
   if (
-    (env.XDG_DATA_HOME === undefined && shellStartupAssigns('XDG_DATA_HOME', env)) ||
-    (env.OPENCODE_DB === undefined && shellStartupAssigns('OPENCODE_DB', env))
+    accountData
+      ? query.launchEnv.ORCA_DATA_ACCOUNT_PROVIDER !== 'opencode'
+      : shellStartupAssigns('XDG_DATA_HOME', env) || shellStartupAssigns('OPENCODE_DB', env)
   ) {
     return 'unknown'
   }

@@ -28,8 +28,12 @@ async function resolveClaudeHome(env: NodeJS.ProcessEnv): Promise<string | null>
   const configured = env.CLAUDE_CONFIG_DIR?.trim()
   const user = env[CLAUDE_USER_CONFIG_DIR_ENV]?.trim()
   const pointer = env[CLAUDE_PROFILE_POINTER_ENV]?.trim()
+  // A startup file's assignment replaces the spawn's value before `claude` runs, account or not.
+  if (shellStartupAssigns('CLAUDE_CONFIG_DIR', env)) {
+    return null
+  }
   if (!pointer) {
-    return configured || (shellStartupAssigns('CLAUDE_CONFIG_DIR', env) ? null : defaultHome())
+    return configured || defaultHome()
   }
   if (
     configured &&

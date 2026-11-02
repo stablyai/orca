@@ -166,11 +166,13 @@ export async function executePtySpawn(
         } else if (!(error instanceof SavedResumeStartedFresh)) {
           throw error
         } else if (!ctx.savedResumeStartedFresh) {
-          // Another request on this claim found the conversation gone; never run its resume here.
-          if (!(await startJoinedSavedResumeFresh(ctx, facts.savedResumeLaunch, error))) {
+          // Another request on this claim found the conversation gone; a saved restore of it
+          // starts fresh too, and any other request keeps its own command.
+          const joined = await startJoinedSavedResumeFresh(ctx, facts.savedResumeLaunch, error)
+          if (joined === 'failed') {
             throw error
           }
-          ctx.savedResumeStartedFresh = true
+          ctx.savedResumeStartedFresh = joined === 'started-fresh' || undefined
         }
         delete args.agentSessionEnsure
         delete ctx.spawnOptions.agentSessionEnsure

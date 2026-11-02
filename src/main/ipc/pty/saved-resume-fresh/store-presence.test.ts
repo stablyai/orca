@@ -117,7 +117,11 @@ describe('Codex store', () => {
       'shared history may still be linking in from other accounts',
       { settings: { codexManagedAccounts: [{ id: 'a' }] as never } }
     ],
-    ['settings are unknown', { settings: undefined }]
+    ['settings are unknown', { settings: undefined }],
+    [
+      "the spawn's CODEX_HOME disagrees with the routed home",
+      { launchEnv: { HOME: root, CODEX_HOME: '/other', ORCA_CODEX_HOME: '/other' } }
+    ]
   ])('stays unknown when %s', async (_label, overrides) => {
     await expect(probeSavedResumeStore(query(overrides))).resolves.toBe('unknown')
   })
@@ -285,7 +289,15 @@ describe('Claude store', () => {
 
     it.each<[string, () => void, Record<string, string>]>([
       ['a relative pointer target', () => writeStoreFile(pointer(), 'profile'), {}],
-      ['a guest-home pointer', () => {}, { ORCA_CLAUDE_PROFILE_POINTER: '~/.orca/pointer' }]
+      ['a guest-home pointer', () => {}, { ORCA_CLAUDE_PROFILE_POINTER: '~/.orca/pointer' }],
+      [
+        'a startup file that sets its own config folder',
+        () => {
+          writeStoreFile(pointer(), profileHome())
+          writeStoreFile(join(root, '.zshrc'), `export CLAUDE_CONFIG_DIR=${join(root, 'mine')}\n`)
+        },
+        {}
+      ]
     ])('stays unknown for %s', async (_label, write, env) => {
       write()
       await expect(probeSavedResumeStore(accountQuery(env))).resolves.toBe('unknown')
@@ -373,6 +385,24 @@ describe('OpenCode store', () => {
     rmSync(dbPath())
     writeOpenCodeDatabase(dbPath(), table, ['ses_other'])
     await expect(probeSavedResumeStore(openCodeQuery())).resolves.toBe('missing')
+  })
+
+  it("reads an account pane's own data folder, which its shell re-exports after startup files", async () => {
+    writeStoreFile(join(root, '.zshrc'), `export XDG_DATA_HOME=${join(root, 'elsewhere')}\n`)
+    await expect(probeSavedResumeStore(openCodeQuery())).resolves.toBe('unknown')
+    const account = join(root, 'account-data')
+    writeOpenCodeDatabase(join(account, 'opencode', 'opencode.db'), 'session_v2', [OPENCODE_ID])
+    const accountQuery = query({
+      agent: 'opencode',
+      providerSession: { key: 'session_id', id: OPENCODE_ID },
+      launchEnv: {
+        HOME: root,
+        SHELL: '/bin/zsh',
+        ORCA_DATA_ACCOUNT_DATA_HOME: account,
+        ORCA_DATA_ACCOUNT_PROVIDER: 'opencode'
+      }
+    })
+    await expect(probeSavedResumeStore(accountQuery)).resolves.toBe('found')
   })
 
   it('stays unknown for an unrecognized schema, legacy file sessions, or another channel database', async () => {
