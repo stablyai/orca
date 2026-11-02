@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
-import React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GitLabWorkItem, GitLabWorkItemDetails } from '../../../shared/gitlab-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'

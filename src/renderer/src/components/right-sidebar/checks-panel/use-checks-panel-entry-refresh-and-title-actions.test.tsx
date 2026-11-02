@@ -238,15 +238,20 @@ it('GitLab post-write details are not committed after the panel switched to anot
   cardRead.resolve(gitLabReview)
   await act(async () => settle)
 
-  const [{ isRequestCurrent }] = vi.mocked(input.fetchGitLabDetails).mock.calls[0]!
-  expect(isRequestCurrent?.()).toBe(false)
+  const [options] = vi.mocked(input.fetchGitLabDetails).mock.calls[0]!
+  expect(options?.isRequestCurrent?.()).toBe(false)
 })
 
 it.each(['rejected', 'superseded'] as const)(
   'GitLab post-write details for replaced MR 7 cannot claim selected MR 8 when the card read is %s',
   async (cardOutcome) => {
     const mr7: HostedReviewInfo = { ...gitLabReview, number: 7, headSha: 'head-7' }
-    const mr8: HostedReviewInfo = { ...gitLabReview, number: 8, headSha: 'head-8' }
+    const mr8: HostedReviewInfo & { provider: 'gitlab' } = {
+      ...gitLabReview,
+      provider: 'gitlab',
+      number: 8,
+      headSha: 'head-8'
+    }
     const selectedKey = checksPanelHostedReviewAsyncResultKey(
       'hosted-review-key',
       'main',
