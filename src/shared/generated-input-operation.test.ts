@@ -159,8 +159,8 @@ describe('one owner for a generated request lifetime and its queue turn', () => 
     'installs one observer per queued send for %i sends and releases all',
     async (count) => {
       const h = harness()
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: counts the observation's private per-chunk scan.
       const scans = vi.spyOn(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: counts the observation's private per-chunk scan.
         GeneratedInputObservation.prototype as unknown as { scan: () => void },
         'scan'
       )

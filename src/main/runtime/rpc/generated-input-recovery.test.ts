@@ -337,7 +337,7 @@ it('keeps the index bounded across dismissals and fans one change out once per c
     }
     expect(notices.pageVisits).toBeLessThanOrEqual(order.length + pages)
 
-    const received = Array.from({ length: 100 }, () => [] as unknown[])
+    const received = Array.from({ length: 100 }, (): unknown[] => [])
     const unsubscribe = received.map((changes) =>
       notices.subscribe((change) => changes.push(change))
     )

@@ -426,8 +426,8 @@ describe('generated input retargeted to a replacement PTY', () => {
 // sequence fact (readiness rules, framing, Enter reserve and classification) from the replacement.
 describe('generated input retargeted to a replacement running another agent', () => {
   type Pty = { connected: boolean; launchAgent?: string; ptyId: string }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reaches the host's protected PTY table and handle lookups on OrcaRuntimeService.
   const internals = (runtime: OrcaRuntimeService) =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reaches the host's protected PTY table and handle lookups on OrcaRuntimeService.
     runtime as unknown as {
       ptysById: Map<string, Pty>
       getLivePtyForHandle: (handle: string) => unknown
