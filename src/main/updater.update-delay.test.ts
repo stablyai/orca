@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
 import { updaterMainWindow } from './updater-test-main-window'
+import type { UpdateStatus } from '../shared/update-status-types'
 
 const {
   appMock,
@@ -202,35 +203,74 @@ describe('updater update delay', () => {
     })
   })
 
-  it('honors a one-time bypass requested while another check is in flight', async () => {
-    const firstFeed = Promise.withResolvers<unknown>()
-    fetchNewerReleaseTagsMock.mockReturnValueOnce(firstFeed.promise).mockResolvedValue(['v1.4.3'])
-    const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
-    setupAutoUpdater(updaterMainWindow(vi.fn()), {
+  it.each([true, false])(
+    'queues explicit delay choice %s while another check is in flight',
+    async (ignoreUpdateDelay) => {
+      const firstFeed = Promise.withResolvers<unknown>()
+      fetchNewerReleaseTagsMock.mockReturnValueOnce(firstFeed.promise).mockResolvedValue(['v1.4.3'])
+      const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
+      let delayDays = 7
+      setupAutoUpdater(updaterMainWindow(vi.fn()), {
+        getLastUpdateCheckAt: () => NOW,
+        getUpdateDelayDays: () => delayDays
+      })
+
+      checkForUpdatesFromMenu()
+      if (!ignoreUpdateDelay) {
+        delayDays = 0
+      }
+      checkForUpdatesFromMenu({ ignoreUpdateDelay })
+      firstFeed.resolve(heldResult())
+
+      await vi.waitFor(() => {
+        expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+      })
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledTimes(2)
+      expect(fetchNewerReleaseTagsMock).toHaveBeenNthCalledWith(
+        1,
+        '1.4.1',
+        1,
+        expect.objectContaining({ minReleaseAgeMs: 7 * DAY_MS })
+      )
+      expect(fetchNewerReleaseTagsMock).toHaveBeenLastCalledWith('1.4.1', 1, {
+        includePrerelease: false
+      })
+      expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
+        provider: 'generic',
+        url: 'https://github.com/stablyai/orca/releases/download/v1.4.3'
+      })
+    }
+  )
+
+  it.each<UpdateStatus>([
+    { state: 'available', version: '1.4.3', changelog: null },
+    { state: 'downloading', version: '1.4.3', percent: 50 },
+    { state: 'downloaded', version: '1.4.3' }
+  ])('preserves $state updates when a background check holds the release', async (status) => {
+    const { UpdaterSetup } = await import('./updater/updater-setup')
+    class TestUpdater extends UpdaterSetup {
+      publishStatus(): void {
+        this.availableVersion = '1.4.3'
+        this.sendStatus(status)
+      }
+    }
+    const updater = new TestUpdater()
+    const sendMock = vi.fn()
+    const completed = vi.fn()
+    updater.setupAutoUpdater(updaterMainWindow(sendMock), {
       getLastUpdateCheckAt: () => NOW,
-      getUpdateDelayDays: () => 7
+      getUpdateDelayDays: () => 7,
+      setLastUpdateCheckAt: completed
     })
+    updater.publishStatus()
+    sendMock.mockClear()
+    fetchNewerReleaseTagsMock.mockResolvedValue(heldResult())
 
-    checkForUpdatesFromMenu()
-    checkForUpdatesFromMenu({ ignoreUpdateDelay: true })
-    firstFeed.resolve(heldResult())
+    updater.checkForUpdates()
 
-    await vi.waitFor(() => {
-      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
-    })
-    expect(fetchNewerReleaseTagsMock).toHaveBeenCalledTimes(2)
-    expect(fetchNewerReleaseTagsMock).toHaveBeenNthCalledWith(
-      1,
-      '1.4.1',
-      1,
-      expect.objectContaining({ minReleaseAgeMs: 7 * DAY_MS })
-    )
-    expect(fetchNewerReleaseTagsMock).toHaveBeenLastCalledWith('1.4.1', 1, {
-      includePrerelease: false
-    })
-    expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
-      provider: 'generic',
-      url: 'https://github.com/stablyai/orca/releases/download/v1.4.3'
-    })
+    await vi.waitFor(() => expect(completed).toHaveBeenCalled())
+    expect(updater.getUpdateStatus()).toEqual(status)
+    expect(sendMock).not.toHaveBeenCalled()
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
   })
 })

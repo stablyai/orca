@@ -124,8 +124,15 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     this.clearBackgroundCheckLaunchPending()
     this.backgroundCheckPromotedToUserInitiated = false
     this.userInitiatedCheck = false
-    this.completeSilentUpdateCheck(userInitiated)
+    const preserveAvailableUpdate =
+      this.currentStatus.state === 'available' ||
+      this.currentStatus.state === 'downloading' ||
+      this.currentStatus.state === 'downloaded'
+    this.completeSilentUpdateCheck(userInitiated, { preserveAvailableUpdate })
     this.scheduleCheckWhenDelayedUpdateClears()
+    if (preserveAvailableUpdate) {
+      return
+    }
     this.sendSettledCheckStatus({ state: 'not-available', userInitiated })
   }
 

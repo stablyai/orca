@@ -4,11 +4,15 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { GeneralPane } from './GeneralPane'
 import { TooltipProvider } from '../ui/tooltip'
+import type { UpdateStatus } from '../../../../shared/update-status-types'
 const fake = vi.hoisted(() => ({
   query: '',
   getVersion: vi.fn(async () => '1.4.100'),
   refresh: vi.fn(async () => {}),
   action: vi.fn(),
+  updateStatus: vi.fn<() => UpdateStatus>(() => ({ state: 'idle' })),
+  updateSettings: vi.fn(async () => {}),
+  check: vi.fn(),
   updates: new Map([
     ['synthetic-host', { environmentId: 'synthetic-host', phase: 'current', name: 'Synthetic' }]
   ])
@@ -26,7 +30,8 @@ vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       settingsSearchQuery: fake.query,
-      updateStatus: { state: 'idle' },
+      updateStatus: fake.updateStatus(),
+      updateSettings: fake.updateSettings,
       remoteServerUpdates: fake.updates,
       remoteServerUpdatesChecking: false,
       remoteServerUpdatesRunning: false,
@@ -50,14 +55,30 @@ vi.mock('@/components/settings/DefaultWindowsProjectRuntimeSetting', () => ({
 beforeEach(() => {
   vi.clearAllMocks()
   fake.query = ''
+  fake.updateStatus.mockReturnValue({ state: 'idle' })
   fake.updates = new Map([
     ['synthetic-host', { environmentId: 'synthetic-host', phase: 'current', name: 'Synthetic' }]
   ])
-  Object.assign(window, { api: { updater: { getVersion: fake.getVersion } } })
+  Object.assign(window, { api: { updater: { getVersion: fake.getVersion, check: fake.check } } })
 })
 afterEach(() => {
   cleanup()
   Reflect.deleteProperty(window, 'api')
+})
+it('requests a fresh delayed check after saving the delay during an active check', async () => {
+  fake.updateStatus.mockReturnValue({ state: 'checking', userInitiated: true })
+  render(
+    <GeneralPane
+      settings={getDefaultSettings('/synthetic')}
+      updateSettings={vi.fn()}
+      fontSuggestions={[]}
+    />,
+    { wrapper: TooltipProvider }
+  )
+  fireEvent.click(screen.getByRole('radio', { name: '7 days' }))
+  await act(async () => {})
+  expect(fake.updateSettings).toHaveBeenCalledWith({ updateDelayDays: 7 })
+  expect(fake.check).toHaveBeenCalledWith({ ignoreUpdateDelay: false })
 })
 it.each([false, true])(
   'retains update sections with Windows runtime support %s',

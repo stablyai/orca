@@ -48,6 +48,7 @@ function formatDelayDays(days: number): string {
 function canRecheckAfterDelayChange(status: UpdateStatus): boolean {
   return (
     status.state === 'idle' ||
+    status.state === 'checking' ||
     status.state === 'not-available' ||
     status.state === 'available' ||
     status.state === 'error'
@@ -86,7 +87,7 @@ export function UpdateDelaySetting(): React.JSX.Element {
     const shouldRecheck = canRecheckAfterDelayChange(updateStatus)
     void updateSettings({ updateDelayDays: next }).then(() => {
       if (shouldRecheck) {
-        void window.api.updater.check()
+        void window.api.updater.check({ ignoreUpdateDelay: false })
       }
     })
   }

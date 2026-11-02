@@ -56,11 +56,13 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
     if (checkAlreadyInFlight) {
       this.backgroundCheckPromotedToUserInitiated = true
       this.rearmActiveUpdateCheckStallTimer()
-      if (checkVariant !== 'default' || options?.ignoreUpdateDelay) {
+      if (checkVariant !== 'default' || options?.ignoreUpdateDelay !== undefined) {
         // Queue explicit channel or delay-bypass requests after the active check settles.
         this.pendingUserInitiatedCheckAfterInFlight = {
           ...this.getOptionsForUpdateCheckVariant(checkVariant),
-          ...(options?.ignoreUpdateDelay ? { ignoreUpdateDelay: true } : {})
+          ...(options?.ignoreUpdateDelay !== undefined
+            ? { ignoreUpdateDelay: options.ignoreUpdateDelay }
+            : {})
         }
       }
       return
