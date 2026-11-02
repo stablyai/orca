@@ -9,7 +9,7 @@ it('turns the workspace file filter off while an outside folder is shown', () =>
   const view = render(
     <FileExplorerNameFilter query="" disabled onQueryChange={vi.fn()} onClear={vi.fn()} />
   )
-  const input = screen.getByRole('textbox', { name: 'Find files' }) as HTMLInputElement
+  const input = screen.getByRole<HTMLInputElement>('textbox', { name: 'Find files' })
 
   expect(input.disabled).toBe(true)
   expect(input.placeholder).toBe('Find is not available outside the workspace')
