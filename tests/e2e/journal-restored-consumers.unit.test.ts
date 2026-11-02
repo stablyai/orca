@@ -239,7 +239,14 @@ it.each(cases)(
       }
       return frame.result.page
     }
-    const append = journal.appendItem.bind(journal)
+    // Ordinary rows are never recovery echoes, so the journal always keeps them.
+    const append = async (...args: Parameters<typeof journal.appendItem>) => {
+      const item = await journal.appendItem(...args)
+      if (!item) {
+        throw new Error('Journal omitted an ordinary item')
+      }
+      return item
+    }
     async function completedTurn(id: string, prompt: string, answer: string) {
       const user = await append(
         { provider: 'orca', clientMessageId: `${id}-user` },
@@ -278,7 +285,7 @@ it.each(cases)(
     // The mixed reader resumes from here, inside the old rows.
     const crossing = kind === 'mixed' ? await history({ direction: 'tail' }) : null
     const { response, turnScope } = await completedTurn('current', PROMPT, STALE)
-    const disposable = await journal.appendItem(
+    const disposable = await append(
       { provider: 'orca', clientMessageId: 'disposable' },
       { kind: 'status', text: REMOVED },
       options
@@ -418,6 +425,9 @@ it.each(cases)(
       message(PUBLISHED),
       options
     )
+    if (!published) {
+      throw new Error('Reopened journal omitted an ordinary item')
+    }
     await vi.waitFor(() => {
       for (const [reader, from] of [
         [hydrated, priorHydrated],
