@@ -43,6 +43,18 @@ import {
   structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
 } from '@/components/native-chat/native-chat-composer-draft-store'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+import { resetStructuredAgentLaunchRegistryForTests } from './agent-session/launch/structured-agent-session-launch-registry'
+
+// A switch-on build's chat is drawn by main's frames.
+vi.mock('@/runtime/runtime-layout-client', async (original) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await original())
+)
 
 // Main's answer to the window's layout commands, as a switch-on build sends them, and the first
 // terminals it starts for the window's new tabs.
@@ -77,6 +89,7 @@ function startupOf(tabId: string): unknown {
 }
 
 const initial = useAppStore.getState()
+let drawn: TabsDrawnFromMain | undefined
 
 function worktree(name: string, host: 'paired' | 'local' = 'paired'): Worktree {
   const worktreePath = path.join('workspace', name)
@@ -151,6 +164,9 @@ const REQUEST = {
 } as unknown as WorktreeCreationRequest
 
 afterEach(() => {
+  drawn?.close()
+  drawn = undefined
+  resetStructuredAgentLaunchRegistryForTests()
   mocks.hostAccepts = false
   mocks.hostLaunch.mockReset()
   mocks.mainStarts.length = 0
@@ -272,6 +288,7 @@ describe('a background create whose own machine owns its Setup and cannot run th
     )
     seedThisMachine()
     choseHostLaunch()
+    drawn = await drawTabsFromMain(useAppStore)
     updateNativeChatComposerDraft(
       pendingCreationChatDraftScopeKey('creation-1'),
       { text: unsent, images: [] },
@@ -290,6 +307,7 @@ describe('a background create whose own machine owns its Setup and cannot run th
     await vi.waitFor(() =>
       expect(mocks.hostLaunch).toHaveBeenCalledWith('agent.launchStatus', expect.anything())
     )
+    await drawn!.settle()
     const chatsNow = () =>
       (useAppStore.getState().unifiedTabsByWorktree[LOCAL_CREATED.id] ?? []).filter(
         (candidate) => candidate.contentType === 'agent-session'
@@ -315,6 +333,7 @@ describe('a background create whose own machine owns its Setup and cannot run th
     useAppStore.getState().createTab(LOCAL_CREATED.id, undefined, undefined, {
       id: TERMINAL_TAB
     })
+    await drawn!.settle()
     status.resolve({
       state: 'succeeded',
       result: {
@@ -334,6 +353,7 @@ describe('a background create whose own machine owns its Setup and cannot run th
       }
     })
 
+    await drawn!.settle()
     await vi.waitFor(() => expect(chatsNow()).toHaveLength(chatsLeft))
     const state = useAppStore.getState()
     expect(state.tabsByWorktree[LOCAL_CREATED.id]?.map((tab) => tab.id)).toEqual([TERMINAL_TAB])
