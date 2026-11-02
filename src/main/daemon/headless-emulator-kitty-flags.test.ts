@@ -8,6 +8,6 @@ describe('HeadlessEmulator kitty keyboard flags', () => {
     expect(emulator.kittyKeyboardFlags()).toBe(0)
     await emulator.applyKittyKeyboardFlags(1)
 
-    expect(emulator.kittyKeyboardFlags()).toBeGreaterThan(0)
+    expect(emulator.kittyKeyboardFlags()).toBe(1)
   })
 })

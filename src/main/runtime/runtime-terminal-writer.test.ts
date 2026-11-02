@@ -288,19 +288,12 @@ describe('RuntimeTerminalWriter interrupt bytes', () => {
     expect(writes).toEqual(['\x03'])
   })
 
-  it('writes the kitty Ctrl+C sequence when that protocol is active', async () => {
+  it('writes the interrupt bytes already chosen for the payload', async () => {
     const writes: string[] = []
-    const writer = new RuntimeTerminalWriter(
-      (_ptyId, data) => {
-        writes.push(data)
-        return true
-      },
-      () => 'darwin',
-      () => null,
-      undefined,
-      undefined,
-      () => 31
-    )
+    const writer = new RuntimeTerminalWriter((_ptyId, data) => {
+      writes.push(data)
+      return true
+    })
 
     await writer.writeAction('pty-1', { interrupt: true }, TERMINAL_INTERRUPT_KITTY_CTRL_C, {
       inputKind: 'driving'
