@@ -127,3 +127,26 @@ export async function flushEditorViewsForSave(
   flushPendingEditorBuffer(getState(), fileId, autosave)
   return framesFlushed
 }
+
+/** Runs `close` once every frame view of these files handed over its pending edits, so the dirty
+ *  check `close` makes sees them; synchronous when none is mounted, else `deferred` (re-check what
+ *  is still open). Each frame flush has its own deadline, so a silent frame delays at most that. */
+export function closeAfterEditorFramesFlush(
+  state: EditorBufferViewIndex,
+  fileIds: Iterable<string>,
+  close: (deferred: boolean) => void
+): void {
+  const flushes = new Set<FrameFlush>()
+  for (const fileId of fileIds) {
+    for (const viewId of editorBufferSiblingViewIds(state, fileId)) {
+      for (const flush of frameFlushes.get(viewId) ?? []) {
+        flushes.add(flush)
+      }
+    }
+  }
+  if (flushes.size === 0) {
+    close(false)
+    return
+  }
+  void Promise.all([...flushes].map((flush) => flush().catch(() => false))).then(() => close(true))
+}
