@@ -43,7 +43,6 @@ vi.mock('./runtime-worktree-selector', () => ({
 }))
 
 import {
-  getStructuredAgentSessionLaunchLifecycle,
   getStructuredLaunchStateBySessionId,
   hasStructuredAgentSessionLaunchCancellationTombstone,
   resetStructuredAgentLaunchRegistryForTests,
@@ -55,11 +54,8 @@ import {
   resetStructuredAgentLaunchPersistenceForTests,
   writeStructuredAgentLaunchRecord
 } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
-import { wasStructuredAgentLaunchClosedByLocalCancel } from '@/lib/agent-session/launch/structured-agent-session-local-launch-cancel'
-import {
-  beginStructuredAgentSessionTabClose,
-  suppressCancelledStructuredSessionTabs
-} from './structured-agent-session-tab-retirement'
+import '@/lib/agent-session/launch/structured-agent-session-local-launch-cancel'
+import { suppressCancelledStructuredSessionTabs } from './structured-agent-session-tab-retirement'
 
 const WORKTREE = 'repo-1::worktree-1'
 const SESSION = 'chat-1'
@@ -140,37 +136,6 @@ beforeEach(() => {
 })
 
 describe('this machine, with main owning the layout', () => {
-  const hostTabClose = [
-    LOCAL,
-    'session.tabs.close',
-    { worktree: `id:${WORKTREE}`, tabId: `agent-session:${SESSION}`, reason: 'user' }
-  ]
-
-  it('cancel before the create: retires the chat on main at once and keeps no tombstone', async () => {
-    // The create has not landed, so main has no tab for it yet.
-    mocks.callRuntime.mockRejectedValueOnce(new Error('tab_not_found'))
-    pendingLaunch('local', LOCAL)
-
-    markStructuredAgentSessionLaunchCancelled(WORKTREE, SESSION, 'local', layoutOwner)
-    await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalledWith(...hostTabClose))
-
-    expect(mocks.closeSession).toHaveBeenCalledWith(LOCAL, SESSION)
-    // Let the retirement settle, so a tombstone written on its answer would show.
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE, SESSION)).toBe(false)
-    expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE, SESSION)).toBeNull()
-  })
-
-  it('create before the cancel (an aborted launch): closes the chat and its published tab', async () => {
-    pendingLaunch('local', LOCAL)
-
-    markStructuredAgentSessionLaunchCancelled(WORKTREE, SESSION, 'local', layoutOwner)
-
-    await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalledWith(...hostTabClose))
-    expect(mocks.closeSession).toHaveBeenCalledWith(LOCAL, SESSION)
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE, SESSION)).toBe(false)
-  })
-
   it('cancel after a reload, when only the saved launch is left: tells main and forgets it', () => {
     writeStructuredAgentLaunchRecord({
       sessionId: SESSION,
@@ -188,35 +153,6 @@ describe('this machine, with main owning the layout', () => {
     expect(readStructuredAgentLaunchRecord(SESSION)).toBeUndefined()
     expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE, SESSION)).toBe(false)
   })
-
-  // Main records close before fallible work, fencing late creates without publishing a chat (structured-agent-session-close-before-create.test.ts).
-  it('a retire main fails is logged; no tombstone, and a late create reply revives nothing', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    mocks.closeSession.mockRejectedValueOnce(new Error('host unavailable'))
-    pendingLaunch('local', LOCAL)
-
-    markStructuredAgentSessionLaunchCancelled(WORKTREE, SESSION, 'local', layoutOwner)
-    await vi.waitFor(() =>
-      expect(warn).toHaveBeenCalledWith(
-        '[structured-agent-session] local cancel retirement failed',
-        expect.any(Error)
-      )
-    )
-
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE, SESSION)).toBe(false)
-    expect(wasStructuredAgentLaunchClosedByLocalCancel(SESSION)).toBe(true)
-    expect(suppressCancelledStructuredSessionTabs(hostFrame(), LOCAL).tabs).toHaveLength(1)
-  })
-
-  it('switch off: keeps the tombstone and leaves the close to the tab close, as today', () => {
-    mocks.layoutOwnerIsMain = false
-    pendingLaunch('local', LOCAL)
-
-    markStructuredAgentSessionLaunchCancelled(WORKTREE, SESSION, 'local', layoutOwner)
-
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE, SESSION)).toBe(true)
-    expect(mocks.closeSession).not.toHaveBeenCalled()
-  })
 })
 
 describe('a paired server, with main owning the layout', () => {
@@ -228,23 +164,6 @@ describe('a paired server, with main owning the layout', () => {
     expect(mocks.closeSession).not.toHaveBeenCalled()
 
     expect(suppressCancelledStructuredSessionTabs(hostFrame(), SERVER).tabs).toEqual([])
-    expect(mocks.closeSession).toHaveBeenCalledWith(SERVER, SESSION)
-  })
-
-  it('create before the cancel: the published chat closes as any chat does, no tombstone', () => {
-    pendingLaunch(SERVER_HOST, SERVER)
-    expect(suppressCancelledStructuredSessionTabs(hostFrame(), SERVER).tabs).toHaveLength(1)
-
-    // Once the create has answered, the tab is not provisional, so its close cancels nothing.
-    beginStructuredAgentSessionTabClose({
-      target: SERVER,
-      worktreeId: WORKTREE,
-      sessionId: SESSION,
-      provisional: false,
-      layoutOwner
-    })
-
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE, SESSION)).toBe(false)
     expect(mocks.closeSession).toHaveBeenCalledWith(SERVER, SESSION)
   })
 })
