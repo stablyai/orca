@@ -447,7 +447,7 @@ describe('complete handback acceptance', () => {
       'immediate'
     )
     const hook = fixture.mount()
-    let pending: Promise<void> | undefined
+    let pending: Promise<boolean> | undefined
     act(() => {
       pending = hook.result.current.send(submitted, [])
     })
