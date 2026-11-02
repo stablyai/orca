@@ -10,10 +10,18 @@ export function getWindowsAdministratorStatus(): Promise<boolean | null> {
     return Promise.resolve(null)
   }
   // The desktop's token does not change during its lifetime; never poll or prompt for elevation.
-  return (status ??= readStatus().catch(() => null))
+  return (status ??= readStatus([]).catch(() => null))
 }
 
-async function readStatus(): Promise<boolean | null> {
+/** Null when unknown, including an elevated process queried from a standard desktop. */
+export function getProcessAdministratorStatus(pid: number): Promise<boolean | null> {
+  if (process.platform !== 'win32') {
+    return Promise.resolve(null)
+  }
+  return readStatus([String(pid)]).catch(() => null)
+}
+
+async function readStatus(pidArgs: string[]): Promise<boolean | null> {
   const environment = getAppEnvironment()
   const launcher = environment.isPackaged()
     ? getBundledLauncherPath('win32', process.resourcesPath)
@@ -23,7 +31,7 @@ async function readStatus(): Promise<boolean | null> {
   }
   const result = await runProcess({
     program: launcher,
-    args: ['--orca-administrator-status'],
+    args: ['--orca-administrator-status', ...pidArgs],
     timeoutMs: 3_000,
     maxOutputBytes: 64
   })

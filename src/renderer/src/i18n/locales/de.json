@@ -21310,7 +21310,23 @@
       "count_other": "{{count}} laufende Terminals"
     },
     "restartedInputNotSent": "Das Terminal wurde während der Eingabe neu gestartet. Daher hat es möglicherweise einen Teil der Eingabe nicht erhalten. Die neue Shell prüfen, bevor die Eingabe wiederholt wird.",
-    "typingBeforeStartNotSent": "Einige Tasteneingaben während des Terminalstarts wurden nicht gesendet."
+    "typingBeforeStartNotSent": "Einige Tasteneingaben während des Terminalstarts wurden nicht gesendet.",
+    "windowsAdministratorBanner": {
+      "unknownCount": "seine laufenden Terminals",
+      "count_one": "{{count}} laufendes Terminal",
+      "count_other": "{{count}} laufende Terminals",
+      "restarted": "Terminaldienst mit Administratorrechten neu gestartet.",
+      "alreadyReplaced": "Der Terminaldienst wurde bereits ersetzt. Es wurde nichts gestoppt.",
+      "failed": "Neustart fehlgeschlagen.",
+      "title": "Terminals laufen nicht mit Administratorrechten",
+      "body": "Der Terminaldienst wurde gestartet, bevor Orca Administratorrechte hatte. Neue Terminals öffnen sich daher ohne diese Rechte, bis er neu gestartet wird.",
+      "restart": "Terminals neu starten",
+      "dismiss": "Ausblenden",
+      "confirmTitle": "Terminals mit Administratorrechten neu starten?",
+      "confirmBody": "Ein Neustart beendet alle Prozesse in {{sessions}}. Wiederhergestellte Tabs öffnen neue Shells mit Administratorrechten, und Agenten, die das Fortsetzen unterstützen, können danach fortgesetzt werden. Den Neustart durchführen, wenn die Agenten inaktiv sind.",
+      "cancel": "Abbrechen",
+      "confirm": "Neu starten und Prozesse beenden"
+    }
   },
   "fileExplorer": {
     "root": {

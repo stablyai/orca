@@ -4,24 +4,18 @@ import { quoteWindowsArgument } from '@orca/process-host/windows-command-line'
 const mocks = vi.hoisted(() => ({
   app: { isPackaged: true },
   existsSync: vi.fn(() => true),
-  runProcess: vi.fn(),
-  getWindowsAdministratorStatus: vi.fn(),
-  restartDaemon: vi.fn()
+  runProcess: vi.fn()
 }))
 vi.mock('electron', () => ({ app: mocks.app }))
 vi.mock('node:fs', () => ({ existsSync: mocks.existsSync }))
 vi.mock('@orca/process-host', () => ({ runProcess: mocks.runProcess }))
-vi.mock('./windows-administrator-status', () => ({
-  getWindowsAdministratorStatus: mocks.getWindowsAdministratorStatus
-}))
-vi.mock('../daemon/daemon-provider-restart', () => ({ restartDaemon: mocks.restartDaemon }))
 vi.mock('../cli/bundled-cli-launcher-path', () => ({
   getBundledLauncherPath: () => 'C:\\Orca\\resources\\bin\\orca.exe'
 }))
 
 import {
-  requestWindowsAdministratorRestart,
-  restartLocalTerminalsAfterElevation
+  consumeLocalTerminalRestartRequest,
+  requestWindowsAdministratorRestart
 } from './windows-administrator-restart'
 
 const restartFlag = '--orca-restart-local-terminals-as-administrator'
@@ -33,8 +27,6 @@ beforeEach(() => {
   mocks.app.isPackaged = true
   mocks.existsSync.mockReturnValue(true)
   mocks.runProcess.mockReset().mockResolvedValue({ code: 0, stdout: '', stderr: '' })
-  mocks.getWindowsAdministratorStatus.mockReset().mockResolvedValue(true)
-  mocks.restartDaemon.mockReset().mockResolvedValue({ killedCount: 1 })
 })
 afterEach(() => {
   process.argv = originalArgv
@@ -87,28 +79,11 @@ describe('Windows administrator restart request', () => {
     expect(mocks.runProcess).not.toHaveBeenCalled()
   })
 
-  it('replaces the local host only after verified elevation and consumes the request once', async () => {
+  it('consumes the terminal restart request exactly once', () => {
+    expect(consumeLocalTerminalRestartRequest()).toBe(false)
     process.argv.push(restartFlag)
-    await restartLocalTerminalsAfterElevation(new AbortController().signal)
-    expect(mocks.restartDaemon).toHaveBeenCalledOnce()
+    expect(consumeLocalTerminalRestartRequest()).toBe(true)
     expect(process.argv).not.toContain(restartFlag)
-    await restartLocalTerminalsAfterElevation(new AbortController().signal)
-    expect(mocks.restartDaemon).toHaveBeenCalledOnce()
-  })
-  it.each([false, null])('preserves sessions if elevation is not proven: %s', async (status) => {
-    mocks.getWindowsAdministratorStatus.mockResolvedValue(status)
-    process.argv.push(restartFlag)
-    await restartLocalTerminalsAfterElevation(new AbortController().signal)
-    expect(mocks.restartDaemon).not.toHaveBeenCalled()
-    expect(process.argv).not.toContain(restartFlag)
-  })
-  it('preserves sessions for ordinary launches and canceled startup', async () => {
-    await restartLocalTerminalsAfterElevation(new AbortController().signal)
-    process.argv.push(restartFlag)
-    const controller = new AbortController()
-    controller.abort()
-    await restartLocalTerminalsAfterElevation(controller.signal)
-    expect(mocks.getWindowsAdministratorStatus).not.toHaveBeenCalled()
-    expect(mocks.restartDaemon).not.toHaveBeenCalled()
+    expect(consumeLocalTerminalRestartRequest()).toBe(false)
   })
 })

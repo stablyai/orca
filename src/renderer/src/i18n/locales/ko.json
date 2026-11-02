@@ -21168,6 +21168,22 @@
       "gotIt": "확인",
       "body": "숨기려면 Claude Code에 /diff를 입력하세요. Claude는 이후 세션을 위해 해당 선택을 기억합니다.",
       "title": "Claude Code는 넓은 터미널에서 채팅 옆에 자체 diff 패널을 열 수 있습니다. 이 패널은 Orca가 아닌 Claude의 패널입니다."
+    },
+    "windowsAdministratorBanner": {
+      "unknownCount": "실행 중인 터미널",
+      "count_one": "실행 중인 터미널 {{count}}개",
+      "count_other": "실행 중인 터미널 {{count}}개",
+      "restarted": "터미널 서비스가 관리자 권한으로 다시 시작되었습니다.",
+      "alreadyReplaced": "터미널 서비스가 이미 교체되었으므로 아무것도 중지되지 않았습니다.",
+      "failed": "다시 시작하지 못했습니다.",
+      "title": "터미널이 관리자 권한으로 실행되고 있지 않음",
+      "body": "터미널 서비스가 Orca에 관리자 권한이 생기기 전에 시작되어, 다시 시작할 때까지 새 터미널은 관리자 권한 없이 열립니다.",
+      "restart": "터미널 다시 시작",
+      "dismiss": "닫기",
+      "confirmTitle": "터미널을 관리자 권한으로 다시 시작할까요?",
+      "confirmBody": "다시 시작하면 {{sessions}}의 모든 프로세스가 종료됩니다. 복원된 탭은 새 관리자 셸을 열고, 재개를 지원하는 에이전트는 나중에 재개할 수 있습니다. 에이전트가 유휴 상태일 때 실행하세요.",
+      "cancel": "취소",
+      "confirm": "다시 시작하고 프로세스 종료"
     }
   },
   "fileSearch": {

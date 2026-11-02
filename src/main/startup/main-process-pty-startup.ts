@@ -6,7 +6,8 @@ import { track } from '../telemetry/client'
 import { getPtyIdForPaneKey } from '../ipc/pty/pane/key-state'
 import { getDaemonProvider, listLiveDaemonPtyIds } from '../daemon/daemon-provider-state'
 import { initDaemonPtyProvider } from '../daemon/daemon-provider-init'
-import { restartLocalTerminalsAfterElevation } from '../windows/windows-administrator-restart'
+import { reconcileTerminalHostElevation } from '../windows/windows-administrator-terminal-host'
+import { getWindowsAdministratorStatus } from '../windows/windows-administrator-status'
 import { resolveTerminalSpawnAdmissionMode } from '../daemon/terminal-spawn-gate'
 import {
   getCodexPaneAccount,
@@ -131,13 +132,15 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
     // Desktop/serve must adopt the persistent provider before terminals or renderers exist.
     startDaemonPtyProvider: async (signal) => {
       logStartupMilestone('startup-service-start', { service: 'daemon-pty-provider' })
+      // Warm the cached elevation probe alongside adoption instead of after it.
+      void getWindowsAdministratorStatus()
       // Only GUI macOS daemons follow login-session death; serve must survive SSH disconnect.
       await initDaemonPtyProvider(signal, {
         macosLoginSessionWatch: process.platform === 'darwin' && !state.isServeMode,
         // Desktop and serve share one per-machine restore budget (D1 Q1).
         spawnAdmission: resolveTerminalSpawnAdmissionMode()
       })
-      await restartLocalTerminalsAfterElevation(signal)
+      await reconcileTerminalHostElevation(signal)
       // Retained shells keep their launch-time Codex home despite routing changes.
       const hasRetainedManagedHostPane = hasRecordedManagedHostCodexPane()
       if (

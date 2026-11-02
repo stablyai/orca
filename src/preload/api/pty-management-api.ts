@@ -49,6 +49,16 @@ export type PtyManagementSeveredDaemonRestartResult =
   | { status: 'restarted'; killedCount: number }
   | { status: 'refused'; reason: 'not-severed' | 'replaced' | 'unverifiable' }
 
+// Mirrors WindowsStandardTerminalHost: an elevated desktop still using a non-elevated terminal host.
+export type PtyManagementWindowsStandardTerminalHost = {
+  pid: number
+  liveSessionCount: number | null
+}
+
+export type PtyManagementWindowsStandardTerminalHostRestartResult =
+  | { status: 'restarted'; killedCount: number }
+  | { status: 'refused'; reason: 'replaced' }
+
 export type PtyManagementApi = {
   asyncIoHealth: () => Promise<DaemonAsyncIoStatus>
   // degraded: new PTYs fall back to local spawning without daemon persistence.
@@ -71,4 +81,10 @@ export type PtyManagementApi = {
   restartSeveredDaemon: (
     expected: Pick<PtyManagementSeveredDaemon, 'pid' | 'linuxStartTicks' | 'bootId'>
   ) => Promise<PtyManagementSeveredDaemonRestartResult>
+  windowsStandardTerminalHost: () => Promise<{
+    host: PtyManagementWindowsStandardTerminalHost | null
+  }>
+  restartWindowsStandardTerminalHost: (
+    expectedPid: number
+  ) => Promise<PtyManagementWindowsStandardTerminalHostRestartResult>
 }

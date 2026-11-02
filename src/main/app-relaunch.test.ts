@@ -9,16 +9,12 @@ const { appRelaunchMock, hasSwitchMock, recordDurableCrashBreadcrumbMock } = vi.
 vi.mock('electron', () => ({
   app: { relaunch: appRelaunchMock, commandLine: { hasSwitch: hasSwitchMock } }
 }))
-vi.mock('./windows/windows-administrator-status', () => ({
-  getWindowsAdministratorStatus: vi.fn(async () => true)
-}))
-vi.mock('./daemon/daemon-provider-restart', () => ({ restartDaemon: vi.fn(async () => {}) }))
 vi.mock('./crash-reporting/durable-crash-breadcrumb', () => ({
   recordDurableCrashBreadcrumb: recordDurableCrashBreadcrumbMock
 }))
 
 import { relaunchApp } from './app-relaunch'
-import { restartLocalTerminalsAfterElevation } from './windows/windows-administrator-restart'
+import { consumeLocalTerminalRestartRequest } from './windows/windows-administrator-restart'
 import { _resetHydrateShellPathCache, _setLaunchPathForTests } from './startup/hydrate-shell-path'
 
 beforeEach(() => {
@@ -42,7 +38,7 @@ afterEach(() => {
 })
 
 describe('relaunchApp', () => {
-  it('does not replay native administrator restart arguments before or after consumption', async () => {
+  it('does not replay native administrator restart arguments before or after consumption', () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     const flag = '--orca-restart-local-terminals-as-administrator'
     const nativeArgv = ['Orca.exe', '--user-data-dir=C:\\Orca profile', flag]
@@ -55,7 +51,7 @@ describe('relaunchApp', () => {
 
     relaunchApp('renderer-request')
     expect(nextArgs).toEqual(['--user-data-dir=C:\\Orca profile'])
-    await restartLocalTerminalsAfterElevation(new AbortController().signal)
+    expect(consumeLocalTerminalRestartRequest()).toBe(true)
     expect(process.argv).not.toContain(flag)
     expect(nativeArgv).toContain(flag)
     relaunchApp('profile-switch')

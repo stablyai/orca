@@ -22,6 +22,7 @@ import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-pref
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { LocalGitToolchainScanBanner } from './LocalGitToolchainScanBanner'
 import { SeveredTerminalDaemonBanner } from './SeveredTerminalDaemonBanner'
+import { WindowsAdministratorTerminalsBanner } from './WindowsAdministratorTerminalsBanner'
 import { StalledTerminalDaemonBanner } from './StalledTerminalDaemonBanner'
 import { StartupWorktreeRefreshStatus } from './StartupWorktreeRefreshStatus'
 
@@ -173,6 +174,7 @@ function Sidebar({
             />
             <SeveredTerminalDaemonBanner />
             <StalledTerminalDaemonBanner />
+            <WindowsAdministratorTerminalsBanner />
             {sidebarBody === 'agents' ? (
               <React.Suspense fallback={<div className="min-h-0 flex-1" />}>
                 <ActivityThreadCollapseContext.Provider value={agentsCollapseState}>

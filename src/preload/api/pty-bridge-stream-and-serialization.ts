@@ -179,6 +179,10 @@ export const ptyStreamAndSerializationApi = {
     resetFolderAccess: () => ipcRenderer.invoke('pty:management:resetFolderAccess'),
     severedDaemon: () => ipcRenderer.invoke('pty:management:severedDaemon'),
     restartSeveredDaemon: (expected) =>
-      ipcRenderer.invoke('pty:management:restartSeveredDaemon', expected)
+      ipcRenderer.invoke('pty:management:restartSeveredDaemon', expected),
+    windowsStandardTerminalHost: () =>
+      ipcRenderer.invoke('pty:management:windowsStandardTerminalHost'),
+    restartWindowsStandardTerminalHost: (expectedPid) =>
+      ipcRenderer.invoke('pty:management:restartWindowsStandardTerminalHost', expectedPid)
   }
 } satisfies Partial<PreloadApi['pty']>

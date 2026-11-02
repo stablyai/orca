@@ -21169,6 +21169,22 @@
       "gotIt": "知道了",
       "title": "Claude Code 可以在宽终端中的聊天旁边打开自己的差异面板。该面板是 Claude 的，而不是 Orca 的。",
       "body": "要隐藏该面板，请在 Claude Code 中输入 /diff。Claude 会在后续会话中记住此选择。"
+    },
+    "windowsAdministratorBanner": {
+      "unknownCount": "其正在运行的终端",
+      "count_one": "{{count}} 个运行中的终端",
+      "count_other": "{{count}} 个正在运行的终端",
+      "restarted": "终端服务已以管理员身份重新启动。",
+      "alreadyReplaced": "终端服务已被替换；未停止任何内容。",
+      "failed": "重新启动失败。",
+      "title": "终端未以管理员身份运行",
+      "body": "终端服务在 Orca 获得管理员权限之前就已启动，因此在其重新启动之前，新终端将以非管理员权限打开。",
+      "restart": "重新启动终端",
+      "dismiss": "关闭",
+      "confirmTitle": "以管理员身份重新启动终端？",
+      "confirmBody": "重新启动会结束 {{sessions}} 中的所有进程。已恢复的标签页会打开新的管理员 shell，支持恢复的智能体之后可以恢复。请在智能体空闲时执行此操作。",
+      "cancel": "取消",
+      "confirm": "重新启动并结束进程"
     }
   },
   "fileSearch": {

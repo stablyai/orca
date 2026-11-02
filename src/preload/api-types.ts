@@ -222,7 +222,9 @@ export type {
   PtyManagementMacTccAttributionHealth,
   PtyManagementSession,
   PtyManagementSeveredDaemon,
-  PtyManagementSeveredDaemonRestartResult
+  PtyManagementSeveredDaemonRestartResult,
+  PtyManagementWindowsStandardTerminalHost,
+  PtyManagementWindowsStandardTerminalHostRestartResult
 } from './api/pty-management-api'
 export type {
   ShellOpenExternalEditorRequest,

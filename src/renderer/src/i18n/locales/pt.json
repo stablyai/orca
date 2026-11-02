@@ -21670,7 +21670,24 @@
       "count_one": "{{count}} terminal em execução"
     },
     "restartedInputNotSent": "O terminal reiniciou enquanto você digitava, então parte da entrada pode não ter chegado a ele. Verifique o novo shell antes de digitar novamente.",
-    "typingBeforeStartNotSent": "Algumas teclas digitadas enquanto o terminal iniciava não foram enviadas."
+    "typingBeforeStartNotSent": "Algumas teclas digitadas enquanto o terminal iniciava não foram enviadas.",
+    "windowsAdministratorBanner": {
+      "unknownCount": "seus terminais em execução",
+      "count_one": "{{count}} terminal em execução",
+      "count_many": "{{count}} terminais em execução",
+      "count_other": "{{count}} terminais em execução",
+      "restarted": "Serviço de terminais reiniciado como administrador.",
+      "alreadyReplaced": "O serviço de terminais já foi substituído; nada foi interrompido.",
+      "failed": "Falha ao reiniciar.",
+      "title": "Os terminais não estão em execução como administrador",
+      "body": "O serviço de terminais foi iniciado antes de o Orca ter permissões de administrador, então novos terminais abrem sem elas até que ele seja reiniciado.",
+      "restart": "Reiniciar terminais",
+      "dismiss": "Dispensar",
+      "confirmTitle": "Reiniciar os terminais como administrador?",
+      "confirmBody": "Reiniciar encerra todos os processos em {{sessions}}. As abas restauradas abrirão novos shells de administrador, e agentes que permitem retomar sessões poderão ser retomados depois. Faça isso quando seus agentes estiverem ociosos.",
+      "cancel": "Cancelar",
+      "confirm": "Reiniciar e encerrar processos"
+    }
   },
   "fileExplorer": {
     "root": {

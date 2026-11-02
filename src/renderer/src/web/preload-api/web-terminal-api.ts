@@ -120,7 +120,11 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
       // Why: the host daemon's /proc evidence is not reachable from a web client.
       severedDaemon: () => Promise.resolve({ severed: null }),
       restartSeveredDaemon: () =>
-        Promise.resolve({ status: 'refused' as const, reason: 'not-severed' as const })
+        Promise.resolve({ status: 'refused' as const, reason: 'not-severed' as const }),
+      // Why: the host desktop's Windows token is not observable from a web client.
+      windowsStandardTerminalHost: () => Promise.resolve({ host: null }),
+      restartWindowsStandardTerminalHost: () =>
+        Promise.resolve({ status: 'refused' as const, reason: 'replaced' as const })
     }
   }
 }

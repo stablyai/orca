@@ -19,6 +19,19 @@ describe.runIf(process.platform === 'win32')('native Windows administrator resta
       expect(binary.readUInt16LE(peOffset + 24 + 68)).toBe(subsystem)
     }
   })
+  it('reads another process token and refuses malformed process ids', async () => {
+    const status = (args: string[]): Promise<{ code: number | null; stdout: string }> =>
+      runProcess({ program: launcher, args: ['--orca-administrator-status', ...args] })
+    const self = await status([])
+    expect(self.code).toBe(0)
+    // This test process shares the launcher's token, so both readings must agree.
+    await expect(status([String(process.pid)])).resolves.toMatchObject({
+      code: 0,
+      stdout: self.stdout
+    })
+    await expect(status(['not-a-pid'])).resolves.toMatchObject({ code: 1 })
+  })
+
   it('relaunches with intact arguments only after the previous desktop exits', async () => {
     await withFixture(async ({ fixture, output }) => {
       const previous = spawnStandInDesktop()

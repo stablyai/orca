@@ -21832,6 +21832,23 @@
       "gotIt": "J'ai compris",
       "title": "Claude Code peut ouvrir son propre panneau de différences à côté du chat dans les terminaux larges. Ce panneau appartient à Claude, pas à Orca.",
       "body": "Pour le masquer, tapez /diff dans Claude Code. Claude se souvient de ce choix pour les sessions ultérieures."
+    },
+    "windowsAdministratorBanner": {
+      "unknownCount": "ses terminaux en cours d'exécution",
+      "count_one": "{{count}} terminal en cours d’exécution",
+      "count_many": "{{count}} terminaux en cours d'exécution",
+      "count_other": "{{count}} terminaux en cours d'exécution",
+      "restarted": "Service de terminal redémarré en tant qu’administrateur.",
+      "alreadyReplaced": "Le service de terminal a déjà été remplacé ; rien n'a été arrêté.",
+      "failed": "Échec du redémarrage.",
+      "title": "Les terminaux ne s’exécutent pas en tant qu’administrateur",
+      "body": "Le service de terminal a démarré avant qu'Orca ait les droits d'administrateur. Les nouveaux terminaux s'ouvrent donc sans ces droits jusqu'à son redémarrage.",
+      "restart": "Redémarrer les terminaux",
+      "dismiss": "Ignorer",
+      "confirmTitle": "Redémarrer les terminaux en tant qu’administrateur ?",
+      "confirmBody": "Le redémarrage met fin à tous les processus de {{sessions}}. Les onglets restaurés ouvrent de nouveaux shells d'administrateur, et les agents qui prennent en charge la reprise peuvent être repris ensuite. Faites-le lorsque vos agents sont inactifs.",
+      "cancel": "Annuler",
+      "confirm": "Redémarrer et arrêter les processus"
     }
   },
   "fileSearch": {

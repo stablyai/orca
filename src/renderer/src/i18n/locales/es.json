@@ -21503,6 +21503,23 @@
       "gotIt": "Entendido",
       "body": "Para ocultarlo, escriba /diff en Claude Code. Claude recuerda esa elección para sesiones posteriores.",
       "title": "Claude Code puede abrir su propio panel de diferencias al lado del chat en terminales anchas. Ese panel es de Claude, no de Orca."
+    },
+    "windowsAdministratorBanner": {
+      "unknownCount": "sus terminales en ejecución",
+      "count_one": "{{count}} terminal en ejecución",
+      "count_many": "{{count}} terminales en ejecución",
+      "count_other": "{{count}} terminales en ejecución",
+      "restarted": "Se reinició el servicio de terminal como administrador.",
+      "alreadyReplaced": "El servicio de terminal ya se había reemplazado; no se detuvo nada.",
+      "failed": "Error al reiniciar.",
+      "title": "Las terminales no se ejecutan como administrador",
+      "body": "El servicio de terminal se inició antes de que Orca tuviera permisos de administrador, así que las terminales nuevas se abren sin ellos hasta que se reinicie.",
+      "restart": "Reiniciar terminales",
+      "dismiss": "Descartar",
+      "confirmTitle": "¿Reiniciar las terminales como administrador?",
+      "confirmBody": "Reiniciar termina todos los procesos de {{sessions}}. Las pestañas restauradas abren nuevos shells de administrador y los agentes que admiten reanudación pueden reanudarse después. Hazlo cuando tus agentes estén inactivos.",
+      "cancel": "Cancelar",
+      "confirm": "Reiniciar y terminar procesos"
     }
   },
   "quickOpen": {
