@@ -5,9 +5,10 @@ import type { AppliedControlFlags } from './relay-control-flag-channel.js'
 // Without placing-director contact, memory-only reserve ownership cannot supersede hosts; flip back to db and re-register as a switch flip would.
 export const RESERVE_DEAD_MAN_MS = 60_000
 const RESERVE_DEAD_MAN_SPREAD_MS = 60_000
-// A fresh process waits for its load balancer before any director poll can reach it: up to about
-// 110 s after the switch file applied on 2026-11-01 rolls, past several cells' windows. Until its
-// first contact a new process gets this much more (autohealing's 180 s initial delay).
+// A fresh process waits for its load balancer before any director poll can reach it. On the
+// 2026-11-01 rolls that gap outlasted the 71-103 s windows of c10, c16 and c24 (inferred, not
+// measured: roughly 70-125 s). Until its first contact a new process gets this much more
+// (autohealing's 180 s initial delay).
 export const RESERVE_DEAD_MAN_BOOT_GRACE_MS = 180_000
 
 // Stable 60–120s per-cell windows stagger fleet-wide fallback DB re-registration over one minute.
