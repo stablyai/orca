@@ -107,7 +107,9 @@ A `sandboxed-ui` custom editor around a canvas or diagram library; start from
 (`engines.orca` `>=1.4.248`) so browser clients open the file in Source instead of a fallback.
 There is no bundler or network: copy the library's ESM build into the plugin and map it,
 `<script type="importmap">{ "imports": { "lib": "./vendor/lib.js" } }</script>` (16 MiB a script,
-1 MiB a `.ts` file; no `eval`). Style from the `--orca-*` variables in `references/host-api.md`
+1 MiB a `.ts` file; no `eval`). For types, write a small declaration beside the copied file
+(`vendor/lib.d.ts` for `lib.js`, `.d.mts` for `.mjs`) with only the exports you use, and import
+it by relative path; a package's split `.d.ts` files rarely resolve once copied. Style from the `--orca-*` variables in `references/host-api.md`
 and redo it on `orca.on('theme', ...)`. Orca keeps no undo for editors: the library's own undo
 gets Cmd/Ctrl+Z.
 
