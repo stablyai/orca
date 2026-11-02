@@ -7,15 +7,13 @@ import { formatTimeAgo, getProviderDisplayName, ProviderIcon, ProviderPanel } fr
 
 export function ProviderIdentityCard({
   p,
-  identity,
+  accountLabel,
   footer,
-  showResetCredits,
   usagePercentageDisplay
 }: {
   p: ProviderRateLimits
-  identity?: React.ReactNode
+  accountLabel?: string
   footer?: React.ReactNode
-  showResetCredits: boolean
   usagePercentageDisplay: UsagePercentageDisplay
 }): React.JSX.Element {
   return (
@@ -35,11 +33,13 @@ export function ProviderIdentityCard({
       </div>
       <Card size="sm">
         <div className="space-y-3 px-2.5">
-          {identity}
+          {accountLabel ? (
+            <div className="min-w-0 break-words text-sm font-medium">{accountLabel}</div>
+          ) : null}
           <ProviderPanel
             p={p}
             embedded
-            showResetCredits={showResetCredits}
+            showResetCredits={false}
             usagePercentageDisplay={usagePercentageDisplay}
           />
           {footer}

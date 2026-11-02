@@ -9,7 +9,7 @@ const cardVariants = cva(
     variants: {
       size: {
         default: 'gap-6 py-6',
-        sm: 'gap-3 py-2.5'
+        sm: 'gap-3 py-2.5 shadow-xs'
       }
     },
     defaultVariants: { size: 'default' }

@@ -38,10 +38,8 @@ import { AccountRuntimeToggle } from './StatusBarAccountControls'
 import {
   InlineUsageBars,
   InlineUsageSignInAction,
-  InlineUsageSkeleton,
-  isUnavailableInactiveUsage
+  InlineUsageSkeleton
 } from './InlineProviderUsage'
-import { AccountIdentityHeader } from './AccountIdentityHeader'
 import { AccountSwitchList } from './AccountSwitchList'
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
@@ -255,16 +253,12 @@ export function ClaudeSwitcherForOwner({
         'auto.components.status.bar.StatusBar.3dd7ddfae1',
         'Open Claude details and account switcher'
       )}
-      wide
-      identity={
-        !hasActiveRuntimeEnvironment ? (
-          <AccountIdentityHeader
-            label={
-              selectedGroup?.targets.find((target) => target.active)?.label ??
-              translate('auto.components.status.bar.StatusBar.c676918adc', 'System default')
-            }
-          />
-        ) : undefined
+      variant="account"
+      accountLabel={
+        !hasActiveRuntimeEnvironment
+          ? (selectedGroup?.targets.find((target) => target.active)?.label ??
+            translate('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
+          : undefined
       }
       topContent={
         chatAction ? undefined : (
@@ -315,30 +309,34 @@ export function ClaudeSwitcherForOwner({
                   void handleSelectAccount(target.id, target.runtimeTarget)
                 }
               }}
-            >
-              <div className="flex w-full flex-col gap-0.5">
-                {signInId ? (
+              action={
+                signInId ? (
                   <InlineUsageSignInAction
+                    accountLabel={target.label}
                     isFetching={false}
                     isSigningIn={signingInId === signInId}
                     disabled={isSwitching || signingInId !== null}
                     reason={target.hint ?? undefined}
                     onSignIn={() => void handleSignIn(signInId)}
                   />
-                ) : target.hint ? (
-                  <span className="text-3xs leading-4 text-muted-foreground">{target.hint}</span>
-                ) : null}
-                {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
-                  <InlineUsageSkeleton />
-                ) : inactiveUsage?.rateLimits &&
-                  // Why: the sign-in note above already says this; skip the repeat.
-                  !(signInId && isUnavailableInactiveUsage(inactiveUsage.rateLimits)) ? (
-                  <InlineUsageBars
-                    limits={inactiveUsage.rateLimits}
-                    isFetching={inactiveUsage.isFetching}
-                  />
-                ) : null}
-              </div>
+                ) : undefined
+              }
+            >
+              {!signInId ? (
+                <div className="flex w-full flex-col gap-0.5">
+                  {target.hint ? (
+                    <span className="text-3xs leading-4 text-muted-foreground">{target.hint}</span>
+                  ) : null}
+                  {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
+                    <InlineUsageSkeleton />
+                  ) : inactiveUsage?.rateLimits ? (
+                    <InlineUsageBars
+                      limits={inactiveUsage.rateLimits}
+                      isFetching={inactiveUsage.isFetching}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
             </AccountSwitchRowItem>
           )
         })}

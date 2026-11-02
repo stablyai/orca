@@ -22,7 +22,6 @@ import {
   isUnavailableInactiveUsage
 } from './InlineProviderUsage'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
-import { AccountIdentityHeader } from './AccountIdentityHeader'
 import { AccountSwitchList } from './AccountSwitchList'
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { useCodexSwitcherController } from './use-codex-switcher-controller'
@@ -65,8 +64,6 @@ export function CodexSwitcherMenu({
     setResetConfirmOpen,
     setSkipFutureResetConfirm,
     skipFutureResetConfirm,
-    suppressNextAccountSelect,
-    suppressNextAccountSelectRef,
     switchGroups
   } = useCodexSwitcherController(codex)
 
@@ -77,22 +74,16 @@ export function CodexSwitcherMenu({
       iconOnly={iconOnly}
       asSubmenu={asSubmenu}
       triggerContent={triggerContent}
-      // Reset credits render beside the action below; suppress the generic summary’s duplicate.
-      hidePanelResetCredits
       ariaLabel={translate(
         'auto.components.status.bar.StatusBar.ba55303942',
         'Open Codex details and account switcher'
       )}
-      wide
-      identity={
-        !hasActiveRuntimeEnvironment ? (
-          <AccountIdentityHeader
-            label={
-              activeTarget?.label ??
-              translate('auto.components.status.bar.StatusBar.c676918adc', 'System default')
-            }
-          />
-        ) : undefined
+      variant="account"
+      accountLabel={
+        !hasActiveRuntimeEnvironment
+          ? (activeTarget?.label ??
+            translate('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
+          : undefined
       }
       panelFooter={
         resetCreditCount !== null ? (
@@ -208,42 +199,42 @@ export function CodexSwitcherMenu({
                   onSelect={(event) => {
                     // Why: keep the menu open so the follow-up "restart live Codex tabs" prompt stays in this interaction.
                     event.preventDefault()
-                    if (suppressNextAccountSelectRef.current) {
-                      suppressNextAccountSelectRef.current = false
-                      return
-                    }
                     if (!target.active) {
                       void handleSelectAccount(target.id, target.runtimeTarget)
                     }
                   }}
                   disabled={isBusy || target.active}
-                >
-                  <div className="flex w-full min-w-0 flex-col gap-0.5">
-                    {/* Why: rows follow this desktop's codexTarget, so a remote owner's usage could land on the wrong row. */}
-                    {target.active && !hasActiveRuntimeEnvironment ? (
-                      <InlineUsageBars limits={codex} isFetching={codex.status === 'fetching'} />
-                    ) : inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
-                      <InlineUsageSkeleton />
-                    ) : showSignInAction ? (
+                  action={
+                    showSignInAction ? (
                       <InlineUsageSignInAction
+                        accountLabel={target.label}
                         isFetching={inactiveUsage?.isFetching ?? false}
                         isSigningIn={isSigningIn}
                         disabled={isBusy}
-                        onSignInPointerDown={suppressNextAccountSelect}
                         onSignIn={() => {
-                          suppressNextAccountSelect()
                           if (target.id !== null) {
                             void handleSignInAccount(target.id, target.runtimeTarget)
                           }
                         }}
                       />
-                    ) : inactiveUsage?.rateLimits ? (
-                      <InlineUsageBars
-                        limits={inactiveUsage.rateLimits}
-                        isFetching={inactiveUsage.isFetching}
-                      />
-                    ) : null}
-                  </div>
+                    ) : undefined
+                  }
+                >
+                  {!showSignInAction ? (
+                    <div className="flex w-full min-w-0 flex-col gap-0.5">
+                      {/* Why: rows follow this desktop's codexTarget, so a remote owner's usage could land on the wrong row. */}
+                      {target.active && !hasActiveRuntimeEnvironment ? (
+                        <InlineUsageBars limits={codex} isFetching={codex.status === 'fetching'} />
+                      ) : inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
+                        <InlineUsageSkeleton />
+                      ) : inactiveUsage?.rateLimits ? (
+                        <InlineUsageBars
+                          limits={inactiveUsage.rateLimits}
+                          isFetching={inactiveUsage.isFetching}
+                        />
+                      ) : null}
+                    </div>
+                  ) : null}
                 </AccountSwitchRowItem>
               )
             })}

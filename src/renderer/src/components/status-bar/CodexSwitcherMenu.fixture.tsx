@@ -8,8 +8,13 @@ import type {
   RateLimitWindow
 } from '../../../../shared/rate-limit-types'
 import { CodexSwitcherMenu } from './CodexSwitcherMenu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 
-const NOW = Date.UTC(2026, 9, 31, 16)
+const NOW = Date.now()
 const DAY = 24 * 60 * 60 * 1000
 
 type SampleAccount = {
@@ -99,7 +104,7 @@ function usageFor(account: SampleAccount): ProviderRateLimits {
         : {
             usedPercent: 32,
             windowMinutes: 300,
-            resetsAt: Date.now() + 80 * 60_000 + 5_000,
+            resetsAt: NOW + 80 * 60_000 + 5_000,
             resetDescription: null
           },
     weekly: account.weekly === null ? null : weeklyWindow(account.weekly, account.resetsInDays),
@@ -123,7 +128,7 @@ function managed(account: SampleAccount): CodexManagedAccount {
   }
 }
 
-function switcherFixture(accounts: SampleAccount[]) {
+function switcherFixture(accounts: SampleAccount[], asSubmenu = false) {
   const [active, ...inactive] = accounts
   const codex: ProviderRateLimits = {
     ...usageFor(active),
@@ -154,10 +159,33 @@ function switcherFixture(accounts: SampleAccount[]) {
     },
     render: () => (
       <div className="flex h-[760px] items-end bg-background p-3">
-        <CodexSwitcherMenu codex={codex} compact={false} iconOnly={false} />
+        {asSubmenu ? (
+          <DropdownMenu defaultOpen modal={false}>
+            <DropdownMenuTrigger>Usage</DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <CodexSwitcherMenu
+                codex={codex}
+                compact={false}
+                iconOnly={false}
+                asSubmenu
+                triggerContent="Codex"
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <CodexSwitcherMenu codex={codex} compact={false} iconOnly={false} />
+        )}
       </div>
     ),
     interact: (frame) => {
+      if (asSubmenu) {
+        const trigger = frame.ownerDocument.querySelector<HTMLElement>(
+          '[data-slot="dropdown-menu-sub-trigger"]'
+        )
+        trigger?.focus()
+        trigger?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+        return
+      }
       frame
         .querySelector<HTMLButtonElement>('button[aria-label]')
         ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
@@ -168,3 +196,5 @@ function switcherFixture(accounts: SampleAccount[]) {
 export const sixAccounts = switcherFixture(BASE_ACCOUNTS)
 
 export const longList = switcherFixture([...BASE_ACCOUNTS, ...EXTRA_ACCOUNTS])
+
+export const submenu = switcherFixture([...BASE_ACCOUNTS, ...EXTRA_ACCOUNTS], true)

@@ -22,23 +22,21 @@ export function ProviderDetailsMenu({
   iconOnly,
   ariaLabel,
   topContent,
-  hidePanelResetCredits = false,
   open,
   onOpenChange,
   children,
   asSubmenu = false,
   triggerContent,
   trigger,
-  identity,
+  accountLabel,
   panelFooter,
-  wide = false
+  variant = 'default'
 }: {
   provider: ProviderRateLimits | null
   compact: boolean
   iconOnly: boolean
   ariaLabel: string
   topContent?: React.ReactNode
-  hidePanelResetCredits?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
   children?: React.ReactNode
@@ -46,11 +44,9 @@ export function ProviderDetailsMenu({
   asSubmenu?: boolean
   triggerContent?: React.ReactNode
   trigger?: React.ReactElement
-  /** Heads the usage with the account it belongs to (see ProviderPanel). */
-  identity?: React.ReactNode
+  accountLabel?: string
   panelFooter?: React.ReactNode
-  /** Room for the account list's one-line rows. */
-  wide?: boolean
+  variant?: 'default' | 'account'
 }): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const usagePercentageDisplay = normalizeUsagePercentageDisplay(
@@ -71,21 +67,15 @@ export function ProviderDetailsMenu({
       {topContent}
       {provider ? (
         <div className="p-2">
-          {/* Why: provider-specific action sections may render richer reset-credit UI. */}
-          {identity || panelFooter ? (
+          {variant === 'account' ? (
             <ProviderIdentityCard
               p={provider}
-              identity={identity}
+              accountLabel={accountLabel}
               footer={panelFooter}
-              showResetCredits={!hidePanelResetCredits}
               usagePercentageDisplay={usagePercentageDisplay}
             />
           ) : (
-            <ProviderPanel
-              p={provider}
-              showResetCredits={!hidePanelResetCredits}
-              usagePercentageDisplay={usagePercentageDisplay}
-            />
+            <ProviderPanel p={provider} usagePercentageDisplay={usagePercentageDisplay} />
           )}
         </div>
       ) : null}
@@ -107,12 +97,10 @@ export function ProviderDetailsMenu({
         <DropdownMenuSubContent
           {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
           collisionPadding={{ top: 8, bottom: 32, left: 8, right: 8 }}
-          className={wide ? 'w-[400px] max-w-[calc(100vw-1rem)]' : 'w-[300px]'}
+          scrollable
+          className={`${variant === 'account' ? 'w-[400px]' : 'w-[300px]'} max-w-[calc(100vw-1rem)]`}
         >
-          {/* Why: the primitive owns its padding and clips overflow, so the scroller sits inside it. */}
-          <div className="-m-1 max-h-(--radix-dropdown-menu-content-available-height) overflow-y-auto p-1 scrollbar-sleek">
-            {panelBody}
-          </div>
+          {panelBody}
         </DropdownMenuSubContent>
       </DropdownMenuSub>
     )
@@ -140,7 +128,7 @@ export function ProviderDetailsMenu({
         side="top"
         align="start"
         sideOffset={8}
-        className={wide ? 'w-[400px] max-w-[calc(100vw-1rem)]' : 'w-[260px]'}
+        className={`${variant === 'account' ? 'w-[400px]' : 'w-[260px]'} max-w-[calc(100vw-1rem)]`}
         onPointerDownOutside={menuFocusHandoff.onPointerDownOutside}
         onCloseAutoFocus={menuFocusHandoff.onCloseAutoFocus}
       >

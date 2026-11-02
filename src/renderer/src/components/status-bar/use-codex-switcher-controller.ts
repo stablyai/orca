@@ -48,14 +48,6 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
   const [reauthenticatingAccountId, setReauthenticatingAccountId] = useState<string | null>(null)
   const mountedRef = useRef(true)
   const menuOpenRef = useRef(open)
-  // Why: Radix item-select is separate from the nested button click, so stopPropagation alone won't prevent the row switch.
-  const suppressNextAccountSelectRef = useRef(false)
-  const suppressNextAccountSelect = useCallback(() => {
-    suppressNextAccountSelectRef.current = true
-    window.setTimeout(() => {
-      suppressNextAccountSelectRef.current = false
-    }, 0)
-  }, [])
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
@@ -303,8 +295,6 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
     setResetConfirmOpen,
     setSkipFutureResetConfirm,
     skipFutureResetConfirm,
-    suppressNextAccountSelect,
-    suppressNextAccountSelectRef,
     switchGroups
   }
 }

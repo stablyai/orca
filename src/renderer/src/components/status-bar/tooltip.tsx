@@ -324,23 +324,28 @@ export function ProviderPanel({
 
   return (
     <div className={`${className ?? 'w-full'} space-y-3 text-xs`}>
-      <div hidden={embedded}>
-        <div className={`flex items-center gap-1.5 text-[13px] font-medium ${textClass}`}>
-          <ProviderIcon provider={p.provider} />
-          {name}
-        </div>
-        <div className={faintClass}>{updatedAgo}</div>
-        {resetCreditCount !== null && resetCreditCount !== undefined ? (
-          <div className={mutedClass}>
-            {translate(
-              'auto.components.status.bar.tooltip.rateLimitResetsAvailable',
-              '{{count}} rate-limit resets available',
-              { count: resetCreditCount, defaultValue_one: '{{count}} rate-limit reset available' }
-            )}
+      {!embedded ? (
+        <div>
+          <div className={`flex items-center gap-1.5 text-[13px] font-medium ${textClass}`}>
+            <ProviderIcon provider={p.provider} />
+            {name}
           </div>
-        ) : null}
-        {resetCreditExpiry ? <div className={faintClass}>{resetCreditExpiry}</div> : null}
-      </div>
+          <div className={faintClass}>{updatedAgo}</div>
+          {resetCreditCount !== null && resetCreditCount !== undefined ? (
+            <div className={mutedClass}>
+              {translate(
+                'auto.components.status.bar.tooltip.rateLimitResetsAvailable',
+                '{{count}} rate-limit resets available',
+                {
+                  count: resetCreditCount,
+                  defaultValue_one: '{{count}} rate-limit reset available'
+                }
+              )}
+            </div>
+          ) : null}
+          {resetCreditExpiry ? <div className={faintClass}>{resetCreditExpiry}</div> : null}
+        </div>
+      ) : null}
 
       {embedded ? null : <div className={`border-t ${dividerClass}`} />}
 
