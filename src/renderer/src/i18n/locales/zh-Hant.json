@@ -191,7 +191,10 @@
       "title": "將 {{distro}} 作為主機執行（建議）",
       "why": "Git、檔案和終端機將在 Linux 中原生執行，而不是透過 Windows 檔案共用。",
       "accept": "作為主機執行",
-      "projectNotFound": "找不到要移動的已新增專案。請在側邊欄的專案上使用「移至 {{distro}} 主機…」。"
+      "projectNotFound": "找不到要移動的已新增專案。請在側邊欄的專案上使用「移至 {{distro}} 主機…」。",
+      "existingTitle": "新增到 {{distro}} 主機（建議）",
+      "existingWhy": "{{distro}} 已作為主機執行，因此 Git、檔案和終端機將在 Linux 中原生執行，而不是透過 Windows 檔案共用。",
+      "existingAccept": "新增到主機"
     }
   },
   "app": {
@@ -22276,7 +22279,8 @@
       "changed": "先前已移動，之後又被舊版 Orca 在這裡變更。不會再次移動。",
       "chatsStay": "現有聊天會留在這台電腦上。此專案中的新聊天會在 WSL 主機上開始。",
       "browserLoginsConflict": "瀏覽器登入狀態不會轉移，因為主機的瀏覽器設定檔已在使用中。移動後，請在主機的瀏覽器分頁中重新登入。",
-      "browserLoginsNotCarried": "瀏覽器登入狀態不會轉移到此主機。移動後，請在其瀏覽器分頁中重新登入。"
+      "browserLoginsNotCarried": "瀏覽器登入狀態不會轉移到此主機。移動後，請在其瀏覽器分頁中重新登入。",
+      "why": "之後工作會在 Linux 中、緊鄰你的檔案執行，因此終端機、Git 和檔案變更會更快、更可靠。你的專案不會改變，也可以隨時用「重新在這台電腦上使用」把任何專案移回來。"
     },
     "cancel": "取消",
     "progress": {
