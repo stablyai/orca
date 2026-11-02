@@ -177,6 +177,36 @@ describe('structured launch after a host-failed create', () => {
     }
   )
 
+  // Only the failed start keeps the refusal's owner, so only it can tell a terminal from a chat.
+  it('says a terminal runs the conversation when the refusal names no chat', async () => {
+    ownershipRefusal = {
+      code: 'agent_session_conflict',
+      details: { reason: 'conversationHeldElsewhere' },
+      message: 'agent_session_conflict',
+      createAttemptRefusedBeforeCommit: true
+    }
+    refuseFirstCall = true
+    const sessionId = launch()
+    await settle(sessionId)
+    expect(
+      structuredSessionNotices({
+        launch: {
+          lifecycle: 'failed',
+          failure: getStructuredAgentSessionLaunchFailure(WORKTREE, sessionId),
+          retry: () => {}
+        },
+        agentLabel: 'Codex',
+        sessionError: null,
+        composerError: null
+      })
+    ).toMatchObject([
+      {
+        // This file's translate mock leaves {{agent}} unfilled.
+        text: expect.stringMatching(/^Chat could not be started\. .* in another terminal\./)
+      }
+    ])
+  })
+
   it('retains a missing-history failed tab with Retry, then starts a new attempt', async () => {
     refuseFirstCall = true
     missingHistory = true

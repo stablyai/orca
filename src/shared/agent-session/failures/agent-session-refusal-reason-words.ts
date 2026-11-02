@@ -212,16 +212,17 @@ const HELD_IN_TERMINAL: AgentSessionRefusalReasonWords = {
 }
 
 /** The words and next step a reason gets; undefined when the refusal names none. `owner` is the
- *  chat a failed start's refusal named as holding the conversation. */
+ *  chat a failed start's refusal named as holding the conversation, or null when it named none;
+ *  absent where the refusal's owner was not kept, so who holds it is unknown. */
 export function agentSessionRefusalReasonWords(
-  failure: AgentSessionWriteRefusal & { owner?: AgentSessionConversationOwner }
+  failure: AgentSessionWriteRefusal & { owner?: AgentSessionConversationOwner | null }
 ): AgentSessionRefusalReasonWords | undefined {
   const reason = failure.details?.reason
   // A holder that is no chat is a terminal's agent, which the host found still running.
   if (
     failure.code === 'agent_session_conflict' &&
     reason === 'conversationHeldElsewhere' &&
-    !failure.owner
+    failure.owner === null
   ) {
     return HELD_IN_TERMINAL
   }

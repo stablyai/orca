@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   agentSessionRefusalCauseParts,
-  agentSessionWriteNoticeEnglish
+  agentSessionWriteNoticeEnglish,
+  agentSessionWriteNoticeParts
 } from './agent-session-refusal-notice'
 import { agentSessionFailureSentence } from './agent-session-failure-words'
 import {
@@ -35,12 +36,30 @@ describe('agentSessionRefusalCauseParts', () => {
       details: { reason: 'conversationHeldElsewhere' }
     })
     expect(
-      agentSessionWriteNoticeEnglish(agentSessionRefusalCauseParts(held, { agentName: 'Claude' }))
+      agentSessionWriteNoticeEnglish(
+        agentSessionRefusalCauseParts({ ...held, owner: null }, { agentName: 'Claude' })
+      )
     ).toBe(
       'Claude is already running this conversation in another terminal. Quit Claude there or close that terminal to continue here.'
     )
     const namingChat = { ...held, owner: { sessionId: 'chat-1', workspaceId: 'wt-1' } }
     expect(agentSessionRefusalCauseParts(namingChat)).toEqual([])
+  })
+
+  // The write failure drops the owner, so its words cannot tell a holding chat from a terminal.
+  it('keeps a send refusal naming its holding chat from reading as a terminal', () => {
+    const namingChat = agentSessionRefusalFailure({
+      code: 'agent_session_conflict',
+      details: {
+        reason: 'conversationHeldElsewhere',
+        owner: { sessionId: 'holding-chat', workspaceId: 'repo::/srv/app' }
+      }
+    })
+    expect(
+      agentSessionWriteNoticeEnglish(
+        agentSessionWriteNoticeParts(namingChat, 'composer-send', { agentName: 'Claude' })
+      )
+    ).not.toMatch(/terminal/)
   })
 })
 
