@@ -17,7 +17,7 @@ export {
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
   scanWorkspacePortsForTarget
-} from '@/lib/workspace-port-actions'
+} from '@/lib/workspace-ports/workspace-port-actions'
 
 export default function PortsPanel({ isVisible }: { isVisible: boolean }): React.JSX.Element {
   const activeWorktree = useActiveWorktree()

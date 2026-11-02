@@ -22,7 +22,6 @@ vi.mock('./mobile-tasks-dependencies', async () => {
     ActivityIndicator: 'ActivityIndicator',
     ChevronDown: 'ChevronDown',
     Plus: 'Plus',
-    BottomDrawer: 'BottomDrawer',
     TaskProviderLogo: 'TaskProviderLogo',
     ExternalLink: 'ExternalLink',
     Copy: 'Copy',
@@ -34,6 +33,7 @@ vi.mock('./mobile-tasks-dependencies', async () => {
     Linking: { openURL: vi.fn() }
   }
 })
+vi.mock('../components/bottom-drawer/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
 vi.mock('lucide-react-native', () => ({ Inbox: 'Inbox' }))
 vi.mock('../components/MobileStateView', () => ({
   MobileStateView: 'MobileStateView',

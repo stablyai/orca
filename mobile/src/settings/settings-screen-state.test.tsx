@@ -33,7 +33,7 @@ vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => useEffect(callback, [callback])
 }))
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', ChevronRight: 'Icon' }))
-vi.mock('../components/BottomDrawer', () => ({
+vi.mock('../components/bottom-drawer/BottomDrawer', () => ({
   BottomDrawer: ({ children }: { children: ReactNode }) => children
 }))
 vi.mock('../components/VoiceModelList', () => ({ VoiceModelList: () => null }))

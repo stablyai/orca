@@ -1,6 +1,6 @@
 import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/claude-profile-installed-router'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
-import { LocalPtyProvider } from '../../../providers/local-pty-provider'
+import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { getProvider } from '../provider/registry'

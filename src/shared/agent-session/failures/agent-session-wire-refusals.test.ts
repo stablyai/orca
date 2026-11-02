@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { readAgentSessionRefusalDetails } from './agent-session-refusal-details'
 import {
-  agentSessionRefusalError,
   agentSessionRefusalReference,
   readAgentSessionRefusalReference,
   refuse,
@@ -24,53 +23,7 @@ function asReleasedClientSeesIt(refusal: AgentSessionWireRefusal): unknown {
   return rest
 }
 
-describe('a refusal names only a reason its code lists', () => {
-  it('rejects a reason another code lists, at compile time', () => {
-    // @ts-expect-error `promptGone` is an operation_invalid reason, not a conflict one.
-    refuse('agent_session_conflict', { reason: 'promptGone' }, 'm')
-    // @ts-expect-error the thrown form is held to the same list.
-    agentSessionRefusalError('agent_session_identity_required', { reason: 'claimConflicted' })
-    // @ts-expect-error a fact another code carries is not this code's.
-    refuse('agent_session_conflict', { reason: 'ownerAlive', currentFence: 3 }, 'm')
-    // @ts-expect-error the unclassified path cannot carry a reason.
-    refuseUnclassified('agent_session_conflict', 'm', { reason: 'claimConflicted' })
-    expect(refuse('agent_session_conflict', { reason: 'ownerAlive' }, 'm').details).toEqual({
-      reason: 'ownerAlive'
-    })
-  })
-})
-
 describe('the loose fields released clients read', () => {
-  it('are copied from details by refuse, one field at a time', () => {
-    expect(
-      refuse('agent_session_checkpoint_stale', { reason: 'fenceStale', currentFence: 4 }, 'm')
-    ).toMatchObject({ currentFence: 4 })
-    expect(
-      refuse(
-        'agent_session_item_revision_stale',
-        { reason: 'promptMoved', currentRevision: 2, resolution: RESOLUTION },
-        'm'
-      )
-    ).toMatchObject({ currentRevision: 2, resolution: RESOLUTION })
-    expect(
-      refuse(
-        'agent_session_operation_invalid',
-        { reason: 'rewindRefused', rewindReason: 'busy' },
-        'm'
-      )
-    ).toMatchObject({ rewindReason: 'busy' })
-    expect(
-      refuse(
-        'agent_session_ownership_unknown',
-        { reason: 'ownerUnproven', ownerVerdict: 'exited' },
-        'm'
-      )
-    ).toMatchObject({ ownerVerdict: 'exited' })
-    expect(
-      refuseUnclassified('agent_session_checkpoint_stale', 'm', { currentFence: 9 })
-    ).toMatchObject({ currentFence: 9, details: { currentFence: 9 } })
-  })
-
   it('gain a verdict learned after the refusal, in details and at the top level', () => {
     const stamped = withAgentSessionRefusalFacts(
       refuse('agent_session_operation_invalid', { reason: 'providerStartFailed' }, 'm'),

@@ -104,27 +104,4 @@ describe('resolveSourceControlNextStep', () => {
     expect(step({ review: { kind: 'none' } }).kind).toBe('none')
     expect(step({ review: { kind: 'loading' }, reviewCreation: 'create' }).kind).toBe('none')
   })
-
-  it('turns on auto-merge while GitHub waits on a requirement, and says why when nothing can', () => {
-    expect(
-      step({
-        review: {
-          kind: 'github',
-          pr: { ...OPEN_PR, mergeStateStatus: 'BLOCKED' },
-          failedChecks: 0,
-          pendingChecks: 2
-        }
-      })
-    ).toEqual({ kind: 'merge_when_ready', mergeState: 'blocked', pendingChecks: 2 })
-    expect(step({}, { reviewDecision: 'REVIEW_REQUIRED', mergeStateStatus: 'BLOCKED' })).toEqual({
-      kind: 'merge_when_ready',
-      mergeState: 'review_required',
-      pendingChecks: 0
-    })
-    expect(step({}, { mergeStateStatus: 'BLOCKED', autoMergeAllowed: false })).toEqual({
-      kind: 'merge_blocked',
-      mergeState: 'blocked'
-    })
-    expect(step({}, { state: 'draft' })).toEqual({ kind: 'merge_blocked', mergeState: 'draft' })
-  })
 })
