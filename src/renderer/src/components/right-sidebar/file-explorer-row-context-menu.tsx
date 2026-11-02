@@ -41,6 +41,7 @@ import type { FileExplorerRowProps } from './FileExplorerRow'
 import {
   shouldShowCollapseFolderAction,
   shouldShowCopyFileAction,
+  shouldShowCopyRelativePathAction,
   shouldShowFindInFolderAction,
   shouldShowOpenInTerminalAction,
   shouldShowRemoteDownloadAction,
@@ -54,6 +55,7 @@ const isMac = navigator.userAgent.includes('Mac')
 type FileExplorerRowContextMenuProps = Pick<
   FileExplorerRowProps,
   | 'node'
+  | 'readOnly'
   | 'isExpanded'
   | 'deleteShortcutLabel'
   | 'connectionId'
@@ -79,6 +81,7 @@ type FileExplorerRowContextMenuProps = Pick<
 
 export function FileExplorerRowContextMenu({
   node,
+  readOnly,
   isExpanded,
   deleteShortcutLabel,
   connectionId,
@@ -148,21 +151,25 @@ export function FileExplorerRowContextMenu({
       onPointerUpCapture={preventSecondaryMenuSelection}
       onCloseAutoFocus={(e) => e.preventDefault()}
     >
-      <ContextMenuItem
-        disabled={writesBlocked}
-        onSelect={() => onStartNew('file', targetDir, targetDepth)}
-      >
-        <FilePlus />
-        {translate('auto.components.right.sidebar.FileExplorerRow.37c875d827', 'New File')}
-      </ContextMenuItem>
-      <ContextMenuItem
-        disabled={writesBlocked}
-        onSelect={() => onStartNew('folder', targetDir, targetDepth)}
-      >
-        <FolderPlus />
-        {translate('auto.components.right.sidebar.FileExplorerRow.f61af83316', 'New Folder')}
-      </ContextMenuItem>
-      <ContextMenuSeparator />
+      {!readOnly && (
+        <>
+          <ContextMenuItem
+            disabled={writesBlocked}
+            onSelect={() => onStartNew('file', targetDir, targetDepth)}
+          >
+            <FilePlus />
+            {translate('auto.components.right.sidebar.FileExplorerRow.37c875d827', 'New File')}
+          </ContextMenuItem>
+          <ContextMenuItem
+            disabled={writesBlocked}
+            onSelect={() => onStartNew('folder', targetDir, targetDepth)}
+          >
+            <FolderPlus />
+            {translate('auto.components.right.sidebar.FileExplorerRow.f61af83316', 'New Folder')}
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+        </>
+      )}
       {showCopyFileAction && (
         <ContextMenuItem onSelect={handleCopyFile}>
           <Copy />
@@ -178,22 +185,24 @@ export function FileExplorerRowContextMenu({
           <ContextMenuShortcut>{copyPathShortcutLabel}</ContextMenuShortcut>
         ) : null}
       </ContextMenuItem>
-      <ContextMenuItem onSelect={() => onCopyPaths('relative')}>
-        <Copy />
-        {selectionSize > 1
-          ? translate(
-              'auto.components.right.sidebar.FileExplorerRow.42e10cbf57',
-              'Copy Relative Paths'
-            )
-          : translate(
-              'auto.components.right.sidebar.FileExplorerRow.66a29dde82',
-              'Copy Relative Path'
-            )}
-        {copyRelativePathShortcutLabel !== 'Unassigned' ? (
-          <ContextMenuShortcut>{copyRelativePathShortcutLabel}</ContextMenuShortcut>
-        ) : null}
-      </ContextMenuItem>
-      {!node.isDirectory && (
+      {shouldShowCopyRelativePathAction(node, readOnly) && (
+        <ContextMenuItem onSelect={() => onCopyPaths('relative')}>
+          <Copy />
+          {selectionSize > 1
+            ? translate(
+                'auto.components.right.sidebar.FileExplorerRow.42e10cbf57',
+                'Copy Relative Paths'
+              )
+            : translate(
+                'auto.components.right.sidebar.FileExplorerRow.66a29dde82',
+                'Copy Relative Path'
+              )}
+          {copyRelativePathShortcutLabel !== 'Unassigned' ? (
+            <ContextMenuShortcut>{copyRelativePathShortcutLabel}</ContextMenuShortcut>
+          ) : null}
+        </ContextMenuItem>
+      )}
+      {!readOnly && !node.isDirectory && (
         <ContextMenuItem disabled={writesBlocked} onSelect={() => onDuplicate(node)}>
           <Files />
           {translate('auto.components.right.sidebar.FileExplorerRow.0fec99bfd7', 'Duplicate')}
@@ -208,7 +217,7 @@ export function FileExplorerRowContextMenu({
           )}
         </ContextMenuItem>
       )}
-      {shouldShowOpenInTerminalAction(node) && (
+      {!readOnly && shouldShowOpenInTerminalAction(node) && (
         <ContextMenuItem onSelect={onOpenInTerminal}>
           <SquareTerminal />
           {translate(
@@ -267,7 +276,7 @@ export function FileExplorerRowContextMenu({
           {translate('auto.components.right.sidebar.FileExplorerRow.d6a25618aa', 'Collapse Folder')}
         </ContextMenuItem>
       )}
-      {shouldShowFindInFolderAction(node) && (
+      {shouldShowFindInFolderAction(node, readOnly) && (
         <ContextMenuItem onSelect={onFindInFolder}>
           <Search />
           {translate('auto.components.right.sidebar.FileExplorerRow.0df0e5abac', 'Find in Folder')}
@@ -285,21 +294,29 @@ export function FileExplorerRowContextMenu({
         {getRevealInFileManagerLabel()}
         {revealBlocked ? <LocalOnlyMenuHint /> : null}
       </ContextMenuItem>
-      <ContextMenuSeparator />
-      <ContextMenuItem disabled={writesBlocked} onSelect={() => onStartRename(node)}>
-        <Pencil />
-        {translate('auto.components.right.sidebar.FileExplorerRow.fc747429bf', 'Rename')}
-        <ContextMenuShortcut>
-          {isMac
-            ? '↩'
-            : translate('auto.components.right.sidebar.FileExplorerRow.a06551beee', 'Enter')}
-        </ContextMenuShortcut>
-      </ContextMenuItem>
-      <ContextMenuItem variant="destructive" disabled={writesBlocked} onSelect={onRequestDelete}>
-        <Trash2 />
-        {translate('auto.components.right.sidebar.FileExplorerRow.addc01145f', 'Delete')}
-        <ContextMenuShortcut>{deleteShortcutLabel}</ContextMenuShortcut>
-      </ContextMenuItem>
+      {!readOnly && (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuItem disabled={writesBlocked} onSelect={() => onStartRename(node)}>
+            <Pencil />
+            {translate('auto.components.right.sidebar.FileExplorerRow.fc747429bf', 'Rename')}
+            <ContextMenuShortcut>
+              {isMac
+                ? '↩'
+                : translate('auto.components.right.sidebar.FileExplorerRow.a06551beee', 'Enter')}
+            </ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuItem
+            variant="destructive"
+            disabled={writesBlocked}
+            onSelect={onRequestDelete}
+          >
+            <Trash2 />
+            {translate('auto.components.right.sidebar.FileExplorerRow.addc01145f', 'Delete')}
+            <ContextMenuShortcut>{deleteShortcutLabel}</ContextMenuShortcut>
+          </ContextMenuItem>
+        </>
+      )}
     </ContextMenuContent>
   )
 }

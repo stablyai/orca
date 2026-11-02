@@ -62,13 +62,18 @@ export async function readRuntimeDirectory(
       connectionId: context.connectionId,
       ...options,
       ...(wakeWslDistro ? { wakeWslDistro } : {}),
-      ...(access ? { access } : {})
+      ...localAccess(context.connectionId, access)
     })
   }
+  const remoteOptions = options.followSymlinks ? { followSymlinks: true } : {}
   return callRuntimeRpc<DirEntry[]>(
     remoteArgs.target,
     'files.readDir',
-    { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath, ...options },
+    {
+      worktree: remoteArgs.worktreeSelector,
+      relativePath: remoteArgs.relativePath,
+      ...remoteOptions
+    },
     { timeoutMs: 15_000 }
   )
 }

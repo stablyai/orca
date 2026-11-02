@@ -71,6 +71,7 @@ export function installRuntimeFileClientEnvironment(): void {
     clearLegacyQuickOpenInventoryCacheForTests()
     replaceRuntimeEnvironmentRevisions([])
     fsReadFile.mockReset()
+    fsReadDir.mockReset()
     fsReadFileChunk.mockReset()
     fsWriteFile.mockReset()
     fsOnChanged.mockReset()

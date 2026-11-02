@@ -4,15 +4,10 @@ import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-ow
 import { getWorkspaceFileRevealOwner } from '@/lib/reveal-in-file-manager'
 import { getRouteForLocalPathOpenOwner } from '@/lib/local-path-open-guard'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
-import {
-  getExplorerDisplayRootOptions,
-  resolveExplorerDisplayRootChoice,
-  getExplorerDisplayRootPath,
-  getExplorerDisplayDepth,
-  getExplorerEffectiveExpanded
-} from './file-explorer-display-root'
+import { getExplorerDisplayDepth, getExplorerEffectiveExpanded } from './file-explorer-display-root'
+import { FileExplorerNavigationBar } from './FileExplorerNavigationBar'
 import { FileExplorerScopeNotice } from './FileExplorerScopeNotice'
-import { useFileExplorerRootNavigation } from './use-file-explorer-root-navigation'
+import { useFileExplorerDisplayRootState } from './use-file-explorer-display-root-state'
 import { useFileExplorerScopeTransition } from './use-file-explorer-scope-transition'
 import { basename } from '@/lib/path'
 import { cn } from '@/lib/utils'
@@ -78,11 +73,15 @@ function FileExplorerFiles(): React.JSX.Element {
   const savedRoot = useAppStore((s) =>
     activeWorktreeId ? s.explorerDisplayRootByWorktree[activeWorktreeId] : undefined
   )
-  const rootOptions = useMemo(() => getExplorerDisplayRootOptions(activeWorktree), [activeWorktree])
-  const rootChoice = resolveExplorerDisplayRootChoice(rootOptions, savedRoot)
-  const rootNavigation = useFileExplorerRootNavigation(activeWorktreeId, rootChoice, rootOptions)
-  const worktreePath = activeWorktree?.path ?? null
-  const displayRootPath = getExplorerDisplayRootPath(worktreePath, rootChoice)
+  const {
+    displayRootPath,
+    navigation,
+    outsideWorkspace,
+    rootChoice,
+    rootNavigation,
+    rootOptions,
+    worktreePath
+  } = useFileExplorerDisplayRootState(activeWorktreeId, activeWorktree, savedRoot)
   const displayDepth = getExplorerDisplayDepth(worktreePath, displayRootPath)
   const isFilesViewActive = explorerView === 'files'
   const visibleFilesWorktreePath = getVisibleFileExplorerWorktreePath({
@@ -107,7 +106,12 @@ function FileExplorerFiles(): React.JSX.Element {
       ),
     [expanded, visibleFilesWorktreePath, displayRootPath, worktreePath]
   )
-  const tree = useFileExplorerTree(worktreePath, effectiveExpanded, activeWorktreeId)
+  const tree = useFileExplorerTree(
+    displayRootPath,
+    effectiveExpanded,
+    activeWorktreeId,
+    worktreePath
+  )
   const {
     nameFilterQuery,
     setNameFilterQuery,
@@ -187,7 +191,9 @@ function FileExplorerFiles(): React.JSX.Element {
     activeRepo,
     worktreePath,
     visibleFilesWorktreePath,
+    visibleTreeRootPath: visibleFilesWorktreePath ? displayRootPath : null,
     displayRootPath,
+    readOnly: outsideWorkspace,
     effectiveExpanded,
     expanded,
     activeFileId,
@@ -266,6 +272,7 @@ function FileExplorerFiles(): React.JSX.Element {
           showDotfiles={showDotfiles}
           onToggleDotfiles={handleToggleDotfiles}
         />
+        <FileExplorerNavigationBar navigation={navigation} />
         {activeWorktree?.isSparse && (
           <FileExplorerScopeNotice
             rootSelect={
@@ -297,6 +304,7 @@ function FileExplorerFiles(): React.JSX.Element {
                 query={nameFilterQuery}
                 scopeLabel={rootOptions?.find((option) => option.value === rootChoice)?.label}
                 loading={nameFilterFiles.loading}
+                disabled={outsideWorkspace}
                 onQueryChange={setNameFilterQuery}
                 onClear={handleClearNameFilter}
               />
@@ -313,6 +321,7 @@ function FileExplorerFiles(): React.JSX.Element {
         <div className="relative min-h-0 flex-1 overflow-hidden">
           <FileExplorerFilesTreePane
             displayRootPath={displayRootPath}
+            readOnly={outsideWorkspace}
             activeRepo={activeRepo}
             worktreePath={worktreePath}
             explorerView={explorerView}
@@ -353,14 +362,16 @@ function FileExplorerFiles(): React.JSX.Element {
         </div>
       </div>
 
-      <FileExplorerBackgroundMenu
-        open={bgMenuOpen}
-        onOpenChange={setBgMenuOpen}
-        point={bgMenuPoint}
-        worktreePath={displayRootPath ?? worktreePath}
-        displayDepth={displayDepth}
-        onStartNew={inlineInputState.startNew}
-      />
+      {!outsideWorkspace && (
+        <FileExplorerBackgroundMenu
+          open={bgMenuOpen}
+          onOpenChange={setBgMenuOpen}
+          point={bgMenuPoint}
+          worktreePath={displayRootPath ?? worktreePath}
+          displayDepth={displayDepth}
+          onStartNew={inlineInputState.startNew}
+        />
+      )}
     </>
   )
 }

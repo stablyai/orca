@@ -91,3 +91,79 @@ it('does not enqueue auto-reveal for an editor file outside scope', () => {
   expect(store.setState).not.toHaveBeenCalled()
   expect(args.setSelectedPath).not.toHaveBeenCalled()
 })
+
+it('does not leave an outside browsing root when a workspace editor tab gains focus', () => {
+  const args = { ...fixture(), displayRootPath: '/tmp/reference' }
+  renderHook(() =>
+    useFileExplorerAutoReveal({
+      ...args,
+      pendingExplorerReveal: null,
+      activeFileId: 'readme',
+      openFiles: [
+        {
+          id: 'readme',
+          filePath: '/repo/README.md',
+          relativePath: 'README.md',
+          worktreeId: 'wt',
+          mode: 'edit',
+          language: 'markdown',
+          isDirty: false
+        }
+      ]
+    })
+  )
+
+  expect(store.setState).not.toHaveBeenCalled()
+  expect(setRoot).not.toHaveBeenCalled()
+})
+
+it('does not auto-expand or select workspace files while browsing above the workspace', () => {
+  const args = { ...fixture(), displayRootPath: '/' }
+  renderHook(() =>
+    useFileExplorerAutoReveal({
+      ...args,
+      pendingExplorerReveal: null,
+      activeFileId: 'readme',
+      openFiles: [
+        {
+          id: 'readme',
+          filePath: '/repo/README.md',
+          relativePath: 'README.md',
+          worktreeId: 'wt',
+          mode: 'edit',
+          language: 'markdown',
+          isDirty: false
+        }
+      ]
+    })
+  )
+
+  expect(store.setState).not.toHaveBeenCalled()
+  expect(args.setSelectedPath).not.toHaveBeenCalled()
+})
+
+it('does not auto-scroll to visible workspace files while browsing above the workspace', () => {
+  const args = { ...fixture(), displayRootPath: '/' }
+  const scrollToIndex = vi.spyOn(args.virtualizer, 'scrollToIndex')
+  renderHook(() =>
+    useFileExplorerAutoReveal({
+      ...args,
+      pendingExplorerReveal: null,
+      activeFileId: 'index',
+      openFiles: [
+        {
+          id: 'index',
+          filePath: '/repo/packages/app/index.ts',
+          relativePath: 'packages/app/index.ts',
+          worktreeId: 'wt',
+          mode: 'edit',
+          language: 'typescript',
+          isDirty: false
+        }
+      ]
+    })
+  )
+
+  expect(args.setSelectedPath).not.toHaveBeenCalled()
+  expect(scrollToIndex).not.toHaveBeenCalled()
+})

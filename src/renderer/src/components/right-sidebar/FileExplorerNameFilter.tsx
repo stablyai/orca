@@ -7,6 +7,8 @@ type FileExplorerNameFilterProps = {
   query: string
   scopeLabel?: string
   loading?: boolean
+  /** The filter lists workspace files, so a folder browsed outside the workspace turns it off. */
+  disabled?: boolean
   onQueryChange: (value: string) => void
   onClear: () => void
 }
@@ -15,6 +17,7 @@ export function FileExplorerNameFilter({
   query,
   scopeLabel,
   loading = false,
+  disabled = false,
   onQueryChange,
   onClear
 }: FileExplorerNameFilterProps): React.JSX.Element {
@@ -33,14 +36,22 @@ export function FileExplorerNameFilter({
           'Find files'
         )}
         placeholder={
-          scopeLabel
-            ? translate('fileExplorer.root.findInFolder', 'Find in {{path}}', { path: scopeLabel })
-            : translate(
-                'auto.components.right.sidebar.FileExplorerNameFilter.26fb73c6e3',
-                'Find files'
+          disabled
+            ? translate(
+                'fileExplorer.navigation.findUnavailableOutside',
+                'Find is not available outside the workspace'
               )
+            : scopeLabel
+              ? translate('fileExplorer.root.findInFolder', 'Find in {{path}}', {
+                  path: scopeLabel
+                })
+              : translate(
+                  'auto.components.right.sidebar.FileExplorerNameFilter.26fb73c6e3',
+                  'Find files'
+                )
         }
         value={query}
+        disabled={disabled}
         onChange={(event) => onQueryChange(event.currentTarget.value)}
         spellCheck={false}
       />

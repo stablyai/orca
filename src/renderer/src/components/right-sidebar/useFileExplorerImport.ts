@@ -65,7 +65,11 @@ export function useFileExplorerImport({
       return null
     }
     const dir = readDropDir(rootRef.current, event.target) ?? displayRootPath
-    return getRelativePathInsideRoot(dir, displayRootPath) === null ? null : dir
+    // Why: a browsed folder outside the workspace is read-only; only workspace folders take a drop.
+    return getRelativePathInsideRoot(dir, displayRootPath) === null ||
+      getRelativePathInsideRoot(dir, worktreePath) === null
+      ? null
+      : dir
   }
 
   return useOsFileDropOwner<FileExplorerDropDestination | null>(rootRef, {
