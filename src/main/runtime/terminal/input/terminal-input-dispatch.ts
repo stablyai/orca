@@ -34,18 +34,14 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     record: TerminalHandleRecord
     leaf: RuntimeLeafRecord
   }
-  protected abstract serializeAgentPromptSubmission<T>(
-    ptyId: string,
-    generation: number,
-    submit: () => Promise<T>
-  ): Promise<T>
   protected abstract assertAgentPromptGeneration(ptyId: string, expected: number): void
   protected abstract writeTerminalAgentPrompt(
     handle: string,
     ptyId: string,
     generation: number,
     pastePayload: string,
-    options: RuntimeAgentPromptWriteOptions
+    options: RuntimeAgentPromptWriteOptions,
+    atTurn?: () => void
   ): Promise<{ submits: number; prompt?: RuntimeTerminalPromptDelivery }>
   /** The opt-in path (`onPermission: 'wait'`, `expectedBinding`), pinned to `ptyId`. */
   protected abstract submitTerminalAgentPrompt(
@@ -269,16 +265,15 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
         return await this.submitTerminalAgentPrompt(handle, pty.pty.ptyId, prompt, payload, options)
       }
       const generation = this.getPtyLifecycleGeneration(pty.pty.ptyId)
-      const delivery = await this.serializeAgentPromptSubmission(
+      const delivery = await this.writeTerminalAgentPrompt(
+        handle,
         pty.pty.ptyId,
         generation,
-        async () => {
+        payload,
+        { ...options, promptForSchedule: prompt },
+        () => {
           this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
           this.assertAgentPromptGeneration(pty.pty.ptyId, generation)
-          return await this.writeTerminalAgentPrompt(handle, pty.pty.ptyId, generation, payload, {
-            ...options,
-            promptForSchedule: prompt
-          })
         }
       )
       const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
@@ -304,14 +299,18 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       return await this.submitTerminalAgentPrompt(handle, leaf.ptyId, prompt, payload, options)
     }
     const generation = this.getPtyLifecycleGeneration(leaf.ptyId)
-    const delivery = await this.serializeAgentPromptSubmission(leaf.ptyId, generation, async () => {
-      this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId!)
-      this.assertAgentPromptGeneration(leaf.ptyId!, generation)
-      return await this.writeTerminalAgentPrompt(handle, leaf.ptyId!, generation, payload, {
-        ...options,
-        promptForSchedule: prompt
-      })
-    })
+    const leafPtyId = leaf.ptyId
+    const delivery = await this.writeTerminalAgentPrompt(
+      handle,
+      leafPtyId,
+      generation,
+      payload,
+      { ...options, promptForSchedule: prompt },
+      () => {
+        this.assertLiveTerminalHandleTargetsPty(handle, leafPtyId)
+        this.assertAgentPromptGeneration(leafPtyId, generation)
+      }
+    )
     const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
     return {
       handle,

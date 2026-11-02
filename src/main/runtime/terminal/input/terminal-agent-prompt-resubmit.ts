@@ -3,24 +3,26 @@ import type {
   AgentPromptExpectedBinding,
   RuntimeAgentPromptWriteOptions
 } from '../../runtime-terminal-contracts'
-import {
-  AGENT_PROMPT_SUBMIT,
-  isHeldAgentPromptDraft
-} from '../../../../shared/agent-prompt-injection'
+import { isHeldAgentPromptDraft } from '../../../../shared/agent-prompt-injection'
 import type { AgentPromptActivity } from '../../agent-prompt-submission-verification'
 import {
   isAgentPromptStalledError,
   verifyAgentPromptSubmission
 } from '../../agent-prompt-submission-verification'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
+import { waitForAgentPromptPromise } from '../../orca-runtime-core'
 
 type HeldAgentPrompt = {
   baseline: AgentPromptActivity
   readActivity: () => AgentPromptActivity
   prompt: string | undefined
   heldBudgetMs: number
-  /** Synchronous last check immediately before each retry's write. */
-  commit?: () => void
+  /** The operation's deadline; no retry outlives it. */
+  deadline: number
+  /** The operation's recheck before each retry; false skips it. */
+  admit: () => Promise<boolean>
+  /** The retry's Enter through the operation's last synchronous check; throws when refused. */
+  write: () => void
 }
 
 export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntimeWithGeneratedInputAdmission {
@@ -57,13 +59,21 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
     if (retryDelayMs === undefined || (!blind && !gated)) {
       return 0
     }
-    const deadline = Date.now() + held.heldBudgetMs
+    // Retries share the operation's deadline and abort; none starts a fresh budget.
+    const deadline = Math.min(Date.now() + held.heldBudgetMs, held.deadline)
+    const signal = options.signal
     let resubmits = 0
     let gatedResubmits = 0
     try {
       do {
-        const waitMs = blind ? retryDelayMs : Math.min(retryDelayMs, deadline - Date.now())
-        if (await agentPromptSettledWithin(held, Math.max(0, waitMs), options.signal)) {
+        const waitMs = Math.min(
+          blind ? retryDelayMs : Math.min(retryDelayMs, deadline - Date.now()),
+          held.deadline - Date.now()
+        )
+        if (await agentPromptSettledWithin(held, Math.max(0, waitMs), signal)) {
+          return resubmits
+        }
+        if (signal?.aborted || Date.now() >= held.deadline) {
           return resubmits
         }
         this.assertAgentPromptGeneration(ptyId, generation)
@@ -71,7 +81,8 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
         const holdsPrompt = async (): Promise<boolean> =>
           prompt !== undefined &&
           isHeldAgentPromptDraft(
-            (await this.readCurrentTerminalWaitScreen(ptyId))?.draft,
+            (await waitForAgentPromptPromise(this.readCurrentTerminalWaitScreen(ptyId), signal))
+              ?.draft,
             prompt,
             1 + resubmits
           )
@@ -83,18 +94,17 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
           }
           continue
         }
-        await options.beforeWrite?.(ptyId)
+        if (!(await held.admit())) {
+          return resubmits
+        }
         // Recheck after yielding: read the screen before the synchronous deadline/turn checks to avoid stale writes.
         if (!blind && (!(await holdsPrompt()) || Date.now() >= deadline)) {
           return resubmits
         }
-        if (await agentPromptSettledWithin(held, 0, options.signal)) {
+        if (await agentPromptSettledWithin(held, 0, signal)) {
           return resubmits
         }
-        held.commit?.()
-        if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)) {
-          return resubmits
-        }
+        held.write()
         resubmits += 1
         if (blind) {
           blind = false

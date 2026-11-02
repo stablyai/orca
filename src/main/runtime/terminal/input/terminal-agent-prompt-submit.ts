@@ -24,15 +24,18 @@ export abstract class OrcaRuntimeWithSubmitTerminalAgentPrompt extends OrcaRunti
         await this.waitWhileTerminalAgentPromptBlocked(handle, ptyId, generation, options)
       }
       try {
-        const delivery = await this.serializeAgentPromptSubmission(ptyId, generation, async () => {
-          this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
-          this.assertAgentPromptGeneration(ptyId, generation)
-          this.assertAgentPromptExpectedBinding(handle, options.expectedBinding)
-          return await this.writeTerminalAgentPrompt(handle, ptyId, generation, payload, {
-            ...options,
-            promptForSchedule: prompt
-          })
-        })
+        const delivery = await this.writeTerminalAgentPrompt(
+          handle,
+          ptyId,
+          generation,
+          payload,
+          { ...options, promptForSchedule: prompt },
+          () => {
+            this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
+            this.assertAgentPromptGeneration(ptyId, generation)
+            this.assertAgentPromptExpectedBinding(handle, options.expectedBinding)
+          }
+        )
         const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
         return {
           handle,

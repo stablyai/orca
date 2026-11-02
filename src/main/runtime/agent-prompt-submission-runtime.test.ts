@@ -594,33 +594,33 @@ describe('agent prompt submission queue', () => {
     vi.useRealTimers()
   })
 
-  it('serializes rejected submissions, isolates generations and keeps a replacement tail', async () => {
+  it('orders turns per generation, keeps a replacement tail, and retires a queued turn on abort', async () => {
     const target = inputDispatchRuntime()
-    const gate = Promise.withResolvers<void>()
+    const turn = (generation: number, signal?: AbortSignal) =>
+      target['acquireAgentPromptTurn'](PTY, generation, signal)
     const calls: string[] = []
-    const first = target['serializeAgentPromptSubmission'](PTY, 1, async () => {
-      calls.push('first')
-      await gate.promise
-      throw new Error('rejected submission')
-    })
-    const rejected = expect(first).rejects.toThrow('rejected submission')
-    const second = target['serializeAgentPromptSubmission'](PTY, 1, async () => {
+    const releaseFirst = await turn(1)
+    calls.push('first')
+    const abandoned = new AbortController()
+    const queued = turn(1, abandoned.signal)
+    const second = turn(1).then((release) => {
       calls.push('second')
-      return 2
+      return release
     })
-    const freshGeneration = target['serializeAgentPromptSubmission'](PTY, 2, async () => {
-      calls.push('fresh')
-      return 'fresh result'
-    })
-    await expect(freshGeneration).resolves.toBe('fresh result')
+    const fresh = await turn(2)
+    calls.push('fresh')
+    fresh()
+    // A queued caller that gives up settles at once and runs nothing, while the head still holds.
+    abandoned.abort()
+    await expect(queued).rejects.toThrow('request_aborted')
     expect(calls).toEqual(['first', 'fresh'])
     const replacement = Promise.resolve()
     const key = `${PTY}\u00001`
     target['agentPromptSubmissionTailByPtyId'].set(key, replacement)
-    gate.resolve()
-    await rejected
-    await expect(second).resolves.toBe(2)
+    releaseFirst()
+    ;(await second)()
     expect(calls).toEqual(['first', 'fresh', 'second'])
+    await Promise.resolve()
     expect(target['agentPromptSubmissionTailByPtyId'].get(key)).toBe(replacement)
     expect(target['agentPromptSubmissionTailByPtyId'].has(`${PTY}\u00002`)).toBe(false)
   })

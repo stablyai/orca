@@ -4,8 +4,7 @@ import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import { GENERATED_AGENT_INPUT_TIMEOUT_MS } from '../../../../../shared/generated-agent-input-readiness'
 import { deliverGeneratedPaste } from '@/lib/agent-paste-draft'
-import { waitForAgentDraftInputReady } from '@/lib/agent-draft-readiness'
-import { TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
+import { waitForPaneAgentToLookReady } from '@/lib/agent-draft-readiness'
 import { createPasteReadinessTimeoutNotice } from '@/lib/launch-agent-paste-timeout-notice'
 import { PTY_PRECONNECT_INPUT_MAX_CODE_UNITS } from '../pty-preconnect-input-buffer'
 import { findColdRestoreResumeSource } from './cold-restore-resume-startup'
@@ -53,7 +52,6 @@ type DraftPhase = 'capturing' | 'delivering' | 'closed'
 export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): void {
   let phase: DraftPhase = 'capturing'
   let draft = ''
-  let wrote = false
   let observation: AbortController | null = null
   let liveInputSinceBind = false
   let agent: TuiAgent | null | undefined
@@ -108,52 +106,65 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
     return true
   }
 
-  const recoverDraft = (draftAgent: TuiAgent): void => {
-    const retained = draft !== ''
+  /** Before handoff only: the pane still owns the exact keys and recovers them once. */
+  const recoverDraft = (draftAgent: TuiAgent, certainty: 'not-sent' | 'unconfirmed'): void => {
     const content = draft
     draft = ''
     phase = 'closed'
-    if (retained) {
-      createPasteReadinessTimeoutNotice({
-        worktreeId: session.deps.worktreeId,
-        tabId: session.deps.tabId,
-        agent: draftAgent,
-        submitted: false,
-        content
-      }).onTimeout(wrote ? 'unconfirmed' : 'not-sent')
+    if (content !== '') {
+      showHeldKeysNotice(draftAgent, content, certainty)
     }
   }
+  const showHeldKeysNotice = (
+    draftAgent: TuiAgent,
+    content: string,
+    certainty: 'not-sent' | 'unconfirmed'
+  ): void => {
+    createPasteReadinessTimeoutNotice({
+      worktreeId: session.deps.worktreeId,
+      tabId: session.deps.tabId,
+      agent: draftAgent,
+      submitted: false,
+      content
+    }).onTimeout(certainty)
+  }
 
-  /** The pane's readiness is only when to offer the keys; the PTY's host still admits and writes. */
+  /** The one ownership handoff: the operation now owns the keys, and its outcome alone decides
+   *  whether they are recovered. Closing the pane no longer touches them. */
+  const handOffDraft = (ptyId: string, draftAgent: TuiAgent, deadline: number): void => {
+    const content = draft
+    draft = ''
+    phase = 'closed'
+    observation = null
+    void deliverGeneratedPaste({
+      ptyId,
+      content,
+      submit: false,
+      agent: draftAgent,
+      inputKind: 'driving',
+      intent: 'startup',
+      // The same deadline the pane's observation spent: no second, fresh budget.
+      deadline
+    }).then((outcome) => {
+      if (outcome === 'not-sent' || outcome === 'unconfirmed') {
+        showHeldKeysNotice(draftAgent, content, outcome)
+      }
+    })
+  }
+
+  /** The pane's observation only times the handoff; the user driving the screen keeps the keys. */
   const pasteDraft = (ptyId: string, draftAgent: TuiAgent, deadline: number): void => {
     if (session.disposed || session.transport.getPtyId() !== ptyId) {
-      recoverDraft(draftAgent)
+      recoverDraft(draftAgent, 'not-sent')
       return
     }
     const status = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]?.state
     // The user is already driving the screen, or a prompt is waiting on an answer.
     if (liveInputSinceBind || status === 'blocked' || status === 'waiting') {
-      recoverDraft(draftAgent)
+      recoverDraft(draftAgent, 'not-sent')
       return
     }
-    void deliverGeneratedPaste({
-      ptyId,
-      content: draft,
-      submit: false,
-      agent: draftAgent,
-      inputKind: 'driving',
-      intent: 'startup',
-      // The same deadline the readiness observation spent: no second, fresh budget.
-      deadline
-    }).then((outcome) => {
-      if (outcome === 'staged' || outcome === 'delivered') {
-        draft = ''
-        phase = 'closed'
-        return
-      }
-      wrote = outcome === 'unconfirmed'
-      recoverDraft(draftAgent)
-    })
+    handOffDraft(ptyId, draftAgent, deadline)
   }
 
   session.onAgentPreReadyDraftPtyBound = (ptyId: string, freshSpawn: boolean): void => {
@@ -175,29 +186,47 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
     }
     if (!freshSpawn) {
       // An attached pane may still be at the shell; pasting now would prefix its pending launch command.
-      recoverDraft(draftAgent)
+      recoverDraft(draftAgent, 'not-sent')
       return
     }
     liveInputSinceBind = false
     const deadline = Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS
-    // Disposal ends the observation; the held keys are then recovered, never dropped.
-    observation = new AbortController()
-    void waitForAgentDraftInputReady(
+    // Before handoff, disposal ends this observation and the pane recovers the keys.
+    const pending = new AbortController()
+    observation = pending
+    void waitForPaneAgentToLookReady(
       ptyId,
-      GENERATED_AGENT_INPUT_TIMEOUT_MS,
-      TUI_AGENT_CONFIG[draftAgent].draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste',
       draftAgent,
-      observation.signal
+      GENERATED_AGENT_INPUT_TIMEOUT_MS,
+      pending.signal
     )
-      .then((ready) => (ready ? pasteDraft(ptyId, draftAgent, deadline) : recoverDraft(draftAgent)))
-      .catch(() => recoverDraft(draftAgent))
+      .then((ready) => {
+        if (observation !== pending) {
+          return
+        }
+        if (ready) {
+          pasteDraft(ptyId, draftAgent, deadline)
+        } else {
+          recoverDraft(draftAgent, 'not-sent')
+        }
+      })
+      .catch(() => {
+        if (observation === pending) {
+          recoverDraft(draftAgent, 'not-sent')
+        }
+      })
   }
 
   session.discardAgentPreReadyDraft = (): void => {
+    // After handoff the operation owns the keys; there is nothing here to recover.
+    if (phase === 'closed') {
+      return
+    }
     observation?.abort()
+    observation = null
     const draftAgent = resolveAgent()
     if (draftAgent) {
-      recoverDraft(draftAgent)
+      recoverDraft(draftAgent, 'not-sent')
     }
   }
 }

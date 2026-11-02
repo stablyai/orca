@@ -1,19 +1,18 @@
-import type { DraftPasteReadySignal } from '../../../shared/tui-agent-config'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import {
-  signalAllowsCompatibilityEvidence,
-  waitForGeneratedAgentInput,
-  type GeneratedInputIntent
-} from '../../../shared/generated-agent-input-readiness'
-import { stripAnsiEscapeSequences } from '../../../shared/ansi-escape-sequences'
+import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
+import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../shared/agent-prompt-injection'
 import {
   admitsGeneratedInput,
-  type GeneratedInputProcess,
-  type GeneratedInputScreen
+  type GeneratedInputProcess
 } from '../../../shared/generated-agent-input-admission'
-import { showsAgentComposer } from '../../../shared/agent-input-dialog'
-import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
+import {
+  gridShowsReadyComposer,
+  type GeneratedInputEvidence
+} from '../../../shared/generated-input-readiness-evaluation'
+import { waitForGeneratedAgentInput } from '../../../shared/generated-agent-input-readiness'
+import { resolvePasteReadySignal } from '../../../shared/draft-paste-ready-scanner'
+import type { GeneratedInputSource } from '../../../shared/generated-input-operation'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import {
   readPtyBracketedPasteMode,
@@ -21,79 +20,23 @@ import {
 } from '@/components/terminal-pane/pty-buffer-serializer'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
 import { replayPreHandlerPtyData } from '@/components/terminal-pane/pty-pre-handler-buffer'
+import { acquireTerminalPtyInputTurn } from '@/components/terminal-pane/terminal-pty-input-transaction'
 import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   getRemoteRuntimePtyOwner,
   subscribeToRuntimeTerminalData
 } from '@/runtime/runtime-terminal-stream'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
+import { sendAgentDraftPasteContentNow } from './agent-draft-paste-content'
 
-// Legacy adapter: only for a paired host older than the generated-input transaction. It applies
-// the host's one admission rule to what this client can see; an old host can still open a dialog
-// after this read, which no client can prevent.
+// Legacy source: only for a paired host older than the generated-input operation. It reports what
+// this client can see of that host's terminal and writes through the existing input route; the
+// shared operation decides. An old host can still open a dialog after the last read, which no
+// client can prevent.
 
-/**
- * The one decision point for a legacy host that offers no observation at all: no mounted pane, no
- * screen from the host and no streamed text since the agent's last handoff. 'deliver' keeps main's
- * behavior and the common pattern's unknown-endpoint rule (any dialog seen anywhere still vetoes);
- * 'refuse' waits out the budget and offers Copy instead. Delivering is the decided behavior: an
- * older paired server keeps working as it did, with this stated limit.
- */
-export const LEGACY_BLIND_POLICY: 'deliver' | 'refuse' = 'deliver'
-
-type LegacyEvidence = { screen: GeneratedInputScreen; grid: boolean }
-
-// Text an older host streamed to this client since the agent's last handoff, per PTY. It is veto
-// and marker evidence only, never a grid; each legacy delivery clears it when it ends.
-const legacyTails = new Map<string, string>()
-const LEGACY_TAIL_CHARS = 8 * 1024
-// oxlint-disable-next-line no-control-regex -- PTY mode resets end the agent's current input region.
-const LEGACY_HANDOFF = /\x1b\[\?(?:2004|2031|1049)l/g
-
-function observeLegacyTail(ptyId: string, data: string): void {
-  const handoffs = [...data.matchAll(LEGACY_HANDOFF)]
-  const last = handoffs.at(-1)
-  const text = stripAnsiEscapeSequences(
-    last ? data.slice(last.index + last[0].length) : data
-  ).replace(/\r\n?/g, '\n')
-  const kept = last ? text : (legacyTails.get(ptyId) ?? '') + text
-  legacyTails.set(ptyId, kept.slice(-LEGACY_TAIL_CHARS))
-}
-
-export function forgetLegacyTail(ptyId: string): void {
-  legacyTails.delete(ptyId)
-}
-
-/** The mounted pane's grid, else the host's own screen, else the streamed tail as veto evidence;
- *  with none of them, the blind policy decides. */
-async function readLegacyEvidence(ptyId: string): Promise<LegacyEvidence> {
-  const mounted = await readPtyInputScreen(ptyId)
-  if (mounted) {
-    return { screen: mounted, grid: true }
-  }
-  // Only a paired host's PTY has a host screen to ask for; a local one is never legacy.
-  const owner = isRemoteRuntimePtyId(ptyId) ? getRemoteRuntimePtyOwner(ptyId) : null
-  if (owner) {
-    try {
-      const read = await callRuntimeRpc<{ terminal: { tail: string[]; source?: string } }>(
-        owner.target,
-        'terminal.read',
-        { terminal: owner.terminal, screen: true },
-        { timeoutMs: 5_000 }
-      )
-      if (read.terminal.source === 'screen') {
-        return { screen: { lines: read.terminal.tail, alternateScreen: false }, grid: true }
-      }
-    } catch {
-      // An unanswered read is no observation; the tail or blind policy decides below.
-    }
-  }
-  const tail = legacyTails.get(ptyId)
-  if (tail?.trim()) {
-    return { screen: { lines: tail.split('\n'), alternateScreen: false }, grid: false }
-  }
-  return { screen: LEGACY_BLIND_POLICY === 'deliver' ? 'unknown' : null, grid: false }
-}
+const HOST_SCREEN_READ_TIMEOUT_MS = 5_000
+let observationSeq = 0
 
 async function readLegacyProcess(ptyId: string): Promise<GeneratedInputProcess> {
   const process = await inspectRuntimeTerminalProcess(ptyId)
@@ -107,71 +50,162 @@ async function readLegacyProcess(ptyId: string): Promise<GeneratedInputProcess> 
       }
 }
 
-export async function agentInputIsAdmitted(
-  ptyId: string,
-  agent?: TuiAgent,
-  quiet = false,
-  typedText?: string
-): Promise<boolean> {
+/** The mounted pane's grid, else the host's own screen; 'unknown' otherwise (the operation's own
+ *  streamed tail and the blind policy take it from there). */
+async function readLegacyEvidence(ptyId: string): Promise<GeneratedInputEvidence> {
   const process = await readLegacyProcess(ptyId)
-  const { screen } = await readLegacyEvidence(ptyId)
-  return admitsGeneratedInput({ agent, screen, process, quiet, typedText })
-}
-
-/** A painted composer with the expected agent proven in front is current positive evidence. */
-async function legacyComposerVisible(
-  ptyId: string,
-  signal: DraftPasteReadySignal,
-  agent?: TuiAgent
-): Promise<boolean> {
-  if (!agent || !signalAllowsCompatibilityEvidence(signal) || !readPtyBracketedPasteMode(ptyId)) {
-    return false
+  const mounted = await readPtyInputScreen(ptyId)
+  if (mounted) {
+    return { screen: mounted, process, bracketedPaste: readPtyBracketedPasteMode(ptyId) }
   }
-  const process = await readLegacyProcess(ptyId)
-  const { screen, grid } = await readLegacyEvidence(ptyId)
-  // Only a grid can show a painted composer; streamed text is veto evidence alone.
-  return (
-    process.known &&
-    grid &&
-    screen !== null &&
-    screen !== 'unknown' &&
-    isExpectedAgentProcess(process.foreground, TUI_AGENT_CONFIG[agent].expectedProcess) &&
-    showsAgentComposer(screen.lines.join('\n'))
-  )
+  // Only a paired host's PTY has a host screen to ask for; a local one is never legacy.
+  const owner = isRemoteRuntimePtyId(ptyId) ? getRemoteRuntimePtyOwner(ptyId) : null
+  if (owner) {
+    try {
+      const read = await callRuntimeRpc<{ terminal: { tail: string[]; source?: string } }>(
+        owner.target,
+        'terminal.read',
+        { terminal: owner.terminal, screen: true },
+        { timeoutMs: HOST_SCREEN_READ_TIMEOUT_MS }
+      )
+      if (read.terminal.source === 'screen') {
+        return {
+          screen: { lines: read.terminal.tail, alternateScreen: false },
+          process,
+          bracketedPaste: null
+        }
+      }
+    } catch {
+      // An unanswered read is no observation.
+    }
+  }
+  return { screen: 'unknown', process, bracketedPaste: null }
 }
 
-export function waitForAgentDraftInputReady(
+/** One generated write's legacy source for `ptyId`. */
+export function createLegacyGeneratedInputSource(args: {
+  ptyId: string
+  content: string
+  agent?: TuiAgent | null
+  inputKind: TerminalInputKind
+}): GeneratedInputSource {
+  const { ptyId, content, inputKind } = args
+  let replay = ''
+  const write = async (
+    gate: Parameters<GeneratedInputSource['writeText']>[0],
+    data: string
+  ): Promise<boolean> => {
+    const taken = gate.dispatching()
+    try {
+      const accepted = await sendRuntimePtyInputVerified(ptyId, data, inputKind)
+      taken(accepted)
+      return accepted
+    } catch {
+      // A lost answer may have been written: it stays unconfirmed, never retried.
+      taken('unknown')
+      return false
+    }
+  }
+  const retryDelayMs = args.agent ? TUI_AGENT_CONFIG[args.agent]?.submitRetryDelayMs : undefined
+  return {
+    observe: (onData) => {
+      if (isRemoteRuntimePtyId(ptyId)) {
+        observationSeq += 1
+        return subscribeToRuntimeTerminalData(
+          ptyId,
+          `desktop:generated-input:${ptyId}:${observationSeq}`,
+          onData
+        )
+      }
+      const dispose = subscribeToPtyData(ptyId, onData)
+      replayPreHandlerPtyData(ptyId, (data) => {
+        replay += data
+      })
+      return dispose
+    },
+    replay: () => replay,
+    acquire: (signal) => acquireTerminalPtyInputTurn(ptyId, signal),
+    read: () => readLegacyEvidence(ptyId),
+    enterReserveMs: 0,
+    writeText: async (gate) => {
+      let wrote = false
+      return await sendAgentDraftPasteContentNow(ptyId, content, inputKind, async (data) => {
+        // After the first frame its own rows are composer text, not a dialog.
+        if (!(await gate.admit(wrote ? content : undefined))) {
+          return false
+        }
+        wrote = true
+        return await write(gate, data)
+      })
+    },
+    // Defer Enter so the agent processes the paste's end before submission.
+    settle: (signal) => delay(AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS, signal),
+    writeEnter: async (gate) => (await gate.admit(content)) && (await write(gate, '\r')),
+    ...(retryDelayMs === undefined
+      ? {}
+      : {
+          // Some composers render before accepting Enter; one best-effort retry.
+          retry: async (gate, signal) => {
+            await delay(retryDelayMs, signal)
+            if (await gate.admit(content)) {
+              await write(gate, '\r')
+            }
+          }
+        })
+  }
+}
+
+function delay(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms)
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer)
+        resolve()
+      },
+      { once: true }
+    )
+  })
+}
+
+/** Before held keys are handed to the operation: when this pane's own agent looks ready to take
+ *  them. Timing only; the operation that receives them observes and admits on its own. */
+export function waitForPaneAgentToLookReady(
   ptyId: string,
+  agent: TuiAgent,
   timeoutMs: number,
-  readySignal: DraftPasteReadySignal,
-  agent?: TuiAgent,
-  signal?: AbortSignal,
-  initialData = '',
-  intent: GeneratedInputIntent = 'startup'
+  signal: AbortSignal
 ): Promise<boolean> {
-  let replay = initialData
+  let replay = ''
+  const readySignal = resolvePasteReadySignal(TUI_AGENT_CONFIG[agent], false)
+  const evidence = async (): Promise<GeneratedInputEvidence> => {
+    const screen = await readPtyInputScreen(ptyId)
+    return {
+      screen: screen ?? 'unknown',
+      process: { known: false },
+      bracketedPaste: screen ? readPtyBracketedPasteMode(ptyId) : null
+    }
+  }
   return waitForGeneratedAgentInput(
     {
-      subscribe: async (onData) => {
-        const observe = (data: string): void => {
-          observeLegacyTail(ptyId, data)
-          onData(data)
-        }
-        if (isRemoteRuntimePtyId(ptyId)) {
-          return subscribeToRuntimeTerminalData(ptyId, `desktop:paste-ready:${ptyId}`, observe)
-        }
-        const unsubscribe = subscribeToPtyData(ptyId, observe)
+      subscribe: (onData) => {
+        const dispose = subscribeToPtyData(ptyId, onData)
         replayPreHandlerPtyData(ptyId, (data) => {
           replay += data
         })
-        return unsubscribe
+        return dispose
       },
       replay: () => replay,
       bracketedPaste: () => readPtyBracketedPasteMode(ptyId),
-      composerReady: () => legacyComposerVisible(ptyId, readySignal, agent),
-      accept: (quiet) => agentInputIsAdmitted(ptyId, agent, quiet)
+      composerReady: async (quietMs) =>
+        gridShowsReadyComposer(await evidence(), agent, readySignal, quietMs),
+      accept: async (quiet) => {
+        const { screen, process } = await evidence()
+        return admitsGeneratedInput({ agent, screen, process, quiet })
+      }
     },
     readySignal,
-    { timeoutMs, signal, intent }
+    { timeoutMs, signal, intent: 'startup' }
   )
 }

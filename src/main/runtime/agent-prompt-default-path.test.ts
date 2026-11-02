@@ -69,11 +69,14 @@ describe('agent prompt writer: default path', () => {
   })
 
   it("settles its receipt on main's microtask schedule", async () => {
-    // Pin completion timing: adding an async layer increases this count.
-    expect(await completionTicks()).toBe(5)
+    // Pin completion timing: adding an async layer increases this count. The queue turn now sits
+    // inside the generated-input operation, below this layer.
+    expect(await completionTicks()).toBe(2)
   })
 
-  it('writes a queued leaf prompt to the PTY the leaf names when its turn comes', async () => {
+  // The prompt is bound to the PTY its leaf named when the host accepted it; a respawn before its
+  // turn is that operation's own binding check, never a write into the replacement process.
+  it('binds a queued leaf prompt to the PTY the leaf named when it was accepted', async () => {
     const target = dispatchRuntime()
     const leaf = { writable: true, ptyId: PTY }
     const written: string[] = []
@@ -110,6 +113,6 @@ describe('agent prompt writer: default path', () => {
 
     await first
     await second
-    expect(written).toEqual([PTY, 'pty-default-path-respawned'])
+    expect(written).toEqual([PTY, PTY])
   })
 })

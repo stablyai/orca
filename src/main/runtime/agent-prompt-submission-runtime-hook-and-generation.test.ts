@@ -524,7 +524,7 @@ describe('agent prompt submission runtime hook and generation cases', () => {
     const probe = Promise.withResolvers<'agent'>(),
       reached = Promise.withResolvers<void>()
     const unsubscribe = vi.fn()
-    vi.spyOn(runtime, 'subscribeToTerminalData').mockReturnValue(unsubscribe)
+    const subscribed = vi.spyOn(runtime, 'subscribeToTerminalData').mockReturnValue(unsubscribe)
     vi.mocked(runtime.readLaunchedAgentForeground).mockImplementation(() => {
       reached.resolve()
       return probe.promise
@@ -543,14 +543,17 @@ describe('agent prompt submission runtime hook and generation cases', () => {
     await reached.promise
     void chain.cancel('prompt', 'conversation_cancelled')
     await expect(delivered).resolves.toMatchObject({ outcome: 'refused' })
-    expect(unsubscribe).toHaveBeenCalledTimes(1)
+    // Every observation the cancelled follow-up opened is closed, once, and a late answer opens none.
+    const opened = subscribed.mock.calls.length
+    expect(unsubscribe).toHaveBeenCalledTimes(opened)
     if (late === 'agent') {
       probe.resolve('agent')
     } else {
       probe.reject(new Error('late failure'))
     }
     await Promise.resolve()
-    expect(unsubscribe).toHaveBeenCalledTimes(1)
+    expect(subscribed).toHaveBeenCalledTimes(opened)
+    expect(unsubscribe).toHaveBeenCalledTimes(opened)
     expect(writes).toEqual([])
   })
 

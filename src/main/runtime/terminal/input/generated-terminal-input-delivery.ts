@@ -21,37 +21,16 @@ const TARGET_GONE = new Set([
   'terminal_not_writable'
 ])
 
-/** One generated write, admitted and written on this host; the outcome says what reached the PTY.
- *  The outcome settles at the operation's own deadline even while it waits behind another in the
- *  PTY's queue; when that queued run reaches the writer it finds the deadline passed and writes
- *  nothing, so a late drain cannot revive it. */
+/** One generated write on this host: the shared operation below `sendTerminalAgentPrompt` owns its
+ *  deadline, queue turn and outcome; this maps the writer's result to the typed outcome. */
 export async function deliverGeneratedTerminalInput(
   runtime: Pick<OrcaRuntimeService, 'sendTerminalAgentPrompt'>,
   handle: string,
   delivery: GeneratedInputDelivery
 ): Promise<GeneratedInputOutcome> {
-  const progress = { pasted: false, submitted: false }
   const budget = Math.min(delivery.timeoutMs ?? Infinity, GENERATED_AGENT_INPUT_TIMEOUT_MS)
   const deadline = Date.now() + Math.max(0, budget)
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const expired = new Promise<GeneratedInputOutcome>((resolve) => {
-    const settleIfUnwritten = (): void => {
-      // Once text is written the real outcome decides; it is bounded by the same deadline.
-      if (!progress.pasted && !progress.submitted) {
-        resolve('not-sent')
-      }
-    }
-    timer = setTimeout(settleIfUnwritten, Math.max(0, deadline - Date.now()))
-    // An abort raised inside the write itself is read after the writer records that write.
-    delivery.signal?.addEventListener('abort', () => queueMicrotask(settleIfUnwritten), {
-      once: true
-    })
-  })
-  try {
-    return await Promise.race([deliver(runtime, handle, delivery, deadline, progress), expired])
-  } finally {
-    clearTimeout(timer)
-  }
+  return await deliver(runtime, handle, delivery, deadline, { pasted: false, submitted: false })
 }
 
 async function deliver(
