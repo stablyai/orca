@@ -1,13 +1,10 @@
 import { randomInt } from 'node:crypto'
 import type { Store } from '../persistence/loading-store/store'
 import { resolveConsent } from './consent'
-import type { GlobalSettings } from '../../shared/global-settings-types'
 import type {
   ChatUiLaunchTipCohort,
   ChatUiLaunchTipTargeting
 } from '../../shared/telemetry-settings-types'
-
-export type ChatUiLaunchTipEligibility = (settings: GlobalSettings) => boolean
 
 export type { ChatUiLaunchTipCohort }
 
@@ -19,10 +16,7 @@ let deferredForConsent = false
  * banner is unresolved the tip waits, so the exposure is never spent unmeasured; opted-out and
  * contributor builds stay unenrolled and see the tip as before.
  */
-export function ensureChatUiLaunchTipCohort(
-  store: Store,
-  _resolveEligibility: ChatUiLaunchTipEligibility
-): ChatUiLaunchTipCohort | undefined {
+export function ensureChatUiLaunchTipCohort(store: Store): ChatUiLaunchTipCohort | undefined {
   deferredForConsent = false
   try {
     const settings = store.getSettings()

@@ -3,15 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChatUiLaunchTipVariant } from '../../shared/native-chat/chat-ui-launch-tip-audience'
 import type { TelemetrySettings } from '../../shared/telemetry-settings-types'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { TUI_AGENT_AUTO_PICK_ORDER } from '../../shared/tui-agent-selection'
 import type { Store } from '../persistence/loading-store/store'
 import {
-  ensureChatUiLaunchTipCohort as assignCohort,
+  ensureChatUiLaunchTipCohort,
   isChatUiLaunchTipDeferredForConsent
 } from './chat-ui-launch-tip-cohort'
 import { experimentCohortProps } from './experiment-cohort-props'
 import { commonPropsSchema } from '../../shared/telemetry-events'
-import { hasChatUiLaunchTipEligibleHarness } from '../native-chat/chat-ui-launch-tip-targeting'
 import {
   BASE_COMMON,
   makeFakeSettings,
@@ -46,10 +44,6 @@ function makeStore(
       settings.telemetry = updates.telemetry
     })
   } as unknown as Store
-}
-
-function ensureChatUiLaunchTipCohort(store: Store) {
-  return assignCohort(store, hasChatUiLaunchTipEligibleHarness)
 }
 
 describe('ensureChatUiLaunchTipCohort', () => {
@@ -127,64 +121,6 @@ describe('ensureChatUiLaunchTipCohort', () => {
   )
 
   it.each([
-    {
-      name: 'all Chat',
-      enabled: ['claude', 'codex'],
-      surface: 'chat',
-      overrides: {},
-      eligible: false
-    },
-    {
-      name: 'CLI-only harness',
-      enabled: ['aider'],
-      surface: 'terminal',
-      overrides: {},
-      eligible: false
-    },
-    {
-      name: 'Chat plus CLI-only harness',
-      enabled: ['codex', 'aider'],
-      surface: 'chat',
-      overrides: { aider: false },
-      eligible: false
-    },
-    {
-      name: 'per-harness CLI override',
-      enabled: ['codex'],
-      surface: 'chat',
-      overrides: { codex: false },
-      eligible: true
-    },
-    {
-      name: 'per-harness Chat override',
-      enabled: ['codex'],
-      surface: 'terminal',
-      overrides: { codex: true },
-      eligible: false
-    },
-    {
-      name: 'mixed supported harnesses',
-      enabled: ['claude', 'codex'],
-      surface: 'chat',
-      overrides: { claude: false },
-      eligible: true
-    },
-    { name: 'all disabled', enabled: [], surface: 'terminal', overrides: {}, eligible: false }
-  ] as const)('targets $name using settings only', ({ enabled, surface, overrides, eligible }) => {
-    vi.mocked(crypto.randomInt)
-      .mockImplementationOnce(() => 8)
-      .mockImplementationOnce(() => 1)
-    const store = makeStore({}, 'chat-ui-off', [], {
-      agentDefaultSurface: surface,
-      nativeChatProviders: overrides,
-      disabledTuiAgents: TUI_AGENT_AUTO_PICK_ORDER.filter(
-        (agent) => !enabled.some((candidate) => candidate === agent)
-      )
-    })
-    expect(hasChatUiLaunchTipEligibleHarness(store.getSettings())).toBe(eligible)
-  })
-
-  it.each([
     'control',
     'treatment-center',
     'treatment',
@@ -208,7 +144,7 @@ describe('ensureChatUiLaunchTipCohort', () => {
         .mockImplementationOnce(() => draw)
         .mockImplementationOnce(() => 1)
       const store = makeStore({ onboardingLanguageCohort: 'treatment' })
-      const props = experimentCohortProps(store, hasChatUiLaunchTipEligibleHarness)
+      const props = experimentCohortProps(store)
       expect(props).toEqual({
         onboarding_language_v1: 'treatment',
         chat_ui_launch_tip_v1: cohort,
@@ -222,7 +158,7 @@ describe('ensureChatUiLaunchTipCohort', () => {
   it('ignores malformed targeting metadata rather than disabling all telemetry', () => {
     const store = makeStore({ chatUiLaunchTipCohort: 'treatment' })
     Object.assign(store.getSettings().telemetry!, { chatUiLaunchTipTargeting: { mode: 'invalid' } })
-    const props = experimentCohortProps(store, hasChatUiLaunchTipEligibleHarness)
+    const props = experimentCohortProps(store)
     expect(props.chat_ui_launch_tip_targeting_v1).toBeUndefined()
     expect(commonPropsSchema.safeParse({ ...BASE_COMMON, ...props }).success).toBe(true)
   })

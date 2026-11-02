@@ -6,7 +6,7 @@ import type { CommonProps, EventName, EventProps, OptInVia } from '../../shared/
 import type { AgentDashboardSurface } from '../../shared/telemetry-agent-dashboard-event-schemas'
 import type { Store } from '../persistence/loading-store/store'
 import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
-import { experimentCohortProps, type ChatUiLaunchTipEligibility } from './experiment-cohort-props'
+import { experimentCohortProps } from './experiment-cohort-props'
 import { getCohortAtEmit } from './cohort-classifier'
 import { isConsentEnvOverridden, resolveConsent } from './consent'
 import * as postHogStart from './posthog-client-start'
@@ -45,11 +45,7 @@ let testTransportEnabled = false
 let appOpenedTrackedThisSession = false
 const trackedDashboardActiveDays = new Map<AgentDashboardSurface, number>()
 
-export function initTelemetry(
-  store: Store,
-  scheduleStart: postHogStart.StartScheduler,
-  resolveChatUiEligibility: ChatUiLaunchTipEligibility
-): void {
+export function initTelemetry(store: Store, scheduleStart: postHogStart.StartScheduler): void {
   // Retain Store even for contributor builds so opt-out persists.
   storeRef = store
   resetBurstCapsForSession()
@@ -75,7 +71,7 @@ export function initTelemetry(
   commonProps = buildCommonProps(installId, sessionId, BUILD_IDENTITY)
 
   // Official builds only; contributor builds retain the original announcement behavior.
-  Object.assign(commonProps, experimentCohortProps(store, resolveChatUiEligibility))
+  Object.assign(commonProps, experimentCohortProps(store))
 
   // Validate singleton common properties once; invalid identity would collapse installs into one subject.
   const parsedCommon = commonPropsSchema.safeParse(commonProps)

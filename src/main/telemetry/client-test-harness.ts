@@ -142,11 +142,7 @@ export function setupTelemetryClientTest(
   const mock = makeMockPostHog()
   const settings = makeFakeSettings(telemetry)
   const store = makeFakeStore(settings)
-  initTelemetry(
-    store,
-    () => {},
-    () => false
-  )
+  initTelemetry(store, () => {})
   _setPostHogClientForTests(mock as unknown as PostHog)
   _setCommonPropsForTests(BASE_COMMON)
   _setStoreForTests(store)

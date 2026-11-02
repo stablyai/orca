@@ -61,7 +61,7 @@ describe('deferred PostHog client start', () => {
       existedBeforeTelemetryRelease: false
     })
     store = makeFakeStore(settings)
-    initTelemetry(store, scheduleClientStart, () => false)
+    initTelemetry(store, scheduleClientStart)
   })
 
   afterEach(async () => {
@@ -72,6 +72,31 @@ describe('deferred PostHog client start', () => {
     createPostHogClient.mockReset()
     scheduleClientStart.mockReset()
     restoreConsentEnv(envStash)
+  })
+
+  it.each([
+    { saved: 'normal', expected: 'normal' },
+    { saved: 'swapped', expected: 'swapped' },
+    { saved: 'invalid', expected: undefined },
+    { saved: null, expected: undefined },
+    { saved: 42, expected: undefined },
+    { saved: {}, expected: undefined },
+    { saved: undefined, expected: undefined }
+  ])('keeps telemetry working with persisted button emphasis $saved', ({ saved, expected }) => {
+    Object.assign(settings.telemetry!, {
+      chatUiLaunchTipCohort: 'treatment',
+      chatUiLaunchTipButtonEmphasis: saved
+    })
+    scheduleClientStart.mockClear()
+
+    initTelemetry(store, scheduleClientStart)
+
+    expect(track('app_opened', {})).toBe(true)
+    scheduleClientStart.mock.calls[0][0]()
+    expect(sdk.capture).toHaveBeenCalledWith(expect.objectContaining({ event: 'app_opened' }))
+    expect(sdk.capture.mock.calls[0][0].properties.chat_ui_launch_tip_button_emphasis_v1).toBe(
+      expected
+    )
   })
 
   it.each([
@@ -90,9 +115,8 @@ describe('deferred PostHog client start', () => {
       vi.mocked(crypto.randomInt)
         .mockImplementationOnce(() => draw)
         .mockImplementationOnce(() => 1)
-      const resolveEligibility = vi.fn(() => eligible)
       scheduleClientStart.mockClear()
-      initTelemetry(store, scheduleClientStart, resolveEligibility)
+      initTelemetry(store, scheduleClientStart)
       expect(settings.telemetry?.chatUiLaunchTipTargeting).toEqual({
         mode: 'not-switched',
         eligible
@@ -132,7 +156,7 @@ describe('deferred PostHog client start', () => {
       .mockImplementationOnce(() => 9)
       .mockImplementationOnce(() => 1)
     scheduleClientStart.mockClear()
-    initTelemetry(store, scheduleClientStart, () => true)
+    initTelemetry(store, scheduleClientStart)
 
     for (const action of ['live_switching_shown', 'open_live_switching'] as const) {
       expect(track('chat_ui_feature_tip_action', { variant: 'chat_ui_off', action })).toBe(true)
