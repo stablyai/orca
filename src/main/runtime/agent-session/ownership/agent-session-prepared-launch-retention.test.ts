@@ -26,7 +26,7 @@ const directories: string[] = []
 
 afterEach(async () => {
   for (const directory of directories.splice(0)) {
-    closeTestJournalHostDatabase(directory)
+    await closeTestJournalHostDatabase(directory)
     await rm(directory, { recursive: true, force: true })
   }
 })
@@ -122,7 +122,7 @@ describe('prepared launch obligation retention', () => {
         probe: async () => ({ outcome: 'reservation-unused' }),
         now: expiredNow
       })
-      closeTestJournalHostDatabase(directory)
+      await closeTestJournalHostDatabase(directory)
       const reopened = await openTestAgentSessionRecordStore(directory)
       expect(
         reopened.listOperationRows().find((saved) => saved.operationId === operationId)

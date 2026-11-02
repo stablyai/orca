@@ -121,8 +121,14 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
 
   it('retains physical ownership when raw listener registration throws after spawn', async () => {
     const pane = healthyPane(4242)
-    pane.onData = () => {
-      throw new Error('listener failed')
+    const raw = { onData() {}, onExit() {}, onSelected() {} }
+    const onData = pane.onData
+    // Only the raw observer's registration fails; the owner's own subscriptions still work.
+    pane.onData = (listener) => {
+      if (listener === raw.onData) {
+        throw new Error('listener failed')
+      }
+      return onData(listener)
     }
     nodePty.spawn.mockReturnValue(pane)
     const work = new TerminalCreationWork()
@@ -131,7 +137,7 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
         ...args,
         windowsFallbackAttempts: [attempts[0]!],
         creationWork: work,
-        rawSpawnObserver: () => ({ onData() {}, onExit() {}, onSelected() {} })
+        rawSpawnObserver: () => raw
       })
     ).rejects.toThrow('listener failed')
     await work.finish()

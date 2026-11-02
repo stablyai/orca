@@ -86,7 +86,8 @@ it.each(['agent', 'shell'] as const)(
       // SAFETY: the real placement, readiness, write guard and settlement exercise only these runtime ports.
       runtime: runtime as unknown as OrcaRuntimeService,
       db,
-      run: db.getRun('run_legacy_local')!,
+      bindRun: () => db.getRun('run_legacy_local')!,
+      taskDeps: undefined,
       coordinator: null,
       mode: decideWorkerStartMode({ params: { agent: 'codex' }, settings: null })
     })
