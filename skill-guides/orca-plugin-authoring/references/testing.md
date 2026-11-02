@@ -61,6 +61,7 @@
 - `refusals: readonly MockHostRefusal[]`
 - `posts: readonly { event: string; payload?: unknown; panel?: string }[]`: What the worker sent with `orca.panels.post`, in order.
 - `emit(event: E, payload: PluginEvents[E])`: Delivers an event as Orca would (checked against Orca's payload schema) and waits for every handler.
+- `hooks: { fire<H extends PluginHookName>(hook: H, event: PluginHooks[H]['event']): Promise<HookDecision<H>> }`
 - `command(commandId: string, args?: unknown)`: Runs a registered command and resolves with its result.
 - `request(name: K, input?: PluginRequestInput<K>, caller?: { panel?: string })`: A panel's `plugin.request`, answered by the worker's `orca.panels.handle`; `panel` names the calling panel's contribution id. An unhandled name rejects with `unknown_method`.
 - `request(name: Undeclared<N, PluginRequests>, input?: JsonValue, caller?: { panel?: string })`
@@ -77,6 +78,6 @@
 ## Options
 
 - `MountOptions = { host?: MockHost; theme?: 'light' | 'dark'; locale?: string; visible?: boolean; panelId?: string; persisted?: { plugin?: Record<string, unknown>; workspace?: Record<string, unknown> } }`
-- `MountWorkerOptions = { host?: MockHost; events?: readonly string[]; commands?: readonly string[] }`
+- `MountWorkerOptions = { host?: MockHost; events?: readonly string[]; commands?: readonly string[]; hooks?: readonly string[] }`
 - `MockHostOptions = { capabilities?: readonly string[]; results?: Record<string, unknown>; requests?: MockRequests; storage?: Record<string, JsonValue>; settings?: Record<string, JsonValue>; secrets?: Record<string, string> }`
 - `CheckScenario = MockHostOptions & { persisted?: MountOptions['persisted']; theme?: 'light' | 'dark'; events?: readonly { [E in keyof OrcaEvents]: { event: E; payload: OrcaEvents[E] } }[keyof OrcaEvents][] }`

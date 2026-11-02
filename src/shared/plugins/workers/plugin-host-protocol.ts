@@ -33,7 +33,9 @@ export const WORKER_METHODS = {
   invokeCommand: 'command.invoke',
   deliverEvent: 'event.deliver',
   /** A panel's `plugin.request`, answered by the handler from `orca.panels.handle`. */
-  panelRequest: 'panel.request'
+  panelRequest: 'panel.request',
+  /** One hook, answered with a decision (plugin-worker-hooks.ts). */
+  runHook: 'hook.run'
 } as const
 
 export const pluginWorkerInitSchema = z.object({

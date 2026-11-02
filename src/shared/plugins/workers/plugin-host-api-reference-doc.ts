@@ -2,6 +2,8 @@ import type { z } from 'zod'
 import { PLUGIN_EVENT_PAYLOAD_SCHEMAS, PLUGIN_EVENT_SUMMARIES } from '../events/plugin-events'
 import type { PluginErrorCode } from '../frames/plugin-protocol'
 import { PLUGIN_EVENT_NAMES } from '../manifest/plugin-manifest'
+import { PLUGIN_HOOK_NAMES } from '../contributions/plugin-hook-contribution'
+import { PLUGIN_HOOK_DEFAULT_DEADLINE_MS, PLUGIN_HOOK_SPECS } from '../events/plugin-hook-payloads'
 import { PLUGIN_HOST_API_MAJOR } from './plugin-host-api-major'
 import { PLUGIN_HOST_API, PLUGIN_HOST_API_MINOR, PLUGIN_HOST_METHOD_NAMES } from './plugin-host-api'
 import { REFERENCE_TYPE_TEXT, zodTypeText } from './plugin-schema-type-text'
@@ -82,6 +84,26 @@ export function renderPluginHostApiReference(): string {
       (name) =>
         `| \`${name}\` | \`${zodTypeText(PLUGIN_EVENT_PAYLOAD_SCHEMAS[name], 'output', REFERENCE_TYPE_TEXT).replaceAll('|', '\\|')}\` | ${PLUGIN_EVENT_SUMMARIES[name]} |`
     )
+  )
+  const typeCell = (schema: z.ZodType | null): string =>
+    schema === null
+      ? 'none'
+      : `\`${zodTypeText(schema, 'output', REFERENCE_TYPE_TEXT).replaceAll('|', '\\|')}\``
+  lines.push(
+    '',
+    '## Hooks',
+    '',
+    `A worker changes or stops what Orca is about to do with \`orca.hooks.on(hook, (event, next) => ...)\`, which returns \`{ dispose() }\`. Each hook must be listed in \`contributes.hooks\` (\`main\` and the \`trusted-worker\` profile; no capability). Return \`next(event)\` to go on, with the fields the hook allows changed; return a result such as \`{ deny: reason }\` to stop; return nothing to pass. Plugins run one after another (installed plugins by key, then development folders), then Orca acts on what is left. A plugin that takes longer than ${PLUGIN_HOOK_DEFAULT_DEADLINE_MS / 1000} s (worker start included), throws, crashes or is disabled counts as having passed, and \`orca plugin logs\` shows the hook, the plugin and how long it took.`,
+    '',
+    "Hooks run in the workers of the Orca that handles the request, before it acts: for an SSH or WSL terminal or workspace, that is the desktop, before the work is sent to its host. A paired client reaching a remote Orca server is decided by that server's plugins. `orca plugin types` writes the events as `PluginHooks` in `orca/host`; `orca/testing` `mountWorker(...).hooks.fire(hook, event)` returns what the chain decided.",
+    '',
+    '| Hook | Event | Stop result | `next` may change | Summary |',
+    '| --- | --- | --- | --- | --- |',
+    ...PLUGIN_HOOK_NAMES.map((name) => {
+      const spec = PLUGIN_HOOK_SPECS[name]
+      const mutable = spec.mutable.map((key) => `\`${key}\``).join(', ') || 'nothing'
+      return `| \`${name}\` | ${typeCell(spec.payload)} | ${typeCell(spec.result)} | ${mutable} | ${spec.summary} |`
+    })
   )
   lines.push(
     '',

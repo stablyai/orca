@@ -11,7 +11,13 @@ declare module 'orca/testing' {
     PluginRequests,
     Undeclared
   } from 'orca'
-  import type { OrcaWorkerApi, PluginEventName, PluginEvents } from 'orca/worker'
+  import type {
+    OrcaWorkerApi,
+    PluginEventName,
+    PluginEvents,
+    PluginHookName,
+    PluginHooks
+  } from 'orca/worker'
 
   /** One element of the drawn panel. Actions take it, or a query that finds it. */
   export type TestElement = {
@@ -201,7 +207,13 @@ declare module 'orca/testing' {
     events?: readonly string[]
     /** Commands it may register; defaults to the manifest's `contributes.commands`. */
     commands?: readonly string[]
+    /** Hooks Orca runs through it; defaults to the manifest's `contributes.hooks`. */
+    hooks?: readonly string[]
   }
+  /** What a hook chain decided: Orca goes on with `event` (as changed), or a handler refused. */
+  export type HookDecision<H extends PluginHookName> =
+    | { kind: 'continue'; event: PluginHooks[H]['event'] }
+    | { kind: 'deny'; reason: string }
   export type TestWorker = {
     readonly host: MockHost
     /** What the worker passed to `orca.log`. */
@@ -211,6 +223,15 @@ declare module 'orca/testing' {
     readonly posts: readonly { event: string; payload?: unknown; panel?: string }[]
     /** Delivers an event as Orca would (checked against Orca's payload schema) and waits for every handler. */
     emit<E extends PluginEventName>(event: E, payload: PluginEvents[E]): Promise<void>
+    readonly hooks: {
+      /** Runs a hook as Orca would, with this worker as the only plugin: the same deadline, the
+       *  fields `next` may change, and the same checks on its result. A throw or timeout counts as
+       *  passing and lands in `logs`. */
+      fire<H extends PluginHookName>(
+        hook: H,
+        event: PluginHooks[H]['event']
+      ): Promise<HookDecision<H>>
+    }
     /** Runs a registered command and resolves with its result. */
     command(commandId: string, args?: unknown): Promise<unknown>
     /** A panel's `plugin.request`, answered by the worker's `orca.panels.handle`; `panel` names the

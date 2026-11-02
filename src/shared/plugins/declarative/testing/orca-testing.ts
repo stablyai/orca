@@ -21,7 +21,7 @@ export { test, describe, beforeEach, afterEach } from 'node:test'
 export { default as assert } from 'node:assert/strict'
 export { stored } from './testing-panel'
 export type { MockHost, MockHostOptions, MockHostRefusal } from './testing-host'
-export type { TestWorker, WorkerModule } from './testing-worker'
+export type { HookDecision, TestWorker, WorkerModule } from './testing-worker'
 export type { TestPanel, PanelIssue, PersistedState } from './testing-panel'
 export type { TestElement, TestQuery, TreeSnapshot } from './testing-tree'
 
@@ -73,6 +73,7 @@ export function mountWorker(
   return mountTestWorker(module, {
     host: options.host ?? mockHost(),
     events: options.events ?? fieldsOf(contributes(manifest).events, 'on'),
+    hooks: options.hooks ?? fieldsOf(contributes(manifest).hooks, 'event'),
     commands: options.commands ?? (manifest ? fieldsOf(contributes(manifest).commands, 'id') : null)
   })
 }
