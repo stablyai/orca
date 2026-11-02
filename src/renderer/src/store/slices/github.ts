@@ -1,3 +1,4 @@
+import { createGitHubTaskRecordCache } from '../github/task-record-cache'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice as GitHubSliceContract } from '../github/slice-types'
@@ -7,6 +8,7 @@ import {
   isExpiredActivePRRefreshState
 } from '../github/pr-refresh-state'
 import { evictStaleEntries } from '../github/cache-policy'
+import { deletePRRefreshStartedEntry } from '../github/pr-result-cache'
 import { persistGitHubCacheChanges } from '../github/cache-persistence'
 import { createProjectActions } from '../github/project-actions'
 import { createProjectRowActions } from '../github/project-row-actions'
@@ -31,6 +33,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (
   get,
   store
 ) => ({
+  githubTaskCache: createGitHubTaskRecordCache(store),
   prCache: {},
   issueCache: {},
   checksCache: {},
@@ -75,6 +78,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (
       }
       const nextStates = { ...s.prRefreshStates }
       delete nextStates[cacheKey]
+      deletePRRefreshStartedEntry(token.sequence, cacheKey)
       return { prRefreshStates: nextStates }
     })
   },

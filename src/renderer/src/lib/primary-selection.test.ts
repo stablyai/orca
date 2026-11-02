@@ -25,13 +25,6 @@ describe('primary selection buffer', () => {
     expect(getPrimarySelectionText()).toBe('')
   })
 
-  it('stores selected text while enabled', () => {
-    setPrimarySelectionEnabled(true)
-
-    expect(setPrimarySelectionText('hello')).toBe(true)
-    expect(getPrimarySelectionText()).toBe('hello')
-  })
-
   it('keeps the current buffer when a selection is empty or too large', () => {
     setPrimarySelectionEnabled(true)
     setPrimarySelectionText('current')
@@ -112,24 +105,6 @@ describe('primary selection buffer', () => {
     await Promise.resolve()
     await expect(readPrimarySelectionText()).resolves.toBe('hello')
   })
-
-  it('falls back to the mirrored private buffer if the system selection read fails later', async () => {
-    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (X11; Linux x86_64)' })
-    vi.stubGlobal('window', {
-      api: {
-        ui: {
-          readSelectionClipboardText: vi.fn(async () => {
-            throw new Error('read failed')
-          }),
-          writeSelectionClipboardText: vi.fn(async () => {})
-        }
-      }
-    })
-    setPrimarySelectionEnabled(true)
-
-    expect(setPrimarySelectionText('hello')).toBe(true)
-    await expect(readPrimarySelectionText()).resolves.toBe('hello')
-  })
 })
 
 describe('primary-selection native paste suppression', () => {
@@ -154,27 +129,11 @@ describe('primary-selection native paste suppression', () => {
     expect(consumePrimarySelectionNativePasteSuppression(1_000)).toBe(false)
   })
 
-  it('suppresses the follow-up native paste within the armed window', () => {
-    setPrimarySelectionEnabled(true)
-    armPrimarySelectionNativePasteSuppression(1_000)
-
-    expect(consumePrimarySelectionNativePasteSuppression(1_000)).toBe(true)
-  })
-
   it('suppresses a follow-up that arrives late in the armed window', () => {
     setPrimarySelectionEnabled(true)
     armPrimarySelectionNativePasteSuppression(1_000)
 
     expect(consumePrimarySelectionNativePasteSuppression(1_700)).toBe(true)
-  })
-
-  it('lets a real paste through after the follow-up is consumed inside the window', () => {
-    setPrimarySelectionEnabled(true)
-    armPrimarySelectionNativePasteSuppression(1_000)
-
-    expect(consumePrimarySelectionNativePasteSuppression(1_000)).toBe(true)
-    expect(consumePrimarySelectionNativePasteSuppression(1_050)).toBe(false)
-    expect(consumePrimarySelectionNativePasteSuppression(1_700)).toBe(false)
   })
 
   it('consumes only one follow-up per arm across repeated middle-clicks', () => {

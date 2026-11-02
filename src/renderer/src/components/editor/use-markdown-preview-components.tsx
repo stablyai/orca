@@ -3,6 +3,7 @@ import type { Components } from 'react-markdown'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import CodeBlockCopyButton from './CodeBlockCopyButton'
 import MermaidBlock from './MermaidBlock'
+import { useMermaidDiagramExpand } from './use-mermaid-diagram-expand'
 import {
   getMarkdownDocLinkAnchor,
   parseMarkdownDocLinkHref,
@@ -25,6 +26,10 @@ import { documentResourceAccess } from '@/lib/local-file-access'
 import { MarkdownGitHubCallout } from '@/components/markdown-github-callout'
 import { readGitHubCalloutKind } from '@/lib/remark-github-callouts'
 import { translate } from '@/i18n/i18n'
+
+function hasMermaidCodeClass(value: unknown): boolean {
+  return typeof value === 'string' && /language-mermaid/.test(value)
+}
 
 export function useMarkdownPreviewComponents({
   foundation,
@@ -63,6 +68,7 @@ export function useMarkdownPreviewComponents({
   const { scrollToAnchor } = viewport
   const { getMarkdownCommentsForRange, handleAnnotatedMarkdownBlockClick } = reviewActions
   const { renderAnnotationControls, wrapAnnotatedBlock } = annotationRenderers
+  const expandMermaidDiagram = useMermaidDiagramExpand()
 
   return useMemo(() => {
     // Why: preview images come from document text, so main limits them to the document's roots.
@@ -168,9 +174,13 @@ export function useMarkdownPreviewComponents({
         return <img {...props} src={resolvedSrc} alt={alt ?? ''} onClick={handleImageClick} />
       },
       code: ({ className, children, ...props }) => {
-        if (/language-mermaid/.test(className || '')) {
+        if (hasMermaidCodeClass(className)) {
           return (
-            <MermaidBlock content={String(children).trimEnd()} isDark={isDark} htmlLabels={false} />
+            <MermaidBlock
+              content={String(children).trimEnd()}
+              isDark={isDark}
+              onExpand={expandMermaidDiagram}
+            />
           )
         }
         return (
@@ -180,14 +190,19 @@ export function useMarkdownPreviewComponents({
         )
       },
       pre: ({ node, children, ...props }) => {
-        const child = React.Children.toArray(children)[0]
-        if (React.isValidElement(child) && child.type === MermaidBlock) {
-          return <>{children}</>
-        }
+        const isMermaid = node?.children.some(
+          (child) =>
+            child.type === 'element' &&
+            child.tagName === 'code' &&
+            Array.isArray(child.properties.className) &&
+            child.properties.className.some(hasMermaidCodeClass)
+        )
         return wrapAnnotatedBlock(
           'pre',
-          node as MarkdownPreviewPositionNode,
-          <CodeBlockCopyButton {...props}>{children}</CodeBlockCopyButton>
+          node,
+          <CodeBlockCopyButton {...props} wrapInPre={!isMermaid}>
+            {children}
+          </CodeBlockCopyButton>
         )
       },
       p: ({ node, children, ...props }) =>
@@ -294,6 +309,7 @@ export function useMarkdownPreviewComponents({
   }, [
     filePath,
     activateMarkdownLink,
+    expandMermaidDiagram,
     isDark,
     isMac,
     imageRuntimeContext,

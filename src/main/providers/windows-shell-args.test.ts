@@ -8,7 +8,7 @@ import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 import { getBashShellReadyRcfileContent } from './local-pty-shell-ready-bash-rcfile'
 import { getDaemonBashShellReadyRcfileContent } from '../daemon/daemon-bash-shell-ready-rcfile'
 // Resolve content-addressed wrapper paths instead of assuming a fixed directory.
-import { getShellReadyWrapperRoot } from './local-pty-shell-ready-wrapper-root'
+import { getShellReadyWrapperRoot } from './local-pty/local-pty-shell-ready-wrapper-root'
 
 const CODEX_LAUNCH_PREFLIGHT = 'C:\\Program Files\\Orca\\orca.exe'
 const POWERSHELL_STARTUP_COMMAND_C_MARK = '[Console]::Write("$([char]27)]133;C$([char]7)")'

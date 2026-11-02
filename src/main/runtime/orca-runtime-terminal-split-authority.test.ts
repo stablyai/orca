@@ -412,6 +412,11 @@ describe('remote runtime terminal split authority', () => {
 
     expect(harness.spawn).toHaveBeenCalledWith(
       expect.objectContaining({
+        resolvedWorkspace: expect.objectContaining({
+          id: WORKTREE_ID,
+          path: '/workspace',
+          connectionId: null
+        }),
         env: expect.objectContaining({
           CODEX_HOME: '/home/u/.orca/codex/b',
           ORCA_CLAUDE_PROFILE_POINTER: '~/caller'

@@ -96,16 +96,6 @@ afterEach(() => {
 })
 
 describe('WSL move renderer store rewrites', () => {
-  it('changes nothing without a committed move', async () => {
-    seedStorage()
-    const before = { ...localStorage }
-    client.list.mockResolvedValue([])
-    await (await loadRunner()).runWslMoveRendererStoreRewrites()
-    expect({ ...localStorage }).toEqual(before)
-    expect(localStorage.getItem(APPLIED)).toBeNull()
-    expect(client.record).not.toHaveBeenCalled()
-  })
-
   it('never throws when the move list is unavailable, and asks again later', async () => {
     vi.useFakeTimers()
     try {

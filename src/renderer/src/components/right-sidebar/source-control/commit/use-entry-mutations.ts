@@ -10,13 +10,13 @@ import {
   requestEditorSaveQuiesce
 } from '@/components/editor/editor-autosave'
 import { getConnectionId } from '@/lib/connection-context'
-import { basename, joinPath } from '@/lib/path'
+import { basename } from '@/lib/path'
 import { useAppStore } from '@/store'
-import { deleteRuntimePath } from '@/runtime/runtime-file-mutation-client'
 import {
   bulkDiscardRuntimeGitPaths,
   bulkUnstageRuntimeGitPaths,
   discardRuntimeGitPath,
+  resolveRuntimeGitConflict,
   stageRuntimeGitPath,
   unstageRuntimeGitPath
 } from '@/runtime/runtime-git-working-tree-client'
@@ -120,36 +120,28 @@ export function useSourceControlEntryMutations({
         runtimeEnvironmentId:
           activeRepoTarget?.kind === 'environment' ? activeRepoTarget.environmentId : null
       }
-      const resolve: (context: RuntimeGitContext, filePath: string) => Promise<void> =
-        resolution !== 'keep_deletion'
-          ? async (context, filePath) => {
-              // Same view match as autosave holds: every workspace's view of this physical file, not another host's.
-              const current = useAppStore.getState()
-              const keys = pathMutationHoldKeys(current, editorTarget)
-              const dirtyFiles = current.openFiles.filter(
-                (file) => file.isDirty && keys.has(editorFileHoldKey(current, file))
-              )
-              // Stage what the user sees: an unsaved resolution must reach disk before git add reads it.
-              await Promise.all(
-                dirtyFiles.map((file) => requestEditorFileSave({ fileId: file.id }))
-              )
-              await stageRuntimeGitPath(context, filePath)
-            }
-          : async (context, filePath) => {
-              // Hold autosave so an open tab cannot recreate the file after it is removed.
-              const releaseAutoSave = await requestEditorSaveQuiesce(editorTarget)
-              try {
-                // Delete even if status said absent so a since-restored file is never staged; Git history keeps it.
-                await deleteRuntimePath(context, joinPath(worktreePath, filePath), false, {
-                  permanent: true
-                })
-                notifyEditorExternalFileChange(editorTarget)
-                // With the worktree file gone, git add stages the removal and resolves the conflict.
-                await stageRuntimeGitPath(context, filePath)
-              } finally {
-                releaseAutoSave()
-              }
-            }
+      const resolve = async (context: RuntimeGitContext, filePath: string): Promise<void> => {
+        if (resolution !== 'keep_deletion') {
+          // Same view match as autosave holds: every workspace's view of this physical file, not another host's.
+          const current = useAppStore.getState()
+          const keys = pathMutationHoldKeys(current, editorTarget)
+          const dirtyFiles = current.openFiles.filter(
+            (file) => file.isDirty && keys.has(editorFileHoldKey(current, file))
+          )
+          // Stage what the user sees: an unsaved resolution must reach disk before git add reads it.
+          await Promise.all(dirtyFiles.map((file) => requestEditorFileSave({ fileId: file.id })))
+          await resolveRuntimeGitConflict(context, filePath, resolution)
+          return
+        }
+        // Hold autosave so an open tab cannot recreate the file the host removes.
+        const releaseAutoSave = await requestEditorSaveQuiesce(editorTarget)
+        try {
+          await resolveRuntimeGitConflict(context, filePath, resolution)
+          notifyEditorExternalFileChange(editorTarget)
+        } finally {
+          releaseAutoSave()
+        }
+      }
       resolvingConflictKeysRef.current.add(resolvingKey)
       return runEntryMutation('stage', entry.path, resolve).finally(() => {
         resolvingConflictKeysRef.current.delete(resolvingKey)

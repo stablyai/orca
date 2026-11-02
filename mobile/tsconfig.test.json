@@ -16,6 +16,6 @@
     "src/test-support/rpc-recording/recorded-request-params.test.ts",
     "src/tasks/mobile-agent-launch-architecture.test.ts",
     "src/transport/mobile-relay-browser-cancel-budget.test.ts",
-    "src/transport/mobile-web-bundle-host-slow-link.test.ts"
+    "src/transport/web-bundle/mobile-web-bundle-host-slow-link.test.ts"
   ]
 }

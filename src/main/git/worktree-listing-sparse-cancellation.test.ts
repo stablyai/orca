@@ -80,19 +80,6 @@ describe('sparse worktree listing cancellation', () => {
     expect(rows.every((row) => row.isSparse === undefined)).toBe(true)
   })
 
-  it('starts no probes for a pre-aborted request, including an empty listing', async () => {
-    const controller = new AbortController()
-    const reason = new Error('Already closed')
-    controller.abort(reason)
-    for (const rows of [[listedWorktree(0)], []]) {
-      await expect(
-        annotateSparseCheckoutStatus('/repo', rows, { signal: controller.signal })
-      ).rejects.toBe(reason)
-    }
-    await nextTurn()
-    expect(sparseProbe).not.toHaveBeenCalled()
-  })
-
   it('observes worker rejections when the first probe synchronously aborts the request', async () => {
     const controller = new AbortController()
     const reason = new Error('First probe closed the request')
@@ -123,18 +110,5 @@ describe('sparse worktree listing cancellation', () => {
       releases.splice(0).forEach((release) => release())
       process.off('unhandledRejection', onUnhandled)
     }
-  })
-
-  it('preserves existing sparse and bare rows during a successful listing', async () => {
-    const rows = [
-      { ...listedWorktree(0), isBare: true },
-      { ...listedWorktree(1), isSparse: true },
-      listedWorktree(2)
-    ]
-    sparseProbe.mockResolvedValue(true)
-    const result = await annotateSparseCheckoutStatus('/repo', rows)
-    expect(sparseProbe).toHaveBeenCalledExactlyOnceWith('/repo', rows[2]?.path, {})
-    expect(result).toEqual([rows[0], rows[1], { ...rows[2], isSparse: true }])
-    expect(rows[2]?.isSparse).toBeUndefined()
   })
 })

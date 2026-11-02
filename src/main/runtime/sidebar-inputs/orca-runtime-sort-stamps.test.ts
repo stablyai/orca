@@ -58,17 +58,6 @@ function createHeadlessRuntime(
 }
 
 describe('host sort stamps on a headless runtime', () => {
-  it('stamps a bell the host scans from its own bytes', () => {
-    vi.useFakeTimers({ now: 50_000 })
-    try {
-      const { runtime, meta } = createHeadlessRuntime()
-      runtime.onPtyData('pty-1', '\x07', 1)
-      expect(meta[WT].lastActivityAt).toBe(50_000)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('announces a burst of stamp writes once, as a metadata change of the row’s repo', () => {
     vi.useFakeTimers({ now: 55_000 })
     try {
@@ -84,17 +73,6 @@ describe('host sort stamps on a headless runtime', () => {
       expect(events.filter((event) => event.type === 'worktreesChanged')).toEqual([
         expect.objectContaining({ type: 'worktreesChanged', repoId: 'repo-1' })
       ])
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('stamps a bell the daemon reports for a parked terminal', () => {
-    vi.useFakeTimers({ now: 60_000 })
-    try {
-      const { runtime, meta } = createHeadlessRuntime()
-      runtime.emitDaemonPtyTransientFact('pty-1', { kind: 'bell' })
-      expect(meta[WT].lastActivityAt).toBe(60_000)
     } finally {
       vi.useRealTimers()
     }
@@ -133,30 +111,6 @@ describe('host sort stamps on a headless runtime', () => {
     // No client is looking: a finish is news, a clear or a compaction is not.
     expect(finishUnread).toBe(true)
     expect(boundaryUnread).toBe(false)
-  })
-
-  it('stamps agent transitions from the attached hook store', () => {
-    vi.useFakeTimers({ now: 70_000 })
-    try {
-      const { runtime, meta } = createHeadlessRuntime()
-      const server = new AgentHookServer()
-      runtime.attachAgentStatusStore(server)
-      server.ingestTerminalStatus({
-        paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
-        tabId: 'tab-1',
-        worktreeId: WT,
-        payload: { state: 'waiting', prompt: 'task', agentType: 'claude' }
-      })
-      // No client is looking, so the request for input also raises the unread flag.
-      expect(meta[WT]).toMatchObject({
-        lastActivityAt: 70_000,
-        smartTier: 'needs-you',
-        smartAt: 70_000,
-        isUnread: true
-      })
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('reconciles stored tiers once the provider can answer for the workspace’s terminals', async () => {

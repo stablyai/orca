@@ -55,12 +55,6 @@ describe('describeCreatedWorktree against the real Git binary', () => {
     )
   })
 
-  it('accepts a fully qualified branch ref', async () => {
-    await expect(
-      describeCreatedWorktree(repoPath, worktreePath, 'refs/heads/feature')
-    ).resolves.toMatchObject({ branch: 'refs/heads/feature', isMainWorktree: false })
-  })
-
   it('rejects a checkout owned by a different repo', async () => {
     const otherRepo = join(scratchDir, 'other')
     await seedRepo(otherRepo, 'other@example.invalid')

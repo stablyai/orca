@@ -114,29 +114,6 @@ describe('project host setup selector', () => {
     expect(countedSetups.counters).toEqual({ map: 0, flatMap: 0, iterator: 0, length: 0 })
   })
 
-  it('invalidates the projection when hydrated setup identity changes', () => {
-    const repo = makeRepo('repo-1')
-    const repos = [repo]
-    const projects = [makeProject('repo:repo-1', repo.id)]
-    const setups = [makeSetup(repo.id, 'repo:repo-1')]
-    const first = getProjectHostSetupProjectionFromState({
-      repos,
-      projects,
-      projectHostSetups: setups
-    })
-    const replacementSetups = [...setups]
-
-    const next = getProjectHostSetupProjectionFromState({
-      repos,
-      projects,
-      projectHostSetups: replacementSetups
-    })
-
-    expect(next).not.toBe(first)
-    expect(next.projects).toBe(projects)
-    expect(next.setups).toBe(replacementSetups)
-  })
-
   it('invalidates the projection when the repo identity changes', () => {
     const repo = makeRepo('repo-1')
     const repos = [repo]

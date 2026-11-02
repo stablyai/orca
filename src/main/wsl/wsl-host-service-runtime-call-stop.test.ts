@@ -54,18 +54,18 @@ describe('a runtime call that finds the WSL host stopped', () => {
 
   it('says the host stopped, so its panes offer Start instead of a dead prompt', async () => {
     const { service } = await stoppedUnderVisibleWork()
-    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu was stopped')
+    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu is stopped')
     expect(published).toEqual([
       expect.objectContaining({ environmentId: 'wsl:ubuntu', state: 'distro-stopped' })
     ])
     // Said once, however many calls meet the stop.
-    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu was stopped')
+    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu is stopped')
     expect(published).toHaveLength(1)
   })
 
   it('reconnects its open work once the distro runs again, without booting it', async () => {
     const { connector, service } = await stoppedUnderVisibleWork()
-    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu was stopped')
+    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu is stopped')
     expect(connector.connect).not.toHaveBeenCalled()
 
     // Started some other way; the gate runs this only on a confirmed running list.
@@ -78,7 +78,7 @@ describe('a runtime call that finds the WSL host stopped', () => {
 
   it('stays down while nothing shows the host, until it is opened', async () => {
     const { connector, service } = await stoppedUnderVisibleWork()
-    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu was stopped')
+    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu is stopped')
     service.setVisibleWork([])
     connector.distro.state = 'running'
     deferred.get('Ubuntu:wsl-host-parked:wsl:ubuntu')?.()
@@ -89,7 +89,7 @@ describe('a runtime call that finds the WSL host stopped', () => {
   // e9-reviewer: the stop can land after liveness already reconnected and said ready.
   it('says ready again when the host was already back by the time the distro ran', async () => {
     const { connector, service } = await stoppedUnderVisibleWork()
-    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu was stopped')
+    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu is stopped')
     connector.distro.state = 'running'
     // Liveness reconnected on its own.
     await connector.connect('Ubuntu')
@@ -109,7 +109,7 @@ describe('a runtime call that finds the WSL host stopped', () => {
     expect(refusal).not.toBeInstanceOf(RemoteRuntimeClientError)
     expect(refusal).toMatchObject({
       message:
-        'Ubuntu was stopped. Switch to one of its projects, or reconnect it in Settings → Remote Orca Servers, to start it again.'
+        'Ubuntu is stopped. To start it, click Start or open a new terminal in one of its projects.'
     })
   })
 })

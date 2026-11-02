@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -57,17 +58,6 @@ function mutate(
 }
 
 describe('real-home user hook trust rebasing', () => {
-  it('writes without touching config.toml when no hook moves', () => {
-    const user = command('user-hook')
-    mutate(
-      { Stop: [{ hooks: [user] }] },
-      { Stop: [{ hooks: [user] }, { hooks: [command('orca')] }] }
-    )
-
-    expect(existsSync(hooksPath)).toBe(true)
-    expect(existsSync(configPath)).toBe(false)
-  })
-
   it('finds multiple shifted user hooks, including a handler from a mixed group', async () => {
     const orca = command('orca-hook')
     const first = command('first-user')

@@ -1,14 +1,16 @@
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import {
   buildWorktreeSortLabels,
   compareWorktreeSortLabel
 } from '../../../../shared/sidebar-list/smart-sort'
 
+/** Manual ranks by host identity: same-id copies on two hosts are separate cards. */
 export type WorktreeManualOrderCatalog = {
-  orderedIds: readonly string[]
-  rankByWorktreeId: ReadonlyMap<string, number>
+  orderedKeys: readonly string[]
+  rankByKey: ReadonlyMap<string, number>
 }
 
 export function buildWorktreeManualOrderCatalog(args: {
@@ -25,19 +27,20 @@ export function buildWorktreeManualOrderCatalog(args: {
       (right.manualOrder ?? right.sortOrder) - (left.manualOrder ?? left.sortOrder) ||
       compareWorktreeSortLabel(left, right, labels)
   )
-  const rowsById = new Map<string, Worktree[]>()
+  const rowsByKey = new Map<string, Worktree[]>()
   for (const row of rows) {
-    const matches = rowsById.get(row.id)
+    const key = getWorktreeHostIdentity(row)
+    const matches = rowsByKey.get(key)
     if (matches) {
       matches.push(row)
     } else {
-      rowsById.set(row.id, [row])
+      rowsByKey.set(key, [row])
     }
   }
 
-  const orderedIds = [...rowsById.keys()]
-  const rankByWorktreeId = new Map<string, number>()
-  for (const [worktreeId, matches] of rowsById) {
+  const orderedKeys = [...rowsByKey.keys()]
+  const rankByKey = new Map<string, number>()
+  for (const [key, matches] of rowsByKey) {
     const ranks = matches.map((row) => row.manualOrder)
     const rank = ranks[0]
     if (
@@ -45,8 +48,8 @@ export function buildWorktreeManualOrderCatalog(args: {
       Number.isFinite(rank) &&
       ranks.every((candidate) => candidate === rank)
     ) {
-      rankByWorktreeId.set(worktreeId, rank)
+      rankByKey.set(key, rank)
     }
   }
-  return { orderedIds, rankByWorktreeId }
+  return { orderedKeys, rankByKey }
 }

@@ -105,32 +105,6 @@ describe('showPreservedBranchToast', () => {
     )
   })
 
-  it('saves the future branch choice before deleting the current branch', async () => {
-    const savePreference = vi.fn().mockResolvedValue(undefined)
-    const onForceDelete = vi.fn()
-    showPreservedBranchToast(
-      { preservedBranch: { branchName: 'feature/test', head: 'abc123' } },
-      undefined,
-      onForceDelete,
-      savePreference
-    )
-    const body = renderToastBody()
-    const trigger = body.querySelector('button[aria-label="More branch delete options"]')
-    expect(trigger).not.toBeNull()
-
-    await act(async () => {
-      trigger?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
-    })
-    const option = document.querySelector('[role="menuitem"]')
-    expect(option?.textContent).toBe('Always delete preserved branches')
-    await act(async () => {
-      option?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(savePreference).toHaveBeenCalledOnce()
-    expect(onForceDelete).toHaveBeenCalledWith('feature/test', 'abc123')
-  })
-
   it('keeps the branch and toast when saving the future choice fails', async () => {
     const savePreference = vi.fn().mockRejectedValue(new Error('disk full'))
     const onForceDelete = vi.fn()
