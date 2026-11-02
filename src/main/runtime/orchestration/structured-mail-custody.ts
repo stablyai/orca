@@ -33,13 +33,16 @@ export function structuredMailboxEnded(
   return mailboxHandle.startsWith('run:') && !db?.getRun?.(mailboxHandle.slice('run:'.length))
 }
 
-/** The one authority every handover asks: whether this session may still be handed this mail now. */
+/** The one authority every handover asks: whether this session may still be handed this mail now.
+ *  Only a readable fact decides it is no longer owed; a fact that cannot be read holds it. */
 export function structuredMailOwed(input: {
   db: OrchestrationDb
   sessionId: string
   mailboxHandle: string
   messageIds: readonly string[]
   resolve: (mailboxHandle: string) => StructuredPointerTarget | null
+  /** Why no chat resolves: someone else holds it, or that cannot be read now. */
+  unresolved: (mailboxHandle: string) => 'elsewhere' | 'unverifiable'
   ended: (mailboxHandle: string) => boolean
 }): QueuedMessageOwed {
   const { db, mailboxHandle } = input
@@ -55,8 +58,8 @@ export function structuredMailOwed(input: {
     if (target) {
       return target.sessionId === input.sessionId ? 'owed' : 'stale'
     }
-    // No owner resolves, but nothing durable ended it: a restart may still be restoring it.
-    return 'unavailable'
+    // A terminal, a released worker or another host holds it; a restart still restoring it holds it here.
+    return input.unresolved(mailboxHandle) === 'elsewhere' ? 'stale' : 'unavailable'
   } catch {
     return 'unavailable'
   }
@@ -71,20 +74,13 @@ export function hasStructuredMailSends(db: OrchestrationDb | null, mailboxHandle
   }
 }
 
-/** A send no longer owed where it went: forget it, and let mail still in this mailbox be selected
- *  again for whoever owns the mailbox now. */
-export function retireStaleMailSend(db: OrchestrationDb, row: StructuredMailSendRow): void {
-  db.deleteStructuredMailSend(row.mailbox_handle, row.message_id)
-  if (db.areUnreadMessages(row.mailbox_handle, [row.message_id])) {
-    db.markAsUndelivered([row.message_id])
-  }
-}
-
-/** Settle what became of earlier sends: the ids still in a chat's hands, and sends to make again. */
+/** Settle what became of earlier sends: the ids still in a chat's hands, and sends to make again.
+ *  The chat's host answers what each became; this only stamps it, each retirement guarded by its
+ *  attempt, so an old answer never ends a newer send. */
 export async function settleStructuredMailSends(input: {
   db: OrchestrationDb
   mailboxHandle: string
-  host: Pick<StructuredMailboxPointerHost, 'observe' | 'withdraw'>
+  host: Pick<StructuredMailboxPointerHost, 'observe' | 'withdraw' | 'wakeQueue'>
   cliCommand: OrchestrationCliCommand
   owed: (sessionId: string, messageIds: readonly string[]) => QueuedMessageOwed
 }): Promise<{ outstanding: Set<string>; resend: StructuredMailResend[] }> {
@@ -95,27 +91,27 @@ export async function settleStructuredMailSends(input: {
     const owed = input.owed(row.session_id, [row.message_id])
     const state = await host.observe(row.session_id, row.operation_id)
     const message = db.getMessageById(row.message_id)
-    const unread = message !== undefined && !message.read
-    // A pointer's handover shows the agent none of an oversized message; `check` still has it.
-    const readsWhole = () =>
-      message !== undefined && !message.read && structuredMailFitsWhole(message, input.cliCommand)
-    const retire = () => db.deleteStructuredMailSend(mailboxHandle, row.message_id)
+    const unread = message !== undefined && !message.read ? message : undefined
+    const retire = (consumed: boolean) => db.retireStructuredMailSend(row, consumed)
+    // No longer this chat's: mail still unread goes to whoever owns the mailbox now, never read.
+    const release = () => db.releaseStructuredMailSend(row)
     switch (state.kind) {
       case 'accepted':
-        if (readsWhole()) {
-          db.markAsReadAndDelivered([row.message_id])
-        }
-        retire()
+        // A pointer's handover shows the agent none of an oversized message; `check` still has it.
+        retire(unread !== undefined && structuredMailFitsWhole(unread, input.cliCommand))
         continue
       case 'unknown':
         // It may have reached the agent: never sent again; `check` still returns it.
-        retire()
+        retire(false)
+        continue
+      case 'refused':
+        release()
         continue
       case 'rejected':
         if (state.cancelled) {
-          retire()
+          retire(false)
         } else if (owed === 'stale') {
-          retireStaleMailSend(db, row)
+          release()
         } else {
           if (state.recovered && owed === 'owed') {
             resend.push({ row, renew: true })
@@ -125,24 +121,21 @@ export async function settleStructuredMailSends(input: {
         continue
       case 'withdrawn':
         if (owed === 'owed') {
-          // The person deleted the card, as with any queued message.
-          if (readsWhole()) {
-            db.markAsReadAndDelivered([row.message_id])
-          }
-          retire()
+          // The person deleted the card, as with any queued message, pointer or whole.
+          retire(true)
         } else if (owed === 'stale') {
-          retireStaleMailSend(db, row)
+          release()
         } else {
           outstanding.add(row.message_id)
         }
         continue
       case 'absent':
         if (owed === 'stale') {
-          retireStaleMailSend(db, row)
+          release()
           continue
         }
         if (owed === 'owed') {
-          // Recorded, then never admitted (a crash between them): the same id is admitted fresh.
+          // Reserved, then never admitted (a crash between them): the same id is admitted fresh.
           const mintedAt = parseAgentSessionOperationTimestamp(row.operation_id) ?? 0
           resend.push({ row, renew: Date.now() - mintedAt > REUSABLE_OPERATION_AGE_MS })
         }
@@ -152,12 +145,16 @@ export async function settleStructuredMailSends(input: {
       case 'unreadable':
         if (owed === 'stale' && state.kind === 'waiting') {
           if (await host.withdraw(row.session_id, row.operation_id)) {
-            retireStaleMailSend(db, row)
+            release()
             continue
           }
-        } else if (unread && !message.delivered_at) {
-          // The send landed but its stamp did not: the chat holds it, so selection must skip it.
+        } else if (unread && !unread.delivered_at) {
+          // A record saved before reservations: the chat holds it, so selection must skip it.
           db.markAsDelivered([row.message_id], mailboxHandle)
+        }
+        if (owed === 'owed' && state.kind === 'waiting') {
+          // Its owner may only now be readable: a card the queue passed over goes without a later action.
+          host.wakeQueue(row.session_id)
         }
         outstanding.add(row.message_id)
         continue

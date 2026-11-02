@@ -12,7 +12,7 @@ import type {
 } from './structured-agent-session-host-types'
 import {
   queuedSendAnswer,
-  structuredSendFacts
+  structuredSendAnswer
 } from './structured-agent-session-queued-send-answer'
 
 type ReadContext = {
@@ -57,8 +57,13 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
     readModelCatalog,
     queuedSendAnswer: async (id: string, messageId: string) =>
       queuedSendAnswer(await journalOf(id), messageId),
-    sendFacts: async (id: string, messageId: string) =>
-      structuredSendFacts(await journalOf(id), messageId),
+    sendAnswer: async (id: string, messageId: string) =>
+      structuredSendAnswer(
+        await journalOf(id),
+        (operationId) => context().deps.store.readCommandReceipt({ kind: 'global' }, operationId),
+        id,
+        messageId
+      ),
     readCommands: (id: string, commandsOnRequest = false) =>
       context().readCommands(id, commandsOnRequest),
     supportsCreate: (location: AgentSessionExecutionLocation, agent: string) =>

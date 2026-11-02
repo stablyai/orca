@@ -1,6 +1,7 @@
 /** What the structured mailbox lane needs from a chat host: ordinary sends, and reads of what became of them. */
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredSendAnswer } from '../../native-chat/agent-session-wire/structured-agent-session-queued-send-answer'
 
 export type StructuredPointerSendOutcome =
   /** The chat's queue took it, as it takes a person's message sent while the agent works. */
@@ -13,22 +14,8 @@ export type StructuredPointerSendOutcome =
   /** A check took or a waiter claimed its mail before admission; nothing ran. */
   | { kind: 'obsolete' }
 
-/** What became of one earlier send, read from the chat's journal without replaying it. */
-export type StructuredMailSendState =
-  /** Still the chat's to hand over: a card waiting, paused or returned, or a handoff not yet answered. */
-  | { kind: 'waiting' }
-  /** Its card was deleted before handover. */
-  | { kind: 'withdrawn' }
-  | { kind: 'accepted' }
-  /** Sent at once and proven never delivered. `cancelled`: someone stopped it on purpose.
-   *  `recovered`: a turn was accepted, or the context cleared, after the rejection settled. */
-  | { kind: 'rejected'; cancelled: boolean; recovered: boolean }
-  /** It may have reached the agent; nothing says whether it did. */
-  | { kind: 'unknown' }
-  /** A complete read found nothing under its id: it was never admitted. */
-  | { kind: 'absent' }
-  /** The session cannot be read now. */
-  | { kind: 'unreadable' }
+/** What became of one earlier send, as the chat's host answers it without replaying it. */
+export type StructuredMailSendState = StructuredSendAnswer
 
 export type StructuredMailboxPointerHost = {
   send: (input: {
@@ -42,6 +29,8 @@ export type StructuredMailboxPointerHost = {
     stillOwed: () => boolean
   }) => Promise<StructuredPointerSendOutcome>
   observe: (sessionId: string, operationId: string) => Promise<StructuredMailSendState>
+  /** Have the chat's queue look again: a card it passed over may be decidable now. */
+  wakeQueue: (sessionId: string) => void
   /** Delete a card still waiting in the queue; false when it could not be deleted now. */
   withdraw: (sessionId: string, operationId: string) => Promise<boolean>
   /** Current lease fence; `null` when no record backs the session any more. */

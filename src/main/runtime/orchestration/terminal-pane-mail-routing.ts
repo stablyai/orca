@@ -20,11 +20,9 @@ import type { OrchestrationDb } from './db'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import type { QueuedMessageOwed } from '../../native-chat/agent-session-journal/queued-message-consume-error'
 import {
-  chatDispatchMailTarget,
-  handleLessCoordinatorSessionId,
-  structuredSessionAddressTarget,
-  structuredSessionMailTarget,
-  structuredSessionIdleEdgeMailboxes
+  structuredMailboxCustody,
+  structuredSessionIdleEdgeMailboxes,
+  type StructuredMailboxCustody
 } from './structured-session-mail-target'
 import { exitedChatDispatchesForSession } from './chat-assignee'
 import { OPERATOR_CLOSE_EXIT_CAUSE } from '../../../shared/terminal-exit-cause'
@@ -237,68 +235,13 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
 
   /** Resolve every structured-owned mailbox here; declining Run or direct mail would leave both delivery lanes refusing it. */
   protected resolveStructuredMailboxTarget(mailboxHandle: string): StructuredPointerTarget | null {
-    if (mailboxHandle.startsWith('run:')) {
-      return this.resolveStructuredCoordinatorMailboxTarget(mailboxHandle.slice('run:'.length))
-    }
-    const addressed = structuredSessionAddressTarget(mailboxHandle, this._orchestrationDb)
-    if (addressed !== undefined) {
-      return addressed
-    }
-    if (!mailboxHandle.startsWith('dispatch:')) {
-      return this.resolveStructuredWorkerDirectMailboxTarget(mailboxHandle)
-    }
-    const dispatchId = mailboxHandle.slice('dispatch:'.length)
-    const dispatch = this._orchestrationDb?.getDispatchContextById?.(dispatchId)
-    const assignee = dispatch?.assignee_handle
-    // A Dispatch's mail follows its Task: none reaches the chat before it took the Task, or after it ended.
-    if (!assignee || dispatch.status !== 'dispatched') {
-      return null
-    }
-    const chat = chatDispatchMailTarget(dispatch, this._orchestrationDb)
-    if (chat !== undefined) {
-      return chat
-    }
-    const sessionId = this.liveStructuredWorkerSessionId(assignee)
-    return sessionId ? { sessionId, dispatchId } : null
+    const custody = this.structuredMailboxCustody(mailboxHandle)
+    return typeof custody === 'object' ? custody : null
   }
 
-  /** Structured coordinators need Run nudges after turns end; no blocking check waiter or Dispatch is required. */
-  protected resolveStructuredCoordinatorMailboxTarget(
-    runId: string
-  ): StructuredPointerTarget | null {
-    const run = this._orchestrationDb?.getRun?.(runId)
-    const sessionId = run ? handleLessCoordinatorSessionId(run) : null
-    if (sessionId) {
-      return structuredSessionMailTarget(sessionId, this._orchestrationDb)
-    }
-    const coordinator = run?.coordinator_handle
-    if (!coordinator) {
-      return null
-    }
-    const workerSessionId = this.liveStructuredWorkerSessionId(coordinator)
-    return workerSessionId ? { sessionId: workerSessionId, dispatchId: null } : null
-  }
-
-  /** Route direct worker mail through its active Dispatch or a session-scoped ledger between Dispatches; downstream idle/lease gates decide safety. */
-  protected resolveStructuredWorkerDirectMailboxTarget(
-    handle: string
-  ): StructuredPointerTarget | null {
-    const db = this._orchestrationDb
-    // Only this runtime's held structured workers resolve here; other owners remain for their own lane.
-    const authority = resolveStructuredWorkerAuthority(handle, db)
-    if (!authority) {
-      return null
-    }
-    const dispatchId =
-      db?.findActiveDispatchForAssignee?.(handle, authority.identity.paneKey)?.id ?? null
-    return { sessionId: authority.running.sessionId, dispatchId }
-  }
-
-  /** The session running a structured worker of this runtime: its `/clear` successor, if any. */
-  private liveStructuredWorkerSessionId(handle: string): string | null {
-    return (
-      resolveStructuredWorkerAuthority(handle, this._orchestrationDb)?.running.sessionId ?? null
-    )
+  /** Who holds a mailbox, from durable facts: the chat its mail reaches, someone else, or unverifiable now. */
+  protected structuredMailboxCustody(mailboxHandle: string): StructuredMailboxCustody {
+    return structuredMailboxCustody(mailboxHandle, this._orchestrationDb)
   }
 
   protected scheduleRestoredMessageRepoints(): void {

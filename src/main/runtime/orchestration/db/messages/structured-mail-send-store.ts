@@ -1,4 +1,5 @@
 import type { OrchestrationDb } from '../orchestration-db'
+import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
 
 /** One orchestration message handed to a chat session: the agent-session operation id its send used. */
 export type StructuredMailSendRow = {
@@ -38,70 +39,112 @@ export function getStructuredMailSendMailboxes(this: OrchestrationDb): string[] 
   ).map((row) => row.mailbox_handle)
 }
 
-/** Record a first send; false when another pass already holds this message's send. */
-export function putStructuredMailSend(this: OrchestrationDb, row: StructuredMailSendRow): boolean {
-  return (
-    this.db
-      .prepare(
-        `INSERT INTO structured_mail_sends
-           (mailbox_handle, message_id, session_id, operation_id, minted_at_ms, fence)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(mailbox_handle, message_id) DO NOTHING`
-      )
-      .run(
-        row.mailbox_handle,
-        row.message_id,
-        row.session_id,
-        row.operation_id,
-        row.minted_at_ms,
-        row.fence
-      ).changes === 1
-  )
+/** Reserve a send before the host call: its record and the message's delivered stamp land together,
+ *  so no crash between the send and its bookkeeping leaves the message selectable again. The message
+ *  stays unread. `replacing` swaps one attempt for the next only while it is still the current one,
+ *  so two passes that both saw it fail cannot both send it again. False when another pass holds it. */
+export function reserveStructuredMailSend(
+  this: OrchestrationDb,
+  row: StructuredMailSendRow,
+  replacing?: string
+): boolean {
+  return runLifecycleWriteTransaction(this.db, 'reserve_structured_mail_send', () => {
+    const reserved =
+      replacing === undefined
+        ? this.db
+            .prepare(
+              `INSERT INTO structured_mail_sends
+                 (mailbox_handle, message_id, session_id, operation_id, minted_at_ms, fence)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT(mailbox_handle, message_id) DO NOTHING`
+            )
+            .run(
+              row.mailbox_handle,
+              row.message_id,
+              row.session_id,
+              row.operation_id,
+              row.minted_at_ms,
+              row.fence
+            ).changes === 1
+        : this.db
+            .prepare(
+              `UPDATE structured_mail_sends
+                  SET session_id = ?, operation_id = ?, minted_at_ms = ?, fence = ?
+                WHERE mailbox_handle = ? AND message_id = ? AND operation_id = ?`
+            )
+            .run(
+              row.session_id,
+              row.operation_id,
+              row.minted_at_ms,
+              row.fence,
+              row.mailbox_handle,
+              row.message_id,
+              replacing
+            ).changes === 1
+    if (reserved) {
+      this.markAsDelivered([row.message_id], row.mailbox_handle)
+    }
+    return reserved
+  })
 }
 
-/** Swap one attempt for the next only if it is still the current one, so two passes that both saw it
- *  fail cannot both send it again. */
-export function replaceStructuredMailSendAttempt(
-  this: OrchestrationDb,
-  expectedOperationId: string,
-  next: StructuredMailSendRow
-): boolean {
+function deleteCurrentAttempt(db: OrchestrationDb, row: StructuredMailSendRow): boolean {
   return (
-    this.db
+    db.db
       .prepare(
-        `UPDATE structured_mail_sends
-            SET session_id = ?, operation_id = ?, minted_at_ms = ?, fence = ?
+        `DELETE FROM structured_mail_sends
           WHERE mailbox_handle = ? AND message_id = ? AND operation_id = ?`
       )
-      .run(
-        next.session_id,
-        next.operation_id,
-        next.minted_at_ms,
-        next.fence,
-        next.mailbox_handle,
-        next.message_id,
-        expectedOperationId
-      ).changes === 1
+      .run(row.mailbox_handle, row.message_id, row.operation_id).changes === 1
   )
 }
 
-export function deleteStructuredMailSend(
+/** Nothing reached the chat under this attempt: drop it and its reservation, so mail still unread is
+ *  selected again by whoever owns the mailbox then. A newer attempt is left alone. */
+export function releaseStructuredMailSend(
   this: OrchestrationDb,
-  mailboxHandle: string,
-  messageId: string
-): void {
-  this.db
-    .prepare('DELETE FROM structured_mail_sends WHERE mailbox_handle = ? AND message_id = ?')
-    .run(mailboxHandle, messageId)
+  row: StructuredMailSendRow
+): boolean {
+  return runLifecycleWriteTransaction(this.db, 'release_structured_mail_send', () => {
+    const released = deleteCurrentAttempt(this, row)
+    if (released) {
+      this.markAsUndelivered([row.message_id])
+    }
+    return released
+  })
+}
+
+/** The chat's part is over: drop the attempt, stamping what it ended as in the same write. A record
+ *  saved before reservations carries no delivered stamp; this repairs it before it goes, so the message
+ *  is never selectable again. `consumed`: the agent or the person took it whole, so it is read too. */
+export function retireStructuredMailSend(
+  this: OrchestrationDb,
+  row: StructuredMailSendRow,
+  consumed: boolean
+): boolean {
+  return runLifecycleWriteTransaction(this.db, 'retire_structured_mail_send', () => {
+    const retired = deleteCurrentAttempt(this, row)
+    if (retired && consumed) {
+      this.markAsReadAndDelivered([row.message_id])
+    } else if (retired) {
+      this.db
+        .prepare(
+          `UPDATE messages SET delivered_at = COALESCE(delivered_at, datetime('now'))
+            WHERE id = ? AND to_handle = ?`
+        )
+        .run(row.message_id, row.mailbox_handle)
+    }
+    return retired
+  })
 }
 
 export type StructuredMailSendStoreMethods = {
   getStructuredMailSends: typeof getStructuredMailSends
   getStructuredMailSend: typeof getStructuredMailSend
   getStructuredMailSendMailboxes: typeof getStructuredMailSendMailboxes
-  putStructuredMailSend: typeof putStructuredMailSend
-  replaceStructuredMailSendAttempt: typeof replaceStructuredMailSendAttempt
-  deleteStructuredMailSend: typeof deleteStructuredMailSend
+  reserveStructuredMailSend: typeof reserveStructuredMailSend
+  releaseStructuredMailSend: typeof releaseStructuredMailSend
+  retireStructuredMailSend: typeof retireStructuredMailSend
 }
 
 export function attachStructuredMailSendStore(ctor: { prototype: object }): void {
@@ -109,8 +152,8 @@ export function attachStructuredMailSendStore(ctor: { prototype: object }): void
     getStructuredMailSends,
     getStructuredMailSend,
     getStructuredMailSendMailboxes,
-    putStructuredMailSend,
-    replaceStructuredMailSendAttempt,
-    deleteStructuredMailSend
+    reserveStructuredMailSend,
+    releaseStructuredMailSend,
+    retireStructuredMailSend
   })
 }

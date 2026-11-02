@@ -496,10 +496,11 @@ type ParkedMailRegistry = ReadonlyMap<unknown, unknown>
 
 function observeParkedMail(value: unknown): ParkedMailRegistry {
   const parking = isRecord(value) ? value.parking : undefined
-  if (!isRecord(parking) || !(parking.parked instanceof Map)) {
+  if (!isRecord(parking) || !(parking.sessionOf instanceof Map)) {
     throw new Error('expected actual parked mail registry')
   }
-  return parking.parked
+  // Parked mailboxes, each with the session whose journal edge it waits on.
+  return parking.sessionOf
 }
 
 it('worker-abandon settles and fences consumption, releases the existing binding and retains the child', async () => {

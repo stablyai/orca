@@ -37,7 +37,7 @@ export function setJournalInputOrder(state: JournalReducerState, owner: JournalI
 
 /** Own admission places and shared command witnesses are reconstructed by the journal fold. */
 export class JournalInputOrder {
-  private readonly links = new JournalSubmissionLinks()
+  readonly links = new JournalSubmissionLinks()
   private reconstructing = false
   private legacyPlaces = 0
   private readonly recoveryOwed = new Set<string>()
@@ -248,7 +248,7 @@ export class JournalInputOrder {
 
   private refresh(state: JournalReducerState, id: string): void {
     const entry = state.submissions.get(id)
-    this.links.refresh(id, entry)
+    this.links.refresh(id, entry, state.items)
     if (entry?.dispatchState === 'pending' || entry?.dispatchState === 'unknown') {
       if (this.unsettled.get(id) !== entry) {
         this.unsettled.set(id, entry)

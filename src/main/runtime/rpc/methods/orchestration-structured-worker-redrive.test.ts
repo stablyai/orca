@@ -333,11 +333,13 @@ describe('the structured redrive publication edge', () => {
       }
       try {
         await server.start()
-        // A send that throws stamps nothing; the session's next journal edge sends it again.
+        // A send that throws keeps its reservation; the session's next journal edge finds it never
+        // admitted and sends it again under the same id.
         const send = vi.spyOn(host, 'send').mockRejectedValueOnce(new Error('provider unavailable'))
         const messageId = await sendMail('Continue after the current turn')
         expect(send).toHaveBeenCalledTimes(1)
-        expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0, delivered_at: null })
+        expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0 })
+        expect(state.db.getStructuredMailSends(mailbox)).toHaveLength(1)
         await worker.append('provider-available')
         await vi.advanceTimersByTimeAsync(300)
         expect(notify).toHaveBeenCalledWith(worker.identity.sessionId)
@@ -437,7 +439,8 @@ describe('the structured redrive publication edge', () => {
       await vi.advanceTimersByTimeAsync(300)
       expect(send).toHaveBeenCalledTimes(1)
       expect(dispatch).not.toHaveBeenCalled()
-      expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0, delivered_at: null })
+      expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0 })
+      expect(state.db.getStructuredMailSends(mailbox)).toHaveLength(1)
       const attached = host.collaboratorsForTests().sessions.get(identity.sessionId)
       if (mode === 'kept-released-owner') {
         const child = attached?.child
@@ -526,7 +529,9 @@ describe('the structured redrive publication edge', () => {
         presentation
       )
       expect(savedSession).toEqual(savedBefore)
-      expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0, delivered_at: null })
+      // The send that threw keeps its reservation for the retry.
+      expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0 })
+      expect(state.db.getStructuredMailSends(mailbox)).toHaveLength(1)
       if (mode === 'new-turn') {
         await journal.appendTombstone(newTurn, { fence: lease.runtimeFence })
         await vi.advanceTimersByTimeAsync(300)

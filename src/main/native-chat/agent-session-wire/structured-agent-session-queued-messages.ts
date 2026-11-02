@@ -17,9 +17,9 @@ import {
 } from './structured-agent-session-current-work'
 import {
   QueuedMessageNotConsumableError,
-  QueuedMessageNotOwedError,
-  type QueuedMessageOwed
+  QueuedMessageNotOwedError
 } from '../agent-session-journal/queued-message-consume-error'
+import { queuedMailUnavailable, queuedMessageOwed } from './structured-agent-session-queued-mail'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
 import type {
   StructuredAgentSessionHostDeps,
@@ -68,12 +68,20 @@ export function structuredQueueHold(input: StructuredQueueGateInput): Structured
 
 /** Publish the drain’s live pick; backlog itself never gates a lone draft. */
 export function nextStructuredQueuedMessage(
-  input: StructuredQueueGateInput & { journal: AgentSessionJournal }
+  input: StructuredQueueGateInput & {
+    journal: AgentSessionJournal
+    unavailable?: (card: QueuedMessageRow) => boolean
+  }
 ): QueuedMessageRow | null {
   if (structuredInputExecutionWorking(input.journal, input.work)) {
     return null
   }
-  const selected = selectStructuredAgentSessionInput(input.journal)
+  const selected = selectStructuredAgentSessionInput(
+    input.journal,
+    undefined,
+    false,
+    input.unavailable
+  )
   const next = selected.kind === 'card' ? selected.card : null
   // Check cheap working state before the prompt scan on every streamed frame.
   if (next === null) {
@@ -197,17 +205,6 @@ export async function maybeQueueStructuredAgentSessionSend(
   }
 }
 
-/** An agent's card asks whether it is still owed when it is handed over; a person's always is. */
-export function queuedMessageOwed(
-  deps: Pick<StructuredAgentSessionHostDeps, 'queuedAgentMessageOwed'>,
-  sessionId: string,
-  body: AgentJournalMessageItem
-): (() => QueuedMessageOwed) | undefined {
-  const { from } = body
-  const decide = deps.queuedAgentMessageOwed
-  return from?.kind === 'agent' && decide ? () => decide(sessionId, from) : undefined
-}
-
 export type QueuedMessageDrainDeps = {
   sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
   getRecord: (sessionId: string) => AgentSessionRecord | null
@@ -278,13 +275,15 @@ export class StructuredAgentSessionQueuedMessageDrain {
     const fence = this.deps.conversationFence(sessionId)
     const record = this.deps.getRecord(sessionId)
     const work = this.deps.currentWork(sessionId)
-    const next = work ? nextStructuredQueuedMessage({ journal, record, work }) : null
+    const deps = { queuedAgentMessageOwed: this.deps.owed }
+    const unavailable = queuedMailUnavailable(deps, sessionId)
+    const next = work ? nextStructuredQueuedMessage({ journal, record, work, unavailable }) : null
     if (this.disposed || !next) {
       return
     }
     // Fresh submission IDs link drafts through queuedMessageId, never equality.
     const submissionId = createStructuredAgentSessionOperationId(randomUUID)
-    const owed = queuedMessageOwed({ queuedAgentMessageOwed: this.deps.owed }, sessionId, next.body)
+    const owed = queuedMessageOwed(deps, sessionId, next.body)
     try {
       await journal.appendSubmission(
         {
@@ -301,19 +300,26 @@ export class StructuredAgentSessionQueuedMessageDrain {
           messageId: next.messageId,
           expect: 'waiting',
           yieldsToPause: true,
+          unavailable,
           ...(owed && { owed })
         },
         this.deps.submissionReceipt?.(sessionId)
       )
     } catch (error) {
       if (error instanceof QueuedMessageNotConsumableError) {
+        if (next.messageId !== journal.queuedMessages.nextInputCard()?.messageId) {
+          // It was chosen beside held mail, which may be decidable now: choose again.
+          this.schedule(sessionId)
+        }
         return
       }
       if (error instanceof QueuedMessageNotOwedError) {
         // No longer owed here: drop it without a turn; its withdrawal commit wakes the next card.
-        // One that cannot be decided now waits at the head for a later wake.
+        // One that cannot be decided now keeps its place; the next wake passes over it.
         if (error.owed === 'stale') {
           await journal.queuedMessages.withdraw([next.messageId])
+        } else {
+          this.schedule(sessionId)
         }
         return
       }

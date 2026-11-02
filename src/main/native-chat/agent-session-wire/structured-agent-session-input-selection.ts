@@ -13,7 +13,9 @@ export type StructuredInputSelection =
 export function selectStructuredAgentSessionInput(
   journal: AgentSessionJournal,
   currentInput?: string,
-  unanswerable = false
+  unanswerable = false,
+  /** Mail at the head that cannot be decided now; the person's cards behind it go on. */
+  unavailable?: (card: QueuedMessageRow) => boolean
 ): StructuredInputSelection {
   const queued = journal.inputOrder.firstQueued()
   const current = currentInput ? journal.submission(currentInput) : undefined
@@ -22,7 +24,7 @@ export function selectStructuredAgentSessionInput(
     (!queued || current.submittedSequence! < queued.submittedSequence!)
       ? current
       : queued
-  const nextCard = journal.queuedMessages.nextInputCard()
+  const nextCard = journal.queuedMessages.nextInputCard(true, unavailable)
   if (!selected) {
     return nextCard ? { kind: 'card', card: nextCard } : { kind: 'none' }
   }

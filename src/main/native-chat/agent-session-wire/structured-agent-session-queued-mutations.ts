@@ -22,7 +22,9 @@ import {
   type MutationPlan
 } from './structured-agent-session-mutation-plans'
 import type { CommandReceiptResult } from '../agent-session-journal/command-receipt-schema'
-import { queuedMessageOwed, structuredQueueHold } from './structured-agent-session-queued-messages'
+import { structuredQueueHold } from './structured-agent-session-queued-messages'
+import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { queuedMessageOwed } from './structured-agent-session-queued-mail'
 import { resumeStructuredQueue } from './structured-agent-session-queued-pause'
 import {
   mutateStructuredAgentSession,
@@ -140,14 +142,27 @@ export function sendQueuedStructuredAgentMessage(
         if (error instanceof QueuedMessageNotConsumableError) {
           return invalid('The queued message changed underneath this Send; try again.')
         }
+        // Typed reasons, so desktop and phone say what happened: one notice, never this prose.
         if (error instanceof QueuedMessageNotOwedError) {
           if (error.owed === 'unavailable') {
-            return invalid(
-              "Orca can't confirm this message still applies right now; try again shortly."
-            )
+            return {
+              ok: false,
+              refusal: refuse(
+                'execution_owner_reconciling',
+                { reason: 'hostReconciling' },
+                "Orca can't confirm this message still applies right now."
+              )
+            }
           }
           await ctx.journal.queuedMessages.withdraw([messageId])
-          return invalid('This message no longer applies to this chat, so it was removed.')
+          return {
+            ok: false,
+            refusal: refuse(
+              'agent_session_operation_invalid',
+              { reason: 'continuationSuperseded' },
+              'This message no longer applies to this chat, so it was removed.'
+            )
+          }
         }
         throw error
       }

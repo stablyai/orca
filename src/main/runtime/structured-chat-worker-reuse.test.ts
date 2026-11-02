@@ -1,6 +1,7 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
 // A finished structured worker takes follow-up work in its own chat through worker-start --terminal <handle>, or a send to its Dispatch.
 
+import { structuredMailboxCustody } from './orchestration/structured-session-mail-target'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
@@ -88,6 +89,7 @@ async function finishedStructuredWorker(
   taskId: string,
   settle: 'done' | 'abandon' | 'none' = 'done'
 ) {
+  // The worker's own journal watches; the coordinator's mail watches come and go with its mail.
   const disposed = vi.fn()
   const observe = host.observeJournalPublications.bind(host)
   const observed = vi
@@ -95,7 +97,9 @@ async function finishedStructuredWorker(
     .mockImplementation((id, listener) => {
       const dispose = observe(id, listener)
       return () => {
-        disposed()
+        if (id !== COORDINATOR) {
+          disposed()
+        }
         dispose()
       }
     })
@@ -186,8 +190,13 @@ describe('a finished structured worker', () => {
 
     expect(await reportDone(identity.sessionId, followUp, dispatchId)).toMatchObject({ ok: true })
     expect(disposed).not.toHaveBeenCalled()
+    expect(structuredMailboxCustody(identity.handle, db)).toMatchObject({
+      sessionId: identity.sessionId
+    })
     await call('orchestration.workerRelease', { dispatch: dispatchId }, { sessionId: COORDINATOR })
     await vi.waitFor(() => expect(disposed).toHaveBeenCalledTimes(1), WAIT)
+    // Released: mail to its handle is no longer this chat's, so a card for it never holds the person's queue.
+    expect(structuredMailboxCustody(identity.handle, db)).toBe('elsewhere')
   })
 
   it('given new work after abandon, watches its journal again so parked mail is retried', async () => {

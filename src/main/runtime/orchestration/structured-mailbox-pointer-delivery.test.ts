@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from './db'
 import { OrchestrationStructuredMailboxPointerDelivery } from './structured-mailbox-pointer-delivery'
+import { StructuredMailboxParking } from './structured-mailbox-parking'
 import type {
   StructuredMailboxPointerHost,
   StructuredMailSendState,
@@ -74,13 +75,38 @@ function harness(options: { busy?: boolean } = {}) {
     getStructuredMailSendMailboxes: () => [
       ...new Set([...records.values()].map((row) => row.mailbox_handle))
     ],
-    putStructuredMailSend: (row: StructuredMailSendRow) =>
-      records.has(row.message_id) ? false : (records.set(row.message_id, row), true),
-    replaceStructuredMailSendAttempt: (expected: string, row: StructuredMailSendRow) =>
-      records.get(row.message_id)?.operation_id === expected
-        ? (records.set(row.message_id, row), true)
-        : false,
-    deleteStructuredMailSend: (_handle: string, id: string) => records.delete(id)
+    reserveStructuredMailSend: (row: StructuredMailSendRow, replacing?: string) => {
+      const current = records.get(row.message_id)
+      if (replacing === undefined ? current : current?.operation_id !== replacing) {
+        return false
+      }
+      records.set(row.message_id, row)
+      mail.get(row.message_id)!.delivered_at ??= 'now'
+      return true
+    },
+    releaseStructuredMailSend: (row: StructuredMailSendRow) => {
+      if (records.get(row.message_id)?.operation_id !== row.operation_id) {
+        return false
+      }
+      records.delete(row.message_id)
+      if (!mail.get(row.message_id)!.read) {
+        mail.get(row.message_id)!.delivered_at = null
+      }
+      return true
+    },
+    retireStructuredMailSend: (row: StructuredMailSendRow, consumed: boolean) => {
+      if (records.get(row.message_id)?.operation_id !== row.operation_id) {
+        return false
+      }
+      records.delete(row.message_id)
+      const message = mail.get(row.message_id)!
+      Object.assign(
+        message,
+        { delivered_at: message.delivered_at ?? 'now' },
+        consumed && { read: 1 }
+      )
+      return true
+    }
   }
   const host: StructuredMailboxPointerHost = {
     currentFence: () => 4,
@@ -107,6 +133,7 @@ function harness(options: { busy?: boolean } = {}) {
         : { kind: 'sent' as const, state: 'accepted' as const }
     }),
     observe: vi.fn(async (_sessionId, operationId) => chat.get(operationId) ?? { kind: 'absent' }),
+    wakeQueue: vi.fn(),
     withdraw: vi.fn(async (_sessionId, operationId) => {
       chat.set(operationId, { kind: 'withdrawn' })
       return true
@@ -118,6 +145,7 @@ function harness(options: { busy?: boolean } = {}) {
     resolveStructuredTarget: (handle) =>
       handle === mailbox && !ended ? { sessionId: owner, dispatchId: 'd1' } : null,
     mailboxEnded: () => ended,
+    unresolvedCustody: () => 'unverifiable',
     getCliCommand: () => 'orca-dev',
     senderSnapshot: () => ({ name: 'Coordinator', agent: null }),
     host
@@ -450,14 +478,28 @@ describe('structured mailbox delivery: each message whole', () => {
     expect(h.mail.get('m1')).toMatchObject({ read: 0, delivered_at: 'now' })
     expect(h.records.size).toBe(0)
   })
+
+  it('consumes an oversized message when the person deletes its pointer card', async () => {
+    const h = harness({ busy: true })
+    h.receive('m1', 'x'.repeat(MAX_PROMPT_BYTES))
+    await h.deliver()
+    h.settle('m1', { kind: 'withdrawn' })
+    await h.journal()
+    expect(h.mail.get('m1')).toMatchObject({ read: 1, delivered_at: 'now' })
+    expect(h.records.size).toBe(0)
+  })
 })
 
 describe('structured mailbox delivery across a real database close and reopen', () => {
   it.each([
-    ['still waits as a card', { kind: 'waiting' }, 0],
-    ['was handed over while Orca was down', { kind: 'accepted' }, 0],
-    ['was recorded but never admitted', { kind: 'absent' }, 1]
-  ] as const)('settles a send that %s', async (_label, state, sends) => {
+    ['still waits as a card', { kind: 'waiting' }, true, 0],
+    ['was handed over while Orca was down', { kind: 'accepted' }, true, 0],
+    // Reserved, then Orca stopped before the host call: the same id is admitted.
+    ['was reserved but never admitted', { kind: 'absent' }, true, 1],
+    // Admitted, then Orca stopped before an older build stamped it: never sent again.
+    ['was admitted before an older build stamped it', { kind: 'unknown' }, false, 0],
+    ['was handed over before an older build stamped it', { kind: 'accepted' }, false, 0]
+  ] as const)('settles a send that %s', async (_label, state, stamped, sends) => {
     // Orca reopens a minute after the send was recorded, well inside the host's admission window.
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(1_757_030_460_000)
@@ -478,15 +520,26 @@ describe('structured mailbox delivery across a real database close and reopen', 
         subject: 'report'
       })
       const operationId = '1757030400000-0123456789abcdef0123456789abcdef'
-      db.putStructuredMailSend({
+      const row = {
         mailbox_handle: mailbox,
         message_id: message.id,
         session_id: 'session-1',
         operation_id: operationId,
         minted_at_ms: 1_757_030_400_000,
         fence: 4
-      })
-      db.markAsDelivered([message.id], mailbox)
+      }
+      if (stamped) {
+        expect(db.reserveStructuredMailSend(row)).toBe(true)
+      } else {
+        db.db
+          .prepare(
+            `INSERT INTO structured_mail_sends
+               (mailbox_handle, message_id, session_id, operation_id, minted_at_ms, fence)
+             VALUES (?, ?, ?, ?, ?, ?)`
+          )
+          .run(mailbox, message.id, 'session-1', operationId, row.minted_at_ms, 4)
+      }
+      expect(db.getMessageById(message.id)?.read).toBe(0)
       db.close()
       db = new OrchestrationDb(file)
       const reopened = db
@@ -502,6 +555,7 @@ describe('structured mailbox delivery across a real database close and reopen', 
           currentFence: () => 4,
           watchJournal: () => () => {},
           observe: async () => state,
+          wakeQueue: () => {},
           withdraw: async () => true,
           send
         }
@@ -516,12 +570,51 @@ describe('structured mailbox delivery across a real database close and reopen', 
         // Never admitted: the same id is admitted, so the host's own replay protection holds.
         expect(send.mock.calls[0]?.[0]).toMatchObject({ operationId })
       }
-      expect(db.getMessageById(message.id)?.read).toBe(state.kind === 'accepted' ? 1 : 0)
-      expect(db.getStructuredMailSends(mailbox)).toHaveLength(state.kind === 'accepted' ? 0 : 1)
+      const settled = db.getMessageById(message.id)
+      expect(settled?.read).toBe(state.kind === 'accepted' ? 1 : 0)
+      // Whatever it became, the message is never selectable for another send.
+      expect(settled?.delivered_at).not.toBeNull()
+      const retired = state.kind === 'accepted' || state.kind === 'unknown'
+      expect(db.getStructuredMailSends(mailbox)).toHaveLength(retired ? 0 : 1)
     } finally {
       db.close()
       rmSync(directory, { recursive: true, force: true })
       vi.useRealTimers()
     }
   })
+})
+
+describe('parked mailboxes and their journal watches', () => {
+  it.each([4, 40])(
+    'wakes one of %i chats with only its own mail, and ends its watch with it',
+    (count) => {
+      const unwatched: string[] = []
+      const callbacks = new Map<string, () => void>()
+      const woken: string[] = []
+      const parking = new StructuredMailboxParking({
+        watchJournal: (sessionId, onActivity) => {
+          callbacks.set(sessionId, onActivity)
+          return () => unwatched.push(sessionId)
+        },
+        onActivity: (sessionId) => {
+          woken.push(...parking.parkedFor(sessionId).map(([mailbox]) => mailbox))
+        }
+      })
+      for (let chat = 0; chat < count; chat += 1) {
+        parking.park(`dispatch:${chat}`, `session-${chat}`)
+      }
+      callbacks.get('session-1')!()
+      expect(woken).toEqual(['dispatch:1'])
+      // The last mailbox leaving ends the watch at once, with no further journal write.
+      parking.unpark('dispatch:1')
+      expect(unwatched).toEqual(['session-1'])
+      // A mailbox that moves to another chat leaves its old chat's watch behind.
+      parking.park('dispatch:2', 'session-3')
+      expect(unwatched).toEqual(['session-1', 'session-2'])
+      expect(parking.parkedFor('session-3').map(([mailbox]) => mailbox)).toEqual([
+        'dispatch:3',
+        'dispatch:2'
+      ])
+    }
+  )
 })

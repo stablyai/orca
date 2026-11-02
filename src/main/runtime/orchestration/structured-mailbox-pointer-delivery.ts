@@ -16,9 +16,9 @@ import type { StructuredMailSendRow } from './db/messages/structured-mail-send-s
 import type { QueuedMessageOwed } from '../../native-chat/agent-session-journal/queued-message-consume-error'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { StructuredMailboxParking } from './structured-mailbox-parking'
+import { structuredMailboxCustody } from './structured-session-mail-target'
 import {
   hasStructuredMailSends,
-  retireStaleMailSend,
   settleStructuredMailSends,
   structuredMailboxEnded,
   structuredMailOwed,
@@ -38,6 +38,8 @@ type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageW
   resolveStructuredTarget: (mailboxHandle: string) => StructuredPointerTarget | null
   /** Whether nothing can own the mailbox again; read from the database unless a test supplies it. */
   mailboxEnded?: (mailboxHandle: string) => boolean
+  /** Why no chat resolves a mailbox; read from the database unless a test supplies it. */
+  unresolvedCustody?: (mailboxHandle: string) => 'elsewhere' | 'unverifiable'
   /** The CLI name the recipient runs, for the reply line and the oversized-message pointer. */
   getCliCommand: () => OrchestrationCliCommand
   /** What Orca calls a sender now, snapshotted onto the message; null when it has no name. */
@@ -55,8 +57,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
   private readonly rerun = new Map<string, Set<string>>()
   private readonly parking = new StructuredMailboxParking({
     watchJournal: (sessionId, onActivity) => this.deps.host.watchJournal(sessionId, onActivity),
-    onActivity: (sessionId) => this.onJournalActivity(sessionId),
-    busy: () => this.inFlight.size > 0
+    onActivity: (sessionId) => this.onJournalActivity(sessionId)
   })
 
   constructor(private readonly deps: StructuredPointerDeliveryDependencies<TWaiter>) {}
@@ -76,12 +77,11 @@ export class OrchestrationStructuredMailboxPointerDelivery<
   /** Retry mail parked on this session's settlement or reattach journal edge. */
   onJournalActivity(sessionId: string): void {
     for (const [mailboxHandle, parked] of this.parking.parkedFor(sessionId)) {
-      const target = this.deps.resolveStructuredTarget(mailboxHandle)
-      if (target?.sessionId !== sessionId) {
-        // This journal cannot wake a mailbox moved elsewhere or currently unresolved; retain its own retry edge.
-        continue
+      // A mailbox that moved is parked again under its new owner by the pass, if it still needs to be.
+      // An unresolved one stays parked here: its sends still settle (a Dispatch that ended releases them).
+      if (this.deps.resolveStructuredTarget(mailboxHandle)) {
+        this.parking.unpark(mailboxHandle)
       }
-      this.parking.unpark(mailboxHandle)
       void this.deliver(mailboxHandle, parked.reservedTypes).catch(() => undefined)
     }
   }
@@ -122,6 +122,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
           mailboxHandle,
           messageIds,
           resolve: this.deps.resolveStructuredTarget,
+          unresolved: (handle) => this.unresolved(handle),
           ended: (handle) => this.ended(handle)
         })
       : 'unavailable'
@@ -149,7 +150,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       for (const id of messageIds) {
         const row = db.getStructuredMailSend(mail.mailbox, id)
         if (row?.session_id === sessionId) {
-          retireStaleMailSend(db, row)
+          db.releaseStructuredMailSend(row)
         }
       }
       // After the queue's write lane unwinds.
@@ -196,6 +197,10 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       })
       let target = this.deps.resolveStructuredTarget(mailboxHandle)
       if (!target || this.ended(mailboxHandle)) {
+        if (!hasStructuredMailSends(db, mailboxHandle)) {
+          // Nothing of it is left in any chat: no edge is owed to it.
+          this.parking.unpark(mailboxHandle)
+        }
         return
       }
       for (const again of resend) {
@@ -275,15 +280,12 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       session_id: sessionId,
       operation_id:
         again && !again.renew ? again.row.operation_id : mintAgentSessionOperationId(Date.now()),
-      minted_at_ms: Date.now(),
+      minted_at_ms: again && !again.renew ? again.row.minted_at_ms : Date.now(),
       fence
     }
-    // Recorded before the send, so a crash after it lands finds the card instead of sending twice.
-    // Only the pass whose record lands sends: two passes that saw one failure cannot both repeat it.
-    const recorded = !again
-      ? db.putStructuredMailSend(attempt)
-      : !again.renew || db.replaceStructuredMailSendAttempt(again.row.operation_id, attempt)
-    if (!recorded) {
+    // Reserved before the send, with its delivered stamp, so a crash after it lands finds the card
+    // instead of sending twice. Only the pass whose reservation lands sends.
+    if (!db.reserveStructuredMailSend(attempt, again?.row.operation_id)) {
       return 'next'
     }
     let owed: QueuedMessageOwed = 'owed'
@@ -306,37 +308,34 @@ export class OrchestrationStructuredMailboxPointerDelivery<
         )
       }
     })
-    // Nothing reached the chat: mail still here is selected again, by whoever owns it then.
-    const unsent = () => {
-      db.deleteStructuredMailSend(mailboxHandle, message.id)
-      if (db.areUnreadMessages(mailboxHandle, [message.id])) {
-        db.markAsUndelivered([message.id])
-      }
-    }
     switch (outcome.kind) {
       case 'unattached':
       case 'refused':
-        // Nothing was recorded (a full queue, a detached chat): retry on the session's next edge.
-        unsent()
+        // Refused before admission (a full queue, a detached chat): retry on the session's next edge.
+        db.releaseStructuredMailSend(attempt)
         return 'park'
       case 'obsolete':
-        unsent()
+        db.releaseStructuredMailSend(attempt)
         return owed === 'unavailable' ? 'park' : 'next'
       case 'queued':
-        db.markAsDelivered([message.id], mailboxHandle)
         return 'next'
       case 'sent':
-        db.markAsDelivered([message.id], mailboxHandle)
-        if (outcome.state === 'accepted' && whole) {
-          db.markAsReadAndDelivered([message.id])
-        }
         // In doubt, including a resend the host answered from an earlier admission: never again.
         if (outcome.state === 'accepted' || outcome.state === 'unknown') {
-          db.deleteStructuredMailSend(mailboxHandle, message.id)
+          db.retireStructuredMailSend(attempt, outcome.state === 'accepted' && whole)
         }
         // Pending or rejected: the record decides on a later pass.
         return 'next'
     }
+  }
+
+  /** Read from the database: a resolver that found no chat where the database names one cannot decide. */
+  private unresolved(mailboxHandle: string): 'elsewhere' | 'unverifiable' {
+    if (this.deps.unresolvedCustody) {
+      return this.deps.unresolvedCustody(mailboxHandle)
+    }
+    const custody = structuredMailboxCustody(mailboxHandle, this.deps.getDb())
+    return custody === 'elsewhere' ? 'elsewhere' : 'unverifiable'
   }
 
   private ended(mailboxHandle: string): boolean {

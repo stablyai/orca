@@ -55,9 +55,15 @@ async function reportResult(f: Fixture, worker: Worker) {
   return {
     unsubscribe,
     notices,
-    /** The worker's result mail, while the coordinator has not been handed it. */
-    undelivered: () =>
-      db.getUnreadMessages(mailbox, ['worker_done']).filter((row) => row.delivered_at === null),
+    /** The worker's result mail while it is still owed to the coordinator: unread, and never handed
+     *  over or held by a send that did not land. */
+    owed: () =>
+      db
+        .getUnreadMessages(mailbox, ['worker_done'])
+        .filter(
+          (row) =>
+            row.delivered_at === null || db.getStructuredMailSend(mailbox, row.id) !== undefined
+        ),
     settled: async () => {
       let settled: ReturnType<typeof notices>[number] | undefined
       await vi.waitFor(() => {
@@ -101,7 +107,7 @@ describe('a coordinator chat whose worker is still running when the account is s
       expect(f.rig.host.childAccountHome(PARENT)).toEqual(f.homeB)
       expect(f.launches.at(-1)).toBe(f.homeB.path)
       expect(f.rig.adapter.acquire).toHaveBeenCalledTimes(1)
-      expect(result.undelivered()).toEqual([])
+      expect(result.owed()).toEqual([])
 
       await f.send('keep going')
       expect(f.rig.host.childAccountHome(PARENT)).toEqual(f.homeB)
@@ -216,14 +222,14 @@ describe('a worker result launches a resting coordinator exactly as a message fr
           expect(f.launches.at(-1)).toBe(home(f))
           expect(existsSync(f.homeA.path)).toBe(f.accounts().includes('a'))
           if (outcome.dispatchState === 'accepted') {
-            expect(result.undelivered()).toEqual([])
+            expect(result.owed()).toEqual([])
             continue
           }
-          // A refused result is never marked handed over; it stays owed to the coordinator.
-          expect(result.undelivered()).toHaveLength(1)
+          // A refused result stays owed to the coordinator: unread, its send kept for one more try.
+          expect(result.owed()).toHaveLength(1)
           if (recover) {
             recover(f)
-            expect(result.undelivered()).toHaveLength(1)
+            expect(result.owed()).toHaveLength(1)
             // The user's message comes after the refused result.
             f.rig.clock.now += 1_000
             clock += 1_000
@@ -231,7 +237,7 @@ describe('a worker result launches a resting coordinator exactly as a message fr
             await vi.waitFor(() =>
               expect(result.notices().filter((n) => n.dispatchState === 'accepted')).toHaveLength(1)
             )
-            await vi.waitFor(() => expect(result.undelivered()).toEqual([]))
+            await vi.waitFor(() => expect(result.owed()).toEqual([]))
             expect(f.rig.host.childAccountHome(PARENT)).toEqual(f.homeA)
           }
         } finally {

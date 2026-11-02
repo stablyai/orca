@@ -8,6 +8,8 @@ import { structuredAgentSessionMessageSendMutation } from '../../shared/agent-se
 import { formatOrcaSessionAddress } from '../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
+import type { AgentMessageSource } from '../../shared/agent-session/agent-session-message-source'
+import { agentSessionRefusalNotice } from '../../shared/agent-session/failures/agent-session-refusal-notice'
 import { idOf } from './rpc/orchestration-session-caller-test-fixture'
 import { operationId } from './structured-chat-coordinator-fake-codex-fixture'
 import {
@@ -41,6 +43,28 @@ async function busyChat(sessionId: string) {
 
 function journalOf(sessionId: string): AgentSessionJournal {
   return host.collaboratorsForTests().sessions.get(sessionId)!.journal
+}
+
+/** Queue a card behind the running turn: the person's own, or another agent's with `from`. */
+async function queueCard(text: string, from?: AgentMessageSource): Promise<string> {
+  const mutation = structuredAgentSessionMessageSendMutation({
+    sessionId: COORDINATOR,
+    clientOperationId: operationId(),
+    expectedRuntimeFence: host.deps.store.getConversation(COORDINATOR)!.currentFence,
+    body: {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text }],
+      ...(from && { from })
+    },
+    delivery: 'queue-if-active'
+  })
+  const queued = await host.send(
+    { callerKey: 'test-surface' },
+    { ...mutation, ...(!from && { userSend: true as const }) }
+  )
+  expect(queued).toMatchObject({ ok: true, value: { queued: { state: 'waiting' } } })
+  return mutation.envelope.clientOperationId
 }
 
 describe('a queued mail card runs only while its chat still owes it', () => {
@@ -142,12 +166,75 @@ describe('a queued mail card runs only while its chat still owes it', () => {
         ...fields
       }
     )
-    expect(sent).toMatchObject({
-      ok: false,
-      refusal: { message: expect.stringContaining('no longer applies') }
-    })
+    if (sent.ok) {
+      throw new Error('a stale Send went through')
+    }
+    // The person is told why the card went, on desktop and phone alike.
+    expect(agentSessionRefusalNotice(sent.refusal, 'send', { agentName: 'Codex' })).toContain(
+      'This chat has moved on.'
+    )
     expect(await queuedCardTexts()).toEqual([])
     expect(chat.turns).toHaveLength(1)
+  })
+
+  it("lets the person's cards pass mail it cannot decide on now, then hands the mail over first once it can", async () => {
+    const chat = await busyChat(COORDINATOR)
+    const { taskId } = await coordinatorRunAndTask()
+    await finishWorker(taskId)
+    await vi.waitFor(async () => expect(await queuedCardTexts()).toHaveLength(1), WAIT)
+    await queueCard('first question of mine')
+    await queueCard('second question of mine')
+    const unreadable = vi.spyOn(db, 'areUnreadMessages').mockImplementation(() => {
+      throw new Error('database unavailable')
+    })
+    await settleTurn(COORDINATOR, 0)
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
+    // The person's first card went, in their order; the report and their second card still wait.
+    expect(turnText(chat.turns[1]!)).toContain('first question of mine')
+    const waiting = await queuedCardTexts()
+    expect(waiting).toHaveLength(2)
+    expect(waiting[0]).toContain('(worker_done)')
+    unreadable.mockRestore()
+    await settleTurn(COORDINATOR, 1)
+    // Readable again: the older report goes before the person's later card.
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(3), WAIT)
+    expect(isWholeMail(turnText(chat.turns[2]!))).toBe(true)
+    await settleTurn(COORDINATOR, 2)
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(4), WAIT)
+    expect(turnText(chat.turns[3]!)).toContain('second question of mine')
+  })
+
+  it('hands a Task over without opening the mail database', async () => {
+    const chat = await busyChat(COORDINATOR)
+    await queueCard('Do the assigned task', {
+      kind: 'agent',
+      senders: [],
+      orchestration: { message: 'task', runId: 'run-task', taskId: 'task', dispatchId: 'd-task' }
+    })
+    const open = vi.spyOn(runtime, 'getExistingOrchestrationDb').mockImplementation(() => {
+      throw new Error('database cannot open')
+    })
+    await settleTurn(COORDINATOR, 0)
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
+    expect(turnText(chat.turns[1]!)).toContain('Do the assigned task')
+    expect(open).toHaveBeenCalled()
+  })
+
+  it('withdraws a report card once its Run moves to a terminal, so the terminal can be pointed at it', async () => {
+    await busyChat(COORDINATOR)
+    const { runId, taskId } = await coordinatorRunAndTask()
+    await finishWorker(taskId)
+    await vi.waitFor(async () => expect(await queuedCardTexts()).toHaveLength(1), WAIT)
+    db.bindRun({
+      runId,
+      coordinatorHandle: 'term_taker',
+      coordinatorPaneKey: 'tab_taker:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    })
+    runtime.withdrawStaleChatMail()
+    await vi.waitFor(async () => expect(await queuedCardTexts()).toEqual([]), WAIT)
+    await vi.waitFor(() => expect(db.getStructuredMailSends(`run:${runId}`)).toEqual([]), WAIT)
+    // Unread and undelivered again: the terminal's own lane selects it; nothing marked it read.
+    expect(db.getUnreadMessages(`run:${runId}`)).toMatchObject([{ read: 0, delivered_at: null }])
   })
 
   it('sends a report refused for queue room once the queue frees room, and never spins meanwhile', async () => {
@@ -173,7 +260,11 @@ describe('a queued mail card runs only while its chat still owes it', () => {
     const send = vi.spyOn(host, 'send')
     await finishWorker(taskId)
     await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1), WAIT)
-    expect(db.getUnreadMessages(`run:${runId}`)).toMatchObject([{ delivered_at: null }])
+    // The refusal releases the reservation made before the send.
+    await vi.waitFor(
+      () => expect(db.getUnreadMessages(`run:${runId}`)).toMatchObject([{ delivered_at: null }]),
+      WAIT
+    )
     // Unrelated journal writes do not retry a refusal into a loop.
     await journalOf(COORDINATOR).appendQueueResume(
       host.deps.store.getConversation(COORDINATOR)!.currentFence
@@ -238,7 +329,7 @@ describe('a queued mail card runs only while its chat still owes it', () => {
       runtime.deliverPendingMessagesForHandle(`run:${runId}`)
       await vi.waitFor(async () => expect(await queuedCardTexts()).toHaveLength(count), WAIT)
 
-      const facts = vi.spyOn(host, 'sendFacts')
+      const facts = vi.spyOn(host, 'sendAnswer')
       const snapshots = vi.spyOn(host, 'journalSnapshot')
       const histories = vi.spyOn(journal, 'submissions')
       const sends = vi.spyOn(host, 'send')

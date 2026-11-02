@@ -194,6 +194,20 @@ export function holdStructuredWorker(
   return { kind: addressable ? 'held' : 'not-held', identity, running: located.running }
 }
 
+/** Who holds a worker handle's mail: this runtime's held worker; someone else (a terminal, a released
+ *  or unknown worker); or a session that cannot be verified now. */
+export function structuredWorkerCustody(
+  handle: string,
+  db: OrchestrationDb | null | undefined
+): StructuredWorkerAuthority | 'elsewhere' | 'unverifiable' {
+  const identity = resolveStructuredWorkerIdentity(handle, db)
+  const hold = identity ? holdStructuredWorker(identity, db) : null
+  if (hold?.kind === 'unverifiable') {
+    return 'unverifiable'
+  }
+  return hold?.kind === 'held' ? { identity: hold.identity, running: hold.running } : 'elsewhere'
+}
+
 /** A worker this runtime owns and its orchestration has not released, with its running session. */
 export function resolveStructuredWorkerAuthority(
   handle: string,

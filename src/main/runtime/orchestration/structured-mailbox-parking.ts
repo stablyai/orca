@@ -1,4 +1,5 @@
-/** Mailboxes waiting for their chat's next journal edge, and the journal watch each such chat keeps. */
+/** Mailboxes waiting for their chat's next journal edge, indexed by that chat, and the journal watch each
+ *  such chat keeps only while it has one. */
 
 export type ParkedMailbox = {
   sessionId: string
@@ -7,7 +8,8 @@ export type ParkedMailbox = {
 
 export class StructuredMailboxParking {
   /** Retain the parked session id: transient resolution failure must not erase unrelated workers' retry edges. */
-  private readonly parked = new Map<string, ParkedMailbox>()
+  private readonly parked = new Map<string, Map<string, ParkedMailbox>>()
+  private readonly sessionOf = new Map<string, string>()
   /** Sessions with parked mail hear their own journal, coordinators included, not only status edges. */
   private readonly watches = new Map<string, () => void>()
 
@@ -16,13 +18,17 @@ export class StructuredMailboxParking {
       /** Coalesced journal publications of a session; returns the unsubscribe. */
       watchJournal: (sessionId: string, onActivity: () => void) => () => void
       onActivity: (sessionId: string) => void
-      /** A pass is running and may park again. */
-      busy: () => boolean
     }
   ) {}
 
   park(mailboxHandle: string, sessionId: string, reservedTypes?: ReadonlySet<string>): void {
-    this.parked.set(mailboxHandle, { sessionId, reservedTypes })
+    if (this.sessionOf.get(mailboxHandle) !== sessionId) {
+      this.unpark(mailboxHandle)
+    }
+    const own = this.parked.get(sessionId) ?? new Map<string, ParkedMailbox>()
+    own.set(mailboxHandle, { sessionId, reservedTypes })
+    this.parked.set(sessionId, own)
+    this.sessionOf.set(mailboxHandle, sessionId)
     if (!this.watches.has(sessionId)) {
       this.watches.set(
         sessionId,
@@ -31,39 +37,39 @@ export class StructuredMailboxParking {
     }
   }
 
+  /** A session's watch ends with its last parked mailbox, retargeted ones included. */
   unpark(mailboxHandle: string): void {
-    this.parked.delete(mailboxHandle)
+    const sessionId = this.sessionOf.get(mailboxHandle)
+    if (sessionId === undefined) {
+      return
+    }
+    this.sessionOf.delete(mailboxHandle)
+    const own = this.parked.get(sessionId)
+    own?.delete(mailboxHandle)
+    if (!own?.size) {
+      this.forget(sessionId)
+    }
   }
 
   parkedFor(sessionId: string): [string, ParkedMailbox][] {
-    return Array.from(this.parked).filter(([, parked]) => parked.sessionId === sessionId)
+    return Array.from(this.parked.get(sessionId) ?? [])
   }
 
   forget(sessionId: string): void {
-    for (const [mailboxHandle] of this.parkedFor(sessionId)) {
-      this.parked.delete(mailboxHandle)
+    for (const mailboxHandle of this.parked.get(sessionId)?.keys() ?? []) {
+      this.sessionOf.delete(mailboxHandle)
     }
-    this.unwatch(sessionId)
+    this.parked.delete(sessionId)
+    this.watches.get(sessionId)?.()
+    this.watches.delete(sessionId)
   }
 
   /** A queue freeing room or a card changing is a journal edge, not a status edge. */
   private onWatched(sessionId: string): void {
-    if (this.parkedFor(sessionId).length > 0) {
-      try {
-        this.deps.onActivity(sessionId)
-      } catch {
-        // A database closing under shutdown: the mail stays for the next start's scan.
-      }
-      return
+    try {
+      this.deps.onActivity(sessionId)
+    } catch {
+      // A database closing under shutdown: the mail stays for the next start's scan.
     }
-    // Nothing parked here any more: the watch ends with it, unless a pass may park again.
-    if (!this.deps.busy()) {
-      this.unwatch(sessionId)
-    }
-  }
-
-  private unwatch(sessionId: string): void {
-    this.watches.get(sessionId)?.()
-    this.watches.delete(sessionId)
   }
 }

@@ -1,4 +1,5 @@
 import { journalInputOrder } from './journal-input-order'
+import { selectBesideHeldMail } from './journal-queue-held-mail'
 import { journalQueueAdoptionPlan } from './journal-queue-adoption-plan'
 import {
   journalAttachmentClaimReceipt,
@@ -90,17 +91,20 @@ export class JournalQueuedMessages {
     return this.deps.state().queue.cards.get(messageId) ?? this.legacy.get(messageId) ?? null
   }
 
-  /** Selection reads identity summaries; current values are resolved after edits. */
-  nextInputCard(automatic = true): QueuedMessageRow | null {
+  /** Selection reads identity summaries; current values are resolved after edits. `unavailable`: mail
+   *  the head cannot be decided on now, passed over for the person's cards behind it. */
+  nextInputCard(
+    automatic = true,
+    unavailable?: (card: QueuedMessageRow) => boolean
+  ): QueuedMessageRow | null {
     const state = this.inputState()
     const identity = journalInputOrder(state).head(state, this.deps.reopenFloor())
-    const card = identity ? this.get(identity.messageId) : null
-    return !card ||
-      card.state === 'returned' ||
-      journalInputOrder(state).paused(state, card, this.deps.reopenFloor()) ||
-      (automatic && this.editLeases.isHeld(card.messageId))
-      ? null
-      : card
+    const ready = (next: QueuedMessageRow) =>
+      next.state !== 'returned' &&
+      !journalInputOrder(state).paused(state, next, this.deps.reopenFloor()) &&
+      !(automatic && this.editLeases.isHeld(next.messageId))
+    const head = identity ? this.get(identity.messageId) : null
+    return selectBesideHeldMail(() => this.list(), head, ready, unavailable)
   }
 
   // Card insertion, attachment claims and send receipt must commit together.
@@ -229,7 +233,7 @@ export class JournalQueuedMessages {
       card.fingerprint === input.fingerprint &&
       input.consumedAs !== input.messageId
     if (consumable && input.yieldsToPause) {
-      const next = this.nextInputCard()
+      const next = this.nextInputCard(true, input.unavailable)
       if (next?.messageId === input.messageId) {
         return
       }

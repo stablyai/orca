@@ -14,6 +14,8 @@ export type AgentSessionRecordReader = {
   isSessionUnreadable?: (sessionId: string) => boolean
   /** Absent on a store that predates tab visibility; every session then counts as open. */
   getVisibleSessionTabIndex?: () => { present: boolean; sessionIds: string[] }
+  /** Changes identity whenever any record changes, so lookups derived from all records can be reused. */
+  revision?: () => object
 }
 
 /** Null until the agent-session host is installed; callers that must see records ensure it first. */
@@ -27,12 +29,14 @@ export function conversationRecordReader(store: {
   listConversations: AgentSessionRecordReader['listRecords']
   isSessionUnreadable?: AgentSessionRecordReader['isSessionUnreadable']
   getVisibleSessionTabIndex: NonNullable<AgentSessionRecordReader['getVisibleSessionTabIndex']>
+  revision?: AgentSessionRecordReader['revision']
 }): AgentSessionRecordReader {
   return {
     getRecord: store.getConversation,
     isSessionUnreadable: store.isSessionUnreadable,
     listRecords: store.listConversations,
-    getVisibleSessionTabIndex: store.getVisibleSessionTabIndex
+    getVisibleSessionTabIndex: store.getVisibleSessionTabIndex,
+    revision: store.revision
   }
 }
 

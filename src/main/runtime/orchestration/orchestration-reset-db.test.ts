@@ -58,7 +58,7 @@ describe('OrchestrationDb reset scopes', () => {
       messageId: 'question_1',
       remoteQuestion: true
     })
-    db.putStructuredMailSend({
+    db.reserveStructuredMailSend({
       mailbox_handle: `dispatch:${started.dispatch.id}`,
       message_id: message.id,
       session_id: 'session_1',

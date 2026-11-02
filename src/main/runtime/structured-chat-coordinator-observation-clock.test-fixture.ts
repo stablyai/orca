@@ -28,7 +28,7 @@ export function createCoordinatorMailObservationClock(
       wait: { timeout: number }
     ): Promise<void> {
       // The lane reads each outstanding send by key; a session with none outstanding reads nothing.
-      const reads = vi.spyOn(getHost(), 'sendFacts')
+      const reads = vi.spyOn(getHost(), 'sendAnswer')
       runtime.onStructuredSessionStatusForMail({ sessionId, status: null })
       runtime.onStructuredSessionStatusForMail({ sessionId, status: 'idle' })
       await vi.waitFor(async () => {

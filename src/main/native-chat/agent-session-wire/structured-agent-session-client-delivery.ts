@@ -42,7 +42,7 @@ export class StructuredAgentSessionClientDelivery {
   private readonly turnCompletionFeed
   readonly requestFailures
   private readonly sendSettlement
-  private readonly journalObservers = new Map<string, Set<() => void>>()
+  private readonly journalObservers = new Map<string, Set<(journal: AgentSessionJournal) => void>>()
 
   constructor(
     private readonly sessions: Map<string, StructuredAgentSessionHostSession>,
@@ -248,8 +248,11 @@ export class StructuredAgentSessionClientDelivery {
   }
 
   /** Observe every journal publication, including row-free wakes, without opening a client stream. */
-  observeJournalPublications = (sessionId: string, observer: () => void): (() => void) => {
-    const observers = this.journalObservers.get(sessionId) ?? new Set<() => void>()
+  observeJournalPublications = (
+    sessionId: string,
+    observer: (journal: AgentSessionJournal) => void
+  ): (() => void) => {
+    const observers = this.journalObservers.get(sessionId) ?? new Set<typeof observer>()
     observers.add(observer)
     this.journalObservers.set(sessionId, observers)
     return () => {
@@ -302,7 +305,7 @@ export class StructuredAgentSessionClientDelivery {
     this.queue.onJournalActivity(sessionId, activity)
     for (const observer of this.journalObservers.get(sessionId) ?? []) {
       try {
-        observer()
+        observer(journal)
       } catch (error) {
         this.deps().logger.warn('observing a journal publication failed', {
           scope: 'journal-delivery',

@@ -7,8 +7,6 @@ import type {
   StructuredMailSendState
 } from './structured-mailbox-pointer-host-contract'
 import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentSessionSendSubmission } from '../../../shared/agent-session/agent-session-wire'
-import { dispatchWasWithdrawn } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { mintAgentSessionOperationId } from './structured-pointer-operation-id'
 import {
@@ -17,6 +15,7 @@ import {
 } from './structured-session-pointer-delivery'
 import { sendAgentTurn, type StructuredSessionTurnOutcome } from './send-agent-turn'
 import { subscribeForRedrive } from './structured-session-journal-redrive'
+import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 
 /** Names the dispatch a nudge belongs to on the operation row it writes. */
 export function structuredPointerCallerKey(dispatchId: string): string {
@@ -58,8 +57,7 @@ async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapsh
   }
 }
 
-/** A card's own state, or the handoff it became; a send made at once is its own submission.
- *  Read by key: a lane following many sends never takes a whole-history snapshot for each. */
+/** The host that admitted the send answers for it; this lane only acts on that answer. */
 async function observeMailSend(
   sessionId: string,
   operationId: string
@@ -68,41 +66,11 @@ async function observeMailSend(
   if (!host) {
     return { kind: 'unreadable' }
   }
-  let facts: Awaited<ReturnType<typeof host.sendFacts>>
   try {
-    facts = await host.sendFacts(sessionId, operationId)
+    return await host.sendAnswer(sessionId, operationId)
   } catch {
     // Unreadable proves nothing, least of all that nothing was sent.
     return { kind: 'unreadable' }
-  }
-  const { answer } = facts
-  if (!answer) {
-    return { kind: 'absent' }
-  }
-  if ('queued' in answer && answer.queued) {
-    return answer.queued.state === 'withdrawn' ? { kind: 'withdrawn' } : { kind: 'waiting' }
-  }
-  const submission = agentSessionSendSubmission(answer)
-  switch (submission?.dispatchState) {
-    case 'accepted':
-      return { kind: 'accepted' }
-    case 'pending':
-      return { kind: 'waiting' }
-    case 'rejected': {
-      if (submission.queuedMessageId !== undefined) {
-        // A card's failed handoff: the card is the queue's to retry, never a mailbox copy.
-        return { kind: 'waiting' }
-      }
-      const at = facts.rejectedAt
-      return {
-        kind: 'rejected',
-        cancelled: dispatchWasWithdrawn(submission),
-        // Journal order, never clocks: only a turn handed over, or a clear made, after the rejection settled.
-        recovered: at !== undefined && (facts.acceptedTurnAt > at || facts.clearedAt > at)
-      }
-    }
-    default:
-      return { kind: 'unknown' }
   }
 }
 
@@ -110,6 +78,10 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
   return {
     observe(sessionId, operationId) {
       return observeMailSend(sessionId, operationId)
+    },
+
+    wakeQueue(sessionId) {
+      getStructuredAgentSessionHost()?.wakeQueuedMessages(sessionId)
     },
 
     async withdraw(sessionId, operationId) {
@@ -147,7 +119,19 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
 
     watchJournal(sessionId, onActivity) {
       const host = getStructuredAgentSessionHost()
-      return host ? subscribeForRedrive(host, sessionId, onActivity) : () => {}
+      let seen: string | undefined
+      // Only what mail waits on: cards and queue room, settled handoffs, an accepted turn, a /clear,
+      // a turn's items starting or ending. A streamed token revises an item and changes none of these.
+      const relevant = (journal: AgentSessionJournal) => {
+        const order = journal.inputOrder
+        const state = journal.queuedMessages.inputState()
+        const cleared = state.queuePauseMarks.cleared?.sequence
+        const key = `${journal.queuedMessages.revision()}:${order.version()}:${order.links.version()}:${order.links.acceptedHandover()}:${cleared}:${state.items.size}:${state.tombstones.size}`
+        const changed = key !== seen
+        seen = key
+        return changed
+      }
+      return host ? subscribeForRedrive(host, sessionId, onActivity, relevant) : () => {}
     },
 
     currentFence(sessionId) {
