@@ -36,6 +36,10 @@ vi.mock('../components/use-mobile-diff-review-overflow-actions', () => ({
 }))
 vi.mock('../components/MobilePRSidebar', () => ({ MobilePRSidebar: () => null }))
 vi.mock('../components/RightDrawer', () => ({ RightDrawer: () => null }))
+// The view only hands these to the mocked drawers; the real module pulls the comment and animation tree.
+vi.mock('../components/pr-sidebar/PRCommentsSection', () => ({
+  usePRCommentCardActions: () => undefined
+}))
 vi.mock('expo-haptics', () => ({
   impactAsync: vi.fn(async () => {}),
   notificationAsync: vi.fn(async () => {}),
