@@ -84,6 +84,11 @@ export function createTerminalPaneHibernationActions(
         // Why: killing the PTY with no persisted resume record strands the pane unwakeable; abort instead of hibernating unrecoverably.
         throw new Error('agent_hibernation_capture_missing')
       }
+      if (opts.restoreOnTabOpenOnly) {
+        for (const record of Object.values(sleepingAgentSessionRecords)) {
+          record.restoreOnTabOpenOnly = true
+        }
+      }
       const capture = shutdownBufferCaptures.get(opts.tabId)
       if (capture) {
         try {

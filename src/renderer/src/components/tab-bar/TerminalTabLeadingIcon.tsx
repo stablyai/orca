@@ -1,3 +1,4 @@
+import { Moon } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
@@ -19,6 +20,7 @@ type TerminalTabLeadingIconProps = {
   isActive: boolean
   /** Program-reported 0–100 for the tab's live work; fills the state ring. */
   progress?: number
+  isSleeping?: boolean
 }
 
 type TerminalTabAgentIdentityIconProps = {
@@ -49,7 +51,8 @@ export function TerminalTabLeadingIcon({
   shell,
   showUnreadActivity,
   isActive,
-  progress
+  progress,
+  isSleeping
 }: TerminalTabLeadingIconProps): React.JSX.Element {
   if (showUnreadActivity) {
     return (
@@ -80,6 +83,20 @@ export function TerminalTabLeadingIcon({
         <AgentStateDot state={dotState} size="md" title={null} progress={progress} />
         {/* Keep agent identity beside activity so parallel tabs remain distinguishable. */}
         {agent ? <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} /> : null}
+      </span>
+    )
+  }
+
+  if (isSleeping) {
+    return (
+      <span
+        data-testid="tab-sleeping-indicator"
+        className="mr-1 inline-flex shrink-0 items-center gap-1"
+      >
+        <Moon className="size-3 text-muted-foreground/80" aria-hidden />
+        {agent ? (
+          <TerminalTabAgentIdentityIcon agent={agent} isActive={false} className="opacity-60" />
+        ) : null}
       </span>
     )
   }

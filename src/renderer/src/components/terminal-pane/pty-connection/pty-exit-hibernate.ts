@@ -222,7 +222,12 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
         if (session.pendingHibernatedWakeTarget && !pendingWakeMatches) {
           session.pendingHibernatedWakeTarget = null
         }
-        if (session.deps.isVisibleRef.current || pendingWakeMatches) {
+        // Why: manual tab sleep sets restoreOnTabOpenOnly so an active/visible tab stays asleep until user wakes or focuses.
+        if (
+          (session.deps.isVisibleRef.current &&
+            sleepingRecordEntry.record.restoreOnTabOpenOnly !== true) ||
+          pendingWakeMatches
+        ) {
           // Consume wake after exit if reveal/mobile activation already raced arming; a second user event must not be required.
           queueMicrotask(() => {
             session.consumeHibernatedAgentWake()

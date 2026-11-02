@@ -1,4 +1,4 @@
-import { Pencil, Pin, PinOff, SquareTerminal, Timer, X } from 'lucide-react'
+import { Moon, Pencil, Pin, PinOff, SquareTerminal, Sun, Timer, X } from 'lucide-react'
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -15,6 +15,7 @@ import type { NativeChatTabSession } from './tab-session-history-switch'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { useAllowAutoClose } from './use-allow-auto-close'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
+import { useTabHibernation } from './use-tab-hibernation'
 
 const TAB_COLORS = [
   {
@@ -149,6 +150,15 @@ export function SortableTabContextMenu({
     sessionId: nativeChat?.sessionId
   })
 
+  const { onSleepTab, onWakeTab } = useTabHibernation({
+    open,
+    tabId: tab.id,
+    worktreeId: tab.worktreeId,
+    isActive,
+    groupId,
+    onActivate
+  })
+
   return (
     <ContextMenuContent
       animation="none"
@@ -194,6 +204,18 @@ export function SortableTabContextMenu({
           ? translate('auto.components.tab.bar.SortableTabContextMenu.417722e9c2', 'Unpin Tab')
           : translate('auto.components.tab.bar.SortableTabContextMenu.60f958ec75', 'Pin Tab')}
       </ContextMenuItem>
+      {onSleepTab ? (
+        <ContextMenuItem onSelect={onSleepTab}>
+          <Moon className="size-3.5 shrink-0" />
+          {translate('components.tab.bar.SortableTabContextMenu.sleepTab', 'Sleep Tab')}
+        </ContextMenuItem>
+      ) : null}
+      {onWakeTab ? (
+        <ContextMenuItem onSelect={onWakeTab}>
+          <Sun className="size-3.5 shrink-0" />
+          {translate('components.tab.bar.SortableTabContextMenu.wakeTab', 'Wake Tab')}
+        </ContextMenuItem>
+      ) : null}
       {onAllowAutoClose ? (
         <ContextMenuItem onSelect={onAllowAutoClose}>
           <Timer className="size-3.5 shrink-0" />
