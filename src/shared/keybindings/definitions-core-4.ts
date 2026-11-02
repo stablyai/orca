@@ -17,6 +17,22 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     }
   },
   {
+    id: 'editor.toggleChanges',
+    title: 'Toggle Changes',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'view', 'changes'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'editor.cycleViewMode',
+    title: 'Cycle Editor View',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'view', 'cycle', 'mode'],
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'chat.find',
     title: 'Find in chat',
     group: 'Chat',
