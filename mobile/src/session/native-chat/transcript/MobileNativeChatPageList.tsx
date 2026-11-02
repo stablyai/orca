@@ -29,6 +29,7 @@ import {
   type MobileNativeChatScrollNode
 } from '../../mobile-native-chat-reading-place'
 import type { MobileNativeChatListHandle } from './use-mobile-native-chat-tail-follow'
+import { useMobileNativeChatPreviousAlign } from './use-mobile-native-chat-previous-align'
 import type { MobileNativeChatScrollRoots } from './mobile-native-chat-scroll-roots'
 import { scrollWritesStopMomentum } from '../../mobile-native-chat-scroll-motion'
 import {
@@ -262,23 +263,41 @@ export function MobileNativeChatPageList({
     [isFollowing]
   )
 
+  const align = useMobileNativeChatPreviousAlign({
+    scroller,
+    write,
+    notePlace,
+    latest,
+    revealUndrawn: (index) => {
+      const { keys: drawnKeys, n, rowKeys: keysNow } = latest.current
+      const firstKey = drawnKeys[index]
+      if (firstKey !== undefined) {
+        setDrawn({ scope: keysNow.scope, firstKey, count: n - index })
+      }
+    }
+  })
+
   useImperativeHandle(
     ref,
     () => ({
       scrollToEnd: () => {
+        align.cancelAlign()
         const s = scroller()
         if (s) {
           write(s, 0)
         }
       },
       scrollToOffset: ({ offset }) => {
+        align.cancelAlign()
         const s = scroller()
         if (s) {
           write(s, offset - (s.scrollHeight - s.clientHeight))
         }
-      }
+      },
+      hasPreviousMessage: align.hasPreviousMessage,
+      revealPreviousMessage: align.revealPreviousMessage
     }),
-    [scroller, write]
+    [align.cancelAlign, align.hasPreviousMessage, align.revealPreviousMessage, scroller, write]
   )
 
   const drawnHead = useRef<string | undefined>(undefined)
@@ -288,7 +307,8 @@ export function MobileNativeChatPageList({
       return
     }
     // Chromium keeps a touch scroll's offset from the top, so rows drawn or cut above would carry the reader with them; a write hands the scroll the end-anchored offset.
-    if (keys[first] !== drawnHead.current) {
+    // Skip place restoration while a previous-message jump is easing, or it pulls back to the old line.
+    if (!align.aligning.current && keys[first] !== drawnHead.current) {
       drawnHead.current = keys[first]
       if (!resting() && !scrollWritesStopMomentum()) {
         const top = s.scrollTop
@@ -296,8 +316,11 @@ export function MobileNativeChatPageList({
         write(s, top)
       }
     }
-    keepPlace(s)
+    if (!align.aligning.current) {
+      keepPlace(s)
+    }
     drawAndFetch(s)
+    align.finishPendingAlign(s)
   })
 
   // Content and viewport resizes (e.g. the composer growing) bypass commits; restore nested scroll boxes first.
@@ -310,8 +333,11 @@ export function MobileNativeChatPageList({
     }
     const observer = new ResizeObserver(() => {
       roots?.restoreAll()
-      keepPlace(s)
+      if (!align.aligning.current) {
+        keepPlace(s)
+      }
       drawAndFetch(s)
+      align.finishPendingAlign(s)
     })
     observer.observe(viewport)
     observer.observe(content)
@@ -329,6 +355,7 @@ export function MobileNativeChatPageList({
     }
     // A release that hands over to a fling comes right after a scroll, which still counts.
     const down = () => {
+      align.cancelAlign()
       touching.current = true
       hold()
     }
@@ -345,7 +372,7 @@ export function MobileNativeChatPageList({
       downs.forEach((type) => s.removeEventListener(type, down, options))
       ups.forEach((type) => s.removeEventListener(type, up, options))
     }
-  }, [scroller, hold])
+  }, [align.cancelAlign, scroller, hold])
 
   const scrolled = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -354,7 +381,10 @@ export function MobileNativeChatPageList({
       if (!s) {
         return
       }
-      const byReader = own.current === null || Math.abs(s.scrollTop - own.current) >= 1
+      // The jump's own frames and the momentum stop are not the reader taking over.
+      const byReader =
+        !align.aligning.current &&
+        (own.current === null || Math.abs(s.scrollTop - own.current) >= 1)
       own.current = null
       if (byReader) {
         readerScrolledAt.current = Date.now()

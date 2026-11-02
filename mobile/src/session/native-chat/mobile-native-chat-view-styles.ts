@@ -3,6 +3,8 @@ import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
 const FLOATING_CONTROLS_BOTTOM = spacing.md
+export const NATIVE_CHAT_FAB_SIZE = 38
+export const NATIVE_CHAT_FAB_GAP = spacing.sm
 const LOAD_EARLIER_HEIGHT = 44
 const LOAD_EARLIER_RETRY_HEIGHT = 28
 
@@ -32,9 +34,9 @@ export const styles = themedStyleSheet(() => ({
     position: 'absolute',
     right: spacing.md,
     bottom: FLOATING_CONTROLS_BOTTOM,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
+    width: NATIVE_CHAT_FAB_SIZE,
+    // Room for the previous-message button stacked on the jump-to-latest button.
+    height: NATIVE_CHAT_FAB_SIZE * 2 + NATIVE_CHAT_FAB_GAP
   },
   listWrap: {
     flex: 1,
@@ -63,8 +65,8 @@ export const styles = themedStyleSheet(() => ({
     textAlign: 'center'
   },
   fab: {
-    width: 38,
-    height: 38,
+    width: NATIVE_CHAT_FAB_SIZE,
+    height: NATIVE_CHAT_FAB_SIZE,
     borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
