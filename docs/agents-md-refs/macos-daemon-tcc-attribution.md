@@ -50,9 +50,10 @@ fork.
 
 ## Why a forked daemon that outlives the app is severed
 
-Measured on macOS 27.2 with `tccd`'s own `AUTHREQ_ATTRIBUTION` log (#12971). `tccd` scopes an App
-Data grant to the responsible process's pid, pid version and boot UUID. Terminal children have the
-daemon's responsible process, and `/usr/bin/login` does not change that:
+`tccd` scopes an App Data grant to the responsible process's pid, pid version and boot UUID (read
+from its disassembly on macOS 27.2; a grant was not exercised, because 27.2 denied silently here).
+The responsible column below is measured from `tccd`'s `AUTHREQ_ATTRIBUTION` log (#12971). Terminal
+children have the daemon's responsible process, and `/usr/bin/login` does not change that:
 
 | Host                             | `responsible` for a new child                  | Session grant              |
 | -------------------------------- | ---------------------------------------------- | -------------------------- |
