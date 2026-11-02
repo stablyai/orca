@@ -955,6 +955,7 @@
           "zcode_label": "ZCode",
           "codebuddy_label": "CodeBuddy",
           "jcode_label": "Jcode",
+          "openinterpreter_label": "OpenInterpreter",
           "freebuff_label": "Freebuff",
           "dsh_label": "DeepSeek Harness",
           "qoder_label": "Qoder CLI",

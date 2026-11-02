@@ -50,5 +50,7 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   zcode: 'zcode',
   // DSH uses Cordis plugins rather than a skills --agent target.
   dsh: null,
-  jcode: null
+  jcode: null,
+  // OpenInterpreter has no skills --agent target.
+  'open-interpreter': null
 } satisfies Record<TuiAgent, string | null>
