@@ -51,10 +51,13 @@ Never use vague names like `helpers`, `utils`, `common`, `misc`, or `shared-stuf
 
 Every change must consider these areas:
 
-1. Cross-Platform Support (mac/linux/windows) * Guard platform-specific behavior at runtime; use platform-aware shortcuts, paths, and existing process wrappers. Before changing platform-specific code, processes, shells, shortcuts, paths, or native modules, read [`docs/agents-md-refs/cross-platform-support.md`](./docs/agents-md-refs/cross-platform-support.md).
-2. Remote hosts * Features should work locally and on remote hosts
+1. Cross-Platform Support (mac/linux/windows)
+   - Guard platform-specific behavior at runtime; use platform-aware shortcuts, paths, and existing process wrappers. Before changing platform-specific code, processes, shells, shortcuts, paths, or native modules, read [`docs/agents-md-refs/cross-platform-support.md`](./docs/agents-md-refs/cross-platform-support.md).
+2. Remote hosts
+   - Features should work locally and on remote hosts
 3. Mobile
-4. Folder Workspaces * Don't assume every workspace is a git worktree.
+4. Folder Workspaces
+   - Don't assume every workspace is a git worktree.
 
 # Footguns
 
