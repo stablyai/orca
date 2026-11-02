@@ -1,4 +1,5 @@
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -85,10 +86,10 @@ async function seed(limited = false) {
       { provider: 'orca', clientMessageId: 'context-limit' },
       {
         kind: 'status',
-        text: 'Usage limit',
-        failure: agentSessionFailureFact('usageLimitReached', {
-          usageLimit: { resetsAt: 1800000060000 }
-        })
+        ...agentSessionFailureWords(
+          agentSessionFailureFact('usageLimitReached', { usageLimit: { resetsAt: 1800000060000 } }),
+          { surface: 'row' }
+        )
       },
       { fence, turnScope: { kind: 'turn', turnItemId: 'orca:context-limit-turn' } }
     )

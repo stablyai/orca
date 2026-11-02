@@ -7,6 +7,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
@@ -35,8 +36,10 @@ export async function appendRewindUsageLimitedTurn(journal: AgentSessionJournal,
     { provider: 'orca', clientMessageId: 'kept-limit' },
     {
       kind: 'status',
-      text: 'Usage limit reached',
-      failure: agentSessionFailureFact('usageLimitReached', { usageLimit: { resetsAt } })
+      ...agentSessionFailureWords(
+        agentSessionFailureFact('usageLimitReached', { usageLimit: { resetsAt } }),
+        { surface: 'row' }
+      )
     },
     { fence: 1, turnScope: { kind: 'turn', turnItemId } }
   )

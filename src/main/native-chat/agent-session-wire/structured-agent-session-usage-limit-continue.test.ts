@@ -140,7 +140,11 @@ it('retries refusals after 1, 2, 4 and 8 minutes and publishes failure after fiv
   const { current, sweep, resetsAt } = await setup()
   const send = vi.spyOn(current.host, 'send').mockResolvedValue({
     ok: false,
-    refusal: refuse('execution_owner_reconciling', { reason: 'recordUnreadable' })
+    refusal: refuse(
+      'execution_owner_reconciling',
+      { reason: 'recordUnreadable' },
+      'execution_owner_reconciling'
+    )
   })
   current.clock.now = resetsAt + 15_000
   await sweep.tick()
@@ -169,7 +173,11 @@ it('rechecks setting and cancellation under acceptance and reads unloaded journa
     expect(() => params.beforeRun?.()).toThrow('agent_session_restart_work_superseded')
     return {
       ok: false,
-      refusal: refuse('agent_session_operation_invalid', { reason: 'continuationSuperseded' })
+      refusal: refuse(
+        'agent_session_operation_invalid',
+        { reason: 'continuationSuperseded' },
+        'This chat has moved on. Check the latest messages before continuing.'
+      )
     }
   })
   await sweep.tick()

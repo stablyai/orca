@@ -108,20 +108,25 @@ it('keeps consent with its pairing through failures, late responses and rejected
   const { webRuntimeState } = await import('./preload-api/web-runtime-session')
   installWebPreloadApi()
   const api = globals.window.api.settings
-  expect(api.getSync().nativeChatAutoContinueAfterUsageLimit).toBeUndefined()
+  const consent = () => {
+    const settings = api.getSync()
+    expect(settings).not.toBeNull()
+    return settings?.nativeChatAutoContinueAfterUsageLimit
+  }
+  expect(consent()).toBeUndefined()
   expect((await api.get()).nativeChatAutoContinueAfterUsageLimit).toBe(true)
   const a = webRuntimeState.activeEnvironment!
   webRuntimeState.activeEnvironment = { ...a, id: 'server-B', pairingRevision: 2 }
   hostConsent = false
   failure = true
   expect((await api.get()).nativeChatAutoContinueAfterUsageLimit).toBeUndefined()
-  expect(api.getSync().nativeChatAutoContinueAfterUsageLimit).toBeUndefined()
+  expect(consent()).toBeUndefined()
   failure = false
   expect((await api.get()).nativeChatPermissionMode).toBe('full-access')
-  expect(api.getSync().nativeChatAutoContinueAfterUsageLimit).toBe(false)
+  expect(consent()).toBe(false)
   rejectWrite = true
   await expect(api.set({ nativeChatAutoContinueAfterUsageLimit: true })).rejects.toThrow('offline')
-  expect(api.getSync().nativeChatAutoContinueAfterUsageLimit).toBe(false)
+  expect(consent()).toBe(false)
   rejectWrite = false
   for (const method of ['settings.get', 'settings.update', 'status.get']) {
     delayed = method
@@ -144,7 +149,7 @@ it('keeps consent with its pairing through failures, late responses and rejected
           : { settings: { nativeChatAutoContinueAfterUsageLimit: true } }
     })
     await pending.catch(() => undefined)
-    expect(api.getSync().nativeChatAutoContinueAfterUsageLimit).toBeUndefined()
+    expect(consent()).toBeUndefined()
     hold = undefined
   }
   expect(globals.storage.getItem('orca.web.settings.v1')).not.toContain(
