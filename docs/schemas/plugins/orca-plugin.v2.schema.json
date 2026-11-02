@@ -218,9 +218,9 @@
         },
         "hooks": {
           "default": [],
-          "description": "Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 3.",
+          "description": "Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 5.",
           "x-orca-since": "1.4.248",
-          "maxItems": 3,
+          "maxItems": 5,
           "type": "array",
           "items": {
             "$ref": "#/$defs/HookContribution"
@@ -721,14 +721,18 @@
           "enum": [
             "terminal.send",
             "workspace.create.before",
-            "workspace.create.after"
+            "workspace.create.after",
+            "agent.launch.before",
+            "agent.prompt.before"
           ],
           "description": "Hook the worker handles with `orca.hooks.on`.",
           "x-orca-since": "1.4.248",
           "x-orca-enum-since": {
             "terminal.send": "1.4.248",
             "workspace.create.before": "1.4.248",
-            "workspace.create.after": "1.4.248"
+            "workspace.create.after": "1.4.248",
+            "agent.launch.before": "1.4.248",
+            "agent.prompt.before": "1.4.248"
           }
         }
       },

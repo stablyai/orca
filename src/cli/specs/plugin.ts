@@ -1,7 +1,7 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS, LOCAL_COMMAND_FLAGS } from '../args'
 import { PLUGIN_TEMPLATE_NAMES } from '../plugin-authoring/plugin-template-names'
-import { PLUGIN_DEV_REQUEST_COMMAND_SPEC } from './plugin-dev-request'
+import { PLUGIN_DEV_HOOK_COMMAND_SPEC, PLUGIN_DEV_REQUEST_COMMAND_SPEC } from './plugin-dev-request'
 
 const TEMPLATES = PLUGIN_TEMPLATE_NAMES.join('|')
 
@@ -281,6 +281,7 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
       'orca plugin dev emit acme.notes agent.status.changed --data \'{"workspaceId":null,"paneKey":"p1","state":"done","receivedAt":1}\' --json'
     ]
   },
+  PLUGIN_DEV_HOOK_COMMAND_SPEC,
   PLUGIN_DEV_REQUEST_COMMAND_SPEC,
   {
     path: ['plugin', 'dev', 'unload'],

@@ -69,3 +69,39 @@ export class TerminalPluginHookOrder {
     return result
   }
 }
+
+/** Whether `agent.prompt.before` runs: prompts Orca, the CLI or a plugin submits, as for
+ *  `terminal.send`; a person's own prompt is never held. */
+export function agentPromptHookApplies(options: { inputSource?: TerminalInputSource }): boolean {
+  return (
+    (options.inputSource === undefined || options.inputSource === 'programmatic') &&
+    pluginHookWanted('agent.prompt.before')
+  )
+}
+
+/** `agent.prompt.before`, before the prompt is encoded for the agent. Throws PluginHookDeniedError. */
+export async function runAgentPromptPluginHook(
+  input: {
+    handle: string
+    prompt: string
+    inputKind: Exclude<TerminalInputKind, 'query-reply'>
+    agent: string | null
+  },
+  /** The caller's checks on the original prompt, run again on what a plugin wrote. */
+  assertRewrittenAllowed: (prompt: string) => Promise<void>
+): Promise<string> {
+  const { prompt } = await runPluginHook(
+    'agent.prompt.before',
+    PLUGIN_HOOK_SPECS['agent.prompt.before'].payload,
+    {
+      agent: input.agent,
+      terminalId: input.handle,
+      prompt: input.prompt,
+      inputKind: input.inputKind
+    }
+  )
+  if (prompt !== input.prompt) {
+    await assertRewrittenAllowed(prompt)
+  }
+  return prompt
+}

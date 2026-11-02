@@ -33,7 +33,7 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes.panels` | [PanelContribution](#panelcontribution)[] | no | 1.4.160 | Sidebar panels. At most 64. |
 | `contributes.commands` | [CommandContribution](#commandcontribution)[] | no | 1.4.160 | Command palette entries. At most 256. |
 | `contributes.events` | [EventContribution](#eventcontribution)[] | no | 1.4.160 | Events delivered to the plugin worker. At most 4. |
-| `contributes.hooks` | [HookContribution](#hookcontribution)[] | no | 1.4.248 | Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 3. |
+| `contributes.hooks` | [HookContribution](#hookcontribution)[] | no | 1.4.248 | Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 5. |
 | `contributes.languagePacks` | [LanguagePackContribution](#languagepackcontribution)[] | no | 1.4.160 | Interface translations. At most 16. |
 | `contributes.keybindings` | [KeybindingContribution](#keybindingcontribution)[] | no | 1.4.160 | Keyboard shortcuts for contributed commands. At most 256. |
 | `contributes.vmRecipes` | [VmRecipeContribution](#vmrecipecontribution)[] | no | 1.4.160 | Virtual machine environment recipes. At most 64. |
@@ -95,7 +95,7 @@ A hook Orca runs through the worker before (or after) it acts. Requires `main` a
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `event` | `"terminal.send"` \| `"workspace.create.before"` \| `"workspace.create.after"` | yes | 1.4.248 | Hook the worker handles with `orca.hooks.on`. |
+| `event` | `"terminal.send"` \| `"workspace.create.before"` \| `"workspace.create.after"` \| `"agent.launch.before"` \| `"agent.prompt.before"` | yes | 1.4.248 | Hook the worker handles with `orca.hooks.on`. |
 
 ## LanguagePackContribution
 

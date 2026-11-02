@@ -219,7 +219,8 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     )
   }
 
-  async sendTerminalAgentPrompt(
+  /** sendTerminalAgentPrompt once plugin hooks decided. */
+  protected async sendAgentPromptAfterPluginHooks(
     handle: string,
     prompt: string,
     options: RuntimeAgentPromptWriteOptions
@@ -243,7 +244,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       : null
     if (starting) {
       const target = await starting
-      return { ...(await this.sendTerminalAgentPrompt(target, prompt, options)), handle }
+      return { ...(await this.sendAgentPromptAfterPluginHooks(target, prompt, options)), handle }
     }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {

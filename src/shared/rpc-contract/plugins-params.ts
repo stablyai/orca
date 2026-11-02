@@ -74,6 +74,9 @@ export const PluginDevEmitParams = z
     message: 'pass exactly one of path or pluginKey'
   })
 
+/** `orca plugin dev hook`: one hook through a development plugin's worker alone. */
+export const PluginDevHookParams = PluginDevEmitParams
+
 /** `orca plugin dev request`: one `plugin.request` to a development plugin's worker. */
 export const PluginDevRequestParams = z
   .object({

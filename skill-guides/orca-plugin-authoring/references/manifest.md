@@ -36,7 +36,7 @@
 - `panels` (PanelContribution[], since 1.4.160): Sidebar panels. At most 64.
 - `commands` (CommandContribution[], since 1.4.160): Command palette entries. At most 256.
 - `events` (EventContribution[], since 1.4.160): Events delivered to the plugin worker. At most 4.
-- `hooks` (HookContribution[], since 1.4.248): Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 3.
+- `hooks` (HookContribution[], since 1.4.248): Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 5.
 - `languagePacks` (LanguagePackContribution[], since 1.4.160): Interface translations. At most 16.
 - `keybindings` (KeybindingContribution[], since 1.4.160): Keyboard shortcuts for contributed commands. At most 256.
 - `vmRecipes` (VmRecipeContribution[], since 1.4.160): Virtual machine environment recipes. At most 64.
@@ -79,7 +79,7 @@ An event subscription. Requires `main`, the `trusted-worker` execution profile a
 
 A hook Orca runs through the worker before (or after) it acts. Requires `main` and the `trusted-worker` execution profile.
 
-- `event` ("terminal.send" | "workspace.create.before" | "workspace.create.after", required, since 1.4.248): Hook the worker handles with `orca.hooks.on`.
+- `event` ("terminal.send" | "workspace.create.before" | "workspace.create.after" | "agent.launch.before" | "agent.prompt.before", required, since 1.4.248): Hook the worker handles with `orca.hooks.on`.
 
 ## LanguagePackContribution
 
