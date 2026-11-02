@@ -286,7 +286,7 @@ describe('WSL host deployment store', () => {
     )
 
     it('keeps SSH and paired servers when the file is corrupt in serve-only too', () => {
-      vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+      vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
       noteWslHostsServeOnly(true)
       try {
         addSshManaged()
@@ -303,14 +303,14 @@ describe('WSL host deployment store', () => {
     })
 
     it('keeps every other server listed when the file is corrupt and the gate is closed', () => {
-      vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+      vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
       addSshManaged()
       writeFileSync(getWslHostDeploymentStorePath(userDataPath), '{"version":1,"deployments":{}}')
       expect(listEnvironments(userDataPath).map((entry) => entry.id)).toEqual(['ssh-managed'])
     })
 
     it('hides nothing for an unreadable record while the gate is closed', () => {
-      vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+      vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
       const wslId = addWslManaged()
       seed({ ...futureKind, environmentId: wslId })
       expect(listEnvironments(userDataPath).map((entry) => entry.id)).toEqual([wslId])

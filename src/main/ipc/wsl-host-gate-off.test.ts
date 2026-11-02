@@ -131,7 +131,7 @@ describe('WSL hosts with the internal gate closed', () => {
   }
 
   beforeEach(() => {
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     vi.stubEnv('ORCA_E2E_FAKE_WSL_HOSTS', '')
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-wsl-gate-'))
     mocks.getPath.mockReturnValue(userDataPath)

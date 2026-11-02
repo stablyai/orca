@@ -274,7 +274,7 @@ describe('WSL move retention', () => {
   })
 
   it('does nothing with the internal WSL hosts gate closed', async () => {
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     seedWslMoveCutover(testState.dir, retainedMove())
     open(profile())
 

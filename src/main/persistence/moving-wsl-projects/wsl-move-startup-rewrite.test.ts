@@ -18,7 +18,7 @@ afterEach(() => {
 
 describe('WSL move startup rewrite', () => {
   it('neither runs the pass nor waits with the gate closed', async () => {
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     const recover = vi.fn(async () => {})
     await runWslMoveStartupRewrite({ userDataPath: '/data' }, { recover })
     expect(recover).not.toHaveBeenCalled()
