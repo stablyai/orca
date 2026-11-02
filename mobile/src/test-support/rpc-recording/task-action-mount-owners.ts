@@ -66,7 +66,12 @@ export function useCommittedOwnerProjection(
     const next: Record<string, RecordedValue> = {}
     for (const field of Object.keys(owners).sort()) {
       const value = owners[field]
-      if (typeof value === 'function' || field === 'copiedLinkResetTimerRef') {
+      // Refs hold a mutable current, not committed state.
+      if (
+        typeof value === 'function' ||
+        field === 'copiedLinkResetTimerRef' ||
+        field === 'detailRefreshRequested'
+      ) {
         continue
       }
       const read = () => {
