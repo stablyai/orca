@@ -1,4 +1,5 @@
 import { formatTerminalStartFailure } from '../../../../../../shared/terminal-start-failure'
+import { stripClaudePinnedLaunchMarker } from '../../../../../../shared/claude/claude-pinned-launch-error'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { WorkerDispatchRow } from '../../../../orchestration/types'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -75,9 +76,11 @@ export async function failWorkerStartWithReceipt(args: WorkerStartFailureArgs): 
 }
 
 function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
-  const reason =
+  // Why strip: only the renderer's PTY spawn path reads the marker; worker-show and --full print this.
+  const reason = stripClaudePinnedLaunchMarker(
     formatTerminalStartFailure(args.error) ??
-    (args.error instanceof Error ? args.error.message : String(args.error))
+      (args.error instanceof Error ? args.error.message : String(args.error))
+  )
   const unknown = isUnknownWorkerStartOutcome(args.error, args.failedStage)
   const worker = unknown
     ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason)

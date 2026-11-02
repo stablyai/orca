@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/worker-terminal-auto-release-scheduler'
+import { claudePinnedLaunchError } from '../../../../../../shared/claude/claude-pinned-launch-error'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 
 const PINNED = { id: 'acct-b', email: 'pinned@example.com', managedAuthRuntime: 'host' }
@@ -16,6 +17,7 @@ describe('a fresh follow-up to a worker started with --account', () => {
     h.setup()
     const accounts = [PINNED]
     vi.spyOn(h.runtime, 'getAccountsSnapshot').mockImplementation(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the follow-up reads only the Claude account roster off this snapshot.
       () => ({ claude: { accounts, activeAccountId: null }, codex: null }) as never
     )
     vi.spyOn(h.runtime, 'showTerminalWorkspaceLaunchScope').mockResolvedValue({
@@ -67,6 +69,7 @@ describe('a fresh follow-up to a worker started with --account', () => {
 
   it('names the removed account instead of starting on another one', async () => {
     const dispatchId = await startPinnedWorkerThenLoseIt()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the follow-up reads only the Claude account roster off this snapshot.
     vi.mocked(h.runtime.getAccountsSnapshot).mockReturnValue({
       claude: { accounts: [], activeAccountId: null },
       codex: null
@@ -77,5 +80,21 @@ describe('a fresh follow-up to a worker started with --account', () => {
       message: expect.stringContaining(PINNED.email)
     })
     expect(h.runtime.createTerminal).not.toHaveBeenCalled()
+  })
+
+  it('saves a refused pinned launch without the renderer marker', async () => {
+    h.setup()
+    vi.mocked(h.runtime.createTerminal).mockRejectedValue(
+      claudePinnedLaunchError('account-missing', 'That Claude account no longer exists.')
+    )
+    const task = h.db.createTask({ spec: 'pinned start', runId: h.activeRunId })
+
+    const result = await h.call('orchestration.workerStart', {
+      task: task.id,
+      from: 'term_coord',
+      agent: 'claude'
+    })
+
+    expect(result).toMatchObject({ lastError: 'That Claude account no longer exists.' })
   })
 })

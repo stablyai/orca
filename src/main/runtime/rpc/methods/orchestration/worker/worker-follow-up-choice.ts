@@ -133,7 +133,8 @@ function assertWorkerAccountRemains(
   }
   throw new OrchestrationError(
     'worker_account_gone',
-    `Dispatch ${dispatchId}'s worker ran on Claude account ${options.accountEmail ?? accountId}, which was removed from Orca. Start a new worker with worker-start and choose an account with --account.`
+    `Dispatch ${dispatchId}'s worker ran on Claude account ${options.accountEmail ?? accountId}, which was removed from Orca. Start a new worker with worker-start and choose an account with --account.`,
+    { effectsApplied: false }
   )
 }
 
