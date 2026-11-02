@@ -6,8 +6,6 @@ import { X, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { LinearScopeSelector } from '@/components/linear-scope-selector'
-import { getGitHubProjectSourceSummary } from './task-page-source-context'
-import { getTaskSourceContextSummary } from '../task-source-context-summary'
 import {
   Select,
   SelectTrigger,
@@ -36,15 +34,6 @@ export function TaskPageSourceBar({
     taskSource,
     taskSourceAvailabilityNoticeByProvider,
     taskSourceContextSummary,
-    taskSourceRepoContexts,
-    taskSourceHostAvailability,
-    perRepoSourceState,
-    activeGithubTaskKind,
-    selectedRepos,
-    githubMode,
-    accountBackedTaskSourceHostId,
-    hostRegistryById,
-    hostLabelById,
     taskSourceManuallyChangedRef,
     setSelectedJiraIssueKey,
     setSelectedJiraIssueFallback,
@@ -60,31 +49,6 @@ export function TaskPageSourceBar({
     handleLinearTeamSelectionChange,
     handleLinearScopeOpen
   } = model
-  const sourceSummary =
-    taskSource === 'github' && githubMode === 'project'
-      ? getGitHubProjectSourceSummary({
-          providerLabel:
-            visibleSourceOptions.find((source) => source.id === 'github')?.label ?? 'GitHub',
-          hostId: accountBackedTaskSourceHostId,
-          host: hostRegistryById.get(accountBackedTaskSourceHostId),
-          hostLabelById
-        })
-      : taskSource === 'github'
-        ? getTaskSourceContextSummary({
-            provider: 'github',
-            providerLabel:
-              visibleSourceOptions.find((source) => source.id === 'github')?.label ?? 'GitHub',
-            repoContexts: taskSourceRepoContexts,
-            // The list's resolved sources include preference and fallback; project identity does not.
-            repoIdentities: perRepoSourceState.map(({ sources }) => {
-              const source = activeGithubTaskKind === 'prs' ? sources?.prs : sources?.issues
-              return source ? { provider: 'github', ...source } : null
-            }),
-            hostAvailability: taskSourceHostAvailability,
-            hostLabelById,
-            selectedRepoCount: selectedRepos.length
-          })
-        : taskSourceContextSummary
   return (
     <div className="flex items-center justify-between gap-2">
       <div
@@ -164,9 +128,9 @@ export function TaskPageSourceBar({
         })}
         <div
           className="hidden min-w-0 max-w-[min(420px,40vw)] items-center rounded-md border border-border/50 bg-muted/35 px-2 py-1 text-xs text-muted-foreground sm:flex"
-          title={sourceSummary.title}
+          title={taskSourceContextSummary.title}
         >
-          <span className="truncate">{sourceSummary.label}</span>
+          <span className="truncate">{taskSourceContextSummary.label}</span>
         </div>
       </div>
       {taskSource === 'linear' && linearConnected ? (
