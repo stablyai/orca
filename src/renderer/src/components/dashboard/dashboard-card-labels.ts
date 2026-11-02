@@ -1,5 +1,4 @@
 import { getAgentRowConversationName } from '../../../../shared/agent-row-conversation-name'
-import { getAgentPromptLabel } from '../../../../shared/agent-row-primary-text'
 import { DASHBOARD_MAX_LABEL_LENGTH } from '../../../../shared/dashboard-snapshot'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
@@ -13,9 +12,7 @@ import {
 } from '@/runtime/structured-chat-tab-name'
 
 export function rowTask(row: DashboardAgentRow): string {
-  return (
-    (row.entry.orchestration?.taskTitle ?? '').trim() || getAgentPromptLabel(row.entry.prompt ?? '')
-  )
+  return (row.entry.orchestration?.taskTitle ?? '').trim() || (row.entry.prompt ?? '').trim()
 }
 
 export function nonEmpty(value: string | undefined): string | undefined {

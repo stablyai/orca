@@ -1,5 +1,4 @@
 import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
-import { getAgentPromptLabel } from '../../../../shared/agent-row-primary-text'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import {
   dashboardCardBaseDisplayState,
@@ -61,9 +60,7 @@ export function patchDashboardSnapshotFromAgentStatus(
   const nextCard: DashboardCard = {
     ...card,
     ...(event.agentType ? { agentType: event.agentType } : {}),
-    ...(event.prompt
-      ? { task: getAgentPromptLabel(event.prompt) || card.task, lastUserMessage: event.prompt }
-      : {}),
+    ...(event.prompt ? { task: event.prompt, lastUserMessage: event.prompt } : {}),
     ...(event.lastAssistantMessage !== undefined
       ? { lastAgentMessage: event.lastAssistantMessage || undefined }
       : {}),
