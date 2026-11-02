@@ -66,7 +66,6 @@ export function useMobileStructuredAgentOptions(args: MobileStructuredAgentOptio
     updateOptionState,
     conversationSupport,
     imageSupport,
-    awaitingOptions,
     receiveCatalog,
     isCurrentContext,
     controller,
@@ -96,14 +95,14 @@ export function useMobileStructuredAgentOptions(args: MobileStructuredAgentOptio
     imageSupport?.sessionId === sessionId &&
     !imageSupport.statesPermissionMode &&
     optionState.permissionMode === null
-  const interactionReadyRef = useRef(!awaitingOptions)
+  const interactionReadyRef = useRef(writes.current.count === 0)
   const lockSnapshotRef = useRef(
     (snapshot: ReturnType<typeof structuredAgentSessionShownSnapshot>) => snapshot
   )
   const lockSnapshot = (snapshot: ReturnType<typeof structuredAgentSessionShownSnapshot>) =>
-    awaitingOptions ? lockedStructuredAgentSessionOptionSnapshot(snapshot) : snapshot
+    writes.current.count > 0 ? lockedStructuredAgentSessionOptionSnapshot(snapshot) : snapshot
   useLayoutEffect(() => {
-    interactionReadyRef.current = !awaitingOptions
+    interactionReadyRef.current = writes.current.count === 0
     lockSnapshotRef.current = lockSnapshot
   })
   const readOptionState = useCallback(
@@ -122,8 +121,7 @@ export function useMobileStructuredAgentOptions(args: MobileStructuredAgentOptio
     mobileStructuredModelDefaultSnapshot(
       structuredAgentSessionShownSnapshot(readOptionState()),
       readOptionState(),
-      hostSupport?.defaultModel === true,
-      awaitingOptions
+      hostSupport?.defaultModel === true
     )
   )
   const optionSnapshot = legacyHostPermissions
@@ -141,12 +139,7 @@ export function useMobileStructuredAgentOptions(args: MobileStructuredAgentOptio
       record: optionStateRef.current.record,
       view,
       snapshot: lockSnapshotRef.current(structuredAgentSessionShownSnapshot(view)),
-      ready:
-        !awaitingOptions &&
-        writes.current.count === 0 &&
-        !!client &&
-        !!sessionId &&
-        interactionReadyRef.current,
+      ready: writes.current.count === 0 && !!client && !!sessionId && interactionReadyRef.current,
       providerStarting,
       isCurrentContext,
       flush: (isCurrent: () => boolean) => {
@@ -208,7 +201,6 @@ export function useMobileStructuredAgentOptions(args: MobileStructuredAgentOptio
     sessionId,
     mutate,
     takesModelDefault: hostSupport?.defaultModel === true,
-    awaitingOptions,
     lockSnapshotRef,
     source: optionSource
   })

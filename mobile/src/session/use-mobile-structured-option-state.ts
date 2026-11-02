@@ -180,7 +180,6 @@ export function useMobileStructuredOptionState(args: {
   }, [readStamp, reread])
 
   return {
-    awaitingOptions: support?.sessionId === sessionId && support?.fence !== fence,
     projectRuntimeReports,
     conversationSupport,
     imageSupport,

@@ -1,5 +1,4 @@
 import type { AgentSessionOptionResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
-import { lockedStructuredAgentSessionOptionSnapshot } from '../../../src/shared/agent-session/options/structured-agent-session-option-snapshot'
 import { useCallback, type RefObject } from 'react'
 import { structuredAgentSessionDefaultModelChoice } from '../../../src/shared/structured-agent-session-default-model-choice'
 import {
@@ -26,10 +25,9 @@ export const MOBILE_MODEL_DEFAULT_PICK = ''
 export function mobileStructuredModelDefaultSnapshot(
   snapshot: SessionOptionDescriptor[],
   state: StructuredAgentSessionOptionState,
-  supported: boolean,
-  awaitingOptions: boolean
+  supported: boolean
 ): SessionOptionDescriptor[] {
-  const choices = supported
+  return supported
     ? snapshot.map((descriptor) =>
         descriptor.id === 'model'
           ? {
@@ -40,7 +38,6 @@ export function mobileStructuredModelDefaultSnapshot(
           : descriptor
       )
     : snapshot
-  return awaitingOptions ? lockedStructuredAgentSessionOptionSnapshot(choices) : choices
 }
 
 export function useMobileStructuredModelDefault(args: {
@@ -49,7 +46,6 @@ export function useMobileStructuredModelDefault(args: {
   sessionId: string | null
   mutate: StructuredAgentSessionMutate
   takesModelDefault: boolean
-  awaitingOptions: boolean
   lockSnapshotRef: RefObject<(snapshot: SessionOptionDescriptor[]) => SessionOptionDescriptor[]>
   source: Pick<
     ReturnType<typeof useMobileStructuredOptionState>,
@@ -63,8 +59,7 @@ export function useMobileStructuredModelDefault(args: {
     | 'isCurrentContext'
   >
 }) {
-  const { agent, client, sessionId, mutate, takesModelDefault, awaitingOptions, lockSnapshotRef } =
-    args
+  const { agent, client, sessionId, mutate, takesModelDefault, lockSnapshotRef } = args
   const {
     optionStateRef,
     activeOptionRecordRef,
@@ -88,7 +83,6 @@ export function useMobileStructuredModelDefault(args: {
         !client ||
         !sessionId ||
         !agent ||
-        awaitingOptions ||
         writes.current.count > 0 ||
         controller.pending().length > 0 ||
         !isCurrentContext()
@@ -146,7 +140,6 @@ export function useMobileStructuredModelDefault(args: {
     [
       activeOptionRecordRef,
       agent,
-      awaitingOptions,
       client,
       takesModelDefault,
       isCurrentContext,
