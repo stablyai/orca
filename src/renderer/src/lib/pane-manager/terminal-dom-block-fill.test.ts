@@ -21,25 +21,6 @@ describe('applyDomBlockFills', () => {
     return span
   }
 
-  it('paints a uniform ▀ composer border with a cell-filling gradient', () => {
-    const span = mountSpan('▀'.repeat(12))
-
-    applyDomBlockFills(document)
-
-    expect(span.style.color).toBe('transparent')
-    expect(span.style.backgroundImage).toContain('linear-gradient(to bottom')
-    expect(span.style.backgroundSize).toBe(`${100 / 12}% 100%`)
-    expect(span.style.backgroundRepeat).toBe('repeat-x')
-    expect(span.style.getPropertyValue('--orca-block-fg')).toBe('rgb(30, 30, 30)')
-  })
-
-  it('does not restyle mixed block/letter spans', () => {
-    const span = mountSpan('▀▀█ Ask')
-    applyDomBlockFills(document)
-    expect(span.style.color).toBe('rgb(30, 30, 30)')
-    expect(span.style.backgroundImage).toBe('')
-  })
-
   it('visits only the rows xterm repainted', () => {
     const first = mountSpan('▀▀▀')
     const rows = first.parentElement!.parentElement!

@@ -261,6 +261,7 @@ export function AgentSessionContinuationDialog({
               model={destinationModel}
               worktreeId={request?.worktreeId}
               agent={selectedAgent}
+              cli={selection.cli}
               value={currentPick?.draft}
               onPick={(agent, draft, entry) =>
                 setPick({ request, agent, surface: draft?.surface, draft, entry })

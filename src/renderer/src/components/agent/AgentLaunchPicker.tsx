@@ -4,7 +4,6 @@ import { sameAgentLaunchPickerModel } from '../tab-bar/new-tab-agent-menu-model'
 import { memo, useEffect, useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
+import { rowLabel } from '../tab-bar/tab-agent-row-presentation'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { useAgentPickerDraftScope } from './AgentLaunchSetupButton'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
@@ -38,6 +38,7 @@ export const AgentLaunchPicker = memo(
     disabled,
     setupDisabled,
     emptyLabel,
+    cli,
     children,
     onTriggerEnter,
     onCatalogOpen,
@@ -54,6 +55,8 @@ export const AgentLaunchPicker = memo(
     disabled?: boolean
     setupDisabled?: boolean
     emptyLabel?: string
+    /** True when this launch is the terminal and a chat exists, so the closed field says "(CLI)". */
+    cli?: boolean
     children?: ReactNode
     onTriggerEnter?: () => void
     /** Supplied entries own their catalogs; this says which agent's menu the user is viewing. */
@@ -92,6 +95,11 @@ export const AgentLaunchPicker = memo(
         ? entry.catalog.models.find((model) => model.id === choices?.model)?.label
         : undefined) ?? choices?.model
     const summary = [modelLabel, choices?.options?.effort].filter(Boolean).join(' · ')
+    const agentLabel = agent
+      ? cli
+        ? rowLabel({ kind: 'cli', agent })
+        : getAgentLabel(agent)
+      : (emptyLabel ?? translate('agentPicker.select', 'Select agent'))
     return (
       <div className="space-y-2">
         <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -112,10 +120,7 @@ export const AgentLaunchPicker = memo(
             >
               {agent ? <AgentIcon agent={agent} size={14} /> : null}
               <span className="min-w-0 flex-1 truncate text-left">
-                {triggerLabel ??
-                  (agent
-                    ? getAgentLabel(agent)
-                    : (emptyLabel ?? translate('agentPicker.select', 'Select agent')))}
+                {triggerLabel ?? agentLabel}
                 {!triggerLabel && agent && summary ? (
                   <span className="text-muted-foreground"> · {summary}</span>
                 ) : null}
@@ -136,12 +141,14 @@ export const AgentLaunchPicker = memo(
                 disabled={disabled}
                 setupDisabled={setupDisabled}
                 onSelectAgent={setSelected}
-                runLaunch={(row, draft, entry) =>
+                runLaunch={(row, draft, entry, surface) =>
                   onPick(
                     row.agent,
                     draft,
                     entry,
-                    !draft && row.kind === 'chat' ? 'chat' : undefined
+                    // Re-selecting an agent preserves the form's surface; a new chat row chooses Chat.
+                    surface ??
+                      (!draft && row.agent !== agent && row.kind === 'chat' ? 'chat' : undefined)
                   )
                 }
               />
@@ -152,30 +159,6 @@ export const AgentLaunchPicker = memo(
             )}
           </DropdownMenuContent>
         </DropdownMenu>
-        {entry && entry.surfaces.length > 1 ? (
-          <ToggleGroup
-            type="single"
-            value={draft?.surface ?? entry.defaultSurface}
-            disabled={disabled}
-            aria-label={translate('agentPicker.openIn', 'Open in')}
-            className="grid w-full grid-cols-2"
-            onValueChange={(surface) => {
-              if (surface === 'chat' || surface === 'terminal') {
-                onPick(
-                  entry.agent,
-                  { ...(draft ?? agentPickerDraft(entry)), surface },
-                  entry,
-                  surface
-                )
-              }
-            }}
-          >
-            <ToggleGroupItem value="chat">{translate('agentPicker.chat', 'Chat')}</ToggleGroupItem>
-            <ToggleGroupItem value="terminal">
-              {translate('agentPicker.terminal', 'Terminal')}
-            </ToggleGroupItem>
-          </ToggleGroup>
-        ) : null}
       </div>
     )
   },

@@ -37,10 +37,8 @@ import type { CurrentActionSelection } from './source-control-action-selection'
 export type AgentPickerSurface = 'chat' | 'terminal'
 export type AgentPickerDraftOwner = object
 export type AgentPickerModel = AgentSessionModelOption & { isLegacy?: true; hidden?: true }
-export { TEXT_ACTION_DEFAULT_MODEL } from './source-control-text-action-picker'
 export type AgentPickerEntry = {
   textGeneration?: TextActionPickerCatalog
-
   agent: TuiAgent
   label: string
   aliases?: string[]
@@ -54,6 +52,8 @@ export type AgentPickerEntry = {
   catalogRead?: 'pending' | 'settled' | 'failed' | 'unsupported'
   ownerKey?: string
   draftTarget?: { key: string; worktreeId?: string; repoId?: string; executionHostId: string }
+  /** The workspace the agent launches in, whose files and skills its first prompt can name. */
+  worktreeId?: string
   defaultsPending?: boolean
   structuredDefaultsPending?: boolean
 }
@@ -73,6 +73,8 @@ export type AgentPickerDraft = {
     changed: boolean
     argumentsAuthored: boolean
   }
+  /** The first prompt typed in the panel, set only on the launch: never part of a kept setup. */
+  prompt?: string
 }
 
 export function agentPickerDraft(

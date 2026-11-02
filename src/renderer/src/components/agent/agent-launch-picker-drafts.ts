@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef } from 'react'
+import type { AgentPickerRetainedSetup as RetainedSetup } from '../../../../shared/agent-launch-picker-authority'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useSyncExternalStore
+} from 'react'
 import { sameSourceControlSetupSelection } from '../settings/source-control-agent-launch-picker'
 import { shallow } from 'zustand/shallow'
 import {
@@ -8,17 +17,19 @@ import {
   type AgentPickerEntry
 } from '../../../../shared/agent-launch-picker'
 
+import { currentAgentPickerDraft } from '../../../../shared/agent-launch-picker-authority'
+import { retireAgentPickerSetups } from './agent-launch-picker-retirement'
+import {
+  launchDraftSource,
+  nativeChatLaunchPromptDraftScopeKey
+} from '../native-chat/native-chat-launch-draft-source'
+import {
+  subscribeToNativeChatComposerDraft,
+  writeLaunchSetupOptions
+} from '../native-chat/native-chat-composer-draft-store'
+
 export type { AgentPickerDraftOwner } from '../../../../shared/agent-launch-picker'
 export type AgentPickerSetupIdentity = { model: string; effort?: string }
-type RetainedSetup = {
-  target: AgentPickerEntry['draftTarget']
-  agent: AgentPickerEntry['agent']
-  preset?: AgentPickerSetupIdentity
-  authority: string | undefined
-  source: AgentPickerDraft | undefined
-  draft: AgentPickerDraft
-  active: boolean
-}
 const appSession: AgentPickerDraftOwner = {}
 const sessionDrafts = new WeakMap<AgentPickerDraftOwner, Map<string, RetainedSetup>>()
 
@@ -66,47 +77,15 @@ function sameSource(before?: AgentPickerDraft, after?: AgentPickerDraft) {
 export function retireAgentPickerDrafts(
   entries: readonly AgentPickerEntry[],
   scope = appSession,
-  targetAlive?: (target: NonNullable<AgentPickerEntry['draftTarget']>) => boolean
+  targetAlive?: (target: NonNullable<AgentPickerEntry['draftTarget']>) => boolean,
+  mode: 'launch' | 'select' = 'launch'
 ) {
-  const drafts = sessionDrafts.get(scope)
-  if (!drafts) {
-    return
-  }
-  const membership = new Map(
-    entries.map((entry) => [
-      JSON.stringify([entry.draftTarget?.key, entry.agent]),
-      {
-        entry,
-        models:
-          entry.catalog.origin === 'unknown' || entry.catalog.listingInProgress
-            ? undefined
-            : new Map(
-                entry.catalog.models.map((model) => [
-                  model.id,
-                  model.effortsKnown === false
-                    ? undefined
-                    : new Set(model.efforts.map((effort) => effort.value))
-                ])
-              )
-      }
-    ])
+  retireAgentPickerSetups(
+    entries,
+    mode === 'select' ? sessionDrafts.get(scope) : undefined,
+    targetAlive,
+    mode
   )
-  for (const [key, retained] of drafts) {
-    const current = membership.get(JSON.stringify([retained.target?.key, retained.agent]))
-    if (retained.target && targetAlive && !targetAlive(retained.target)) {
-      drafts.delete(key)
-    } else if (current && current.entry.ownerKey !== retained.authority) {
-      drafts.delete(key)
-    } else if (current?.models && retained.preset && !retained.active) {
-      const { model, effort } = retained.preset
-      if (
-        !current.models.has(model) ||
-        (effort !== undefined && current.models.get(model)?.has(effort) === false)
-      ) {
-        drafts.delete(key)
-      }
-    }
-  }
 }
 
 export function useAgentPickerSetup({
@@ -117,6 +96,7 @@ export function useAgentPickerSetup({
   draftScope = appSession,
   draftId = 'agent',
   preset,
+  mode = 'launch',
   open
 }: {
   entry: AgentPickerEntry
@@ -126,45 +106,108 @@ export function useAgentPickerSetup({
   draftScope?: AgentPickerDraftOwner
   draftId?: string
   preset?: AgentPickerSetupIdentity
+  mode?: 'launch' | 'select'
   open: boolean
 }) {
   const currentSurface = surface ?? initial?.surface
   const [, publish] = useReducer((version: number) => version + 1, 0)
   const key = JSON.stringify([entry.draftTarget?.key, entry.agent, draftId])
-  const read = useCallback(() => sessionDrafts.get(draftScope)?.get(key), [draftScope, key])
+  const launchKey = nativeChatLaunchPromptDraftScopeKey(
+    entry.worktreeId ?? '',
+    entry.agent,
+    entry.rows[0]?.executionHostId ?? 'local'
+  )
+  const originalPreset = useMemo(
+    () =>
+      preset ??
+      (mode === 'launch' && initial?.choices.model
+        ? { model: initial.choices.model, effort: initial.choices.options?.effort ?? undefined }
+        : undefined),
+    [preset, mode, initial?.choices.model, initial?.choices.options?.effort]
+  )
+  // Original parsed preset identity is independent of edited choices and changing defaults.
+  const slot = preset
+    ? JSON.stringify({
+        model: preset.model,
+        ...(preset.effort !== undefined ? { options: { effort: preset.effort } } : {})
+      })
+    : initial && mode === 'launch'
+      ? JSON.stringify(initial.choices)
+      : ''
+  const read = useCallback(
+    () =>
+      mode === 'launch'
+        ? launchDraftSource(launchKey)?.options?.get(slot)
+        : sessionDrafts.get(draftScope)?.get(key),
+    [mode, launchKey, slot, draftScope, key]
+  )
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      mode === 'launch' && open
+        ? subscribeToNativeChatComposerDraft(launchKey, listener)
+        : () => {},
+    [mode, open, launchKey]
+  )
+  useSyncExternalStore(subscribe, () => read()?.draft)
   const matches = useCallback(
-    (record: RetainedSetup) =>
-      record.authority === entry.ownerKey && sameSource(record.source, initial),
-    [entry.ownerKey, initial]
+    (record: RetainedSetup) => sameSource(record.source, initial),
+    [initial]
   )
   const lifetime = useMemo(
-    () => ({ draftScope, key, authority: entry.ownerKey, surface: currentSurface }),
-    [draftScope, key, entry.ownerKey, currentSurface]
+    () => ({
+      draftScope,
+      key,
+      launchKey,
+      slot,
+      mode,
+      authority: entry.ownerKey,
+      surface: currentSurface
+    }),
+    [draftScope, key, launchKey, slot, mode, entry.ownerKey, currentSurface]
   )
   const live = useRef<typeof lifetime | undefined>(undefined)
   const collection = sessionDrafts.get(draftScope)
   const retained = read()
-  const acquire = useCallback(() => {
-    let drafts = sessionDrafts.get(draftScope)
-    if (!drafts) {
-      drafts = new Map()
-      sessionDrafts.set(draftScope, drafts)
-    }
-    let record = drafts.get(key)
-    if (!record || !matches(record)) {
-      record = {
-        target: entry.draftTarget,
-        agent: entry.agent,
-        preset,
-        authority: entry.ownerKey,
-        source: initial,
-        draft: seed ?? agentPickerDraft(entry),
-        active: open
+  const acquire = useCallback(
+    (authored?: AgentPickerDraft) => {
+      let record = read()
+      if (!record || !matches(record)) {
+        record = {
+          target: entry.draftTarget,
+          agent: entry.agent,
+          preset: originalPreset,
+          source: initial,
+          draft: authored ?? seed ?? agentPickerDraft(entry),
+          active: open
+        }
+        if (mode === 'launch') {
+          writeLaunchSetupOptions(launchKey, record.draft, slot, record)
+        } else {
+          let drafts = sessionDrafts.get(draftScope)
+          if (!drafts) {
+            drafts = new Map()
+            sessionDrafts.set(draftScope, drafts)
+          }
+          drafts.set(key, record)
+        }
       }
-      drafts.set(key, record)
-    }
-    return record
-  }, [draftScope, key, matches, entry, preset, initial, seed, open])
+      return record
+    },
+    [
+      read,
+      matches,
+      entry,
+      originalPreset,
+      initial,
+      seed,
+      open,
+      mode,
+      launchKey,
+      slot,
+      draftScope,
+      key
+    ]
+  )
   useLayoutEffect(() => {
     live.current = lifetime
     return () => {
@@ -172,35 +215,50 @@ export function useAgentPickerSetup({
     }
   }, [lifetime])
   useLayoutEffect(() => {
-    if (!open && !read()) {
+    if ((mode === 'launch' || !open) && !read()) {
       return
     }
-    const record = acquire()
-    record.active = open
-    if (record !== retained) {
+    const activeRecord = acquire()
+    activeRecord.active = open
+    if (activeRecord !== retained) {
       publish()
     }
     return () => {
-      record.active = false
+      activeRecord.active = false
     }
-  }, [open, read, acquire, retained])
-  const record = retained && matches(retained) ? retained : undefined
-  const currentDraft = (draft: AgentPickerDraft) =>
-    currentSurface && currentSurface !== draft.surface
-      ? { ...draft, surface: currentSurface }
-      : draft
+  }, [open, read, acquire, retained, mode])
+  let record = retained && matches(retained) ? retained : undefined
+  const currentDraft = (draft: AgentPickerDraft) => {
+    const current = currentAgentPickerDraft(entry, draft)
+    return currentSurface && currentSurface !== current.surface
+      ? { ...current, surface: currentSurface }
+      : current
+  }
   const getDraft = () =>
-    live.current === lifetime && record && read() === record && matches(record)
-      ? currentDraft(record.draft)
+    live.current === lifetime &&
+    read() === record &&
+    (!record || matches(record)) &&
+    (record || mode === 'launch')
+      ? currentDraft(record?.draft ?? seed ?? agentPickerDraft(entry))
       : undefined
+  const store = (draft: AgentPickerDraft) => {
+    if (!record) {
+      record = acquire(draft)
+    } else {
+      record.draft = draft
+      if (mode === 'launch') {
+        writeLaunchSetupOptions(launchKey, draft, slot, record)
+      }
+    }
+    publish()
+  }
   const change = (draft: AgentPickerDraft) => {
     if (getDraft()) {
-      record!.draft = draft
-      publish()
+      store(draft)
     }
   }
   return {
-    ready: !!record,
+    ready: mode === 'launch' || !!record,
     draft: currentDraft(record?.draft ?? seed ?? agentPickerDraft(entry)),
     getDraft,
     change,
@@ -210,7 +268,9 @@ export function useAgentPickerSetup({
         sessionDrafts.get(draftScope) === collection &&
         (!retained || read() === retained)
       ) {
-        acquire().active = true
+        if (mode === 'select' || read()) {
+          acquire().active = true
+        }
         publish()
       }
     },
@@ -218,14 +278,17 @@ export function useAgentPickerSetup({
       if (!getDraft()) {
         return false
       }
+      if (mode === 'launch' && !record) {
+        return true
+      }
       record!.source = draft.recipeEdits ? draft : initial
-      record!.draft = draft.recipeEdits
+      const accepted = draft.recipeEdits
         ? {
             ...draft,
             recipeEdits: { ...draft.recipeEdits, changed: false, argumentsAuthored: false }
           }
         : draft
-      publish()
+      store(accepted)
       return true
     }
   }

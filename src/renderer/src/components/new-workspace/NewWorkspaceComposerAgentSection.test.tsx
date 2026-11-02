@@ -45,6 +45,8 @@ describe('NewWorkspaceComposerAgentSection agent picker', () => {
       </TooltipProvider>
     )
 
+    expect(screen.getByRole('button', { name: 'Select agent' }).textContent).not.toContain('Chat')
+    expect(screen.getByRole('button', { name: 'Select agent' }).textContent).not.toContain('(CLI)')
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
       button: 0,
       ctrlKey: false

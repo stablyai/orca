@@ -2,8 +2,8 @@ import { analyzeAgentChoiceArgs } from './agent-choice-args'
 import { reconcileAgentChoiceArgsDetailed } from './agent-choice-reconciliation'
 import { projectAgentLaunchProfile } from './agent-launch-profile'
 import { agentPickerPanelArguments } from './agent-launch-picker-arguments'
+import { TEXT_ACTION_DEFAULT_MODEL } from './source-control-text-action-picker'
 import {
-  TEXT_ACTION_DEFAULT_MODEL,
   agentPickerArgumentsText,
   agentPickerEffectiveChoices,
   type AgentPickerDraft,

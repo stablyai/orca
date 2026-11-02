@@ -68,6 +68,7 @@ function ObservedSourceControlActionAgentPicker(props: PickerProps) {
       {...props}
       observation={observation}
       canSaveSurface={canSaveSurface}
+      cli={observation.selectionFor(props.agent, props.surface).cli}
     />
   )
 }
@@ -104,6 +105,7 @@ export function sourceControlActionAgentPreview(
 type ViewProps = PickerProps & {
   observation: ReturnType<typeof useAgentMenuObservation>
   canSaveSurface: boolean
+  cli: boolean
 }
 
 export function SourceControlActionAgentPickerView(props: ViewProps) {
@@ -168,6 +170,7 @@ const SelectedSourceControlActionAgentPicker = memo(
         draftScope={props.draftScope}
         model={observation.model}
         agent={props.agent}
+        cli={props.cli}
         disabled={props.disabled}
         emptyLabel={translate(
           'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
@@ -195,6 +198,7 @@ const SelectedSourceControlActionAgentPicker = memo(
   (a, b) =>
     a.agent === b.agent &&
     a.surface === b.surface &&
+    a.cli === b.cli &&
     a.disabled === b.disabled &&
     a.draftScope === b.draftScope &&
     a.canSaveSurface === b.canSaveSurface &&

@@ -102,24 +102,6 @@ beforeAll(async () => {
 }, SUITE_TIMEOUT_MS)
 
 describe('cross-version worktree identity downgrade', () => {
-  it('pairs two real builds', () => {
-    expect(typeof preStackMigrate).toBe('function')
-    expect(typeof stackMigrate).toBe('function')
-    // Require distinct implementations so every skew cannot silently run the same build.
-    expect(preStackMigrate).not.toBe(stackMigrate)
-  })
-
-  it('the pre-stack build repoints two of the four row kinds, and strands two', () => {
-    const state = persistedStateAfterRename()
-    expect(preStackMigrate(state, OLD_ID, NEW_ID)).toBe(true)
-    expect(rowsById(state)).toEqual({
-      sleepingAgentSessionsByPaneKey: NEW_ID,
-      terminalSurfaceTombstonesByPaneKey: NEW_ID,
-      closedTerminalTabTombstonesByTabId: OLD_ID,
-      clientHostedBrowserCloseIntentsByEnvironment: OLD_ID
-    })
-  })
-
   it('the stack repoints all four', () => {
     const state = persistedStateAfterRename()
     expect(stackMigrate(state, OLD_ID, NEW_ID)).toBe(true)

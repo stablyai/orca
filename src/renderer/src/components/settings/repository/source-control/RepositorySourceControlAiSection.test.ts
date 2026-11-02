@@ -32,7 +32,7 @@ import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-cap
 import { projectSourceControlActionLaunch } from '../../../../../../shared/source-control-action-launch-preferences'
 import { projectAgentLaunchSettings } from '../../../../../../shared/agent-launch-settings'
 import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
-import { clearHostAgentMenuSettingsForTests } from '../../use-host-agent-launch-preferences'
+import { clearHostAgentMenuSettingsForTests } from '../../host-agent-launch-preferences-resource'
 import { mutateHostAgentLaunchSettings } from '../../agent-launch-settings-transport'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
@@ -336,7 +336,7 @@ it.each(['own', 'parent'] as const)(
     }
     await configure()
     fireEvent.click(screen.getByRole('button', { name: 'Remove --model sonnet' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
     expect(change).toHaveBeenCalledOnce()
     const [actionId, preferences, args, nodes] = change.mock.calls[0]
     expect(args).toBeUndefined()
@@ -628,7 +628,7 @@ it('keeps staged repository setup through template edits and saves/reopens only 
     await act(() => locale.i18n.changeLanguage('es'))
     expect(screen.getByRole('textbox', { name: 'Argumentos' })).toBe(input)
     expect(input).toHaveProperty('value', '--pending')
-    expect(screen.getByRole('button', { name: 'Usar' })).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Iniciar terminal' })).toBeDefined()
     expect(update).not.toHaveBeenCalled()
     await act(() => locale.i18n.changeLanguage('en'))
     fireEvent.keyDown(screen.getByRole('textbox', { name: 'Arguments' }), { key: 'Escape' })
@@ -639,7 +639,7 @@ it('keeps staged repository setup through template edits and saves/reopens only 
     await open()
     expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty('value', '--pending')
     expect(screen.getByRole('button', { name: 'Remove --model claude-sonnet-5-5' })).toBeDefined()
-    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
     expect(own.getByDisplayValue('CURRENT {basePrompt}')).toBeDefined()
     fireEvent.click(own.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(update).toHaveBeenCalledOnce())

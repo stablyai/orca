@@ -1,4 +1,4 @@
-import type { AgentJournalCursor } from '../../agent-session-journal-identity'
+import type { AgentJournalCursor } from '../journal/agent-session-journal-identity'
 import type { AgentJournalTurnOutcome } from '../../agent-turn-outcome'
 import type { AgentSessionExecutionLocation } from '../lifecycle/agent-session-record'
 

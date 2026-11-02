@@ -94,8 +94,6 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     ['src/main/project-groups/', 'src/renderer/src/store/project-groups/']
   ),
   featureRoute('feature.usage-overview', ['usage-overview'], [`${COMPONENTS}stats/`]),
-  featureRoute('feature.pet', ['pet-status-segment-layout'], [`${COMPONENTS}pet/`]),
-  featureRoute('feature.setup-guide', ['setup-guide-sidebar'], [`${COMPONENTS}setup-guide/`]),
   featureRoute(
     'feature.new-workspace',
     [

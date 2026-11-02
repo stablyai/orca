@@ -1,5 +1,7 @@
-import { TEXT_ACTION_DEFAULT_MODEL } from '../../../../shared/agent-launch-picker'
-import { textActionArgumentsOwnEffort } from '../../../../shared/source-control-text-action-picker'
+import {
+  TEXT_ACTION_DEFAULT_MODEL,
+  textActionArgumentsOwnEffort
+} from '../../../../shared/source-control-text-action-picker'
 import { translate } from '@/i18n/i18n'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type {

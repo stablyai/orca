@@ -215,7 +215,10 @@
       "title": "{{distro}} dağıtımını ana makine olarak çalıştır (önerilir)",
       "why": "Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
       "accept": "Ana makine olarak çalıştır",
-      "projectNotFound": "Taşınacak eklenen proje bulunamadı. Kenar çubuğundaki projede \"{{distro}} ana makinesine taşı…\" seçeneğini kullanın."
+      "projectNotFound": "Taşınacak eklenen proje bulunamadı. Kenar çubuğundaki projede \"{{distro}} ana makinesine taşı…\" seçeneğini kullanın.",
+      "existingTitle": "{{distro}} ana makinesine ekle (önerilir)",
+      "existingWhy": "{{distro}} zaten ana makine olarak çalışıyor; Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
+      "existingAccept": "Ana makineye ekle"
     }
   },
   "app": {
@@ -602,7 +605,7 @@
         "inheritFont": "IDE yazı tipiyle aynı",
         "fontPreviewLabel": "Sohbet yazı tipi önizlemesi",
         "fontPreview": "Pijamalı hasta yağız şoföre çabucak güvendi.",
-        "title": "Sohbet",
+        "title": "Sohbet arayüzü",
         "textSize": "Metin boyutu",
         "textSizeDescription": "Mesajlar, araç etkinlikleri ve mesaj kutusu. Sohbet içindeki {{increase}} / {{decrease}} kısayolları da bu ayarı değiştirir.",
         "codeTextSize": "Kod metni boyutu",
@@ -1742,7 +1745,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "Yapılandırılmış ajan oturumu henüz kullanılamıyor. Bir süre sonra tekrar deneyin.",
         "gone": "Bu sohbet artık bu sunucuda değil, bu yüzden burada yeniden açılamıyor.",
-        "hostCannotOpen": "Orca güncellenene kadar bu sohbet yeniden açılamaz."
+        "hostCannotOpen": "Orca güncellenene kadar bu sohbet yeniden açılamaz.",
+        "worktreeDeleted": "Çalışma ağacı silindi.",
+        "folderWorkspaceRemoved": "Klasör çalışma alanı kaldırıldı."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Sağlanmış kök tarifleri sparse checkout'u desteklemez."
@@ -8063,7 +8068,6 @@
           "9d3e56ca36": "Değişiklikleri Uygula",
           "f96688b6bc": "İptal",
           "b7ddae600c": "Tamam",
-          "e4bda7ce6f": "Bu sistemde Ghostty yapılandırması bulunamadı.",
           "b58d4c9051": "Desteklenmeyen anahtarlar",
           "674b5ccd6b": "İçe aktarılacak yeni ayar yok, mevcut ayarlarınız zaten eşleşiyor.",
           "a4c5dec640": "Güncellenecek ayarlar",
@@ -13974,6 +13978,7 @@
                 "baseCommitLabel": "temel commit:",
                 "failingChecks_one": "{{count}} başarısız kontrol",
                 "failingChecks_other": "{{count}} başarısız kontrol",
+                "pipelineFailed": "{{name}} başarısız oldu",
                 "pendingChecks_one": "{{count}} kontrol bekliyor",
                 "pendingChecks_other": "{{count}} kontrol bekliyor",
                 "unresolvedChecks_one": "{{count}} çözülmemiş kontrol",
@@ -19053,6 +19058,7 @@
       "failureWords": {
         "theAgent": "Ajan",
         "providerStartFailed": "{{agent}}, başlatılması tamamlanmadan durdu.",
+        "savedConversationMissing": "{{agent}} bu sohbetin kayıtlı konuşmasını bulamadı.",
         "runCommandAgain": "/{{command}} komutunu yeniden çalıştırın.",
         "sendToTryAgain": "Tekrar denemek için mesajınızı gönderin.",
         "sendAgainToTryOnceMore": "Tekrar denemek için mesajınızı yeniden gönderin.",
@@ -19589,7 +19595,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Sohbet arayüzünde devam etmek için bu sunucudaki Orca'yı güncelleyin.",
-        "notSavedYet": "{{agent}} bu sohbeti henüz kaydetmedi. Yanıt verdikten sonra yeniden deneyin."
+        "notSavedYet": "{{agent}} bu sohbeti henüz kaydetmedi. Yanıt verdikten sonra yeniden deneyin.",
+        "exitUnconfirmed": "{{agent}} bu sohbeti başka bir terminalde yürütüyor. Oradan çıkın veya o terminali kapatın, ardından yeniden deneyin."
       },
       "state": {
         "loading": {
@@ -20421,7 +20428,23 @@
     "newWorkspace": {
       "agentOptional": "Ajan [İsteğe bağlı]",
       "createDescription": "Projeyi ve çalışma alanı adını seçin. Bir ajan başlatmak istiyorsanız ajan seçin.",
-      "setupOnly": "Yalnızca kurulum"
+      "setupOnly": "Yalnızca kurulum",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Bu çalışma alanını oluşturmadan önce setup çalıştırılıp çalıştırılmayacağını seçin.",
+        "cancel": "İptal",
+        "retry": "Yeniden dene",
+        "setupScript": "Kurulum betiği",
+        "defaultTabCommands": "Varsayılan sekme komutları",
+        "setupAndDefaultTabs": "Kurulum ve varsayılan sekme komutları",
+        "askRunSetup": "Kurulum şimdi çalıştırılsın mı?",
+        "askRunDefaultTabs": "Varsayılan sekme komutları şimdi çalıştırılsın mı?",
+        "askRunSetupAndDefaultTabs": "Kurulum ve varsayılan sekme komutları şimdi çalıştırılsın mı?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + yerel",
+        "localSource": "yerel ayarlar"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Başka bir sorun değişikliği devam ediyor."
@@ -20509,6 +20532,9 @@
         "finished": "Geçici orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
         "keepOpen": "Açık tut"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "WSL üzerinde çalışır: {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {
@@ -21153,6 +21179,7 @@
     "scanIssues": {
       "issuesOmitted": "Ek tarama sorunları gösterilmedi.",
       "sessionMetadataUnreadable": "Bu taramada oturum meta verileri okunamadı.",
+      "transcriptTooLarge": "Bir {{label}} konuşması Oturum Geçmişi'nde yüklenemeyecek kadar büyük. Doğrudan {{label}} içinde sürdürmeyi deneyin.",
       "openCodeScannerUnavailable": "Arka plan tarayıcısı başlatılamadığı için OpenCode geçmişi atlandı; uygulama yanıt vermeye devam ediyor.",
       "openCodeScanIncomplete": "OpenCode geçmiş taraması tamamlanamadı: {{detail}}",
       "openCodeWslReaderPreparing": "WSL SQLite okuyucusu hazırlanıyor. Kurulum tamamlandıktan sonra Vault bölümünü yenileyin.",
@@ -22281,6 +22308,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: okunabilir yedek yok, bu yüzden boş başlayacak.",
+      "sectionKeptCurrent": "{{section}}: mevcut çalıştırmalarınız korunacak",
       "sectionRestored": "{{section}}: {{time}} kaydedilen yedekten geri yüklendi.",
       "projectsForgotten": "Orca projelerinizi ve çalışma alanı ayrıntılarını unutacak. Diskteki dosyalara dokunulmaz.",
       "newerProjectsRemoved": "Bu yedekten sonra eklenen projeler, çalışma alanı ayrıntılarıyla birlikte Orca'dan kaldırılacak. Diskteki dosyalara dokunulmaz.",
@@ -22323,7 +22351,7 @@
       "noneFound": "(bulunamadı)",
       "sqlitePath": "SQLite yolu: {{path}}",
       "sectionsDamaged": "Bu profilin kayıtlı durumunun bir bölümü hasarlı: {{sections}}. Diğer her şey sağlam.",
-      "repairCommand": "Orca'yı kapatın, ardından yalnızca hasarlı bölümleri yedeklerden değiştirip diğer her şeyi korumak için `{{command}}` komutunu çalıştırın. Orca hasarlı dosyanın bir kopyasını saklar.",
+      "repairCommand": "Orca’yı durdurun, ardından yalnızca hasarlı kısımları onarmak ve diğer her şeyi korumak için `{{command}}` komutunu çalıştırın. Orca hasarlı dosyanın bir kopyasını saklar.",
       "restoreWholeBackup": "Bunun yerine bir yedeği bütünüyle geri yüklemek için önce `{{exportsCommand}}`, ardından `{{rollbackCommand}}` komutunu çalıştırın.",
       "sqliteUnreadable": "SQLite durumu okunamadığı için etkin profil Orca'da güvenli bir şekilde açılamadı.",
       "legacyJsonPath": "Eski JSON yolu: {{path}}",
@@ -22569,7 +22597,8 @@
       "changed": "Daha önce taşındı, ardından burada Orca'nın eski bir sürümü tarafından değiştirildi. Yeniden taşınmaz.",
       "chatsStay": "Mevcut sohbetler bu bilgisayarda kalır. Bu projedeki yeni sohbetler WSL ana makinesinde başlar.",
       "browserLoginsConflict": "Ana makinenin tarayıcı profili zaten kullanımda olduğundan tarayıcı oturumları aktarılmayacak. Taşımadan sonra ana makinenin tarayıcı sekmelerinde yeniden oturum açın.",
-      "browserLoginsNotCarried": "Tarayıcı oturumları bu ana makineye aktarılmayacak. Taşımadan sonra ana makinenin tarayıcı sekmelerinde yeniden oturum açın."
+      "browserLoginsNotCarried": "Tarayıcı oturumları bu ana makineye aktarılmayacak. Taşımadan sonra ana makinenin tarayıcı sekmelerinde yeniden oturum açın.",
+      "why": "Çalışma artık dosyalarınızın yanında, Linux içinde yürür; bu sayede terminaller, Git ve dosya değişiklikleri daha hızlı ve daha güvenilir olur. Projeleriniz değişmez ve herhangi bir projeyi “Bu bilgisayarda yeniden kullan” ile geri taşıyabilirsiniz."
     },
     "cancel": "İptal",
     "progress": {
@@ -23070,8 +23099,7 @@
     "launchTerminal": "Terminal başlat",
     "use": "Kullan",
     "select": "Aracı seç",
-    "openIn": "Açılacağı yer",
-    "chat": "Sohbet",
-    "terminal": "Terminal"
+    "promptPlaceholder": "İstem ekleyin (isteğe bağlı): beceriler için /, dosyalar için @",
+    "promptPlaceholderFilesOnly": "İstem ekleyin (isteğe bağlı): dosyalar için @"
   }
 }

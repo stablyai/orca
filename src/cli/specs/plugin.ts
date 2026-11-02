@@ -1,7 +1,7 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS, LOCAL_COMMAND_FLAGS } from '../args'
 import { PLUGIN_TEMPLATE_NAMES } from '../plugin-authoring/plugin-template-names'
-import { PLUGIN_DEV_REQUEST_COMMAND_SPEC } from './plugin-dev-request'
+import { PLUGIN_DEV_HOOK_COMMAND_SPEC, PLUGIN_DEV_REQUEST_COMMAND_SPEC } from './plugin-dev-request'
 
 const TEMPLATES = PLUGIN_TEMPLATE_NAMES.join('|')
 
@@ -21,6 +21,7 @@ export const PLUGIN_AUTHORING_COMMAND_SPECS: CommandSpec[] = [
       'editor and panel run code in a sandboxed frame: loading them prints the access they ask for and needs --approve.',
       'components is a panel written in TSX with Orca components and no build step; it also writes the editor typings to .orca/types (see `orca plugin types`).',
       'worker-panel is a components panel plus its own TypeScript worker (`main`): requests, posts and storage typed by one src/protocol.ts, with panel and worker tests for `orca plugin test`. It needs --approve to load.',
+      'hook is a worker-only guard on `terminal.send` that refuses dangerous commands and fails closed (`onError: "deny"`), with a test for `orca plugin test`. It needs --approve to load.',
       'The id defaults to the folder name. Leave out --publisher: Orca names the publisher after the repository owner (or `local` for a folder). Pass it only to support Orca older than 1.4.246, and then it must be that owner.',
       'Runs on the machine that runs this command; it does not reach the Orca app.',
       EXIT_CODES_NOTE
@@ -29,7 +30,8 @@ export const PLUGIN_AUTHORING_COMMAND_SPECS: CommandSpec[] = [
       'orca plugin create ./dusk-theme --template theme --publisher acme',
       'orca plugin create ./notes-editor --template editor --name "Notes" --json',
       'orca plugin create ./todo-panel --template components',
-      'orca plugin create ./counter --template worker-panel'
+      'orca plugin create ./counter --template worker-panel',
+      'orca plugin create ./guard --template hook'
     ]
   },
   {
@@ -64,7 +66,7 @@ export const PLUGIN_AUTHORING_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['plugin', 'check'],
     summary:
-      'Validate a plugin and render each components panel once on this machine, unsandboxed: only for code you trust',
+      'Validate a plugin, render each components panel once on this machine (unsandboxed: only for code you trust), and statically check each custom editor',
     usage: 'orca plugin check [dir] [--json]',
     allowedFlags: [...LOCAL_COMMAND_FLAGS, 'dir'],
     positionalArgs: ['dir'],
@@ -72,7 +74,7 @@ export const PLUGIN_AUTHORING_COMMAND_SPECS: CommandSpec[] = [
       "Not sandboxed: this runs the plugin's code on this machine with your user's full access, outside Orca's plugin sandbox. Check only code you trust.",
       'Validates like `orca plugin validate`, then mounts each `ui: "components"` panel in Node against a stand-in host with the capabilities the manifest declares, and reports runtime errors (with file:line), layouts Orca would refuse, and props it would drop.',
       'Runs on the `node` on PATH when it is 20.6 or newer, else on the Node built into Orca. It does not reach the Orca app.',
-      'Exit codes: 0 ok, 1 a panel failed to render, 2 the plugin is invalid (plugin_invalid).'
+      'Exit codes: 0 ok, 1 a panel failed to render or an editor failed its static check (plugin_check_failed), 2 the plugin is invalid (plugin_invalid).'
     ],
     examples: ['orca plugin check .', 'orca plugin check ./todo-panel --json']
   },
@@ -281,6 +283,7 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
       'orca plugin dev emit acme.notes agent.status.changed --data \'{"workspaceId":null,"paneKey":"p1","state":"done","receivedAt":1}\' --json'
     ]
   },
+  PLUGIN_DEV_HOOK_COMMAND_SPEC,
   PLUGIN_DEV_REQUEST_COMMAND_SPEC,
   {
     path: ['plugin', 'dev', 'unload'],

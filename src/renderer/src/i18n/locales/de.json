@@ -215,7 +215,10 @@
       "title": "{{distro}} als Host ausführen (empfohlen)",
       "why": "Git, Dateien und Terminals laufen dann nativ in Linux statt über die Windows-Dateifreigabe.",
       "accept": "Als Host ausführen",
-      "projectNotFound": "Das hinzugefügte Projekt zum Verschieben wurde nicht gefunden. Verwende „Auf den {{distro}}-Host verschieben…“ beim Projekt in der Seitenleiste."
+      "projectNotFound": "Das hinzugefügte Projekt zum Verschieben wurde nicht gefunden. Verwende „Auf den {{distro}}-Host verschieben…“ beim Projekt in der Seitenleiste.",
+      "existingTitle": "Auf dem {{distro}}-Host hinzufügen (empfohlen)",
+      "existingWhy": "{{distro}} läuft bereits als Host, daher laufen Git, Dateien und Terminals nativ in Linux statt über die Windows-Dateifreigabe.",
+      "existingAccept": "Auf Host hinzufügen"
     }
   },
   "app": {
@@ -610,7 +613,7 @@
         "inheritFont": "Wie IDE-Schrift",
         "fontPreviewLabel": "Vorschau der Chat-Schrift",
         "fontPreview": "Der schnelle braune Fuchs springt über den faulen Hund.",
-        "title": "Chat",
+        "title": "Chat-Oberfläche",
         "textSize": "Textgröße",
         "textSizeDescription": "Nachrichten, Werkzeugaktivitäten und das Nachrichtenfeld. {{increase}} / {{decrease}} in einem Chat ändern diese Einstellung ebenfalls.",
         "codeTextSize": "Code-Textgröße",
@@ -1764,7 +1767,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "Die strukturierte Agenten-Sitzung ist noch nicht verfügbar. In Kürze erneut versuchen.",
         "gone": "Dieser Chat befindet sich nicht mehr auf diesem Host und kann hier daher nicht erneut geöffnet werden.",
-        "hostCannotOpen": "Dieser Chat kann erst nach einer Aktualisierung von Orca erneut geöffnet werden."
+        "hostCannotOpen": "Dieser Chat kann erst nach einer Aktualisierung von Orca erneut geöffnet werden.",
+        "worktreeDeleted": "Der Worktree wurde gelöscht.",
+        "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Rezepte mit bereitgestelltem Stammverzeichnis unterstützen keinen Sparse-Checkout."
@@ -8077,7 +8082,6 @@
           "9d3e56ca36": "Änderungen anwenden",
           "f96688b6bc": "Abbrechen",
           "b7ddae600c": "Abschließen",
-          "e4bda7ce6f": "Auf diesem System wurde keine Ghostty-Konfiguration gefunden.",
           "b58d4c9051": "Nicht unterstützte Schlüssel",
           "674b5ccd6b": "Keine neuen Einstellungen zum Importieren – die aktuellen Einstellungen stimmen bereits überein.",
           "a4c5dec640": "Zu aktualisierende Einstellungen",
@@ -13988,6 +13992,7 @@
                 "baseCommitLabel": "Basis-Commit:",
                 "failingChecks_one": "{{count}} fehlgeschlagener Check",
                 "failingChecks_other": "{{count}} fehlgeschlagene Checks",
+                "pipelineFailed": "{{name}} fehlgeschlagen",
                 "pendingChecks_one": "{{count}} Check ausstehend",
                 "pendingChecks_other": "{{count}} Checks ausstehend",
                 "unresolvedChecks_one": "{{count}} Check ungeklärt",
@@ -19067,6 +19072,7 @@
       "failureWords": {
         "theAgent": "Der Agent",
         "providerStartFailed": "{{agent}} wurde beendet, bevor der Start abgeschlossen war.",
+        "savedConversationMissing": "{{agent}} konnte den gespeicherten Verlauf dieses Chats nicht finden.",
         "runCommandAgain": "/{{command}} erneut ausführen.",
         "sendToTryAgain": "Die Nachricht senden, um es erneut zu versuchen.",
         "sendAgainToTryOnceMore": "Die Nachricht erneut senden, um es noch einmal zu versuchen.",
@@ -19602,7 +19608,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Orca auf diesem Host aktualisieren, um in der Chat-Oberfläche fortzufahren.",
-        "notSavedYet": "{{agent}} hat diese Unterhaltung noch nicht gespeichert. Nach der Antwort erneut versuchen."
+        "notSavedYet": "{{agent}} hat diese Unterhaltung noch nicht gespeichert. Nach der Antwort erneut versuchen.",
+        "exitUnconfirmed": "{{agent}} führt diese Unterhaltung in einem anderen Terminal aus. Dort beenden oder das Terminal schließen, dann erneut versuchen."
       },
       "state": {
         "loading": {
@@ -20437,7 +20444,23 @@
     "newWorkspace": {
       "agentOptional": "Agent [optional]",
       "createDescription": "Projekt und Namen des Arbeitsbereichs auswählen. Optional einen Agenten zum Starten auswählen.",
-      "setupOnly": "Nur Einrichtung"
+      "setupOnly": "Nur Einrichtung",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Auswählen, ob die Einrichtung vor dem Erstellen dieses Arbeitsbereichs ausgeführt werden soll.",
+        "cancel": "Abbrechen",
+        "retry": "Erneut versuchen",
+        "setupScript": "Einrichtungsskript",
+        "defaultTabCommands": "Standard-Tab-Befehle",
+        "setupAndDefaultTabs": "Einrichtung und Standard-Tab-Befehle",
+        "askRunSetup": "Einrichtung jetzt ausführen?",
+        "askRunDefaultTabs": "Standard-Tab-Befehle jetzt ausführen?",
+        "askRunSetupAndDefaultTabs": "Einrichtung und Standard-Tab-Befehle jetzt ausführen?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + lokal",
+        "localSource": "Lokale Einstellungen"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Eine weitere Issue-Änderung ist in Bearbeitung."
@@ -20525,6 +20548,9 @@
         "finished": "Temporärer Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
         "keepOpen": "Offen halten"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "Läuft in WSL: {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {
@@ -21170,6 +21196,7 @@
     "scanIssues": {
       "issuesOmitted": "Weitere Probleme beim Scannen wurden ausgelassen.",
       "sessionMetadataUnreadable": "Sitzungsmetadaten konnten bei diesem Scan nicht gelesen werden.",
+      "transcriptTooLarge": "Eine Unterhaltung mit {{label}} ist zu groß, um im Sitzungsverlauf geladen zu werden. Stattdessen direkt in {{label}} fortsetzen, falls möglich.",
       "openCodeScannerUnavailable": "Der OpenCode-Verlauf wurde übersprungen, weil der Hintergrundscanner nicht starten konnte; die App reagiert weiterhin.",
       "openCodeScanIncomplete": "Der Scan des OpenCode-Verlaufs wurde nicht abgeschlossen: {{detail}}",
       "openCodeWslReaderPreparing": "Das SQLite-Leseprogramm für WSL wird vorbereitet. Nach Abschluss der Einrichtung Vault aktualisieren.",
@@ -22017,7 +22044,8 @@
       "changed": "Zuvor verschoben, dann hier durch eine ältere Version von Orca geändert. Es wird nicht erneut verschoben.",
       "chatsStay": "Bestehende Chats bleiben auf diesem Computer. Neue Chats in diesem Projekt starten auf dem WSL-Host.",
       "browserLoginsConflict": "Browser-Anmeldungen werden nicht übernommen, da das Browser-Profil des Hosts bereits verwendet wird. Nach dem Verschieben in den Browser-Tabs des Hosts erneut anmelden.",
-      "browserLoginsNotCarried": "Browser-Anmeldungen werden nicht auf diesen Host übernommen. Nach dem Verschieben in den Browser-Tabs des Hosts erneut anmelden."
+      "browserLoginsNotCarried": "Browser-Anmeldungen werden nicht auf diesen Host übernommen. Nach dem Verschieben in den Browser-Tabs des Hosts erneut anmelden.",
+      "why": "Die Arbeit läuft dann in Linux, direkt bei den Dateien, sodass Terminals, Git und Dateiänderungen schneller und zuverlässiger sind. Die Projekte ändern sich nicht, und jedes Projekt lässt sich mit „Wieder auf diesem Computer verwenden“ zurückholen."
     },
     "cancel": "Abbrechen",
     "progress": {
@@ -22454,6 +22482,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: Es gibt keine lesbare Sicherungskopie, daher startet dieser Abschnitt leer.",
+      "sectionKeptCurrent": "{{section}}: Ihre aktuellen Ausführungen bleiben erhalten",
       "sectionRestored": "{{section}}: aus der {{time}} gespeicherten Sicherungskopie wiederhergestellt.",
       "projectsForgotten": "Orca vergisst die Projekte und ihre Arbeitsbereichsdetails. Dateien auf dem Datenträger bleiben unverändert.",
       "newerProjectsRemoved": "Projekte, die nach dieser Sicherungskopie hinzugefügt wurden, werden zusammen mit ihren Arbeitsbereichsdetails aus Orca entfernt. Dateien auf dem Datenträger bleiben unverändert.",
@@ -22496,7 +22525,7 @@
       "noneFound": "(keine gefunden)",
       "sqlitePath": "SQLite-Pfad: {{path}}",
       "sectionsDamaged": "Ein Teil des gespeicherten Zustands dieses Profils ist beschädigt: {{sections}}. Alles andere ist intakt.",
-      "repairCommand": "Orca beenden und dann `{{command}}` ausführen, um nur die beschädigten Teile aus Sicherungskopien zu ersetzen und alles andere beizubehalten. Orca bewahrt eine Kopie der beschädigten Datei auf.",
+      "repairCommand": "Beenden Sie Orca und führen Sie dann `{{command}}` aus, um nur die beschädigten Teile zu reparieren und alles andere beizubehalten. Orca bewahrt eine Kopie der beschädigten Datei auf.",
       "restoreWholeBackup": "Um stattdessen eine vollständige Sicherungskopie wiederherzustellen, zuerst `{{exportsCommand}}` und dann `{{rollbackCommand}}` ausführen.",
       "sqliteUnreadable": "Orca kann das aktive Profil nicht sicher öffnen, da sein SQLite-Zustand nicht lesbar ist.",
       "legacyJsonPath": "Pfad der alten JSON-Datei: {{path}}",
@@ -23087,8 +23116,7 @@
     "launchTerminal": "Terminal starten",
     "use": "Verwenden",
     "select": "Agent auswählen",
-    "openIn": "Öffnen in",
-    "chat": "Chat",
-    "terminal": "Terminal"
+    "promptPlaceholder": "Prompt hinzufügen (optional): / für Skills, @ für Dateien",
+    "promptPlaceholderFilesOnly": "Prompt hinzufügen (optional): @ für Dateien"
   }
 }

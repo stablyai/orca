@@ -1,6 +1,7 @@
 import { act, createElement, type ComponentProps } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, vi } from 'vitest'
+import { clearNativeChatComposerDraftsForTests } from '../native-chat/native-chat-composer-draft-store'
 import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 
 export const entry: AgentPickerEntry = {
@@ -18,6 +19,7 @@ export let root: Root
 export let host: HTMLDivElement
 export const onUse = vi.fn<(draft: AgentPickerDraft) => void>()
 beforeEach(() => {
+  clearNativeChatComposerDraftsForTests()
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   onUse.mockClear()
   host = document.createElement('div')
@@ -43,7 +45,13 @@ export function AgentLaunchSetupPanel({
   onDraftChange?: (draft: AgentPickerDraft) => void
 }) {
   const draftScope = useAgentPickerDraftScope()
-  const setup = useAgentPickerSetup({ entry: props.entry, initial, draftScope, open: true })
+  const setup = useAgentPickerSetup({
+    entry: props.entry,
+    initial,
+    draftScope,
+    mode: props.mode,
+    open: true
+  })
   return setup.ready
     ? createElement(SetupPanel, {
         ...props,
@@ -54,9 +62,12 @@ export function AgentLaunchSetupPanel({
           onDraftChange?.(draft)
         },
         onUse: (draft) => {
-          if (setup.accept(draft)) {
-            onUse(draft)
+          const options = { ...draft }
+          delete options.prompt
+          if (setup.accept(options)) {
+            return onUse(draft)
           }
+          return false
         }
       })
     : null

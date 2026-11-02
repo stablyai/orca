@@ -20,6 +20,16 @@ export {
 } from './agent-launch-picker-drafts'
 export type { AgentPickerSetupIdentity } from './agent-launch-picker-drafts'
 
+export type AgentLaunchSetupPanelProps = {
+  entry: AgentPickerEntry
+  draft: AgentPickerDraft
+  getDraft: () => AgentPickerDraft | undefined
+  mode?: 'launch' | 'select'
+  disabled?: boolean
+  onDraftChange: (draft: AgentPickerDraft) => void
+  onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
+}
+
 function setupKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault()
@@ -46,7 +56,7 @@ export function AgentLaunchSetupButton({
   initial,
   seed,
   surface,
-  mode,
+  mode = 'launch',
   renderAnchor,
   disabled,
   open: controlledOpen,
@@ -67,7 +77,7 @@ export function AgentLaunchSetupButton({
   open?: boolean
   replacedByAnotherSetup?: boolean
   onOpenChange?: (open: boolean) => void
-  onUse: (draft: AgentPickerDraft) => void
+  onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
 }) {
   const [localOpen, setOpen] = useState(false)
   const open = controlledOpen ?? localOpen
@@ -79,6 +89,7 @@ export function AgentLaunchSetupButton({
     draftScope,
     draftId,
     preset,
+    mode,
     open
   })
   const closeFocus = useRef({ open, restore: true })
@@ -180,6 +191,12 @@ export function AgentLaunchSetupButton({
         onClick={(event) => event.stopPropagation()}
         // Hovering another menu row moves focus there; only a click outside or Escape closes the panel.
         onFocusOutside={(event) => event.preventDefault()}
+        // The prompt's open / or @ menu takes Escape first.
+        onEscapeKeyDown={(event) => {
+          if (content.current?.querySelector('[contenteditable][aria-expanded="true"]')) {
+            event.preventDefault()
+          }
+        }}
         onCloseAutoFocus={(event) => {
           if (!closeFocus.current.restore) {
             event.preventDefault()
@@ -196,14 +213,16 @@ export function AgentLaunchSetupButton({
               disabled={disabled}
               onDraftChange={setup.change}
               onUse={(draft) => {
-                if (
-                  setup.accept(
-                    mode === 'select' ? draft : { ...draft, surface: setup.draft.surface }
-                  )
-                ) {
-                  onUse(draft)
+                const options = { ...draft, surface: setup.draft.surface }
+                delete options.prompt
+                if (!setup.accept(mode === 'select' ? draft : options)) {
+                  return false
                 }
-                changeOpen(false)
+                const accepted = onUse(draft)
+                if (accepted !== false) {
+                  changeOpen(false)
+                }
+                return accepted
               }}
             />
           ) : null}

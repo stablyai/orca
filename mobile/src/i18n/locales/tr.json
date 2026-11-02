@@ -1911,6 +1911,7 @@
       "providerRetrying": "{{agent}} geçici bir sorunla karşılaştı ve yeniden deniyor.",
       "providerRetryingQuoted": "{{agent}} yeniden deniyor: {{detail}}.",
       "providerStartFailed": "{{agent}}, başlatılması tamamlanmadan durdu.",
+      "savedConversationMissing": "{{agent}} bu sohbetin kayıtlı konuşmasını bulamadı.",
       "queueFull": "Ajana iletilmeyi bekleyen çok fazla mesaj olduğu için bu mesaj gönderilmedi.",
       "quitTerminalAgent": "Sohbete burada devam etmek için o ajandan çıkın.",
       "runCommandAgain": "/{{command}} komutunu yeniden çalıştırın.",
@@ -2040,8 +2041,7 @@
       "promptUnconfirmed": "Ajan başlatıldı, ancak istemin gönderildiği doğrulanamadı."
     },
     "prActionsEngine": {
-      "mergeFailed": "Pull request merge edilemedi.",
-      "refreshFailed": "Pull request yenilenemedi."
+      "mergeFailed": "Pull request merge edilemedi."
     },
     "prAiTriageLaunch": {
       "agentStarted": "Ajan başlatıldı",
@@ -2497,6 +2497,10 @@
       "terminal": "Terminal",
       "tapToFocusPane": "{{title}}, odaklamak için dokunun",
       "inputPane": "{{title}} · Girdi"
+    },
+    "structuredOpen": {
+      "worktreeDeleted": "Çalışma ağacı silindi.",
+      "folderWorkspaceRemoved": "Klasör çalışma alanı kaldırıldı."
     }
   },
   "settings": {

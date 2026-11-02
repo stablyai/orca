@@ -31,6 +31,9 @@ export type RpcDispatchStreamingOptions = Pick<
   callerScope?: RpcCallerScope
   /** Aborts when the caller's connection closes; only for the dispatcher's own waits, never handlers. */
   connectionSignal?: AbortSignal
+  /** In-process callers: runs after admission and feature waits, just before the handler; a throw
+   *  refuses the call (a plugin revoked while its call waited). */
+  beforeInvoke?: () => void
 }
 
 export function rpcContextFromTransport(

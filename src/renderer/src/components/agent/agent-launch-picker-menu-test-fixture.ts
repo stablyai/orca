@@ -1,4 +1,11 @@
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
+import { resolveAgentLaunchCommand } from '../../../../shared/tui-agent-launch-command'
+import { tokenizeStartupCommand } from '../../../../shared/tui-agent-startup-shell'
+import {
+  agentPickerLaunchInputs,
+  type AgentPickerDraft,
+  type AgentPickerEntry
+} from '../../../../shared/agent-launch-picker'
 
 export const entry: AgentPickerEntry = {
   agent: 'codex',
@@ -16,3 +23,35 @@ export const entry: AgentPickerEntry = {
     ]
   }
 }
+
+export function compilePickerTerminalLaunch(draft: AgentPickerDraft, entry: AgentPickerEntry) {
+  const compiled = resolveAgentLaunchCommand({
+    ...resolveAgentStartupPlanInputs({
+      agent: entry.agent,
+      settings: { agentCmdOverrides: { [entry.agent]: entry.agent } },
+      ...agentPickerLaunchInputs(draft, entry),
+      platform: 'linux',
+      shell: 'posix',
+      isRemote: false
+    }),
+    shell: 'posix'
+  })
+  if (!compiled.ok) {
+    throw new Error(compiled.error)
+  }
+  return tokenizeStartupCommand(compiled.command, 'posix')
+}
+
+export const codexAskRetainedArgsTokens = [
+  'codex',
+  '-c',
+  'disable_paste_burst=true',
+  '-a',
+  'on-request',
+  '-s',
+  'read-only',
+  '-c',
+  'approvals_reviewer=user',
+  '--add-dir',
+  'old-owner'
+]

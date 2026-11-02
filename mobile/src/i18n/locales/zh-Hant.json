@@ -1907,6 +1907,7 @@
       "providerRetrying": "{{agent}} 遇到暫時性問題，正在重試。",
       "providerRetryingQuoted": "{{agent}} 正在重試：{{detail}}。",
       "providerStartFailed": "{{agent}} 在完成啟動前已停止。",
+      "savedConversationMissing": "{{agent}} 找不到此聊天已儲存的對話。",
       "queueFull": "等待代理程式處理的訊息過多，因此此訊息未傳送。",
       "quitTerminalAgent": "請結束該代理程式，以便在此處繼續聊天。",
       "runCommandAgain": "請重新執行 /{{command}}。",
@@ -2036,8 +2037,7 @@
       "promptUnconfirmed": "代理程式已啟動，但無法確認提示詞是否已傳送。"
     },
     "prActionsEngine": {
-      "mergeFailed": "合併 PR 失敗。",
-      "refreshFailed": "重新整理 PR 失敗。"
+      "mergeFailed": "合併 PR 失敗。"
     },
     "prAiTriageLaunch": {
       "agentStarted": "代理程式已啟動",
@@ -2493,6 +2493,10 @@
       "terminal": "終端機",
       "tapToFocusPane": "{{title}}，點一下以聚焦",
       "inputPane": "{{title}} · 輸入"
+    },
+    "structuredOpen": {
+      "worktreeDeleted": "工作樹已刪除。",
+      "folderWorkspaceRemoved": "資料夾工作區已移除。"
     }
   },
   "settings": {

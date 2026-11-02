@@ -20,7 +20,7 @@ import { focusNativeChatPromptCard } from './use-native-chat-prompt-card-focus'
 import {
   headSteerableQueuedMessageCard,
   queuedMessageCardNeedsAttention
-} from '../../../../shared/structured-agent-session-queued-cards'
+} from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import type { QueuedEditAttachTarget } from './NativeChatQueuedMessageComposer'
 
 /** Keep host-held drafts outside the transcript until consumed; keep the live region mounted for the first card. */

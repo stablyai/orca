@@ -32,7 +32,10 @@ vi.mock('../settings/agent-launch-settings-transport', () => ({
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
     (select: (state: unknown) => unknown) =>
-      select({ settings: { agentDefaultArgs: { codex: '--desktop-only' } } }),
+      select({
+        settings: { agentDefaultArgs: { codex: '--desktop-only' } },
+        agentStatusByPaneKey: {}
+      }),
     { getState: () => mocks.store }
   )
 }))

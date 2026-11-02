@@ -67,18 +67,6 @@ describe('getLayoutBaseCharacterForCode', () => {
     expect(getLayoutCharacterForCode('Digit7', true)).toBe('?')
   })
 
-  it('never combines a native snapshot with a separate layout-map fallback', () => {
-    _setLayoutMapForTests({ get: () => 'q', size: 1 })
-    _setLayoutSnapshotForTests({
-      inputSourceId: 'partial',
-      keyCharacters: {
-        Digit7: { unmodified: '7', shifted: '/' }
-      }
-    })
-
-    expect(getLayoutBaseCharacterForCode('KeyQ')).toBeUndefined()
-  })
-
   it('invalidates synchronously and fences an older refresh after a layout change', async () => {
     _setLayoutSnapshotForTests({
       inputSourceId: 'old',

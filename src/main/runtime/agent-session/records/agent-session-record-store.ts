@@ -1,3 +1,4 @@
+import * as usageLimitContinue from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import { createAgentSessionOwnerProof } from '../../agent-session-owner-proof'
 import { backfillAgentSessionPermissionModes } from '../ownership/agent-session-permission-backfill'
 import { createAgentSessionConversationReceipts } from '../agent-session-conversation-receipts'
@@ -29,7 +30,7 @@ import {
   type AgentSessionExecutionLocation,
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session-options-replacement'
+import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/agent-session-options-replacement'
 import {
   commitAgentSessionProcessIdentity,
   evictAgentSessionOwner,
@@ -129,6 +130,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   getConversation = (sessionId: string) => getAgentSessionConversation(this.state, sessionId)
   listConversations = () => listAgentSessionConversations(this.state)
+  lineageRevision = (): object => this.transactions.lineageRevision()
   selectWritableRecord = (sessionId: string) =>
     selectWritableAgentSessionRecord(this.state, sessionId)
   requireWritableRecord = (sessionId: string) =>
@@ -229,6 +231,11 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     return this.mutate(args.sessionId, (record) => evictAgentSessionOwner({ ...args, record }))
   }
 
+  cancelUsageLimitContinue = (id: string, cut: usageLimitContinue.UsageLimitContinueIdentity) =>
+    this.mutate(id, (record) =>
+      usageLimitContinue.cancelAgentSessionUsageLimitContinue(record, cut)
+    )
+
   transitionHandoff = (
     sessionId: string,
     transition: (record: AgentSessionRecord) => AgentSessionRecord
@@ -271,9 +278,29 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     args: Parameters<typeof settleAgentSessionOperationInto>[1]
   ): Promise<void> => this.transact((draft) => settleAgentSessionOperationInto(draft, args))
 
-  /** Commit settlement with the journal write; new submissions also clear Sleep in that draft. */
+  /** Commit settlement with the journal write, including any action-owned record transformation;
+   *  new submissions also clear Sleep in that draft. */
   operationOutcomeReceipt = (args: Parameters<typeof agentSessionOperationOutcomeReceipt>[1]) =>
     agentSessionOperationOutcomeReceipt(this.transactions, args)
+
+  /** The journal commit revealing a stopped cut co-writes its withdrawal; a saved one needs none. */
+  usageLimitContinueCancelReceipt = (
+    id: string,
+    cut: usageLimitContinue.UsageLimitContinueIdentity
+  ): JournalOperationReceipt | undefined => {
+    const saved = this.getRecord(id)?.usageLimitContinueCancel
+    return saved?.turnItemId === cut.turnItemId && saved.resetsAt === cut.resetsAt
+      ? undefined
+      : this.transactions.receipt((draft) => {
+          const record = draft.records.get(id)
+          if (record) {
+            draft.records.set(
+              id,
+              usageLimitContinue.cancelAgentSessionUsageLimitContinue(record, cut)
+            )
+          }
+        })
+  }
 
   /** Automatic queue admission uses the same record transition as a client's send receipt. */
   submissionReceipt = (sessionId: string) =>

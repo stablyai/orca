@@ -94,6 +94,7 @@ export class PluginService {
         pluginsDataDir: getPluginsDataDir(this.options.userDataPath),
         desktop: this.options.getDesktopFrameServices?.(),
         panels: pluginPanelBridgeServices(this.panelBridge),
+        statusBar: this.options.statusBar,
         audit: this.audit,
         log: (pluginKey) => this.installed.captureLog(pluginKey, 'info')
       })
@@ -115,8 +116,8 @@ export class PluginService {
       capabilities: (pluginKey) => this.getGrantedCapabilities(pluginKey),
       isCurrentApproved: (spec) => isApprovedWorkerSpec(spec, resolveApproved(spec.pluginKey)),
       isApprovalKept: (spec) => isApprovedWorkerSpec(spec, resolveApproved(spec.pluginKey, true)),
-      executeHostCall: (pluginKey, method, params) =>
-        this.executeHostCall(pluginKey, method, params, 'worker'),
+      executeHostCall: (pluginKey, method, params, signal) =>
+        this.executeHostCall(pluginKey, method, params, 'worker', signal ? { signal } : undefined),
       onPanelPost: (pluginKey, post) => this.panelBridge.onWorkerPost(pluginKey, post),
       log: (pluginKey) => this.installed.logs.capture(pluginKey),
       onStateChanged: () => this.notifyChanged(false)
@@ -274,9 +275,9 @@ export class PluginService {
     return this.hostCall(...args)
   }
 
-  invokeCommand(pluginKey: string, commandId: string, args?: unknown): Promise<unknown> {
-    const plugin = this.findApprovedPlugin(pluginKey)
-    return invokePluginWorkerCommand(pluginKey, plugin, this.workerController, commandId, args)
+  invokeCommand(pluginKey: string, commandId: string, args?: unknown, startBy?: number) {
+    const [plugin, workers] = [this.findApprovedPlugin(pluginKey), this.workerController]
+    return invokePluginWorkerCommand(pluginKey, plugin, workers, commandId, args, startBy)
   }
 
   wantsEvent(event: PluginEventName): boolean {

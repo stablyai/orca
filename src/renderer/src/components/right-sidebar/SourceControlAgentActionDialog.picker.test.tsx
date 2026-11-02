@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { readNativeChatSessionOptionCache } from '../native-chat/native-chat-session-option-cache'
+import { readNativeChatSessionOptionCache } from '../../../../shared/native-chat/input/native-chat-session-option-cache'
 import { planQueuedPaneAgentLaunch } from '../../../../main/ipc/pty/pane-agent-launch.test-fixture'
 import type { RunSourceControlAgentActionStartArgs } from './runSourceControlAgentActionStart'
 import type { PtySpawnIpcArgs } from '../../../../main/ipc/pty/ipc/spawn-types'
@@ -121,7 +121,7 @@ it.each(['claude', 'codex'] as const)(
     fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
       target: { value: '--add-dir docs' }
     })
-    await user.click(screen.getByRole('button', { name: 'Use' }))
+    await user.click(screen.getByRole('button', { name: 'Launch terminal' }))
     await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Arguments' })).toBeNull())
     await act(async () =>
       fireEvent.click(screen.getByRole('button', { name: 'Save & start agent' }))
@@ -164,7 +164,7 @@ it.each(['global', 'repo'] as const)(
     await user.click(screen.getByRole('button', { name: 'Configure Claude' }))
     await user.click(screen.getByRole('button', { name: 'Claude permissions' }))
     await user.click(screen.getByRole('menuitemradio', { name: /^Ask/ }))
-    await user.click(screen.getByRole('button', { name: 'Use' }))
+    await user.click(screen.getByRole('button', { name: 'Launch terminal' }))
     if (scope === 'repo') {
       act(() => f.controller.onSaveAgentDefaultChange('repo'))
     }
@@ -214,7 +214,7 @@ it.each(['global', 'repo'] as const)(
     for (const value of ['--model s', '--model sonnet --effort high', '--add-dir docs']) {
       fireEvent.change(input, { target: { value } })
     }
-    await user.click(screen.getByRole('button', { name: 'Use' }))
+    await user.click(screen.getByRole('button', { name: 'Launch terminal' }))
     act(() => f.controller.onSaveAgentDefaultChange(scope))
     await user.click(screen.getByRole('button', { name: 'Save & start agent' }))
     await waitFor(() => expect(f.onStart).toHaveBeenCalledOnce())
@@ -260,7 +260,7 @@ it.each(['global', 'repo'] as const)(
       '--add-dir docs'
     )
     expect(screen.queryByRole('button', { name: 'Remove --model sonnet' })).toBeNull()
-    await user.click(screen.getByRole('button', { name: 'Use' }))
+    await user.click(screen.getByRole('button', { name: 'Launch terminal' }))
     expect(f.persist).toHaveBeenCalledOnce()
     reopened.unmount()
   }
@@ -331,7 +331,8 @@ it.each(['global', 'repo'] as const)(
       expect(document.querySelector('button[aria-label="Seleccionar agente"]')).toBeTruthy()
       expect(screen.getByRole('textbox', { name: 'Argumentos' })).toBe(pendingInput)
       expect(pendingInput).toHaveProperty('value', '--latest-pending')
-      expect(screen.getByRole('button', { name: 'Usar' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Iniciar chat' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Iniciar terminal' })).toBeTruthy()
       expect(screen.getByRole('radio', { name: 'Alto' }).getAttribute('aria-checked')).toBe('true')
       expect(screen.getByRole('button', { name: 'Permisos de Claude' })).toBe(permission)
       expect(mounted.controller.recipe).toBe(accepted)
@@ -344,9 +345,9 @@ it.each(['global', 'repo'] as const)(
           {
             agentPicker: {
               select: 'Agente actualizado',
-              use: 'Aplicar actualizado',
+              launchChat: 'Iniciar chat actualizado',
+              launchTerminal: 'Iniciar terminal actualizado',
               arguments: 'Argumentos actualizados',
-              openIn: 'Abrir actualizado',
               chat: 'Conversación actualizada',
               terminal: 'Terminal actualizada'
             },
@@ -359,13 +360,8 @@ it.each(['global', 'repo'] as const)(
         )
       )
       expect(document.querySelector('button[aria-label="Agente actualizado"]')).toBeTruthy()
-      expect(screen.getByRole('button', { name: 'Aplicar actualizado' })).toBeTruthy()
-      expect(document.querySelector('[aria-label="Abrir actualizado"]')?.textContent).toContain(
-        'Conversación actualizada'
-      )
-      expect(document.querySelector('[aria-label="Abrir actualizado"]')?.textContent).toContain(
-        'Terminal actualizada'
-      )
+      expect(screen.getByRole('button', { name: 'Iniciar chat actualizado' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Iniciar terminal actualizado' })).toBeTruthy()
       expect(screen.getByRole('textbox', { name: 'Argumentos actualizados' })).toBe(pendingInput)
       expect(pendingInput).toHaveProperty('value', '--latest-pending')
       expect(search).toHaveProperty('value', 'son')
@@ -381,7 +377,7 @@ it.each(['global', 'repo'] as const)(
         '--latest-pending'
       )
       expect(screen.getByRole('button', { name: 'Remove --model claude-sonnet-5-5' })).toBeDefined()
-      fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
       expect(mounted.controller.recipe.commandInputTemplate).toBe('CURRENT {basePrompt}')
       expect(mounted.controller.recipe.agentArgs).toBe('--latest-pending')
       await act(() => mounted.controller.handleStart())
@@ -459,12 +455,12 @@ it.each([
     await user.click(screen.getByRole('button', { name: 'Select agent' }))
     await user.click(screen.getByRole('button', { name: 'Configure Claude' }))
     if (agentId === null) {
-      fireEvent.keyDown(screen.getByRole('button', { name: 'Use' }), { key: 'Escape' })
+      fireEvent.keyDown(screen.getByRole('button', { name: 'Launch terminal' }), { key: 'Escape' })
       fireEvent.keyDown(document, { key: 'Escape' })
       expect(f.controller.recipe.agentId).toBeNull()
       expect(f.persist).not.toHaveBeenCalled()
     } else {
-      await user.click(screen.getByRole('button', { name: 'Use' }))
+      await user.click(screen.getByRole('button', { name: 'Launch terminal' }))
     }
     act(() => f.controller.onSaveAgentDefaultChange('repo'))
     await user.click(screen.getByRole('button', { name: /^(Save & start agent|Start agent)$/ }))
@@ -594,7 +590,7 @@ it.each([true, false] as const)(
       readDraft()?.recipeEdits?.selection.source.authoredPreferences?.modelSelection?.options
         ?.fastMode
     ).toEqual({ agentId: 'claude', value: String(fast) })
-    await user.click(screen.getByRole('button', { name: 'Use' }))
+    await user.click(screen.getByRole('button', { name: 'Launch terminal' }))
     expect(f.controller.recipe.launchPreferences?.modelSelection?.options?.fastMode).toEqual({
       agentId: 'claude',
       value: String(fast)
@@ -721,7 +717,7 @@ it.each(['claude', 'codex'] as const)(
     const f = mountSourceDialog(recipe, recipe)
     act(() =>
       useAppStore.setState(({ settings }) => ({
-        settings: { ...settings!, nativeChatProviders: {} }
+        settings: { ...settings!, nativeChatProviders: { [agent]: true } }
       }))
     )
     const user = userEvent.setup()
@@ -743,18 +739,30 @@ it.each(['claude', 'codex'] as const)(
     await user.click(
       screen.getByRole('button', { name: `Configure ${agent === 'claude' ? 'Claude' : 'Codex'}` })
     )
-    await user.click(screen.getByRole('button', { name: 'Use' }))
+    await user.click(screen.getByRole('button', { name: 'Launch terminal' }))
     expect(f.controller.recipe).toMatchObject(recipe)
-    await user.click(screen.getByRole('radio', { name: 'Chat' }))
+    await open()
+    await user.click(
+      screen.getByRole('button', { name: `Configure ${agent === 'claude' ? 'Claude' : 'Codex'}` })
+    )
+    await user.click(screen.getByRole('button', { name: 'Launch chat' }))
     expect(f.controller.recipe).toMatchObject({ ...recipe, surface: 'chat' })
     await open()
     await user.click(
       screen.getByRole('menuitem', { name: new RegExp(agent === 'claude' ? '^Claude' : '^Codex') })
     )
     expect(f.controller.recipe).toMatchObject({ ...recipe, surface: 'chat' })
-    await user.click(screen.getByRole('radio', { name: 'Terminal' }))
+    await open()
+    await user.click(
+      screen.getByRole('button', { name: `Configure ${agent === 'claude' ? 'Claude' : 'Codex'}` })
+    )
+    await user.click(screen.getByRole('button', { name: 'Launch terminal' }))
     expect(f.controller.recipe).toMatchObject(recipe)
-    await user.click(screen.getByRole('radio', { name: 'Chat' }))
+    await open()
+    await user.click(
+      screen.getByRole('button', { name: `Configure ${agent === 'claude' ? 'Claude' : 'Codex'}` })
+    )
+    await user.click(screen.getByRole('button', { name: 'Launch chat' }))
     act(() => f.controller.onSaveAgentDefaultChange('repo'))
     await user.click(screen.getByRole('button', { name: 'Save & start agent' }))
     await waitFor(() => expect(f.persist).toHaveBeenCalledOnce())
@@ -763,7 +771,7 @@ it.each(['claude', 'codex'] as const)(
     f.view.unmount()
     const reopened = f.mount()
     expect(f.controller.recipe).toMatchObject({ ...recipe, surface: 'chat' })
-    expect(screen.getByRole('radio', { name: 'Chat' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Select agent' }).textContent).not.toContain('(CLI)')
     expect(f.controller.agentArgsApply).toBe(false)
     reopened.unmount()
   }

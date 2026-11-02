@@ -152,7 +152,7 @@ export function registerRepoSourceExtentTests(rpc: ReturnType<typeof vi.fn>) {
       if ('parentArgs' in fixture) {
         fireEvent.blur(input)
       }
-      fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
       expect(change).toHaveBeenCalledExactlyOnceWith(
         'resolveConflicts',
         permission ? { agentId: 'claude', permissionMode: permission } : undefined,

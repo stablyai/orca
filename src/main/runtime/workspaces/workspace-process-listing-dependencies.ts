@@ -21,6 +21,7 @@ import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle
 import type { Repo } from '../../../shared/repo-types'
 import { escalateChatWorkerError } from '../orchestration/chat-worker-error-escalation'
 import type { StructuredAgentSessionRequestFailure } from '../../native-chat/agent-session-wire/structured-agent-session-request-failures'
+import type { StructuredAgentSessionHostDeps } from '../../native-chat/agent-session-wire/structured-agent-session-host-types'
 
 export abstract class OrcaRuntimeWithWorktreePsDependencies extends OrcaRuntimeWithStartTuiIdleVisibleReadProbe {
   /** Apply the host-owning desktop's account overlay to configured agent environment. */
@@ -69,6 +70,16 @@ export abstract class OrcaRuntimeWithWorktreePsDependencies extends OrcaRuntimeW
       .modelCatalog
   }
 
+  /** Read the setting live so turning it off stops every pending automatic continuation. */
+  protected usageLimitAutoContinueHostDeps(): StructuredAgentSessionHostDeps['usageLimitAutoContinue'] {
+    return {
+      isEnabled: () =>
+        this.requireStore().getSettings().nativeChatAutoContinueAfterUsageLimit === true,
+      subscribe: (changed) => this.requireStore().onSettingsChanged?.(changed) ?? (() => {}),
+      isWorkspaceAsleep: (workspaceId) => this.isWorktreeTerminalSleepHeld(workspaceId)
+    }
+  }
+
   protected abstract listResolvedWorktreeSnapshot(
     ...args: Parameters<RuntimeWorkspaceCatalog['listResolvedWorktreeSnapshot']>
   ): ReturnType<RuntimeWorkspaceCatalog['listResolvedWorktreeSnapshot']>
@@ -79,6 +90,7 @@ export abstract class OrcaRuntimeWithWorktreePsDependencies extends OrcaRuntimeW
   ): ReturnType<
     OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController['refreshPtyWorktreeRecordsFromController']
   >
+  protected abstract isWorktreeTerminalSleepHeld(workspaceId: string): boolean
   abstract notifyFolderWorkspaceChanged(): void
   abstract notifyBranchRenamed(repoId: string): void
   abstract notifyWorktreeFolderRenamed(
@@ -117,6 +129,9 @@ export abstract class OrcaRuntimeWithWorktreePsDependencies extends OrcaRuntimeW
   abstract onStructuredSessionTabHidden(
     ...args: Parameters<OrcaRuntimeWithGetPtyRecordForPaneKey['onStructuredSessionTabHidden']>
   ): ReturnType<OrcaRuntimeWithGetPtyRecordForPaneKey['onStructuredSessionTabHidden']>
+  abstract structuredChatMailOwed(
+    ...args: Parameters<OrcaRuntimeWithGetPtyRecordForPaneKey['structuredChatMailOwed']>
+  ): ReturnType<OrcaRuntimeWithGetPtyRecordForPaneKey['structuredChatMailOwed']>
 
   listRepos(): Repo[] {
     return this.store?.getRepos() ?? []

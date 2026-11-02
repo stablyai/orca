@@ -264,9 +264,13 @@ async function open(agent: string) {
     expect(screen.getByRole('radio', { name: 'Low' }).hasAttribute('disabled')).toBe(false)
   )
 }
-async function useDraft() {
+async function useDraft(surface: 'chat' | 'terminal' = 'terminal') {
   fireEvent.blur(textarea())
-  fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: surface === 'chat' ? 'Launch chat' : 'Launch terminal'
+    })
+  )
   await waitFor(() =>
     expect(
       document.querySelector(
@@ -356,11 +360,28 @@ it('pr35802 retains ordinary W1 accepted Low/verbose after parent echo then W2 C
   expect(evidence.submit).not.toHaveBeenCalled()
 })
 
-it('pr35802 preserves the genuine same-target authority replacement reset control', async () => {
+it('pr35802 retains authored Args through same-target Settings acquisition refresh', async () => {
   render(<NewWorkspaceComposerModal />, { wrapper: TooltipProvider })
   await open('Claude')
   const before = snapshot('before-reset')
   fireEvent.change(textarea(), { target: { value: '--verbose' } })
+  await closeMenu()
+  act(() =>
+    useAppStore.setState((state) => ({
+      settings: { ...state.settings!, agentDefaultArgs: { claude: '--debug' } }
+    }))
+  )
+  await open('Claude')
+  expect(last('claude').target).toBe(before.target)
+  expect(last('claude').authority).not.toBe(before.authority)
+  expect(textarea().value).toBe('--verbose')
+  expect(evidence.submit).not.toHaveBeenCalled()
+})
+
+it('pr35802 derives untouched Args from current same-target Settings defaults', async () => {
+  render(<NewWorkspaceComposerModal />, { wrapper: TooltipProvider })
+  await open('Claude')
+  const before = snapshot('before-reset')
   await closeMenu()
   act(() =>
     useAppStore.setState((state) => ({
@@ -430,13 +451,12 @@ it('keeps accepted and newer pending ordinary intent across same-target agent sw
   await open('Claude')
   fireEvent.change(textarea(), { target: { value: '--pending' } })
   await closeMenu()
-  for (const route of ['Chat', 'Terminal'] as const) {
-    fireEvent.click(screen.getByRole('radio', { name: route }))
+  for (const route of ['chat', 'terminal'] as const) {
     await open('Claude')
     expect(textarea().value).toBe('--pending')
     expect(screen.getByRole('radio', { name: 'Low' }).getAttribute('aria-checked')).toBe('true')
-    await useDraft()
-    expect(last('claude').initial?.surface).toBe(route.toLowerCase())
+    await useDraft(route)
+    expect(last('claude').initial?.surface).toBe(route)
   }
   await open('Codex')
   await useDraft()
@@ -446,18 +466,23 @@ it('keeps accepted and newer pending ordinary intent across same-target agent sw
   expect(evidence.submit).not.toHaveBeenCalled()
   await useDraft()
   const captured: unknown[] = []
-  for (const route of ['Chat', 'Terminal'] as const) {
-    fireEvent.click(screen.getByRole('radio', { name: route }))
+  for (const route of ['chat', 'terminal'] as const) {
     await open('Claude')
-    await useDraft()
+    await useDraft(route)
     await closeMenu()
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+      button: 0,
+      ctrlKey: false
+    })
+    fireEvent.click(await screen.findByRole('menuitem', { name: /^Claude/ }))
+    expect(evidence.submit).toHaveBeenCalledTimes(captured.length)
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Create worktree' })))
     const submitted = evidence.submit.mock.calls.at(-1)!
     expect(submitted[0]).toBe('claude')
     expect(submitted[1]).toMatchObject({
       launchChoice: {
-        route: route === 'Chat' ? 'structured-native-chat' : 'terminal-tui',
-        requestedSurface: route.toLowerCase()
+        route: route === 'chat' ? 'structured-native-chat' : 'terminal-tui',
+        requestedSurface: route
       },
       launchInputs: { agentArgs: '--pending', sessionOptions: { effort: 'low' } }
     })

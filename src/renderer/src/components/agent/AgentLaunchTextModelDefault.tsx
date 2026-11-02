@@ -1,9 +1,7 @@
 import { CommandItem } from '@/components/ui/command'
 import { translate } from '@/i18n/i18n'
-import {
-  TEXT_ACTION_DEFAULT_MODEL,
-  type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import { TEXT_ACTION_DEFAULT_MODEL } from '../../../../shared/source-control-text-action-picker'
 import type { AgentPickerEdit } from '../../../../shared/agent-launch-picker-edits'
 
 export function AgentLaunchTextModelDefault({

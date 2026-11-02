@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
