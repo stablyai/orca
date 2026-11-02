@@ -5694,7 +5694,6 @@
       "src/main/runtime/terminal-tail-redraw-row.equivalence.test.ts": 1725,
       "src/main/runtime/terminal-tail-redraw-scaling.test.ts": 362,
       "src/main/runtime/terminal-tail-redraw-spans.test.ts": 114,
-      "src/main/runtime/terminal-tail-redraw-wall-time.test.ts": 34058,
       "src/main/runtime/terminal-tail-row-retention.test.ts": 1096,
       "src/main/runtime/terminal-tail-sentinel-index.test.ts": 2479,
       "src/main/runtime/terminal-tail-whitespace.test.ts": 135,
