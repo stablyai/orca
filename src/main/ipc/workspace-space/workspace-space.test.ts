@@ -37,8 +37,11 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../../workspaces/space-analysis/workspace-space-analysis', () => ({
-  WorkspaceSpaceScanCancelledError: WorkspaceSpaceScanCancelledErrorMock,
   analyzeWorkspaceSpace: analyzeWorkspaceSpaceMock
+}))
+
+vi.mock('../../workspaces/space-analysis/workspace-space-scan-control', () => ({
+  WorkspaceSpaceScanCancelledError: WorkspaceSpaceScanCancelledErrorMock
 }))
 
 vi.mock('../../workspaces/space-analysis/workspace-space-analysis-snapshot', () => ({

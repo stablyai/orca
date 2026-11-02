@@ -27,8 +27,8 @@ vi.mock('../../repo-worktrees', async (importOriginal) => ({
   ...(await importOriginal<typeof RepoWorktrees>()),
   listRepoWorktrees: boundary.list
 }))
-vi.mock('../../git/status', () => ({ getStatus: boundary.status }))
-vi.mock('../../git/runner', () => ({
+vi.mock('../../git/source-control/status-read', () => ({ getStatus: boundary.status }))
+vi.mock('../../git/command-runner/git-exec-file', () => ({
   gitExecFileAsync: vi.fn(async () => ({ stdout: '0\n', stderr: '' }))
 }))
 vi.mock('../../project-runtime-git-options', () => ({
