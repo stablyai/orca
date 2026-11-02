@@ -214,11 +214,12 @@ export function mapGhosttyToOrca(
       return { key: 'terminalCursorOpacity', value: num }
     },
 
-    'font-family': (v) => {
-      if (typeof v !== 'string' || v.trim().length === 0) {
-        return null
-      }
-      return { key: 'terminalFontFamily', value: v }
+    // Repeated font-family is a fallback list whose first entry is primary; `""` resets the list.
+    'font-family': (_v, rawValue) => {
+      const entries = Array.isArray(rawValue) ? rawValue : [rawValue]
+      const isReset = (entry: string): boolean => entry.trim().length === 0
+      const primary = entries.slice(entries.findLastIndex(isReset) + 1)[0]
+      return primary ? { key: 'terminalFontFamily', value: primary } : null
     },
 
     'font-size': (v) => {

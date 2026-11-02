@@ -16,6 +16,18 @@ describe('mapGhosttyToOrca — font & cursor', () => {
     expect(result.unsupportedKeys).toEqual([])
   })
 
+  it('imports the primary font-family from a repeated fallback list, honoring "" resets', () => {
+    expect(mapGhosttyToOrca({ 'font-family': ['Menlo', 'Monaco'] }).diff).toEqual({
+      terminalFontFamily: 'Menlo'
+    })
+    expect(mapGhosttyToOrca({ 'font-family': ['Fira Code', '', 'Menlo', 'Monaco'] }).diff).toEqual({
+      terminalFontFamily: 'Menlo'
+    })
+    const cleared = mapGhosttyToOrca({ 'font-family': ['Fira Code', ''] })
+    expect(cleared.diff).toEqual({})
+    expect(cleared.unsupportedKeys).toEqual(['font-family'])
+  })
+
   it('skips invalid font-size values', () => {
     const result = mapGhosttyToOrca({ 'font-size': 'not-a-number' })
     expect(result.diff).toEqual({})
