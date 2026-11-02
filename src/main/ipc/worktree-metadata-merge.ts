@@ -5,7 +5,7 @@ import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import { getLinkedWorkItemMetadata } from './worktree-linked-work-item-metadata'
 import { normalizeWorkspaceCreatorProvenance } from '../../shared/workspace-creator-provenance'
 import { createWorktreeIdentity } from '../../shared/worktree/identity'
-import { projectCheckoutMark } from '../project-realpath-identity'
+import { projectCheckoutMark } from './worktree-project-checkout-mark'
 
 export function mergeWorktree(
   repoId: string,

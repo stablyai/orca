@@ -13,7 +13,11 @@ import { registerRepoCloneHandlers } from './repos/repo-clone-lifecycle'
 import { RuntimeRepositoryRegistrationController } from '../runtime/runtime-repository-registration-controller'
 import { RuntimeRepositoryCloneController } from '../runtime/runtime-repository-clone-controller'
 import { RuntimeManagedWorktreeQueries } from '../runtime/runtime-managed-worktree-queries'
-import { partialRuntimeStore, storeWorktreeMeta } from '../runtime/runtime-store-partial-fixture'
+import {
+  partialRuntimeStore,
+  storeProjectGroup,
+  storeWorktreeMeta
+} from '../runtime/runtime-store-partial-fixture'
 import { buildDetectedGitWorktrees } from './worktrees/listing/ssh-worktree-fallback'
 import { listRepoWorktrees } from '../repo-worktrees'
 import { areRuntimePathsEqual } from '../../shared/worktree/ownership'
@@ -80,8 +84,8 @@ function fixture() {
       meta[id] = storeWorktreeMeta({ ...meta[id], ...patch })
       return meta[id]
     },
-    createProjectGroup: (input) => ({ id: 'group', ...input }),
-    moveProjectToGroup: () => {}
+    createProjectGroup: (input) => storeProjectGroup({ id: 'group', ...input }),
+    moveProjectToGroup: () => null
   })
   Object.assign(store, {
     getProjectHostSetups: () => [],

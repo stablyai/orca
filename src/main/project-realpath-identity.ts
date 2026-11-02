@@ -6,6 +6,10 @@ import { getRepoExecutionHostId, isRepoOnCatalogHost } from '../shared/execution
 import { isFolderRepo } from '../shared/repo-kind'
 import { parseWslUncPath } from '../shared/wsl-paths'
 import { areRuntimePathsEqual, toDetectedWorktree } from '../shared/worktree/ownership'
+import {
+  PROJECT_CHECKOUT_LOCATOR,
+  type ProjectCheckoutMarked
+} from './ipc/worktree-project-checkout-mark'
 
 async function realpathKey(path: string): Promise<string | null> {
   const resolved = await fsPromises.realpath(path).catch(() => null)
@@ -38,11 +42,6 @@ export async function findProjectAtSameRealPath<T extends { path: string }>(
   const index = keys.indexOf(target)
   return index === -1 ? null : projects[index]
 }
-
-// Symbol-keyed so it survives row spreads but never JSON or IPC serialization.
-const PROJECT_CHECKOUT_LOCATOR = Symbol('projectCheckoutLocator')
-
-type ProjectCheckoutMarked = { [PROJECT_CHECKOUT_LOCATOR]?: string }
 
 const checkoutRootDerivations = new Map<string, Promise<string | null>>()
 
@@ -85,14 +84,6 @@ export function markProjectCheckout<T extends Pick<GitWorktreeInfo, 'path' | 'is
       ? { ...worktree, [PROJECT_CHECKOUT_LOCATOR]: repoPath }
       : worktree
   )
-}
-
-/** Copy boundaries that rebuild rows field by field keep the scan's proof. */
-export function projectCheckoutMark(
-  worktree: Pick<GitWorktreeInfo, 'path'> & ProjectCheckoutMarked
-): ProjectCheckoutMarked {
-  const locator = worktree[PROJECT_CHECKOUT_LOCATOR]
-  return locator === undefined ? {} : { [PROJECT_CHECKOUT_LOCATOR]: locator }
 }
 
 /** Pure: a scan proved this row is the directory the saved locator names. */
