@@ -514,6 +514,51 @@ describe('structured mailbox delivery: each message whole', () => {
   })
 })
 
+describe('what the lane remembers about settled mailboxes', () => {
+  /** The in-memory settle bookkeeping still held: per-mailbox change counts and last settles. */
+  const retained = (h: ReturnType<typeof harness>) =>
+    h.delivery['settledState']['changes'].size + h.delivery['settledState']['settled'].size
+
+  it.each([4, 40])(
+    'keeps nothing for %i ended mailboxes cleaned up with no mail ever sent',
+    async (count) => {
+      const h = harness()
+      const gone = Array.from({ length: count }, (_, index) => `dispatch:gone-${index}`)
+      h.delivery.withdrawStale(gone)
+      h.delivery.withdrawStale(gone)
+      await flush()
+      expect(retained(h)).toBe(0)
+      expect(h.host.observe).not.toHaveBeenCalled()
+    }
+  )
+
+  it('keeps a cleanup that races a settle, then forgets the mailbox once nothing of it is left', async () => {
+    const h = harness({ busy: true })
+    h.receive('m1')
+    await h.deliver()
+    expect(h.records.size).toBe(1)
+    // The card still waits in the chat: the lane remembers the mailbox.
+    expect(retained(h)).toBeGreaterThan(0)
+    let answer!: () => void
+    vi.mocked(h.host.observe).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = () => resolve({ kind: 'absent' })
+        })
+    )
+    h.end()
+    h.delivery.withdrawStale(['dispatch:d1'])
+    await flush()
+    // Mid-settle, the record goes and another cleanup finds nothing: its mark is kept for the pass.
+    h.records.clear()
+    h.delivery.withdrawStale(['dispatch:d1'])
+    expect(h.delivery['settledState']['changes'].get('dispatch:d1')).toBe(2)
+    answer()
+    await flush()
+    expect(retained(h)).toBe(0)
+  })
+})
+
 describe('structured mailbox delivery across a real database close and reopen', () => {
   it.each([
     ['still waits as a card', { kind: 'waiting' }, true, 0],

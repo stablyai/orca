@@ -75,6 +75,11 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     const target = this.deps.resolveStructuredTarget(mailboxHandle)
     // Earlier sends are settled even when no chat owns the mailbox now; only an owner is sent to.
     if (!target && !hasStructuredMailSends(this.deps.getDb(), mailboxHandle)) {
+      // Nothing to settle or send: keep nothing for it. A pass still running forgets it itself, after
+      // it has seen what this cleanup marked.
+      if (!this.inFlight.has(mailboxHandle)) {
+        this.settledState.forget(mailboxHandle)
+      }
       return false
     }
     void this.deliver(mailboxHandle, reservedTypes).catch(() => {
@@ -352,10 +357,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
   }
 
   private redeliver(mailboxHandle: string): void {
-    if (this.deps.redeliver) {
-      this.deps.redeliver(mailboxHandle)
-    } else {
-      this.deliverForHandle(mailboxHandle)
-    }
+    const redeliver = this.deps.redeliver ?? ((handle: string) => this.deliverForHandle(handle))
+    redeliver(mailboxHandle)
   }
 }
