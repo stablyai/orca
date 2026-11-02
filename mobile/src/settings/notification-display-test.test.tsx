@@ -24,6 +24,14 @@ const mocks = vi.hoisted(() => ({
   clients: [] as { state: string; client: { sendRequest: ReturnType<typeof vi.fn> } }[]
 >>>>>>> upstream/main
 }))
+vi.mock(
+  './settings-screen-frame',
+  async () => (await import('../test-support/settings-chrome-test-double')).settingsFrameDouble
+)
+vi.mock(
+  '../components/list/ListGroup',
+  async () => (await import('../test-support/settings-chrome-test-double')).listGroupDouble
+)
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
   Text: 'Text',
@@ -82,7 +90,7 @@ async function send() {
   await act(async () => {
     renderer = create(createElement(NotificationDisplayTest, { onTroubleshoot: vi.fn() }))
   })
-  await act(async () => findAllByHostType(renderer.root, 'Pressable')[0].props.onPress())
+  await act(async () => findAllByHostType(renderer.root, 'ListRow')[0].props.onPress())
 }
 
 it.each([

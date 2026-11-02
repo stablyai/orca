@@ -119,7 +119,7 @@ describe('push registration capability gating', () => {
       platform: 'ios',
       token: IOS_TOKEN.token,
       apnsEnvironment: 'production',
-      filter: { onlyWhenDesktopAway: true, sound: true }
+      filter: { onlyWhenDesktopAway: true, onlyWhenAgentNeedsInput: false, sound: true }
     })
     expect(stored.registeredHostIds).toEqual(['host-1'])
   })

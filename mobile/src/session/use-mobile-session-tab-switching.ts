@@ -112,7 +112,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
   )
 
   const switchSessionTab = useCallback(
-    (tab: MobileSessionTab) => {
+    (tab: MobileSessionTab, options?: { activate?: boolean }) => {
       if (isCachedActiveDocumentRetap(tab, activeSessionTabId, { markdownDocs, fileDocs })) {
         return
       }
@@ -140,7 +140,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
         }
         activeHandleRef.current = null
         setActiveHandle(null)
-        if (client) {
+        if (client && options?.activate !== false) {
           void activateMobileSessionTab(client, {
             worktree: `id:${worktreeId}`,
             tabId: tab.id,
@@ -173,7 +173,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       }
       activeHandleRef.current = null
       setActiveHandle(null)
-      if (client) {
+      if (client && options?.activate !== false) {
         void activateMobileSessionTab(client, {
           worktree: `id:${worktreeId}`,
           tabId: tab.id,

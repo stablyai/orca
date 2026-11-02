@@ -15,6 +15,8 @@ export type OrcaPushPayload = {
   readonly paneKey?: string
   readonly worktreeId?: string
   readonly executionHost?: string
+  readonly source?: string
+  readonly agentState?: string
 }
 
 function readString(value: unknown): string | undefined {
@@ -78,6 +80,8 @@ export function readOrcaPushPayload(data: unknown): OrcaPushPayload | null {
     notificationEpoch: readString(record.notificationEpoch),
     paneKey,
     worktreeId: readString(record.worktreeId),
-    executionHost: readString(record.executionHost)
+    executionHost: readString(record.executionHost),
+    source: readString(record.source),
+    agentState: readString(record.agentState)
   }
 }

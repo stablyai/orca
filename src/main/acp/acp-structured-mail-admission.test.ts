@@ -7,7 +7,7 @@ import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire
 import { commandReceiptScope } from '../native-chat/agent-session-journal/command-receipt-schema'
 import { createStructuredMailboxPointerHost } from '../runtime/orchestration/structured-mailbox-pointer-host'
 import { mintAgentSessionOperationId } from '../runtime/orchestration/structured-pointer-operation-id'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 
 afterEach(async () => {
   setStructuredAgentSessionHost(null)
@@ -46,7 +46,8 @@ it('holds mail without interrupting an answerable ACP question', async () => {
       operationId,
       expectedRuntimeFence,
       body,
-      holdWhileWorking: false
+      holdWhileWorking: false,
+      stillOwed: () => true
     })
   ).toEqual({ kind: 'held' })
   const after = await host.journalSnapshot(SESSION)

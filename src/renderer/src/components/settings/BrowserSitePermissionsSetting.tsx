@@ -1,3 +1,4 @@
+// @protected-copy: saved site permission choices.
 import { useEffect, useState } from 'react'
 import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
 import {

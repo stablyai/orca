@@ -1,215 +1,85 @@
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import { RotateCw } from 'lucide-react-native'
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
+import { ActivityIndicator, ScrollView, Text, View } from 'react-native'
+import {
+  ArrowRight,
+  CircleCheck,
+  CircleDashed,
+  CircleMinus,
+  CircleX,
+  LoaderCircle,
+  MessageCircle,
+  MoreHorizontal,
+  type LucideIcon
+} from 'lucide-react-native'
+import { MobileLoadErrorState, MobileStateView } from './MobileStateView'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
-import type { PrSidebarLoadOptions } from '../session/use-mobile-pr-sidebar-controller'
-import type { ConnectionState } from '../transport/types'
-import type { RpcClient } from '../transport/rpc-client'
-import { useMobilePrActions, type MobilePrActions } from '../session/use-mobile-pr-actions'
-import {
-  useMobilePrCommentActions,
-  type MobilePrCommentActions
-} from '../session/use-mobile-pr-comment-actions'
-import {
-  useMobilePrTitleAction,
-  type MobilePrTitleAction
-} from '../session/use-mobile-pr-title-action'
-import { useMobilePrAiTriage, type MobilePrAiTriage } from '../session/use-mobile-pr-ai-triage'
-import { useHostProtocolGates } from './host-protocol-gates-context'
-import { usePRBotAuthorOverrides } from '../session/use-pr-bot-author-overrides'
-import { buildFixChecksPrompt, buildResolveConflictsPrompt } from '../session/pr-ai-triage-prompt'
-import { fetchPRCheckDetails } from '../session/github-pr-rpc'
-import { hasGitHubCheckHandle } from '../../../src/shared/pr-checks-fix-prompt'
+import { colors } from '../theme/mobile-theme'
+import type { PrSidebarData } from '../session/mobile-pr-sidebar-state'
+import { isPrSidebarDetailsPlaceholder } from '../session/mobile-pr-sidebar-state'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
-import { mobilePrSidebarStyles as styles } from './pr-sidebar/mobile-pr-sidebar-styles'
-import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
-import { PRSidebarHeader } from './pr-sidebar/PRSidebarHeader'
-import { PRConflictingFilesSection } from './pr-sidebar/PRConflictingFilesSection'
-import { PRActionsSection } from './pr-sidebar/PRActionsSection'
-import { PRReviewersSection } from './pr-sidebar/PRReviewersSection'
-import { PRChecksSection } from './pr-sidebar/PRChecksSection'
-import { PRCommentsSection } from './pr-sidebar/PRCommentsSection'
-import { PrSidebarCreateEmptyState } from './pr-sidebar/PrSidebarCreateEmptyState'
+import { ListGroup, ListRow, LIST_LEADING_INSET } from './list/ListGroup'
+import { useNow } from '../hooks/use-now'
+import { commentRelativeTime } from './pr-sidebar/pr-comment-relative-time'
+import { prStateBadge } from './pr-sidebar/pr-checks-presentation'
+import { statusColor } from './pr-sidebar/pr-sidebar-status-color'
+import { PrTabEmptyState } from './pr-sidebar/PrTabEmptyState'
+import { PrChangesCard, PrDescription } from './pr-sidebar/PrTabOverviewCards'
+import { PrTabBottomAction } from './pr-sidebar/PrTabBottomAction'
+import { MobilePrTabSheets } from './pr-sidebar/MobilePrTabSheets'
+import { PrTabScreenView } from './pr-sidebar/PrTabScreenView'
+import { buildPrGateRows, type PrGateRow, type PrGateTone } from './pr-sidebar/pr-tab-gates'
+import {
+  useMobilePrTab,
+  type MobilePrCreateSettled,
+  type MobilePrTab,
+  type PrTabScreen
+} from './pr-sidebar/use-mobile-pr-tab'
+import { usePrTabMenuGroups } from './pr-sidebar/use-pr-tab-menu'
+import { openMobilePrUrl } from './mobile-pr-url'
+import { NavBarButton } from './nav-bar/NavBarButton'
+import { PullDownMenu } from './nav-bar/PullDownMenu'
+import { useBackClaim } from '../navigation/use-back-claim'
+import { prTabStyles as styles } from './pr-sidebar/pr-tab-styles'
 
-type Props = {
-  state: PrSidebarState
+type BranchCompare = { commitsAhead?: number; baseRef: string } | null
+
+type BodyProps = {
+  tab: MobilePrTab
   onRetry: () => void
-  // Re-fetches authoritative PR data after a successful mutation (U3/U6) or create.
-  refetch: (options?: PrSidebarLoadOptions) => void
-  client: RpcClient | null
-  connState: ConnectionState
-  worktreeId: string
-  gitBranch: string | null
-  gitStatus: MobileGitStatusResult | null
-  headSha: string | null
   bottomInset?: number
-  // Hub chrome already shows open-on-web; hide the in-body icon there.
-  showOpenOnWeb?: boolean
-  /** Named when an AI button's agent starts; the branch stands in when absent. */
-  workspaceLabel: string | null
+  /** Opens the Changes segment from the changes card; absent outside the hub. */
+  onOpenChanges?: () => void
+  branchCompare?: BranchCompare
+  /** The dock's bottom action. The hub passes none: its next-step bar is the one bottom action there. */
+  footer?: ReactNode
 }
 
-// Mutation hooks run unconditionally here and gate internally until a PR is ready.
-export function MobilePRSidebar({
-  state,
+// The PR tab answers "can I merge, and what's blocking it": identity, gates, changes, description.
+export function MobilePrTabBody({
+  tab,
   onRetry,
-  refetch,
-  client,
-  connState,
-  worktreeId,
-  gitBranch,
-  gitStatus,
-  headSha,
   bottomInset = 0,
-  showOpenOnWeb = true,
-  workspaceLabel
-}: Props) {
+  onOpenChanges,
+  branchCompare = null,
+  footer = null
+}: BodyProps) {
   useMobileColorScheme()
-  const launchWorkspaceLabel = workspaceLabel || gitBranch
-  const branch = prSidebarRenderBranch(state)
-  const prNumber = state.kind === 'ready' ? state.data.pr.number : 0
-  // Keep stable PRInfo.prRepo identity; cloning owner/repo thrashes mutation/comment/title hooks.
-  const prRepo = state.kind === 'ready' ? (state.data.pr.prRepo ?? null) : null
-  const actions = useMobilePrActions({
-    client,
-    connState,
-    worktreeId,
-    prNumber,
-    headSha,
-    prRepo,
-    refetch
-  })
-  const commentActions = useMobilePrCommentActions({
-    client,
-    connState,
-    worktreeId,
-    prNumber,
-    prRepo,
-    refetch
-  })
-  const titleAction = useMobilePrTitleAction({
-    client,
-    connState,
-    worktreeId,
-    prNumber,
-    prRepo,
-    refetch
-  })
-  const { hostCapabilities, statusPending, statusReadable } = useHostProtocolGates()
-  const triage = useMobilePrAiTriage({
-    client,
-    connState,
-    worktreeId,
-    workspaceLabel: launchWorkspaceLabel,
-    hostCapabilities,
-    hostStatusPending: statusPending,
-    hostStatusReadable: statusReadable
-  })
-  // Key overrides on PR payload so every refetch refreshes them instead of keeping session-long snapshot.
-  const botAuthorOverrides = usePRBotAuthorOverrides(
-    client,
-    connState,
-    state.kind === 'ready' ? state.data.details : null
-  )
-
-  return (
-    <ScrollView
-      style={{ flex: 1 }}
-      contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset }]}
-      keyboardShouldPersistTaps="handled"
-      // Inset scroll for keyboard or bottom root/reply composers remain covered.
-      automaticallyAdjustKeyboardInsets
-      showsVerticalScrollIndicator={false}
-    >
-      <PrSidebarContent
-        branch={branch}
-        state={state}
-        onRetry={onRetry}
-        refetch={refetch}
-        client={client}
-        connState={connState}
-        worktreeId={worktreeId}
-        gitBranch={gitBranch}
-        gitStatus={gitStatus}
-        actions={actions}
-        commentActions={commentActions}
-        titleAction={titleAction}
-        triage={triage}
-        workspaceLabel={launchWorkspaceLabel}
-        botAuthorOverrides={botAuthorOverrides}
-        showOpenOnWeb={showOpenOnWeb}
-      />
-    </ScrollView>
-  )
-}
-
-function PrSidebarContent({
-  branch,
-  state,
-  onRetry,
-  refetch,
-  client,
-  connState,
-  worktreeId,
-  gitBranch,
-  gitStatus,
-  actions,
-  commentActions,
-  titleAction,
-  triage,
-  workspaceLabel,
-  showOpenOnWeb,
-  botAuthorOverrides
-}: {
-  branch: ReturnType<typeof prSidebarRenderBranch>
-  state: PrSidebarState
-  onRetry: () => void
-  refetch: (options?: PrSidebarLoadOptions) => void
-  client: RpcClient | null
-  connState: ConnectionState
-  worktreeId: string
-  gitBranch: string | null
-  gitStatus: MobileGitStatusResult | null
-  actions: MobilePrActions
-  commentActions: MobilePrCommentActions
-  titleAction: MobilePrTitleAction
-  triage: MobilePrAiTriage
-  workspaceLabel: string | null
-  showOpenOnWeb: boolean
-  botAuthorOverrides: ReadonlySet<string>
-}) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const { state, actions } = tab
+  const branch = prSidebarRenderBranch(state)
+
   if (branch === 'loading') {
     return (
-      <View style={styles.stateArea}>
-        <ActivityIndicator color={colors.textSecondary} />
-        <Text style={styles.stateText}>
-          {t('components.prSidebar.loading', 'Loading pull request…')}
-        </Text>
-      </View>
+      <MobileStateView loading title={t('components.prSidebar.loading', 'Loading pull request…')} />
     )
   }
   if (branch === 'error') {
-    const message =
-      state.kind === 'error'
-        ? state.message
-        : t('components.prSidebar.loadFailed', 'Something went wrong.')
     return (
-      <View style={styles.stateArea}>
-        <Text style={styles.stateText}>{message}</Text>
-        <Pressable
-          style={styles.retryButton}
-          onPress={onRetry}
-          accessibilityRole="button"
-          accessibilityLabel={t('components.prSidebar.retryLoading', 'Retry loading pull request')}
-        >
-          <RotateCw size={14} color={colors.textPrimary} strokeWidth={2.2} />
-          <Text style={styles.retryText}>{t('common.retry', 'Retry')}</Text>
-        </Pressable>
-      </View>
+      <MobileLoadErrorState
+        error={state.kind === 'error' ? state.message : null}
+        onRetry={onRetry}
+      />
     )
   }
   if (branch === 'blocked' || actions.blocked) {
@@ -229,151 +99,257 @@ function PrSidebarContent({
     )
   }
   if (branch === 'none') {
-    // Offer create for GitHub branch without PR, matching desktop rather than dead-end message.
     return (
-      <PrSidebarCreateEmptyState
-        client={client}
-        worktreeId={worktreeId}
-        gitBranch={gitBranch}
-        gitStatus={gitStatus}
-        connState={connState}
-        workspaceLabel={workspaceLabel}
-        onCreated={refetch}
-      />
+      <View style={styles.container}>
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+          <PrTabEmptyState tab={tab} branchCompare={branchCompare} />
+        </ScrollView>
+        {footer}
+      </View>
     )
   }
-  if (branch === 'ready' && state.kind === 'ready') {
-    return (
-      <PrSidebarSections
-        data={state.data}
-        client={client}
-        worktreeId={worktreeId}
-        actions={actions}
-        commentActions={commentActions}
-        titleAction={titleAction}
-        triage={triage}
-        refetch={refetch}
-        botAuthorOverrides={botAuthorOverrides}
-        showOpenOnWeb={showOpenOnWeb}
-      />
-    )
+  if (branch !== 'ready' || state.kind !== 'ready') {
+    return null
   }
-  return null
+  return (
+    <View style={styles.container}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.content, !footer && { paddingBottom: bottomInset }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <PrTabSections tab={tab} data={state.data} onOpenChanges={onOpenChanges} />
+      </ScrollView>
+      {footer}
+    </View>
+  )
 }
 
-function PrSidebarSections({
+function PrTabSections({
+  tab,
   data,
-  client,
-  worktreeId,
-  actions,
-  commentActions,
-  titleAction,
-  triage,
-  refetch,
-  showOpenOnWeb,
-  botAuthorOverrides
+  onOpenChanges
 }: {
-  data: Extract<PrSidebarState, { kind: 'ready' }>['data']
-  client: RpcClient | null
-  worktreeId: string
-  actions: MobilePrActions
-  commentActions: MobilePrCommentActions
-  titleAction: MobilePrTitleAction
-  triage: MobilePrAiTriage
-  refetch: (options?: PrSidebarLoadOptions) => void
-  showOpenOnWeb: boolean
-  botAuthorOverrides: ReadonlySet<string>
+  tab: MobilePrTab
+  data: PrSidebarData
+  onOpenChanges?: () => void
 }) {
   useMobileColorScheme()
   const pr = data.pr
-  // Build pure triage prompts lazily at launch so each uses current PR data.
-  const checksTriage = {
-    fixChecks: () =>
-      void triage.launch('fix-checks', () =>
-        buildFixChecksPrompt({
-          prNumber: pr.number,
-          prTitle: pr.title,
-          prUrl: pr.url,
-          checks: data.checks,
-          loadCheckDetails: async (check) => {
-            if (!client || !hasGitHubCheckHandle(check)) {
-              return null
-            }
-            const outcome = await fetchPRCheckDetails(client, worktreeId, {
-              checkRunId: check.checkRunId,
-              workflowRunId: check.workflowRunId,
-              checkName: check.name,
-              url: check.url,
-              prRepo: pr.prRepo ?? null
-            })
-            return outcome.ok ? outcome.result : null
-          }
-        })
-      ),
-    isBusy: triage.isBusy('fix-checks'),
-    availability: triage.availability,
-    ...triage.noticeFor('fix-checks')
+  const gates = useMemo(
+    () =>
+      buildPrGateRows({
+        pr,
+        details: data.details,
+        checks: data.checks,
+        checksError: data.checksError,
+        botAuthorOverrides: tab.botAuthorOverrides
+      }),
+    [data.checks, data.checksError, data.details, pr, tab.botAuthorOverrides]
+  )
+  const openGate = (row: PrGateRow): (() => void) | undefined => {
+    switch (row.target) {
+      case 'checks':
+        return tab.openChecksScreen
+      case 'comments':
+        return tab.openCommentsScreen
+      case 'reviewers':
+        return tab.openReviewersSheet
+      case null:
+        return undefined
+    }
   }
-  const conflictsTriage = {
-    resolveConflicts: () =>
-      void triage.launch('resolve-conflicts', () =>
-        buildResolveConflictsPrompt({
-          prNumber: pr.number,
-          baseRef: pr.conflictSummary?.baseRef ?? pr.baseRefName ?? null,
-          files: pr.conflictSummary?.files ?? [],
-          worktreeId
-        })
-      ),
-    isBusy: triage.isBusy('resolve-conflicts'),
-    availability: triage.availability,
-    ...triage.noticeFor('resolve-conflicts')
-  }
-  // Combine ready PR identity/actions in one card to avoid duplicate badge/title/branch/action bands.
   return (
     <>
-      <View style={styles.section}>
-        <View style={styles.sectionBody}>
-          <PRSidebarHeader
-            pr={data.pr}
-            details={data.details}
-            titleAction={titleAction}
-            showOpenOnWeb={showOpenOnWeb}
-            bare
-          />
-          <PRActionsSection
-            pr={data.pr}
-            actions={actions}
-            client={client}
-            worktreeId={worktreeId}
-            onUnlinked={refetch}
-            onRecheck={() => refetch({ includeDetails: false })}
-          />
-        </View>
-      </View>
-      {/* Own titled section when present; null otherwise (no empty chrome). */}
-      <PRConflictingFilesSection pr={data.pr} triage={conflictsTriage} />
-      <PRReviewersSection
-        details={data.details}
-        actions={actions}
-        client={client}
-        worktreeId={worktreeId}
-      />
-      <PRChecksSection
-        checks={data.checks}
-        checksError={data.checksError}
-        client={client}
-        worktreeId={worktreeId}
-        prRepo={data.pr.prRepo ?? null}
-        actions={actions}
-        triage={checksTriage}
-      />
-      <PRCommentsSection
-        details={data.details}
-        prState={data.pr.state}
-        prRepo={data.pr.prRepo ?? null}
-        actions={commentActions}
-        botAuthorOverrides={botAuthorOverrides}
-      />
+      <PrTabHeader data={data} />
+      <ListGroup separatorInset={LIST_LEADING_INSET}>
+        {gates.map((row) => {
+          const onPress = openGate(row)
+          return (
+            <ListRow
+              key={row.key}
+              title={row.title}
+              subtitle={row.subtitle ?? undefined}
+              leading={<GateIcon row={row} />}
+              navigates={onPress !== undefined}
+              onPress={onPress}
+            />
+          )
+        })}
+      </ListGroup>
+      <PrChangesCard data={data} onPress={onOpenChanges} />
+      <PrDescription tab={tab} data={data} />
     </>
+  )
+}
+
+function PrTabHeader({ data }: { data: PrSidebarData }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const now = useNow(60_000)
+  const { pr, details } = data
+  const item = details && !isPrSidebarDetailsPlaceholder(details) ? details.item : null
+  const badge = prStateBadge(pr.state)
+  const badgeColor = statusColor(badge.token)
+  const author = item?.author ?? null
+  const updatedAt = item?.updatedAt || pr.updatedAt
+  const meta = [
+    author,
+    updatedAt
+      ? t('pullRequest.tab.updated', 'updated {{time}}', {
+          time: commentRelativeTime(updatedAt, now, t)
+        })
+      : null
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  const headRef = item?.branchName ?? pr.headRefName ?? null
+  const baseRef = item?.baseRefName ?? pr.baseRefName ?? null
+  return (
+    <View style={styles.header}>
+      <View style={styles.metaRow}>
+        <View style={[styles.badge, { borderColor: badgeColor }]}>
+          <Text style={[styles.badgeText, { color: badgeColor }]}>{badge.label}</Text>
+        </View>
+        <Text style={styles.number}>#{pr.number}</Text>
+        {meta ? (
+          <Text style={styles.meta} numberOfLines={1}>
+            {meta}
+          </Text>
+        ) : null}
+      </View>
+      <Text style={styles.title} accessibilityRole="header">
+        {item?.title ?? pr.title}
+      </Text>
+      {headRef && baseRef ? (
+        <View style={styles.refsRow}>
+          <Text style={styles.ref} numberOfLines={1}>
+            {headRef}
+          </Text>
+          <ArrowRight size={12} color={colors.textMuted} strokeWidth={2.2} />
+          <Text style={styles.ref} numberOfLines={1}>
+            {baseRef}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
+const GATE_ICON: Record<Exclude<PrGateTone, 'loading'>, LucideIcon> = {
+  passed: CircleCheck,
+  blocking: CircleX,
+  waiting: CircleDashed,
+  idle: CircleMinus
+}
+
+function GateIcon({ row }: { row: PrGateRow }) {
+  useMobileColorScheme()
+  if (row.tone === 'loading') {
+    return <ActivityIndicator size="small" color={colors.textSecondary} />
+  }
+  const Icon =
+    row.tone === 'waiting' && row.key === 'threads'
+      ? MessageCircle
+      : row.tone === 'waiting' && row.key === 'checks'
+        ? LoaderCircle
+        : GATE_ICON[row.tone]
+  const color =
+    row.tone === 'passed'
+      ? colors.statusGreen
+      : row.tone === 'blocking'
+        ? colors.statusRed
+        : row.tone === 'waiting'
+          ? colors.statusAmber
+          : colors.textMuted
+  return <Icon size={20} color={color} strokeWidth={2} />
+}
+
+type SidebarProps = Omit<Parameters<typeof useMobilePrTab>[0], 'onOpenScreen'> & {
+  onRetry: () => void
+  bottomInset?: number
+}
+
+/** The PR tab outside the Source Control hub (the diff review dock), with its own screens, menu and sheets. */
+export function MobilePRSidebar({ onRetry, bottomInset = 0, ...input }: SidebarProps) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const [screen, setScreen] = useState<PrTabScreen | null>(null)
+  const { refetch } = input
+  const onCreateSettled = useCallback(
+    ({ created }: MobilePrCreateSettled) => {
+      if (!created) {
+        return
+      }
+      refetch({ includeDetails: true })
+      // The dock has no Created notice, so "already open" or "created but not refreshed" opens the PR instead.
+      if (created.warning) {
+        openMobilePrUrl(created.url)
+      }
+    },
+    [refetch]
+  )
+  const tab = useMobilePrTab({
+    ...input,
+    onOpenScreen: setScreen,
+    onCreateSettled,
+    live: screen === 'comments' ? 'details' : 'checks'
+  })
+  const refresh = () => refetch({ includeDetails: true })
+  const prMenuGroups = usePrTabMenuGroups(tab, refresh)
+  // Without a PR the dock still needs Refresh, e.g. after a PR is opened on the web.
+  const menuGroups = prMenuGroups ?? [
+    [
+      {
+        id: 'refresh',
+        label: t('pullRequest.menu.refresh', 'Refresh'),
+        closeBeforePress: true,
+        onPress: refresh
+      }
+    ]
+  ]
+  const moreRef = useRef<View>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const close = () => setScreen(null)
+  // The dock's drawer would otherwise take Back and close the whole PR panel from a pushed screen.
+  useBackClaim(
+    screen
+      ? () => {
+          setScreen(null)
+          return true
+        }
+      : null
+  )
+  return (
+    <View style={styles.container}>
+      {screen ? (
+        <PrTabScreenView screen={screen} tab={tab} onBack={close} bottomInset={bottomInset} />
+      ) : (
+        <>
+          <View style={styles.dockBar}>
+            <NavBarButton
+              ref={moreRef}
+              icon={MoreHorizontal}
+              onPress={() => setMenuOpen(true)}
+              active={menuOpen}
+              accessibilityLabel={t('pullRequest.tab.moreActions', 'More pull request actions')}
+            />
+            <PullDownMenu
+              visible={menuOpen}
+              anchorRef={moreRef}
+              groups={menuGroups}
+              onClose={() => setMenuOpen(false)}
+            />
+          </View>
+          <MobilePrTabBody
+            tab={tab}
+            onRetry={onRetry}
+            bottomInset={bottomInset}
+            footer={<PrTabBottomAction tab={tab} bottomInset={bottomInset} />}
+          />
+        </>
+      )}
+      <MobilePrTabSheets tab={tab} />
+    </View>
   )
 }

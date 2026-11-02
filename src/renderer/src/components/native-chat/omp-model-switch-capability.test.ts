@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearNativeChatSessionOptionCacheForTests } from './native-chat-session-option-cache'
-import { createNativeChatPtySessionOptions } from '../../../../shared/native-chat-pty-session-options'
+import { createNativeChatPtySessionOptions } from '../../../../shared/native-chat/input/native-chat-pty-session-options'
 
 describe('OMP model command capability', () => {
   beforeEach(() => clearNativeChatSessionOptionCacheForTests())

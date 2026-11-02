@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { contextTokensFromUsage } from '../../shared/agent-session-context-usage'
+import { contextTokensFromUsage } from '../../shared/agent-session/agent-session-context-usage'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { openAcpFixtureRig, readAcpFixture } from './acp-timeline-fixture.test-support'
 import { AcpTimelineTranslator } from './acp-timeline-translator'

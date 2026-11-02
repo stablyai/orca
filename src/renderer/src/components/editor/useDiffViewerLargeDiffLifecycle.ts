@@ -5,12 +5,15 @@ import { monaco } from '@/lib/monaco-setup'
 import {
   disposeUnattachedDiffViewerMonacoModels,
   disposeUnattachedMonacoModelPaths,
-  getDiffViewerMonacoModelPaths
+  getDiffViewerMonacoModelPaths,
+  recallDiffViewerModelPaths,
+  rememberDiffViewerModelPaths
 } from './diff-monaco-model-disposal'
 
 type DiffViewerLargeDiffLifecycleInput = {
   limited: boolean
   modelKey: string
+  modelOwnerKey?: string
   originalModelKey?: string
   modifiedModelKey?: string
   diffEditorRef: RefObject<editor.IStandaloneDiffEditor | null>
@@ -20,6 +23,7 @@ type DiffViewerLargeDiffLifecycleInput = {
 export function useDiffViewerLargeDiffLifecycle({
   limited,
   modelKey,
+  modelOwnerKey,
   originalModelKey,
   modifiedModelKey,
   diffEditorRef,
@@ -35,19 +39,26 @@ export function useDiffViewerLargeDiffLifecycle({
     () =>
       getDiffViewerMonacoModelPaths({
         modelKey,
+        modelOwnerKey,
         originalModelKey,
         modifiedModelKey,
         generationSuffix: largeDiffModelGenerationSuffix
       }),
-    [modelKey, originalModelKey, modifiedModelKey, largeDiffModelGenerationSuffix]
+    [modelKey, modelOwnerKey, originalModelKey, modifiedModelKey, largeDiffModelGenerationSuffix]
   )
   const currentDiffModelPathsRef = useRef(currentDiffModelPaths)
   currentDiffModelPathsRef.current = currentDiffModelPaths
-  const previousDiffModelPathsRef = useRef(currentDiffModelPaths)
+  const previousDiffModelPathsRef = useRef<typeof currentDiffModelPaths | null>(null)
 
   useEffect(() => {
-    const previousModelPaths = previousDiffModelPathsRef.current
+    const previousModelPaths =
+      previousDiffModelPathsRef.current ??
+      (modelOwnerKey ? recallDiffViewerModelPaths(modelOwnerKey, modelKey) : undefined) ??
+      currentDiffModelPaths
     previousDiffModelPathsRef.current = currentDiffModelPaths
+    if (modelOwnerKey) {
+      rememberDiffViewerModelPaths(modelOwnerKey, modelKey, currentDiffModelPaths)
+    }
     const supersededModelPaths = [
       previousModelPaths.originalModelPath !== currentDiffModelPaths.originalModelPath
         ? previousModelPaths.originalModelPath
@@ -77,7 +88,7 @@ export function useDiffViewerLargeDiffLifecycle({
       }
     }
     disposeUnattachedMonacoModelPaths(monaco, supersededModelPaths)
-  }, [currentDiffModelPaths, diffEditorRef])
+  }, [currentDiffModelPaths, diffEditorRef, modelKey, modelOwnerKey])
 
   useEffect(() => {
     if (!limited) {

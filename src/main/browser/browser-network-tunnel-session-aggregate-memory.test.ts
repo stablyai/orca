@@ -78,7 +78,9 @@ describe('BrowserNetworkTunnelSession aggregate memory', () => {
 function createRegistry(): BrowserNetworkTunnelOutboundMemoryBudgetRegistry {
   return new BrowserNetworkTunnelOutboundMemoryBudgetRegistry({
     hostMaxBytes: 10,
-    processMaxBytes: 100
+    processMaxBytes: 100,
+    controlFrameReserveBytes: 0,
+    controlFrameReserveClaims: 0
   })
 }
 

@@ -1,3 +1,4 @@
+import type { RelayHookAdmissionOptions } from './agent-hook-event-admission'
 import { admitRelayOpenCodeTui } from './agent-hook-request'
 import { checkHookOwnerPresence } from '../shared/agent-hook-owner-presence'
 import { normalizeHookPayload } from '../shared/agent-hook-listener'
@@ -24,8 +25,10 @@ export function ingestRelayHookSpoolRecord(
       event: AgentHookEventPayload,
       source: AgentHookSource,
       env?: string,
-      version?: string
+      version?: string,
+      admission?: RelayHookAdmissionOptions
     ) => void
+    onAccepted?: (event: AgentHookEventPayload) => void
     isPaneSurfaceRetired: (paneKey: string) => boolean
     getAgentLaunchToken: (paneKey: string) => string | undefined
   }
@@ -49,7 +52,10 @@ export function ingestRelayHookSpoolRecord(
       ? host.providerNormalization.normalize(state, record.source, body, env, options)
       : normalizeHookPayload(state, record.source, body, env, options)
     if (event) {
-      host.apply(event, record.source, hookBodyEnv(body), hookBodyVersion(body))
+      host.apply(event, record.source, hookBodyEnv(body), hookBodyVersion(body), {
+        isReplay: true,
+        onAccepted: host.onAccepted
+      })
     }
   }
   const pending = host.checkAgentPresence

@@ -4,8 +4,9 @@ import { randomUUID } from 'node:crypto'
 import type { PostHog } from 'posthog-node'
 import type { CommonProps, EventName, EventProps, OptInVia } from '../../shared/telemetry-events'
 import type { AgentDashboardSurface } from '../../shared/telemetry-agent-dashboard-event-schemas'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
+import { experimentCohortProps } from './experiment-cohort-props'
 import { getCohortAtEmit } from './cohort-classifier'
 import { isConsentEnvOverridden, resolveConsent } from './consent'
 import * as postHogStart from './posthog-client-start'
@@ -69,10 +70,8 @@ export function initTelemetry(store: Store, scheduleStart: postHogStart.StartSch
   sessionId = randomUUID()
   commonProps = buildCommonProps(installId, sessionId, BUILD_IDENTITY)
 
-  const languageCohort = settings.telemetry?.onboardingLanguageCohort
-  if (languageCohort === 'control' || languageCohort === 'treatment') {
-    commonProps.onboarding_language_v1 = languageCohort
-  }
+  // Official builds only; contributor builds retain the original announcement behavior.
+  Object.assign(commonProps, experimentCohortProps(store))
 
   // Validate singleton common properties once; invalid identity would collapse installs into one subject.
   const parsedCommon = commonPropsSchema.safeParse(commonProps)

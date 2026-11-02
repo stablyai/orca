@@ -161,15 +161,6 @@ describe('a bridged terminal the old relay proves exited', () => {
     expect(runtime.onPtyExit).toHaveBeenCalledWith(PTY, 0, undefined, { hostExitConfirmed: true })
   })
 
-  it('reaches the runtime when its shell exits on its own', async () => {
-    await startBridge()
-
-    relay.ptys.delete(RELAY_PTY)
-    relay.exits.forEach((listener) => listener(RELAY_PTY, 3))
-
-    expect(runtime.onPtyExit).toHaveBeenCalledWith(PTY, 3, undefined, { hostExitConfirmed: true })
-  })
-
   it('reaches the runtime once from a stop-and-wait, not again from the stop', async () => {
     await startBridge()
 

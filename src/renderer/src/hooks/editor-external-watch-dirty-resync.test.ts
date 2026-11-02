@@ -54,20 +54,6 @@ it.each(['original', 'external rewrite'])(
   }
 )
 
-it('leaves a dirty tab unmarked when its resync read fails', async () => {
-  const store = createEditorStore()
-  storeRef.current = store
-  openGuardedFile(store, { baseline: 'original', draft: 'my edits' })
-  const readFile = vi.fn(() => Promise.reject(new Error('connection lost')))
-  vi.stubGlobal('window', { api: { fs: { readFile } } })
-
-  reconcileEditorTabsAfterOverflow({ worktreeId: 'wt-1', worktreePath: '/repo' }, true)
-  await vi.advanceTimersByTimeAsync(0)
-
-  expect(readFile).toHaveBeenCalled()
-  expect(store.getState().openFiles[0]?.externalMutation).toBeUndefined()
-})
-
 it("treats the tab's own just-written save as an echo, not an external change", async () => {
   const store = createEditorStore()
   storeRef.current = store

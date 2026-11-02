@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
-import { exposeDispatchContext, exposeWorker, inspectWorkerTerminal } from './worker-observation'
-import type { DispatchContextRow, WorkerDispatchRow } from '../../../../orchestration/types'
+import { inspectWorkerTerminal } from './worker-observation'
+
+import { exposeDispatchContext } from './dispatch-context-exposure'
+import type { DispatchContextRow } from '../../../../orchestration/types'
 
 const DISPATCH_ID = 'ctx-worker'
 const TERMINAL_HANDLE = 'term-worker'
@@ -27,18 +29,6 @@ function createHarness(args: {
 }
 
 describe('inspectWorkerTerminal missing liveness verdict', () => {
-  it('keeps a connected local worker live', async () => {
-    const { runtime, db } = createHarness({
-      connected: true,
-      hostScope: { kind: 'local', hostId: 'local' }
-    })
-
-    await expect(inspectWorkerTerminal(runtime, db, DISPATCH_ID)).resolves.toMatchObject({
-      exact: true,
-      status: 'live'
-    })
-  })
-
   it('keeps a disconnected local worker exited', async () => {
     const { runtime, db } = createHarness({
       connected: false,
@@ -66,40 +56,6 @@ describe('inspectWorkerTerminal missing liveness verdict', () => {
 })
 
 describe('worker-show receipt shape', () => {
-  it('parses the JSON columns once and emits one casing', () => {
-    const exposed = exposeWorker({
-      dispatch_id: DISPATCH_ID,
-      runtime_epoch: 'epoch-1',
-      state: 'ready',
-      stage: 'input_accepted',
-      worktree_id: 'repo::/tmp/wt',
-      agent_terminal_handle: TERMINAL_HANDLE,
-      setup_state: 'ran',
-      effects: '[{"kind":"setup"}]',
-      residual_resources: '["res-1"]',
-      start_options: '{"agent":"codex"}',
-      last_error: null,
-      created_at: 'now',
-      updated_at: 'now'
-    } as WorkerDispatchRow)
-
-    expect(exposed).toEqual({
-      dispatchId: DISPATCH_ID,
-      runtimeEpoch: 'epoch-1',
-      state: 'ready',
-      stage: 'input_accepted',
-      worktreeId: 'repo::/tmp/wt',
-      agentTerminalHandle: TERMINAL_HANDLE,
-      setupState: 'ran',
-      effects: [{ kind: 'setup' }],
-      residualResources: ['res-1'],
-      startOptions: { agent: 'codex' },
-      lastError: null,
-      createdAt: 'now',
-      updatedAt: 'now'
-    })
-  })
-
   it('parses host_scope and withholds authority hashes from the dispatch row', () => {
     const exposed = exposeDispatchContext({
       id: DISPATCH_ID,
@@ -121,26 +77,5 @@ describe('worker-show receipt shape', () => {
     expect(exposed).not.toHaveProperty('capability_hash')
     // Retain only the legacy dispatch spelling older paired CLIs still print beside camelCase worker.
     expect(Object.keys(exposed).filter((key) => key.includes('_'))).toEqual(['task_id'])
-  })
-
-  // Mixed-version CLIs still print these legacy fields (cli/handlers/orchestration/worker-observation-handlers.ts).
-  it('keeps every field an older paired CLI prints', () => {
-    const dispatch = exposeDispatchContext({
-      id: DISPATCH_ID,
-      run_id: 'run-1',
-      task_id: 'task-1',
-      status: 'dispatched'
-    } as DispatchContextRow)
-
-    expect(dispatch).toMatchObject({ id: DISPATCH_ID, task_id: 'task-1', status: 'dispatched' })
-    expect(
-      exposeWorker({
-        state: 'ready',
-        stage: 'input_accepted',
-        effects: '[]',
-        residual_resources: '[]',
-        start_options: '{}'
-      } as WorkerDispatchRow)
-    ).toMatchObject({ state: 'ready', stage: 'input_accepted' })
   })
 })

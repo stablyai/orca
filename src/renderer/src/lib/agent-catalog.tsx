@@ -41,41 +41,43 @@ export function getAgentLabel(agent: TerminalAgent): string {
 
 export function AgentIcon({
   agent,
-  size = 14
+  size = 14,
+  className
 }: {
   agent: TerminalAgent | null | undefined
   size?: number
+  className?: string
 }): React.JSX.Element {
   // Unknown identity gets a neutral glyph so Codex panes cannot briefly display Claude’s icon before hooks arrive.
   if (!agent) {
-    return <AgentLetterIcon letter="?" size={size} />
+    return <AgentLetterIcon letter="?" size={size} className={className} />
   }
   if (agent === 'claude' || agent === 'claude-agent-teams') {
-    return <ClaudeIcon size={size} />
+    return <ClaudeIcon size={size} className={className} />
   }
   if (agent === 'codex') {
-    return <OpenAIIcon size={size} />
+    return <OpenAIIcon size={size} className={className} />
   }
   if (agent === 'droid') {
-    return <DroidIcon size={size} />
+    return <DroidIcon size={size} className={className} />
   }
   if (agent === 'pi') {
-    return <PiIcon size={size} />
+    return <PiIcon size={size} className={className} />
   }
   if (agent === 'omp') {
-    return <OmpIcon size={size} />
+    return <OmpIcon size={size} className={className} />
   }
   if (agent === 'aider') {
-    return <AiderIcon size={size} />
+    return <AiderIcon size={size} className={className} />
   }
   if (agent === 'kilo') {
-    return <KiloIcon size={size} />
+    return <KiloIcon size={size} className={className} />
   }
   if (agent === 'copilot') {
-    return <CopilotIcon size={size} />
+    return <CopilotIcon size={size} className={className} />
   }
   if (agent === 'opencode' || agent === 'opencode2') {
-    return <OpenCodeIcon size={size} />
+    return <OpenCodeIcon size={size} className={className} />
   }
   const catalogEntry = getAgentCatalog().find((a) => a.id === agent)
   // Prefer bundled favicons for offline use and regions where Google’s service is unreachable (#8451).
@@ -89,6 +91,7 @@ export function AgentIcon({
         src={iconSrc}
         width={size}
         height={size}
+        className={className}
         alt=""
         aria-hidden
         style={{ borderRadius: 2 }}
@@ -102,11 +105,18 @@ export function AgentIcon({
         src={`https://www.google.com/s2/favicons?domain=${catalogEntry.faviconDomain}&sz=64`}
         width={size}
         height={size}
+        className={className}
         alt=""
         aria-hidden
         style={{ borderRadius: 2 }}
       />
     )
   }
-  return <AgentLetterIcon letter={getAgentLabel(agent).charAt(0).toUpperCase()} size={size} />
+  return (
+    <AgentLetterIcon
+      letter={getAgentLabel(agent).charAt(0).toUpperCase()}
+      size={size}
+      className={className}
+    />
+  )
 }

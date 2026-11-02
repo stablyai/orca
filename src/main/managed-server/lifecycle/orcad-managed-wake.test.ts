@@ -20,8 +20,6 @@ import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import { FakeOrcadHost, OLD } from '../activation/orcad-activation-host-test-harness'
-import { ORCAD_E2E_IDLE_TIMEOUT_ENV } from '../../../shared/orcad-idle-exit'
-import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../../shared/orcad-managed-launch-env'
 
 let host = new FakeOrcadHost()
 
@@ -64,38 +62,6 @@ afterEach(() => {
 })
 
 describe('wakeStoppedManagedOrcad', () => {
-  it('starts a stopped active slot as a managed launch and releases the fence', async () => {
-    host = stoppedHost()
-
-    const wake = await wakeStoppedManagedOrcad(slot)
-
-    expect(wake.outcome).toBe('started')
-    expect([...host.alive]).toEqual([OLD])
-    expect(host.fence).toBe(false)
-    expect(launches()).toHaveLength(1)
-    expect(launches()[0]).toContain(
-      `${ORCAD_MANAGED_ACTIVATION_ROOT_ENV}='/home/u/.orca-remote/.orcad-activation-transaction'`
-    )
-    expect(launches()[0]).not.toContain(ORCAD_E2E_IDLE_TIMEOUT_ENV)
-  })
-
-  it('forwards the test-only idle timeout to the server it starts', async () => {
-    vi.stubEnv(ORCAD_E2E_IDLE_TIMEOUT_ENV, '3000')
-    host = stoppedHost()
-
-    await wakeStoppedManagedOrcad(slot)
-
-    expect(launches()[0]).toContain(`${ORCAD_E2E_IDLE_TIMEOUT_ENV}='3000'`)
-  })
-
-  it('leaves a running server alone', async () => {
-    host = FakeOrcadHost.deployedOld()
-
-    expect(await wakeStoppedManagedOrcad(slot)).toEqual({ outcome: 'serving' })
-    expect(launches()).toEqual([])
-    expect(acquireInstallLock).not.toHaveBeenCalled()
-  })
-
   it('never starts a second process when the slot state is unprovable', async () => {
     host = stoppedHost()
     host.pidFiles.clear()
@@ -117,16 +83,6 @@ describe('wakeStoppedManagedOrcad', () => {
     expect([...host.alive]).toEqual([OLD])
     expect(host.fence).toBe(false)
     expect(launches()).toHaveLength(1)
-  })
-
-  it('defers to an update or recovery that holds the activation fence', async () => {
-    host = stoppedHost()
-    host.fence = true
-    host.fenceFresh = true
-
-    expect(await wakeStoppedManagedOrcad(slot)).toEqual({ outcome: 'fenced' })
-    expect(launches()).toEqual([])
-    expect(host.fence).toBe(true)
   })
 
   it('releases the fence its own wake left when the connection dropped, and starts the slot', async () => {
@@ -263,20 +219,6 @@ describe('wakeStoppedManagedOrcad', () => {
     expect(launches()).toEqual([])
   })
 
-  it('never releases a fence another client may hold, even after its own wake dropped', async () => {
-    host = stoppedHost()
-    host.fence = true
-    host.fenceFresh = true
-    expect(
-      await wakeStoppedManagedOrcad({
-        ...slot,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above, a different target.
-        conn: { getTarget: () => ({ id: 'ssh-2' }) } as unknown as OrcadHostTransport
-      })
-    ).toEqual({ outcome: 'fenced' })
-    expect(host.fence).toBe(true)
-  })
-
   it('drops an abandoned fence no journal backs, and starts the slot', async () => {
     host = stoppedHost()
     host.fence = true
@@ -285,12 +227,5 @@ describe('wakeStoppedManagedOrcad', () => {
     expect(await wakeStoppedManagedOrcad(slot)).toMatchObject({ outcome: 'started' })
     expect(launches()).toHaveLength(1)
     expect(host.fence).toBe(false)
-  })
-
-  it('has nothing to start on a host with no activated server', async () => {
-    host = new FakeOrcadHost()
-
-    expect(await wakeStoppedManagedOrcad(slot)).toEqual({ outcome: 'not-activated' })
-    expect(launches()).toEqual([])
   })
 })

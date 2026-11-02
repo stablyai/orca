@@ -2,7 +2,7 @@ import { parsePaneKey } from '../../../src/shared/stable-pane-id'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../../src/shared/structured-agent-session-projection'
+} from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type { MobileSessionTab } from './mobile-session-route-types'
 
 /**

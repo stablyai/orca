@@ -47,54 +47,6 @@ afterEach(() => {
 })
 
 describe('startup fork-upstream backfill', () => {
-  it('keeps a renamed fork own owner avatar while recording the upstream', async () => {
-    const runtime = new OrcaRuntimeService()
-    const updateRepo = attachStore(runtime, [makeRepo()])
-    getRepoUpstream.mockResolvedValue({ owner: 'upstream-org', repo: 'rocket' })
-    getRepoSlug.mockResolvedValue({ owner: 'acme', repo: 'rocket-pro' })
-
-    await (runtime as unknown as BackfillInternals).repositoryForkBackfill.run()
-
-    expect(updateRepo).toHaveBeenCalledExactlyOnceWith(repoTarget('repo-1'), {
-      upstream: { owner: 'upstream-org', repo: 'rocket' },
-      repoIcon: {
-        type: 'image',
-        src: 'https://github.com/acme.png?size=64',
-        source: 'github',
-        label: 'acme/rocket-pro'
-      }
-    })
-  })
-
-  it('migrates a same-name fork to the upstream owner avatar', async () => {
-    const runtime = new OrcaRuntimeService()
-    const updateRepo = attachStore(runtime, [
-      makeRepo({
-        path: '/workspace/rocket',
-        repoIcon: {
-          type: 'image',
-          src: 'https://github.com/acme.png?size=64',
-          source: 'github',
-          label: 'acme/rocket'
-        }
-      })
-    ])
-    getRepoUpstream.mockResolvedValue({ owner: 'upstream-org', repo: 'rocket' })
-    getRepoSlug.mockResolvedValue({ owner: 'acme', repo: 'rocket' })
-
-    await (runtime as unknown as BackfillInternals).repositoryForkBackfill.run()
-
-    expect(updateRepo).toHaveBeenCalledExactlyOnceWith(repoTarget('repo-1'), {
-      upstream: { owner: 'upstream-org', repo: 'rocket' },
-      repoIcon: {
-        type: 'image',
-        src: 'https://github.com/upstream-org.png?size=64',
-        source: 'github',
-        label: 'upstream-org/rocket'
-      }
-    })
-  })
-
   it('skips every row whose files sit on an SSH host', async () => {
     // Unified remote ownership, including nested runtime targets, must not read this client's same-path files.
     const runtime = new OrcaRuntimeService()

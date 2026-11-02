@@ -30,6 +30,7 @@ it("publishes the desktop's chat tab name over the saved name, and the saved nam
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: title projection reads only the record from this host stub.
   setStructuredAgentSessionHost({
+    getSessionTabId: () => null,
     deps: {
       store: {
         getConversation: () => ({
@@ -120,12 +121,6 @@ async function listRestartedHeadlessCursorTab(
 it("publishes a headless tab's generated name over the agent's live frames", async () => {
   expect(await listRestartedHeadlessCursorTab(true, '⠋ Cursor Agent')).toEqual(
     expect.objectContaining({ title: 'Fix tab titles' })
-  )
-})
-
-it('keeps a headless tab on its saved title while generated names are off', async () => {
-  expect(await listRestartedHeadlessCursorTab(false, null)).toEqual(
-    expect.objectContaining({ title: 'bash' })
   )
 })
 

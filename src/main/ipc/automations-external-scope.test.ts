@@ -5,7 +5,7 @@ import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../shared/automation-owner-c
 import type { AutomationOwnerRef } from '../../shared/automation-owner-ref'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { AutomationService } from '../automations/service'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type * as Fs from 'node:fs'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-error'
 import { ExternalAutomationManagerCache } from '../automations/external-automation-manager-cache'

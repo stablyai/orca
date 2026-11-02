@@ -8,7 +8,11 @@ import { resolveHostIdForFingerprint, resolveHostIdsForFingerprint } from './pus
 import { readOrcaPushPayload, type OrcaPushPayload } from './push-payload'
 import type { NotificationBehavior } from 'expo-notifications'
 import { readNativeNotificationData } from './native-notification-data'
-import { loadNotificationDeliveryPreferences } from './notification-delivery-preferences'
+import {
+  loadNotificationDeliveryPreferences,
+  type NotificationDeliveryPreferences
+} from './notification-delivery-preferences'
+import { allowsMobilePushAlertKind } from '../../../src/shared/mobile-push-alert'
 
 const RECENT_FOREGROUND_PUSH_CAP = 512
 const recentForegroundPushes = new Set<string>()
@@ -67,11 +71,9 @@ export async function foregroundNotificationBehavior(notification: {
   })
   // Unrecognized notifications retain normal behavior; recognized pushes fail closed
   // when consent, host, viewing, or dismissal checks cannot complete.
-  const ineligible = await shouldSuppressForegroundPush(
-    payload,
-    preferences.suppressWhileViewing,
-    explicitHostId
-  ).catch(() => payload !== null)
+  const ineligible = await shouldSuppressForegroundPush(payload, preferences, explicitHostId).catch(
+    () => payload !== null
+  )
   const suppressed =
     isTerminalBellTitle ||
     alreadyConsumed ||
@@ -90,11 +92,7 @@ export async function canPresentForegroundPush(
   explicitHostId?: string
 ): Promise<boolean> {
   const preferences = await loadNotificationDeliveryPreferences()
-  return !(await shouldSuppressForegroundPush(
-    payload,
-    preferences.suppressWhileViewing,
-    explicitHostId
-  ))
+  return !(await shouldSuppressForegroundPush(payload, preferences, explicitHostId))
 }
 
 async function resolvePushHostIds(
@@ -111,7 +109,7 @@ async function resolvePushHostIds(
 
 async function shouldSuppressForegroundPush(
   payload: OrcaPushPayload | null,
-  suppressWhileViewing: boolean,
+  preferences: NotificationDeliveryPreferences,
   explicitHostId?: string
 ): Promise<boolean> {
   if (!payload) {
@@ -127,6 +125,10 @@ async function shouldSuppressForegroundPush(
     }
     return true
   }
+  // An older host ignores this registration filter, so its pushes are filtered here too.
+  if (!allowsMobilePushAlertKind(preferences, payload.source, payload.agentState)) {
+    return true
+  }
   const hostIds = await resolvePushHostIds(payload, explicitHostId)
   // Why suppressed rather than shown: the only pushes that outlive their host are
   // ones a gateway registration still holds after a removal whose unregister never
@@ -140,7 +142,7 @@ async function shouldSuppressForegroundPush(
   }
   if (
     hostIds.some((hostId) =>
-      shouldSuppressNotificationWhileViewing(payload, hostId, suppressWhileViewing)
+      shouldSuppressNotificationWhileViewing(payload, hostId, preferences.suppressWhileViewing)
     )
   ) {
     return true

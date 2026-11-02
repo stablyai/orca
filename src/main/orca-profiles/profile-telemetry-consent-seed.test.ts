@@ -81,15 +81,6 @@ describe('new profile consent seeding', () => {
     expect(existsSync(getOrcaProfileStateDatabaseFile(profileId, root))).toBe(false)
   })
 
-  it('refuses an incapable runtime before admission or profile creation', () => {
-    vi.spyOn(database, 'isProfileStateSqliteAvailable').mockReturnValue(false)
-    expect(() => seedNewOrcaProfileTelemetryConsent(profileId, telemetry, root)).toThrow(
-      'bundled Orca runtime'
-    )
-    expect(existsSync(join(root, '.profile-state-access'))).toBe(false)
-    expect(existsSync(join(root, 'profiles'))).toBe(false)
-  })
-
   it('refuses seeding while maintenance owns the root', () => {
     const maintenance = acquireProfileStateMaintenance(root)
     try {

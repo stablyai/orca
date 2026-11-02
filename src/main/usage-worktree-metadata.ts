@@ -6,7 +6,7 @@ import {
   splitWorktreeIdForFilesystem
 } from '../shared/worktree/id'
 import { isFolderRepo } from '../shared/repo-kind'
-import type { Store } from './persistence'
+import type { Store } from './persistence/loading-store/store'
 import { getRepoRoutingConnectionId } from '../shared/execution-host'
 
 export type UsageWorktreeRef = {

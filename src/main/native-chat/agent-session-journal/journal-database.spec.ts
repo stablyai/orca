@@ -26,7 +26,7 @@ import {
   readJournalSessionEpoch
 } from './journal-row-table'
 import type { JournalRow } from './journal-row-schema'
-import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
+import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 export function registerJournalDatabaseTests(): void {
   let root: string
