@@ -245,7 +245,8 @@ it.each([100, 1000])(
         )
         expect(samples.map(({ visits }) => visits)).toEqual(Array(41).fill(n + 1))
         expect(samples.reduce((sum, sample) => sum + sample.visits, 0)).toBe(41 * (n + 1))
-        expect(otherReads).toBe(112) // Eight existing backpressure retries inspect only the held first entry.
+        // Each of eight held-head retries adds one metadata discrimination to its fourteen existing scalar reads.
+        expect(otherReads).toBe(8 * (14 + 1))
         await Promise.all(deliveries)
         expect(r.mail()).toHaveLength(1)
         expect(r.mail()[0]?.body).toContain('Grok ended this turn with an error.')

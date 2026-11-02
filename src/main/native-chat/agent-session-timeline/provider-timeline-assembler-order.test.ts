@@ -9,10 +9,13 @@ import {
   openProviderTimelineRig,
   providerItemId,
   providerTurnItemId,
-  runningTool
+  runningTool,
+  pendingApproval
 } from './provider-timeline-assembler-test-support'
 
-afterEach(closeProviderTimelineRigs)
+afterEach(async () => {
+  await closeProviderTimelineRigs()
+})
 
 async function heldWindowRig() {
   const runs: (() => void)[] = []
@@ -131,15 +134,27 @@ describe('one canonical row per provider item', () => {
   })
 })
 
-describe('every other event is an ordering barrier for text', () => {
+describe('structural events preserve text ordering', () => {
   it('writes text that arrived before a tool ahead of the tool, named stream or not', async () => {
     const { rig, fire } = await heldWindowRig()
     rig.assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })
     rig.assembler.apply({
       type: 'text.delta',
+      item: { id: 'empty-start' },
+      channel: 'assistant',
+      text: ''
+    })
+    rig.assembler.apply({
+      type: 'text.delta',
       item: { id: 'm1' },
       channel: 'assistant',
       text: 'First'
+    })
+    rig.assembler.apply({
+      type: 'text.delta',
+      item: { id: 'empty-start' },
+      channel: 'assistant',
+      text: 'Second'
     })
     rig.assembler.apply({ type: 'item.open', item: 'tool', body: runningTool('read') })
     fire()
@@ -147,6 +162,7 @@ describe('every other event is an ordering barrier for text', () => {
     const items = (await rig.rows()).filter((row) => row.body.kind !== 'turn')
     expect(items.map((row) => row.itemId)).toEqual([
       providerItemId('item', 'm1'),
+      providerItemId('item', 'empty-start'),
       providerItemId('item', 'tool')
     ])
   })
@@ -244,3 +260,91 @@ describe('explicit provider attribution', () => {
     expect(await rig.turn('t2')).not.toHaveProperty('contextUsage')
   })
 })
+
+it.each(['assistant', 'reasoning'] as const)(
+  'separates %s metadata from actual placement, replacement and final barriers',
+  async (channel) => {
+    const rig = await openProviderTimelineRig({ schedule: () => () => {} })
+    const a = rig.assembler
+    const delta = (id: string, text: string) =>
+      a.apply({ type: 'text.delta', item: { id }, channel, text })
+    const usage = (turn?: string) =>
+      a.apply({
+        type: 'context.usage',
+        usage: { window: { tokens: 1000, capturedAt: 2 } },
+        ...(turn ? { join: { turn } } : {})
+      })
+    const messages = () =>
+      rig.journal.snapshot().items.filter((item) => item.body.kind === 'message')
+    usage()
+    expect(rig.journal.snapshot().items).toEqual([])
+    a.apply({ type: 'turn.open', turn: 'old', at: 1 })
+    a.apply({ type: 'turn.end', state: 'completed', at: 2 })
+    a.apply({ type: 'turn.open', turn: 'current', at: 3 })
+    delta('blank', '')
+    delta('white', ' \n ')
+    delta('named', 'First')
+    delta('blank', 'Second')
+    for (const turn of [undefined, 'old', 'current', 'missing']) {
+      usage(turn)
+    }
+    await rig.eventSink.written?.()
+    expect(messages()).toEqual([])
+    // Suppression is the classifier's actual null output, not an arbitrary empty decision.
+    a.apply({
+      type: 'provider.frame',
+      frameKind: 'request:extension/delta',
+      payload: { sessionId: 'session' }
+    })
+    await rig.eventSink.written?.()
+    expect(messages()).toEqual([])
+    a.apply({ type: 'text.delta', item: { stream: 'anonymous' }, channel, text: 'Third' })
+    usage('missing')
+    await rig.eventSink.written?.()
+    expect(messages().map((item) => messageText(item.body))).toEqual(['First', 'Second', 'Third'])
+    const first = structuredClone(messages())
+    a.apply({ type: 'text.delta', item: { stream: 'anonymous' }, channel, text: 'Fourth' })
+    a.apply({ type: 'text.close', item: { stream: 'anonymous' } })
+    delta('named', ' tail')
+    // A positioned unrelated tail is not a predecessor of a newly released anonymous row.
+    a.apply({ type: 'text.delta', item: { stream: 'other' }, channel, text: 'Fifth' })
+    usage()
+    await rig.eventSink.written?.()
+    expect(messages().map((item) => messageText(item.body))).toEqual([
+      'First',
+      'Second',
+      'Third',
+      'Fourth',
+      'Fifth'
+    ])
+    a.apply({
+      type: 'text.delta',
+      item: { stream: 'child' },
+      channel,
+      text: 'Child',
+      producer: { agentId: 'child' }
+    })
+    usage()
+    await rig.eventSink.written?.()
+    expect(messages()).toHaveLength(5)
+    // Visible fallback, request and tool really order preceding text.
+    a.apply({ type: 'provider.frame', frameKind: 'unmodeled-result', payload: { answer: 1 } })
+    a.apply({ type: 'request.open', request: 'approval', body: pendingApproval })
+    a.apply({ type: 'item.open', item: 'tool', body: runningTool('read') })
+    await rig.eventSink.written?.()
+    expect(messages()[0]).toMatchObject({
+      ...first[0],
+      revision: first[0].revision + 1,
+      body: { role: channel, blocks: [{ type: 'text', text: 'First tail' }] }
+    })
+    expect(messages().map((item) => messageText(item.body))).toContain('Child')
+    a.apply({
+      type: 'item.close',
+      item: 'named',
+      body: { kind: 'message', role: channel, blocks: [{ type: 'text', text: 'Replacement' }] }
+    })
+    a.apply({ type: 'turn.end', state: 'completed', at: 9 })
+    await rig.eventSink.written?.()
+    expect(messageText(rig.journal.item(providerItemId('item', 'named'))?.body)).toBe('Replacement')
+  }
+)

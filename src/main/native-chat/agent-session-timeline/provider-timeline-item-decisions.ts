@@ -213,7 +213,7 @@ export function decideFrame(
   const { state, context } = input
   const frame = unhandledProviderFrameJournalItem(context.agent, event.frameKind, event.payload)
   if (!frame) {
-    return {}
+    return { suppressedFrame: true }
   }
   const row = context.rows.item(
     'frame',

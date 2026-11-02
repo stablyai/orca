@@ -57,8 +57,6 @@ export function createCodexJournalTranslator(
   } = createCodexJournalTranslatorWriters(deps)
   const flushStreams = (threadId?: string): CodexJournalTranslationAdmission =>
     items.streams.flush(threadId)
-      ? CODEX_JOURNAL_ADMITTED
-      : { accepted: false, reason: 'backpressure' }
   let readActivity = createCodexProviderActivityReader()
   const resetActivity = (threadId: string): void => {
     if (threadId === (deps.primaryThreadId?.() ?? null)) {
@@ -194,9 +192,11 @@ export function createCodexJournalTranslator(
           return publishActivity(event, streamResult.admission)
         }
       }
-      const streamAdmission = flushStreams('threadId' in event ? event.threadId : undefined)
-      if (!streamAdmission.accepted) {
-        return streamAdmission
+      if (event.type !== 'notification' || event.method !== CODEX_TOKEN_USAGE_METHOD) {
+        const streamAdmission = flushStreams('threadId' in event ? event.threadId : undefined)
+        if (!streamAdmission.accepted) {
+          return streamAdmission
+        }
       }
       if (event.type === 'prompt') {
         const suppressionAdmission = genericFrames.flush()
@@ -230,7 +230,7 @@ export function createCodexJournalTranslator(
         event.method === CODEX_TOKEN_USAGE_METHOD &&
         event.threadId === (deps.primaryThreadId?.() ?? null)
       ) {
-        recordCodexContextUsage({
+        const contextAdmission = recordCodexContextUsage({
           sink: deps.sink,
           activeTurns,
           attributionFor,
@@ -238,6 +238,9 @@ export function createCodexJournalTranslator(
           params: event.params,
           capturedAt: deps.now?.() ?? Date.now()
         })
+        if (!contextAdmission.accepted) {
+          return contextAdmission
+        }
       }
       if (event.method === 'item/started' || event.method === 'item/completed') {
         const routed = routeThreadItem(event)

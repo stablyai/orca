@@ -18,6 +18,8 @@ export type CodexItemStreamDeps = {
   maxRetainedBytes?: number
   maxTotalRetainedBytes?: number
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']
+  isCurrent?: AgentSessionDeltaCoalescerDeps['isCurrent']
+  onScheduledFailure?: AgentSessionDeltaCoalescerDeps['onScheduledFailure']
 }
 
 export type CodexItemStreamState = {
@@ -57,7 +59,7 @@ export type CodexStructuredItemStreams = {
   ) => CodexStructuredItemStreamHandleResult
   forget: (threadId: string, itemId: string) => void
   /** Force-saves streamed text before a row; a thread limits that to its own streams, the only text its row follows. */
-  flush: (threadId?: string) => boolean
+  flush: (threadId?: string) => CodexStructuredItemStreamAdmission
   dispose: () => void
   snapshot: (
     threadId: string,

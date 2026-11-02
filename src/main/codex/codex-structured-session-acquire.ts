@@ -40,6 +40,7 @@ import type { CodexStructuredSessionTeardown } from './codex-structured-session-
 import type { CodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import type { deliverCodexServerRequest } from './codex-structured-provider-events'
 import { codexAcquisitionNotificationHandler } from './codex-structured-acquisition-notification'
+import { codexAcquisitionScheduledOwner } from './codex-acquisition-scheduled-owner'
 
 export async function acquireCodexStructuredSession(input: {
   input: StructuredAgentSessionAcquireInput
@@ -85,7 +86,16 @@ export async function acquireCodexStructuredSession(input: {
     primaryThreadId: () => primaryThreadId,
     dispatchEchoes,
     subagentExecutions,
-    prompts: acquisition.prompts
+    prompts: acquisition.prompts,
+    ...codexAcquisitionScheduledOwner({
+      sessions,
+      sessionId,
+      acquisition,
+      fence: acquireInput.fence,
+      acquisitionGeneration,
+      notificationRetries,
+      forceCloseUnexpected: input.forceCloseUnexpected
+    })
   })
   const open = deps.openConnection ?? spawnCodexAppServerConnection
   const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, deps.readProcessStartTime)
