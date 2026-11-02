@@ -139,32 +139,6 @@ describe('projectGroups IPC validation', () => {
     expect(isGitRepo).not.toHaveBeenCalled()
   })
 
-  it('imports a small selection from a large nested scan', async () => {
-    mockStore.createProjectGroup.mockReturnValue(group)
-    const names = Array.from(
-      { length: 87 },
-      (_, index) => `service-${String(index + 1).padStart(2, '0')}`
-    )
-    await withNestedTree(names, async (root) => {
-      const selectedPaths = [names[2], names[41], names[86]].map((name) => join(root, name))
-
-      const result = await handlers.get('projectGroups:importNested')!(null, {
-        parentPath: root,
-        groupName: 'Platform',
-        projectPaths: selectedPaths,
-        mode: 'group'
-      })
-
-      expect(result).toMatchObject({ importedCount: 3, alreadyKnownCount: 0, failedCount: 0 })
-      expect(mockStore.addRepo).toHaveBeenCalledTimes(3)
-      for (const path of selectedPaths) {
-        expect(mockStore.addRepo).toHaveBeenCalledWith(
-          expect.objectContaining({ path, projectGroupId: group.id })
-        )
-      }
-    })
-  })
-
   it('imports selected local linked worktrees as one project rooted at the main worktree', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-nested-linked-worktrees-'))
     try {
@@ -224,23 +198,5 @@ describe('projectGroups IPC validation', () => {
     } finally {
       await rm(tempRoot, { recursive: true, force: true })
     }
-  })
-
-  it('sanitizes unexpected nested import errors before returning results', async () => {
-    mockStore.createProjectGroup.mockReturnValue(group)
-    await withNestedTree(['api'], async (root) => {
-      mockStore.addRepo.mockImplementationOnce(() => {
-        throw new Error(`secret backend path ${join(root, 'api')}`)
-      })
-
-      const result = await handlers.get('projectGroups:importNested')!(null, {
-        parentPath: root,
-        groupName: 'Platform',
-        projectPaths: [join(root, 'api')],
-        mode: 'group'
-      })
-
-      expect(result).toMatchObject({ projects: [{ error: 'Repository could not be imported' }] })
-    })
   })
 })

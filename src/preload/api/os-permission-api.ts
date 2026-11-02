@@ -19,7 +19,7 @@ import type {
   NotificationSoundResult,
   StructuredNotificationRead
 } from '../../shared/notification-settings-types'
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 
 export type NotificationsApi = {
   getDesktopAwayState: () => Promise<boolean | undefined>
@@ -61,8 +61,7 @@ export type DeveloperPermissionsApi = {
 }
 
 export type ComputerUsePermissionsApi = {
-  // Passive badges pass background to accept a backed-off denial instead of relaunching the helper.
-  getStatus: (args?: { background?: boolean }) => Promise<ComputerUsePermissionStatusResult>
+  getStatus: () => Promise<ComputerUsePermissionStatusResult>
   openSetup: (args?: { id?: ComputerUsePermissionId }) => Promise<ComputerUsePermissionSetupResult>
   reset: () => Promise<ComputerUsePermissionResetResult>
 }

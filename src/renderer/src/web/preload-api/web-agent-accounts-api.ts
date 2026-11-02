@@ -133,7 +133,8 @@ export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
       }
       return callRuntimeResult<ClaudeRateLimitAccountsState>(
         'accounts.selectClaude',
-        { accountId },
+        // This window's switcher moves running sessions itself; the host window must not too.
+        { accountId, movesRunningSessions: true },
         ACCOUNT_MUTATION_TIMEOUT_MS
       )
     }

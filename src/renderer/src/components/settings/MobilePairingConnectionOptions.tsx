@@ -11,6 +11,7 @@ import type {
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
 import { MobilePairingPathOption } from './MobilePairingPathOption'
 import { MobileRelaySignInPanel } from './MobileRelaySignInPanel'
+import { relayClockSkewMessage } from '../mobile/relay-clock-skew-message'
 
 function relayStatusLabel(status: MobileRelayStatus): string {
   if (status === 'registered') {
@@ -64,8 +65,7 @@ export function MobilePairingConnectionOptions({
   relayMintRetrying?: boolean
 }): React.JSX.Element {
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
-  const [relayStatus, setRelayStatus] = useState<MobileRelayStatus>('offline')
-  const [relayCellUrl, setRelayCellUrl] = useState<string | undefined>(undefined)
+  const [relayStatus, setRelayStatus] = useState<MobileRelayStatusDetail>({ status: 'offline' })
   const signedIn = authStatus?.state === 'connected'
   const reconnectRequired = authStatus?.state === 'reconnect-required'
   // Unconfigured builds have no Relay sign-in endpoint; mark unavailable instead of offering a dead CTA.
@@ -98,7 +98,7 @@ export function MobilePairingConnectionOptions({
     optionRefs.current[next]?.focus()
   }
 
-  const relayCell = relayCellUrl ? relayCellLabel(relayCellUrl) : null
+  const relayCell = relayStatus.cellUrl ? relayCellLabel(relayStatus.cellUrl) : null
 
   useOrcaProfileAuthStatusRefresh()
 
@@ -106,8 +106,7 @@ export function MobilePairingConnectionOptions({
     let receivedEvent = false
     let active = true
     const apply = (detail: MobileRelayStatusDetail): void => {
-      setRelayStatus(detail.status)
-      setRelayCellUrl(detail.cellUrl)
+      setRelayStatus(detail)
     }
     const unsubscribe = window.api.mobile.onRelayStatusChanged((detail) => {
       receivedEvent = true
@@ -185,12 +184,20 @@ export function MobilePairingConnectionOptions({
                         'auto.components.settings.MobilePairingConnectionOptions.unavailable',
                         'Unavailable'
                       )
-                    : relayStatusLabel(relayStatus)}
+                    : relayStatusLabel(relayStatus.status)}
               </Badge>
             ) : null
           }
         />
         {needsSignIn ? <MobileRelaySignInPanel reconnectRequired={reconnectRequired} /> : null}
+        {signedIn &&
+        value === 'automatic' &&
+        !relayMintFailed &&
+        relayStatus.clockOffsetMs !== undefined ? (
+          <p className="border-t border-border/60 px-3 py-2 text-xs text-destructive" role="alert">
+            {relayClockSkewMessage(relayStatus.clockOffsetMs)}
+          </p>
+        ) : null}
         {value === 'automatic' && relayCell ? (
           <p
             className="border-t border-border/60 py-2 pl-10 pr-3 text-xs text-muted-foreground"

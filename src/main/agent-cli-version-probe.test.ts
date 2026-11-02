@@ -122,7 +122,7 @@ it('probes the agent behind a launcher with tree teardown', async () => {
 })
 
 it('probes Claude through its prefix with the same tree teardown', async () => {
-  prints('2.1.280')
+  prints('2.1.280 (Claude Code)')
   await expect(
     probeClaudeCliVersion(INPUT.program, {
       cwd: INPUT.cwd,

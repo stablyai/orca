@@ -8,6 +8,7 @@ import type {
 import { Trans } from 'react-i18next'
 import { i18n, translate } from '@/i18n/i18n'
 import { getTimelineTargetLabel } from './issue-conversation-entries'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function renderTimelineTarget(
   target: GitHubIssueTimelineTarget | undefined
@@ -21,7 +22,7 @@ export function renderTimelineTarget(
       type="button"
       className="min-w-0 truncate font-medium text-foreground underline underline-offset-2 hover:text-muted-foreground"
       title={getTimelineTargetLabel(target)}
-      onClick={() => window.api.shell.openUrl(target.url)}
+      onClick={(event) => openAppHttpLink(target.url, { event })}
     >
       {getTimelineTargetLabel(target)}
     </button>

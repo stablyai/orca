@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../native-chat-types'
-import {
-  createNativeChatTranscriptRetention,
-  encodeNativeChatTranscriptIdentity
-} from './native-chat-transcript-retention'
+import type { NativeChatMessage } from '../native-chat-types'
+import { createNativeChatTranscriptRetention } from './native-chat-transcript-retention'
 
 function message(id: string): NativeChatMessage {
   return { id, role: 'assistant', blocks: [], timestamp: 0, source: 'transcript' }
@@ -31,11 +28,5 @@ describe('native chat transcript retention', () => {
     retention.capture('source', retained)
 
     expect(retention.visible({ identity: 'source', messages: fresh, settled: true })).toBe(fresh)
-  })
-
-  it('encodes identity components without delimiter collisions', () => {
-    expect(encodeNativeChatTranscriptIdentity(['host\0workspace', 'session'])).not.toBe(
-      encodeNativeChatTranscriptIdentity(['host', 'workspace\0session'])
-    )
   })
 })

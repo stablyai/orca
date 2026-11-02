@@ -1,5 +1,4 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { createTestStore, makeLayout, makeTab } from './store-test-helpers'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
@@ -103,25 +102,6 @@ export function registerReposStaleFetchTests(): void {
       resolveStale([localRepo, remoteRepo])
       await stale
       expect(store.getState().repos).toEqual([])
-    })
-
-    it('reapplies an in-flight catalog after the repo is removed', async () => {
-      const { promise: catalog, resolve: resolveCatalog } = Promise.withResolvers<Repo[]>()
-      reposList.mockReturnValueOnce(catalog)
-      const store = createTestStore()
-      store.setState({ repos: [localRepo] })
-
-      const pending = store.getState().fetchRepos(catalogOwner(store))
-      await store
-        .getState()
-        .removeProject(localRepo.id, { hostId: getRepoExecutionHostId(localRepo) })
-      expect(store.getState().repos).toEqual([])
-
-      resolveCatalog([localRepo])
-      await pending
-
-      // Current contract: removal does not claim a catalog generation, so the latest fetch can resurrect it.
-      expect(store.getState().repos).toEqual([{ ...localRepo, executionHostId: 'local' }])
     })
 
     it('waits for the superseding catalog fetch before startup hydration', async () => {

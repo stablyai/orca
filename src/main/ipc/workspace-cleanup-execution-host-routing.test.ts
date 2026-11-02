@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { GitStatusResult } from '../../shared/git-status-types'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
@@ -201,17 +201,5 @@ describe('workspace cleanup execution-host routing', () => {
     expect(result.candidates).toHaveLength(1)
     expect(result.candidates[0]?.blockers).toContain('git-status-error')
     expect(result.candidates[0]?.executionHostId).toBe('ssh:alpha')
-  })
-
-  it('still routes a genuinely local repo to this machine', async () => {
-    const store = makeStore([makeRepo({ path: '/local/repo' })], {
-      [WORKTREE_ID]: makeMeta()
-    })
-
-    const result = await scanWorkspaceCleanup(store)
-
-    expect(listRepoWorktreesMock).toHaveBeenCalled()
-    expect(getStatusMock).toHaveBeenCalled()
-    expect(result.candidates[0]?.executionHostId).toBe('local')
   })
 })

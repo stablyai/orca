@@ -1,6 +1,6 @@
 import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/claude-profile-installed-router'
 import { mintPtySessionId } from '../../../daemon/pty-session-id'
-import { LocalPtyProvider } from '../../../providers/local-pty-provider'
+import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import {
   isClaudeLaunchCommand,
   recoverFreshSpawnProviderRouting,
@@ -35,7 +35,8 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
       args.worktreeId,
       args.sessionId,
       localPtySpawnCwd(args),
-      args.wslPassiveRestore === true
+      args.wslPassiveRestore === true,
+      args.connectionId
     )
     if (admission) {
       await admission
@@ -49,7 +50,8 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
       args.worktreeId,
       args.sessionId,
       localPtySpawnCwd(args),
-      args.wslPassiveRestore === true
+      args.wslPassiveRestore === true,
+      args.connectionId
     )
     if (admission) {
       await admission
@@ -91,7 +93,8 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     projectRuntimeSource: { kind: 'sent', projectRuntime: args.projectRuntime },
     preAdopted: ctx.preAdoptedStablePane !== null,
     getSettings: ctx.deps.getSettings,
-    resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd,
+    resolveStartupCwd: (id, cwd, fallback) =>
+      ctx.deps.resolvePtySpawnStartupCwd(id, cwd, fallback, args.connectionId),
     ...(args.wslPassiveRestore === true
       ? {
           wslStartHold: {
@@ -110,6 +113,7 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
   ctx.startupCwdFallback = target.startupCwdFallback
   ctx.terminalRuntimeOptions = target.terminalRuntimeOptions
   ctx.expectedWslDistro = target.expectedWslDistro
+  ctx.wslHoldReadAnchor = target.wslHoldReadAnchor
   ctx.codexSelectionTarget = target.codexSelectionTarget
   ctx.spawnTiming.mark('preflight')
   args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)

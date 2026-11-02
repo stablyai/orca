@@ -1,3 +1,5 @@
+import { NativeChatCrewFrame } from '../orchestration-crew/NativeChatCrewPanel'
+import { TerminalChatCrewPanel } from '../orchestration-crew/TerminalChatCrewPanel'
 import { cn } from '@/lib/utils'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from './use-native-chat-store-appearance-style'
@@ -5,7 +7,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../../store'
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 import { useNativeChatRetainedSession } from './use-native-chat-retained-session'
-import { isNativeChatTranscriptUnsettled } from './native-chat-live-session-contract'
 import { selectNativeChatViewState } from './native-chat-view-state'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import {
@@ -19,9 +20,8 @@ import { useNativeChatFind } from './use-native-chat-find'
 import { NativeChatFindBar } from './NativeChatFindBar'
 import { useNativeChatCanSend } from './use-native-chat-can-send'
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
-import { nativeChatAskRequiresTerminal } from '../../../../shared/native-chat-agent-support'
-import { useNativeChatInteractivePromptCard } from './use-native-chat-interactive-prompt-card'
-import { useNativeChatPromptCardPresentation } from './use-native-chat-prompt-card-presentation'
+import { nativeChatAskRequiresTerminal } from '../../../../shared/native-chat/native-chat-agent-support'
+import { useNativeChatTerminalPromptCard } from './use-native-chat-interactive-prompt-card'
 import { NativeChatPromptStrip } from './NativeChatPromptCollapse'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
@@ -29,7 +29,7 @@ import { shouldClearNativeChatWorkingSuppression } from '../../../../shared/nati
 import { resolveNativeChatTerminalTurn } from '../../../../shared/native-chat/native-chat-terminal-turn'
 import { useNativeChatTerminalTurnTiming } from './use-native-chat-terminal-turn-timing'
 import { launchPromptAsMessage, shouldPruneLaunchPrompt } from './native-chat-pending'
-import { pendingSendsAsMessages } from '../../../../shared/native-chat-pending-sends'
+import { pendingSendsAsMessages } from '../../../../shared/native-chat/transcript/native-chat-pending-sends'
 import { useNativeChatPendingDelivery } from './use-native-chat-pending-delivery'
 import {
   appendCommandMarkerCache,
@@ -57,7 +57,7 @@ import { useRecheckNativeChatFileLinksWhenTurnEnds } from './use-native-chat-fil
 import { useNativeChatLocalCommandAnswer } from './use-native-chat-local-command-answer'
 import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
 import {
-  matchNativeChatSplitShortcut,
+  handleNativeChatSplitShortcut,
   nativeChatSplitShortcutLabels
 } from './native-chat-split-shortcut'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
@@ -74,6 +74,7 @@ export function NativeChatResolvedView({
   ownsTabWideLaunchDraft,
   onSwitchToTerminal,
   readTerminalScreen,
+  readTerminalDraft,
   contextMenuActions
 }: NativeChatResolvedViewProps): React.JSX.Element {
   // Route reads/subscriptions through the pane’s runtime owner; null retains local routing.
@@ -93,13 +94,7 @@ export function NativeChatResolvedView({
   const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
   const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
   // Adopt the TUI’s unsent launch context into the GUI composer.
-  const launchDraftSignal = useNativeChatLaunchDraftSignal({
-    terminalTabId,
-    agent,
-    messages: session.messages,
-    // Treat awaiting transcripts as unsettled to avoid re-offering an already-submitted prefill.
-    transcriptLoading: isNativeChatTranscriptUnsettled(session.readPhase)
-  })
+  const launchDraftSignal = useNativeChatLaunchDraftSignal({ terminalTabId, agent, session })
   // Use the live session’s reconciled lifecycle for every working-state consumer.
   const liveWorking = session.status === 'working'
   // Preview the in-progress hook reply before its completed transcript turn arrives.
@@ -190,21 +185,24 @@ export function NativeChatResolvedView({
         : new Map([...(launchPromptDeliveryNotices ?? []), ...delivery.notices]),
     [launchPromptDeliveryNotices, delivery.notices]
   )
-  const promptCard = useNativeChatInteractivePromptCard({
-    paneKey,
-    messages: sessionAfterCommandBoundaries.messages,
-    transcriptSettled: session.readPhase === 'ready'
-  })
-  // A prompt card and composer must never share the input region: composer text would answer the agent’s selector.
-  const promptCardPresentation = useNativeChatPromptCardPresentation({
+  const {
+    promptCard,
+    presentation: promptCardPresentation,
+    actionKey
+  } = useNativeChatTerminalPromptCard({
     paneKey,
     targetPtyId,
-    card: promptCard,
-    canSend,
-    transcriptSettled: session.readPhase === 'ready'
+    runtimeEnvironmentId,
+    agent,
+    sessionId,
+    transcriptPath: transcriptPath ?? null,
+    messages: sessionAfterCommandBoundaries.messages,
+    transcriptSettled: session.readPhase === 'ready',
+    canSend
   })
   const { card: shownPromptCard, collapsedCard } = promptCardPresentation
   const mountedPromptCard = shownPromptCard ?? collapsedCard
+  const composerReady = shownPromptCard === null && targetPtyId !== null && canSend
   const rootInput = useNativeChatRootInputRouting({
     tabId: terminalTabId,
     rootRef,
@@ -212,7 +210,7 @@ export function NativeChatResolvedView({
     questionAnswerInputRef,
     isVisible,
     isFocusedGroup,
-    composerReady: shownPromptCard === null && targetPtyId !== null && canSend
+    composerReady
   })
 
   // Match mobile ordering: hook preview before optimistic user echoes.
@@ -326,19 +324,7 @@ export function NativeChatResolvedView({
       }}
       onKeyDownCapture={(event) => {
         find.onKeyDownCapture(event)
-        const split = event.repeat
-          ? null
-          : matchNativeChatSplitShortcut(event, getShortcutPlatform(), keybindings)
-        if (split && contextMenuActions) {
-          event.preventDefault()
-          event.stopPropagation()
-          if (split.opensTerminal && contextMenuActions.onSplitWithTerminal) {
-            contextMenuActions.onSplitWithTerminal(split.direction)
-          } else if (split.direction === 'right') {
-            contextMenuActions.onSplitRight()
-          } else {
-            contextMenuActions.onSplitDown()
-          }
+        if (handleNativeChatSplitShortcut(event, keybindings, contextMenuActions)) {
           return
         }
         rootInput.onKeyDownCapture(event)
@@ -351,7 +337,14 @@ export function NativeChatResolvedView({
       style={appearanceStyle}
       data-native-chat-scheme={appearanceStyle.colorScheme}
     >
-      <div className="relative flex min-h-0 flex-1 flex-col">
+      <NativeChatCrewFrame
+        panel={
+          <TerminalChatCrewPanel
+            {...{ terminalTabId, paneKey, targetPtyId, isVisible, composerRef }}
+            canMention={composerReady}
+          />
+        }
+      >
         {find.isOpen ? <NativeChatFindBar find={find} isVisible={isVisible} /> : null}
         {viewState.kind === 'loading' ? (
           <NativeChatEmptyState kind="loading" />
@@ -374,12 +367,12 @@ export function NativeChatResolvedView({
             runtimeContext={imageRuntimeContext}
           />
         )}
-      </div>
+      </NativeChatCrewFrame>
       {/* A collapsed card stays mounted but hidden, so a partly answered question survives. */}
       {mountedPromptCard ? (
         <div hidden={collapsedCard !== null} inert={collapsedCard !== null} className="contents">
           <NativeChatInteractiveCard
-            key={promptCardPresentation.occurrenceKey ?? 'prompt'}
+            key={actionKey}
             card={mountedPromptCard}
             send={interactiveSend}
             requiresTerminal={nativeChatAskRequiresTerminal(agent)}
@@ -414,7 +407,7 @@ export function NativeChatResolvedView({
           answerCommandLocally={answerLocally}
           onSwitchToTerminal={onSwitchToTerminal}
           readTerminalScreen={readTerminalScreen}
-          launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft }}
+          launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft, readTerminalDraft }}
           recallSource={{ messages: sessionWithPending.messages, commands: commandMarkers }}
         />
       </div>

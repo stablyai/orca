@@ -2,7 +2,7 @@ import { journalItemEchoFields } from '../agent-session-journal/journal-item-ech
 // Centralize admitted single-item options; lifecycle batches carry producers per mutation.
 // Child-bound sink fences identify the execution that produced each row.
 
-import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
+import { agentJournalLinkageFields } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { JournalItemAppendOptions } from '../agent-session-journal/journal-store-contracts'
 import type { StructuredAgentSessionItemAppendOptions } from './structured-agent-session-event-sink'
 

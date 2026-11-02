@@ -84,6 +84,7 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
       return
     }
     // Ground the pen at the proven gap: lost resets can leak bold into later cells (STA-4042). Skip flood markers because snapshot replay already grounds them.
+    session.resumeEscapeGap.noteGroundingWrite(session.idleCursorReset.parserEscape)
     session.writePtyOutputToXterm(RESET_AFTER_BYTE_GAP, true)
     // Capture restore state before marking synchronously starts one; a mid-restore drop needs a newer snapshot.
     const restoreWasInFlight = session.hiddenOutputRestoreInFlight !== null

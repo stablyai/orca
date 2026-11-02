@@ -1,4 +1,4 @@
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { runningTurnLifecycleRevisions } from './structured-agent-session-stale-turn-verdict'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 import { withdrawCodexSendsNoTurnOpenedFor } from './structured-agent-session-unopened-send-withdrawal'

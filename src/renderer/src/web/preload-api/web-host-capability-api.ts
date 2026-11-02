@@ -114,7 +114,6 @@ export function createComputerUsePermissionsApi(): NonNullable<
   Partial<PreloadApi>['computerUsePermissions']
 > {
   return {
-    // Browser focus can't activate the host app, so remote reads never opt into the denied backoff.
     getStatus: () =>
       callRuntimeResult<ComputerUsePermissionStatusResult>(
         'computer.permissionsStatus',
@@ -126,13 +125,19 @@ export function createComputerUsePermissionsApi(): NonNullable<
         'computer.permissions',
         args ?? {},
         15_000
-      ).catch(() => ({
-        platform: getBrowserPlatform(),
-        helperAppPath: null,
-        openedSettings: false,
-        launchedHelper: false,
-        nextStep: 'Computer-use permissions are managed on the Orca server.'
-      })),
+      ).catch((error: unknown) => {
+        // Only a host without this method falls back; real failures (e.g. a cancelled Open) must surface.
+        if (!(error instanceof Error && 'code' in error && error.code === 'method_not_found')) {
+          throw error
+        }
+        return {
+          platform: getBrowserPlatform(),
+          helperAppPath: null,
+          openedSettings: false,
+          launchedHelper: false,
+          nextStep: 'Computer-use permissions are managed on the Orca server.'
+        }
+      }),
     reset: () =>
       Promise.resolve({
         platform: getBrowserPlatform(),
@@ -151,6 +156,8 @@ export function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
     // Why: browser clients have no local skill homes; remote hosts plan their own (not here).
     bundledPlan: () => Promise.reject(new Error('Updating Orca skills requires the desktop app.')),
     bundledExecute: () =>
+      Promise.reject(new Error('Updating Orca skills requires the desktop app.')),
+    bundledAutoUpdate: () =>
       Promise.reject(new Error('Updating Orca skills requires the desktop app.')),
     prepareShare: () => Promise.reject(new Error('Skill publishing requires the desktop app.')),
     publishShare: () => Promise.reject(new Error('Skill publishing requires the desktop app.')),

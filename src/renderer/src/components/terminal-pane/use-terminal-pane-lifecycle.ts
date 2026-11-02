@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import type { IDisposable } from '@xterm/xterm'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
 import { applyTerminalAppearance } from './terminal-appearance'
+import { useThemeBackgroundStore } from '@/store/theme-background'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import {
   applyTerminalScrollbackRowsToMountedPanes,
@@ -89,6 +90,8 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
     return () => window.removeEventListener('focus', onWindowFocus)
   }, [deps.isActive, deps.isVisible, deps.managerRef, deps.panePtyBindingsRef])
 
+  // Why: a theme image arrives after plugin themes load, so the single-paint switch must re-run then.
+  const themeBackgroundActive = useThemeBackgroundStore((state) => state.active)
   useEffect(() => {
     const manager = deps.managerRef.current
     const currentSettings = deps.settingsRef.current
@@ -107,6 +110,7 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
     )
   }, [
     deps.settings,
+    themeBackgroundActive,
     deps.systemPrefersDark,
     deps.effectiveMacOptionAsAlt,
     deps.managerRef,

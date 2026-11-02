@@ -18,6 +18,7 @@ export type Body = {
   launchToken?: string
   tabId?: string
   worktreeId?: string
+  hookEventName?: string
   env?: string
   version?: string
   agentProcess?: string

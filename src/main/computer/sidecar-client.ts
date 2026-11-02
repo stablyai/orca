@@ -7,11 +7,13 @@ import type {
   ComputerProviderCapabilities,
   ComputerSnapshotResult
 } from '../../shared/runtime-types'
-import { normalizeComputerActionResult } from './computer-action-verification-normalization'
+import {
+  normalizeComputerActionResult,
+  rejectContradictedComputerAction
+} from './computer-action-verification-normalization'
 import { isComputerSidecarDiagnostic, logComputerDiagnostic } from './computer-sidecar-diagnostics'
 import { validateComputerSidecarPasteText } from './computer-sidecar-paste-validation'
 import { RuntimeClientError } from './runtime-client-error'
-import { computerUsePermissionStatusGate } from './macos-computer-use-permission-status-gate'
 import { getForkedChildEntryPath } from '../forked-child-entry-path'
 
 // Bundled beside orcad.js on servers and under out/main on desktop.
@@ -85,8 +87,10 @@ export async function callComputerSidecarAction(
   if (validation) {
     await validation
   }
-  return normalizeComputerActionResult(
-    (await getComputerSidecar().call(method, params)) as ComputerActionResult
+  return rejectContradictedComputerAction(
+    normalizeComputerActionResult(
+      (await getComputerSidecar().call(method, params)) as ComputerActionResult
+    )
   )
 }
 
@@ -255,10 +259,6 @@ class ComputerSidecarProcess {
     if (message.ok) {
       pending.resolve(message.result)
       return
-    }
-    if (message.error.code === 'permission_denied' && process.platform === 'darwin') {
-      // The provider's own TCC check outranks any cached status.
-      computerUsePermissionStatusGate.invalidate()
     }
     pending.reject(new RuntimeClientError(message.error.code, message.error.message))
   }

@@ -17,6 +17,7 @@ import type { SourceControlPullRequestGeneration } from './use-pull-request-gene
 import type { PullRequestGenerationFields } from '@/store/slices/pull-request-generation'
 import { useGenerateBeforeCreatePullRequest } from '../../use-generate-before-create-pull-request'
 import { createdReviewIsForeground } from '../../created-review-foreground'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 /** Already-open and partial-stack failures can leave a real review that still needs linking. */
 export function useSourceControlHostedReviewCreation({
@@ -162,7 +163,7 @@ export function useSourceControlHostedReviewCreation({
             context
           )
           if (context.openChecks && resolvedPrCreationDefaults.openAfterCreate) {
-            window.api.shell.openUrl(result.url)
+            openAppHttpLink(result.url, { worktreeId: activeWorktreeId })
           }
           return
         }
@@ -188,7 +189,8 @@ export function useSourceControlHostedReviewCreation({
                   'Open on {{value0}}',
                   { value0: hostedReviewCreateCopy.providerName }
                 ),
-                onClick: () => window.api.shell.openUrl(result.existingReview!.url)
+                onClick: () =>
+                  openAppHttpLink(result.existingReview!.url, { worktreeId: activeWorktreeId })
               }
             }
           )

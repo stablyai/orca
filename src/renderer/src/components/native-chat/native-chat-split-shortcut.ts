@@ -1,3 +1,5 @@
+import type { KeyboardEvent } from 'react'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import {
   canonicalizeParsedKeybinding,
   formatKeybindingList,
@@ -57,4 +59,31 @@ export function nativeChatSplitShortcutLabels(
     return bindings.length > 0 ? formatKeybindingList(bindings, platform) : ''
   }
   return { right: label('terminal.splitRight'), down: label('terminal.splitDown') }
+}
+
+export function handleNativeChatSplitShortcut(
+  event: KeyboardEvent,
+  keybindings: KeybindingOverrides,
+  actions?: {
+    onSplitRight: () => void
+    onSplitDown: () => void
+    onSplitWithTerminal?: (direction: NativeChatSplitDirection) => void
+  }
+): boolean {
+  const split = event.repeat
+    ? null
+    : matchNativeChatSplitShortcut(event, getShortcutPlatform(), keybindings)
+  if (!split || !actions) {
+    return false
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  if (split.opensTerminal && actions.onSplitWithTerminal) {
+    actions.onSplitWithTerminal(split.direction)
+  } else if (split.direction === 'right') {
+    actions.onSplitRight()
+  } else {
+    actions.onSplitDown()
+  }
+  return true
 }

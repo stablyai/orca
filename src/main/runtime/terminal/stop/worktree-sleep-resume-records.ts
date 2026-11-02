@@ -4,7 +4,7 @@ import {
   normalizeAgentProviderSession,
   type SleepingAgentLaunchConfig,
   type SleepingAgentSessionRecord
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-ipc-payload'
 import type { AgentProcessVerdict } from '../../../../shared/agent-process-presence'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'

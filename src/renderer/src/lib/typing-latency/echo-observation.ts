@@ -5,7 +5,6 @@ export type EchoCandidate = {
   /** Trusted DOM event timestamp; the gap to t0 is time the input waited behind other renderer work. */
   eventAt: number | null
   source: TypingInputSource
-  text: string
   dispatchedAt: number | null
   /** First PTY output handed to the renderer's output scheduler after dispatch. */
   arrivedAt: number | null
@@ -25,14 +24,12 @@ export type RecordedKeystroke = {
 export function createEchoCandidate(
   t0: number,
   source: TypingInputSource,
-  text: string,
   eventAt: number | null = null
 ): EchoCandidate {
   return {
     t0,
     eventAt,
     source,
-    text,
     dispatchedAt: null,
     arrivedAt: null,
     status: 'undispatched'
@@ -53,7 +50,6 @@ export type EchoSourceCounts = Record<TypingInputSource, number>
 export type ExactEchoSample = {
   attribution: 'single-input'
   source: TypingInputSource
-  text: string
   inputToDispatchMs: number
   dispatchToParseMs: number
   parseToPaintMs: number
@@ -111,7 +107,6 @@ export function createEchoObservation(batch: EchoBatch, paintedAt: number): Echo
     return {
       attribution: 'single-input',
       source: candidate.source,
-      text: candidate.text,
       inputToDispatchMs: Math.max(0, dispatchedAt - candidate.t0),
       dispatchToParseMs: Math.max(0, parsedAt - dispatchedAt),
       parseToPaintMs: Math.max(0, paintedAt - parsedAt),

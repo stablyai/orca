@@ -11,6 +11,7 @@ type HarnessProps = {
   readonly activeHandleRef: RefObject<string | null>
   readonly canSend: boolean
   readonly inputRef: RefObject<TerminalLiveInputFocusTarget | null>
+  readonly commandInputRef: RefObject<TerminalLiveInputFocusTarget | null>
   readonly keyboardHeight?: number
   readonly lifecycleIdentity: object | null
   readonly lifecycleKey: string
@@ -90,6 +91,7 @@ function connectedProps(
     activeHandleRef,
     canSend: true,
     inputRef,
+    commandInputRef: { current: null },
     lifecycleIdentity: null,
     lifecycleKey: 'host-a:worktree-a:connected',
     liveInputEnabled: true,

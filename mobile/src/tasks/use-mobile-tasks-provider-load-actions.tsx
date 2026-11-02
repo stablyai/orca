@@ -1,3 +1,5 @@
+import type { ClassifiedError } from '../../../src/shared/classified-error'
+import { getWorkItemPageErrorTypes } from '../../../src/shared/github/work-item-page-errors'
 import type { RuntimeHydrationModel } from './use-mobile-tasks-runtime-hydration'
 import { readJiraConnection, reconcileJiraConnection } from './jira-mobile-connection'
 import {
@@ -138,6 +140,7 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     ): Promise<{
       items: Array<Extract<TaskItem, { provider: 'github' }>>
       failedCount: number
+      errorTypes: ClassifiedError['type'][]
       sourcesByRepoId: Record<string, GitHubRepoSources>
       sourceErrors: GitHubIssueSourceError[]
       sourceFallbacks: GitHubIssueSourceFallback[]
@@ -161,8 +164,9 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
               query: scopeGitHubTaskSearch(appliedQuery, githubKind),
               page: taskPageToGitHubApiPage(taskPage)
             })
+            const decoded = githubWorkItemSearchRead.interpret(reply)
             // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires `items` and each row's `labels`, and types the other eight (`id`, `type`, `number`, `title`, `state`, `url`, `updatedAt`, `author`). Two gaps keep the cast: the salvaged members type as `T | undefined` where GitHubWorkItem declares them required, and `sources`/`errors`/`issueSourceFellBack` are deliberately `z.unknown()` because the two banner extractors below read them member by member with their own guards.
-            const envelope = githubWorkItemSearchRead.interpret(reply) as {
+            const envelope = decoded as {
               items: Array<Omit<GitHubWorkItem, 'repoId' | 'repoName'>>
               sources?: GitHubRepoSources
               errors?: { issues?: { message: string } }
@@ -171,6 +175,7 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
             return {
               items: envelope.items.map((item) => createGitHubTask(repo, item)),
               sources: envelope.sources,
+              errorTypes: getWorkItemPageErrorTypes(decoded.errors),
               sourceError: extractGitHubIssueSourceError(repo, envelope),
               sourceFallback: extractGitHubIssueSourceFallback(repo, envelope),
               repoId: repo.id
@@ -213,6 +218,7 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
           .flatMap((result) => result.items)
           .sort((a, b) => b.source.number - a.source.number),
         failedCount: results.filter((result) => result.error).length,
+        errorTypes: results.flatMap((result) => result.errorTypes ?? []),
         sourcesByRepoId,
         sourceErrors,
         sourceFallbacks

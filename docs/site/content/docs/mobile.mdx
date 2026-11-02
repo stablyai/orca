@@ -104,6 +104,23 @@ The mobile terminal has a dedicated **Terminal settings** screen (Settings → T
 
 ## Troubleshooting
 
+### Firewalls and Orca Relay
+
+For Orca Relay and sign-in, allow outbound TCP port `443` from the desktop and phone to these hosts:
+
+| Host                                                                             | Purpose                                       | Protocol                          |
+| -------------------------------------------------------------------------------- | --------------------------------------------- | --------------------------------- |
+| `login.onorca.dev`                                                               | Orca sign-in and Relay credentials            | HTTPS                             |
+| `auth.onorca.dev`                                                                | Hosted sign-in pages                          | HTTPS                             |
+| `relay.onorca.dev`                                                               | Relay director, which assigns a regional cell | HTTPS and secure WebSockets (WSS) |
+| `*.relay.onorca.dev`, including `c1.relay.onorca.dev` and `c27.relay.onorca.dev` | Regional Relay cells                          | HTTPS and secure WebSockets (WSS) |
+
+Allow WebSocket upgrades and long-lived connections to both `relay.onorca.dev` and the Relay cells. Cell assignments can change, so allow the cell hostname pattern as well as the director. Relay uses outbound connections; it does not need an inbound port or router port forwarding.
+
+For a direct LAN or Tailscale connection, allow the paired desktop's listening port instead. The default is `6768`, but a desktop using another port needs that port allowed. **Settings → Troubleshooting** shows the paired endpoint's port in its firewall advice.
+
+### Common issues
+
 - **Stuck spinner on a worktree** — the phone tracks a heartbeat from the desktop agent process. If the desktop says idle but the phone shows working, force-refresh the worktree row to sync state.
 - **Pairing fails** — make sure your desktop and phone are signed into the same Orca account. Pairing codes expire after a few minutes; generate a fresh one if it's been sitting on the screen.
 - **Authentication failed / pairing invalid** — the desktop no longer accepts this device token (for example after desktop cleared paired devices). Try **Retry** on the banner first (transient rejections can recover without re-pairing). If it keeps failing, use **Re-pair** from desktop, or **Remove** the host and pair again.

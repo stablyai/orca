@@ -28,8 +28,8 @@ function makeRepoExec(
   checkedOutBranch = 'local-branch'
 ): ExecMock {
   return vi.fn<GitRemoteExec>(async (args: string[]) => {
-    if (args[0] === 'symbolic-ref' && args[1] === '--short' && args[2] === 'HEAD') {
-      return { stdout: `${checkedOutBranch}\n`, stderr: '' }
+    if (args[0] === 'symbolic-ref' && args[1] === '--quiet' && args[2] === 'HEAD') {
+      return { stdout: `refs/heads/${checkedOutBranch}\n`, stderr: '' }
     }
     if (args[0] === 'remote' && args.length === 1) {
       return { stdout: Object.keys(remotes).join('\n'), stderr: '' }

@@ -1,16 +1,14 @@
 import type { BrowserWindow } from 'electron'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import { OrcaRuntimeWithGetAgentSessionExecutionNamespace } from './session-construction/agent-session/get-agent-session-execution-namespace'
-import type {
-  RuntimeAgentSessionRpcCaller,
-  RuntimeCreateAgentSessionRequest,
-  RuntimeCreateAgentSessionResult
-} from '../../shared/agent-session-host-authority'
 import {
+  type RuntimeAgentSessionRpcCaller,
+  type RuntimeCreateAgentSessionRequest,
+  type RuntimeCreateAgentSessionResult,
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
   parseAgentSessionOperationTimestamp
-} from '../../shared/agent-session-host-authority'
+} from '../../shared/agent-session/agent-session-host-authority'
 import { createHash } from 'node:crypto'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
@@ -181,6 +179,7 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
           startupAgent: request.agent,
           ...(request.prompt ? { startupPrompt: request.prompt } : {}),
           startupPromptDelivery: request.promptDelivery,
+          suppressStartupUpdatePrompt: request.promptDelivery === 'auto-submit',
           // TEMPORARY: see `startupPromptCarry`.
           startupPromptCarry: 'force-line',
           ...(request.agentArgs !== undefined ? { agentArgs: request.agentArgs } : {}),

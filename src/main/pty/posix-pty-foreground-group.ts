@@ -11,6 +11,7 @@ export type PosixPtyForegroundGroupDeps = {
   readProcessTable?: () => Promise<string>
   /** False once the root has exited; a stale table could then name a recycled group. */
   ownsRoot?: () => boolean
+  readForegroundGroup?: () => number | null | undefined
 }
 
 type ProcessRow = {
@@ -33,7 +34,8 @@ async function runPs(pid: number): Promise<string> {
   // A native read stuck behind a busy pool leaves ps its full timeout before signalling.
   const inProcess = await runPsInProcess(args, {
     timeoutMs: inProcessSliceMs(PROCESS_TABLE_QUERY_TIMEOUT_MS),
-    maxOutputBytes: PROCESS_TABLE_MAX_BYTES
+    maxOutputBytes: PROCESS_TABLE_MAX_BYTES,
+    callerRunsPs: true
   })
   const result =
     inProcess && !inProcess.timedOut
@@ -125,12 +127,27 @@ export async function signalPosixPtyForegroundGroup(
   const currentPid = deps.currentPid ?? process.pid
   let pgid: number | null
   try {
-    pgid = getPosixPtyForegroundGroup(
-      await (deps.readProcessTable ?? (() => readForegroundGroupTable(rootPid, currentPid)))(),
-      rootPid,
-      ptsName,
-      currentPid
-    )
+    const masterGroup = deps.readForegroundGroup?.()
+    if (masterGroup !== undefined) {
+      const own = parseProcessRows(await readOwnProcessRow(currentPid)).find(
+        (row) => row.pid === currentPid
+      )
+      pgid =
+        masterGroup !== null &&
+        masterGroup > 1 &&
+        deps.readForegroundGroup?.() === masterGroup &&
+        own !== undefined &&
+        normalizeTty(own.tty) !== normalizeTty(ptsName)
+          ? masterGroup
+          : null
+    } else {
+      pgid = getPosixPtyForegroundGroup(
+        await (deps.readProcessTable ?? (() => readForegroundGroupTable(rootPid, currentPid)))(),
+        rootPid,
+        ptsName,
+        currentPid
+      )
+    }
   } catch {
     pgid = null
   }

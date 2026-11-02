@@ -1,11 +1,9 @@
 /** Pure gate facts for session-turn nudges; busy input steers or queues while the orchestration DB retains mail ownership. */
 
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
-import type { StructuredAgentSessionWorkScope } from '../../../shared/structured-agent-session-main-agent-working'
-import {
-  activeStructuredAgentSessionTurnId,
-  projectStructuredAgentSessionStatus
-} from '../../../shared/structured-agent-session-projection'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSessionWorkScope } from '../../../shared/agent-session/view/structured-agent-session-main-agent-working'
+import { activeStructuredAgentSessionTurnId } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
+import { projectStructuredAgentSessionStatus } from '../../../shared/agent-session/view/structured-agent-session-projection'
 
 /** Every reason retains the pointer; none of them consume mail. */
 export type StructuredPointerRetainReason =

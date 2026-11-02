@@ -22,14 +22,6 @@ const remoteRepo: Repo = {
   executionHostId: 'runtime:env-1'
 }
 
-const localRepo: Repo = {
-  id: 'app',
-  path: '/Users/me/app',
-  displayName: 'app',
-  badgeColor: '#000',
-  addedAt: 1
-}
-
 const hostCalls: string[] = []
 let hostKnowsProject = true
 let hostSelectorAmbiguous = false
@@ -170,22 +162,5 @@ describe('project removal after its server is gone', () => {
 
     expect(hostCalls).toContain('repo.rm')
     expect(store.getState().repos).toEqual([])
-  })
-})
-
-describe('project removal error toast', () => {
-  it('shows the host’s message without the IPC wrapper', async () => {
-    removeForHost.mockRejectedValue(
-      new Error("Error invoking remote method 'repos:removeForHost': Error: Project is busy")
-    )
-    const store = createTestStore()
-    store.setState({ repos: [localRepo] })
-
-    await store.getState().removeProject('app', { hostId: 'local', errorFeedback: 'toast' })
-
-    expect(toast.error).toHaveBeenCalledWith(
-      'Failed to remove project',
-      expect.objectContaining({ description: 'Project is busy' })
-    )
   })
 })

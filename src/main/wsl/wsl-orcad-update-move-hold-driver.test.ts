@@ -254,7 +254,7 @@ async function expectHeld(): Promise<void> {
   for (const intent of ['update', 'connect'] as const) {
     const launched = await launchServer(intent)
     // The running server keeps serving the move; Settings shows the code as "Not done: a project
-    // is moving onto this server…" (managed-server-copy.test.ts).
+    // is moving onto this server…".
     expect(launched).toMatchObject({
       outcome: 'ready',
       fullVersion: RUNNING,

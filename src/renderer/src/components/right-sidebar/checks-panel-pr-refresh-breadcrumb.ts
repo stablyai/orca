@@ -7,13 +7,13 @@ import type {
   CrashReportBreadcrumbData,
   CrashReportDetailValue
 } from '../../../../shared/crash-reporting'
+import type { HostedReviewProvider } from '../../../../shared/hosted-review'
 
 type ChecksPanelPRRefreshBreadcrumbEvent = 'start' | 'done' | 'stale_cleared'
-type ChecksPanelReviewProvider = 'github' | 'gitlab'
 
 type ChecksPanelPRRefreshBreadcrumbArgs = {
   event: ChecksPanelPRRefreshBreadcrumbEvent
-  provider: ChecksPanelReviewProvider
+  provider: HostedReviewProvider
   repoId?: string | null
   worktreeId?: string | null
   branch?: string | null
