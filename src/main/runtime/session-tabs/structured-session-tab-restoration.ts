@@ -5,6 +5,7 @@ import {
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileSessionTabsChangedMethods } from './session-tabs-change-publication'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { restoredChatTabChanges } from './restored-chat-tab-changes'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
@@ -77,6 +78,25 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     }
   }
 
+  /** A chat opened with no tab named and none recorded: its usual id, unless another tab of the
+   *  layout owner holds that id; then the owner's next free one, so its record names the tab the
+   *  chat actually opens in. */
+  private async withFreeChatTabId(
+    input: StructuredSessionTabPublicationInput
+  ): Promise<StructuredSessionTabPublicationInput> {
+    if (input.tabId || getStructuredAgentSessionHost()?.getSessionTabId?.(input.sessionId)) {
+      return input
+    }
+    const usual = structuredAgentSessionTabId(input.sessionId)
+    const taken = this.ownerLayoutWorkspace(input.workspaceId)?.tabs.find((tab) => tab.id === usual)
+    return taken && taken.entityId !== input.sessionId
+      ? {
+          ...input,
+          tabId: await this.switchChatTabId(input.workspaceId, input.sessionId, input.agent)
+        }
+      : input
+  }
+
   async publishStructuredAgentSessionTab(
     input: StructuredSessionTabPublicationInput
   ): Promise<void> {
@@ -85,7 +105,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     const { tabId, current, eligible } =
       input.committed && input.tabId
         ? { tabId: input.tabId, current: input.tabId, eligible: input.committed }
-        : await admitStructuredSessionTabPublication(input, () =>
+        : await admitStructuredSessionTabPublication(await this.withFreeChatTabId(input), () =>
             input.workspaceAuthority
               ? this.prepareStructuredAgentSessionStartupRestoration()
               : this.restoreStructuredAgentSessionTabs()

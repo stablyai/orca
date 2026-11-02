@@ -201,6 +201,27 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
     ])
   })
 
+  // The phone opens the pane the host keys: a host tab's own id, or (a host that names no layout
+  // tab) the chat's usual pane, as before.
+  it.each([
+    [
+      'names its layout tab',
+      'host-layout-tab',
+      structuredAgentSessionPaneKey('host-layout-tab', SESSION)
+    ],
+    ['names only the chat (an older host)', `agent-session:${SESSION}`, undefined]
+  ])('keys a paired chat’s pane by its host tab when the host %s', (_name, hostTabId, expected) => {
+    dispatchStructuredTurnCompletionAttention(
+      {
+        ...structuredTab(),
+        mirroredHostTab: { hostId: 'runtime:env-1', workspaceId: WORKSPACE, tabId: hostTabId }
+      },
+      completion(),
+      { kind: 'environment', environmentId: 'env-1' }
+    )
+    expect(onlyDispatch().hostPaneKey).toEqual(expected)
+  })
+
   it('uses the receiving paired subscription over the tab’s execution host', () => {
     store.setState({
       runtimeEnvironments: [

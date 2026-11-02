@@ -41,7 +41,10 @@ export function liveEntryWorktreeId(
     Boolean(entry.connectionId) ||
     (represented?.contentType !== 'agent-session' && isWebTerminalSurfaceTabId(parsed.tabId))
   if (remote) {
-    return resolveAgentStatusWorktreeId(entry, tabIdToWorktreeId) ?? undefined
+    return (
+      resolveAgentStatusWorktreeId(entry, tabIdToWorktreeId, entry.orchestration, represented) ??
+      undefined
+    )
   }
   return tabWorktreeId ?? (entry.state === 'done' && !remote ? undefined : entry.worktreeId)
 }

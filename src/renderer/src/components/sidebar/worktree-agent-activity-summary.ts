@@ -120,12 +120,10 @@ function getWorktreeAgentActivitySummaries(
 
   const now = Date.now()
   for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
-    const paneIdentity = parseAgentStatusPaneIdentity(
-      paneKey,
-      state.unifiedTabsByWorktree
-        ? getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree).get(paneKey)
-        : undefined
-    )
+    const represented = state.unifiedTabsByWorktree
+      ? getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree).get(paneKey)
+      : undefined
+    const paneIdentity = parseAgentStatusPaneIdentity(paneKey, represented)
     if (!paneIdentity) {
       continue
     }
@@ -133,7 +131,12 @@ function getWorktreeAgentActivitySummaries(
       entry,
       runtimeAgentOrchestrationByPaneKey?.[paneKey]
     )
-    const worktreeId = resolveAgentStatusWorktreeId(entry, tabIdToWorktreeId, orchestration)
+    const worktreeId = resolveAgentStatusWorktreeId(
+      entry,
+      tabIdToWorktreeId,
+      orchestration,
+      represented
+    )
     if (!worktreeId) {
       continue
     }

@@ -30,13 +30,18 @@ export function parseAgentStatusPaneIdentity(
 export function resolveAgentStatusWorktreeId(
   entry: Pick<AgentStatusEntry, 'paneKey' | 'worktreeId' | 'orchestration' | 'connectionId'>,
   worktreeIdByTabId: Pick<ReadonlyMap<string, string>, 'get'>,
-  orchestration = entry.orchestration
+  orchestration = entry.orchestration,
+  /** The tab the pane key names, when known: a chat's tab id is this client's own, whatever its
+   *  spelling, never a mirrored terminal's id. */
+  representedTab?: Pick<Tab, 'id' | 'entityId' | 'contentType'>
 ): string | null {
-  const paneIdentity = parseAgentStatusPaneIdentity(entry.paneKey)
+  const paneIdentity = parseAgentStatusPaneIdentity(entry.paneKey, representedTab)
   // Host-reported workspace ownership survives colliding mirrored tab IDs.
   if (
     entry.worktreeId &&
-    (entry.connectionId || isWebTerminalSurfaceTabId(paneIdentity?.tabId ?? ''))
+    (entry.connectionId ||
+      (representedTab?.contentType !== 'agent-session' &&
+        isWebTerminalSurfaceTabId(paneIdentity?.tabId ?? '')))
   ) {
     return entry.worktreeId
   }

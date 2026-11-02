@@ -4,6 +4,7 @@ import {
   parseAgentStatusPaneIdentity,
   resolveAgentStatusWorktreeId
 } from './agent-status-worktree-attribution'
+import { structuredAgentSessionPaneKey } from './agent-session/view/structured-agent-session-projection'
 
 function entry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
   return {
@@ -41,6 +42,19 @@ describe('agent status worktree attribution', () => {
         new Map([['parent-tab', 'parent-worktree']])
       )
     ).toBe('parent-worktree')
+  })
+
+  // A host switch can leave a chat in a tab whose id a mirrored terminal once had: that id is this
+  // client's own tab, so its own workspace wins, as for any chat.
+  it('reads a chat in a tab with a mirrored terminal id as this client’s tab', () => {
+    const chat = { id: 'web-terminal-E0', entityId: 'S', contentType: 'agent-session' as const }
+    const status = entry({
+      paneKey: structuredAgentSessionPaneKey('web-terminal-E0', 'S'),
+      worktreeId: 'host-worktree'
+    })
+    const tabs = new Map([['web-terminal-E0', 'client-worktree']])
+    expect(resolveAgentStatusWorktreeId(status, tabs, undefined, chat)).toBe('client-worktree')
+    expect(resolveAgentStatusWorktreeId(status, tabs)).toBe('host-worktree')
   })
 
   it('parses legacy numeric pane identities consistently', () => {
