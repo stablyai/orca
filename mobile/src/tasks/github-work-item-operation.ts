@@ -62,15 +62,12 @@ export async function withGitHubTargetOperation<T>(args: {
         ? { sourceId: status.hostDescriptor.installationId, runtimeId: status.runtimeId }
         : null
     // Mixed versions: a host advertising explicit intent receives it; a canonical-only host reads ordinary loads
-    // without the owner and Refresh with the owner only; a host with neither cannot honor an explicit Refresh.
+    // without the owner and Refresh with the owner only; a host with neither keeps today's params for both.
     const capabilities = args.canonical === undefined ? [] : (status.capabilities ?? [])
     const explicitIntent = capabilities.includes(
       GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY
     )
     const legacyCanonical = capabilities.includes(GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY)
-    if (args.canonical === true && !explicitIntent && !legacyCanonical) {
-      throw new Error(GITHUB_EXACT_OPERATION_UNSUPPORTED)
-    }
     const sendOwner =
       supports && source !== null && (explicitIntent || !legacyCanonical || args.canonical === true)
     if ((!supports || !source) && !args.read) {
