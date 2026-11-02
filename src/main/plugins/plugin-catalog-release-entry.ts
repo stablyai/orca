@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { parseGitRepositoryIdentity } from '../../shared/plugins/catalog/plugin-marketplace'
-import { pluginCatalogReleaseEntry } from '../../shared/plugins/catalog/plugin-catalog-release'
+import {
+  pluginCatalogReleaseEntry,
+  pluginCatalogReleaseError,
+  pluginCatalogReleaseSchema
+} from '../../shared/plugins/catalog/plugin-catalog-release'
 import { catalogImagesFromManifest } from '../../shared/plugins/images/plugin-manifest-catalog-images'
 import { isPluginRepositoryPath } from '../../shared/plugins/installation/plugin-path-safety'
 import {
@@ -14,6 +18,7 @@ import {
 import { validatePluginInstallTree } from './plugin-artifact-validation'
 import { materializePluginGitTree, type PluginGitBytesRunner } from './installation/plugin-git-tree'
 import { hashPluginTree } from './plugin-content-hash'
+import { readPluginManifestText } from './plugin-manifest-file'
 
 const GIT_QUERY_TIMEOUT_MS = 30_000
 const GIT_QUERY_MAX_BYTES = 1024 * 1024
@@ -91,9 +96,12 @@ async function committedReleaseEntry(
     const hashed = await hashPluginTree(tree)
     let rawManifest: unknown
     try {
-      rawManifest = JSON.parse(await readFile(join(tree, PLUGIN_MANIFEST_FILENAME), 'utf8'))
-    } catch {
-      return { note: `no catalog release entry: HEAD has no valid ${PLUGIN_MANIFEST_FILENAME}` }
+      rawManifest = JSON.parse(await readPluginManifestText(tree))
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      return {
+        note: `no catalog release entry: HEAD has no valid ${PLUGIN_MANIFEST_FILENAME} (${detail})`
+      }
     }
     const parsed = parsePluginManifest(rawManifest)
     const notInstallable = (reason: string) => ({
@@ -128,7 +136,18 @@ async function committedReleaseEntry(
         ),
       sha256: (bytes) => createHash('sha256').update(bytes).digest('hex')
     })
-    return { entry: images ? { ...release, images } : release }
+    const entry = images ? { ...release, images } : release
+    // Why: install compares the entry as a catalog parses it, which can drop or reject fields.
+    const listed = pluginCatalogReleaseSchema.safeParse(entry)
+    const listedError = listed.success
+      ? pluginCatalogReleaseError({
+          release: listed.data,
+          manifest: parsed.manifest,
+          resolvedCommit: commit,
+          contentHash: hashed.hash
+        })
+      : `a catalog cannot list it: ${listed.error.issues[0]?.message}`
+    return listedError ? notInstallable(listedError) : { entry }
   } finally {
     await rm(tree, { recursive: true, force: true })
   }
