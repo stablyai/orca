@@ -80,6 +80,7 @@ export function wrapWindowsStartWait(
   const cmdExePath = getCmdExePath()
   return {
     spawnCmd: cmdExePath,
-    spawnArgs: ['/d', '/c', 'start', '', '/wait', spawnCmd, ...spawnArgs]
+    // `cmd /c start /wait` exits 0 whatever the target returned; `& exit` returns the target's errorlevel.
+    spawnArgs: ['/d', '/c', 'start', '', '/wait', spawnCmd, ...spawnArgs, '&', 'exit']
   }
 }

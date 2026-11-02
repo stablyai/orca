@@ -31,8 +31,11 @@ function buildPidRelayScript(command: string, args: string[], pidFilePath: strin
     `$Arguments = @(${encodedArgs})`,
     `[IO.File]::WriteAllText((Read-OrcaValue '${encodeUtf8(pidFilePath)}'), [string]$PID)`,
     '& $Command @Arguments',
-    'if ($null -eq $LASTEXITCODE) { exit 0 }',
-    'exit $LASTEXITCODE'
+    // A command that never starts leaves $LASTEXITCODE null; only $? reports that failure.
+    '$Started = $?',
+    'if ($null -ne $LASTEXITCODE) { exit $LASTEXITCODE }',
+    'if ($Started) { exit 0 }',
+    'exit 1'
   ].join('; ')
 }
 
