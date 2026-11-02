@@ -56,8 +56,23 @@ export function applyWebSessionTabsSnapshotWithContext(
       )
     : {}
   const worktreeId = rawSnapshot.worktree
-  if (getTerminalHostAliasesFor(state, environmentId, worktreeId).length) {
-    return reconcileTerminalHostAliases(state, state, rawSnapshot, environmentId)
+  const rows = state.tabsByWorktree[worktreeId]
+  const entries = state.unifiedTabsByWorktree[worktreeId]
+  const hasOrdinaryWorkspace =
+    (rows !== undefined && (!rows.length || rows.some((row) => !row.hostTerminalAlias))) ||
+    (entries !== undefined &&
+      (!entries.length ||
+        entries.some(
+          (entry) =>
+            entry.contentType !== 'terminal' ||
+            !rows?.find((row) => row.id === entry.entityId)?.hostTerminalAlias
+        ))) ||
+    state.browserTabsByWorktree[worktreeId] !== undefined ||
+    state.openFiles.some((file) => file.worktreeId === worktreeId) ||
+    isFrameDrawnServerWorkspace(environmentId, worktreeId)
+  if (!hasOrdinaryWorkspace && getTerminalHostAliasesFor(state, environmentId, worktreeId).length) {
+    const patch = reconcileTerminalHostAliases(state, state, rawSnapshot, environmentId)
+    return identityPatch.agentSenderPublicationsByHost ? { ...patch, ...identityPatch } : patch
   }
   // Switch point: ORCA_LAYOUT_OWNER_IS_MAIN && — every mirror write (single, batch, operations) passes here.
   const previousSnapshotTabIds =
