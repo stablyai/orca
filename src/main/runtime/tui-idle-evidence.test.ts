@@ -3,12 +3,12 @@ import { detectAgentStatusFromTitle } from '../../shared/agent-title-status'
 import { getSyntheticAgentTerminalTitle } from '../../shared/synthetic-agent-title'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { getTuiAgentRestSignal } from '../../shared/tui-agent-rest-signal'
-import { isKnownReadyPromptBody } from './terminal-wait-detection'
+import { isKnownReadyPromptBody } from '../../shared/terminal-wait-detection'
 import {
   evaluateAgentStateRules,
   hookAuthority,
   readsTrustedScreen
-} from './agent-state-rules/agent-state-rules-engine'
+} from '../../shared/agent-state-rules/agent-state-rules-engine'
 import {
   evaluateTuiIdle,
   quietForegroundLaneForTerminalAgent,

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   detectTerminalWaitBlockedReason,
   isKnownReadyPromptPreview
-} from './terminal-wait-detection'
+} from '../../shared/terminal-wait-detection'
 
 const HEADER = 'Antigravity CLI 1.2.0'
 

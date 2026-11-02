@@ -1,4 +1,4 @@
-import { detectTerminalWaitBlockedReason } from '../../terminal-wait-detection'
+import { detectTerminalWaitBlockedReason } from '../../../../shared/terminal-wait-detection'
 import {
   OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission,
   type TerminalInteractiveWaitEvidence

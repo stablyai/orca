@@ -3,7 +3,7 @@ import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
 } from '../../../../shared/runtime-terminal-contracts'
-import { detectTerminalWaitBlockedReason } from '../../terminal-wait-detection'
+import { detectTerminalWaitBlockedReason } from '../../../../shared/terminal-wait-detection'
 import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitResult

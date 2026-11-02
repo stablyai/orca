@@ -5,7 +5,7 @@ import {
 } from '../../shared/agent-process-recognition'
 import { isOpenCodeNativeTitle } from '../../shared/agent-detection'
 import { isShellProcess } from '../../shared/shell-process-detection'
-import { isKnownReadyPromptPreview } from './terminal-wait-detection'
+import { isKnownReadyPromptPreview } from '../../shared/terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import {

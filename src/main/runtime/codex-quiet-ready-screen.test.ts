@@ -7,13 +7,13 @@ import {
   replayTranscript,
   type TranscriptReplayFrame
 } from './agent-transcript-replay-test-harness'
-import { isCodexComposerReadyScreen } from './agent-state-rules/codex-screen-predicates'
+import { isCodexComposerReadyScreen } from '../../shared/agent-state-rules/codex-screen-predicates'
 import {
   detectTerminalWaitBlockedReason,
   isKnownReadyPromptBody,
   isKnownReadyPromptPreview,
   isQuietReadyScreenBody
-} from './terminal-wait-detection'
+} from '../../shared/terminal-wait-detection'
 import {
   evaluateTuiIdle,
   hasQuietReadyScreen,

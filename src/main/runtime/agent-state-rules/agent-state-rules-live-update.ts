@@ -13,14 +13,14 @@ import {
   overlayOnBundledAgentStateRules,
   type ActiveAgentStateRules,
   type AgentStateRulesSource
-} from './active-agent-state-rules'
+} from '../../../shared/agent-state-rules/active-agent-state-rules'
 import {
   AGENT_STATE_RULES_BUNDLE_MAX_BYTES,
   BUNDLED_AGENT_STATE_RULES_VERSION,
   parseAgentStateRulesBundle,
   type AgentStateRulesBundle
-} from './agent-state-rules-bundle'
-import { AGENT_STATE_RULES_ENGINE_VERSION } from './agent-state-rules-schema'
+} from '../../../shared/agent-state-rules/agent-state-rules-bundle'
+import { AGENT_STATE_RULES_ENGINE_VERSION } from '../../../shared/agent-state-rules/agent-state-rules-schema'
 
 const REFRESH_INTERVAL_MS = 4 * 60 * 60 * 1000
 const FETCH_TIMEOUT_MS = 30_000

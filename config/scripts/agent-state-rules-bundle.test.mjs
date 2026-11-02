@@ -4,10 +4,10 @@ import {
   BUNDLED_AGENT_STATE_RULES_VERSION,
   LIVE_UPDATABLE_AGENT_STATE_RULE_IDS,
   parseAgentStateRulesBundle
-} from '../../src/main/runtime/agent-state-rules/agent-state-rules-bundle.ts'
-import { BUNDLED_AGENT_STATE_RULE_FILES } from '../../src/main/runtime/agent-state-rules/agent-state-rules-catalog.ts'
+} from '../../src/shared/agent-state-rules/agent-state-rules-bundle.ts'
+import { BUNDLED_AGENT_STATE_RULE_FILES } from '../../src/shared/agent-state-rules/agent-state-rules-catalog.ts'
 import { agentStateRulesDownloadUrl } from '../../src/main/runtime/agent-state-rules/agent-state-rules-live-update.ts'
-import { AGENT_STATE_RULES_ENGINE_VERSION } from '../../src/main/runtime/agent-state-rules/agent-state-rules-schema.ts'
+import { AGENT_STATE_RULES_ENGINE_VERSION } from '../../src/shared/agent-state-rules/agent-state-rules-schema.ts'
 import {
   AGENT_STATE_RULES_ASSET,
   buildAgentStateRulesBundle,

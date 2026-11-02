@@ -11,13 +11,13 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import type { TerminalAgent } from '../../shared/terminal-agent'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { getTuiAgentRestSignal } from '../../shared/tui-agent-rest-signal'
-import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
+import { detectExplicitIdleStatusFromTitle } from '../../shared/terminal-wait-detection'
 import { isOmpIdleStateTitle } from './omp-terminal-readiness'
 import {
   hasQuietReadyRules,
   idleTitleRequiresQuiet,
   type AgentStateVerdict
-} from './agent-state-rules/agent-state-rules-engine'
+} from '../../shared/agent-state-rules/agent-state-rules-engine'
 import { evaluateHookTurn, type TuiIdleHookTurn } from './tui-idle-hook-lane'
 
 /** Rank authoritative hooks, blocked tail, strong/quiet readiness, first-party working, then sustained weak readiness.

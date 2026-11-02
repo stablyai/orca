@@ -1,7 +1,7 @@
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 import type { TuiAgent } from '../../shared/tui-agent'
-import { hookAuthority } from './agent-state-rules/agent-state-rules-engine'
+import { hookAuthority } from '../../shared/agent-state-rules/agent-state-rules-engine'
 import { selectFreshExplicitAgentStatusRow } from './runtime-hook-agent-row-selection'
 import { terminalHostConnectionMatches } from './orchestration/worker-provider-session'
 

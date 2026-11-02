@@ -6,13 +6,13 @@ import {
   detectTerminalWaitBlockedReason,
   isKnownReadyPromptBody,
   isQuietReadyScreenBody
-} from './terminal-wait-detection'
+} from '../../shared/terminal-wait-detection'
 import { readScreenInputVeto, type RuledScreen } from './screen-input-veto'
 import {
   evaluateAgentStateRules,
   readsTrustedScreen,
   type AgentStateVerdict
-} from './agent-state-rules/agent-state-rules-engine'
+} from '../../shared/agent-state-rules/agent-state-rules-engine'
 import type { TuiIdleHookTurn } from './tui-idle-hook-lane'
 import type {
   FirstPartyAgentStatus,

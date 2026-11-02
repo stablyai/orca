@@ -3,8 +3,8 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusIpcPayload
 } from '../../shared/agent-status-types'
-import { hookAuthority } from './agent-state-rules/agent-state-rules-engine'
-import { parseAgentStateRuleFiles } from './agent-state-rules/agent-state-rules-catalog'
+import { hookAuthority } from '../../shared/agent-state-rules/agent-state-rules-engine'
+import { parseAgentStateRuleFiles } from '../../shared/agent-state-rules/agent-state-rules-catalog'
 import { hookLeadTurnState, readTuiIdleHookTurn, type TuiIdleHookTurn } from './tui-idle-hook-lane'
 import {
   evaluateTuiIdle,

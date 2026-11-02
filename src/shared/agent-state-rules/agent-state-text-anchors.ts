@@ -1,4 +1,4 @@
-import type { RuntimeTerminalWaitBlockedReason } from '../../../shared/runtime-types'
+import type { RuntimeTerminalWaitBlockedReason } from '../runtime-types'
 import { startOfLastLines } from '../terminal-wait-tail-window'
 import { compileTextTest, type TextMatcher } from './agent-state-rule-matchers'
 import { compiledFromActiveAgentStateRules } from './active-agent-state-rules'

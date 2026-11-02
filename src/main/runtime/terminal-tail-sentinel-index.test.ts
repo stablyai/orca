@@ -8,7 +8,7 @@ import {
   tailMayContainBlockedSignal
 } from './terminal-tail-sentinel-index'
 import { computeTerminalTailWaitState } from './terminal-wait-tail-state'
-import { terminalWaitBlockedSentinelRe } from './agent-state-rules/blocked-text-layer'
+import { terminalWaitBlockedSentinelRe } from '../../shared/agent-state-rules/blocked-text-layer'
 import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
 
 // Independent full scan defines whether any retained/partial line matches the blocked sentinel.

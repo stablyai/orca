@@ -4,8 +4,8 @@ import {
   BUNDLED_AGENT_STATE_RULE_FILES,
   parseAgentStateRuleFiles,
   RAW_BUNDLED_AGENT_STATE_RULE_FILES
-} from './agent-state-rules-catalog'
-import { AgentStateRulesFileSchema } from './agent-state-rules-schema'
+} from '../../../shared/agent-state-rules/agent-state-rules-catalog'
+import { AgentStateRulesFileSchema } from '../../../shared/agent-state-rules/agent-state-rules-schema'
 
 // Kinds whose parse output can differ from their input.
 const OUTPUT_CHANGING_KINDS = new Set(['pipe', 'transform', 'default', 'prefault', 'catch'])

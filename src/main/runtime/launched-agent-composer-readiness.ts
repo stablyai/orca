@@ -15,8 +15,8 @@ import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { draftPasteReadySignalHasMarker } from '../../shared/draft-paste-ready-scanner'
 import { nameOnlyIdleNeedsCorroboration } from './tui-idle-evidence'
 import type { OrcaRuntimeService } from './orca-runtime'
-import { showsHoldAnchor } from './agent-state-rules/agent-state-text-anchors'
-import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
+import { showsHoldAnchor } from '../../shared/agent-state-rules/agent-state-text-anchors'
+import { detectTerminalWaitBlockedReason } from '../../shared/terminal-wait-detection'
 
 export type LaunchedAgentReadinessLane = 'composer-marker' | 'tui-idle'
 

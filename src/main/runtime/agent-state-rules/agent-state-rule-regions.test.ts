@@ -5,16 +5,16 @@ import {
   isKnownReadyPromptBody,
   isKnownReadyPromptPreview,
   isKnownReadyPromptSettled
-} from '../terminal-wait-detection'
+} from '../../../shared/terminal-wait-detection'
 import { nameOnlyIdleNeedsCorroboration } from '../tui-idle-evidence'
 import {
   compileAgentRules,
   evaluateCompiledRules,
   readsTrustedScreen,
   type AgentStateRegions
-} from './agent-state-rules-engine'
-import { parseAgentStateRuleFiles } from './agent-state-rules-catalog'
-import { showsIdleTitleAnchor } from './agent-state-title-anchors'
+} from '../../../shared/agent-state-rules/agent-state-rules-engine'
+import { parseAgentStateRuleFiles } from '../../../shared/agent-state-rules/agent-state-rules-catalog'
+import { showsIdleTitleAnchor } from '../../../shared/agent-state-rules/agent-state-title-anchors'
 
 const STRONG_QUIET = { state: 'idle', strength: 'strong', requiresQuiet: true }
 const TITLE = { region: 'title', status: 'idle' }

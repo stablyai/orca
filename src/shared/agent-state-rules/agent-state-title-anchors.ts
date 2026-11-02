@@ -1,4 +1,4 @@
-import { isOpenCodeNativeTitle } from '../../../shared/opencode-terminal-title'
+import { isOpenCodeNativeTitle } from '../opencode-terminal-title'
 import { compileTextTest } from './agent-state-rule-matchers'
 import { compiledFromActiveAgentStateRules } from './active-agent-state-rules'
 import type {

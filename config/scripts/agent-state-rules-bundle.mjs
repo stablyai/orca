@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { agentStateRulesTag } from './release-tag-patterns.mjs'
 
-const RULES_DIR = join(import.meta.dirname, '..', '..', 'src/main/runtime/agent-state-rules')
+const RULES_DIR = join(import.meta.dirname, '..', '..', 'src/shared/agent-state-rules')
 export const AGENT_STATE_RULES_ASSET = 'agent-state-rules.json'
 
 function readJson(path) {

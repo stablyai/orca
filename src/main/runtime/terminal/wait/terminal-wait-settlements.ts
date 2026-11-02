@@ -6,7 +6,7 @@ import {
   buildPtyTerminalWaitResult
 } from '../../terminal-wait-results'
 import type { AgentStatus } from '../../../../shared/agent-detection'
-import { detectExplicitIdleStatusFromTitle } from '../../terminal-wait-detection'
+import { detectExplicitIdleStatusFromTitle } from '../../../../shared/terminal-wait-detection'
 import { buildTerminalWaitText } from '../../terminal-wait-tail-state'
 import {
   evaluateTuiIdle,

@@ -8,8 +8,8 @@ import {
   buildPtyTerminalWaitResult,
   getPtyTerminalState
 } from '../../terminal-wait-results'
-import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
-import { showsScreenProbeBanner } from '../../agent-state-rules/agent-state-text-anchors'
+import { readsTrustedScreen } from '../../../../shared/agent-state-rules/agent-state-rules-engine'
+import { showsScreenProbeBanner } from '../../../../shared/agent-state-rules/agent-state-text-anchors'
 import { buildTerminalWaitText } from '../../terminal-wait-tail-state'
 import { evaluateTuiIdle, type TuiIdleVerdict } from '../../tui-idle-evidence'
 import {

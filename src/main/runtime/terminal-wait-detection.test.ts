@@ -3,7 +3,7 @@ import {
   detectTerminalWaitBlockedReason,
   isKnownReadyPromptPreview,
   isMuseReadyPromptPreview
-} from './terminal-wait-detection'
+} from '../../shared/terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 
 // Agents print rg hits from this detector into scrollback; quoted source must not masquerade as a live prompt.

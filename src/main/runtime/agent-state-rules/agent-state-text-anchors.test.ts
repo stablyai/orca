@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { parseAgentStateRuleFiles } from './agent-state-rules-catalog'
-import { compileTextAnchors, findPromptAnchorIndexes } from './agent-state-text-anchors'
-import { terminalWaitBlockedSentinelRe } from './blocked-text-layer'
-import { detectTerminalWaitBlockedReason } from '../terminal-wait-detection'
+import { parseAgentStateRuleFiles } from '../../../shared/agent-state-rules/agent-state-rules-catalog'
+import {
+  compileTextAnchors,
+  findPromptAnchorIndexes
+} from '../../../shared/agent-state-rules/agent-state-text-anchors'
+import { terminalWaitBlockedSentinelRe } from '../../../shared/agent-state-rules/blocked-text-layer'
+import { detectTerminalWaitBlockedReason } from '../../../shared/terminal-wait-detection'
 
 function anchorsOf(anchors: unknown[]) {
   return compileTextAnchors(

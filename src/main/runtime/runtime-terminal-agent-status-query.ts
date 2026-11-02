@@ -17,7 +17,7 @@ import {
   getPtyDisplayRecord,
   type TitleDisplayClear
 } from './runtime-worktree-status-projection'
-import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
+import { detectTerminalWaitBlockedReason } from '../../shared/terminal-wait-detection'
 import { getTerminalState } from './terminal-wait-results'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 

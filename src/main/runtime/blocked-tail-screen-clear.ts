@@ -1,6 +1,6 @@
 import type { TuiAgent } from '../../shared/tui-agent'
-import { findTerminalWaitBlockedSignal } from './agent-state-rules/blocked-text-layer'
-import { evaluateAgentStateRules } from './agent-state-rules/agent-state-rules-engine'
+import { findTerminalWaitBlockedSignal } from '../../shared/agent-state-rules/blocked-text-layer'
+import { evaluateAgentStateRules } from '../../shared/agent-state-rules/agent-state-rules-engine'
 
 /** Clear stale tail blockers only when the agent's screen rules prove its composer ready (#24187). */
 export function screenClearsBlockedTail(

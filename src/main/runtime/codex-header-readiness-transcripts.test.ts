@@ -14,7 +14,7 @@ import {
   isKnownReadyPromptPreview,
   isKnownReadyPromptSettled,
   isQuietReadyScreenBody
-} from './terminal-wait-detection'
+} from '../../shared/terminal-wait-detection'
 import { waitForLaunchedAgentComposer } from './launched-agent-composer-readiness'
 import { clearWorkingIndicators } from '../../shared/agent-title-status'
 

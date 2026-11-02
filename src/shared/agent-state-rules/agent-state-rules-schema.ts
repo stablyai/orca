@@ -1,7 +1,7 @@
 import { z } from 'zod'
-import type { RuntimeTerminalWaitBlockedReason } from '../../../shared/runtime-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import type { RuntimeTerminalWaitBlockedReason } from '../runtime-types'
+import type { TuiAgent } from '../tui-agent'
+import { isTuiAgent } from '../tui-agent-config'
 import { findUnsafePatternReason } from './agent-state-rule-pattern-safety'
 
 /** Shipped engine versions must bump when regions, predicates or answers expand. */

@@ -1,5 +1,5 @@
-import type { AgentStatus } from '../../../shared/agent-detection'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { AgentStatus } from '../agent-detection'
+import type { TuiAgent } from '../tui-agent'
 import { compileScreenCondition } from './agent-state-rule-matchers'
 import { compiledFromActiveAgentStateRules } from './active-agent-state-rules'
 import {

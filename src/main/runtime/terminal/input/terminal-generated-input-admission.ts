@@ -22,7 +22,7 @@ import {
   isExpectedAgentProcess
 } from '../../../../shared/agent-process-recognition'
 import { generatedInputAgentName } from '../../../../shared/generated-agent-input-notice'
-import { isKnownReadyPromptBody } from '../../terminal-wait-detection'
+import { isKnownReadyPromptBody } from '../../../../shared/terminal-wait-detection'
 import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../../shared/agent-prompt-injection'
 import { OrcaRuntimeWithTitlelessPaneAgentIdentity } from '../wait/titleless-pane-agent-identity'
 import { GeneratedAgentInputNotices } from '../../generated-agent-input-notices'

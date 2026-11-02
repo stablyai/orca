@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { evaluateTuiIdle, type TuiIdleEvaluationInput } from '../tui-idle-evidence'
-import { isKnownReadyPromptBody, isQuietReadyScreenBody } from '../terminal-wait-detection'
+import {
+  isKnownReadyPromptBody,
+  isQuietReadyScreenBody
+} from '../../../shared/terminal-wait-detection'
 import {
   compileAgentRules,
   evaluateAgentStateRules,
   evaluateCompiledRules,
   type AgentStateVerdict
-} from './agent-state-rules-engine'
-import { parseAgentStateRuleFiles } from './agent-state-rules-catalog'
+} from '../../../shared/agent-state-rules/agent-state-rules-engine'
+import { parseAgentStateRuleFiles } from '../../../shared/agent-state-rules/agent-state-rules-catalog'
 
 const QUIESCENCE_MS = 3000
 

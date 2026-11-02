@@ -1,4 +1,4 @@
-import { terminalWaitBlockedSentinelRe } from './agent-state-rules/blocked-text-layer'
+import { terminalWaitBlockedSentinelRe } from '../../shared/agent-state-rules/blocked-text-layer'
 
 /** Cache sentinel positions by immutable tail-array identity to avoid scanning 2,000 retained lines per tick.
  * Weak keys release replaced tails; record the regex too so hot-reloaded rules cannot hide new blockers. */
