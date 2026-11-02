@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { classifyExactGitHubOperation } from '../../../shared/github/exact-work-item-operation'
 import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../shared/github/work-item-target'
+import { GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY } from '../../../shared/task-source-runtime-capabilities'
 import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY } from '../../../shared/source-control-runtime-capabilities'
 import type { RemoteRuntimePassthroughSocket } from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
 import type { RelayedPhoneReplies } from './relayed-phone-frames'
@@ -24,11 +25,14 @@ export function verifyRelayedGitHubAuthority(args: {
   timeoutMs: number
 }): Promise<void> | undefined {
   const parsed: unknown = JSON.parse(args.frame)
-  const bound = classifyExactGitHubOperation(
-    args.method,
-    typeof parsed === 'object' && parsed !== null && 'params' in parsed ? parsed.params : undefined,
-    parsed
-  )
+  const params =
+    typeof parsed === 'object' && parsed !== null && 'params' in parsed ? parsed.params : undefined
+  const bound = classifyExactGitHubOperation(args.method, params, parsed)
+  const explicitIntent =
+    args.method === 'github.workItemDetails' &&
+    typeof params === 'object' &&
+    params !== null &&
+    Object.hasOwn(params, 'canonical')
   if (!bound) {
     return
   }
@@ -48,7 +52,13 @@ export function verifyRelayedGitHubAuthority(args: {
         throw new Error('Unable to confirm the executing Orca server. Try again.')
       }
       if (
-        !status.data.result.capabilities?.includes(GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY)
+        !status.data.result.capabilities?.includes(
+          GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY
+        ) ||
+        (explicitIntent &&
+          !status.data.result.capabilities?.includes(
+            GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY
+          ))
       ) {
         throw new Error(GITHUB_EXACT_OPERATION_UNSUPPORTED)
       }

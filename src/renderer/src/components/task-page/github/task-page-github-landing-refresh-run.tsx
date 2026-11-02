@@ -1,4 +1,4 @@
-import type { TaskPageGitHubSearchPaginationModel } from './use-task-page-github-search-pagination'
+import type { TaskPageGitHubLandingRefreshModel } from './task-page-github-landing-refresh-model'
 import { stripRepoQualifiers } from '../../../../../shared/task-query'
 import { useAppStore } from '@/store/index'
 import {
@@ -23,7 +23,7 @@ import {
   reconcileTaskPagePagesAfterLandingRefresh
 } from '@/components/task-page/task-page-cache-selectors'
 import { translate } from '@/i18n/i18n'
-export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPaginationModel) {
+export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefreshModel) {
   const {
     fetchWorkItemsAcrossRepos,
     getCachedWorkItems,

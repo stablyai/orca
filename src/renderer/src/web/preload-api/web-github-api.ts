@@ -57,10 +57,11 @@ export function createGitHubApi(): WebGitHubApi {
         ...args,
         ownerRepo
       }),
-    workItemDetails: async ({ ownerRepo, ...args }) => {
+    workItemDetails: async ({ ownerRepo, canonical = false, ...args }) => {
       const details = await callGitHubTargetOperation<WebGitHubResult<'workItemDetails'>>({
         target: { kind: 'environment', environmentId: requireActiveEnvironment().id },
         ownerRepo,
+        canonical,
         read: true,
         method: GITHUB_WEB_RPC_METHODS.workItemDetails,
         params: { ...args, repo: args.repoId ? `id:${args.repoId}` : args.repoPath },

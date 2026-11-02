@@ -98,8 +98,12 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
   // The newest edit refused for the rate limit, unparsed until applied; full-text, so it wins.
   let heldEdit: unknown = null
   let heldId: number | null = null
+  // Held edits a newer one replaced; they get that edit's answer, so success means committed.
+  let supersededIds: (number | null)[] = []
   let heldTimer: ReturnType<typeof setTimeout> | null = null
   let lostEdit = false
+  // An oversized edit came after the held one, so applying the held one leaves it still lost.
+  let lostAfterHeld = false
   let unapplied: CustomEditorUnappliedEdit = null
 
   const reportUnapplied = (): void => {
@@ -198,8 +202,11 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
   const receiveEdit = (data: unknown): void => {
     const message = readPluginEnvelope(data)
     const edit = message?.kind === 'req' ? readCustomEditorEdit(message.params) : null
-    const id = pluginRequestId(data)
-    answer(id, edit ? applyEdit(edit) : pluginError('invalid_params', 'malformed editor edit'))
+    const error = edit ? applyEdit(edit) : pluginError('invalid_params', 'malformed editor edit')
+    answer(pluginRequestId(data), error)
+    for (const id of supersededIds.splice(0)) {
+      answer(id, error)
+    }
   }
 
   const applyHeldEdit = (): void => {
@@ -208,17 +215,23 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
       heldTimer = null
     }
     const held = heldEdit
+    const stillLost = lostAfterHeld
     heldEdit = null
     heldId = null
+    lostAfterHeld = false
     if (held !== null) {
       receiveEdit(held)
+      lostEdit ||= stillLost
     }
     reportUnapplied()
   }
 
-  /** A newer full-document edit carries the held one's intent, so the held one succeeds. */
+  /** A newer full-document edit carries the held one's intent, so it shares that edit's answer. */
   const supersedeHeldEdit = (): void => {
-    answer(heldId, null)
+    if (heldEdit !== null) {
+      supersededIds.push(heldId)
+    }
+    lostAfterHeld = false
     heldEdit = null
     heldId = null
   }
@@ -226,7 +239,8 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
   const refuseEdit = (data: unknown, refusal: CustomEditorEditRefusal): void => {
     options.onEditRefused?.(refusal)
     if (refusal === 'oversized') {
-      supersedeHeldEdit()
+      // The held edit stays: an edit Orca refuses carries nothing to replace it with.
+      lostAfterHeld ||= heldEdit !== null
       lostEdit = true
       answer(pluginRequestId(data), CUSTOM_EDITOR_TOO_LARGE)
     } else {

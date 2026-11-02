@@ -1,40 +1,37 @@
 import { useAppStore } from '@/store'
-import {
-  useGitHubItemTargetContext,
-  useGitHubItemTargetIdentity
-} from './github-work-item-target-context'
+import { useGitHubItemTargetContext } from './github-work-item-target-context'
 import {
   GitHubWorkItemTargetError,
   matchesGitHubWorkItemTarget
 } from '../../../../../shared/github/work-item-target'
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-source-lookup'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
+import { useGitHubTaskRefresh } from './use-github-task-refresh'
+import { addressedGitHubIssueItem } from '@/lib/github-task-target'
 import {
   normalizeItemDialogTab,
   type ItemDialogTab
 } from '@/components/github/github-work-item-identity'
 import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
 } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import type { GitHubItemDialogProjectOrigin } from './github-item-dialog-types'
+import type { GitHubWorkItemDetailsArgs } from './github-item-dialog-types'
 import {
   WORK_ITEM_DETAILS_FRESH_MS,
   invalidateWorkItemDetailsCacheByMatch,
   invalidateWorkItemDetailsCacheForKey,
   subscribeWorkItemDetailsCache,
-  touchWorkItemDetailsCache,
+  withWorkItemDetailsItem,
   workItemDetailsCache,
-  workItemDetailsCacheGeneration,
   optimisticWorkItemComments,
   settleWorkItemComment,
   EMPTY_VIEWED_PATHS
 } from './work-item-details-cache'
 import {
-  settleWorkItemDetailsFetch,
+  loadOrdinaryWorkItemDetails,
+  startWorkItemDetailsFetch,
   getAcceptedWorkItemDetails
 } from './work-item-details-fetch-settle'
 import { syncPRFileViewedState } from './pr-file-viewed-change'
@@ -46,29 +43,26 @@ export function useGitHubWorkItemDetails({
   sourceContext,
   initialTab,
   projectOrigin,
-  onReviewRequestsChange
-}: {
-  workItem: GitHubWorkItem | null
-  repoPath: string | null
-  effectiveRepoId: string | null
-  sourceContext?: TaskSourceContext | null
-  initialTab?: ItemDialogTab
-  projectOrigin?: GitHubItemDialogProjectOrigin
-  onReviewRequestsChange?: (
-    itemKey: { id: string; repoId: string },
-    reviewRequests: GitHubAssignableUser[]
-  ) => void
-}) {
+  onReviewRequestsChange,
+  onRefreshAccepted
+}: GitHubWorkItemDetailsArgs) {
   const [tab, setTab] = useState<ItemDialogTab>(() => normalizeItemDialogTab(workItem, initialTab))
 
-  const { resource, detailsCacheKey, canUseDetailsRepoContext, operationTarget } =
-    useGitHubItemTargetIdentity({
-      workItem,
-      repoPath,
-      effectiveRepoId,
-      sourceContext,
-      projectOrigin
-    })
+  const {
+    binding,
+    resource,
+    detailsCacheKey,
+    canUseDetailsRepoContext,
+    operationTarget,
+    ...refresh
+  } = useGitHubTaskRefresh({
+    workItem,
+    repoPath,
+    effectiveRepoId,
+    sourceContext,
+    projectOrigin,
+    onAccepted: onRefreshAccepted
+  })
 
   // Why: reset during render so an item switch never paints the previous item's tab.
   const tabResetKey =
@@ -95,7 +89,7 @@ export function useGitHubWorkItemDetails({
   )
 
   // Depend on stable cache-entry identity rather than a freshly built optimistic array.
-  const details = useMemo<GitHubWorkItemDetails | null>(() => {
+  const rawDetails = useMemo<GitHubWorkItemDetails | null>(() => {
     return getAcceptedWorkItemDetails({
       cachedEntry,
       resource,
@@ -103,6 +97,23 @@ export function useGitHubWorkItemDetails({
       opt: detailsCacheKey ? (optimisticWorkItemComments.get(detailsCacheKey) ?? []) : []
     })
   }, [cachedEntry, workItem, detailsCacheKey, resource])
+
+  const cache = useAppStore((s) => s.githubTaskCache)
+  // The opened row and the loaded item both show the current record's facts; main's item lacks the row's repo.
+  const taskItems = useMemo(
+    () =>
+      workItem ? [workItem, ...(rawDetails ? [{ ...workItem, ...rawDetails.item }] : [])] : [],
+    [workItem, rawDetails]
+  )
+  const projectedItems = useGitHubTaskItems(taskItems)
+  const projectedWorkItem = workItem ? (projectedItems[0] ?? workItem) : null
+  const details = useMemo(
+    () =>
+      rawDetails && projectedItems[1] && projectedItems[1] !== taskItems[1]
+        ? withWorkItemDetailsItem(rawDetails, projectedItems[1])
+        : rawDetails,
+    [rawDetails, projectedItems, taskItems]
+  )
 
   const invalidOpenedItem =
     !!workItem && (!resource || !matchesGitHubWorkItemTarget(workItem, resource))
@@ -121,6 +132,10 @@ export function useGitHubWorkItemDetails({
         : null
   const detailsLoaded = Boolean(details)
 
+  const ordinaryLoadRef = useRef<{
+    attempt: ReturnType<typeof startWorkItemDetailsFetch>
+    binding: typeof binding
+  } | null>(null)
   // Invalidation can remove an open entry without changing fetch dependencies; a tick forces refetch.
   const [refetchTick, setRefetchTick] = useState(0)
   useEffect(() => {
@@ -141,45 +156,38 @@ export function useGitHubWorkItemDetails({
       return
     }
     const cached = workItemDetailsCache.get(detailsCacheKey)
-    const now = Date.now()
-    const hasFreshData =
-      !rejectedCache && cached?.details && now - cached.fetchedAt <= WORK_ITEM_DETAILS_FRESH_MS
-
-    if (hasFreshData) {
+    if (
+      !rejectedCache &&
+      cached?.details &&
+      Date.now() - cached.fetchedAt <= WORK_ITEM_DETAILS_FRESH_MS
+    ) {
       return
     }
 
-    // Share concurrent fetches for this key instead of racing gh subprocesses.
-    const inflight: Promise<GitHubWorkItemDetails | null> =
-      cached?.pending ??
-      lookupGitHubWorkItemDetailsForSource({
-        repoPath: repoPath ?? '',
-        repoId: effectiveRepoId,
-        sourceContext,
-        number: workItem.number,
-        type: workItem.type,
-        ownerRepo: resource?.repository,
-        target: operationTarget
-      })
-
-    // Snapshot invalidation generation so pre-mutation results cannot restore stale cache data.
-    const launchedAtGeneration = workItemDetailsCacheGeneration
-
-    if (!cached?.pending) {
-      touchWorkItemDetailsCache(detailsCacheKey, {
-        details: rejectedCache ? null : (cached?.details ?? null),
-        fetchedAt: cached?.fetchedAt ?? 0,
-        pending: inflight,
-        error: cached?.error
-      })
+    // A load started on an earlier connection is cancelled and re-run; the entry keeps what it showed.
+    const own = ordinaryLoadRef.current
+    if (cached?.pending && (own?.attempt.pending !== cached.pending || own.binding === binding)) {
+      return
     }
-
-    settleWorkItemDetailsFetch({
+    own?.attempt.cancel()
+    const attempt = startWorkItemDetailsFetch(
       detailsCacheKey,
-      inflight,
-      launchedAtGeneration,
-      target: resource
-    })
+      () =>
+        loadOrdinaryWorkItemDetails(
+          {
+            repoPath: repoPath ?? '',
+            repoId: effectiveRepoId,
+            sourceContext,
+            ownerRepo: resource?.repository,
+            target: operationTarget,
+            item: workItem
+          },
+          cache,
+          binding
+        ),
+      { target: resource, accepts: () => !binding || cache.current(binding) }
+    )
+    ordinaryLoadRef.current = { attempt, binding }
   }, [
     canUseDetailsRepoContext,
     repoPath,
@@ -189,20 +197,23 @@ export function useGitHubWorkItemDetails({
     detailsCacheKey,
     resource,
     operationTarget,
-    refetchTick,
     rejectedCache,
-    invalidOpenedItem
+    invalidOpenedItem,
+    refetchTick,
+    binding,
+    cache
   ])
 
+  const addressedWorkItem = useMemo(
+    () => (projectedWorkItem ? addressedGitHubIssueItem(projectedWorkItem, details?.item) : null),
+    [projectedWorkItem, details?.item]
+  )
   const displayWorkItem = useMemo<GitHubWorkItem | null>(() => {
-    if (!workItem) {
-      return null
-    }
-    if (!details?.item) {
-      return workItem
+    if (!workItem || !details?.item) {
+      return projectedWorkItem
     }
     return {
-      ...workItem,
+      ...projectedWorkItem,
       ...details.item,
       repoId: workItem.repoId,
       type: workItem.type,
@@ -210,7 +221,7 @@ export function useGitHubWorkItemDetails({
       url: workItem.url,
       ...(resource?.type === 'pr' ? { prRepo: resource.repository } : {})
     }
-  }, [details?.item, workItem, resource])
+  }, [details?.item, workItem, projectedWorkItem, resource])
 
   useEffect(() => {
     if (!workItem || details?.item.reviewRequests === undefined) {
@@ -290,6 +301,7 @@ export function useGitHubWorkItemDetails({
 
   return {
     targetContext,
+    ...refresh,
     tab,
     setTab,
     canUseDetailsRepoContext,
@@ -299,6 +311,7 @@ export function useGitHubWorkItemDetails({
     error,
     detailsLoaded,
     displayWorkItem,
+    addressedWorkItem,
     appendOptimisticComment,
     invalidateCurrentDetailsCache,
     handlePRFileViewedChange,

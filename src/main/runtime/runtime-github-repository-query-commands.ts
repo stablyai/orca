@@ -105,7 +105,8 @@ export class RuntimeGitHubRepositoryQueryCommands {
     repoSelector: string,
     number: number,
     type?: 'issue' | 'pr',
-    ownerRepo?: GitHubOwnerRepo
+    ownerRepo?: GitHubOwnerRepo,
+    canonical?: boolean
   ): Promise<Awaited<ReturnType<typeof getWorkItemDetails>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return getWorkItemDetails(
@@ -115,7 +116,11 @@ export class RuntimeGitHubRepositoryQueryCommands {
       getRepoRoutingConnectionId(repo),
       this.deps.getLocalGitArgs(repo)[0] ?? {},
       repo.issueSourcePreference,
-      ...(ownerRepo ? ([ownerRepo] as const) : ([] as const))
+      ...(canonical !== undefined
+        ? ([ownerRepo, canonical] as const)
+        : ownerRepo
+          ? ([ownerRepo] as const)
+          : ([] as const))
     )
   }
 

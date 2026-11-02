@@ -1742,7 +1742,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "Yapılandırılmış ajan oturumu henüz kullanılamıyor. Bir süre sonra tekrar deneyin.",
         "gone": "Bu sohbet artık bu sunucuda değil, bu yüzden burada yeniden açılamıyor.",
-        "hostCannotOpen": "Orca güncellenene kadar bu sohbet yeniden açılamaz."
+        "hostCannotOpen": "Orca güncellenene kadar bu sohbet yeniden açılamaz.",
+        "worktreeDeleted": "Çalışma ağacı silindi.",
+        "folderWorkspaceRemoved": "Klasör çalışma alanı kaldırıldı."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Sağlanmış kök tarifleri sparse checkout'u desteklemez."

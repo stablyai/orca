@@ -6,7 +6,7 @@ import {
 } from '@/components/github/github-work-item-identity'
 import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { GitHubItemDialogProjectOrigin } from './github-item-dialog-types'
+import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import { getWorkItemDetailsCacheKey } from './work-item-details-cache'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
@@ -28,13 +28,15 @@ export function useGitHubItemTargetIdentity({
   repoPath,
   effectiveRepoId,
   sourceContext,
-  projectOrigin
+  projectOrigin,
+  bindingKey
 }: {
   workItem: GitHubWorkItem | null
   repoPath: string | null
   effectiveRepoId: string | null
   sourceContext?: TaskSourceContext | null
-  projectOrigin?: GitHubItemDialogProjectOrigin
+  projectOrigin?: GitHubOwnerRepo
+  bindingKey?: string
 }) {
   const owner = useGitHubOperationOwner({ repoId: effectiveRepoId, repoPath, sourceContext })
   const issueSourcePreference = owner.issueSourcePreference
@@ -55,7 +57,7 @@ export function useGitHubItemTargetIdentity({
         : null,
     [workItem, repository]
   )
-  const operationScope = owner.scope
+  const operationScope = bindingKey ?? owner.scope
   const detailsCacheKey = useMemo(() => {
     if (!workItem || !effectiveRepoId || !canUseDetailsRepoContext) {
       return null
@@ -71,7 +73,8 @@ export function useGitHubItemTargetIdentity({
           : operationScope,
       type: workItem.type,
       number: workItem.number,
-      ownerRepo: repository
+      ownerRepo: repository,
+      bindingKey
     })
   }, [
     canUseDetailsRepoContext,
@@ -81,7 +84,8 @@ export function useGitHubItemTargetIdentity({
     workItem,
     issueSourcePreference,
     repository,
-    operationScope
+    operationScope,
+    bindingKey
   ])
 
   return { resource, detailsCacheKey, canUseDetailsRepoContext, operationTarget: owner.target }

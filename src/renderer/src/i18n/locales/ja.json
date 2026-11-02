@@ -1312,7 +1312,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "構造化 Agent セッションはまだ利用できません。しばらくしてから再試行してください。",
         "gone": "このチャットはこのホスト上に存在しないため、ここで再度開くことはできません。",
-        "hostCannotOpen": "Orca が更新されるまで、このチャットを再度開くことはできません。"
+        "hostCannotOpen": "Orca が更新されるまで、このチャットを再度開くことはできません。",
+        "worktreeDeleted": "ワークツリーは削除されました。",
+        "folderWorkspaceRemoved": "フォルダーワークスペースは削除されました。"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "プロビジョニングされたルートレシピはスパースチェックアウトをサポートしません。"

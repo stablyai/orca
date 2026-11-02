@@ -40,7 +40,15 @@ vi.mock('react-native-reanimated', () => ({
   useAnimatedStyle: () => ({}),
   withTiming: (to: number) => to
 }))
+const notifications = vi.hoisted(() => ({
+  error: vi.fn(),
+  success: vi.fn(),
+  replace: vi.fn(),
+  back: vi.fn(),
+  announce: vi.fn()
+}))
 vi.mock('react-native', () => ({
+  AccessibilityInfo: { announceForAccessibility: notifications.announce },
   ActivityIndicator: 'ActivityIndicator',
   Animated: { View: 'View' },
   Pressable: 'Pressable',
@@ -85,12 +93,6 @@ vi.mock('../components/AutoHeight', () => ({
 }))
 vi.mock('../components/DisclosureChevron', () => ({
   DisclosureChevron: ({ children }: { children: unknown }) => children
-}))
-const notifications = vi.hoisted(() => ({
-  error: vi.fn(),
-  success: vi.fn(),
-  replace: vi.fn(),
-  back: vi.fn()
 }))
 vi.mock('../platform/haptics', () => ({
   triggerError: notifications.error,
@@ -140,6 +142,7 @@ vi.mock('./MobileAgentSessionHistoryList', () => ({
   }
 }))
 import { MobileAgentSessionHistoryPanel } from './MobileAgentSessionHistoryPanel'
+import { AgentHistoryResumeNotice } from './AgentHistoryNotices'
 import { useProvideSessionScreenHandlers } from '../session/session-screen-handlers'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
@@ -677,3 +680,88 @@ it.each([
     }
   }
 )
+
+it('a removed worktree on History Resume shows one timed toast and stays on History', async () => {
+  await activateMobileUiLocale('en')
+  notifications.replace.mockClear()
+  notifications.back.mockClear()
+  notifications.error.mockClear()
+  notifications.announce.mockClear()
+  state.generation = 1
+  state.connection = 'connected'
+  state.legacy = false
+  state.session = {
+    ...ownedSession(),
+    agent: 'codex',
+    structuredSession: { sessionId: 'native-root', workspaceId: 'owned-worktree' }
+  }
+  vi.useFakeTimers()
+  const send = vi.fn<RpcClient['sendRequest']>(async (method) => {
+    const results: Record<string, unknown> = {
+      'orchestration.partyLocation': {
+        location: { kind: 'chat', sessionId: 'native-live', worktreeId: 'owned-worktree' }
+      },
+      'session.tabs.list': { tabs: [] },
+      'agentSession.reveal': {
+        ok: false,
+        refusal: {
+          code: 'agent_session_workspace_removed',
+          message: 'This workspace is no longer available.',
+          details: { workspaceKind: 'git-worktree' }
+        }
+      }
+    }
+    return { id: 'reply', ok: true, result: results[method] }
+  })
+  state.client = {
+    ...createFakeRpcClient({ getGeneration: () => state.generation }),
+    sendRequest: send
+  }
+  let tree: ReactTestRenderer | null = null
+  await act(async () => {
+    tree = create(
+      React.createElement(MobileAgentSessionHistoryPanel, {
+        hostId: 'owned-host',
+        worktreeId: 'owned-worktree'
+      })
+    )
+  })
+  const resume = async () => {
+    await act(async () => {
+      if (!state.onResume || !state.session) {
+        throw new Error('missing row')
+      }
+      await state.onResume(state.session)
+    })
+  }
+  const toasts = () =>
+    tree!.root.findAll(
+      (node) => node.type === Text && node.props.children === 'The worktree was deleted.'
+    )
+  try {
+    await resume()
+    expect(toasts()).toHaveLength(1)
+    expect(tree!.root.findAllByType(AgentHistoryResumeNotice)).toHaveLength(0)
+    expect(notifications.announce).toHaveBeenCalledExactlyOnceWith('The worktree was deleted.')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000)
+    })
+    // A second Resume restarts the one toast instead of stacking another.
+    await resume()
+    expect(toasts()).toHaveLength(1)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000)
+    })
+    expect(toasts()).toHaveLength(1)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000)
+    })
+    expect(toasts()).toHaveLength(0)
+    expect(notifications.error).toHaveBeenCalledTimes(2)
+    expect(notifications.replace).not.toHaveBeenCalled()
+    expect(notifications.back).not.toHaveBeenCalled()
+    expect(send.mock.calls.map(([method]) => method)).not.toContain('session.tabs.createTerminal')
+  } finally {
+    await act(async () => tree?.unmount())
+  }
+})

@@ -73,7 +73,12 @@ function harness(
   return { host, posted, send, messages, documents, answers, answerFlushes }
 }
 
-function setup(initial: { text: string; readOnly?: boolean; maxEdits?: number }) {
+function setup(initial: {
+  text: string
+  readOnly?: boolean
+  maxEdits?: number
+  now?: () => number
+}) {
   const doc = { text: initial.text, readOnly: initial.readOnly ?? false }
   const onEdit = vi.fn((text: string) => {
     doc.text = text
@@ -88,6 +93,7 @@ function setup(initial: { text: string; readOnly?: boolean; maxEdits?: number })
     onUnappliedEdit,
     onKeyChord,
     flushTimeoutMs: 50,
+    ...(initial.now ? { now: initial.now } : {}),
     ...(initial.maxEdits === undefined
       ? {}
       : {
@@ -364,15 +370,55 @@ describe('custom editor document channel', () => {
     send(edit('d', 1, 15))
     expect(onEdit).toHaveBeenCalledTimes(1)
     expect(onUnappliedEdit).toHaveBeenLastCalledWith('held')
-    // `c` is superseded by the full-document `d`, so it succeeded.
-    expect(answers(14)).toEqual([{ orca: 1, kind: 'res', id: 14, result: null }])
+    // `c` is superseded by the full-document `d`, so it gets `d`'s answer once `d` commits.
+    expect(answers(14)).toEqual([])
     expect(answers(15)).toEqual([])
     const flushed = host.flush()
     answerFlushes()
     await expect(flushed).resolves.toBe(true)
     expect(onEdit).toHaveBeenLastCalledWith('d')
+    expect(answers(14)).toEqual([{ orca: 1, kind: 'res', id: 14, result: null }])
     expect(answers(15)).toEqual([{ orca: 1, kind: 'res', id: 15, result: null }])
     expect(onUnappliedEdit).toHaveBeenLastCalledWith(null)
+  })
+
+  it('gives a superseded held edit the refusal of the edit that replaced it', async () => {
+    const { host, doc, send, answers, answerFlushes } = setup({ text: 'a', maxEdits: 1 })
+    send(READY)
+    send(edit('b', 1, 16))
+    send(edit('c', 1, 17))
+    doc.text = 'outside'
+    host.syncDocument()
+    send(edit('d', 1, 18))
+    const flushed = host.flush()
+    answerFlushes()
+    await flushed
+    expect(answers(17)).toMatchObject([{ error: { code: 'conflict' } }])
+    expect(answers(18)).toMatchObject([{ error: { code: 'conflict' } }])
+  })
+
+  it('keeps a held edit when an oversized one follows, and the save stays blocked', async () => {
+    let clock = 0
+    const { host, onEdit, send, answers, answerFlushes } = setup({
+      text: 'a',
+      maxEdits: 1,
+      now: () => clock
+    })
+    send(READY)
+    send(edit('b', 1, 19))
+    send(edit('c', 1, 20))
+    // A new rate window, so the next edit is refused for its size alone.
+    clock = 60_000
+    send(edit('x'.repeat(CUSTOM_EDITOR_DOCUMENT_MAX_BYTES + 1), 1, 21))
+    // `c` is not answered as a success before it reaches the buffer.
+    expect(answers(20)).toEqual([])
+    expect(answers(21)).toMatchObject([{ error: { code: 'too_large' } }])
+    const flushed = host.flush()
+    answerFlushes()
+    expect(onEdit).toHaveBeenLastCalledWith('c')
+    expect(answers(20)).toEqual([{ orca: 1, kind: 'res', id: 20, result: null }])
+    // The frame's newest change was lost, so a save must not mark the tab clean.
+    await expect(flushed).resolves.toBe(false)
   })
 
   it('never spends the edit budget on chords or flush replies', () => {

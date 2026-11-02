@@ -46,7 +46,8 @@ function mergeParsedConfig(
   parsed: Record<string, string | string[]>
 ): void {
   for (const [key, value] of Object.entries(parsed)) {
-    if (key === 'palette') {
+    // Ghostty appends repeatable keys across config files instead of replacing them.
+    if (key === 'palette' || key === 'font-family') {
       target[key] = [...asArray(target[key]), ...asArray(value)]
       continue
     }

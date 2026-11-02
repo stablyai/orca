@@ -1,3 +1,4 @@
+import { GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY } from '../../../shared/task-source-runtime-capabilities'
 import { randomUUID } from 'node:crypto'
 import { publishHostDescriptor } from '../host-descriptor'
 import { GITHUB_ISSUE_METHODS } from '../rpc/methods/github-issue-methods'
@@ -706,6 +707,36 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
       phone.send('stable-a', 'github.updateIssue', params, TARGET, expectedA)
       expect(isOk(await phone.next('stable-a'))).toBe(true)
       expect(aWrite).toHaveBeenCalledWith('id:repo-1', 93, { state: 'closed' }, params.ownerRepo)
+      const details = vi.spyOn(host.runtime, 'getRepoWorkItemDetails').mockResolvedValue(null)
+      const originalStatus = host.runtime.getStatus.bind(host.runtime)
+      const status = vi.spyOn(host.runtime, 'getStatus').mockImplementation(() => ({
+        ...originalStatus(),
+        capabilities: originalStatus().capabilities.filter(
+          (value) => value !== GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY
+        )
+      }))
+      const read = { repo: params.repo, number: 93, type: 'issue', ownerRepo }
+      const beforeIntent = authorityReplies().length
+      phone.send(
+        'intent-old-executor',
+        'github.workItemDetails',
+        { ...read, canonical: false },
+        TARGET,
+        expectedA
+      )
+      expect((await phone.next('intent-old-executor')).ok).toBe(false)
+      expect(details).not.toHaveBeenCalled()
+      expect(authorityReplies()).toHaveLength(beforeIntent + 1)
+      status.mockRestore()
+      for (const canonical of [false, true]) {
+        const before = authorityReplies().length
+        const id = `intent-${canonical}`
+        phone.send(id, 'github.workItemDetails', { ...read, canonical }, TARGET, expectedA)
+        expect(await phone.next(id)).toMatchObject({ ok: true, result: null })
+        expect(details).toHaveBeenLastCalledWith(read.repo, 93, 'issue', ownerRepo, canonical)
+        expect(authorityReplies()).toHaveLength(before + 1)
+      }
+
       const b = await startRuntime()
       const bWrite = vi.spyOn(b.runtime, 'updateRepoIssue').mockResolvedValue({ ok: true })
       if (!capable) {
