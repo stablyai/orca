@@ -21,8 +21,6 @@ type PiScriptOptions = {
   }
   /** Recorded native responses for requested levels, rather than a second clamp implementation. */
   appliedEfforts?: Readonly<Record<string, string>>
-  /** What `get_commands` reports, in Pi's own shape. */
-  commands?: readonly { name: string; source: 'extension' | 'prompt' | 'skill' }[]
 }
 
 class ScriptedPiConnection implements PiRpcConnection {
@@ -87,7 +85,7 @@ class ScriptedPiConnection implements PiRpcConnection {
       return { models: this.signedOut ? [] : [this.model] }
     }
     if (command === 'get_commands') {
-      return { commands: this.options.commands ?? [] }
+      return { commands: [] }
     }
     if (
       command === 'set_model' &&
