@@ -38,7 +38,7 @@ export type OpenCodeSqliteCaptureRequest = {
 
 export type OpenCodeNativeChatReadRequest = {
   id: number
-  kind: 'native-page' | 'native-signal'
+  kind: 'native-page' | 'native-signal' | 'native-presence'
   dbPath: string
   sessionId: string
   limit?: number
