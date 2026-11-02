@@ -14,6 +14,8 @@ export type PluginEditorCheck = {
   /** Plugin-relative files the entry loads, itself included. */
   files: string[]
   issues: PluginEditorCheckIssue[]
+  /** `editor_eval`: likely refused by the frame, but found by a scan that can misread code. */
+  warnings: PluginEditorCheckIssue[]
 }
 
 type EditorCheckModule = {
@@ -50,11 +52,11 @@ export async function checkPluginEditors(
 /** Lines for one editor: how many files it loads, or each issue at its plugin location. */
 export function formatPluginEditorCheck(check: PluginEditorCheck): string[] {
   const head = `${check.editor} (${check.entry}): `
+  const line = (issue: PluginEditorCheckIssue) =>
+    `${issue.location}: ${issue.message} [${issue.code}]`
+  const warnings = check.warnings.map((warning) => `  warning: ${line(warning)}`)
   if (check.issues.length === 0) {
-    return [`${head}ok, ${check.files.length} file(s) load`]
+    return [`${head}ok, ${check.files.length} file(s) load`, ...warnings]
   }
-  return [
-    `${head}failed`,
-    ...check.issues.map((issue) => `  ${issue.location}: ${issue.message} [${issue.code}]`)
-  ]
+  return [`${head}failed`, ...check.issues.map((issue) => `  ${line(issue)}`), ...warnings]
 }

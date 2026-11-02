@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { checkPluginEditors, formatPluginEditorCheck } from './plugin-editor-check'
 import { createPluginFromTemplate } from './plugin-create'
 import { validatePluginTarget } from './plugin-folder-validation'
+import { checkPluginDevFolder } from '../plugin-dev-watch/plugin-dev-watch-check'
 
 const roots: string[] = []
 
@@ -53,7 +54,7 @@ describe('orca plugin check: custom editors', () => {
     ])
   })
 
-  it('reports missing files, refused imports and string eval with their location', async () => {
+  it('reports missing files and refused imports, and warns on string eval', async () => {
     const dir = await editorPlugin()
     await writeFile(
       join(dir, 'editor', 'main.ts'),
@@ -69,10 +70,13 @@ describe('orca plugin check: custom editors', () => {
     )
     const [check] = await checkPluginEditors(dir)
     expect(check.issues.map(({ code, location }) => [code, location])).toEqual([
-      ['editor_eval', 'editor/main.ts:5:1'],
-      ['editor_eval', 'editor/main.ts:6:11'],
       ['editor_import', 'editor/main.ts:1:9'],
       ['editor_import', 'editor/main.ts:2:9']
+    ])
+    // A lexical scan can misread code, so eval is a warning that does not fail the check.
+    expect(check.warnings.map(({ code, location }) => [code, location])).toEqual([
+      ['editor_eval', 'editor/main.ts:5:1'],
+      ['editor_eval', 'editor/main.ts:6:11']
     ])
   })
 
@@ -108,5 +112,17 @@ describe('orca plugin check: custom editors', () => {
     expect(check.issues).toEqual([
       expect.objectContaining({ code: 'editor_too_large', location: 'editor/main.ts:1:24' })
     ])
+  })
+
+  it('fails dev watch --check on an editor issue, and passes it with only a warning', async () => {
+    const dir = await editorPlugin()
+    await appendFile(join(dir, 'editor', 'main.ts'), "eval('1')\n")
+    const warned = await checkPluginDevFolder(dir)
+    expect(warned.ok).toBe(true)
+    expect(warned.editors[0]?.warnings).toEqual([expect.objectContaining({ code: 'editor_eval' })])
+    await appendFile(join(dir, 'editor', 'main.ts'), 'this is not valid ts(\n')
+    const failed = await checkPluginDevFolder(dir)
+    expect(failed.ok).toBe(false)
+    expect(failed.editors[0]?.issues).toEqual([expect.objectContaining({ code: 'editor_syntax' })])
   })
 })

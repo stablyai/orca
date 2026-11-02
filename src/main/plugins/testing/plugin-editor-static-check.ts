@@ -29,7 +29,12 @@ export type PluginEditorCheckIssue = {
   location: string
 }
 
-export type PluginEditorStaticCheck = { files: string[]; issues: PluginEditorCheckIssue[] }
+export type PluginEditorStaticCheck = {
+  files: string[]
+  issues: PluginEditorCheckIssue[]
+  /** Found by a lexical scan that can misread rare code, so they do not fail the check. */
+  warnings: PluginEditorCheckIssue[]
+}
 
 const SCRIPT = /\.(?:[cm]?[jt]sx?)$/i
 const HTML = /\.html?$/i
@@ -100,6 +105,7 @@ export async function checkPluginEditorEntry(
 ): Promise<PluginEditorStaticCheck> {
   const root = realpathSync(pluginDir)
   const issues: PluginEditorCheckIssue[] = []
+  const warnings: PluginEditorCheckIssue[] = []
   const seen = new Set<string>()
   const absolute = (path: string): string => resolve(root, ...path.split('/'))
   const inside = (path: string): boolean => {
@@ -155,7 +161,7 @@ export async function checkPluginEditorEntry(
     }
     for (const match of codeOnly(transpiled.code).matchAll(EVAL_CALL)) {
       const at = lineColumn(transpiled.code, match.index)
-      issues.push({
+      warnings.push({
         code: 'editor_eval',
         message: `${match[0].replace(/\s*\($/, '')} compiles a string, which the editor frame refuses`,
         location: where(at.line, at.column)
@@ -215,5 +221,5 @@ export async function checkPluginEditorEntry(
   }
 
   await visit(posix.normalize(entry), 'orca-plugin.json')
-  return { files: [...seen].sort(), issues }
+  return { files: [...seen].sort(), issues, warnings }
 }
