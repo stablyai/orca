@@ -2,7 +2,7 @@ import type {
   AgentStatusIpcPayload,
   ParsedAgentStatusPayload
 } from '../../shared/agent-status-types'
-import { buildNativeChatFolderTrustPrompt } from '../../shared/native-chat-approval-envelope'
+import { buildNativeChatFolderTrustPrompt } from '../../shared/native-chat/input/native-chat-approval-envelope'
 import type { TerminalAgent } from '../../shared/terminal-agent'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { HeadlessEmulator } from '../daemon/headless-emulator'

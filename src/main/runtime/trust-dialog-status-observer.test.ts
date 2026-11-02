@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
-import { parseInteractivePrompt } from '../../shared/native-chat-interactive-prompt'
+import { parseInteractivePrompt } from '../../shared/native-chat/input/native-chat-interactive-prompt'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
 
