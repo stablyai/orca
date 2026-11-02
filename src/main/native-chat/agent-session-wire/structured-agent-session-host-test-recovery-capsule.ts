@@ -1,6 +1,6 @@
 // Drain replaced hosts’ fire-and-forget withdrawals before removing their lock directories.
 
-import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
+import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
 
 type Capsule = AgentSessionRecoveryCapsule
 

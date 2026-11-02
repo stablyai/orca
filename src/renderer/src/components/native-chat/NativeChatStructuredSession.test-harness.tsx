@@ -4,12 +4,12 @@ import {
 } from './native-chat-message-list.test-support'
 import { useImperativeHandle } from 'react'
 import { vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { QueuedMessageCard } from '../../../../shared/structured-agent-session-queued-cards'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session/agent-session-background-task-wire'
-import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session-write-failure'
-import type { AgentSessionUnavailable } from '../../../../shared/agent-session-availability'
-import type { AgentSessionRefusalReference } from '../../../../shared/agent-session-wire-refusals'
+import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session/failures/agent-session-write-failure'
+import type { AgentSessionUnavailable } from '../../../../shared/agent-session/agent-session-availability'
+import type { AgentSessionRefusalReference } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { NativeChatApprovalCardProps } from './NativeChatApprovalCard'
 
 import type { NativeChatQuestionCardProps } from './NativeChatQuestionCard'
@@ -23,7 +23,7 @@ import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 import { createStructuredSessionComposerMock } from './NativeChatStructuredSession.test-composer'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 import type { StructuredAgentSessionThreadGoal } from './use-structured-agent-session-thread-goal'
-import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/structured-agent-session-launch'
+import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import type {
   SessionOptionSetResult,
   SessionOptionValue

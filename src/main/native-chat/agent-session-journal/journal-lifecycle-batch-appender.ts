@@ -1,7 +1,7 @@
 import { journalItemEchoFields } from './journal-item-echo'
 import { isDeepStrictEqual } from 'node:util'
-import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import { agentJournalLinkageFields } from '../../../shared/agent-session/journal/agent-session-journal-producer'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type { JournalReducerState } from './journal-reducer'
 import {
   journalLifecycleMutationFitsOneBatch,

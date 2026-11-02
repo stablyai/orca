@@ -7,7 +7,7 @@ import { WSL_GUEST_ROOT_MARKER_COMMAND } from '../../shared/wsl-guest-root-marke
 import { resolveSetupRunnerCommand } from '../../shared/setup-runner-command'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 // Resolve content-addressed wrapper paths instead of assuming a fixed directory.
-import { getShellReadyWrapperRoot } from './local-pty-shell-ready-wrapper-root'
+import { getShellReadyWrapperRoot } from './local-pty/local-pty-shell-ready-wrapper-root'
 
 const CODEX_LAUNCH_PREFLIGHT = 'C:\\Program Files\\Orca\\orca.exe'
 const POWERSHELL_STARTUP_COMMAND_C_MARK = '[Console]::Write("$([char]27)]133;C$([char]7)")'

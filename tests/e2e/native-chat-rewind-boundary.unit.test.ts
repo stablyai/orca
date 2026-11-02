@@ -7,10 +7,10 @@ import { afterEach, expect, it, vi } from 'vitest'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../src/shared/agent-session-journal-item-key'
-import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../src/shared/structured-agent-session-reducer'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session-journal-types'
-import { codexProviderHandle } from '../../src/shared/agent-session-provider-handle-encoding'
+} from '../../src/shared/agent-session/journal/agent-session-journal-item-key'
+import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../src/shared/agent-session/structured-agent-session-reducer'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
+import { codexProviderHandle } from '../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { structuredRewindCut } from '../../src/main/native-chat/agent-session-wire/structured-rewind-cut'
 import { useNativeChatRewind } from '../../src/renderer/src/components/native-chat/use-native-chat-rewind'

@@ -1,4 +1,4 @@
-import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionLiveSubscribe } from '../../../src/shared/agent-session/structured-agent-session-live-read'
 import type { RpcClient } from '../transport/rpc-client'
 

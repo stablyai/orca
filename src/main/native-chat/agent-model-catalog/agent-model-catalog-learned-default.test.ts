@@ -4,10 +4,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  AgentSessionAccountHome,
-  AgentSessionRecord
-} from '../../../shared/agent-session-record'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { AcpStructuredOptions } from '../../acp/acp-structured-options'
 import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'

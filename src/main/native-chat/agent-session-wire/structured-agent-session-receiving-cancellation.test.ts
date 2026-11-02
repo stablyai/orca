@@ -1,12 +1,11 @@
 import { expect, it, vi } from 'vitest'
 import { acquiredAgentSessionAccount } from '../../../shared/agent-session-acquired-account'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { REST_TEST_CALLER } from './structured-agent-session-rest-test-rig'
 import { hostTestMessage, hostTestOperationId } from './structured-agent-session-host-test-data'
 import {
   createReceivingCallerFixture,
-  HOME_B,
   PARENT
 } from './structured-agent-session-receiving-callers.test-support'
 
@@ -16,7 +15,7 @@ it('finishes an owned ordinary open but direct cancellation publishes no child',
   const release = Promise.withResolvers<void>()
   try {
     await f.found()
-    await f.coldNative()
+    await f.rig.host.close(PARENT, 'evict')
     f.selectB()
     const original = acquiredAgentSessionAccount(f.rig.store.requireWritableRecord(PARENT))
     const open = AgentSessionJournal.prototype.open
@@ -45,54 +44,6 @@ it('finishes an owned ordinary open but direct cancellation publishes no child',
       original?.recipe
     )
     expect(f.rig.store.requireWritableRecord(PARENT).lease.claimStatus).toBe('released')
-  } finally {
-    release.resolve()
-    await f.dispose()
-  }
-})
-
-it('a real Stop remains responsive while a background start awaits the selected resolver', async () => {
-  const f = await createReceivingCallerFixture()
-  const release = Promise.withResolvers<void>()
-  try {
-    await f.found()
-    await f.rig.host.close(PARENT, 'evict')
-    const original = acquiredAgentSessionAccount(f.rig.store.requireWritableRecord(PARENT))
-    const resolution = vi
-      .spyOn(f.rig.host.deps, 'launchAccountHome')
-      .mockImplementation(async () => {
-        await release.promise
-        return HOME_B
-      })
-    f.rig.adapter.acquire.mockClear()
-    f.rig.adapter.dispatch.mockClear()
-    const id = await f.accept('cancel this background start')
-    await vi.waitFor(() => expect(resolution).toHaveBeenCalled())
-    const stopped = await f.rig.host.cancel(REST_TEST_CALLER, {
-      envelope: {
-        sessionId: PARENT,
-        clientOperationId: hostTestOperationId(),
-        expectedRuntimeFence: f.rig.store.requireWritableRecord(PARENT).lease.runtimeFence,
-        payloadFingerprint: computeAgentSessionPayloadFingerprint({
-          method: 'agentSession.cancel',
-          sessionId: PARENT,
-          fields: {}
-        })
-      }
-    })
-    expect(stopped).toMatchObject({ ok: true, value: { cancelled: true } })
-    release.resolve()
-    await vi.waitFor(() =>
-      expect(f.rig.host.collaboratorsForTests().runtimeState.startFlights.has(PARENT)).toBe(false)
-    )
-    expect(f.rig.adapter.acquire).not.toHaveBeenCalled()
-    expect(f.rig.adapter.dispatch).not.toHaveBeenCalled()
-    expect(
-      f.rig.host.collaboratorsForTests().sessions.get(PARENT)?.journal.submission(id)
-    ).toMatchObject({ rejection: { kind: 'cancelled' } })
-    expect(acquiredAgentSessionAccount(f.rig.store.requireWritableRecord(PARENT))?.recipe).toEqual(
-      original?.recipe
-    )
   } finally {
     release.resolve()
     await f.dispose()

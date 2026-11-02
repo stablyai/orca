@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { AgentJournalThreadGoal } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalThreadGoal } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { NativeChatThreadGoalBanner } from './NativeChatThreadGoalBanner'
 import { formatNativeChatThreadGoalElapsed } from './native-chat-thread-goal-presentation'
 

@@ -5,8 +5,8 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 
 import { afterEach, describe, expect, it } from 'vitest'
-import type { NativeChatBackgroundTaskBlock } from '../../../../shared/native-chat-types'
-import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
+import type { NativeChatBackgroundTaskBlock } from '../../../../shared/native-chat/native-chat-types'
+import { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 
 afterEach(cleanup)
 

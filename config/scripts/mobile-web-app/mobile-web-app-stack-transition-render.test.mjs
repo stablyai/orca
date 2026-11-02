@@ -236,6 +236,10 @@ async function waitForBackClaim(page) {
 
 const between = (left) => left !== null && left > 0 && left < VIEWPORT.width
 const sliding = (frames) => frames.filter((frame) => between(frame.session))
+// The screen under a slide stays painted and drifts up to 30% left, like an iOS push (push-motion.ts).
+const drifting = (left) => left !== null && left < 0 && left >= -VIEWPORT.width * 0.3 - 1
+const overDriftingList = (frames) =>
+  frames.some((frame) => between(frame.session) && drifting(frame.list))
 const SESSION_SETTLED = { list: null, session: 0, hit: 'session', from: null }
 const LIST_SETTLED = { list: 0, session: null, hit: 'list', from: null }
 const sessionMounts = (page) => page.evaluate(() => globalThis.__orcaSessionMounts ?? 0)
@@ -250,7 +254,7 @@ describeRender('the host stack transition on the page', () => {
         const firstShown = frames.find((frame) => frame.session !== null)
         // Native-stack web fallback fails: first visible session frame is already x=0.
         expect(firstShown?.session).toBeGreaterThan(0)
-        expect(frames.some((frame) => between(frame.session) && frame.list === 0)).toBe(true)
+        expect(overDriftingList(frames)).toBe(true)
         // Underlying list stays painted but cannot receive taps that would double-push.
         expect(sliding(frames).map((frame) => frame.hit)).toEqual(sliding(frames).map(() => null))
         expect(frames.at(-1)).toEqual(SESSION_SETTLED)
@@ -264,7 +268,7 @@ describeRender('the host stack transition on the page', () => {
         expect(await sessionMounts(page)).toBe(1)
         const frames = await sampleFrames(page, 'back')
         // Native-stack web fallback removes popped screen on first frame instead of sliding out.
-        expect(frames.some((frame) => between(frame.session) && frame.list === 0)).toBe(true)
+        expect(overDriftingList(frames)).toBe(true)
         // Exit must retain original screen instance.
         expect(await sessionMounts(page)).toBe(1)
         expect(frames.at(-1)).toEqual(LIST_SETTLED)
@@ -278,7 +282,7 @@ describeRender('the host stack transition on the page', () => {
         await sampleFrames(page, 'push')
         await waitForBackClaim(page)
         const frames = await sampleFrames(page, 'hardwareBack')
-        expect(frames.some((frame) => between(frame.session) && frame.list === 0)).toBe(true)
+        expect(overDriftingList(frames)).toBe(true)
         expect(frames.at(-1)).toEqual(LIST_SETTLED)
         expect(await nodeCount(page)).toBe(baseline)
         expect(errors).toEqual([])
@@ -349,7 +353,7 @@ describeRender('the host stack transition on the page', () => {
         await page.close()
       }, 120_000)
 
-      it('swaps instantly in the tablet split view and under reduced motion', async () => {
+      it('swaps without sliding in the tablet split view and under reduced motion', async () => {
         for (const options of [{ animation: 'none' }, { reducedMotion: 'reduce' }]) {
           const { errors, page } = await open(options)
           const pushed = await sampleFrames(page, 'push')

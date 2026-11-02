@@ -1,4 +1,4 @@
-import type { AgentSessionSlashCommand } from './agent-session-wire'
+import type { AgentSessionSlashCommand } from './agent-session/agent-session-wire'
 
 export type CommandMenuRendererFixtureModule = {
   renderCommandMenu: (sessionId: string) => {

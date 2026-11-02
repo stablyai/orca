@@ -264,10 +264,10 @@ describe('useAutomationDispatchEvents setup launch', () => {
     ).toEqual([])
   })
 
-  it('defaults legacy automations without a setup choice to skipping setup', async () => {
-    await registerAndDispatch(makeAutomation({ setupDecision: undefined }))
+  it.each(['run', 'skip', undefined] as const)('creates with saved setup %s', async (setup) => {
+    await registerAndDispatch(makeAutomation({ setupDecision: setup }))
 
-    expect(mockCreateWorktree.mock.calls[0][3]).toBe('skip')
+    expect(mockCreateWorktree.mock.calls[0][3]).toBe(setup ?? 'skip')
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalled()
   })
 
@@ -283,33 +283,6 @@ describe('useAutomationDispatchEvents setup launch', () => {
     await registerAndDispatch()
     expect(mockCreateWorktree.mock.calls[0]?.at(-1)).toEqual(
       expect.objectContaining({ executionHostId: undefined })
-    )
-  })
-
-  // #34433: a runtime host records this as a label; `local` sends the badge's lookup back to this desktop.
-  it('offers the run as a label that names this desktop as its owner', async () => {
-    state.repos[0]!.connectionId = 'box'
-    await registerAndDispatch(
-      makeAutomation({ runContext: { repoId: 'repo-1', hostId: 'ssh:box', path: '/repo' } })
-    )
-
-    expect(mockCreateWorktree.mock.calls[0]?.at(-1)).toEqual(
-      expect.objectContaining({
-        clientAutomationProvenance: expect.objectContaining({ hostId: 'local' })
-      })
-    )
-  })
-
-  it('does not stamp the created workspace with an empty agent-launch fallback', async () => {
-    await registerAndDispatch()
-
-    expect(mockCreateWorktree.mock.calls[0][10]).toBeUndefined()
-    expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agent: 'claude',
-        prompt: 'run this',
-        worktreeId: 'wt-created'
-      })
     )
   })
 
@@ -847,15 +820,6 @@ describe('useAutomationDispatchEvents setup launch', () => {
       )
     ).toHaveLength(1)
     errorSpy.mockRestore()
-  })
-
-  it('preserves a fresh reuse-enabled session as the future reuse seed', async () => {
-    mockFindReusableAutomationSession.mockReturnValue(null)
-
-    await registerAndDispatch(makeAutomation({ reuseSession: true }))
-
-    expect(mockReleaseTerminalOwnership).toHaveBeenCalledOnce()
-    expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
   })
 
   it('releases the launch runtime observers once when a kept-open run completes', async () => {

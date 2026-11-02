@@ -2,9 +2,9 @@
 
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalTurnLifecycle,
-  type AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
+  type AgentJournalTurnLifecycle
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
 import { requiresTerminalSettlement } from '../agent-session-journal/journal-terminal-settlement'
 import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
 import type { ProviderTimelineRowId, ProviderTimelineTurnRef } from './provider-timeline-rows'

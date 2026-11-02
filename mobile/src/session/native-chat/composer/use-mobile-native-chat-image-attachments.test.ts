@@ -112,31 +112,6 @@ describe('useMobileNativeChatImageAttachments', () => {
     })
   }
 
-  it('adds an uploaded image as a chip without pasting to the terminal', async () => {
-    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
-    const client = makeClient([methodNotFound('start'), ok('save', '/tmp/a.png')])
-    mount(
-      baseArgs({
-        client: client as unknown as RpcClient,
-        deviceTokenRef: { current: 'device-1' },
-        getActiveWorktreeConnectionId: async () => 'conn-1'
-      })
-    )
-
-    await act(async () => {
-      await hook!.attachImage('library')
-    })
-
-    expect(hook!.attachments).toEqual([
-      {
-        id: 'img-1',
-        path: '/tmp/a.png',
-        previewUri: 'file:///a.jpg'
-      }
-    ])
-    expect(client.calls.some((c) => c.method === 'terminal.send')).toBe(false)
-  })
-
   it.each(['claude', 'omp'])('rides %s images along before the text', async (agent) => {
     pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([

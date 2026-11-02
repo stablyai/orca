@@ -1,11 +1,11 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { structuredAgentSessionSeedCatalog } from '../../../../shared/structured-agent-session-seed-catalog'
+import { structuredAgentSessionSeedCatalog } from '../../../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionModelCatalog,
   createStructuredAgentSessionOptionState,
   type StructuredAgentSessionOptionState
-} from '../../../../shared/structured-agent-session-options'
+} from '../../../../shared/agent-session/options/structured-agent-session-options'
 import { readHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
 
 /** The first frame: the host's saved list when the renderer already holds it, else the seed,

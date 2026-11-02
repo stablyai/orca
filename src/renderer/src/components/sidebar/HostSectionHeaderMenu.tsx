@@ -31,13 +31,13 @@ import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { runtimePairingRepairRoute } from '../../../../shared/runtime-environments'
 
 import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
-import { selectStoppedWslDistro } from '@/lib/wsl-host-stopped-status'
 import { startWslHostAndReloadProjects } from '@/lib/wsl-host-user-start'
 import { clearRuntimeCompatibilityCache } from '@/runtime/runtime-rpc-client'
 import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { HostHeaderRow } from '../../../../shared/sidebar-list/host-section-rows'
 import { buildHostHeaderMenuModel } from './host-header-menu-items'
+import { selectStartableStoppedWslDistro } from '../wsl-host-stopped/use-stopped-wsl-host'
 import { HostRenameDialog } from './HostRenameDialog'
 import { HostRemoveDialog } from './HostRemoveDialog'
 import { RuntimeRepairDialog } from '../settings/RuntimeRepairDialog'
@@ -96,9 +96,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
   })
   const repairableWithAccessLink = repairRoute === 'access-link'
   const stoppedWslDistro = useAppStore((s) =>
-    s.settings?.experimentalWslHosts === true
-      ? selectStoppedWslDistro(s, runtimeEnvironmentId)
-      : null
+    selectStartableStoppedWslDistro(s, runtimeEnvironmentId)
   )
   const model = buildHostHeaderMenuModel({
     kind: row.kind,

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { sourceControlActionRecipeEntry } from '../../../../../shared/source-control-action-selection'
-import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
+import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
@@ -25,12 +25,14 @@ const launchErrorMocks = vi.hoisted(() => {
   return { StructuredAgentSessionCreateRefusalError }
 })
 
-vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
-  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-errors', async () => ({
+  ...(await vi.importActual<typeof LaunchErrors>(
+    '@/lib/agent-session/launch/structured-agent-session-launch-errors'
+  )),
   ...launchErrorMocks
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-create-call', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-create-call', () => ({
   launchStructuredAgentSession: mocks.launch
 }))
 
@@ -78,7 +80,7 @@ vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi
 
 // The structured route hands the launch's own delivery result back unchanged.
 vi.mock('@/lib/launch-agent-in-new-tab', async () => {
-  const launch = await import('../../structured-agent-session-launch')
+  const launch = await import('./structured-agent-session-launch')
   return {
     launchAgentInNewTab: (args: {
       requestId: string
@@ -101,10 +103,10 @@ vi.mock('@/lib/launch-agent-in-new-tab', async () => {
   }
 })
 
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/structured-agent-session-launch-errors'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import { runSourceControlAgentActionStart } from '@/components/right-sidebar/runSourceControlAgentActionStart'
-import { getStructuredAgentLaunchStatus } from '../../structured-agent-session-launch-status'
+import { getStructuredAgentLaunchStatus } from './structured-agent-session-launch-status'
 import {
   getStructuredAgentSessionLaunchLifecycle,
   resetStructuredAgentLaunchRegistryForTests
@@ -112,7 +114,7 @@ import {
 import {
   retryStructuredAgentSessionLaunch,
   startStructuredAgentLaunch
-} from '../../structured-agent-session-launch'
+} from './structured-agent-session-launch'
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
 
 const WORKTREE_ID = 'wt-unconfirmed-or-retried'

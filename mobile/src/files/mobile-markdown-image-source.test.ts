@@ -44,6 +44,17 @@ describe('Markdown preview images', () => {
     expect(client.sendRequest).not.toHaveBeenCalled()
   })
 
+  it.each(['/Users/me/notes/readme.md', 'C:\\notes\\readme.md'])(
+    'does not read workspace images for a document outside the workspace: %s',
+    async (documentPath) => {
+      const client = host()
+      await expect(
+        loadMarkdownPreviewImage(client, 'wt', documentPath, 'images/d.png')
+      ).rejects.toThrow()
+      expect(client.sendRequest).not.toHaveBeenCalled()
+    }
+  )
+
   it('draws an SVG from its source text, since hosts read SVG as text', async () => {
     const markup = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 4"/>'
     const client = {

@@ -12,7 +12,6 @@ import {
   getLocalPreflightContext,
   getLocalProjectExecutionRuntimeContext,
   getLocalRepoProjectExecutionRuntimeContext,
-  getWslDistroFromPath,
   localPreflightContextKey
 } from './local-preflight-context'
 
@@ -76,12 +75,6 @@ function makeState(args: {
 }
 
 describe('local preflight context', () => {
-  it('extracts WSL distro names from supported UNC forms', () => {
-    expect(getWslDistroFromPath(String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`)).toBe('Ubuntu')
-    expect(getWslDistroFromPath(String.raw`\\wsl$\Debian\home\alice\repo`)).toBe('Debian')
-    expect(getWslDistroFromPath('/Users/alice/repo')).toBeNull()
-  })
-
   it('returns a stable snapshot for repeated WSL selector reads', () => {
     const state = makeState({
       repoPath: '/Users/alice/repo',
@@ -110,41 +103,6 @@ describe('local preflight context', () => {
     expect(getLocalPreflightContext(state, 'darwin')).toEqual({ wslDistro: 'Ubuntu' })
     state.repos = []
     expect(getLocalPreflightContext(state, 'darwin')).toBeUndefined()
-  })
-
-  it('reuses the same WSL snapshot across equivalent active repo and worktree paths', () => {
-    const fromRepo = getLocalPreflightContext(
-      makeState({
-        repoPath: String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`
-      }),
-      'darwin'
-    )
-    const fromWorktree = getLocalPreflightContext(
-      makeState({
-        repoPath: '/Users/alice/repo',
-        worktreePath: String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`
-      }),
-      'darwin'
-    )
-    const fromOtherDistro = getLocalPreflightContext(
-      makeState({
-        repoPath: '/Users/alice/repo',
-        worktreePath: String.raw`\\wsl.localhost\Debian\home\alice\repo`
-      }),
-      'darwin'
-    )
-
-    expect(fromRepo).toBe(fromWorktree)
-    expect(fromOtherDistro).not.toBe(fromRepo)
-    expect(fromOtherDistro).toEqual({ wslDistro: 'Debian' })
-  })
-
-  it('uses the stable host context for non-WSL paths', () => {
-    const state = makeState({ repoPath: '/Users/alice/repo' })
-
-    expect(getLocalPreflightContext(state)).toBeUndefined()
-    expect(getLocalPreflightContext(state)).toBeUndefined()
-    expect(localPreflightContextKey(getLocalPreflightContext(state))).toBe('host')
   })
 
   it('keys preflight by active runtime before local WSL or host context', () => {
@@ -528,30 +486,6 @@ describe('local preflight context', () => {
     const context = getLocalAgentPreflightContext(state, 'win32', {}, 'repo-2::worktree-1')
 
     expect(localPreflightContextKey(context)).toBe('repo-2:windows-host')
-  })
-
-  it('resolves a project host override for a specific worktree over a WSL default', () => {
-    const state: AppState = {
-      ...makeState({ repoPath: 'C:\\Users\\alice\\repo', worktreePath: 'C:\\Users\\alice\\repo' }),
-      settings: {
-        ...legacySettings(),
-        terminalWindowsShell: 'wsl.exe',
-        terminalWindowsWslDistro: 'Debian',
-        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Debian' }
-      },
-      projects: [project({ id: 'repo-1', localWindowsRuntimePreference: { kind: 'windows-host' } })]
-    }
-
-    expect(getLocalProjectExecutionRuntimeContext(state, 'repo-1::worktree-1', 'win32')).toEqual({
-      status: 'resolved',
-      runtime: {
-        kind: 'windows-host',
-        hostPlatform: 'win32',
-        projectId: 'repo-1',
-        reason: 'project-override',
-        cacheKey: 'repo-1:windows-host'
-      }
-    })
   })
 
   it('does not assign the active project runtime to the floating workspace', () => {

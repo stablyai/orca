@@ -9,7 +9,7 @@ export type SummaryAgentGroup = {
   agents: DashboardAgentRowData[]
 }
 
-const SUMMARY_STATE_ORDER: AgentDotState[] = [
+export const SUMMARY_STATE_ORDER: readonly AgentDotState[] = [
   'waiting',
   'blocked',
   // Failures outrank live work, but pending questions come first.

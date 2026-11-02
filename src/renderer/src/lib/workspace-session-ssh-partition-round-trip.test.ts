@@ -1,6 +1,6 @@
 /** Restore sessions runtime wrote to SSH partitions, formerly unread by renderer local/runtime-only hydration (#12721/#18173). */
 import { describe, expect, it } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'

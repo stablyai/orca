@@ -1,7 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { SparsePreset } from '../../../shared/worktree/create-types'
 import { normalizeSparseDirectories } from '../sparse-checkout-directories'
 import { assertWslMoveProjectWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'

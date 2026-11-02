@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import { platform } from 'node:os'
 import type { GhosttyImportPreview, GlobalSettings } from '../../shared/global-settings-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { findGhosttyConfigPaths } from './discovery'
 import { parseGhosttyConfig } from './parser'
 import { mapGhosttyToOrca } from './mapper'
@@ -46,7 +46,8 @@ function mergeParsedConfig(
   parsed: Record<string, string | string[]>
 ): void {
   for (const [key, value] of Object.entries(parsed)) {
-    if (key === 'palette') {
+    // Ghostty appends repeatable keys across config files instead of replacing them.
+    if (key === 'palette' || key === 'font-family') {
       target[key] = [...asArray(target[key]), ...asArray(value)]
       continue
     }

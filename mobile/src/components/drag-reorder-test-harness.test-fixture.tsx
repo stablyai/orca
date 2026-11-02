@@ -203,6 +203,10 @@ vi.mock('react-native-reanimated', async () => {
       return { setActive: probe.frameActive }
     },
     withSpring: probe.spring,
+    withTiming: (value: number) => value,
+    interpolateColor: (value: number, _input: number[], output: string[]) =>
+      value >= 1 ? output[1] : output[0],
+    Easing: { out: (easing: unknown) => easing, cubic: 'cubic' },
     runOnJS:
       (fn: (...args: unknown[]) => unknown) =>
       (...args: unknown[]) => {
@@ -224,6 +228,14 @@ vi.mock('lucide-react-native', () => ({
 }))
 vi.mock('expo-router', () => ({ useFocusEffect: () => {} }))
 vi.mock('./CustomKeyModal', () => ({ CustomKeyModal: () => null }))
+vi.mock(
+  '../settings/settings-screen-frame',
+  async () => (await import('../test-support/settings-chrome-test-double')).settingsFrameDouble
+)
+vi.mock(
+  './list/ListGroup',
+  async () => (await import('../test-support/settings-chrome-test-double')).listGroupDouble
+)
 vi.mock('./MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('../layout/use-shell-side-rail', () => ({ useDirectionPadAvailable: () => false }))
 vi.mock('@react-native-async-storage/async-storage', () => ({

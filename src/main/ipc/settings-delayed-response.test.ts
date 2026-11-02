@@ -105,6 +105,6 @@ it('returns current settings when a language change finishes after a newer theme
   expect(reply.theme).toBe('light')
 })
 
-vi.mock('../claude/agent-view-service', () => ({
+vi.mock('../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: async () => {} })
 }))

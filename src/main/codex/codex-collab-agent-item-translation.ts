@@ -1,4 +1,4 @@
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { CODEX_COLLAB_ROW_AGENTS_KEY } from '../../shared/codex-collab-agent-tools'
 import { journalPayload } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import {

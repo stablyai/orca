@@ -5,15 +5,15 @@ import { cp, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentSessionConversationCommand } from '../../../shared/agent-session/agent-session-conversation-command'
-import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   editPersistedTestAgentSessionStore,
   openTestAgentSessionRecordStore,
   type PersistedTestAgentSessionStore
-} from '../../runtime/agent-session-record-store-test-harness'
+} from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
@@ -31,7 +31,7 @@ import {
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const caller = { callerKey: 'desktop' }
 let directory: string

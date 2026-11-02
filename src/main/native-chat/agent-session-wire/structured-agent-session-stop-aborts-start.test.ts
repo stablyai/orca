@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { JournalStopAcceptor } from '../agent-session-journal/journal-stop-acceptance'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,

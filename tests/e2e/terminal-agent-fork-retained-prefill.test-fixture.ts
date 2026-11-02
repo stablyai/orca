@@ -6,7 +6,7 @@ import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import {
   LocalPtyProvider,
   _resetLocalPtyProviderStateForTest
-} from '../../src/main/providers/local-pty-provider'
+} from '../../src/main/providers/local-pty/local-pty-provider'
 import { installPtyRuntimeController } from '../../src/main/ipc/pty/runtime/controller'
 import { adoptStablePane } from '../../src/main/ipc/pty/pane/adopt-stable'
 import { getLocalPtyProvider, setLocalPtyProvider } from '../../src/main/ipc/pty/provider/registry'
@@ -26,9 +26,9 @@ import { folderWorkspaceKey } from '../../src/shared/workspace-scope'
 import type {
   RuntimeCreateAgentSessionRequest,
   RuntimeCreateAgentSessionResult
-} from '../../src/shared/agent-session-host-authority'
+} from '../../src/shared/agent-session/agent-session-host-authority'
 import type { PtyRuntimeControllerDeps } from '../../src/main/ipc/pty/runtime/controller-deps'
-import type { ShellSpawnParams } from '../../src/main/providers/local-pty-utils'
+import type { ShellSpawnParams } from '../../src/main/providers/local-pty/local-pty-executable-spawn'
 import { SHELL_READY_MARKER_PREFIX } from '../../src/main/shell-ready-marker-scanner'
 import * as startupStaging from '../../src/shared/startup-command-staging'
 import { buildStartupCommandSubmission } from '../../src/shared/startup-command-submission'
@@ -36,8 +36,9 @@ import type * as PosixProcessTable from '../../src/main/pty/posix-pty-process-ta
 
 const physical = vi.hoisted(() => ({ spawn: vi.fn(), sweep: vi.fn() }))
 vi.mock('node-pty', () => ({ spawn: physical.spawn }))
-vi.mock('../../src/main/providers/local-pty-runtime-spawn', async () => {
-  const { spawnShellWithFallback } = await import('../../src/main/providers/local-pty-utils')
+vi.mock('../../src/main/providers/local-pty/local-pty-runtime-spawn', async () => {
+  const { spawnShellWithFallback } =
+    await import('../../src/main/providers/local-pty/local-pty-executable-spawn')
   return {
     loadLocalPtyRuntimeSpawn: async () => (params: Omit<ShellSpawnParams, 'ptySpawn'>) =>
       spawnShellWithFallback({ ...params, ptySpawn: physical.spawn })

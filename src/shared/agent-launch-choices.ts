@@ -1,5 +1,5 @@
 import { isTuiAgent } from './tui-agent-config'
-import { isAgentSessionOptions } from './agent-session-record'
+import { isAgentSessionOptions } from './agent-session/lifecycle/agent-session-record'
 import type { TuiAgent } from './tui-agent'
 import type { AgentPermissionChoice } from './tui-agent-permission-choice'
 

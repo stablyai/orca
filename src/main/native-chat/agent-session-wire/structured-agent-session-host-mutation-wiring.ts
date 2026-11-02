@@ -2,7 +2,8 @@ import {
   cancelStructuredAgentSessionTurn,
   respondToStructuredAgentSessionPrompt,
   setStructuredAgentSessionOption,
-  changeStructuredAgentSessionThreadGoal
+  changeStructuredAgentSessionThreadGoal,
+  type StructuredAgentSessionMutationContext
 } from './structured-agent-session-host-mutations'
 import type {
   StructuredAgentSessionCaller,
@@ -16,14 +17,13 @@ import { IN_PROCESS_OPTIONS_READER } from './structured-agent-session-option-obs
 import { settleStructuredAgentSessionLateDispatch } from './structured-agent-session-late-dispatch'
 import * as agentStart from './structured-agent-session-agent-start'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
-import type { AgentSessionRewindParams } from '../../../shared/agent-session-rewind'
+import type { AgentSessionRewindParams } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
 import { rewindStructuredAgentSession } from './structured-agent-session-rewind'
 import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
 import type { StructuredAgentSessionConversationLifetime } from './structured-agent-session-conversation-lifetime'
 import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import type * as conversation from './structured-agent-session-host-delivery'
 import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
-import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import type { wireStructuredAgentSessionQueuedMessages } from './structured-agent-session-queued-wiring'
 
 type Inputs = {

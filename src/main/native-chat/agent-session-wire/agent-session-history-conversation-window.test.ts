@@ -2,16 +2,16 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentJournalProducerLinkage,
-  AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
+import {
+  type AgentJournalItemBody,
+  type AgentJournalProducerLinkage,
+  AGENT_JOURNAL_THREAD_SCOPE
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryRequest
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import { serializeRemoteRuntimePayload } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -19,7 +19,7 @@ import {
   readAgentSessionHistory,
   readAgentSessionHydrationPage
 } from './agent-session-history-page'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { foldSubagentItems } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
 import {
   subagentJournalBody,

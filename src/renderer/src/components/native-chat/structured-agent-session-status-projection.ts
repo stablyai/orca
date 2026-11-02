@@ -1,5 +1,5 @@
-import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
-import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import {
   agentChildWorkProjectionCandidateFromBackgroundTask,
   projectAgentChildWorkLegacySubagents
@@ -20,12 +20,12 @@ import {
   type AgentSubagentSnapshot
 } from '../../../../shared/agent-status-types'
 import { structuredChildWorkLegacySubagents } from '../../../../shared/agent-session/structured-agent-session-child-work-legacy'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
-import { structuredAgentSessionAgentStatus } from '../../../../shared/structured-agent-session-agent-status'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { structuredAgentSessionAgentStatus } from '../../../../shared/agent-session/view/structured-agent-session-agent-status'
 import {
   structuredAgentSessionDatedMainAgent,
   structuredAgentSessionRowStateStartedAt
-} from '../../../../shared/structured-agent-session-status-started-at'
+} from '../../../../shared/agent-session/view/structured-agent-session-status-started-at'
 import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
 import type { AgentStatusBatchTransaction } from '@/store/slices/agent-status/agent-status-contract'
 import type { StructuredTab } from './structured-agent-session-tabs'

@@ -3,12 +3,12 @@ import {
   mergedAgentModelCatalogModels
 } from './agent-model-catalog-models'
 import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
-import type { AgentSessionUnavailable } from '../../../shared/agent-session-availability'
+import type { AgentSessionUnavailable } from '../../../shared/agent-session/agent-session-availability'
 import type {
   AgentSessionFastModeSupport,
   AgentSessionModelCatalogResult,
   AgentSessionModelOption
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 
 /** Discovery owns configured defaults/freshness; live listings supply membership and effort menus. */
 export type AgentModelCatalogSource = 'discovery' | 'live'

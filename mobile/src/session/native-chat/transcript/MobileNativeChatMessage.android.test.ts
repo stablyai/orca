@@ -4,7 +4,7 @@ import { runInNewContext } from 'node:vm'
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 
 // Run the long-press actions-sheet path separately from the iOS inline-selection suite.
 vi.mock('react-native', async () => {

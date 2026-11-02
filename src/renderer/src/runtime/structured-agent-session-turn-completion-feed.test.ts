@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionTurnCompletion,
   AgentSessionTurnCompletionEvent
-} from '../../../shared/agent-session-wire'
-import type { AgentSessionAttentionEdge } from '../../../shared/agent-session-attention'
+} from '../../../shared/agent-session/view/agent-session-turn-completion-wire'
+import type { AgentSessionAttentionEdge } from '../../../shared/agent-session/agent-session-attention'
 
 const mocks = vi.hoisted(() => ({ subscribe: vi.fn(), supportsCapability: vi.fn() }))
 vi.mock('./structured-agent-session-client', () => ({

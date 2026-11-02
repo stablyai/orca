@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen } from '@testing-library/react'
 import { render } from './native-chat-tooltip-test-harness'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -26,14 +26,14 @@ afterEach(() => {
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
 import { NativeChatOrcaStopContext } from './native-chat-orca-stop-context'
-import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
+import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalTurnItem
-} from '../../../../shared/agent-session-journal-types'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { selectStructuredAgentSettledTurns } from '../../../../shared/structured-agent-session-turn-timing'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import { selectStructuredAgentSettledTurns } from '../../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
@@ -256,7 +256,7 @@ const usageLimitView = {
   }
 
   it.each(['claude', 'codex', 'grok'] as const)(
-    'keeps a collapsed %s quota warning visible without a continuation action',
+    'keeps a collapsed %s quota warning visible and continues once the limit resets',
     (agent) => {
       continueUsageLimit.mockClear()
       const items: AgentJournalRenderItem[] = [
@@ -289,7 +289,7 @@ const usageLimitView = {
             ...agentSessionFailureWords(
               {
                 kind: 'usageLimitReached',
-                usageLimit: { window: 'session', resetsAt: Date.now() + 3600_000 },
+                usageLimit: { window: 'session', resetsAt: Date.now() - 60_000 },
                 detail: { text: 'The provider refused this request.', audience: 'person' }
               },
               { surface: 'row' }
@@ -321,8 +321,10 @@ const usageLimitView = {
       expect(screen.queryByText('Earlier work')).toBeNull()
       expect(screen.getByText(/hit its session limit/)).toBeVisible()
       expect(screen.getByText('Details')).toBeVisible()
-      expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
-      expect(screen.queryByText(/Send a message once it resets/)).toBeNull()
+      const button = screen.getByRole('button', { name: 'Continue Now' })
+      expect(button).toBeVisible()
+      fireEvent.click(button)
+      expect(continueUsageLimit).toHaveBeenCalledOnce()
     }
   )
 

@@ -5,7 +5,7 @@ import {
   markStructuredAgentSessionLaunchCancelled
 } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { forgetUnlistedCreatedChat } from '@/lib/structured-agent-session-unlisted-created-chats'
-import { discardStructuredAgentSessionChatSends } from '@/lib/structured-agent-session-launch-prompt'
+import { discardStructuredAgentSessionChatSends } from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
 import { stopStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-message-sender'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
 import { closeStructuredAgentSession } from './structured-agent-session-close'

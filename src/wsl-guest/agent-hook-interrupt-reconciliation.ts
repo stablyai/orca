@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../shared/agent-status-types'
 import { isRecord } from '../shared/agent-status-child-work-value-guards'
-import { normalizeAgentProviderSession } from '../shared/agent-session-resume'
+import { normalizeAgentProviderSession } from '../shared/agent-session/lifecycle/agent-session-resume'
 import { normalizeHostTurnRevision } from '../shared/agent-hook-interrupt-reconciliation'
 import {
   opensNewTurn,

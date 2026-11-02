@@ -1,10 +1,8 @@
 import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { expect, vi } from 'vitest'
 import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
-import type {
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
@@ -12,13 +10,13 @@ import type {
 import type {
   CodexAppServerLaunch,
   openCodexAppServerConnection
-} from './codex-app-server-connection'
-import { CodexAppServerUnsupportedError } from './codex-app-server-session'
+} from './app-server/codex-app-server-connection'
+import { CodexAppServerUnsupportedError } from './app-server/codex-app-server-session'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import { codexTurnLifecycleFake } from './codex-turn-lifecycle-fake'
 import type { CodexStructuredSessionAdapterDeps } from './codex-structured-session-state'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export const CODEX_TEST_THREAD_ID = 'thread-abc'
 

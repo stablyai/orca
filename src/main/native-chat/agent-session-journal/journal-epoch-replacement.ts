@@ -8,21 +8,23 @@ import {
 } from './journal-item-echo'
 
 import { sameJournalConversation } from './journal-history-origin'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../../shared/agent-session-journal-item-key'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 
 import type {
   AgentJournalCursor,
-  AgentJournalItemBody,
   AgentJournalItemIdentity,
-  AgentJournalProducerLinkage,
-  AgentJournalTurnScope,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
-import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session-journal-identity'
+import type {
+  AgentJournalItemBody,
+  AgentJournalProducerLinkage
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLoad } from './journal-open'
 import {

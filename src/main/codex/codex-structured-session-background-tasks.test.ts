@@ -1,19 +1,19 @@
 import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
 } from './app-server/codex-app-server-connection-types'
-import type { openCodexAppServerConnection } from './codex-app-server-connection'
+import type { openCodexAppServerConnection } from './app-server/codex-app-server-connection'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { CodexJournalItems } from './codex-structured-journal-items'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 type Published = { sessionId: string; evidence: AgentChildWorkEvidence['type'][] }
 

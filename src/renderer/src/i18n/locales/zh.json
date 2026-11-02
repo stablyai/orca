@@ -407,6 +407,8 @@
       "claudeRemoveFolder": "Orca 会从此计算机删除此账户的 Claude 文件夹及其登录信息。与系统默认共享的聊天记录会保留。如果此账户被选中，您下次启动的 Claude 将使用系统默认。"
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "其他工作区正在运行 Git 操作",
+      "remoteOperationInAnotherWorkspace": "其他工作区正在运行 Git 操作（例如推、拉或强力推）。请等待其完成后再使用此操作，以免操作重叠。",
       "actionModel": {
         "on": "开启",
         "off": "关闭",
@@ -1310,7 +1312,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "结构化智能体会话尚不可用。稍后重试。",
         "gone": "此聊天不再在此主机上，因此无法在此处重新打开。",
-        "hostCannotOpen": "在 Orca 更新之前，无法重新打开此聊天。"
+        "hostCannotOpen": "在 Orca 更新之前，无法重新打开此聊天。",
+        "worktreeDeleted": "工作树已删除。",
+        "folderWorkspaceRemoved": "文件夹工作区已移除。"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "预配置根配方不支持稀疏结帐。"
@@ -1320,7 +1324,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "工作区之外的文件尚无法在配对服务器上预览。",
           "webClientUnavailable": "文档预览在 Web 客户端中不可用。"
         }
       },
@@ -4016,7 +4019,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "没有其他账户",
-            "9332ba8684": "切换到",
             "d450654fa2": "Claude 账户",
             "11e2354daf": "Claude 使用量运行时",
             "3dd7ddfae1": "打开 Claude 详情和账户切换器",
@@ -5750,11 +5752,7 @@
           "93cbea12c2": "笔记",
           "dbe2d18972": "更多 {{value0}} 操作",
           "2c67730e07": "在 Orca 中打开",
-          "e42941631a": "Linear 视图",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "编辑议题",
-          "b22f058067": "在 GitHub 上查看",
-          "e97d8f2876": "议题 #{{value0}}",
           "3ea2702e62": "已链接 {{value0}} #{{value1}}",
           "b105fd3057": "链接 Linear {{value0}}",
           "3f2649eeb8": "链接议题#{{value0}}",
@@ -5777,8 +5775,6 @@
           "cliCreatedFromShell": "通过 `orca worktree create` 创建",
           "cliStartupAgent": "Started with {{value0}}",
           "cliCreated": "由 Orca CLI 创建",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "在 Jira 中查看",
           "linkedJira": "已关联 Jira {{value0}}",
           "openInOrcaBrowser": "在 Orca 浏览器中打开"
         },
@@ -5888,7 +5884,9 @@
           "9a5381eb09": "无法打开工作区文件夹。",
           "0bed8727db": "它可能已被手机或删除。刷新工作区或将其从 Orca 中删除。",
           "3921d3d9a5": "找不到工作区文件夹。",
+          "pathNotFound": "未找到文件或文件夹。它可能已被移动或删除。",
           "f387af445b": "工作区路径不是有效的本地路径。",
+          "pathInvalid": "路径不是有效的本地路径。",
           "localOnly": "Local only",
           "remoteSsh": "Remote SSH",
           "remoteRuntimeUnsupported": "无法在本地应用中打开此路径。",
@@ -5903,8 +5901,8 @@
           "remoteEditorUnsupportedDetail": "请选择 VS Code、Cursor 或 Zed，或在本地使用该应用。",
           "remotePathInvalid": "路径对此 SSH 主机无效。",
           "remotePathInvalidDetail": "请先刷新工作区，再重试。",
-          "remoteLaunchFailed": "无法在编辑器中打开此路径。",
-          "remoteLaunchFailedDetail": "请检查此计算机上配置的编辑器命令。",
+          "pathLaunchFailed": "无法在编辑器中打开此路径。",
+          "pathLaunchFailedDetail": "请检查此计算机上配置的编辑器命令。",
           "wsl": "WSL",
           "remoteEditorHint": "只有 VS Code、Cursor 和 Zed 可以打开 SSH 主机上的文件夹。",
           "remoteRuntimeEditorHint": "只有当 Orca 通过 SSH 连接到此服务器时，本机应用才能打开服务器上的文件。"
@@ -6688,6 +6686,7 @@
       },
       "settings": {
         "AccountsPane": {
+          "locationSaveFailed": "无法保存账户位置。请重试。",
           "c2d2751587": "删除账户",
           "dbb9626ed1": "取消",
           "63843e37e2": "删除 Claude 账户？",
@@ -6932,14 +6931,13 @@
           "932ff1fbff": "主题",
           "leftSidebarAppearance": {
             "title": "左侧边栏外观",
-            "rowDescription": "让左侧边栏匹配终端、保持默认，或使用色调。",
             "default": "默认",
-            "matchTerminal": "匹配终端",
             "tinted": "色调",
             "tintColor": "边栏色调",
             "tintColorDescription": "混入左侧边栏表面的颜色。",
             "tintOpacity": "色调强度",
-            "tintOpacityDescription": "控制色调混入边栏的强度。"
+            "tintOpacityDescription": "控制色调混入边栏的强度。",
+            "tintDescription": "保持左侧边栏默认或为其着色。要跟随终端，请将浅色或深色主题设为“匹配终端”。"
           },
           "2edf606c46": "关闭时最小化到托盘",
           "b707773a0d": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出。",
@@ -8645,10 +8643,7 @@
           "1afcc1d973": "垂直内边距",
           "25e2f8e8e1": "终端网格周围的水平填充（以像素为单位）。",
           "36b8402015": "水平内边距",
-          "53ce336e15": "重新启动 Orca 以应用窗口模糊更改。",
           "c65bb9ce63": "需要重新启动",
-          "97950bb087": "将背景模糊应用到终端窗口。需要重新启动。",
-          "2b82242f43": "窗口模糊",
           "809f37738d": "控制终端背景的透明度。 1 是完全不透明，0 是完全透明。",
           "ea7b1a158e": "背景不透明度",
           "03acb60aa0": "控制终端背景的透明度。",
@@ -9075,11 +9070,10 @@
             },
             "leftSidebarAppearance": {
               "title": "左侧边栏外观",
-              "description": "让左侧边栏匹配终端、保持默认，或使用色调。",
               "project": "项目",
-              "terminal": "终端",
               "background": "背景",
-              "tint": "着色"
+              "tint": "着色",
+              "tintDescription": "保持左侧边栏默认或为其着色。要跟随终端，请将浅色或深色主题设为“匹配终端”。"
             },
             "workspaceCardLayout": {
               "title": "工作区卡片布局",
@@ -9134,7 +9128,8 @@
             "zcodeUsageDescription": "在状态栏中显示 ZCode 编码计划配额使用情况。",
             "zcode": "零码",
             "zai": "在",
-            "glm": "格鲁姆"
+            "glm": "格鲁姆",
+            "matchTerminal": "匹配终端"
           }
         },
         "auto": {
@@ -10310,8 +10305,6 @@
             "f6dd9ff606": "背景",
             "71eb45e293": "模糊",
             "0838b3717b": "窗口",
-            "bc2054657a": "将背景模糊应用到终端窗口。需要重新启动。",
-            "72d0482137": "窗口模糊",
             "7db59c4738": "阿尔法",
             "46d99ef4bb": "不透明度",
             "4c643695aa": "控制终端背景的透明度。",
@@ -12179,7 +12172,7 @@
         "wslHosts": {
           "title": "WSL 主机",
           "experimental": "实验性",
-          "description": "Orca 在每个发行版内运行一个服务器。已停止的发行版只有在您打开其某个项目或在此连接它时才会启动。",
+          "description": "Orca 在每个发行版内运行一个服务器。打开项目不会启动已停止的发行版：请点击“启动”、打开新终端，或在此连接它。",
           "add": "添加 WSL 发行版",
           "connect": "连接",
           "turnOn": "在实验性中开启",
@@ -12431,7 +12424,9 @@
           "searchLabel": "搜索构建"
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "使用其终端配色"
+          "useTerminalTheme": "使用其终端配色",
+          "matchTerminal": "匹配终端",
+          "dynamic": "动态"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
@@ -18783,9 +18778,7 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "请更新此主机上的 Orca 以在聊天界面中继续。",
-        "notSavedYet": "{{agent}} 尚未保存此对话。请在它回复后重试。",
-        "exitUnconfirmed": "{{agent}} 已在另一个终端中运行此对话。请退出那里的 {{agent}} 或关闭该终端，然后从会话历史记录中打开此对话。",
-        "exitUnconfirmedFromTerminal": "{{agent}} 已在另一个终端中运行此对话。请退出那里的 {{agent}} 或关闭该终端，然后从会话历史记录中打开此对话。"
+        "notSavedYet": "{{agent}} 尚未保存此对话。请在它回复后重试。"
       },
       "state": {
         "loading": {
@@ -18993,6 +18986,8 @@
         "unnamedSender": "一个智能体",
         "messageFromCoordinator": "来自协调者的消息",
         "startedWorker": "已启动工作者",
+        "handedOffToAgent": "已移交给智能体",
+        "startedAgent": "已启动智能体",
         "taskFromCoordinator": "来自协调者的任务",
         "updateFromWorker": "来自工作者的更新"
       },
@@ -19089,7 +19084,8 @@
         "continue": "继续",
         "failed": "无法继续此聊天。请重试，或发送一条消息。",
         "explanation": "继续后，智能体会先检查其上一步是否已完成。",
-        "unconfirmed": "无法确认 {{agent}} 是否收到“继续”。在重试之前请检查聊天记录。"
+        "unconfirmed": "无法确认 {{agent}} 是否收到“继续”。在重试之前请检查聊天记录。",
+        "usageLimitExplanation": "让智能体从中断处继续。请在上限重置后使用。"
       },
       "rewind": {
         "unsupported": "此聊天无法返回到更早的消息。",
@@ -19267,6 +19263,13 @@
         "effortPickerFailed": "无法打开推理强度选择器。",
         "modelApplyFailed": "无法应用模型 {{value}}。",
         "effortApplyFailed": "无法应用推理强度 {{value}}。"
+      },
+      "usageLimitActions": {
+        "continueNow": "立即继续",
+        "leadIn": "无需等待，继续此聊天：",
+        "switchAccount": "切换账号",
+        "addAccount": "添加账号…",
+        "accountUnavailable": "此聊天无法切换到其他账户。请将其移交给其他智能体。"
       }
     },
     "tab": {
@@ -19575,6 +19578,7 @@
       "detectingAgents": "正在此工作区主机上检测智能体…",
       "detectionFailed": "无法检测此工作区主机上的智能体。",
       "noAgents": "未在此工作区主机上检测到已启用的智能体。",
+      "onlySourceFamilyDetected": "此工作区主机上可用的智能体均与 {{agent}} 共享使用限额。请启用或安装其他智能体。",
       "context": "上下文",
       "modeFocused": "聚焦交接（推荐）",
       "modeFocusedDescription": "使用最新进度和当前工作区，仅在需要时读取更早的会话细节。",
@@ -19734,7 +19738,23 @@
     },
     "newWorkspace": {
       "agentOptional": "智能体 [可选]",
-      "createDescription": "选择项目和工作区名称。如果想启动智能体，请选择一个。"
+      "createDescription": "选择项目和工作区名称。如果想启动智能体，请选择一个。",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "选择是否在创建此工作区前运行设置。",
+        "cancel": "取消",
+        "retry": "重试",
+        "setupScript": "设置脚本",
+        "defaultTabCommands": "默认标签页命令",
+        "setupAndDefaultTabs": "设置及默认标签页命令",
+        "askRunSetup": "立即运行设置？",
+        "askRunDefaultTabs": "立即运行默认标签页命令？",
+        "askRunSetupAndDefaultTabs": "立即运行设置及默认标签页命令？",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + 本地",
+        "localSource": "本地设置"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "另一个议题更改正在进行中。"
@@ -20211,8 +20231,7 @@
       "quitDuringMoveConfirm": "仍要退出"
     },
     "startupWorktreeRefresh": {
-      "loading": "正在发现工作区…",
-      "description": "本地和远程项目加载期间，可能会显示更多工作区。"
+      "loading": "正在发现工作区…"
     },
     "createProject": {
       "errors": {
@@ -20300,7 +20319,8 @@
     "wslHostOffer": {
       "title": "将 {{distro}} 作为主机运行（推荐）",
       "why": "Git、文件和终端将在 Linux 中原生运行，而不是通过 Windows 文件共享。",
-      "accept": "作为主机运行"
+      "accept": "作为主机运行",
+      "projectNotFound": "找不到要移动的已添加项目。请在侧边栏的项目上使用“移到 {{distro}} 主机…”。"
     }
   },
   "editor": {
@@ -20827,6 +20847,7 @@
     "scanIssues": {
       "issuesOmitted": "已省略其他扫描问题。",
       "sessionMetadataUnreadable": "本次扫描未能读取会话元数据。",
+      "transcriptTooLarge": "有一个 {{label}} 会话过大，无法在会话历史中加载。请尝试直接在 {{label}} 中恢复该会话。",
       "openCodeScannerUnavailable": "由于无法启动后台扫描器，已跳过 OpenCode 历史记录；应用仍可正常响应。",
       "openCodeScanIncomplete": "OpenCode 历史记录扫描未完成：{{detail}}",
       "openCodeWslReaderPreparing": "正在准备 WSL SQLite 读取器。设置完成后请刷新 Vault。",
@@ -21430,7 +21451,8 @@
       "checksNeutral": "中性",
       "allReviewChecks": "评审：{{count}} · 检查：{{status}}",
       "showLinked_other": "显示 {{count}} 个关联的审查和任务",
-      "linkedCount_other": "已关联 {{count}} 项"
+      "linkedCount_other": "已关联 {{count}} 项",
+      "labels": "标签：{{labels}}"
     },
     "attachments": {
       "updateRuntime": "更新远程运行时以更改工作区链接",
@@ -21681,12 +21703,8 @@
       "refreshBeforeEnd": "刷新 PTY 前无法结束。",
       "endUnsupported": "无法结束此终端。其主机不支持所需的安全检查。请从其标签页或所在主机关闭它。",
       "checkingTabs": "正在检查标签页…",
-      "endTitle": "结束 {{terminal}}？",
-      "endDescription": "这会结束终端及其子进程。未保存的工作可能会丢失。",
       "lastProcess": "最后看到的进程：{{process}}",
-      "cancel": "取消",
       "ending": "正在结束…",
-      "end": "结束终端",
       "unassigned": "未分配",
       "thisComputer": "此计算机",
       "localOwnedCount_one": "此计算机上的 {{count}} 个 Orca PTY",
@@ -22686,12 +22704,14 @@
       "serveSimUnavailable": "serve-sim 不可用。",
       "serveSimNoEndpoints": "serve-sim 未返回流端点。",
       "serveSimEndpointUnreachable": "serve-sim 已启动，但无法访问其流端点。",
+      "deviceHubInputBlocked": "Xcode 的 Device Hub 已接管此模拟器的输入，因此点按和输入都无法送达。请退出 Device Hub，然后重新连接模拟器。",
       "androidSdkMissing": "未找到 Android SDK。请安装 Android Studio 并设置 ANDROID_HOME。",
       "adbUnavailable": "adb 不可用。",
       "noAndroidDevices": "未找到 Android 设备或 AVD。请在 Android Studio 中创建一个。",
       "androidDeviceNotRunning": "Android 设备“{{device}}”未运行。请先启动它。",
       "unknownDeviceOrAvd": "“{{device}}”不是正在运行的设备，也不是已知的 AVD。",
       "avdBootTimeout": "AVD “{{avdName}}”未能及时完成启动。",
+      "avdExitedBeforeBoot": "AVD “{{avdName}}”在完成启动前已停止：{{detail}}",
       "scrcpyDownloadFailed": "无法下载 scrcpy 服务器：{{detail}}",
       "scrcpyServerInvalid": "下载的 scrcpy 服务器无效或不完整。"
     },

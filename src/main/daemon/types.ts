@@ -28,7 +28,7 @@ import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
-} from '../../shared/agent-session-host-authority'
+} from '../../shared/agent-session/agent-session-host-authority'
 import type * as HistorySeedProtocol from './terminal-history-seed-transfer-protocol'
 import type * as PtyOwnerQueryProtocol from './daemon-pty-owner-query-protocol'
 export type { TerminalModes } from './terminal-modes'

@@ -15,6 +15,32 @@ import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from './orca-runtime-postlude'
 afterEach(() => vi.restoreAllMocks())
 
 describe('lifecycle invalidation respects inventory scope and retry bounds', () => {
+  it('answers a targeted read while a later background census is still pending', async () => {
+    vi.useFakeTimers()
+    const first = deferred<PtyProcessInfo[]>()
+    const background = deferred<PtyProcessInfo[]>()
+    const list = vi
+      .fn<InventoryListing>()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValue(background.promise)
+    const { runtime } = createInventoryRuntime(list)
+    let answered = false
+    const targeted = runtime.read(undefined, WORKTREE).then((result) => {
+      answered = result?.allLivePtyIds.has(PTY) === true
+      return result
+    })
+    const polling = runtime.read()
+    first.resolve([processRow()])
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+      expect(answered).toBe(true)
+    } finally {
+      background.resolve([processRow()])
+      await Promise.all([targeted, polling])
+      vi.useRealTimers()
+    }
+  })
+
   it.each(['remote:unscoped-handle', 'remote:paired-host@@term_guest'])(
     'conservatively rejects pending inventory for foreign lifecycle ID %s',
     async (id) => {
@@ -124,10 +150,10 @@ describe('lifecycle invalidation respects inventory scope and retry bounds', () 
     const { runtime } = createInventoryRuntime(list)
     const a = runtime.read(undefined, 'repo::/tmp/a')
     const b = runtime.read(undefined, 'repo::/tmp/b')
-    first.resolve([processRow('stale-listing')])
     second.resolve([processRow()])
-    expect((await a)?.allLivePtyIds).toEqual(new Set([PTY]))
     expect((await b)?.allLivePtyIds).toEqual(new Set([PTY]))
+    first.resolve([processRow('stale-listing')])
+    expect((await a)?.allLivePtyIds).toEqual(new Set([PTY]))
     expect(list).toHaveBeenCalledTimes(2)
   })
 
@@ -143,12 +169,10 @@ describe('lifecycle invalidation respects inventory scope and retry bounds', () 
     vi.spyOn(Date, 'now').mockReturnValue(1000)
     const patient = runtime.read(undefined, 'repo::/tmp/a', 4000)
     const hasty = runtime.read(undefined, 'repo::/tmp/b', 1500)
-    first.resolve([processRow('overtaken')])
-    await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(3))
     second.resolve([processRow('short-wait')])
-    // The patient read re-lists; the hasty one may adopt that longer-waiting listing.
+    expect((await hasty)?.allLivePtyIds).toEqual(new Set(['short-wait']))
+    first.resolve([processRow('overtaken')])
     expect((await patient)?.allLivePtyIds).toEqual(new Set(['relisted']))
-    expect((await hasty)?.allLivePtyIds).toEqual(new Set(['relisted']))
     expect(list).toHaveBeenCalledTimes(3)
   })
 
@@ -167,15 +191,12 @@ describe('lifecycle invalidation respects inventory scope and retry bounds', () 
     const without = runtime.read(undefined, 'repo::/tmp/b', undefined, {
       includeForegroundProcessEvidence: false
     })
-    first.resolve([processRow('overtaken')])
-    await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(3))
-    expect(list.mock.calls[2]?.[1]?.includeForegroundProcessEvidence).toBe(true)
     second.resolve([processRow('no-evidence')])
+    expect((await without)?.allLivePtyIds).toEqual(new Set(['no-evidence']))
+    first.resolve([processRow('overtaken')])
     expect((await withEvidence)?.allLivePtyIds).toEqual(new Set(['relisted']))
-    // Overtaken by a listing with evidence, the evidence-free read re-lists rather than adopt it.
-    expect((await without)?.allLivePtyIds).toEqual(new Set(['relisted']))
-    expect(list).toHaveBeenCalledTimes(4)
-    expect(list.mock.calls[3]?.[1]?.includeForegroundProcessEvidence).toBe(false)
+    expect(list).toHaveBeenCalledTimes(3)
+    expect(list.mock.calls[2]?.[1]?.includeForegroundProcessEvidence).toBe(true)
   })
 
   it('caps a deadline-free read at one listing budget however many listings it joins', async () => {
@@ -188,6 +209,7 @@ describe('lifecycle invalidation respects inventory scope and retry bounds', () 
     let now = 1000
     vi.spyOn(Date, 'now').mockImplementation(() => now)
     const pending = runtime.read(undefined, 'repo::/tmp/a')
+    runtime.onPtySpawned('other-terminal', SUCCESSOR)
     void runtime.read(undefined, 'repo::/tmp/b')
     // The first listing answers just before its budget runs out; the joined one never answers.
     now = 1000 + PTY_CONTROLLER_LIST_TIMEOUT_MS - 1
@@ -214,6 +236,7 @@ describe('lifecycle invalidation respects inventory scope and retry bounds', () 
     void runtime.read(undefined, 'repo::/tmp/a').then((value) => (result = value))
     // Each hop: a poller starts a newer listing, then the one the read waits on answers late.
     for (let hop = 1; hop <= 5 && result === 'pending'; hop += 1) {
+      runtime.onPtySpawned('other-terminal', SUCCESSOR)
       void runtime.read(undefined, `repo::/tmp/poller-${hop}`)
       now += 1000
       listings[hop - 1]?.resolve([processRow()])

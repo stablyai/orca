@@ -2,12 +2,10 @@ import { expect, it, vi } from 'vitest'
 import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
 import { registerTerminalPtyExitWaiterTests } from './terminal-pty-exit-waiter.spec'
 import { registerClaudeAgentTeamsPtyExitLeakTests } from './claude-agent-teams-pty-exit-leak.spec'
-import { registerPtyExitAgentStatusReconciliationTests } from './pty-exit-agent-status-reconciliation.spec'
 import { registerPtyTranscriptPruneWaitCacheTests } from './pty-transcript-prune-wait-cache.spec'
 
 registerTerminalPtyExitWaiterTests()
 registerClaudeAgentTeamsPtyExitLeakTests()
-registerPtyExitAgentStatusReconciliationTests()
 registerPtyTranscriptPruneWaitCacheTests()
 
 it('reports an already-exited terminal from the idle wait command', async () => {

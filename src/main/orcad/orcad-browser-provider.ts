@@ -145,9 +145,10 @@ async function startProvider(
 
 async function startElectronServeProvider(
   executablePath: string,
+  userDataPath: string,
   signal?: AbortSignal
 ): Promise<OrcadBrowserProvider> {
-  const processHandle = new ElectronServeBrowserProcess(executablePath)
+  const processHandle = new ElectronServeBrowserProcess(executablePath, userDataPath)
   try {
     await processHandle.start(signal)
   } catch (error) {
@@ -202,7 +203,11 @@ export async function resolveOrcadBrowserProvider(
   if (installedElectronExecutable) {
     try {
       setRuntimeBrowserUnavailableCause(null)
-      return await startElectronServeProvider(installedElectronExecutable, options.signal)
+      return await startElectronServeProvider(
+        installedElectronExecutable,
+        options.userDataPath,
+        options.signal
+      )
     } catch (error) {
       if (error instanceof OrcadBrowserCleanupError) {
         throw error

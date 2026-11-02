@@ -20,14 +20,17 @@ import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-sett
 import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as CLIENT
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { mutateHostAgentLaunchSettings } from '../settings/agent-launch-settings-transport'
 import {
   ensureAgentLaunchPreferences,
   readAgentLaunchPreferencesForWorktree
 } from '../settings/use-host-agent-launch-preferences'
-import { useAgentLaunchPickerInventory } from '../agent/use-agent-launch-picker-inventory'
+import {
+  useAgentLaunchPickerInventorySource,
+  useAgentPickerInventoryEntries
+} from '../agent/use-agent-launch-picker-inventory'
 import { useAgentMenuObservation, useNewTabAgentMenuRows } from './use-new-tab-agent-menu-rows'
 
 it('projects one capable source through cold, deadline, late, failed-refresh and empty answers', async () => {
@@ -270,7 +273,9 @@ it.each([20, 200])(
             environmentId: 'alpha'
           })
           renders++
-          return useAgentLaunchPickerInventory('wt', menu, false)
+          return useAgentPickerInventoryEntries(
+            useAgentLaunchPickerInventorySource('wt', menu, false)
+          )
         })
       )
       await act(async () => vi.advanceTimersByTimeAsync(3_000))

@@ -146,8 +146,15 @@ export function buildClaudeStatusSwitchGroups(
   return groups
 }
 
+export type ClaudeAccountSettings = Pick<
+  GlobalSettings,
+  | 'claudeManagedAccounts'
+  | 'activeClaudeManagedAccountIdsByRuntime'
+  | 'activeClaudeManagedAccountId'
+>
+
 function getClaudeStatusAccountsFromSettings(
-  settings: GlobalSettings | null | undefined,
+  settings: ClaudeAccountSettings | null | undefined,
   runtimeState: ClaudeRateLimitAccountsState
 ): ClaudeRateLimitAccountsState | null {
   if (!settings) {
@@ -191,7 +198,7 @@ function getClaudeStatusAccountsFromSettings(
 
 /** `ownerEnvironmentId` is the server owning the shown accounts; `null` is this desktop. */
 export function resolveClaudeStatusAccountState(
-  settings: GlobalSettings | null | undefined,
+  settings: ClaudeAccountSettings | null | undefined,
   runtimeState: ClaudeRateLimitAccountsState,
   ownerEnvironmentId: string | null
 ): ClaudeRateLimitAccountsState {
@@ -199,4 +206,18 @@ export function resolveClaudeStatusAccountState(
     return runtimeState
   }
   return getClaudeStatusAccountsFromSettings(settings, runtimeState) ?? runtimeState
+}
+
+export function signedInClaudeAccountCount(state: ClaudeRateLimitAccountsState): number {
+  const signedIn = state.accounts.filter(
+    (account) =>
+      account.managedAuthRuntime !== 'wsl' && !account.needsSignIn && !account.runsOnSystemDefault
+  )
+  return (
+    signedIn.length +
+    (state.systemDefaultEmail &&
+    !signedIn.some((account) => account.email === state.systemDefaultEmail)
+      ? 1
+      : 0)
+  )
 }

@@ -7,16 +7,16 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../src/shared/agent-session-journal-types'
-import { agentSessionVisibleFailureFacts } from '../../../src/shared/agent-session-visible-failures'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionVisibleFailureFacts } from '../../../src/shared/agent-session/failures/agent-session-visible-failures'
 import { mapSettledWithConcurrency } from '../../../src/shared/map-with-concurrency'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageDeleteResult,
   AgentSessionQueuedMessagesResumeResult,
-  AgentSessionQueuePause,
-  AgentSessionSendResult
-} from '../../../src/shared/agent-session-wire'
+  AgentSessionQueuePause
+} from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionSendResult } from '../../../src/shared/agent-session/agent-session-wire'
 import { queuedMessagesQueuePause } from '../../../src/shared/structured-agent-session-queued-cards'
 import {
   mobileQueuedMessageCards,

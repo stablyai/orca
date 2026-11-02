@@ -1,4 +1,4 @@
-// Mirrors FitAddon.proposeDimensions in @xterm/addon-fit 0.12.0-beta.301 (xterm 6.1.0-beta.304).
+// Mirrors FitAddon.proposeDimensions in @xterm/addon-fit 0.12.0-beta.332 (xterm 6.1.0-beta.336).
 const MINIMUM_COLS = 2
 const MINIMUM_ROWS = 1
 const DEFAULT_SCROLL_BAR_WIDTH = 14

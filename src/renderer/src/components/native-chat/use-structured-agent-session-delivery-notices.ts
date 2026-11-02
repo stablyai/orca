@@ -2,14 +2,14 @@ import { useEffect, useMemo, useRef } from 'react'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import { dispatchWasWithdrawn } from '../../../../shared/structured-agent-session-dispatch-rejection'
-import { structuredAgentSessionCommandItemIds } from '../../../../shared/structured-agent-session-message-projection'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import { structuredAgentSessionCommandItemIds } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 import { useStructuredAgentSessionStartFailureFacts } from './use-structured-agent-session-start-failure-facts'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
-import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 
 const NO_SUBMISSIONS: readonly AgentJournalSubmission[] = []
 
