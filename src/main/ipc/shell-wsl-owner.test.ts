@@ -24,7 +24,7 @@ vi.mock('node:fs/promises', () => ({
   stat: statMock
 }))
 
-vi.mock('../codex-cli/command', () => ({
+vi.mock('../../shared/node-cli-command-resolution', () => ({
   resolveCliCommand: (command: string) => command
 }))
 

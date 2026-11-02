@@ -127,7 +127,7 @@ function uniqueSorted(values: (string | undefined)[]): string[] {
     new Set(
       values
         .map((value) => value?.trim() ?? '')
-        .filter((value) => value.length > 0 && !value.startsWith('../../index'))
+        .filter((value) => value.length > 0 && !value.startsWith('.'))
     )
   ).sort((a, b) => a.localeCompare(b))
 }

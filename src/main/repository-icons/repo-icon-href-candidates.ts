@@ -8,7 +8,7 @@ function normalizeIconHrefPath(href: string): { path: string; rootRelative: bool
 
   const rootRelative = trimmed.startsWith('/')
   const pathOnly = (trimmed.split(/[?#]/)[0] ?? '').replace(/^\/+/, '').replace(/\\/g, '/')
-  const parts = pathOnly.split('/').filter((part) => part && part !== '../index')
+  const parts = pathOnly.split('/').filter((part) => part && part !== '.')
   // Repository-controlled hrefs must stay inside the worktree.
   if (parts.length === 0 || parts.some((part) => part === '..')) {
     return null
@@ -25,7 +25,7 @@ export function iconHrefCandidates(href: string, sourceFile: string): string[] {
   const candidates = new Set<string>()
   if (!clean.rootRelative) {
     const sourceDirectory = posix.dirname(sourceFile)
-    if (sourceDirectory && sourceDirectory !== '../index') {
+    if (sourceDirectory && sourceDirectory !== '.') {
       candidates.add(posix.join(sourceDirectory, clean.path))
     }
   }

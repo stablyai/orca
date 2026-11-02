@@ -428,6 +428,12 @@ vi.mock('../../source-control/hosted-review', () => ({
   }))
 }))
 
+vi.mock('../../github/client/fetch/repo-slug-upstream', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getRepoSlug: getRepoSlugMock,
+  getRepoUpstream: getRepoUpstreamMock
+}))
+
 vi.mock('../../github/client', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
