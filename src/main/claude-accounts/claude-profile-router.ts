@@ -105,7 +105,7 @@ export class ClaudeProfileRouter {
     return this.args.userHome ?? homedir()
   }
 
-  private selectedProfile(): ClaudeProfileDescriptor | null {
+  selectedProfile(): ClaudeProfileDescriptor | null {
     const id = getSelectedClaudeAccountIdForTarget(this.args.getSettings(), { runtime: 'host' })
     return id ? this.describe(id) : null
   }

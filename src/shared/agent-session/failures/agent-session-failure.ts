@@ -19,7 +19,7 @@ import {
   readAgentSessionRefusalReference,
   type AgentSessionRefusalReference
 } from './agent-session-wire-refusals'
-import { CLAUDE_CHOSEN_ACCOUNT_FAILURE_KINDS } from './claude-chosen-account-failure-kinds'
+import { CLAUDE_CHOSEN_ACCOUNT_FAILURE_KINDS } from '../../claude-chosen-account-failure-kinds'
 
 /** One per situation with its own honest next step; a new one needs copy before it compiles. */
 export const AGENT_SESSION_FAILURE_KINDS = [
