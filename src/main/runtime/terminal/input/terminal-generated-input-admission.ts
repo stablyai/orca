@@ -27,6 +27,7 @@ import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../../shared/agen
 import { OrcaRuntimeWithTitlelessPaneAgentIdentity } from '../wait/titleless-pane-agent-identity'
 import { GeneratedAgentInputNotices } from '../../generated-agent-input-notices'
 import { assertAgentPromptRequestActive } from '../../orca-runtime-core'
+import { GeneratedInputRefusedError } from './generated-input-refused-error'
 
 /** Resolves with `fallback` once the operation's deadline passes, so no read outlives it. */
 export function boundedByDeadline<T>(read: Promise<T>, deadline: number, fallback: T): Promise<T> {
@@ -292,5 +293,3 @@ export abstract class OrcaRuntimeWithGeneratedInputAdmission extends OrcaRuntime
     )
   }
 }
-
-export class GeneratedInputRefusedError extends Error {}

@@ -7,7 +7,7 @@ import type {
   GeneratedInputOutcome,
   GeneratedInputRequest
 } from '../../../../shared/generated-terminal-input'
-import { GeneratedInputRefusedError } from './terminal-generated-input-admission'
+import { GeneratedInputRefusedError } from './generated-input-refused-error'
 
 export type GeneratedInputDelivery = GeneratedInputRequest &
   Pick<
