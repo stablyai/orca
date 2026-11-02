@@ -11,10 +11,10 @@ import { customEditorTakeover } from './plugin-custom-editor-takeover'
 import { fileList } from './plugin-contribution-file-list'
 
 /** The manifest points shown as named rows; commands, shortcuts, events and settings have their
- *  own lists. */
+ *  own lists, and hooks show as the trusted-worker access they need. */
 export type PluginContributionKind = Exclude<
   PluginContributionPoint,
-  'commands' | 'keybindings' | 'events' | 'settings'
+  'commands' | 'keybindings' | 'events' | 'hooks' | 'settings'
 >
 
 /** One named thing a plugin adds, ready to show as a row. */

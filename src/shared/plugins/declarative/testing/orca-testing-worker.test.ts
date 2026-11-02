@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { exportedTypeShape, runtimeShape } from '../../authoring/plugin-author-typings.test-fixture'
 import { agentStatusChangedPayloadSchema } from '../../events/plugin-events'
+import { terminalSendHookPayloadSchema } from '../../events/plugin-hook-payloads'
 import { atom, read, set } from '../runtime/declarative-atoms'
 import { h } from '../runtime/declarative-elements'
 import { host as panelHost, plugin } from '../runtime/orca-module'
@@ -19,6 +20,12 @@ type Orca = {
     post(event: string, payload?: unknown): void
   }
   storage: { set(key: string, value: unknown): Promise<void> }
+}
+
+type HookedOrca = Orca & {
+  hooks: {
+    on(hook: string, handler: (event: unknown, next: (e: unknown) => unknown) => unknown): unknown
+  }
 }
 
 let panel: TestPanel | null = null
@@ -127,6 +134,46 @@ describe('mountWorker', () => {
         { events: [], commands: ['board.count'] }
       )
     ).rejects.toThrow(/registered undeclared command other/)
+  })
+
+  it('fires hooks as Orca would and returns what the chain decided', async () => {
+    const mounted = await mountWorker(
+      {
+        default(orca: HookedOrca) {
+          orca.hooks.on('terminal.send', (event, next) => {
+            const { text } = terminalSendHookPayloadSchema.parse(event)
+            if (text.includes('rm -rf')) {
+              return { deny: 'blocked' }
+            }
+            if (text === 'boom') {
+              throw new Error('hook failed')
+            }
+            return next({ ...terminalSendHookPayloadSchema.parse(event), text: text.trim() })
+          })
+        }
+      },
+      { events: [], commands: [], hooks: ['terminal.send'] }
+    )
+    const send = (text: string) => ({ terminalId: 't', text, enter: true, inputKind: 'driving' })
+    await expect(mounted.hooks.fire('terminal.send', send(' ls '))).resolves.toEqual({
+      kind: 'continue',
+      event: send('ls')
+    })
+    await expect(mounted.hooks.fire('terminal.send', send('rm -rf /'))).resolves.toEqual({
+      kind: 'deny',
+      reason: 'blocked'
+    })
+    await expect(mounted.hooks.fire('terminal.send', send('boom'))).resolves.toEqual({
+      kind: 'continue',
+      event: send('boom')
+    })
+    expect(mounted.logs.at(-1)).toMatch(/hook terminal\.send skipped after \d+ms: hook failed/)
+    await expect(mounted.hooks.fire('terminal.send', { text: 1 })).rejects.toThrow(
+      /not one Orca sends/
+    )
+    await expect(mounted.hooks.fire('workspace.create.after', {})).rejects.toThrow(
+      /not in contributes.hooks/
+    )
   })
 
   it('hands activate the same shape of orca object as Orca does', async () => {

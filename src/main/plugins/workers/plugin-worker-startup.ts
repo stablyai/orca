@@ -18,6 +18,8 @@ export type PluginWorkerSpawnSpec = {
   /** Dev tree hash; reviewed content is null for dev trees, so code edits need their own revision. */
   devRevision?: string | null
   grantedCapabilities: readonly PluginCapabilityKind[]
+  /** Not reaped when idle: Orca waits on it (hooks), so a cold start must not be on that path. */
+  keepWarm?: true
 }
 
 /** A requested worker and the checks every spawn of it, including crash restarts, must pass. */

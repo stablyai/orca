@@ -554,6 +554,7 @@
             "panels",
             "commands",
             "events",
+            "hooks",
             "languagePacks",
             "keybindings",
             "vmRecipes",

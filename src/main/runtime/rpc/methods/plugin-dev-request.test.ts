@@ -65,6 +65,7 @@ async function realService(options: {
     commands: [],
     invokeCommand: vi.fn(async () => null),
     requestFromPanel,
+    runHook: vi.fn(),
     notifyDataChanged: vi.fn(),
     deliverEvent: vi.fn(),
     lastActivityAt: () => 1_700_000_000_000,

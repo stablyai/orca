@@ -8,7 +8,7 @@
 
 - `$schema` (string, since 1.4.245): JSON Schema URL for editor completion. Ignored by Orca.
 - `manifestVersion` (2, required, since 1.4.245): Manifest format. Use 2 for new plugins.
-- `execution` ("data" | "declarative" | "sandboxed-ui" | "trusted-worker", required, since 1.4.245): Most authority the plugin needs, least first: `data` (themes, syntaxes, translations), `declarative` (commands, shortcuts, recipes), `sandboxed-ui` (panels), `trusted-worker` (`main` and events). Contributions beyond it fail validation.
+- `execution` ("data" | "declarative" | "sandboxed-ui" | "trusted-worker", required, since 1.4.245): Most authority the plugin needs, least first: `data` (themes, syntaxes, translations), `declarative` (commands, shortcuts, recipes), `sandboxed-ui` (panels), `trusted-worker` (`main`, events and hooks). Contributions beyond it fail validation.
 - `id` (string, required, since 1.4.160): Plugin id, kebab-case. The install identity is `<publisher>.<id>`, where Orca derives the publisher from the repository owner. The reserved names `constructor` and `prototype` are refused.
 - `publisher` (string, since 1.4.160): Deprecated: leave it out. Orca derives the publisher from where the plugin comes from, the way a Go module is named by its repository path: the repository owner for the official and community catalogs and for Git URL installs (`acme` for `github.com/acme/gleam-syntax`), and `local` for a folder. A value here is ignored for catalog and Git installs. Leaving it out needs `engines.orca` of at least `>=1.4.246`, because older Orca requires it; if you keep it for older Orca, it must equal the repository owner. Reserved owners (`stablyai`, `official`, `anthropic`, `openai`, `github` and any starting `orca`) and ids starting `orca-` install only from Orca's official catalog.
 - `name` (string, required, since 1.4.160): Display name.
@@ -23,7 +23,7 @@
 - `icon` (string, since 1.4.160): Square image shown beside the plugin name. PNG, WEBP, static, at least 128×128, square, at most 256 KB.
 - `engines` (object, required, since 1.4.160): Host versions this plugin supports. Older hosts refuse to load it.
 - `engines.orca` (string, required, since 1.4.160): Oldest Orca release this plugin runs on, as `>=x.y.z`. Raise it to the newest "Since" of any field you use; a format 2 manifest needs at least `>=1.4.245`, because older Orca cannot read format 2.
-- `main` (string, since 1.4.160): Node entry run in an out-of-process plugin worker: a `.js`/`.mjs` module, or a `.ts`/`.mts` module that Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`). Requires the `trusted-worker` execution profile, and is required by it, by `contributes.events` and by any command without an `action`.
+- `main` (string, since 1.4.160): Node entry run in an out-of-process plugin worker: a `.js`/`.mjs` module, or a `.ts`/`.mts` module that Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`). Requires the `trusted-worker` execution profile, and is required by it, by `contributes.events`, by `contributes.hooks` and by any command without an `action`.
 - `capabilities` (Capability[], since 1.4.160): Host APIs the plugin asks the user to grant. At most 32.
 - `cover` (object, since 1.4.245): Wide image at the top of the plugin page.
 - `cover.path` (string, required, since 1.4.245): Cover image shown on the plugin page, 16:10 recommended (1600×1000). PNG, JPEG, WEBP, static, at least 800×500, at most 1024 KB.
@@ -36,6 +36,7 @@
 - `panels` (PanelContribution[], since 1.4.160): Sidebar panels. At most 64.
 - `commands` (CommandContribution[], since 1.4.160): Command palette entries. At most 256.
 - `events` (EventContribution[], since 1.4.160): Events delivered to the plugin worker. At most 4.
+- `hooks` (HookContribution[], since 1.4.248): Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 3.
 - `languagePacks` (LanguagePackContribution[], since 1.4.160): Interface translations. At most 16.
 - `keybindings` (KeybindingContribution[], since 1.4.160): Keyboard shortcuts for contributed commands. At most 256.
 - `vmRecipes` (VmRecipeContribution[], since 1.4.160): Virtual machine environment recipes. At most 64.
@@ -47,7 +48,7 @@
 - `newFiles` (NewFileContribution[], since 1.4.245): Untitled files the user can create from the + menu and the command palette. At most 16.
 - `settings` (SettingContribution[], since 1.4.246): Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64.
 
-Reserved (must stay empty arrays): `agentHarnesses`, `skills`, `mcpServers`, `hooks`, `taskSources`, `connections`, `statusBarItems`, `sidebarCards`.
+Reserved (must stay empty arrays): `agentHarnesses`, `skills`, `mcpServers`, `taskSources`, `connections`, `statusBarItems`, `sidebarCards`.
 
 ## PanelContribution
 
@@ -73,6 +74,12 @@ A command palette entry. Requires the `declarative` execution profile or higher.
 An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events.
 
 - `on` ("workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed", required, since 1.4.160): Event delivered to the plugin worker.
+
+## HookContribution
+
+A hook Orca runs through the worker before (or after) it acts. Requires `main` and the `trusted-worker` execution profile.
+
+- `event` ("terminal.send" | "workspace.create.before" | "workspace.create.after", required, since 1.4.248): Hook the worker handles with `orca.hooks.on`.
 
 ## LanguagePackContribution
 

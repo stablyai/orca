@@ -13,6 +13,8 @@ export const PLUGIN_COMPONENTS_CATALOG_2_SINCE = '1.4.247'
 export const PLUGIN_SOURCE_MODULES_SINCE = PLUGIN_PANEL_UI_SINCE
 /** Panels reach their worker, storage, settings and events; `contributes.settings` arrives. */
 export const PLUGIN_PANEL_BRIDGE_SINCE = PLUGIN_PANEL_UI_SINCE
+/** First release that runs `contributes.hooks` and `orca.hooks.on`. */
+export const PLUGIN_HOOKS_SINCE = '1.4.248'
 
 type PluginFieldDoc = {
   description: string

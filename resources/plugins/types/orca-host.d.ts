@@ -172,4 +172,15 @@ declare module 'orca/host' {
     "workspace.changed": { context: { branch: string; displayName: string; terminals: { id: string; title?: string }[] } | null }
   }
   export type PluginEventName = keyof PluginEvents
+
+  /** Worker `orca.hooks.on(hook, handler)`: the event each hook carries and its stop result. */
+  export type PluginHooks = {
+    /** Text Orca, a client or a plugin is about to type into a terminal (not keys a person presses in it). Rewrite `text` or `enter` with `next`, or return `{ deny }` to refuse the send. */
+    "terminal.send": { event: { terminalId: string; text: string; enter: boolean; inputKind: "driving" | "orchestration" | "launch" }; result: { deny: string } }
+    /** A worktree or folder workspace is about to be created. Change `name`, `branch` or `base` with `next`, or return `{ deny }` to refuse it. */
+    "workspace.create.before": { event: { kind: "worktree" | "folder"; projectId: string; name: string; branch?: string; base?: string }; result: { deny: string } }
+    /** A worktree or folder workspace was created. Observe only: Orca does not wait for it, and results are ignored. */
+    "workspace.create.after": { event: { workspaceId: string; kind: "worktree" | "folder"; path: string; branch: string }; result: never }
+  }
+  export type PluginHookName = keyof PluginHooks
 }

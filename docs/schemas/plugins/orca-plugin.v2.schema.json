@@ -25,7 +25,7 @@
         "sandboxed-ui",
         "trusted-worker"
       ],
-      "description": "Most authority the plugin needs, least first: `data` (themes, syntaxes, translations), `declarative` (commands, shortcuts, recipes), `sandboxed-ui` (panels), `trusted-worker` (`main` and events). Contributions beyond it fail validation.",
+      "description": "Most authority the plugin needs, least first: `data` (themes, syntaxes, translations), `declarative` (commands, shortcuts, recipes), `sandboxed-ui` (panels), `trusted-worker` (`main`, events and hooks). Contributions beyond it fail validation.",
       "x-orca-since": "1.4.245",
       "examples": [
         "data"
@@ -170,7 +170,7 @@
       "x-orca-since": "1.4.160"
     },
     "main": {
-      "description": "Node entry run in an out-of-process plugin worker: a `.js`/`.mjs` module, or a `.ts`/`.mts` module that Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`). Requires the `trusted-worker` execution profile, and is required by it, by `contributes.events` and by any command without an `action`. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+      "description": "Node entry run in an out-of-process plugin worker: a `.js`/`.mjs` module, or a `.ts`/`.mts` module that Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`). Requires the `trusted-worker` execution profile, and is required by it, by `contributes.events`, by `contributes.hooks` and by any command without an `action`. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
       "x-orca-since": "1.4.160",
       "examples": [
         "dist/main.mjs"
@@ -214,6 +214,16 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/EventContribution"
+          }
+        },
+        "hooks": {
+          "default": [],
+          "description": "Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 3.",
+          "x-orca-since": "1.4.248",
+          "maxItems": 3,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HookContribution"
           }
         },
         "languagePacks": {
@@ -331,13 +341,6 @@
         },
         "mcpServers": {
           "description": "Reserved for MCP server definitions; must be empty until their format is defined.",
-          "x-orca-since": "1.4.245",
-          "maxItems": 0,
-          "type": "array",
-          "items": {}
-        },
-        "hooks": {
-          "description": "Reserved for agent hooks; must be empty until their format is defined.",
           "x-orca-since": "1.4.245",
           "maxItems": 0,
           "type": "array",
@@ -709,6 +712,31 @@
       ],
       "additionalProperties": false,
       "description": "An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events."
+    },
+    "HookContribution": {
+      "type": "object",
+      "properties": {
+        "event": {
+          "type": "string",
+          "enum": [
+            "terminal.send",
+            "workspace.create.before",
+            "workspace.create.after"
+          ],
+          "description": "Hook the worker handles with `orca.hooks.on`.",
+          "x-orca-since": "1.4.248",
+          "x-orca-enum-since": {
+            "terminal.send": "1.4.248",
+            "workspace.create.before": "1.4.248",
+            "workspace.create.after": "1.4.248"
+          }
+        }
+      },
+      "required": [
+        "event"
+      ],
+      "additionalProperties": false,
+      "description": "A hook Orca runs through the worker before (or after) it acts. Requires `main` and the `trusted-worker` execution profile."
     },
     "LanguagePackContribution": {
       "type": "object",
