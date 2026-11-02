@@ -316,6 +316,50 @@ async function captureFirstRevealedFrame(page: Page, tabId: string): Promise<Buf
   return screen.screenshot({ animations: 'disabled' })
 }
 
+// Codex-like idle output: ~30 Hz spinner-title frames, each its own DEC 2026 frame. Leaves the last frame open (safety timeout cleared) so a renderer swap lands mid-frame deterministically.
+async function runSpinnerFramesEndingOpen(page: Page, tabId: string): Promise<void> {
+  await page.evaluate(async (tabId) => {
+    const manager = window.__paneManagers?.get(tabId)
+    const pane = [
+      ...((manager as unknown as { panes?: Map<number, unknown> } | undefined)?.panes?.values() ??
+        [])
+    ][0] as { terminal: unknown } | undefined
+    const terminal = pane?.terminal as
+      | {
+          rows: number
+          write: (data: string, callback: () => void) => void
+          _core?: { _renderService?: { _syncOutputHandler?: { _timeout?: number } } }
+        }
+      | undefined
+    if (!terminal) {
+      throw new Error('No terminal for spinner frames')
+    }
+    const write = (data: string) =>
+      new Promise<void>((resolve) => terminal.write(data, () => resolve()))
+    const glyphs = '\u280b\u2819\u2839\u2838\u283c\u2834\u2826\u2827\u2807\u280f'
+    for (let i = 0; i < 12; i++) {
+      await write(
+        `\x1b[?2026h\x1b]0;${glyphs[i % glyphs.length]} work\x07\x1b[${terminal.rows};3H\x1b[?2026l`
+      )
+      await new Promise((resolve) => window.setTimeout(resolve, 33))
+    }
+    await write(`\x1b[?2026h\x1b]0;${glyphs[0]} work\x07`)
+    const handler = terminal._core?._renderService?._syncOutputHandler
+    if (handler?._timeout !== undefined) {
+      window.clearTimeout(handler._timeout)
+      handler._timeout = undefined
+    }
+  }, tabId)
+}
+
+async function replaceWebglRenderer(page: Page, tabId: string): Promise<void> {
+  await page.evaluate((tabId) => {
+    const manager = window.__paneManagers?.get(tabId)
+    manager?.setTerminalGpuAcceleration('off')
+    manager?.setTerminalGpuAcceleration('on')
+  }, tabId)
+}
+
 test.describe('terminal reveal paused-render recovery', () => {
   test("reveal repaint forces a render through xterm's paused gate", async ({ orcaPage }) => {
     // Use orcaPage: the main renderer owns __store/__paneManagers, unlike Playwright’s first page.
@@ -389,6 +433,84 @@ test.describe('terminal reveal paused-render recovery', () => {
       diff.matches,
       `recovered surface matches the revealed content (diffRatio=${diff.diffRatio})`
     ).toBe(true)
+  })
+
+  test('a WebGL canvas replaced while spinner frames hold DEC 2026 paints instead of staying blank', async ({
+    orcaPage
+  }, testInfo) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveTerminalManager(orcaPage)
+    const tabId = (await getActiveTabId(orcaPage))!
+    await forceWebglOn(orcaPage, tabId)
+    const hasWebgl = () =>
+      orcaPage
+        .waitForFunction(
+          (tabId) =>
+            (window.__paneManagers?.get(tabId)?.getRenderingDiagnostics?.() ?? []).some(
+              (diagnostic) => diagnostic.hasWebgl
+            ),
+          tabId,
+          { timeout: 15_000 }
+        )
+        .then(() => true)
+        .catch(() => false)
+    const webglAttached = await hasWebgl()
+    test.skip(!webglAttached, 'WebGL renderer is unavailable')
+    if (!webglAttached) {
+      return
+    }
+    expect(await installSynchronizedRevealProbe(orcaPage, tabId)).toBe(true)
+    await callSynchronizedRevealProbe(orcaPage, 'paintFrame', {
+      marker: 'SPINNER_PANE',
+      background: 17,
+      release: true
+    })
+    const coherent = await captureStableTabScreenshot(orcaPage, tabId)
+
+    await runSpinnerFramesEndingOpen(orcaPage, tabId)
+    expect((await readSynchronizedRevealProbe(orcaPage)).synchronizedOutput).toBe(true)
+
+    await replaceWebglRenderer(orcaPage, tabId)
+    expect(await hasWebgl(), 'renderer swapped back to WebGL').toBe(true)
+    const afterSwap = await captureFirstRevealedFrame(orcaPage, tabId)
+    const swapDiff = compareTerminalScreenshots(coherent, afterSwap)
+
+    // A painted canvas keeps honoring DEC 2026: the next frame's cells stay hidden until it closes.
+    await callSynchronizedRevealProbe(orcaPage, 'paintFrame', {
+      marker: 'PENDING_FRAME',
+      background: 52,
+      release: false
+    })
+    await orcaPage.evaluate((tabId) => {
+      window.__paneManagers?.get(tabId)?.scheduleRevealPresent()
+    }, tabId)
+    const held = await captureFirstRevealedFrame(orcaPage, tabId)
+    const heldDiff = compareTerminalScreenshots(coherent, held)
+    await callSynchronizedRevealProbe(orcaPage, 'paintFrame', {
+      marker: 'PENDING_FRAME',
+      background: 52,
+      release: true
+    })
+    const released = await captureStableTabScreenshot(orcaPage, tabId)
+
+    const afterSwapPath = testInfo.outputPath('spinner-canvas-after-swap.png')
+    await writeFile(afterSwapPath, afterSwap)
+    await testInfo.attach('spinner-canvas-after-swap.png', {
+      path: afterSwapPath,
+      contentType: 'image/png'
+    })
+    expect(
+      swapDiff.matches,
+      `new canvas shows the pane, not a blank, while DEC 2026 is open (diffRatio=${swapDiff.diffRatio})`
+    ).toBe(true)
+    expect(
+      heldDiff.matches,
+      `painted canvas keeps the coherent frame while DEC 2026 is held (diffRatio=${heldDiff.diffRatio})`
+    ).toBe(true)
+    expect(
+      compareTerminalScreenshots(coherent, released).matches,
+      'release presents the new frame'
+    ).toBe(false)
   })
 
   test('@headful atlas recovery keeps the coherent frame until synchronized output releases', async ({

@@ -8,6 +8,7 @@ import {
 } from './pane-webgl-renderer'
 import { safeFit } from './pane-fit'
 import { disposePane } from './pane-lifecycle'
+import { presentPaneViewport } from './pane-viewport-present'
 
 function createPane(options: { loadAddon?: () => void } = {}): ManagedPaneInternal {
   const leafId = '22222222-2222-4222-8222-222222222222' as never
