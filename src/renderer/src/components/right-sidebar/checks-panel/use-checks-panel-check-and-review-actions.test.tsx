@@ -140,6 +140,7 @@ function makeInput(overrides: Partial<Input> = {}): Input {
     suppressedGitHubPR: null,
     comment: ''
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture fills only the fields these hooks read; a hook reading another field fails its test.
   return {
     activeReview: {
       provider: 'gitlab',
