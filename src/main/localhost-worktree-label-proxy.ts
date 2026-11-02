@@ -135,6 +135,11 @@ export class LocalhostWorktreeLabelProxy {
     // Downstream errors must release upstream work rather than leak requests or crash main.
     request.on('error', () => proxyRequest.destroy())
     response.on('error', () => proxyRequest.destroy())
+    response.once('close', () => {
+      if (!response.writableFinished) {
+        proxyRequest.destroy()
+      }
+    })
 
     proxyRequest.on('response', (proxyResponse) => {
       proxyResponse.on('error', () => response.destroy())
