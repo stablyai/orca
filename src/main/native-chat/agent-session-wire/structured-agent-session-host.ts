@@ -308,8 +308,10 @@ export class StructuredAgentSessionHost {
     ...args
   ) => this.sessions.observeConversationPublications(...args)
   journalSnapshot = (sessionId: string) => this.backgroundTasks.journalSnapshot(sessionId)
-  queuedSendAnswer = (sessionId: string, messageId: string) =>
-    this.backgroundTasks.queuedSendAnswer(sessionId, messageId)
+  queuedSendAnswer = this.reads.queuedSendAnswer
+  /** What became of one send, answered by key, for callers that follow many sends. */
+  sendAnswer = this.reads.sendAnswer
+  wakeQueuedMessages = (sessionId: string) => this.queued.refresh(sessionId)
 
   private readonly startJournal = structuredAgentStartJournal(
     () => this.deps,
