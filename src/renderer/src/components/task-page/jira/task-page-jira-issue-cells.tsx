@@ -102,6 +102,12 @@ export function JiraIssueCell({
           </span>
         </div>
       )
+    case 'type':
+      return (
+        <span className={MUTED_CELL} title={issue.issueType.name}>
+          {issue.issueType.name}
+        </span>
+      )
     case 'priority':
       return <JiraPriorityText issue={issue} className="block truncate text-[12px]" />
     case 'assignee':

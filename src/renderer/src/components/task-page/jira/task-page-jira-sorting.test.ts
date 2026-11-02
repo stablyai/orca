@@ -112,6 +112,34 @@ describe('TaskPage Jira sorting functionality', () => {
   })
 
   describe('issue sorting', () => {
+    it('sorts by issue type name in both directions, preserves ties, and leaves input unchanged', () => {
+      const story = {
+        ...jiraIssue('ALP-1', 'First story', 'To Do'),
+        issueType: { id: 'story', name: 'Story' }
+      }
+      const bug = {
+        ...jiraIssue('ALP-2', 'Bug report', 'To Do'),
+        issueType: { id: 'bug', name: 'Bug' }
+      }
+      const tiedStory = {
+        ...jiraIssue('ALP-3', 'Second story', 'To Do'),
+        issueType: { id: 'story', name: 'Story' }
+      }
+      const issues = [story, bug, tiedStory]
+
+      expect(sortJiraIssues(issues, 'type', 'asc').map((issue) => issue.key)).toEqual([
+        'ALP-2',
+        'ALP-1',
+        'ALP-3'
+      ])
+      expect(sortJiraIssues(issues, 'type', 'desc').map((issue) => issue.key)).toEqual([
+        'ALP-1',
+        'ALP-3',
+        'ALP-2'
+      ])
+      expect(issues.map((issue) => issue.key)).toEqual(['ALP-1', 'ALP-2', 'ALP-3'])
+    })
+
     it('sorts by key in ascending order', () => {
       const issues = [
         jiraIssue('ALP-10', 'Issue 10', 'To Do'),
