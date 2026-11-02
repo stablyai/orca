@@ -51,13 +51,12 @@ function Chat({
     setCaret: noop,
     setActiveSuggestion: noop
   })
-  const composerRef = useRef<NativeChatComposerHandle>(null)
-  composerRef.current = {
+  const composerRef = useRef<NativeChatComposerHandle>({
     ...insertion,
     insertAgentReferences: () => false,
     handlePasteEvent: noop,
     pasteFromClipboard: noop
-  }
+  })
   useNativeChatComposerRevealFocus({
     tabId: 'chat',
     rootRef,

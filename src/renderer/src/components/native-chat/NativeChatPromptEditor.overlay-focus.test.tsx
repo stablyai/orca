@@ -41,8 +41,13 @@ function setup() {
       {editor(inputRef)}
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
-        <DropdownMenuContent>
-          <input role="combobox" aria-label="Search launcher" />
+        <DropdownMenuContent id="launcher-menu">
+          <input
+            role="combobox"
+            aria-label="Search launcher"
+            aria-controls="launcher-menu"
+            aria-expanded="true"
+          />
           <DropdownMenuItem>New Terminal</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
