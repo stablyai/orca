@@ -181,6 +181,8 @@ describe('mail work as a chat’s backlog grows', () => {
     async (count) => {
       await busyChat()
       const { runId } = await coordinatorRunAndTask()
+      // The rig's own time: the coordinator's last lease renewal.
+      const now = host.deps.store.getRecord(COORDINATOR)!.lease.lastRenewedAt
       for (let other = 0; other < count; other += 1) {
         const sessionId = `00000000-0000-4000-8000-${String(other).padStart(12, '0')}`
         await host.deps.store.reserveOwner({
@@ -203,7 +205,7 @@ describe('mail work as a chat’s backlog grows', () => {
             operationId: operationId(),
             fingerprint: `f-${other}`
           },
-          now: Date.now()
+          now
         })
         await host.deps.store.setSessionTabVisibility(sessionId, true)
       }
