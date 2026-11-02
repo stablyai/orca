@@ -199,6 +199,81 @@ describe('agentSessionAttachment.*', () => {
 
 it('reads a committed text attachment through the registered mobile RPC and validates its complete snapshot', async () => {
   {
+    const bytes = Buffer.from(`HEAD\n${'\n'.repeat(50 * 1024 * 1024 - 5)}`)
+    const path = await uploadBytes('tall-track.log', bytes)
+    const source = new AttachmentTextSource(path, async (request) =>
+      result(await call('agentSessionAttachment.readTextChunk', request, CLIENT_A))
+    )
+    try {
+      for (let block = 0; block < 15; block++) {
+        await source.block(block)
+      }
+      const tall = new AttachmentTextViewport(source, 20, 3000)
+      expect.soft(tall.anchor(0)).toEqual({ block: 0, row: 0 })
+      const interior = { block: 7, row: 120.25 }
+      expect.soft(tall.anchor(tall.position(interior)).block).toBe(interior.block)
+      expect.soft(tall.anchor(tall.position(interior)).row).toBeCloseTo(interior.row, 6)
+      await source.block(0)
+      expect.soft(tall.rows(0)[0]?.text).toBe('HEAD\n')
+      const resized = new AttachmentTextViewport(source, 23, 700)
+      expect.soft(resized.anchor(resized.position(interior)).row).toBeCloseTo(interior.row, 6)
+      expect
+        .soft(tall.anchor(tall.position(resized.anchor(resized.position(interior)))).row)
+        .toBeCloseTo(interior.row, 6)
+      expect
+        .soft(resized.anchor(resized.restore(tall, tall.position(interior))).row)
+        .toBeCloseTo(interior.row, 6)
+      const tailReady = Promise.withResolvers<void>()
+      source.requestViewport(tall.window(tall.total - tall.height), () => tailReady.resolve())
+      await tailReady.promise
+      const tailLayout = new AttachmentTextViewport(source, 20, 3000)
+      const tailRows = tailLayout.rows(tailLayout.total - tailLayout.height)
+      expect(tailRows.length).toBeGreaterThanOrEqual(150)
+      expect(tailRows.at(-1)!.top + 20).toBeCloseTo(tailLayout.total, 5)
+      expect(tailLayout.position(tailLayout.anchor(tailLayout.total - 3000))).toBeCloseTo(
+        tailLayout.total - 3000,
+        5
+      )
+      await source.block(0)
+      expect(new AttachmentTextViewport(source, 20, 3000).rows(0)[0]?.text).toBe('HEAD\n')
+    } finally {
+      source.dispose()
+    }
+  }
+  {
+    const bytes = Buffer.from('🙂'.repeat((25 * 1024 * 1024) / 4))
+    const path = await uploadBytes('tall-unicode.log', bytes)
+    const requests: AttachmentTextRequest[] = []
+    const source = new AttachmentTextSource(path, async (request) => {
+      requests.push(request)
+      return result(await call('agentSessionAttachment.readTextChunk', request, CLIENT_A))
+    })
+    try {
+      await source.block(0)
+      const ready = Promise.withResolvers<void>()
+      source.requestViewport(new AttachmentTextViewport(source, 20, 3000).window(0), () =>
+        ready.resolve()
+      )
+      await ready.promise
+      const tall = new AttachmentTextViewport(source, 20, 3000)
+      const visible = tall.rows(0)
+      expect.soft(visible.length).toBeGreaterThanOrEqual(150)
+      expect.soft(visible.length).toBeLessThanOrEqual(Math.ceil(3000 / 20) + 4)
+      expect.soft(visible.every((row) => Array.from(row.text).length <= 256)).toBe(true)
+      expect.soft(requests.length).toBeGreaterThan(2)
+      expect(requests.every((request) => request.length <= 16 * 1024)).toBe(true)
+      expect(requests.length).toBeLessThanOrEqual(tall.rowBudget + 1)
+      expect(
+        Array.from({ length: source.blockCount }, (_, index) => source.cachedBlock(index)).filter(
+          Boolean
+        ).length
+      ).toBeLessThanOrEqual(tall.rowBudget + 1)
+      expect(visible.at(-1)!.top + 20).toBeGreaterThanOrEqual(3000)
+    } finally {
+      source.dispose()
+    }
+  }
+  {
     const line = 'Original pasted contents 35636; exact Copy and Save.\n'
     const header = `COPY35636-START\n    indented\tfield    value; whitespace35636\n        ${line}`
     const tail = '\nCOPY35636-END\n'
@@ -324,7 +399,7 @@ it('reads a committed text attachment through the registered mobile RPC and vali
     const layout = new AttachmentTextViewport(source, 20, 600)
     expect(layout.total).toBeLessThan(8_000_000)
     const end = layout.rows(layout.total - 600)
-    expect(end.length).toBeLessThanOrEqual(256)
+    expect(end.length).toBeLessThanOrEqual(layout.rowBudget)
     expect(end.at(-1)?.text).toBe('TAIL')
     expect(end.every((row) => Array.from(row.text).length <= 256)).toBe(true)
     // Evicted ranges remain reachable; viewport storms replace pending work rather than serially enqueuing it.
@@ -333,14 +408,14 @@ it('reads a committed text attachment through the registered mobile RPC and vali
     started = Promise.withResolvers<void>()
     const obsolete: unknown[] = [],
       published: unknown[] = []
-    source.requestViewport([3], (error) => obsolete.push(error))
+    source.requestViewport({ block: 3, row: 0, rows: 1 }, (error) => obsolete.push(error))
     await started.promise
     const before = requests.length
     for (let block = 4; block < 104; block++) {
-      source.requestViewport([block], (error) => obsolete.push(error))
+      source.requestViewport({ block, row: 0, rows: 1 }, (error) => obsolete.push(error))
     }
     const ready = Promise.withResolvers<void>()
-    source.requestViewport([0, 1], (error) => {
+    source.requestViewport({ block: 0, row: 0, rows: first.length + second.length }, (error) => {
       published.push(error)
       ready.resolve()
     })
@@ -365,11 +440,49 @@ it('reads a committed text attachment through the registered mobile RPC and vali
     started = Promise.withResolvers<void>()
     const late = Promise.withResolvers<void>()
     hold = late.promise
-    const pending = source.block(4)
+    const dispatched = vi.spyOn(source, 'block')
+    const afterClose: unknown[] = []
+    source.requestViewport({ block: 4, row: 0, rows: 1 }, (error) => afterClose.push(error))
     await started.promise
+    const pending: unknown = dispatched.mock.results.at(-1)?.value
+    if (!(pending instanceof Promise)) {
+      throw new Error('Expected the production demand iteration to dispatch its source read')
+    }
     source.dispose()
     late.resolve()
     await expect(pending).rejects.toThrow()
     expect(source.cachedBlock(4)).toBeUndefined()
+    expect(afterClose).toEqual([])
+    dispatched.mockRestore()
+
+    // A current snapshot failure settles once; a legitimate Retry owns a new source.
+    await writeFile(path, Buffer.from('RETRY35636'))
+    const failed = new AttachmentTextSource(path, async (request) =>
+      result(
+        await call(
+          'agentSessionAttachment.readTextChunk',
+          { ...request, expectedSnapshot: pinnedSnapshot },
+          CLIENT_A
+        )
+      )
+    )
+    const errors: unknown[] = []
+    const settled = Promise.withResolvers<void>()
+    failed.requestViewport({ block: 0, row: 0, rows: 30 }, (error) => {
+      errors.push(error)
+      settled.resolve()
+    })
+    await settled.promise
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toBeInstanceOf(Error)
+    failed.dispose()
+    const retry = new AttachmentTextSource(path, async (request) =>
+      result(await call('agentSessionAttachment.readTextChunk', request, CLIENT_A))
+    )
+    const recovered = Promise.withResolvers<void>()
+    retry.requestViewport({ block: 0, row: 0, rows: 30 }, () => recovered.resolve())
+    await recovered.promise
+    expect(retry.cachedBlock(0)).toEqual(['RETRY35636'])
+    retry.dispose()
   }
 })

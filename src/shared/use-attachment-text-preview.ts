@@ -1,5 +1,9 @@
 import type * as React from 'react'
-import { AttachmentTextSource, type AttachmentTextRead } from './attachment-text-source'
+import {
+  AttachmentTextSource,
+  type AttachmentTextRead,
+  type AttachmentTextWindow
+} from './attachment-text-source'
 
 type Preview = {
   source: AttachmentTextSource
@@ -23,9 +27,9 @@ export function createAttachmentTextPreviewHook({
       error: '',
       readError: ''
     }))
-    const demand = useCallback((source: AttachmentTextSource, indices: number[]) => {
+    const demand = useCallback((source: AttachmentTextSource, window: AttachmentTextWindow) => {
       setPreview((state) => (state.source === source ? { ...state, readError: '' } : state))
-      source.requestViewport(indices, (cause) => {
+      source.requestViewport(window, (cause) => {
         setPreview((state) =>
           state.source === source && !source.disposed
             ? {
@@ -47,7 +51,7 @@ export function createAttachmentTextPreviewHook({
     useEffect(() => {
       const source = new AttachmentTextSource(path, read)
       setPreview({ source, revision: 0, busy: false, error: '', readError: '' })
-      demand(source, [0])
+      demand(source, { block: 0, row: 0, rows: 1 })
       return () => source.dispose()
     }, [path, read, retryRevision, demand])
     return {
@@ -58,8 +62,12 @@ export function createAttachmentTextPreviewHook({
       setBusy: (busy: boolean) =>
         setPreview((state) => (state.source === preview.source ? { ...state, busy } : state)),
       demand: useCallback(
-        (indices: number[]) => demand(preview.source, indices),
-        [preview.source, demand]
+        (window: AttachmentTextWindow) => {
+          if (!preview.readError) {
+            demand(preview.source, window)
+          }
+        },
+        [preview.source, preview.readError, demand]
       ),
       retry: () => setRetryRevision((value) => value + 1)
     }

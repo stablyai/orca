@@ -400,11 +400,22 @@ it('opens draft and sent sources, exports exact bytes and scrolls a giant-line p
       target: { scrollTop: Number.parseFloat(track.style.height) - 600 }
     })
     await waitFor(() => expect(scroller.textContent).toContain('TAIL'))
-    expect(scroller.querySelectorAll('[data-text-segment]').length).toBeLessThanOrEqual(256)
+    expect(scroller.querySelectorAll('[data-text-segment]').length).toBeLessThanOrEqual(
+      Math.ceil(viewportHeight / rowHeight) + 4
+    )
     fireEvent.scroll(scroller, { target: { scrollTop: 0 } })
     await waitFor(() =>
       expect(scroller.querySelector('[data-text-segment]')?.textContent).toBe('x'.repeat(256))
     )
+    viewportHeight = 3000
+    rowHeight = 10
+    act(() => measurements.forEach((measure) => measure()))
+    await waitFor(() => {
+      const rows = scroller.querySelectorAll('[data-text-segment]')
+      expect(rows.length).toBeGreaterThanOrEqual(Math.ceil(viewportHeight / rowHeight))
+      expect(rows.length).toBeLessThanOrEqual(Math.ceil(viewportHeight / rowHeight) + 4)
+      expect(scroller.scrollTop).toBe(0)
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     await act(async () => heldUpload.resolve(path))
     view.unmount()

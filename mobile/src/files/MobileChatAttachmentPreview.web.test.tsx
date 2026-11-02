@@ -319,7 +319,7 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
     ).toBeGreaterThan(0)
     expect(
       container.querySelectorAll('[data-testid="attachment-text-segment"]').length
-    ).toBeLessThanOrEqual(256)
+    ).toBeLessThanOrEqual(Math.ceil(viewportHeight / 19) + 4)
     await act(async () => {
       scroller.scrollTop = 0
       scroller.dispatchEvent(new Event('scroll'))
@@ -393,6 +393,19 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
       deliverScroll = true
       hostScroll.mockRestore()
     }
+    content = Buffer.from('🙂'.repeat((25 * 1024 * 1024) / 4))
+    await act(async () =>
+      root.render(
+        createElement(MobileChatAttachmentPreview, { key: 'unicode', params: route.params })
+      )
+    )
+    await vi.waitFor(async () => {
+      await flush()
+      const rows = container.querySelectorAll('[data-testid="attachment-text-segment"]')
+      expect(rows.length).toBeGreaterThanOrEqual(Math.ceil(viewportHeight / 19))
+      expect(rows.length).toBeLessThanOrEqual(Math.ceil(viewportHeight / 19) + 4)
+      expect(rows[0]?.textContent).toBe('🙂'.repeat(256))
+    })
     const literal = '    indented\tfield    value'
     content = Buffer.from(`\ufeffcomplete\r\n${literal}\n🙂`)
     await act(async () =>

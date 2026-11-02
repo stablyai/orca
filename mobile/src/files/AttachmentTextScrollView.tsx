@@ -1,21 +1,20 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Platform, ScrollView, Text, View, VirtualizedList } from 'react-native'
-import type { AttachmentTextSource } from '../../../src/shared/attachment-text-source'
-import {
-  AttachmentTextViewport,
-  type TextAnchor
-} from '../../../src/shared/attachment-text-viewport'
+import { Platform, ScrollView, Text, View } from 'react-native'
+import type {
+  AttachmentTextSource,
+  AttachmentTextWindow
+} from '../../../src/shared/attachment-text-source'
+import { AttachmentTextViewport } from '../../../src/shared/attachment-text-viewport'
 import { chatAttachmentPreviewStyles as styles } from './mobile-file-preview-styles'
 
-function scrollElement(list: VirtualizedList<number> | null): HTMLElement | null {
+function scrollElement(view: ScrollView | null): HTMLElement | null {
   if (Platform.OS !== 'web') {
     return null
   }
-  const ref = list?.getScrollRef()
   const node: unknown =
-    ref && 'getScrollableNode' in ref && typeof ref.getScrollableNode === 'function'
-      ? ref.getScrollableNode()
-      : ref
+    view && 'getScrollableNode' in view && typeof view.getScrollableNode === 'function'
+      ? view.getScrollableNode()
+      : view
   return node instanceof HTMLElement ? node : null
 }
 
@@ -26,52 +25,45 @@ export function AttachmentTextScrollView({
 }: {
   source: AttachmentTextSource
   revision: number
-  demand: (indices: number[]) => void
+  demand: (window: AttachmentTextWindow) => void
 }) {
-  const list = useRef<VirtualizedList<number>>(null)
-  const anchor = useRef<TextAnchor>({ block: 0, row: 0 })
-  const atEnd = useRef(false)
-  const previous = useRef<AttachmentTextViewport | null>(null)
-  const [position, setPosition] = useState({ top: 0, height: 0, rowHeight: 19 })
-  const layout = useMemo(
+  const scroll = useRef<ScrollView>(null)
+  const nativeOffset = useRef(0)
+  const [position, setPosition] = useState({ height: 0, rowHeight: 19 })
+  const measured = useMemo(
     () => new AttachmentTextViewport(source, position.rowHeight, position.height, revision),
     [source, revision, position.rowHeight, position.height]
   )
+  const [projection, setProjection] = useState(() => ({ layout: measured, top: 0 }))
+  const { layout } = projection
+  // Snapshot the live old track before publishing an extent that could clamp an undelivered gesture.
   useLayoutEffect(() => {
-    const old = previous.current
-    const live = scrollElement(list.current)?.scrollTop ?? old?.position(anchor.current) ?? 0
-    if (
-      old?.source !== source ||
-      live < Math.min(old.total - old.height, layout.total - layout.height) - 1
-    ) {
-      atEnd.current = false
+    if (layout !== measured) {
+      const live = scrollElement(scroll.current)?.scrollTop ?? nativeOffset.current
+      setProjection({ layout: measured, top: measured.restore(layout, live) })
     }
-    const top = layout.restore(old, live, anchor.current, atEnd.current)
-    const endExtentChanged = old?.source === source && atEnd.current && old.total !== layout.total
-    previous.current = layout
-    if (Math.abs(top - live) >= 1 || endExtentChanged) {
-      list.current?.scrollToOffset({ offset: top, animated: false })
+  }, [measured, layout, projection.top])
+  useLayoutEffect(() => {
+    const live = scrollElement(scroll.current)?.scrollTop ?? nativeOffset.current
+    if (Math.abs(live - projection.top) / layout.scale > 0.01) {
+      scroll.current?.scrollTo({ y: projection.top, animated: false })
+      nativeOffset.current = projection.top
     }
-    anchor.current = layout.anchor(top)
-    setPosition((old) => (old.top === top ? old : { ...old, top }))
-  }, [source, layout, position.height])
-  const block = layout.anchor(position.top).block
-  const needsNext =
-    source.cachedBlock(block) !== undefined &&
-    (source.rowCount(block) - layout.anchor(position.top).row) * position.rowHeight <
-      position.height + 4 * position.rowHeight &&
-    block + 1 < source.blockCount
+    const actual = scrollElement(scroll.current)?.scrollTop ?? nativeOffset.current
+    setProjection((old) => (old.top === actual ? old : { ...old, top: actual }))
+  }, [layout])
+  const window = layout.window(projection.top)
   useEffect(() => {
     if (source.size !== null) {
-      demand(needsNext ? [block, block + 1] : [block])
+      demand(window)
     }
-  }, [source, block, needsNext, demand])
+  }, [source, demand, window.block, window.row, window.rows, window.fraction, window.tail])
   const model = useRef(layout)
   useLayoutEffect(() => {
     model.current = layout
   })
   useEffect(() => {
-    const node = scrollElement(list.current)
+    const node = scrollElement(scroll.current)
     if (!node) {
       return
     }
@@ -99,7 +91,7 @@ export function AttachmentTextScrollView({
   }, [])
   const [width, setWidth] = useState(0)
   const [cellWidth, setCellWidth] = useState(8)
-  const rows = layout.rows(position.top)
+  const rows = layout.rows(projection.top)
   const contentWidth = Math.max(width, source.displayUnits * cellWidth + 32)
   return (
     <ScrollView
@@ -108,79 +100,59 @@ export function AttachmentTextScrollView({
       contentContainerStyle={{ flexGrow: 1 }}
       onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
     >
-      <VirtualizedList
-        ref={list}
-        data={source}
-        extraData={layout}
+      <ScrollView
+        ref={scroll}
         style={{ width: contentWidth }}
         onLayout={(event) =>
           setPosition((old) => ({ ...old, height: event.nativeEvent.layout.height }))
         }
-        getItem={(_data, index) => index}
-        getItemCount={() => source.blockCount}
-        keyExtractor={String}
-        getItemLayout={(_data, index) => ({
-          index,
-          length: layout.heights[index]!,
-          offset: layout.starts[index]!
-        })}
-        renderItem={({ index }) => <View style={{ height: layout.heights[index] }} />}
-        initialNumToRender={1}
-        maxToRenderPerBatch={2}
-        windowSize={3}
-        removeClippedSubviews={false}
         scrollEventThrottle={16}
         onScroll={(event) => {
           const top = event.nativeEvent.contentOffset.y
-          anchor.current = layout.anchor(top)
-          atEnd.current = top > 0 && top + position.height >= layout.total - 1
-          setPosition((old) => ({ ...old, top }))
+          nativeOffset.current = top
+          setProjection((old) => ({ ...old, top }))
         }}
-        ListHeaderComponent={
-          <View
-            pointerEvents="box-none"
-            style={{ position: 'absolute', top: 0, left: 0, right: 0 }}
+      >
+        <View style={{ height: layout.total, position: 'relative' }}>
+          <Text
+            accessible={false}
+            style={[
+              styles.textPreview,
+              { position: 'absolute', opacity: 0, alignSelf: 'flex-start' }
+            ]}
+            onTextLayout={(event) => {
+              const line = event.nativeEvent.lines[0]
+              if (line?.height) {
+                setPosition((old) => ({ ...old, rowHeight: line.height }))
+                setCellWidth(line.width)
+              }
+            }}
           >
+            M
+          </Text>
+          {rows.map((row) => (
             <Text
-              accessible={false}
+              key={row.key}
+              testID="attachment-text-segment"
+              selectable
+              numberOfLines={1}
               style={[
                 styles.textPreview,
-                { position: 'absolute', opacity: 0, alignSelf: 'flex-start' }
-              ]}
-              onTextLayout={(event) => {
-                const line = event.nativeEvent.lines[0]
-                if (line?.height) {
-                  setPosition((old) => ({ ...old, rowHeight: line.height }))
-                  setCellWidth(line.width)
+                {
+                  ...(Platform.OS === 'web' ? { whiteSpace: 'pre' as const } : {}),
+                  position: 'absolute',
+                  top: row.top,
+                  height: layout.rowHeight,
+                  left: 16,
+                  width: contentWidth - 32
                 }
-              }}
+              ]}
             >
-              M
+              {row.text.replace(/\n$/, '') || '\u00a0'}
             </Text>
-            {rows.map((row) => (
-              <Text
-                key={row.key}
-                testID="attachment-text-segment"
-                selectable
-                numberOfLines={1}
-                style={[
-                  styles.textPreview,
-                  {
-                    ...(Platform.OS === 'web' ? { whiteSpace: 'pre' as const } : {}),
-                    position: 'absolute',
-                    top: row.top,
-                    height: position.rowHeight,
-                    left: 16,
-                    width: contentWidth - 32
-                  }
-                ]}
-              >
-                {row.text.replace(/\n$/, '') || '\u00a0'}
-              </Text>
-            ))}
-          </View>
-        }
-      />
+          ))}
+        </View>
+      </ScrollView>
     </ScrollView>
   )
 }

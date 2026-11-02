@@ -1,14 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import {
-  AttachmentTextViewport,
-  type TextAnchor
-} from '../../../../shared/attachment-text-viewport'
-import type { AttachmentTextSource } from '../../../../shared/attachment-text-source'
+import { AttachmentTextViewport } from '../../../../shared/attachment-text-viewport'
+import type {
+  AttachmentTextSource,
+  AttachmentTextWindow
+} from '../../../../shared/attachment-text-source'
 
 export function AttachmentTextScrollView(props: {
   source: AttachmentTextSource
   revision: number
-  demand: (indices: number[]) => void
+  demand: (window: AttachmentTextWindow) => void
 }) {
   return <TextViewport key={props.source.path} {...props} />
 }
@@ -19,40 +19,34 @@ function TextViewport({
 }: {
   source: AttachmentTextSource
   revision: number
-  demand: (indices: number[]) => void
+  demand: (window: AttachmentTextWindow) => void
 }) {
   const scroll = useRef<HTMLDivElement>(null)
   const probe = useRef<HTMLDivElement>(null)
-  const anchor = useRef<TextAnchor>({ block: 0, row: 0 })
-  const previousLayout = useRef<AttachmentTextViewport | null>(null)
-  const atEnd = useRef(false)
-  const [position, setPosition] = useState({ top: 0, height: 0, rowHeight: 20, cellWidth: 8 })
-  const layout = useMemo(
+  const [position, setPosition] = useState({ height: 0, rowHeight: 20, cellWidth: 8 })
+  const measured = useMemo(
     () => new AttachmentTextViewport(source, position.rowHeight, position.height, revision),
     [source, revision, position.rowHeight, position.height]
   )
+  const [projection, setProjection] = useState(() => ({ layout: measured, top: 0 }))
+  const { layout } = projection
+  // Keep the old host extent until its live position has been read, before the next track can clamp it.
+  useLayoutEffect(() => {
+    if (layout !== measured) {
+      const live = scroll.current?.scrollTop ?? projection.top
+      setProjection({ layout: measured, top: measured.restore(layout, live) })
+    }
+  }, [measured, layout, projection.top])
   useLayoutEffect(() => {
     const node = scroll.current
     if (!node) {
       return
     }
-    const old = previousLayout.current
-    const live = node.scrollTop
-    if (
-      old?.source !== source ||
-      live < Math.min(old.total - old.height, layout.total - layout.height) - 1
-    ) {
-      atEnd.current = false
+    if (Math.abs(node.scrollTop - projection.top) / layout.scale > 0.01) {
+      node.scrollTop = projection.top
     }
-    const top = layout.restore(old, live, anchor.current, atEnd.current)
-    const endExtentChanged = old?.source === source && atEnd.current && old.total !== layout.total
-    previousLayout.current = layout
-    if (Math.abs(top - live) >= 1 || endExtentChanged) {
-      node.scrollTop = top
-    }
-    anchor.current = layout.anchor(node.scrollTop)
-    setPosition((old) => (old.top === node.scrollTop ? old : { ...old, top: node.scrollTop }))
-  }, [source, layout])
+    setProjection((old) => (old.top === node.scrollTop ? old : { ...old, top: node.scrollTop }))
+  }, [layout])
   useLayoutEffect(() => {
     const node = scroll.current
     if (!node) {
@@ -76,17 +70,12 @@ function TextViewport({
     }
     return () => observer.disconnect()
   }, [])
-  const block = layout.anchor(position.top).block
-  const needsNext =
-    source.cachedBlock(block) !== undefined &&
-    (source.rowCount(block) - layout.anchor(position.top).row) * position.rowHeight <
-      position.height + 4 * position.rowHeight &&
-    block + 1 < source.blockCount
+  const window = layout.window(projection.top)
   useEffect(() => {
     if (source.size !== null) {
-      demand(needsNext ? [block, block + 1] : [block])
+      demand(window)
     }
-  }, [source, block, needsNext, demand])
+  }, [source, demand, window.block, window.row, window.rows, window.fraction, window.tail])
   const model = useRef({ layout, position })
   useLayoutEffect(() => {
     model.current = { layout, position }
@@ -144,9 +133,7 @@ function TextViewport({
       }}
       onScroll={(event) => {
         const node = event.currentTarget
-        anchor.current = layout.anchor(node.scrollTop)
-        atEnd.current = node.scrollTop > 0 && node.scrollTop + node.clientHeight >= layout.total - 1
-        setPosition((old) => ({ ...old, top: node.scrollTop }))
+        setProjection((old) => ({ ...old, top: node.scrollTop }))
       }}
     >
       <div
@@ -163,12 +150,12 @@ function TextViewport({
           minWidth: source.displayUnits * position.cellWidth
         }}
       >
-        {layout.rows(position.top).map((row) => (
+        {layout.rows(projection.top).map((row) => (
           <div
             key={row.key}
             data-text-segment
             className="whitespace-pre font-mono text-sm"
-            style={{ position: 'absolute', top: row.top, height: position.rowHeight }}
+            style={{ position: 'absolute', top: row.top, height: layout.rowHeight }}
           >
             {row.text.replace(/\n$/, '') || '\u00a0'}
           </div>

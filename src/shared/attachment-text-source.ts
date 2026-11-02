@@ -25,6 +25,13 @@ export type AttachmentTextRead = ((
 }
 const SEAM_BYTES = 1024
 export const ATTACHMENT_TEXT_BLOCK_BYTES = 15 * 1024 - 8
+export type AttachmentTextWindow = {
+  block: number
+  row: number
+  rows: number
+  fraction?: number
+  tail?: boolean
+}
 export const ATTACHMENT_TEXT_COPY_MAX_BYTES = 16 * 1024 * 1024
 
 export function attachmentTextBytes(contentBase64: string): Uint8Array {
@@ -53,7 +60,6 @@ export function attachmentTextSegments(text: string): string[] {
   return segments
 }
 
-/** A preview owns one snapshot, two byte blocks and a serial read queue; exports never populate the block cache. */
 export class AttachmentTextSource {
   size: number | null = null
   snapshot: string | undefined
@@ -132,7 +138,7 @@ export class AttachmentTextSource {
 
   async block(index: number) {
     this.assertCurrent()
-    let segments = this.blocks.get(index)
+    let segments = this.blocks.get(index) ?? (this.rowCounts.get(index) === 0 ? [] : undefined)
     if (!segments) {
       const offset = index * ATTACHMENT_TEXT_BLOCK_BYTES
       const start = Math.max(0, offset - 3)
@@ -171,12 +177,7 @@ export class AttachmentTextSource {
           ? ['']
           : []
       this.blocks.set(index, segments)
-      while (this.blocks.size > 2) {
-        this.blocks.delete(this.blocks.keys().next().value!)
-      }
     }
-    this.blocks.delete(index)
-    this.blocks.set(index, segments)
     this.rowCounts.set(index, segments.length)
     this.rowWidths.set(
       index,
@@ -198,6 +199,12 @@ export class AttachmentTextSource {
         )
       )
     )
+    const keep = this.demand ? this.windowBlocks(this.demand.window) : [index]
+    for (const key of this.blocks.keys()) {
+      if (!keep.includes(key)) {
+        this.blocks.delete(key)
+      }
+    }
     return segments
   }
 
@@ -206,19 +213,47 @@ export class AttachmentTextSource {
   get displayUnits(): number {
     return Math.max(0, ...this.rowWidths.values())
   }
-  private demand: { indices: number[]; publish: (error?: unknown) => void } | null = null
+  private demand: { window: AttachmentTextWindow; publish: (error?: unknown) => void } | null = null
   private reading = false
 
   cachedBlock(index: number): readonly string[] | undefined {
-    return this.blocks.get(index)
+    return this.blocks.get(index) ?? (this.rowCounts.get(index) === 0 ? [] : undefined)
   }
   rowCount(index: number): number {
     return this.rowCounts.get(index) ?? Math.ceil(ATTACHMENT_TEXT_BLOCK_BYTES / 256)
   }
 
-  // Replace pending viewport work; only the already dispatched range may outlive a demand.
-  requestViewport(indices: number[], publish: (error?: unknown) => void): void {
-    this.demand = { indices: indices.slice(0, 2), publish }
+  rowKnown(index: number): boolean {
+    return this.rowCounts.has(index)
+  }
+  private windowBlocks(window: AttachmentTextWindow): number[] {
+    const indices: number[] = []
+    let remaining = window.rows
+    let index = window.tail ? this.blockCount - 1 : window.block
+    while (index >= 0 && index < this.blockCount && remaining > 0) {
+      const count = this.rowCount(index)
+      const first =
+        index === window.block && !window.tail
+          ? Math.floor(window.fraction === undefined ? window.row : window.fraction * count)
+          : 0
+      if (count) {
+        indices.push(index)
+      }
+      remaining -= Math.max(0, count - first)
+      index += window.tail ? -1 : 1
+    }
+    return indices
+  }
+
+  // Each successful bounded read advances the latest visible span; obsolete pending work is replaced.
+  requestViewport(window: AttachmentTextWindow, publish: (error?: unknown) => void): void {
+    this.demand = { window, publish }
+    const keep = this.windowBlocks(window)
+    for (const key of this.blocks.keys()) {
+      if (!keep.includes(key)) {
+        this.blocks.delete(key)
+      }
+    }
     if (!this.reading) {
       void this.drainViewport()
     }
@@ -229,16 +264,13 @@ export class AttachmentTextSource {
       while (this.demand && !this.disposed) {
         const demand = this.demand
         try {
-          for (const index of demand.indices) {
-            if (this.demand !== demand) {
-              break
-            }
-            await this.block(index)
-          }
-          if (this.demand === demand && !this.disposed) {
+          const next = this.windowBlocks(demand.window).find((index) => !this.cachedBlock(index))
+          if (next === undefined) {
             this.demand = null
             demand.publish()
+            continue
           }
+          await this.block(next)
         } catch (error) {
           if (this.demand === demand && !this.disposed) {
             this.demand = null
