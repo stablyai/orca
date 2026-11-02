@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { Store } from '../persistence/loading-store/store'
 import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
 import { getUserPluginsDir, getPluginsDataDir } from '../plugins/plugin-discovery'
+import { isBundledPluginKey } from '../plugins/plugin-bundled-bootstrap'
 import {
   installPluginFromGit,
   installPluginFromLocalPath,
@@ -245,13 +246,19 @@ export function registerPluginHandlers(
     if (!canRemoveInstalledPlugin(pluginService, parsed.pluginKey, lock)) {
       throw new Error(`cannot remove protected or non-installed plugin ${parsed.pluginKey}`)
     }
+    // Why: Orca republishes a copy it ships on the next launch; it must come back off, not on.
+    const { bundledPluginRoot } = pluginService.options
+    const shipped =
+      bundledPluginRoot !== undefined &&
+      (await isBundledPluginKey(bundledPluginRoot, parsed.pluginKey))
     await pluginService.removePlugin(parsed.pluginKey, () =>
       removeInstalledPlugin({
         pluginsDir,
         pluginsDataDir: getPluginsDataDir(pluginService.options.userDataPath),
         pluginKey: parsed.pluginKey,
         // Why before deletion: a crash mid-delete must not leave an approved half-removed plugin.
-        beforeRemove: () => clearRemovedPluginSettings(store, parsed.pluginKey)
+        beforeRemove: () =>
+          clearRemovedPluginSettings(store, parsed.pluginKey, { keepDisabled: shipped })
       })
     )
     await clearPluginFrameStorage(parsed.pluginKey)

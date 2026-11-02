@@ -35,10 +35,11 @@ Host API 1.2 (`"pluginApi": 1`). Call `host.call(method, params, { signal })`; a
 - `secrets: SecretsApi`: The plugin's encrypted secrets (`secrets:own`).
 - `shell.openExternal(url: string)`: `reason`: the person cancelled, or Orca's window was hidden so nobody could confirm.
 - `files.saveAs(options: SaveAsOptions)`: Desktop isolated frames only; `cancelled` when the person closes the dialog.
-- `document?: EditorDocumentApi`: Custom editors only.
-- `document.get()`
+- `document?: EditorDocumentApi`: Custom editors only. Orca keeps no undo history for them: Cmd/Ctrl+Z reaches the frame.
+- `document.get()`: The latest document, with your accepted edits' content at the same version.
 - `document.onDidChange(handler: (document: EditorDocument) => void)`: Replays the current document, then each one Orca sends when the file changes outside.
 - `document.applyEdit(edit: EditorEdit)`: Rejects with `conflict`, `too_large` or `not_permitted` (read-only).
+- `document.session(options?: EditorSessionOptions<T>)`: Document sync in one call; resolves once theme, locale and the first document are in.
 
 ## Methods
 

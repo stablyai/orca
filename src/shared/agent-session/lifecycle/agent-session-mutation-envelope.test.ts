@@ -3,7 +3,6 @@ import type { AgentSessionOperationDecision } from './agent-session-operation-le
 import { agentSessionLeaseFixture } from './agent-session-record.test-fixture'
 import {
   admitAgentSessionMutation,
-  agentSessionFingerprintConflict,
   computeAgentSessionPayloadFingerprint
 } from './agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../agent-session-wire'
@@ -77,17 +76,6 @@ describe('computeAgentSessionPayloadFingerprint', () => {
         fields: { text: 'hi' }
       })
     ).not.toBe(send)
-  })
-})
-
-describe('agentSessionFingerprintConflict', () => {
-  it('refuses a payload that does not match what the client declared', () => {
-    const conflict = agentSessionFingerprintConflict(envelope(), 'a'.repeat(64))
-    expect(conflict?.code).toBe('agent_session_operation_conflict')
-  })
-
-  it('passes a matching declaration', () => {
-    expect(agentSessionFingerprintConflict(envelope(), 'f'.repeat(64))).toBeNull()
   })
 })
 

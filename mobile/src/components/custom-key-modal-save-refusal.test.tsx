@@ -65,7 +65,7 @@ vi.mock('lucide-react-native', () => ({
   ChevronLeft: hosts.View,
   ChevronRight: hosts.View
 }))
-vi.mock('./BottomDrawer', () => ({ BottomDrawer: hosts.View }))
+vi.mock('./bottom-drawer/BottomDrawer', () => ({ BottomDrawer: hosts.View }))
 
 import { CustomKeyModal } from './CustomKeyModal'
 import { loadCustomKeys, removeCustomKey, saveCustomKeys } from '../terminal/terminal-custom-keys'

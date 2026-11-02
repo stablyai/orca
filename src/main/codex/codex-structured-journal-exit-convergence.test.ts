@@ -179,12 +179,8 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
     options: new Map(),
     reportedOptions: {}
   }
-  const gate = Promise.withResolvers<void>()
-  const blocked = journal.readInOrder(() => gate.promise)
-  // Saturate the queue to force host settlement after the provider's exit rows are refused.
-  for (let index = 0; index < 1_024; index++) {
-    deferred.sink.publish({ lifecycle: true, coalescingKey: `limit-${index}` })
-  }
+  // A closed sink refuses the provider's exit rows, so the host must settle the turn.
+  deferred.close()
   const exited = handleCodexSessionExit({
     sessions: new Map([[SESSION, codexSession]]),
     sessionId: SESSION,
@@ -197,14 +193,12 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
       }
     }
   })
-  gate.resolve()
-  await blocked
   expect(exited).toBe(true)
-  expect(admission).toHaveReturnedWith({ accepted: false, reason: 'backpressure' })
+  expect(admission).toHaveReturnedWith({ accepted: false, reason: 'closed' })
   expect(recording.entries).toContainEqual({
     level: 'warn',
     message: "Codex's final rows were refused; the host settles the turn instead",
-    fields: { scope: 'codex-exit-rows', sessionId: SESSION, reason: 'backpressure' }
+    fields: { scope: 'codex-exit-rows', sessionId: SESSION, reason: 'closed' }
   })
   expect(codexSession.ended).toBe(true)
   expect(events).toHaveLength(1)

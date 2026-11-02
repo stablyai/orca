@@ -302,7 +302,42 @@ the buffer, dirty state, saving, the external-change banner, read-only tabs and 
 paired host) files; the frame only gets the document, never a path. Editor and panel plugins are
 trusted code, and an editor can read every file it opens, so install ones you trust.
 
-An editor's `window.orca` adds `document`:
+Set `"frame": "isolated"` (needs `engines.orca` `>=1.4.248`) for an editor that needs the
+desktop app's isolated frame, such as one that loads a large library. Browser clients, and the
+desktop app with isolated frames switched off, then never run it in the fallback frame: the file
+opens in Source with "This editor needs the Orca desktop app". The default, `any`, runs wherever
+the client can.
+
+An editor's `window.orca` adds `document`. Most editors need only `session()`, which does the
+document sync for you:
+
+```js
+const doc = await orca.document.session({
+  decode: (content) => parseScene(content.text), // default: the text itself
+  encode: (scene) => ({ kind: 'text', text: serializeScene(scene) }), // default: plain text
+  merge: (base, outside, mine) => mergeScenes(base, outside, mine), // optional
+  debounceMs: 250 // optional, the default
+})
+render(doc.value) // the latest value, including changes Orca has not accepted yet
+doc.onReplace((scene) => render(scene)) // the file changed outside, or a conflict merged
+onUserEdit((scene) => doc.change(scene)) // a no-op while doc.readOnly
+await doc.flush() // send now; rejects with the refusal's code
+```
+
+`session()` resolves once Orca has sent the theme, locale and first document, so start the editor
+from it. It keeps one edit in flight and coalesces later changes, moves its baseline only when Orca
+accepts an edit, and never hands your own accepted edits back through `onReplace`. A refused edit
+keeps your draft and rejects `flush()`. On `conflict` it calls `merge(base, outside, mine)` once,
+where `base` is the last accepted value, and sends the result. Without `merge` the outside
+document wins, since an agent may have written the file: the draft is dropped, `onReplace` gets
+the outside value, and `flush()` rejects with `conflict`. Pass `merge` to keep both sides. It answers Orca's `editor.flush`
+itself before a save. Bytes editors pass both `decode` and `encode`. Check `'session' in
+orca.document` to support older Orca.
+
+Orca keeps no undo history for a custom editor: Cmd/Ctrl+Z reaches the frame, and the editor owns
+undo.
+
+The lower-level calls, for an editor that does its own sync:
 
 ```js
 const doc = await orca.document.get() // { version, readOnly, content, fileType? }
@@ -468,9 +503,10 @@ panels and custom editors, and `import type { OrcaWorkerApi } from 'orca/worker'
 `activate(orca)` (in JavaScript, `/** @param {import('orca/worker').OrcaWorkerApi} orca */`).
 `orca.host.call` checks each method's params and result, and only offers the methods your
 surface may call; `orca.events.on` types each [event payload](plugin-host-api.md#events).
-Development folders skip their top-level `.orca/` and `node_modules/` (they never count toward the
-size limits below there, and editing them never re-reviews the plugin or remounts its frames); an install still
-hashes every file it copies, so do not commit them.
+Development folders skip every `.orca/`, `.git/` and `node_modules/`, at any depth (such as a
+nested `build/node_modules/`): they never count toward the size limits below, and editing them
+never re-reviews the plugin or remounts its frames. An install still hashes every file it copies
+except the root `.git/`, so do not commit them.
 
 A plugin folder holds at most 2,000 files and 50 MiB in total. A panel or custom editor `entry`
 is at most 10 MiB, and each `.ts`, `.tsx`, `.mts` or `.jsx` file Orca transpiles at most 1 MiB;
@@ -480,7 +516,10 @@ In the desktop app, a panel's or custom editor's `console.error` and `console.wa
 exceptions and unhandled rejections (and a components panel's render or mount errors) also land
 in `orca plugin logs`, as `[frame] <file>:<line> <message>` with the path relative to the plugin
 folder and stack traces shortened the same way. At most 20 such lines per plugin every 10 s are
-kept; past that one notice is logged and the rest are dropped. `orca plugin dev inspect
+kept; past that one notice is logged and the rest are dropped. Requests Orca blocks (anything off the plugin's
+own files, refused by the frame's network fence or content policy) do not count toward that:
+they are logged once per kind and origin with a count, every 5 s and when the frame closes, such
+as `[frame] blocked font-src https://unpkg.com (x48): plugin frames have no network`. `orca plugin dev inspect
 <publisher.id>` opens DevTools for each of the plugin's open frames.
 
 ## 3. Validate

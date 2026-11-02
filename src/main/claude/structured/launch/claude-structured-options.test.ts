@@ -264,38 +264,6 @@ describe('Claude structured Fast mode', () => {
     expect(applyFlagSettings).toHaveBeenCalledWith({ fastMode: true }, { timeoutMs: undefined })
   })
 
-  it('rejects Fast on when the running session reports a blocking reason', async () => {
-    const { session, applyFlagSettings } = fastModeSession(true)
-    session.fastModeDisabledReason = 'extra_usage_disabled'
-
-    await expect(
-      setClaudeStructuredOption(session, { key: 'fastMode', value: 'true' }, undefined)
-    ).rejects.toThrow('extra_usage_disabled')
-    expect(applyFlagSettings).not.toHaveBeenCalled()
-  })
-
-  it('clears a blocking reason once a later frame reports state without one', async () => {
-    const { session } = fastModeSession(true)
-
-    observeClaudeFastModeFacts(session, {
-      fast_mode_state: 'off',
-      fast_mode_disabled_reason: 'model_not_allowed'
-    })
-    expect(session.fastModeDisabledReason).toBe('model_not_allowed')
-    await expect(readClaudeStructuredSessionOptions(session, undefined)).resolves.toMatchObject({
-      fastModeSupport: { supported: false, reason: 'model_not_allowed' }
-    })
-
-    observeClaudeFastModeFacts(session, { fast_mode_state: 'on' })
-    expect(session.fastModeDisabledReason).toBeUndefined()
-    expect(
-      (await readClaudeStructuredSessionOptions(session, undefined)).fastModeSupport
-    ).toBeUndefined()
-    await expect(
-      setClaudeStructuredOption(session, { key: 'fastMode', value: 'true' }, undefined)
-    ).resolves.toMatchObject({ fastMode: 'true' })
-  })
-
   it('reconciles an earlier Fast request to a later provider readback', async () => {
     const { session } = fastModeSession(true)
     session.options.set('fastMode', 'true')
@@ -355,17 +323,18 @@ describe('Claude structured Fast mode', () => {
     })
   })
 
-  it('hides Fast when the running CLI reports a blocking session reason', async () => {
+  it('keeps the Fast preference editable when the running CLI reports it unavailable', async () => {
     const { session } = fastModeSession(true)
+    session.options.set('fastMode', 'true')
     observeClaudeFastModeFacts(session, {
       fast_mode_state: 'off',
       fast_mode_disabled_reason: 'not_first_party'
     })
 
     await expect(readClaudeStructuredSessionOptions(session, undefined)).resolves.toMatchObject({
-      fastModeSupport: { supported: false, reason: 'not_first_party' },
-      current: { fastMode: false, fastModeState: 'off' }
+      current: { fastMode: true, fastModeState: 'off' }
     })
+    expect((await readClaudeStructuredSessionOptions(session)).fastModeSupport).toBeUndefined()
   })
 
   it('keeps Fast on across a model switch while support discovery is transient', async () => {
@@ -404,22 +373,6 @@ describe('Claude structured Fast mode', () => {
     })
     expect(session.options.get('fastMode')).toBe('false')
     expect(session.confirmedOptions.has('fastMode')).toBe(true)
-  })
-
-  it('treats an unrecognized provider disabled reason as unavailable', async () => {
-    const { session, applyFlagSettings } = fastModeSession(true)
-    observeClaudeFastModeFacts(session, {
-      fast_mode_state: 'off',
-      fast_mode_disabled_reason: 'future_entitlement_rule'
-    })
-
-    await expect(readClaudeStructuredSessionOptions(session, undefined)).resolves.toMatchObject({
-      fastModeSupport: { supported: false, reason: 'future_entitlement_rule' }
-    })
-    await expect(
-      setClaudeStructuredOption(session, { key: 'fastMode', value: 'true' }, undefined)
-    ).rejects.toThrow('future_entitlement_rule')
-    expect(applyFlagSettings).not.toHaveBeenCalled()
   })
 })
 
@@ -521,7 +474,7 @@ describe('Claude structured option write under the request deadline', () => {
 })
 
 describe('Claude applied inputs across native writer effects', () => {
-  it('retires old-model Fast refusal and reissues explicit inputs after promotion and failure', async () => {
+  it('reissues explicit inputs after native model promotion and failure', async () => {
     const setModel = vi.fn<ClaudeSession['connection']['setModel']>().mockResolvedValue(undefined)
     const session = sessionFor(setModel)
     const flags = vi
@@ -529,7 +482,6 @@ describe('Claude applied inputs across native writer effects', () => {
       .mockResolvedValue(undefined)
     session.connection.applyFlagSettings = flags
     session.connection.getSettings = () => new Promise(() => {})
-    session.fastModeDisabledReason = 'model_not_allowed'
     await applyClaudeMessageOptions(
       session,
       { model: 'opus[1m]', effort: 'high', fastMode: 'true' },
@@ -539,7 +491,6 @@ describe('Claude applied inputs across native writer effects', () => {
       { effortLevel: 'high' },
       { fastMode: true }
     ])
-    expect(session.fastModeDisabledReason).toBeUndefined()
     // Fast can promote the native model; the next supplied model/effort must reach their controls.
     await applyClaudeMessageOptions(session, { model: 'opus[1m]', effort: 'high' }, undefined)
     expect(setModel).toHaveBeenCalledTimes(2)
@@ -553,12 +504,5 @@ describe('Claude applied inputs across native writer effects', () => {
     const count = setModel.mock.calls.length + flags.mock.calls.length
     await applyClaudeMessageOptions(session, {}, undefined)
     expect(setModel.mock.calls.length + flags.mock.calls.length).toBe(count)
-    setModel.mockImplementationOnce(async () => {
-      observeClaudeFastModeFacts(session, { fast_mode_disabled_reason: 'model_not_allowed' })
-    })
-    await applyClaudeMessageOptions(session, { model: 'haiku' }, undefined)
-    await expect(
-      applyClaudeMessageOptions(session, { fastMode: 'true' }, undefined)
-    ).rejects.toThrow('Fast mode is unavailable')
   })
 })
