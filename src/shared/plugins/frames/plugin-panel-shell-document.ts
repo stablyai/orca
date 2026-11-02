@@ -4,7 +4,8 @@
  * `latest`, `waiting`, `starting` and `helloSeen`.
  *
  * The baseline (`base`, `baseVersion`, `baseContent`) moves only when Orca accepts an edit or sends
- * a document while nothing is unaccepted, so a refused edit leaves a draft that is still dirty.
+ * a document while nothing is unaccepted, so a refused edit leaves a draft that is still dirty
+ * (except a conflict without merge, where the outside document replaces it).
  */
 export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
   function start() {
@@ -95,8 +96,13 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
         var previous = base
         var mine = value
         var outside = rebase(doc)
-        // Without merge the draft stays; the next change or flush sends it over the newer document.
-        if (!merge) throw error
+        // Without merge the outside document wins: an agent's write must never be lost silently.
+        if (!merge) {
+          value = outside
+          dirty = false
+          emitReplace(outside)
+          throw error
+        }
         value = merge(previous, outside, mine)
         emitReplace(value)
         return send()

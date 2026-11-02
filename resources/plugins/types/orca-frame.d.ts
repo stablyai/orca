@@ -55,7 +55,7 @@ declare module 'orca/frame' {
   export type EditorSessionOptions<T> = {
     decode?: (content: EditorContent) => T
     encode?: (value: T) => EditorContent
-    /** On a conflict: `base` is the last accepted value. Without it the draft is kept. */
+    /** On a conflict: `base` is the last accepted value. Without it the outside document wins. */
     merge?: (base: T, outside: T, mine: T) => T
     /** Wait after the last change before sending it; default 250. */
     debounceMs?: number
@@ -66,7 +66,7 @@ declare module 'orca/frame' {
     readonly readOnly: boolean
     /** Schedules an edit; one is in flight at a time and later changes coalesce. No-op read-only. */
     change(next: T): void
-    /** Sends now; rejects with the refusal's `code`, and the draft is kept. */
+    /** Sends now; rejects with the refusal's `code`. A refused draft is kept, except on a conflict without merge. */
     flush(): Promise<void>
     /** The file changed outside the editor, or a conflict merged; never your own accepted edits. */
     onReplace(handler: (value: T) => void): Disposable
