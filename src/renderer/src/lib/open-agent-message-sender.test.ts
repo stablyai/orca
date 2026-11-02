@@ -324,9 +324,7 @@ it('gives crew terminal and dispatch opens the sender remedies, named for the ro
       prepare()
       await openOrchestrationCrewAgent(row, host)
       expect(mocks.toast.mock.calls.map(([message]) => message)).toEqual([
-        outcome === 'gone'
-          ? `Worker: ${kind === 'terminal' ? 'This terminal has exited.' : 'This agent is no longer available.'}`
-          : `Worker: ${senderMessages[0]}`
+        outcome === 'gone' ? 'Worker: This terminal has exited.' : `Worker: ${senderMessages[0]}`
       ])
       expect(mocks.info).not.toHaveBeenCalled()
       expect(mocks.activate).not.toHaveBeenCalled()

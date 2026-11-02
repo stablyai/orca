@@ -166,8 +166,8 @@ export async function openOrchestrationCrewAgent(
       : {
           unavailable: () => unavailable(structuredSessionOpenFeedbackText.unavailable()),
           hostCannotOpen: () => unavailable(structuredSessionOpenFeedbackText.hostCannotOpen()),
-          gone: () => unavailable('This agent is no longer available.'),
-          terminalGone: () => unavailable('This agent is no longer available.')
+          gone: () => unavailable(structuredSessionOpenFeedbackText.gone()),
+          terminalGone: () => unavailable('This terminal has exited.')
         }
   const environmentId = host.kind === 'environment' ? host.environmentId : null
   const terminalFeedback = {

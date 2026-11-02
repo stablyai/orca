@@ -1,4 +1,4 @@
-import { NativeChatCrewPanel } from '../orchestration-crew/NativeChatCrewPanel'
+import { NativeChatCrewFrame } from '../orchestration-crew/NativeChatCrewPanel'
 import { useTerminalCrewIdentity } from '../orchestration-crew/use-terminal-crew-identity'
 import { useNativeChatTabOwnerWorktreeId } from './use-native-chat-tab-owner'
 import { cn } from '@/lib/utils'
@@ -345,13 +345,14 @@ export function NativeChatResolvedView({
       style={appearanceStyle}
       data-native-chat-scheme={appearanceStyle.colorScheme}
     >
-      <NativeChatCrewPanel
-        {...crew}
-        isVisible={isVisible}
-        composerRef={composerRef}
-        canMention={canSend && !shownPromptCard && targetPtyId !== null}
-      />
-      <div className="relative flex min-h-0 flex-1 flex-col">
+      <NativeChatCrewFrame
+        crew={{
+          ...crew,
+          isVisible,
+          composerRef,
+          canMention: canSend && !shownPromptCard && targetPtyId !== null
+        }}
+      >
         {find.isOpen ? <NativeChatFindBar find={find} isVisible={isVisible} /> : null}
         {viewState.kind === 'loading' ? (
           <NativeChatEmptyState kind="loading" />
@@ -374,7 +375,7 @@ export function NativeChatResolvedView({
             runtimeContext={imageRuntimeContext}
           />
         )}
-      </div>
+      </NativeChatCrewFrame>
       {/* A collapsed card stays mounted but hidden, so a partly answered question survives. */}
       {mountedPromptCard ? (
         <div hidden={collapsedCard !== null} inert={collapsedCard !== null} className="contents">

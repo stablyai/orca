@@ -108,16 +108,16 @@ describe('public crew read and stream', () => {
   })
 })
 
-it("keeps a worker's last real message over escalations, which are written for the coordinator agent", () => {
+it("keeps a worker's last real message over Orca's own records", () => {
   const { db, deps, assign } = fixture()
-  assign('term_worker')
+  const worker = assign('term_worker')
   db.insertMessage({
     from: 'term_worker',
     to: 'term_coord',
     subject: 'Update',
     body: 'Read 3 files'
   })
-  // Orca's own notice, as QA recorded it, and an agent's own escalation: both are stored the same way.
+  // Orca's notice as QA recorded it, an agent's own escalation, an empty setup receipt and a rejected report.
   db.insertMessage({
     from: 'term_worker',
     to: 'term_coord',
@@ -133,6 +133,19 @@ it("keeps a worker's last real message over escalations, which are written for t
     body: 'I need credentials for the staging database.',
     type: 'escalation'
   })
+  db.insertMessage({ from: `dispatch:${worker.id}`, to: 'term_coord', subject: 'Setup ready' })
+  const report = db.insertMessage({
+    from: 'term_worker',
+    to: 'term_coord',
+    subject: 'Done',
+    body: 'Finished',
+    type: 'worker_done'
+  })
+  db.convertLifecycleMessageToRejection(
+    report.id,
+    'payload_required',
+    'worker_done requires a JSON object payload'
+  )
   expect(buildCrewSnapshot('term_coord', deps).sections.managing[0]?.latest).toMatchObject({
     direction: 'from',
     preview: 'Read 3 files'

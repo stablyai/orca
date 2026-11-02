@@ -275,9 +275,13 @@ export function NativeChatStructuredSession(
     >
       {nativeChatPaneHeader(props, ownerWorktreeId, appearanceStyle.colorScheme, handOff)}
       <NativeChatCrewFrame
-        pane={props}
-        composerRef={composerRef}
-        canMention={composerShown && install.unavailableHint === undefined}
+        crew={{
+          target: props.target,
+          sessionId: props.sessionId,
+          isVisible: props.isVisible,
+          composerRef,
+          canMention: composerShown && install.unavailableHint === undefined
+        }}
       >
         <NativeChatContextClearFade clearing={controller.contextClear.clearing}>
           {find.isOpen ? <NativeChatFindBar find={find} isVisible={props.isVisible} /> : null}
