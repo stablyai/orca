@@ -195,7 +195,8 @@ function AgentMessageAvatar({
     <div className="relative mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
       <AgentTypeIcon agentType={view.agentType} size={16} />
       {view.dot ? (
-        <span className="absolute -right-0.5 -bottom-0.5 rounded-full bg-card ring-2 ring-card">
+        // Flex square: the chat line box would stretch a shrink-wrapped badge into a pill.
+        <span className="absolute -right-0.5 -bottom-0.5 flex size-4 items-center justify-center rounded-full border border-border bg-card ring-2 ring-card">
           <AgentStateDot state={view.dot} size="md" progress={view.progress} />
         </span>
       ) : null}

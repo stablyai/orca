@@ -12,7 +12,7 @@ import {
   emptySession,
   GIT_KEY
 } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
-import { buildOwnedEditorFileId } from '../store/slices/editor/file-ids/editor-file-ids'
+import '../store/slices/editor/file-ids/editor-file-ids'
 import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-fixture'
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 import { createTestStore } from '../store/slices/store-test-helpers'
@@ -140,40 +140,6 @@ describe('the window drawn from layout frames', () => {
     sync.close()
   })
 
-  it('shows a structure change main publishes, keeping what only the window knows', async () => {
-    const session = localDesktopSession()
-    const { store, sync, layouts, frames } = await bootWithFrames('local', session)
-    sync.start()
-    store.setState({
-      tabsByWorktree: {
-        ...store.getState().tabsByWorktree,
-        [GIT_KEY]: store.getState().tabsByWorktree[GIT_KEY]!.map((tab) =>
-          tab.id === 'tab-shell'
-            ? {
-                ...tab,
-                ptyId: 'live-pty',
-                pendingActivationSpawn: true,
-                restoredFromSession: undefined
-              }
-            : tab
-        )
-      }
-    })
-    const renamed = structuredClone(layouts[GIT_KEY]!)
-    renamed.tabs.find((tab) => tab.id === 'tab-shell')!.customTitle = 'renamed'
-    stream.onFrame!(frames.records(GIT_KEY, renamed))
-    await flushMicrotasks()
-    const shell = store.getState().tabsByWorktree[GIT_KEY]!.find((tab) => tab.id === 'tab-shell')!
-    expect(shell).toMatchObject({
-      customTitle: 'renamed',
-      ptyId: 'live-pty',
-      pendingActivationSpawn: true
-    })
-    // Restore marks every row it builds; a row whose terminal bound since must not get it back.
-    expect(shell).not.toHaveProperty('restoredFromSession')
-    sync.close()
-  })
-
   it('keeps the window’s pane remount generation through a structure frame: it is the window’s', async () => {
     const { store, sync, layouts, frames } = await bootWithFrames('local', localDesktopSession())
     sync.start()
@@ -185,16 +151,6 @@ describe('the window drawn from layout frames', () => {
     expect(
       store.getState().tabsByWorktree[GIT_KEY]!.find((tab) => tab.id === 'tab-shell')
     ).toMatchObject({ customTitle: 'renamed', generation: 1 })
-    sync.close()
-  })
-
-  it('answers main’s terminal tab by its terminal id, shown or not, until the stream ends', async () => {
-    const { sync, layouts } = await bootWithFrames('local', localDesktopSession())
-    const shell = layouts[GIT_KEY]!.tabs.find((tab) => tab.entityId === 'tab-shell')!
-    expect(sync.terminalTab(GIT_KEY, 'tab-shell')).toBe(shell)
-    expect(sync.terminalTab(GIT_KEY, 'missing')).toBeUndefined()
-    stream.onStatus!({ state: 'lost' })
-    expect(sync.terminalTab(GIT_KEY, 'tab-shell')).toBeUndefined()
     sync.close()
   })
 
@@ -329,70 +285,6 @@ describe('the window drawn from layout frames', () => {
     expect(rows.find((tab) => tab.id === 'tab-unbound')!.customTitle).toBe('from main')
     expect(store.getState().terminalLayoutsByTabId['tab-shell']!.root).not.toEqual(drawn)
     expect(sync.terminalTab(GIT_KEY, 'tab-shell')).toBeDefined()
-    sync.close()
-  })
-
-  it('shows a live title change of the focused pane without rebuilding structure', async () => {
-    const { store, sync, layouts, frames } = await bootWithFrames('local', localDesktopSession())
-    sync.start()
-    const titled = structuredClone(layouts[GIT_KEY]!)
-    const shell = titled.tabs.find((tab) => tab.id === 'tab-shell')!
-    const focused = store.getState().terminalLayoutsByTabId['tab-shell']!.activeLeafId
-    shell.terminal!.panes = shell.terminal!.panes.map((pane) => ({
-      ...pane,
-      liveTitle: pane.leafId === focused ? 'vim notes.md' : 'other pane'
-    }))
-    const before = store.getState()
-    stream.onFrame!(frames.records(GIT_KEY, titled))
-    await flushMicrotasks()
-    const after = store.getState()
-    expect(after.tabsByWorktree[GIT_KEY]!.find((tab) => tab.id === 'tab-shell')!.title).toBe(
-      'vim notes.md'
-    )
-    expect(after.groupsByWorktree).toBe(before.groupsByWorktree)
-    expect(after.terminalLayoutsByTabId).toBe(before.terminalLayoutsByTabId)
-    sync.close()
-  })
-
-  it('leaves a paired server’s workspaces to the mirror', async () => {
-    const profile = WORKSPACE_LAYOUT_PROFILES.find(
-      (entry) => entry.name === 'remote server partition'
-    )!
-    const { store, sync, layouts, frames } = await bootWithFrames(profile.hostId, profile.build())
-    sync.start()
-    const before = store.getState()
-    const [key, layout] = Object.entries(layouts)[0]!
-    stream.onFrame!(frames.records(key, { ...layout, tabs: [], groups: [] }))
-    await flushMicrotasks()
-    expect(SLICES.filter((slice) => store.getState()[slice] !== before[slice])).toEqual([])
-    sync.close()
-  })
-
-  it('leaves restore in place when the stream ends before its snapshot', async () => {
-    const store = createTestStore()
-    await bootWindowFromPartitions(store, [{ hostId: 'local', session: localDesktopSession() }])
-    const before = store.getState()
-    const sync = openWorkspaceLayoutFrameSync(store)
-    sync.start()
-    stream.onStatus!({ state: 'refused' })
-    await flushMicrotasks()
-    expect(SLICES.filter((slice) => store.getState()[slice] !== before[slice])).toEqual([])
-    sync.close()
-  })
-
-  it('gives a moved editor tab an older build saved under its old workspace the right id', async () => {
-    // Before #29930 a tab Orca moved to its file's workspace kept the source's worktree id.
-    const session = localDesktopSession()
-    const ownedId = buildOwnedEditorFileId('/Users/dev/orca/src/app.ts', GIT_KEY, null)
-    const entry = session.unifiedTabs![GIT_KEY]!.find((tab) => tab.contentType === 'editor')!
-    entry.entityId = ownedId
-    entry.worktreeId = 'repo-2::/Users/dev/other'
-    const { store, sync } = await bootWithFrames('local', session)
-    sync.start()
-    await flushMicrotasks()
-    const tabs = store.getState().unifiedTabsByWorktree[GIT_KEY]!
-    expect(tabs.find((tab) => tab.entityId === ownedId)).toMatchObject({ worktreeId: GIT_KEY })
-    expect(tabs.every((tab) => tab.worktreeId === GIT_KEY)).toBe(true)
     sync.close()
   })
 

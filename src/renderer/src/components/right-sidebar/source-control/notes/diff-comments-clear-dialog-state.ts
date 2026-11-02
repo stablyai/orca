@@ -1,8 +1,10 @@
+import type { DiffCommentOwner } from '@/store/diff-comment-owner'
 import { translate } from '@/i18n/i18n'
 
+/** A clear confirmation on the copy shown when it opened; `count` stands in once that copy is gone. */
 export type PendingDiffCommentsClear =
-  | { kind: 'all'; worktreeId: string }
-  | { kind: 'file'; worktreeId: string; filePath: string }
+  | { kind: 'all'; worktreeId: string; owner: DiffCommentOwner; count: number }
+  | { kind: 'file'; worktreeId: string; owner: DiffCommentOwner; filePath: string; count: number }
 
 type DiffCommentWithPath = {
   filePath: string

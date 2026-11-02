@@ -94,9 +94,9 @@ describe('shared agent-hook-listener', () => {
   it('records the folder a Claude session started in, not the one its Bash tool moved to (#16960)', () => {
     const sessionId = '55555555-5555-4555-8555-555555555555'
     normalizeAndAccept(state, 'claude', {
-      hook_event_name: 'UserPromptSubmit',
+      hook_event_name: 'SessionStart',
+      source: 'startup',
       session_id: sessionId,
-      prompt: 'go',
       cwd: '/repo/pkg'
     })
     // Claude's hook cwd follows `cd` inside its Bash tool.
@@ -129,6 +129,17 @@ describe('shared agent-hook-listener', () => {
     expect(cleared?.providerSession?.cwd).toBe('/repo/pkg')
     expect(clearedPrompt?.providerSession?.cwd).toBe('/repo/pkg')
     expect(resumedElsewhere?.providerSession?.cwd).toBe('/elsewhere')
+  })
+
+  it('records no folder for a Claude session first seen after it started', () => {
+    const midSession = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'UserPromptSubmit',
+      session_id: '55555555-5555-4555-8555-555555555555',
+      prompt: 'go',
+      cwd: '/repo/pkg/sub'
+    })
+
+    expect(midSession?.providerSession?.cwd).toBeUndefined()
   })
 
   it("records a Claude session's live effort and keeps it across hooks that omit it", () => {

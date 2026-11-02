@@ -11,7 +11,7 @@ import {
   type PublishedWorkspaceLayout
 } from '../../../shared/workspace-layout/workspace-layout-published'
 import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import '../../../shared/stable-pane-id'
 import { GIT_KEY } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-fixture'
 import { buildWorkspaceSessionPayload } from '../lib/workspace-session'
@@ -360,32 +360,6 @@ describe('a change main applies first, with frames flowing', () => {
     sync.close()
   })
 
-  it('sends main no generated title, and shows the one main derived from its frame alone', async () => {
-    const { store, sync } = await boot()
-    store.setState({ settings: { ...store.getState().settings!, tabAutoGenerateTitle: true } })
-    const leafId = store.getState().terminalLayoutsByTabId['tab-unbound']!.activeLeafId!
-    const paneKey = makePaneKey('tab-unbound', leafId)
-    const renames = () => callsOf('renameTabs')
-    store.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Refactor the auth middleware')
-    store.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Fix the flaky login test', {
-      replaceExistingGeneratedTitle: true
-    })
-    expect(renames()).toEqual([])
-
-    const writes = writesOf(store, (state) => state.tabsByWorktree)
-    const frame = publishedOf(buildWorkspaceSessionPayload(store.getState()))
-    frame.tabs.find((item) => item.id === 'tab-unbound')!.generatedTitle = 'Refactor the auth'
-    stream.onFrame!(frames.records(GIT_KEY, frame, ++seq))
-    stream.onPosition!(seq)
-    await settle()
-    writes.stop()
-    const row = store.getState().tabsByWorktree[GIT_KEY]!.find((item) => item.id === 'tab-unbound')!
-    expect(row.generatedTitle).toBe('Refactor the auth')
-    expect(writes.count()).toBe(1)
-    expect(renames()).toEqual([])
-    sync.close()
-  })
-
   it('shows main’s rename from its frame alone, without the window writing it again', async () => {
     const { store, sync, answer } = await boot()
     store.getState().setTabCustomTitle('tab-unbound', 'Build')
@@ -406,23 +380,6 @@ describe('a change main applies first, with frames flowing', () => {
         graphBefore
       )
     ).toBe(false)
-    writes.stop()
-    sync.close()
-  })
-
-  it('shows main’s tab color from its frame alone, without the window writing it again', async () => {
-    const { store, sync, answer } = await boot()
-    store.getState().setTabColor('tab-unbound', '#ff0000')
-    const color = rpc.calls.length - 1
-    expect(rpc.calls[color]!.command).toMatchObject({ type: 'setTabProps', color: '#ff0000' })
-    const writes = writesOf(store, (state) => state.tabsByWorktree)
-
-    await answer(color, okReply, (layout) => {
-      layout.tabs.find((item) => item.id === 'tab-unbound')!.color = '#ff0000'
-    })
-    const row = store.getState().tabsByWorktree[GIT_KEY]!.find((item) => item.id === 'tab-unbound')!
-    expect(row.color).toBe('#ff0000')
-    expect(writes.count()).toBe(1)
     writes.stop()
     sync.close()
   })

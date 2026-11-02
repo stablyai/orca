@@ -171,7 +171,7 @@
         "inheritFont": "Misma fuente que el IDE",
         "fontPreviewLabel": "Vista previa de la fuente del chat",
         "fontPreview": "El veloz zorro marrón salta sobre el perro perezoso.",
-        "title": "Chat",
+        "title": "Interfaz de chat",
         "textSize": "Tamaño del texto",
         "textSizeDescription": "Mensajes, actividad de herramientas y cuadro de mensaje. {{increase}} / {{decrease}} en un chat también cambian este valor.",
         "codeTextSize": "Tamaño del texto del código",
@@ -2150,8 +2150,6 @@
         "25690a3855": "Iniciar espacio de trabajo desde PR",
         "a459866967": "Reanudar espacio de trabajo adjunto a PR",
         "347034903a": "Copiar enlace de GitHub",
-        "5a01ca7253": "No se pudo sincronizar el estado visto con GitHub.",
-        "996a1897d2": "No se puede sincronizar el estado visto de este pull request.",
         "e0b15c793f": "No se pudo copiar el enlace de GitHub",
         "992e799227": "Enlace de GitHub copiado",
         "61bfc81ada": "No se puede abrir el espacio de trabajo adjunto a este pull request.",
@@ -19302,7 +19300,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Actualiza Orca en este host para continuar en la interfaz de chat.",
-        "notSavedYet": "{{agent}} aún no ha guardado esta conversación. Inténtalo de nuevo cuando responda."
+        "notSavedYet": "{{agent}} aún no ha guardado esta conversación. Inténtalo de nuevo cuando responda.",
+        "exitUnconfirmed": "{{agent}} está ejecutando esta conversación en otra terminal. Ciérralo allí o cierra esa terminal y vuelve a intentarlo."
       },
       "state": {
         "loading": {
@@ -19839,6 +19838,13 @@
         "switchAccount": "Cambiar de cuenta",
         "addAccount": "Añadir cuenta…",
         "accountUnavailable": "Este chat no se puede mover a otra cuenta. Transfiérelo a otro agente."
+      },
+      "usageLimitAutoContinue": {
+        "cancelFailed": "No se pudo cancelar la continuación automática. Inténtalo de nuevo.",
+        "openSetting": "Continuar automáticamente cuando se restablezcan los límites",
+        "cancelled": "Orca no continuará este chat automáticamente.",
+        "scheduled": "Orca continuará este chat a las {{time}}.",
+        "cancel": "No continuar"
       }
     },
     "tab": {
@@ -20211,7 +20217,12 @@
         "queueSearchSteer": "dirigir",
         "shellEnvSearchVariables": "variables de entorno",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "proxy"
+        "shellEnvSearchProxy": "proxy",
+        "usageLimitContinueTitle": "Continuar los chats automáticamente cuando se restablezca un límite de uso",
+        "usageLimitContinueCopy": "Orca envía \"Continue where you left off.\" cuando se restablece el límite. Se aplica a todos los chats con una hora de restablecimiento conocida.",
+        "usageLimitContinueSearchLimit": "límite de uso",
+        "usageLimitContinueSearchReset": "restablecer",
+        "usageLimitContinueToggleLabel": "Activar o desactivar la continuación de chats al restablecerse un límite de uso"
       },
       "TerminalInteraction": {
         "copyTrimsGutter": "Recortar margen al copiar",
@@ -20428,6 +20439,9 @@
         "finished": "Trabajador temporal de orquestación finalizado · Se cierra en {{countdown}}",
         "keepOpen": "Mantener abierto"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "Se ejecuta en WSL: {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {
@@ -22640,6 +22654,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: no hay ninguna copia de seguridad legible, así que empezará vacío.",
+      "sectionKeptCurrent": "{{section}}: se conservarán tus ejecuciones actuales",
       "sectionRestored": "{{section}}: se restaura desde la copia de seguridad guardada el {{time}}.",
       "projectsForgotten": "Orca olvidará tus proyectos y los detalles de sus espacios de trabajo. Los archivos en disco no se modifican.",
       "newerProjectsRemoved": "Los proyectos añadidos después de esa copia de seguridad se quitarán de Orca, junto con los detalles de sus espacios de trabajo. Los archivos en disco no se modifican.",
@@ -22682,7 +22697,7 @@
       "noneFound": "(no se encontró ninguna)",
       "sqlitePath": "Ruta de SQLite: {{path}}",
       "sectionsDamaged": "Parte del estado guardado de este perfil está dañada: {{sections}}. Todo lo demás está intacto.",
-      "repairCommand": "Cierra Orca y ejecuta `{{command}}` para reemplazar solo las partes dañadas desde copias de seguridad y conservar todo lo demás. Orca guarda una copia del archivo dañado.",
+      "repairCommand": "Detén Orca y ejecuta `{{command}}` para reparar solo las partes dañadas y conservar todo lo demás. Orca guarda una copia del archivo dañado.",
       "restoreWholeBackup": "Para restaurar una copia de seguridad completa en su lugar, ejecuta `{{exportsCommand}}` y luego `{{rollbackCommand}}`.",
       "sqliteUnreadable": "Orca no puede abrir el perfil activo de forma segura porque su estado SQLite no se puede leer.",
       "legacyJsonPath": "Ruta del JSON heredado: {{path}}",
@@ -22992,7 +23007,9 @@
     "toggleArguments": "Mostrar u ocultar argumentos",
     "argumentsTerminalHint": "Solo se aplica a los lanzamientos en terminal (CLI)",
     "searchAgentModels": "Buscar modelos de {{agent}}…",
-    "legacyModelCount": "{{total}} modelos"
+    "legacyModelCount": "{{total}} modelos",
+    "promptPlaceholder": "Agregar un prompt (opcional): / para skills, @ para archivos",
+    "promptPlaceholderFilesOnly": "Agregar un prompt (opcional): @ para archivos"
   },
   "wslMove": {
     "entry": {

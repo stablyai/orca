@@ -14,6 +14,11 @@ export type AgentSessionRecordReader = {
   isSessionUnreadable?: (sessionId: string) => boolean
   /** Absent on a store that predates tab visibility; every session then counts as open. */
   getVisibleSessionTabIndex?: () => { present: boolean; sessionIds: string[] }
+  /** One session's tab is gone from an index that exists; false while no index exists. */
+  isSessionTabRetired?: (sessionId: string) => boolean
+  /** Changes identity only when records join or leave or a /clear links them, so lookups derived from
+   *  every record's lineage can be reused across other writes. */
+  lineageRevision?: () => object
 }
 
 /** Null until the agent-session host is installed; callers that must see records ensure it first. */
@@ -27,12 +32,16 @@ export function conversationRecordReader(store: {
   listConversations: AgentSessionRecordReader['listRecords']
   isSessionUnreadable?: AgentSessionRecordReader['isSessionUnreadable']
   getVisibleSessionTabIndex: NonNullable<AgentSessionRecordReader['getVisibleSessionTabIndex']>
+  isSessionTabRetired?: AgentSessionRecordReader['isSessionTabRetired']
+  lineageRevision?: AgentSessionRecordReader['lineageRevision']
 }): AgentSessionRecordReader {
   return {
     getRecord: store.getConversation,
     isSessionUnreadable: store.isSessionUnreadable,
     listRecords: store.listConversations,
-    getVisibleSessionTabIndex: store.getVisibleSessionTabIndex
+    getVisibleSessionTabIndex: store.getVisibleSessionTabIndex,
+    isSessionTabRetired: store.isSessionTabRetired,
+    lineageRevision: store.lineageRevision
   }
 }
 

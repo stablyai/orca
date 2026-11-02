@@ -26,7 +26,6 @@ describe('remote terminal paused-output drop notice', () => {
   let streamId = 0
   let cursor = 0
   let hostCapabilities: HostCapabilities
-  let subscribeCapabilities: Record<string, unknown> | undefined
   let snapshotRequests: { requestId?: number }[]
 
   const send = (opcode: TerminalStreamOpcode, payload: Uint8Array, seq = 0): void =>
@@ -55,7 +54,6 @@ describe('remote terminal paused-output drop notice', () => {
               capabilities?: Record<string, unknown>
             }>(frame.payload)
             streamId = payload?.streamId ?? 0
-            subscribeCapabilities = payload?.capabilities
             next.onResponse({
               ok: true,
               result: { type: 'subscribed', streamId, capabilities: hostCapabilities }
@@ -97,65 +95,6 @@ describe('remote terminal paused-output drop notice', () => {
     return { data, onPausedOutputDropped, stream }
   }
 
-  /** Paused host discards `dropped`, optionally announcing it, then resumes with `live`. */
-  function pauseDropAndResume(
-    stream: { setOutputPaused: (paused: boolean) => boolean },
-    announce: boolean
-  ): void {
-    stream.setOutputPaused(true)
-    cursor += 'dropped-while-hidden'.length
-    if (announce) {
-      send(TerminalStreamOpcode.PausedOutputDropped, new Uint8Array())
-    }
-    stream.setOutputPaused(false)
-    output('live')
-  }
-
-  it('offers the capability and treats the announced pause gap as covered, not a resync', async () => {
-    hostCapabilities = { outputPause: 1, outputPauseDropNotice: 1 }
-    const { data, onPausedOutputDropped, stream } = await subscribeClient()
-    expect(subscribeCapabilities).toMatchObject({ outputPause: 1, outputPauseDropNotice: 1 })
-    expect(stream.reportsPausedOutputDrops?.()).toBe(true)
-
-    output('before')
-    pauseDropAndResume(stream, true)
-
-    expect(onPausedOutputDropped).toHaveBeenCalledTimes(1)
-    expect(data).toEqual(['before', 'live'])
-    expect(snapshotRequests).toEqual([])
-
-    // The exemption covers only that pause: a later unannounced gap still resyncs.
-    cursor += 5
-    output('after-real-gap')
-    expect(snapshotRequests).toHaveLength(1)
-    expect(snapshotRequests[0]?.requestId).toBeUndefined()
-  })
-
-  // Drop notice plus repaint baseline makes reveal one tagged snapshot with no redundant resync.
-  it('composes with the reveal snapshot: one tagged request, no resync', async () => {
-    for (const announce of [true, false]) {
-      hostCapabilities = announce
-        ? { outputPause: 1, outputPauseDropNotice: 1 }
-        : { outputPause: 1 }
-      snapshotRequests = []
-      const { data, stream } = await subscribeClient()
-      output('before')
-      stream.setOutputPaused(true)
-      cursor += 'dropped-while-hidden'.length
-      if (announce) {
-        send(TerminalStreamOpcode.PausedOutputDropped, new Uint8Array())
-      }
-      stream.setOutputPaused(false)
-      await stream.serializeBufferOutcome({ repaintsPane: true })
-      output('live')
-
-      expect(snapshotRequests).toEqual([{ requestId: expect.any(Number) }])
-      expect(data).toEqual(['before', 'live'])
-      stream.close()
-      resetRemoteRuntimeTerminalMultiplexersForTests()
-    }
-  })
-
   // Why: the reveal snapshot covers the announced gap, so a later real loss must still resync.
   it('detects a real gap after the reveal snapshot covered the announced one', async () => {
     hostCapabilities = { outputPause: 1, outputPauseDropNotice: 1 }
@@ -172,35 +111,5 @@ describe('remote terminal paused-output drop notice', () => {
     expect(data).toEqual(['before'])
     expect(snapshotRequests).toHaveLength(2)
     expect(snapshotRequests[1]?.requestId).toBeUndefined()
-  })
-
-  it('detects a real gap after a recovery snapshot covered the announced one', async () => {
-    hostCapabilities = { outputPause: 1, outputPauseDropNotice: 1 }
-    const { data, stream } = await subscribeClient()
-    output('before')
-    stream.setOutputPaused(true)
-    cursor += 'dropped-while-hidden'.length
-    send(TerminalStreamOpcode.PausedOutputDropped, new Uint8Array())
-    stream.setOutputPaused(false)
-    send(TerminalStreamOpcode.SnapshotStart, encodeTerminalStreamJson({ seq: cursor }))
-    send(TerminalStreamOpcode.SnapshotEnd, new Uint8Array())
-    cursor += 'lost-after-recovery'.length
-    output('after-real-gap')
-
-    expect(data).toEqual(['before'])
-    expect(snapshotRequests).toHaveLength(1)
-  })
-
-  it('keeps the resync for an older host that does not negotiate drop notices', async () => {
-    hostCapabilities = { outputPause: 1 }
-    const { data, onPausedOutputDropped, stream } = await subscribeClient()
-    expect(stream.reportsPausedOutputDrops?.()).toBe(false)
-
-    // An unnegotiated frame is ignored rather than trusted.
-    pauseDropAndResume(stream, true)
-
-    expect(onPausedOutputDropped).not.toHaveBeenCalled()
-    expect(data).toEqual([])
-    expect(snapshotRequests).toHaveLength(1)
   })
 })

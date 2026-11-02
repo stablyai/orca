@@ -9,7 +9,7 @@ import { structuredAgentSessionSendQueues } from './structured-agent-session-que
 import {
   nativeChatQueueFollowUps,
   nativeChatSendFollowUp
-} from '../../../../shared/native-chat-follow-up-behavior'
+} from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
 import type { AgentSessionCancelResult } from '../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useStructuredLegacyLaunchStop } from '@/lib/agent-session/launch/structured-agent-session-legacy-launch-stop'

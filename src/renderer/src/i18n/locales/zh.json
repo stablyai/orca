@@ -173,7 +173,7 @@
         "inheritFont": "与 IDE 字体相同",
         "fontPreviewLabel": "聊天字体预览",
         "fontPreview": "这段文字用于预览聊天字体。",
-        "title": "聊天",
+        "title": "聊天界面",
         "textSize": "文字大小",
         "textSizeDescription": "消息、工具活动和消息输入框。在聊天中按 {{increase}} / {{decrease}} 也会更改此设置。",
         "codeTextSize": "代码文字大小",
@@ -2116,8 +2116,6 @@
         "25690a3855": "从 PR 启动工作区",
         "a459866967": "恢复关联 PR 的工作区",
         "347034903a": "复制 GitHub 链接",
-        "5a01ca7253": "无法将查看的状态与 GitHub 同步。",
-        "996a1897d2": "无法同步此PR的查看状态。",
         "e0b15c793f": "复制 GitHub 链接失败",
         "992e799227": "GitHub 链接已复制",
         "61bfc81ada": "无法打开附加到此PR的工作区。",
@@ -18779,7 +18777,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "请更新此主机上的 Orca 以在聊天界面中继续。",
-        "notSavedYet": "{{agent}} 尚未保存此对话。请在它回复后重试。"
+        "notSavedYet": "{{agent}} 尚未保存此对话。请在它回复后重试。",
+        "exitUnconfirmed": "{{agent}} 正在另一个终端中运行此对话。请在那里退出它或关闭该终端，然后重试。"
       },
       "state": {
         "loading": {
@@ -19271,6 +19270,13 @@
         "switchAccount": "切换账号",
         "addAccount": "添加账号…",
         "accountUnavailable": "此聊天无法切换到其他账户。请将其移交给其他智能体。"
+      },
+      "usageLimitAutoContinue": {
+        "cancelFailed": "无法取消自动继续。请重试。",
+        "openSetting": "额度重置后自动继续",
+        "cancelled": "Orca 不会自动继续此聊天。",
+        "scheduled": "Orca 将在 {{time}} 继续此聊天。",
+        "cancel": "不要继续"
       }
     },
     "tab": {
@@ -19699,7 +19705,12 @@
         "queueSearchSteer": "立即发送",
         "shellEnvSearchVariables": "环境变量",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "代理"
+        "shellEnvSearchProxy": "代理",
+        "usageLimitContinueTitle": "使用额度重置后自动继续聊天",
+        "usageLimitContinueCopy": "额度重置后，Orca 会发送“Continue where you left off.”。适用于所有已知重置时间的聊天。",
+        "usageLimitContinueSearchLimit": "使用额度",
+        "usageLimitContinueSearchReset": "重置",
+        "usageLimitContinueToggleLabel": "切换使用额度重置后自动继续聊天"
       }
     },
     "agentChildRow": {
@@ -19843,6 +19854,9 @@
         "finished": "临时编排工作代理已完成 · {{countdown}}后关闭",
         "keepOpen": "保持打开"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "在 WSL 上运行：{{distro}}（Linux）"
     }
   },
   "dashboardPopout": {
@@ -22015,6 +22029,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}：没有可读取的备份，因此将从空白开始。",
+      "sectionKeptCurrent": "{{section}}：将保留当前运行记录",
       "sectionRestored": "{{section}}：将从 {{time}} 保存的备份中恢复。",
       "projectsForgotten": "Orca 将忘记你的项目及其工作区详情。磁盘上的文件不受影响。",
       "newerProjectsRemoved": "该备份之后添加的项目将连同其工作区详情一起从 Orca 中移除。磁盘上的文件不受影响。",
@@ -22057,7 +22072,7 @@
       "noneFound": "（未找到）",
       "sqlitePath": "SQLite 路径：{{path}}",
       "sectionsDamaged": "此配置文件已保存状态的一部分已损坏：{{sections}}。其余内容均完好无损。",
-      "repairCommand": "关闭 Orca，然后运行 `{{command}}`，仅从备份中替换损坏的部分，并保留其余所有内容。Orca 会保留损坏文件的副本。",
+      "repairCommand": "停止 Orca，然后运行 `{{command}}` 以仅修复损坏的部分并保留其他所有内容。Orca 会保留损坏文件的副本。",
       "restoreWholeBackup": "如需改为恢复整份备份，请先运行 `{{exportsCommand}}`，再运行 `{{rollbackCommand}}`。",
       "sqliteUnreadable": "Orca 无法安全地打开当前配置文件，因为其 SQLite 状态无法读取。",
       "legacyJsonPath": "旧版 JSON 路径：{{path}}",
@@ -22303,7 +22318,9 @@
     "toggleArguments": "切换参数显示",
     "argumentsTerminalHint": "仅适用于终端（CLI）启动",
     "searchAgentModels": "搜索 {{agent}} 模型…",
-    "legacyModelCount": "{{total}} 个模型"
+    "legacyModelCount": "{{total}} 个模型",
+    "promptPlaceholder": "添加提示词（可选）：/ 选择技能，@ 选择文件",
+    "promptPlaceholderFilesOnly": "添加提示词（可选）：@ 选择文件"
   },
   "wslMove": {
     "entry": {

@@ -1283,7 +1283,7 @@
         "inheritFont": "Mesma fonte do IDE",
         "fontPreviewLabel": "Prévia da fonte do chat",
         "fontPreview": "A rápida raposa marrom salta sobre o cão preguiçoso.",
-        "title": "Chat",
+        "title": "Interface de chat",
         "textSize": "Tamanho do texto",
         "textSizeDescription": "Mensagens, atividade das ferramentas e caixa de mensagem. {{increase}} / {{decrease}} em um chat também alteram este tamanho.",
         "codeTextSize": "Tamanho do texto de código",
@@ -16810,8 +16810,6 @@
         "25690a3855": "Iniciar espaço de trabalho a partir do PR",
         "a459866967": "Retomar espaço de trabalho anexado ao PR",
         "347034903a": "Copiar link do GitHub",
-        "5a01ca7253": "Falha ao sincronizar o estado visualizado com o GitHub.",
-        "996a1897d2": "Não foi possível sincronizar o estado visualizado para este pull request.",
         "e0b15c793f": "Falha ao copiar o link do GitHub",
         "992e799227": "Link do GitHub copiado",
         "61bfc81ada": "Não foi possível abrir o espaço de trabalho anexado a este pull request.",
@@ -20663,7 +20661,8 @@
       "transcriptLabel": "Conversa",
       "resumeInNewChat": {
         "hostUpdateRequired": "Atualize o Orca neste host para continuar na interface de chat.",
-        "notSavedYet": "O {{agent}} ainda não salvou esta conversa. Tente novamente depois que ele responder."
+        "notSavedYet": "O {{agent}} ainda não salvou esta conversa. Tente novamente depois que ele responder.",
+        "exitUnconfirmed": "O {{agent}} está executando esta conversa em outro terminal. Saia dele lá ou feche esse terminal e tente novamente."
       },
       "loadingEarlierMessages": "Carregando mensagens anteriores…",
       "prompt": {
@@ -21518,6 +21517,9 @@
         "finished": "Worker temporário de orquestração concluído · Fecha em {{countdown}}",
         "keepOpen": "Manter aberto"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "Executa no WSL: {{distro}} (Linux)"
     }
   },
   "csv": {
@@ -22640,6 +22642,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: não há backup legível, então começará vazio.",
+      "sectionKeptCurrent": "{{section}}: suas execuções atuais serão mantidas",
       "sectionRestored": "{{section}}: restaurado a partir do backup salvo em {{time}}.",
       "projectsForgotten": "O Orca vai esquecer seus projetos e os detalhes dos espaços de trabalho deles. Os arquivos no disco não são alterados.",
       "newerProjectsRemoved": "Os projetos adicionados depois desse backup serão removidos do Orca, junto com os detalhes dos espaços de trabalho deles. Os arquivos no disco não são alterados.",
@@ -22682,7 +22685,7 @@
       "noneFound": "(nada encontrado)",
       "sqlitePath": "Caminho do SQLite: {{path}}",
       "sectionsDamaged": "Parte do estado salvo deste perfil está danificada: {{sections}}. Todo o restante está intacto.",
-      "repairCommand": "Feche o Orca e execute `{{command}}` para substituir apenas as partes danificadas a partir dos backups e manter todo o restante. O Orca guarda uma cópia do arquivo danificado.",
+      "repairCommand": "Pare o Orca e execute `{{command}}` para reparar apenas as partes danificadas e manter todo o resto. O Orca guarda uma cópia do arquivo danificado.",
       "restoreWholeBackup": "Para restaurar um backup completo em vez disso, execute `{{exportsCommand}}` e depois `{{rollbackCommand}}`.",
       "sqliteUnreadable": "O Orca não consegue abrir o perfil ativo com segurança porque seu estado SQLite está ilegível.",
       "legacyJsonPath": "Caminho do JSON legado: {{path}}",
@@ -22977,7 +22980,9 @@
     "toggleArguments": "Mostrar ou ocultar argumentos",
     "argumentsTerminalHint": "Aplica-se apenas a inicializações no terminal (CLI)",
     "searchAgentModels": "Pesquisar modelos de {{agent}}…",
-    "legacyModelCount": "{{total}} modelos"
+    "legacyModelCount": "{{total}} modelos",
+    "promptPlaceholder": "Adicione um prompt (opcional): / para skills, @ para arquivos",
+    "promptPlaceholderFilesOnly": "Adicione um prompt (opcional): @ para arquivos"
   },
   "wslMove": {
     "entry": {

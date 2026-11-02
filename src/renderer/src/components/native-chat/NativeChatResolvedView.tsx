@@ -7,7 +7,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../../store'
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 import { useNativeChatRetainedSession } from './use-native-chat-retained-session'
-import { isNativeChatTranscriptUnsettled } from './native-chat-live-session-contract'
 import { selectNativeChatViewState } from './native-chat-view-state'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import {
@@ -30,7 +29,7 @@ import { shouldClearNativeChatWorkingSuppression } from '../../../../shared/nati
 import { resolveNativeChatTerminalTurn } from '../../../../shared/native-chat/native-chat-terminal-turn'
 import { useNativeChatTerminalTurnTiming } from './use-native-chat-terminal-turn-timing'
 import { launchPromptAsMessage, shouldPruneLaunchPrompt } from './native-chat-pending'
-import { pendingSendsAsMessages } from '../../../../shared/native-chat-pending-sends'
+import { pendingSendsAsMessages } from '../../../../shared/native-chat/transcript/native-chat-pending-sends'
 import { useNativeChatPendingDelivery } from './use-native-chat-pending-delivery'
 import {
   appendCommandMarkerCache,
@@ -72,6 +71,7 @@ export function NativeChatResolvedView({
   ownsTabWideLaunchDraft,
   onSwitchToTerminal,
   readTerminalScreen,
+  readTerminalDraft,
   contextMenuActions
 }: NativeChatResolvedViewProps): React.JSX.Element {
   // Route reads/subscriptions through the pane’s runtime owner; null retains local routing.
@@ -91,13 +91,7 @@ export function NativeChatResolvedView({
   const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
   const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
   // Adopt the TUI’s unsent launch context into the GUI composer.
-  const launchDraftSignal = useNativeChatLaunchDraftSignal({
-    terminalTabId,
-    agent,
-    messages: session.messages,
-    // Treat awaiting transcripts as unsettled to avoid re-offering an already-submitted prefill.
-    transcriptLoading: isNativeChatTranscriptUnsettled(session.readPhase)
-  })
+  const launchDraftSignal = useNativeChatLaunchDraftSignal({ terminalTabId, agent, session })
   // Use the live session’s reconciled lifecycle for every working-state consumer.
   const liveWorking = session.status === 'working'
   // Preview the in-progress hook reply before its completed transcript turn arrives.
@@ -413,7 +407,7 @@ export function NativeChatResolvedView({
           answerCommandLocally={answerLocally}
           onSwitchToTerminal={onSwitchToTerminal}
           readTerminalScreen={readTerminalScreen}
-          launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft }}
+          launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft, readTerminalDraft }}
           recallSource={{ messages: sessionWithPending.messages, commands: commandMarkers }}
         />
       </div>

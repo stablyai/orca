@@ -327,7 +327,13 @@ import {
   UpdatePrState,
   UpdatePrTitle
 } from './github-pull-request-update-params'
-import { RepoIssueCommandRead, RepoSelector, RepoShow, SlugRepo } from './github-repo-target-params'
+import {
+  RepoIssueCommandRead,
+  RepoSelector,
+  RepoShow,
+  RepoWithGitHubAccountExpectation,
+  SlugRepo
+} from './github-repo-target-params'
 import {
   IssuesList,
   RateLimit,
@@ -680,6 +686,7 @@ import {
   UsageCredentialApiKeyParams,
   UsageCredentialSessionCookieParams
 } from './usage-credentials-params'
+import { CancelUsageLimitContinueParams } from './usage-limit-continue-params'
 import { LayoutReopenHeldPanesParams } from './workspace-layout-held-panes-params'
 import {
   LayoutApplyParams,
@@ -776,6 +783,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,
   'agentSession.agents': AgentsParams,
   'agentSession.cancel': CancelParams,
+  'agentSession.cancelUsageLimitContinue': CancelUsageLimitContinueParams,
   'agentSession.close': OptionsParams,
   'agentSession.commands': OptionsParams,
   'agentSession.continuationContext': ContinuationContextParams,
@@ -1077,10 +1085,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'github.countWorkItems': WorkItemsCount,
   'github.createIssue': CreateIssue,
   'github.issue': Issue,
-  'github.listAssignableUsers': RepoSelector,
+  'github.listAssignableUsers': RepoWithGitHubAccountExpectation,
   'github.listBindableAccounts': BindableAccounts,
   'github.listIssues': IssuesList,
-  'github.listLabels': RepoSelector,
+  'github.listLabels': RepoWithGitHubAccountExpectation,
   'github.listWorkItems': WorkItemsList,
   'github.markPRDraft': MarkPrDraft,
   'github.markPRReadyForReview': MarkPrReadyForReview,
@@ -1296,6 +1304,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.gateResolve': GateResolveParams,
   'orchestration.inbox': InboxParams,
   'orchestration.partyLocation': PartyLocationParams,
+  'orchestration.partyOpen': PartyLocationParams,
   'orchestration.reply': ReplyParams,
   'orchestration.requestShow': RequestShowParams,
   'orchestration.reset': ResetParams,

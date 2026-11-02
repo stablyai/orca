@@ -656,7 +656,7 @@
         "inheritFont": "Same as IDE font",
         "fontPreviewLabel": "Chat font preview",
         "fontPreview": "The quick brown fox jumps over the lazy dog.",
-        "title": "Chat",
+        "title": "Chat UI",
         "textSize": "Text size",
         "textSizeDescription": "Messages, tool activity and the message box. {{increase}} / {{decrease}} in a chat change this too.",
         "codeTextSize": "Code text size",
@@ -1063,6 +1063,25 @@
         "acrylic": "acrylic"
       },
       "windowsUnsupported": "Requires Windows 11 version 22H2 or later."
+    },
+    "updateDelay": {
+      "title": "Update Delay",
+      "description": "Wait this many days after a release is published before Orca offers it.",
+      "info": "About Update Delay",
+      "none": "None",
+      "availableSoon": "Available to you {{relative}}",
+      "availableOn": "Available to you {{date}} ({{relative}})",
+      "clearedTitle": "Orca {{version}} is ready",
+      "heldTitle": "Orca {{version}} is on hold",
+      "released": "Released {{released}}",
+      "progress": "Time until Orca {{version}} is available",
+      "skipDelayOnceHint": "Check for this release now. Your delay setting stays the same.",
+      "skipDelayOnce": "Skip Delay Once",
+      "upToDateWithHeld": "You’re up to date. A newer release is on hold until {{date}}.",
+      "heldReleaseReady": "A newer release is ready. Check for updates to get it.",
+      "keywordDelay": "delay",
+      "keywordCooldown": "cooldown",
+      "keywordSecurity": "security"
     }
   },
   "menu": {
@@ -2680,8 +2699,6 @@
         "25690a3855": "Start workspace from PR",
         "a459866967": "Resume workspace attached to PR",
         "347034903a": "Copy GitHub link",
-        "5a01ca7253": "Failed to sync viewed state with GitHub.",
-        "996a1897d2": "Unable to sync viewed state for this pull request.",
         "e0b15c793f": "Failed to copy GitHub link",
         "992e799227": "GitHub link copied",
         "61bfc81ada": "Unable to open the workspace attached to this pull request.",
@@ -8074,9 +8091,6 @@
           "browserExtensions": {
             "copy": "Adds Settings › Browser › Extensions for local browser profiles.",
             "toggleLabel": "Toggle browser extensions"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "Toggle orchestration panel"
           }
         },
         "FloatingWorkspacePane": {
@@ -9331,7 +9345,8 @@
           "048aac8a64": "Terminal Typography",
           "4415beb958": "disabled",
           "4e7d41a9f0": "enabled",
-          "dimUnfocusedPanes": "Dim unfocused panes."
+          "dimUnfocusedPanes": "Dim unfocused panes.",
+          "kitty_import": "Import from Kitty"
         },
         "TerminalAdvancedTypographyControls": {
           "f5fa1a08f1": "Bold Font Weight",
@@ -10288,14 +10303,6 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "password manager"
-            },
-            "orchestrationPanel": {
-              "title": "Orchestration panel",
-              "description": "Shows which agents each agent is working with, beside its chat or terminal.",
-              "orchestration": "orchestration",
-              "agents": "agents",
-              "workers": "workers",
-              "manager": "manager"
             }
           }
         },
@@ -11346,7 +11353,9 @@
             "454df22a5e": "fish",
             "ddd5efe113": "shell",
             "3de504994c": "Shell and arguments used for new local interactive terminal panes",
-            "1733ccd3e9": "Terminal shell"
+            "1733ccd3e9": "Terminal shell",
+            "kitty_import": "Import from Kitty",
+            "kitty_import_description": "One-time import of supported settings from kitty.conf."
           },
           "windows": {
             "search": {
@@ -13578,6 +13587,11 @@
         },
         "FontAutocomplete": {
           "installedFontsUnavailable": "Couldn’t list installed fonts. Type any installed font name to use it."
+        },
+        "TerminalConfigImportModal": {
+          "kitty_title": "Import from Kitty",
+          "kitty_description": "Review the settings that will be imported from your kitty.conf and the files it includes.",
+          "kitty_not_found": "No kitty.conf found on this computer. Choose a config file to import one from another location."
         }
       },
       "right": {
@@ -19545,6 +19559,7 @@
         "hostReconciling": "Orca is still checking on this chat after restarting.",
         "waitMoment": "Wait a moment.",
         "recordUnreadable": "Orca couldn't read this chat's saved state.",
+        "mailOwnerUnconfirmed": "Orca couldn't confirm this message is still meant for this chat.",
         "chatNotFound": "Orca can't find this chat.",
         "startNewChat": "Start a new chat to continue.",
         "tryAgain": "Try again.",
@@ -20089,6 +20104,7 @@
         "estimated": "Estimated from the last response."
       },
       "contextMenu": {
+        "noSessionContext": "No chat context is available.",
         "copyOrcaSessionId": "Copy Orca Session ID",
         "orcaSessionIdCopied": "Orca session ID copied",
         "orcaSessionIdCopyFailed": "Unable to copy Orca session ID",
@@ -20343,6 +20359,13 @@
         "switchAccount": "Switch Account",
         "addAccount": "Add Account…",
         "accountUnavailable": "This chat cannot move to another account. Hand it off to another agent instead."
+      },
+      "usageLimitAutoContinue": {
+        "cancelFailed": "Couldn't cancel automatic continuation. Try again.",
+        "openSetting": "Continue automatically when limits reset",
+        "cancelled": "Orca won't continue this chat automatically.",
+        "scheduled": "Orca will continue this chat at {{time}}.",
+        "cancel": "Don't continue"
       }
     },
     "tab": {
@@ -20742,7 +20765,12 @@
         "linkPreviewsTitle": "Link previews",
         "linkPreviewsCopy": "Hovering a web link shows a preview card. Orca fetches the page to build it, so the site can see the request.",
         "linkPreviewsSearchUnfurl": "unfurl",
-        "linkPreviewsSearchHover": "hover card"
+        "linkPreviewsSearchHover": "hover card",
+        "usageLimitContinueTitle": "Continue chats automatically when a usage limit resets",
+        "usageLimitContinueCopy": "Orca sends \"Continue where you left off.\" when the limit resets. Applies to all chats with a known reset time.",
+        "usageLimitContinueSearchLimit": "usage limit",
+        "usageLimitContinueSearchReset": "reset",
+        "usageLimitContinueToggleLabel": "Toggle continuing chats when a usage limit resets"
       }
     },
     "agentChildRow": {
@@ -20918,6 +20946,9 @@
         "finished": "Temporary orchestration worker finished · Closes in {{countdown}}",
         "keepOpen": "Keep open"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "Runs on WSL: {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {
@@ -22869,6 +22900,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: no readable backup, so it will start empty.",
+      "sectionKeptCurrent": "{{section}}: your current runs will be kept",
       "sectionRestored": "{{section}}: restored from the backup saved {{time}}.",
       "projectsForgotten": "Orca will forget your projects and their workspace details. Files on disk are not touched.",
       "newerProjectsRemoved": "Projects added after that backup will be removed from Orca, along with their workspace details. Files on disk are not touched.",
@@ -22911,7 +22943,7 @@
       "noneFound": "(none found)",
       "sqlitePath": "SQLite path: {{path}}",
       "sectionsDamaged": "Part of this profile's saved state is damaged: {{sections}}. Everything else is intact.",
-      "repairCommand": "Stop Orca, then run `{{command}}` to replace only the damaged parts from backups and keep everything else. Orca keeps a copy of the damaged file.",
+      "repairCommand": "Stop Orca, then run `{{command}}` to repair only the damaged parts and keep everything else. Orca keeps a copy of the damaged file.",
       "restoreWholeBackup": "To restore a whole backup instead, run `{{exportsCommand}}`, then `{{rollbackCommand}}`.",
       "sqliteUnreadable": "Orca cannot safely open the active profile because its SQLite state is unreadable.",
       "legacyJsonPath": "Legacy JSON path: {{path}}",
@@ -23046,7 +23078,8 @@
       "images": "Images",
       "repoIconImages": "Repo icon images",
       "audio": "Audio",
-      "importGhosttyConfig": "Import Ghostty Config"
+      "importGhosttyConfig": "Import Ghostty Config",
+      "importKittyConfig": "Import Kitty Config"
     }
   },
   "taskProviders": {
@@ -23187,7 +23220,9 @@
     "toggleArguments": "Toggle Arguments",
     "argumentsTerminalHint": "Only applies to terminal (CLI) launches",
     "searchAgentModels": "Search {{agent}} models…",
-    "legacyModelCount": "{{total}} models"
+    "legacyModelCount": "{{total}} models",
+    "promptPlaceholder": "Add a prompt (optional): / for skills, @ for files",
+    "promptPlaceholderFilesOnly": "Add a prompt (optional): @ for files"
   },
   "automations": {
     "runFailures": {

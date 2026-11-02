@@ -15,7 +15,7 @@ import {
   withoutSubagentGroupTwins
 } from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-summary'
 import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButton'
-import { nativeChatMessageCopyText } from '../../../../../src/shared/native-chat-message-copy-text'
+import { nativeChatMessageCopyText } from '../../../../../src/shared/native-chat/transcript/native-chat-message-copy-text'
 import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat/transcript/native-chat-row-content'
 import {
   MobileNativeChatGroupedThought,

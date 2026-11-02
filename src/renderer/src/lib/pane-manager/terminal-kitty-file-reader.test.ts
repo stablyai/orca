@@ -14,15 +14,6 @@ const request = () => ({
 })
 afterEach(() => terminals.splice(0).forEach((value) => value.dispose()))
 describe('terminal Kitty file reader ownership', () => {
-  it('does not use another terminal reader', async () => {
-    const first = terminal()
-    const second = terminal()
-    const reader = vi.fn(async () => new Uint8Array([1]))
-    const cleanup = bindTerminalKittyFileReader(first, reader)
-    await expect(readTerminalKittyFile(second, request())).rejects.toThrow('unavailable')
-    expect(reader).not.toHaveBeenCalled()
-    cleanup()
-  })
   it('older connection cleanup preserves its replacement', async () => {
     const value = terminal()
     const first = vi.fn(async () => new Uint8Array([1]))

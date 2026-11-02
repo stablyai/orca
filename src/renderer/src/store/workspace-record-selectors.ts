@@ -103,15 +103,10 @@ const qualifiedFolderOwnerCache = new WeakMap<
   }
 >()
 
-export function resolveQualifiedIndexedFolderWorkspace<W extends FolderHostWorkspace>(
-  state: QualifiedFolderHostState<W>,
-  folderWorkspaceId: string,
-  executionHostId?: ExecutionHostId
-): ReturnType<typeof resolveQualifiedFolderWorkspaceResult<W>> {
-  const folders = selectFolderWorkspaces(state)
-  if (!folders) {
-    return { kind: 'missing' }
-  }
+function qualifiedFolderCacheOf(
+  state: QualifiedFolderHostState,
+  folders: readonly FolderHostWorkspace[]
+) {
   let cache = qualifiedFolderOwnerCache.get(folders)
   if (!cache || cache.groups !== state.projectGroups || cache.repos !== state.repos) {
     const rows = new Map<string, FolderHostWorkspace[]>()
@@ -126,6 +121,32 @@ export function resolveQualifiedIndexedFolderWorkspace<W extends FolderHostWorks
     cache = { groups: state.projectGroups, repos: state.repos, rows, positions, results: new Map() }
     qualifiedFolderOwnerCache.set(folders, cache)
   }
+  return cache
+}
+
+const NO_FOLDER_COPIES: readonly FolderHostWorkspace[] = []
+
+/** The catalog's copies of one folder id from the shared id index (one pass per catalog snapshot); the array is stable until the catalog changes. */
+export function selectFolderWorkspaceCopies(
+  state: QualifiedFolderHostState,
+  folderWorkspaceId: string
+): readonly FolderHostWorkspace[] {
+  const folders = selectFolderWorkspaces(state)
+  return folders
+    ? (qualifiedFolderCacheOf(state, folders).rows.get(folderWorkspaceId) ?? NO_FOLDER_COPIES)
+    : NO_FOLDER_COPIES
+}
+
+export function resolveQualifiedIndexedFolderWorkspace<W extends FolderHostWorkspace>(
+  state: QualifiedFolderHostState<W>,
+  folderWorkspaceId: string,
+  executionHostId?: ExecutionHostId
+): ReturnType<typeof resolveQualifiedFolderWorkspaceResult<W>> {
+  const folders = selectFolderWorkspaces(state)
+  if (!folders) {
+    return { kind: 'missing' }
+  }
+  const cache = qualifiedFolderCacheOf(state, folders)
   const key = executionHostId ? `${folderWorkspaceId}\0${executionHostId}` : folderWorkspaceId
   let result = cache.results.get(key)
   if (!result) {

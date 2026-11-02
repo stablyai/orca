@@ -31,6 +31,7 @@ const worktreeOwnerIndexCache = new WeakMap<
     owners: ReadonlyMap<string, IndexedWorktreeOwnerEntry>
     matches: ReadonlyMap<string, readonly WorktreeOwnerRecord[]>
     first: ReadonlyMap<string, { bucket: string; position: number }>
+    locationsById: ReadonlyMap<string, readonly { bucket: string; position: number }[]>
   }
 >()
 const folderWorkspaceOwnerIndexCache = new WeakMap<
@@ -118,9 +119,13 @@ export function resolveIndexedWorktreeOwner(
     const next = new Map<string, IndexedWorktreeOwnerEntry>()
     const matches = new Map<string, WorktreeOwnerRecord[]>()
     const first = new Map<string, { bucket: string; position: number }>()
+    const locationsById = new Map<string, { bucket: string; position: number }[]>()
     for (const [bucket, worktrees] of Object.entries(worktreesByRepo)) {
       worktrees.forEach((worktree, position) => {
         const id = worktree.id
+        const locations = locationsById.get(id) ?? []
+        locations.push({ bucket, position })
+        locationsById.set(id, locations)
         if (!matches.has(id)) {
           first.set(id, { bucket, position })
         }
@@ -131,10 +136,25 @@ export function resolveIndexedWorktreeOwner(
         }
       })
     }
-    index = { owners: next, matches, first }
+    index = { owners: next, matches, first, locationsById }
     worktreeOwnerIndexCache.set(worktreesByRepo, index)
   }
   return index.owners.get(worktreeId) ?? { kind: 'missing' }
+}
+
+/** Every listed row of `worktreeId` in one repo bucket, duplicates kept in catalog order, typed as the caller's catalog. */
+export function findIndexedWorktreeRows<W extends WorktreeOwnerRecord>(
+  worktreesByRepo: Record<string, readonly W[]> | undefined,
+  repoId: string,
+  worktreeId: string
+): W[] {
+  resolveIndexedWorktreeOwner(worktreesByRepo, worktreeId)
+  const locations =
+    worktreesByRepo && worktreeOwnerIndexCache.get(worktreesByRepo)?.locationsById.get(worktreeId)
+  return (locations ?? []).flatMap(({ bucket, position }) => {
+    const row = bucket === repoId ? worktreesByRepo?.[bucket]?.[position] : undefined
+    return row?.id === worktreeId ? [row] : []
+  })
 }
 
 /**
