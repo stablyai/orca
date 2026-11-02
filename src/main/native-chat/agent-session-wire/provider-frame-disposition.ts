@@ -213,6 +213,10 @@ const PROVIDER_FRAME_CATALOGS: ReadonlyMap<
           ? 'error-surface'
           : 'suppressed-benign'
       }
+      // Plugin `$.ui.*` calls (status line, toasts, panes) that the terminal REPL draws; chat has no surface for them.
+      if (kind.startsWith('message:system:ui_')) {
+        return 'suppressed-benign'
+      }
       if (kind === 'message:auth_status') {
         const error = isProviderRecord(payload) ? payload.error : undefined
         return typeof error === 'string' && error.trim().length > 0

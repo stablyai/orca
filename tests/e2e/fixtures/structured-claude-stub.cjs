@@ -29,7 +29,8 @@ const initializeResponse = {
   available_output_styles: ['default']
 }
 
-// A prompt containing "slow" runs until it is interrupted.
+// A prompt containing "slow" runs until it is interrupted; one containing "plugin-ui" first gets the
+// frames a plugin's `$.ui.status` and `$.ui.toast` calls produce in stream-json mode.
 const TURN_MS = 500
 const SLOW_TURN_MS = 60_000
 let turnTimer = null
@@ -37,10 +38,23 @@ let turnTimer = null
 function startTurn(frame) {
   // The CLI's --replay-user-messages echo, which opens the turn.
   write({ ...frame, isReplay: true })
-  const slow = JSON.stringify(frame.message ?? '').includes('slow')
+  const prompt = JSON.stringify(frame.message ?? '')
+  const slow = prompt.includes('slow')
+  const pluginUi = prompt.includes('plugin-ui')
   turnTimer = setTimeout(
     () => {
       turnTimer = null
+      if (pluginUi) {
+        const ui = { type: 'system', plugin: 'e2e-board', session_id: sessionId }
+        write({ ...ui, subtype: 'ui_status', text: 'PR 6 · 13 open   /board', uuid: randomUUID() })
+        write({
+          ...ui,
+          subtype: 'ui_toast',
+          text: 'Board synced',
+          timeout_ms: 3000,
+          uuid: randomUUID()
+        })
+      }
       write({
         type: 'assistant',
         uuid: randomUUID(),
