@@ -12,6 +12,32 @@ import {
 import { getTabIdFromPaneKey } from './terminal-pty-identities'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+
+function updateOwnedTabLaunchAgent(
+  set: TerminalStoreSet,
+  tabId: string,
+  update: (tab: TerminalTab) => TerminalTab | null
+): void {
+  set((s) => {
+    const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+    if (!ownerWorktreeId) {
+      return s
+    }
+    const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
+    const tabIndex = tabs.findIndex((t) => t.id === tabId)
+    const currentTab = tabs[tabIndex]
+    const nextTab = currentTab ? update(currentTab) : null
+    if (!currentTab || !nextTab || nextTab === currentTab) {
+      return s
+    }
+    const nextTabs = [...tabs]
+    nextTabs[tabIndex] = nextTab
+    scheduleRuntimeGraphSync()
+    return { tabsByWorktree: { ...s.tabsByWorktree, [ownerWorktreeId]: nextTabs } }
+  })
+}
+
 export function createTerminalTabPresentationActions(
   set: TerminalStoreSet,
   get: TerminalStoreGet
@@ -23,6 +49,7 @@ export function createTerminalTabPresentationActions(
   | 'setGeneratedTabTitleFromAgentPrompt'
   | 'setGeneratedTabTitlesFromAgentPrompts'
   | 'clearTabLaunchAgent'
+  | 'replaceTabLaunchAgent'
   | 'setRuntimePaneTitle'
   | 'clearRuntimePaneTitle'
 > {
@@ -123,24 +150,19 @@ export function createTerminalTabPresentationActions(
       })
     },
     clearTabLaunchAgent: (tabId) => {
-      set((s) => {
-        const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
-        if (!ownerWorktreeId) {
-          return s
-        }
-        const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
-        const tabIndex = tabs.findIndex((t) => t.id === tabId)
-        const currentTab = tabs[tabIndex]
-        if (!currentTab?.launchAgent) {
-          return s
+      updateOwnedTabLaunchAgent(set, tabId, (currentTab) => {
+        if (!currentTab.launchAgent) {
+          return null
         }
         const { launchAgent: _launchAgent, ...tabWithoutLaunchAgent } = currentTab
         void _launchAgent
-        const nextTabs = [...tabs]
-        nextTabs[tabIndex] = tabWithoutLaunchAgent
-        scheduleRuntimeGraphSync()
-        return { tabsByWorktree: { ...s.tabsByWorktree, [ownerWorktreeId]: nextTabs } }
+        return tabWithoutLaunchAgent
       })
+    },
+    replaceTabLaunchAgent: (tabId, agent) => {
+      updateOwnedTabLaunchAgent(set, tabId, (currentTab) =>
+        currentTab.launchAgent === agent ? null : { ...currentTab, launchAgent: agent }
+      )
     },
     setRuntimePaneTitle: (tabId, paneId, title) => {
       set((s) => {
