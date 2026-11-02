@@ -8,10 +8,14 @@ import {
   type ExecutionHostTarget
 } from '@/lib/execution-host-facts'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { getIndexedReposById } from '@/store/worktree-repo-index'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   isRuntimeHostContactRevokedVerdict,
   runtimeHostContactForEntry
@@ -57,13 +61,14 @@ function resolveAgentMenuTerminalTarget(
   if (worktreeId) {
     return resolveWorktreeExecutionHostTarget(state, worktreeId)
   }
-  // A workspace not created yet launches on its repo's host. Its id's indexed rows keep the
-  // host, twin and ambiguity rules a whole-catalog search applies.
-  const repo = repoId
-    ? findRepoForHost(getIndexedReposById(state.repos, repoId), repoId, {
-        hostId: executionHostId
-      })
-    : null
+  // A workspace not created yet launches on its repo's owning host: the first row with that id
+  // on that host, or the id's only row. Rows on several hosts with none named settle as no owner.
+  const candidates = repoId ? getIndexedReposById(state.repos, repoId) : []
+  const repo = executionHostId
+    ? candidates.find((row) => getRepoExecutionHostId(row) === executionHostId)
+    : candidates.length === 1
+      ? candidates[0]
+      : undefined
   return repo ? resolveRepoExecutionHostTarget(repo) : null
 }
 
@@ -83,9 +88,9 @@ export function readAgentMenuTerminalPending(
 // this does not compare. Connection and contact facts are not here: they are read live.
 const OWNERSHIP_INPUTS = Object.values({
   repos: (state) => state.repos,
-  worktreesByRepo: (state) => state.worktreesByRepo,
-  detectedWorktreesByRepo: (state) => state.detectedWorktreesByRepo,
-  folderWorkspaces: (state) => state.folderWorkspaces,
+  worktreesByRepo: (state) => selectWorktreesByRepo(state),
+  detectedWorktreesByRepo: (state) => selectDetectedWorktreesByRepo(state),
+  folderWorkspaces: (state) => selectFolderWorkspaces(state),
   projectGroups: (state) => state.projectGroups,
   restoredRuntimeHostIdByWorkspaceSessionKey: (state) =>
     state.restoredRuntimeHostIdByWorkspaceSessionKey,
@@ -94,7 +99,8 @@ const OWNERSHIP_INPUTS = Object.values({
   runtimeEnvironments: (state) => state.runtimeEnvironments,
   runtimeEnvironmentCatalogHydrated: (state) => state.runtimeEnvironmentCatalogHydrated,
   removedRuntimeEnvironmentIds: (state) => state.removedRuntimeEnvironmentIds,
-  settings: (state) => state.settings?.activeRuntimeEnvironmentId
+  // The settings slice by reference: it changes only on a settings write.
+  settings: (state) => state.settings
 } satisfies Record<keyof WorktreeRuntimeOwnerState, (state: AppState) => unknown>)
 
 /**

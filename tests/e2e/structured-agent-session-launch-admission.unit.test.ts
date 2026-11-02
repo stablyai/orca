@@ -67,6 +67,11 @@ import {
   type TabsDrawnFromMain
 } from '@/store/slices/tabs-drawn-from-main.test-fixture'
 
+/** A refused launch opened nothing, so it has no settlement to await. */
+function structuredSettlementOf(launch: ReturnType<typeof launchStructuredAgentFromNewTab>) {
+  return launch && !('refused' in launch) ? launch.structuredSettlement : undefined
+}
+
 const WORKTREE = 'repo-1::/srv/app'
 const INITIAL_SETTINGS = useAppStore.getState().settings
 
@@ -261,8 +266,10 @@ describe('a structured chat launch on a paired server', () => {
       pasteDraftAfterLaunch: false
     }))
     const declined = () =>
-      launchStructuredAgentFromNewTab({ plan: plan(), worktreeId, openTerminal })
-    await expect(declined()?.structuredSettlement).resolves.toMatchObject({ kind: 'failed' })
+      structuredSettlementOf(
+        launchStructuredAgentFromNewTab({ plan: plan(), worktreeId, openTerminal })
+      )
+    await expect(declined()).resolves.toMatchObject({ kind: 'failed' })
     const direct = () =>
       beginDirectWorkItemStructuredLaunch({
         plan: plan(),
@@ -285,7 +292,7 @@ describe('a structured chat launch on a paired server', () => {
     await useAppStore.getState().refreshDetectedAgents(worktreeId)
     const inventory = useAppStore.getState().readLocalAgentInventory(worktreeId)
     expect(inventory).toEqual({ state: 'failed', ids: [] })
-    await expect(declined()?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
+    await expect(declined()).resolves.toEqual({ kind: 'terminal' })
     mocks.launchAgentInNewTab.mockReturnValue({
       surface: { kind: 'local-terminal', tabId: 'fallback' }
     })
@@ -296,12 +303,14 @@ describe('a structured chat launch on a paired server', () => {
     )
     const seedShell = vi.fn(() => ({ opened: true }))
     await expect(
-      launchStructuredAgentFromNewTab({
-        plan: plan(),
-        worktreeId,
-        onHostDeclined: seedShell,
-        openTerminal
-      })?.structuredSettlement
+      structuredSettlementOf(
+        launchStructuredAgentFromNewTab({
+          plan: plan(),
+          worktreeId,
+          onHostDeclined: seedShell,
+          openTerminal
+        })
+      )
     ).resolves.toEqual({ kind: 'terminal' })
     expect(seedShell).toHaveBeenCalledOnce()
   })

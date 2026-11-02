@@ -17,6 +17,7 @@ import { consumeOldHostPreparedCommand } from './prepared-action-launch.test-fix
 import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
 import { projectAgentLaunchSettings } from '../../src/shared/agent-launch-settings'
 import { describe, expect, it, vi } from 'vitest'
+import { launchedTab } from '@/lib/agent-tab-launch-outcome.test-fixture'
 
 describe('launchAgentInNewTab paired web runtime', () => {
   it.each([true, false, 'failed'] as const)('delegates agent quick launch (%s)', async (mode) => {
@@ -34,13 +35,15 @@ describe('launchAgentInNewTab paired web runtime', () => {
     const { launchAgentInNewTab } =
       await import('../../src/renderer/src/lib/launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
-      requestId: 'request-1',
-      activate,
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      groupId: 'group-1'
-    })
+    const result = launchedTab(
+      launchAgentInNewTab({
+        requestId: 'request-1',
+        activate,
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        groupId: 'group-1'
+      })
+    )
 
     expect(result).toEqual(
       expect.objectContaining({
@@ -92,12 +95,14 @@ describe('launchAgentInNewTab paired web runtime', () => {
     mocks.hostRpc.mockReturnValueOnce(pending.promise)
     const { launchAgentInNewTab } =
       await import('../../src/renderer/src/lib/launch-agent-in-new-tab')
-    const result = launchAgentInNewTab({
-      requestId: newAgentLaunchRequestId(),
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      requestedSurface: 'terminal'
-    })
+    const result = launchedTab(
+      launchAgentInNewTab({
+        requestId: newAgentLaunchRequestId(),
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        requestedSurface: 'terminal'
+      })
+    )
     expect(mocks.createWebRuntimeSessionTerminal).not.toHaveBeenCalled()
     pending.resolve({
       settings: projectAgentLaunchSettings({
@@ -116,14 +121,16 @@ describe('launchAgentInNewTab paired web runtime', () => {
       'launchPreferences'
     )
     mocks.createWebRuntimeSessionTerminal.mockClear()
-    const picked = launchAgentInNewTab({
-      requestId: newAgentLaunchRequestId(),
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      requestedSurface: 'terminal',
-      agentArgs: '--model literal',
-      sessionOptions: { model: 'picked' }
-    })
+    const picked = launchedTab(
+      launchAgentInNewTab({
+        requestId: newAgentLaunchRequestId(),
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        requestedSurface: 'terminal',
+        agentArgs: '--model literal',
+        sessionOptions: { model: 'picked' }
+      })
+    )
     await picked?.terminalCompletion
     expect(mocks.createWebRuntimeSessionTerminal.mock.calls[0][0]).toMatchObject({
       command: expect.stringContaining("'picked'"),
@@ -138,12 +145,14 @@ describe('launchAgentInNewTab paired web runtime', () => {
       })
     })
     store.settings.agentCmdOverrides = { claude: 'cx' }
-    const prepared = launchAgentInNewTab({
-      requestId: newAgentLaunchRequestId(),
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      requestedSurface: 'terminal'
-    })
+    const prepared = launchedTab(
+      launchAgentInNewTab({
+        requestId: newAgentLaunchRequestId(),
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        requestedSurface: 'terminal'
+      })
+    )
     await prepared?.terminalCompletion
     expect(mocks.createWebRuntimeSessionTerminal.mock.calls.at(-1)?.[0]).toMatchObject({
       command: "cx '--verbose' '--effort' 'high'",
@@ -154,14 +163,16 @@ describe('launchAgentInNewTab paired web runtime', () => {
     expect(mocks.createTab).not.toHaveBeenCalled()
     const dispatched = mocks.createWebRuntimeSessionTerminal.mock.calls.length
     store.settings.agentCmdOverrides = { claude: 'claude --model sonnet' }
-    const refused = launchAgentInNewTab({
-      requestId: newAgentLaunchRequestId(),
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      requestedSurface: 'terminal',
-      prompt: 'keep this prompt',
-      sessionOptions: { model: 'opus' }
-    })
+    const refused = launchedTab(
+      launchAgentInNewTab({
+        requestId: newAgentLaunchRequestId(),
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        requestedSurface: 'terminal',
+        prompt: 'keep this prompt',
+        sessionOptions: { model: 'opus' }
+      })
+    )
     await expect(refused?.terminalCompletion).resolves.toEqual({
       delivered: false,
       failureNotified: true,
@@ -245,16 +256,18 @@ describe('launchAgentInNewTab paired web runtime', () => {
         stubRuntimeEnvironmentBridge({ call: dispatch })
         const { launchAgentInNewTab } =
           await import('../../src/renderer/src/lib/launch-agent-in-new-tab')
-        const result = launchAgentInNewTab({
-          requestId: newAgentLaunchRequestId(),
-          agent: 'claude',
-          worktreeId: 'wt-1',
-          requestedSurface: 'terminal',
-          groupId: 'group-1',
-          activate: false,
-          agentArgs: '--verbose',
-          ...(route === 'prepared' ? { sessionOptions: { effort: 'high' } } : {})
-        })
+        const result = launchedTab(
+          launchAgentInNewTab({
+            requestId: newAgentLaunchRequestId(),
+            agent: 'claude',
+            worktreeId: 'wt-1',
+            requestedSurface: 'terminal',
+            groupId: 'group-1',
+            activate: false,
+            agentArgs: '--verbose',
+            ...(route === 'prepared' ? { sessionOptions: { effort: 'high' } } : {})
+          })
+        )
         await vi.advanceTimersByTimeAsync(route === 'deadline' ? 3_000 : 0)
         await expect(result?.terminalCompletion).resolves.toMatchObject({
           outcome: { status: 'created' },
@@ -461,13 +474,15 @@ describe('launchAgentInNewTab paired web runtime', () => {
       const { launchAgentInNewTab } =
         await import('../../src/renderer/src/lib/launch-agent-in-new-tab')
       // OpenCode has no built-in structured fallback without the owning host's catalog.
-      const result = launchAgentInNewTab({
-        requestId: newAgentLaunchRequestId(),
-        agent: 'opencode',
-        worktreeId: 'wt-1',
-        prompt: 'review this context',
-        promptDelivery: 'draft'
-      })
+      const result = launchedTab(
+        launchAgentInNewTab({
+          requestId: newAgentLaunchRequestId(),
+          agent: 'opencode',
+          worktreeId: 'wt-1',
+          prompt: 'review this context',
+          promptDelivery: 'draft'
+        })
+      )
       expect(mocks.hostRpc).toHaveBeenCalledWith(
         expect.anything(),
         AGENT_SESSION_AGENTS_METHOD,
@@ -523,14 +538,16 @@ describe('launchAgentInNewTab paired web runtime', () => {
     vi.mocked(pasteDraftWhenAgentReady).mockRejectedValueOnce(new Error('paste transport failed'))
     const { launchAgentInNewTab } =
       await import('../../src/renderer/src/lib/launch-agent-in-new-tab')
-    const result = launchAgentInNewTab({
-      requestId: newAgentLaunchRequestId(),
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      requestedSurface: 'terminal',
-      prompt: 'keep this task',
-      promptDelivery: 'submit-after-ready'
-    })
+    const result = launchedTab(
+      launchAgentInNewTab({
+        requestId: newAgentLaunchRequestId(),
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        requestedSurface: 'terminal',
+        prompt: 'keep this task',
+        promptDelivery: 'submit-after-ready'
+      })
+    )
     await expect(result?.terminalCompletion).resolves.toMatchObject({
       outcome: { status: 'created' },
       delivered: false,
@@ -556,13 +573,15 @@ describe('launchAgentInNewTab paired web runtime', () => {
     const { launchAgentInNewTab } =
       await import('../../src/renderer/src/lib/launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
-      requestId: 'request-2',
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      prompt: 'fix the spinner',
-      groupId: 'group-1'
-    })
+    const result = launchedTab(
+      launchAgentInNewTab({
+        requestId: 'request-2',
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        prompt: 'fix the spinner',
+        groupId: 'group-1'
+      })
+    )
 
     expect(result).toEqual(
       expect.objectContaining({
