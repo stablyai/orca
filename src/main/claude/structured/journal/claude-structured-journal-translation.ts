@@ -27,7 +27,7 @@ import {
   isRootClaudeFrame
 } from '../../claude-turn-opening'
 import { ClaudeOpenTurn } from '../../claude-open-turn'
-import { claudeCommandCurrentTurn, observeClaudeCommandFrame } from '../../claude-command-turn'
+import { absorbClaudeCommandFrame, claudeCommandCurrentTurn } from '../../claude-command-turn'
 import { ClaudeContextFacts } from '../../claude-context-facts'
 import { claudeSessionStateEndsTurn } from '../../claude-session-state-turn-over'
 import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
@@ -147,6 +147,7 @@ export function createClaudeJournalTranslator(
     return delta !== null || thinking
   }
 
+  const usageLimits = new ClaudeUsageLimits()
   const messageContext: ClaudeMessageJournalContext = {
     sink: deps.sink,
     tools,
@@ -160,7 +161,7 @@ export function createClaudeJournalTranslator(
     corrections,
     turn,
     assistantFailures: new ClaudeAssistantFailures(deps.account, deps.model),
-    usageLimits: new ClaudeUsageLimits(),
+    usageLimits,
     threadGoal: new ClaudeThreadGoal(() => deps.sink.journalLinkage?.()?.threadGoalSource())
   }
 
@@ -204,7 +205,7 @@ export function createClaudeJournalTranslator(
           }
         }
       }
-      if (event.type === 'message' && observeClaudeCommandFrame(turn.command, event.message)) {
+      if (event.type === 'message' && absorbClaudeCommandFrame(turn, usageLimits, event.message)) {
         return
       }
       if (event.type === 'message' && handleStream(event.message, event.observedAt ?? Date.now())) {
@@ -271,7 +272,7 @@ export function createClaudeJournalTranslator(
     get commandTurnId() {
       return turn.command ? turn.id : null
     },
-    beginCommand: (start) => turn.beginCommand(claudeCommandCurrentTurn(start)),
+    beginCommand: (start) => turn.beginCommand(claudeCommandCurrentTurn(start, usageLimits)),
     forgetCommand: (turnId) => turn.forgetCommand(turnId),
     commandInterruptRequested: (turnId) => turn.commandInterruptRequested(turnId),
     get openTurnInLiveProviderCycle() {

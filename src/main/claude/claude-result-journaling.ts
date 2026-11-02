@@ -65,18 +65,16 @@ export function journalClaudeResult(
     return
   }
   const failure = claudeResultFailure(message, leftToStop)
+  // A command's quota cause needs its own failed verdict, not only a failed envelope.
+  const compactionFailure =
+    command &&
+    commandResult?.end.outcome === 'failure' &&
+    !leftToStop &&
+    (command.failed !== null || failure !== null)
+      ? { ...command.failed, receivedAfter: command.rejectionsBefore }
+      : undefined
   const usageLimit = settlesTurn
-    ? usageLimits.result(
-        message,
-        failure !== null,
-        usageEvidence,
-        command &&
-          commandResult?.end.outcome === 'failure' &&
-          !leftToStop &&
-          (command.failed !== null || failure !== null)
-          ? (command.failed ?? {})
-          : undefined
-      )
+    ? usageLimits.result(message, !command && failure !== null, usageEvidence, compactionFailure)
     : null
   if (command && commandResult?.row && !usageLimit) {
     sink.appendItem(command.resultIdentity, commandResult.row, { turnScope: endedTurnScope })

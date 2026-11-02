@@ -15,6 +15,8 @@ import { claudeText } from './structured/journal/claude-structured-item-translat
 import { claudeResultFailure } from './structured/launch/claude-structured-provider-fallback'
 import type { ClaudeCurrentTurn, ClaudeTurnEnd } from './claude-turn-lifecycle-item'
 import { isRootClaudeFrame } from './claude-turn-opening'
+import type { ClaudeOpenTurn } from './claude-open-turn'
+import type { ClaudeUsageLimits } from './claude-usage-limits'
 
 export type ClaudeCommandTurn = {
   identity: AgentJournalItemIdentity
@@ -23,6 +25,8 @@ export type ClaudeCommandTurn = {
   compacted: boolean
   interruptRequested: boolean
   failed: { detail?: ProviderDiagnostic } | null
+  /** Account rejections received before the command began cannot explain its failure. */
+  rejectionsBefore: number
 }
 
 export type ClaudeCommandStart = StructuredAgentSessionCommandRun & {
@@ -30,7 +34,10 @@ export type ClaudeCommandStart = StructuredAgentSessionCommandRun & {
   sentUuid: string
 }
 
-export function claudeCommandCurrentTurn(start: ClaudeCommandStart): ClaudeCurrentTurn {
+export function claudeCommandCurrentTurn(
+  start: ClaudeCommandStart,
+  usageLimits: Pick<ClaudeUsageLimits, 'receivedRejections'>
+): ClaudeCurrentTurn {
   const { running } = start
   return {
     sessionId: start.providerSessionId,
@@ -44,7 +51,8 @@ export function claudeCommandCurrentTurn(start: ClaudeCommandStart): ClaudeCurre
       sentUuid: start.sentUuid,
       compacted: false,
       interruptRequested: false,
-      failed: null
+      failed: null,
+      rejectionsBefore: usageLimits.receivedRejections
     }
   }
 }
@@ -74,13 +82,37 @@ export function observeClaudeCommandFrame(
   )
 }
 
+/** Hidden command replies still carry this attempt's provider failure cause. */
+export function absorbClaudeCommandFrame(
+  turn: ClaudeOpenTurn,
+  usageLimits: Pick<ClaudeUsageLimits, 'assistant'>,
+  message: Record<string, unknown>
+): boolean {
+  const { command } = turn
+  if (!observeClaudeCommandFrame(command, message)) {
+    return false
+  }
+  if (command && claudeCommandAnswers(command, message)) {
+    usageLimits.assistant(message, turn)
+  }
+  return true
+}
+
+/** Frames without an input UUID predate correlation; one naming another input is not this command's. */
+function claudeCommandAnswers(
+  command: ClaudeCommandTurn,
+  message: Record<string, unknown>
+): boolean {
+  const answers = claudeText(message.user_message_uuid)
+  return answers === null || answers === command.sentUuid
+}
+
 export function claudeCommandEnd(
   command: ClaudeCommandTurn,
   message: Record<string, unknown>,
   completedAt: number
 ): { end: ClaudeTurnEnd; row: AgentJournalItemBody | null } | null {
-  const answers = claudeText(message.user_message_uuid)
-  if (answers !== null && answers !== command.sentUuid) {
+  if (!claudeCommandAnswers(command, message)) {
     return null
   }
   // Stopped and finished compactions can both return success; use compaction evidence.

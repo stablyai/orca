@@ -117,11 +117,25 @@ export class AcpTurnFailures {
 
   ended(turn: string, ending: AcpTurnEnding, compaction?: AcpCompaction): ProviderTimelineEvent[] {
     const { stopReason, failureDetail, notSignedIn, usageLimit } = ending
-    const placement = compaction
-      ? { join: { thread: this.sessionId }, previous: compaction.failure }
-      : undefined
-    return acpStopReasonFailed(stopReason)
-      ? this.row(turn, failureDetail, stopReason, notSignedIn, usageLimit, placement)
+    if (!acpStopReasonFailed(stopReason)) {
+      return []
+    }
+    if (!compaction) {
+      return this.row(turn, failureDetail, stopReason, notSignedIn, usageLimit)
+    }
+    // Agents report /compact's own failures as errors too; only a typed cause makes it the provider's.
+    compaction.failure = mergeAcpTurnFailureEvidence(
+      compaction.failure,
+      stopReason,
+      failureDetail,
+      notSignedIn,
+      usageLimit
+    )
+    return compaction.failure.notSignedIn || compaction.failure.usageLimited
+      ? this.row(turn, failureDetail, stopReason, notSignedIn, usageLimit, {
+          join: { thread: this.sessionId },
+          previous: compaction.failure
+        })
       : []
   }
 

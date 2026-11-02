@@ -103,7 +103,8 @@ export function acpCompactionEnd(input: {
       end('success')
     ]
   }
-  const words = reply?.detail ?? input.failureDetail ?? compaction.failure?.text
+  // Settlement already merged its detail behind the first diagnostic the agent reported.
+  const words = reply?.detail ?? (compaction.failure?.text || input.failureDetail)
   const detail = words === undefined ? undefined : providerDiagnostic(words, 'person')
   const verdict = structuredCompactionOutcome({
     // Normal completion implies compaction unless the reply says otherwise.

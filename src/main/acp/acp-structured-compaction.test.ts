@@ -208,8 +208,35 @@ describe('ACP compaction settlement', () => {
     const { turn, inside } = await ended(rig, command)
     expect(turn).toMatchObject({ state: 'completed', outcome: 'failure' })
     expect(inside).toEqual([
-      { kind: 'status', tone: 'error', text: 'Internal error: CAPTURE_PROVIDER_400' }
+      expect.objectContaining({
+        tone: 'error',
+        failure: {
+          kind: 'compactionFailed',
+          detail: { text: 'Internal error: CAPTURE_PROVIDER_400', audience: 'person' }
+        }
+      })
     ])
+  })
+
+  it("keeps Grok's own no-work compaction error the command's failure, not the agent's", async () => {
+    const { rig, command, prompt } = await compact(GROK)
+    // Grok's documented compact error data; a supported producer shape, not a live capture.
+    rig.child().agent.fail(prompt, -32603, 'Internal error', {
+      kind: 'compact_failed',
+      message: 'nothing to compact'
+    })
+    const { turn, inside } = await ended(rig, command)
+    expect(turn).toMatchObject({ state: 'completed', outcome: 'failure' })
+    expect(inside).toEqual([
+      expect.objectContaining({
+        tone: 'error',
+        failure: {
+          kind: 'compactionFailed',
+          detail: { text: 'nothing to compact', audience: 'person' }
+        }
+      })
+    ])
+    expect((await rig.rig.rows()).filter((row) => row.body.kind === 'status')).toHaveLength(1)
   })
 
   it.each(['turn_completed', 'prompt_complete'])(

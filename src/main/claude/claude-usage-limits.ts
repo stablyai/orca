@@ -49,9 +49,16 @@ export type ClaudeUsageLimitEvidence = {
 
 // Account observations outlive turns because unchanged rejection notifications are throttled.
 export class ClaudeUsageLimits {
-  private readonly rejected = new Map<string, number | null>()
+  // Each rejection keeps when it was received, so an attempt can tell its own from older ones.
+  private readonly rejected = new Map<string, { resetsAt: number | null; received: number }>()
+  private received = 0
 
   constructor(private readonly now: () => number = Date.now) {}
+
+  /** A watermark: later rejections were received after this point. */
+  get receivedRejections(): number {
+    return this.received
+  }
 
   observe(message: Record<string, unknown>): void {
     if (message.type === 'rate_limit_event') {
@@ -64,7 +71,13 @@ export class ClaudeUsageLimits {
       return null
     }
     const typed = claudeText(message.api_error)
-    const cause = typed === 'usage_limit_reached' ? 'quota' : typed ? 'other' : 'untyped'
+    // A login failure is an explicit cause, even though it carries no api_error.
+    const cause =
+      typed === 'usage_limit_reached'
+        ? 'quota'
+        : typed || message.error === 'authentication_failed'
+          ? 'other'
+          : 'untyped'
     if (cause === 'quota') {
       this.record(claudeRecord(claudeRecord(message.api_error_params)?.rate_limit_info))
     }
@@ -73,7 +86,7 @@ export class ClaudeUsageLimits {
     const decision = !typed && root ? (turn?.usageLimitEvidence?.cause ?? cause) : cause
     const row =
       decision !== 'other' && refused ? this.row(messageText(message), decision === 'quota') : null
-    if (root && turn?.isOpen && (typed || (refused && decision === 'untyped'))) {
+    if (root && turn?.isOpen && (cause !== 'untyped' || (refused && decision === 'untyped'))) {
       turn.usageLimitEvidence = { cause: row ? 'quota' : cause }
     }
     return row
@@ -83,7 +96,7 @@ export class ClaudeUsageLimits {
     message: Record<string, unknown>,
     failed: boolean,
     evidence: ClaudeUsageLimitEvidence | null,
-    compactionFailure?: { detail?: ProviderDiagnostic }
+    compactionFailure?: { detail?: ProviderDiagnostic; receivedAfter: number }
   ): ClaudeUsageLimitRow | null {
     if ((!failed && !compactionFailure) || evidence?.cause === 'other') {
       return null
@@ -95,7 +108,9 @@ export class ClaudeUsageLimits {
       (evidence?.cause === 'untyped' &&
         (status == null || status === 429) &&
         (reason === null || LIMIT_TERMINAL_REASONS.includes(reason))) ||
+      // Only a rejection received during this command can explain its failure; older ones are context.
       (compactionFailure !== undefined &&
+        this.rejectedAfter(compactionFailure.receivedAfter) &&
         (status == null || status === 429) &&
         (reason === null || LIMIT_TERMINAL_REASONS.includes(reason) || reason === 'blocking_limit'))
     if (!limited) {
@@ -121,26 +136,37 @@ export class ClaudeUsageLimits {
       const seconds = info.resetsAt
       const resetsAt =
         typeof seconds === 'number' ? usageLimitResetsAt(seconds * 1000, this.now()) : undefined
-      this.rejected.set(type, resetsAt ?? null)
+      this.rejected.set(type, { resetsAt: resetsAt ?? null, received: ++this.received })
     } else if (info.status === 'allowed' || info.status === 'allowed_warning' || overage) {
       this.rejected.delete(type)
     }
   }
 
-  /** All rejecting limits must reset before requests can resume. */
-  private limit(): AgentSessionUsageLimit | null {
+  private rejectedAfter(received: number): boolean {
+    this.expire()
+    return [...this.rejected.values()].some((entry) => entry.received > received)
+  }
+
+  private expire(): void {
     const now = this.now()
-    for (const [type, resetsAt] of this.rejected) {
+    for (const [type, { resetsAt }] of this.rejected) {
       if (resetsAt !== null && resetsAt <= now) {
         this.rejected.delete(type)
       }
     }
+  }
+
+  /** All rejecting limits must reset before requests can resume. */
+  private limit(): AgentSessionUsageLimit | null {
+    this.expire()
     if (this.rejected.size === 0) {
       return null
     }
     const windows = new Set([...this.rejected.keys()].map((type) => CLAUDE_LIMIT_WINDOWS[type]))
     const window = windows.size === 1 ? [...windows][0] : undefined
-    const resets = [...this.rejected.values()].filter((reset): reset is number => reset !== null)
+    const resets = [...this.rejected.values()]
+      .map((entry) => entry.resetsAt)
+      .filter((reset): reset is number => reset !== null)
     const resetsAt = resets.length === this.rejected.size ? Math.max(...resets) : undefined
     return { ...(window ? { window } : {}), ...(resetsAt ? { resetsAt } : {}) }
   }

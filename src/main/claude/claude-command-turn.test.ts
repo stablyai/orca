@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
@@ -22,6 +23,7 @@ const COMMAND_IDENTITY: AgentJournalItemIdentity = {
 }
 const COMMAND_KEY = agentJournalItemKey(COMMAND_IDENTITY)
 const QUOTA_RESET_S = Math.floor(Date.now() / 1000) + 3600
+const CREDITS = 'This model requires usage credits'
 const IN_COMMAND: AgentJournalTurnScope = { kind: 'turn', turnItemId: COMMAND_KEY }
 const RUNNING = {
   kind: 'turn' as const,
@@ -33,6 +35,49 @@ const RUNNING = {
 }
 
 type Row = { key: string; body: AgentJournalItemBody; turnScope?: AgentJournalTurnScope }
+
+const rejected = (rateLimitType: string, status = 'rejected') => ({
+  type: 'rate_limit_event',
+  rate_limit_info: { status, rateLimitType, resetsAt: QUOTA_RESET_S }
+})
+const COMPACT_QUOTA = "You've hit your limit"
+// Typed quota with embedded limit facts, from the provider contract; not a new live capture.
+const QUOTA_ASSISTANT = {
+  type: 'assistant',
+  parent_tool_use_id: null,
+  api_error: 'usage_limit_reached',
+  error: 'rate_limit',
+  is_api_error_message: true,
+  api_error_params: {
+    rate_limit_info: { status: 'rejected', rateLimitType: 'five_hour', resetsAt: QUOTA_RESET_S }
+  },
+  user_message_uuid: 'compact-input',
+  message: { role: 'assistant', content: [{ type: 'text', text: COMPACT_QUOTA }] }
+}
+
+/** The recorded signed-out assistant error and result, answering this command's input. */
+async function recordedSignedOut(): Promise<Record<string, unknown>[]> {
+  const capture = await readFile(
+    new URL('./__fixtures__/claude-lifecycle-capture-auth-failed.jsonl', import.meta.url),
+    'utf8'
+  )
+  return capture
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line) as { kind: string; frame?: Record<string, unknown> })
+    .flatMap(({ frame }) =>
+      frame?.error === 'authentication_failed' || (frame?.type === 'result' && frame.is_error)
+        ? [
+            {
+              ...frame,
+              session_id: CAPTURED_COMPACT_SESSION_ID,
+              user_message_uuid: 'compact-input',
+              user_message_uuids: ['compact-input']
+            }
+          ]
+        : []
+    )
+}
 
 function harness() {
   const rows = new Map<string, Row>([[COMMAND_KEY, { key: COMMAND_KEY, body: RUNNING }]])
@@ -114,16 +159,18 @@ function harness() {
 }
 
 describe('a captured /compact as the open Claude turn', () => {
-  it.each(['success', 'error_during_execution'])(
-    'retains account quota on a failed command with a %s envelope, before composing its result',
-    (subtype) => {
+  it.each([
+    ['success', 'account event'],
+    ['error_during_execution', 'account event'],
+    ['success', 'assistant error'],
+    ['error_during_execution', 'assistant error']
+  ])(
+    'retains quota on a failed command with a %s envelope from its %s, before composing its result',
+    (subtype, source) => {
       const h = harness()
       h.begin('compact-input')
       // Structured quota/compact sequence from the provider contract; not a new live capture.
-      h.frame({
-        type: 'rate_limit_event',
-        rate_limit_info: { status: 'rejected', rateLimitType: 'five_hour', resetsAt: QUOTA_RESET_S }
-      })
+      h.frame(source === 'account event' ? rejected('five_hour') : QUOTA_ASSISTANT)
       h.frame({ type: 'system', subtype: 'status', compact_result: 'failed' })
       h.frame({
         type: 'result',
@@ -131,7 +178,7 @@ describe('a captured /compact as the open Claude turn', () => {
         is_error: subtype !== 'success',
         local_command: 'compact',
         terminal_reason: null,
-        result: '',
+        result: subtype === 'success' ? '' : COMPACT_QUOTA,
         num_turns: 0,
         user_message_uuid: 'compact-input'
       })
@@ -146,11 +193,101 @@ describe('a captured /compact as the open Claude turn', () => {
           body: expect.objectContaining({
             kind: 'status',
             tone: 'warning',
-            failure: {
+            failure: expect.objectContaining({
               kind: 'usageLimitReached',
               usageLimit: { window: 'session', resetsAt: QUOTA_RESET_S * 1000 }
-            }
+            })
           })
+        })
+      ])
+    }
+  )
+
+  it.each(['signed out', 'model credits'])(
+    'keeps an explicit %s cause over a rejection received during the command',
+    async (cause) => {
+      const h = harness()
+      h.begin('compact-input')
+      h.frame(rejected('five_hour'))
+      const shown = cause === 'signed out' ? 'Not logged in · Please run /login' : CREDITS
+      if (cause === 'signed out') {
+        for (const frame of await recordedSignedOut()) {
+          h.frame(frame)
+        }
+      } else {
+        // Typed credit refusal, the shape the ordinary usage tests use; not a live capture.
+        h.frame({
+          type: 'assistant',
+          parent_tool_use_id: null,
+          api_error: 'model_requires_usage_credits',
+          error: 'rate_limit',
+          is_api_error_message: true,
+          user_message_uuid: 'compact-input',
+          message: { role: 'assistant', content: [{ type: 'text', text: CREDITS }] }
+        })
+        h.frame({
+          type: 'system',
+          subtype: 'status',
+          compact_result: 'failed',
+          compact_error: CREDITS
+        })
+        h.frame({
+          type: 'result',
+          subtype: 'error_during_execution',
+          is_error: true,
+          result: CREDITS,
+          terminal_reason: 'api_error',
+          api_error_status: 429,
+          user_message_uuid: 'compact-input'
+        })
+      }
+      expect(h.commandTurn()).toMatchObject({ state: 'completed', outcome: 'failure' })
+      const statuses = h.drawn().filter((row) => row.body.kind === 'status')
+      expect(statuses).toEqual([
+        expect.objectContaining({
+          turnScope: IN_COMMAND,
+          body: expect.objectContaining({ text: expect.stringContaining(shown) })
+        })
+      ])
+      expect(
+        statuses.some(
+          (row) => row.body.kind === 'status' && row.body.failure?.kind === 'usageLimitReached'
+        )
+      ).toBe(false)
+    }
+  )
+
+  it.each(['received before the command', 'cleared during it'])(
+    "keeps Claude's own refusal command-owned when the only rejection was %s",
+    (when) => {
+      const h = harness()
+      if (when === 'received before the command') {
+        h.frame(rejected('five_hour'))
+        h.begin('compact-input')
+      } else {
+        // A blanket "rejected during this command" flag would borrow the older weekly limit.
+        h.frame(rejected('seven_day'))
+        h.begin('compact-input')
+        h.frame(rejected('five_hour'))
+        h.frame(rejected('five_hour', 'allowed'))
+      }
+      h.frame({
+        type: 'system',
+        subtype: 'status',
+        compact_result: 'failed',
+        compact_error: 'Not enough messages to compact.'
+      })
+      h.frame({
+        type: 'result',
+        subtype: 'success',
+        is_error: false,
+        user_message_uuid: 'compact-input'
+      })
+      expect(h.commandTurn()).toMatchObject({ state: 'completed', outcome: 'failure' })
+      expect(h.drawn().map((row) => row.body)).toEqual([
+        expect.objectContaining({
+          text: 'Compaction failed: Not enough messages to compact.',
+          failure: expect.objectContaining({ kind: 'compactionFailed' })
         })
       ])
     }
