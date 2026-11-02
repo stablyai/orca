@@ -1,3 +1,4 @@
+import { traceWslGate } from './wsl/wsl-spawn-trace'
 import { listRunningWslDistrosAsync, listWslDistrosAsync } from './wsl'
 import { outsideWslUserAct } from './wsl/wsl-user-act-scope'
 import {
@@ -188,7 +189,9 @@ export async function isWslDistroRunningForBackgroundWork(
     return false
   }
   const target = distro?.trim() || (await listWslDistrosAsync())[0]
-  return target ? isWslDistroRunning(target) : false
+  const running = target ? await isWslDistroRunning(target) : false
+  traceWslGate('background', target ?? '-', `asked=${distro ?? 'default'} running=${running}`)
+  return running
 }
 
 /** In-memory deferred work is keyed per distro; callers must rediscover it after restart. Returns a cancel. */

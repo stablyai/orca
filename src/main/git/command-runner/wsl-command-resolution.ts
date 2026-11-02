@@ -1,3 +1,4 @@
+import { traceWslSpawn } from '../../wsl/wsl-spawn-trace'
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import { getDefaultWslDistro, parseWslPath, type WslPathInfo } from '../../wsl'
 import {
@@ -106,6 +107,7 @@ export function resolveCommand(
   assertWslDistroAllowed('wsl.exe', ['-d', wsl.distro])
   // Every WSL Git/CLI run is about to start the distro; gated polls stop trusting a 'stopped' read.
   noteWslDistroLaunched(wsl.distro)
+  traceWslSpawn('git-runner', 'wsl.exe', ['-d', wsl.distro, command, ...args])
 
   const translatedArgs = translateArgsForWsl(args)
   // WSL does not inherit unlisted Windows env vars; carry locale pins in the command.

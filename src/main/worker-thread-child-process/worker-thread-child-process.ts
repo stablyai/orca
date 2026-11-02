@@ -1,3 +1,4 @@
+import { traceWslSpawn } from '../wsl/wsl-spawn-trace'
 import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
 import { Worker } from 'node:worker_threads'
@@ -215,6 +216,8 @@ function defaultWorkerFactory(): Worker {
 let sharedHost: WorkerThreadChildProcessHost | null = null
 
 export function spawnProcessOnWorkerThread(spec: WorkerThreadChildSpec): WorkerThreadChildProcess {
+  // The worker's own process-host never reaches main's spawn observer.
+  traceWslSpawn('worker-thread', spec.program, spec.args ?? [])
   sharedHost ??= new WorkerThreadChildProcessHost(defaultWorkerFactory)
   return sharedHost.spawn(spec)
 }

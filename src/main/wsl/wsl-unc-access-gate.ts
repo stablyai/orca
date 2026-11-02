@@ -1,3 +1,4 @@
+import { traceWslGate } from './wsl-spawn-trace'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   wslDistroStoppedMessage,
@@ -67,13 +68,18 @@ export async function blockedWslDistroForPath(
   options: { leaseMs?: number } = {}
 ): Promise<BlockedWslDistro | null> {
   const distro = wslDistroForPath(path, wslDistro)
-  if (!distro || isWslUserActFor(distro)) {
+  if (!distro) {
+    return null
+  }
+  if (isWslUserActFor(distro)) {
+    traceWslGate('path', distro, 'admitted by user act')
     return null
   }
   const state = await readWslDistroRunningState(distro, {
     startedAfter: performance.now() - (options.leaseMs ?? WSL_UNC_RUNNING_LEASE_MS),
     retryUnverifiable: true
   })
+  traceWslGate('path', distro, `running read: ${state}`)
   return state === 'running' ? null : { distro, state }
 }
 
