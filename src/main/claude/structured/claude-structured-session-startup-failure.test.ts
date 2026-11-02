@@ -235,11 +235,8 @@ it('keeps a rejected initialize final when the child exits before acquisition pu
   await adapter.closeAll()
 })
 
-it('parses only a failed root result at startup and bounds what it retains', async () => {
-  const child = createFakePipedChild()
-  const observation = claudeStartupAnswerObservation()
-  observation.attach(child)
-  const parse = vi.spyOn(JSON, 'parse')
+it('parses only failed root results at startup, bounded by candidates rather than records', async () => {
+  const flush = () => new Promise((resolve) => setImmediate(resolve))
   const hook = (output: string) =>
     `${JSON.stringify({
       type: 'system',
@@ -250,20 +247,65 @@ it('parses only a failed root result at startup and bounds what it retains', asy
       stdout: '',
       stderr: ''
     })}\n`
-  const oversized = hook('x'.repeat(NDJSON_MAX_LINE_BYTES + 1))
-  child.stdout.write(oversized.slice(0, NDJSON_MAX_LINE_BYTES / 2))
-  child.stdout.write(oversized.slice(NDJSON_MAX_LINE_BYTES / 2))
-  child.stdout.write(hook(JSON.stringify({ type: 'result', is_error: true })))
-  child.stdout.write(
-    `${JSON.stringify({ type: 'result', subtype: 'error_during_execution', is_error: true })}\n`
-  )
-  await new Promise((resolve) => setImmediate(resolve))
-  const parsed = parse.mock.calls.map(([text]) => String(text))
-  parse.mockRestore()
-  expect(parsed.filter((text) => text.includes('hook_response'))).toEqual([])
-  expect(parsed.filter((text) => text.includes('error_during_execution'))).toHaveLength(1)
-  expect(observation.failure()).toMatchObject({ errorClass: 'error_result' })
-  expect(child.stdout.listenerCount('data')).toBe(0)
+  const assistant = (text: string) =>
+    `${JSON.stringify({
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: { role: 'assistant', content: [{ type: 'text', text }] }
+    })}\n`
+  const failedResult = (subtype: string) =>
+    `${JSON.stringify({ type: 'result', subtype, is_error: true })}\n`
+  // Counts the real observer's work for one child at a given startup record population.
+  const observeStartup = async (records: number) => {
+    const child = createFakePipedChild()
+    const observation = claudeStartupAnswerObservation()
+    observation.attach(child)
+    const listenersWhileAttached = child.stdout.listenerCount('data')
+    const parse = vi.spyOn(JSON, 'parse')
+    try {
+      const oversized = hook('x'.repeat(NDJSON_MAX_LINE_BYTES + 1))
+      child.stdout.write(oversized.slice(0, NDJSON_MAX_LINE_BYTES / 2))
+      child.stdout.write(oversized.slice(NDJSON_MAX_LINE_BYTES / 2))
+      for (let index = 0; index < records; index += 1) {
+        child.stdout.write(
+          index % 2 === 0
+            ? hook(JSON.stringify({ type: 'result', is_error: true, index }))
+            : assistant(`working ${index}`)
+        )
+      }
+      child.stdout.write(failedResult('error_during_execution'))
+      await flush()
+      const parsed = parse.mock.calls.map(([text]) => String(text))
+      const failure = observation.failure()
+      parse.mockClear()
+      child.stdout.write(failedResult('error_after_capture'))
+      child.stdout.write(hook('after capture'))
+      observation.finish()
+      child.stdout.write(failedResult('error_after_finish'))
+      await flush()
+      return {
+        listenersWhileAttached,
+        irrelevantParses: parsed.filter((text) => !text.includes('error_during_execution')).length,
+        candidateParses: parsed.filter((text) => text.includes('error_during_execution')).length,
+        failure,
+        parsesAfterCapture: parse.mock.calls.length,
+        listenersAfterCapture: child.stdout.listenerCount('data')
+      }
+    } finally {
+      parse.mockRestore()
+    }
+  }
+  const n = await observeStartup(100)
+  const tenN = await observeStartup(1000)
+  expect(n).toMatchObject({
+    listenersWhileAttached: 1,
+    irrelevantParses: 0,
+    candidateParses: 1,
+    failure: expect.objectContaining({ errorClass: 'error_result' }),
+    parsesAfterCapture: 0,
+    listenersAfterCapture: 0
+  })
+  expect(tenN).toEqual(n)
 })
 
 it('takes no startup answer from a line over the budget', async () => {
