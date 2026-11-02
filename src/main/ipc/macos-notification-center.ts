@@ -9,6 +9,12 @@ function paneGroupId(paneKey: string): string {
   return `pane:${paneKey}`
 }
 
+/**
+ * Native identity for a macOS notification: unpositioned announcements share a
+ * group per subject (the pane, or the synthetic worktree subject when pane-less)
+ * so repeats replace each other, while structured alerts keep a once-only id so
+ * a covering read can remove exactly the alert it read.
+ */
 export function macosNotificationIdentity(
   request: NotificationDispatchRequest
 ): Pick<NotificationConstructorOptions, 'id' | 'groupId'> {

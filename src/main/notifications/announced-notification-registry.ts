@@ -82,6 +82,7 @@ export function createAnnouncedNotificationRegistry(limits?: {
       }
       return selected
     },
+    // Whole-worktree read: sweep every subject for this worktree's entries.
     takeByWorktree: (worktreeId) => {
       const taken: {
         paneKey: string
