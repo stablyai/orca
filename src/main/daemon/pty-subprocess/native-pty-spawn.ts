@@ -93,7 +93,7 @@ export async function spawnNativeDaemonPty(args: {
       attempt.resolve({ kind: 'failed', completion: Promise.resolve() })
       throw error
     }
-    const physical = createDaemonPtyPhysicalOwner(proc)
+    const physical = createDaemonPtyPhysicalOwner(proc, shellPath)
     unpublishedOwner = physical
     attempt.resolve({
       kind: 'physical',

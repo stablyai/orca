@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const connectionDiagnosticsScreenStyles = themedStyleSheet(() => ({
@@ -8,7 +8,7 @@ export const connectionDiagnosticsScreenStyles = themedStyleSheet(() => ({
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm
@@ -23,7 +23,7 @@ export const connectionDiagnosticsScreenStyles = themedStyleSheet(() => ({
   hostChip: {
     paddingVertical: spacing.xs + 2,
     paddingHorizontal: spacing.md,
-    borderRadius: 16,
+    borderRadius: radii.pill,
     backgroundColor: colors.bgRaised
   },
   hostChipActive: {
@@ -44,7 +44,7 @@ export const connectionDiagnosticsScreenStyles = themedStyleSheet(() => ({
     backgroundColor: colors.bgPanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: 10,
+    borderRadius: radii.surface,
     padding: spacing.md,
     marginBottom: spacing.md
   },
@@ -70,7 +70,7 @@ export const connectionDiagnosticsScreenStyles = themedStyleSheet(() => ({
     gap: spacing.xs,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    borderRadius: 8,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   sendButtonText: {
@@ -84,7 +84,7 @@ export const connectionDiagnosticsScreenStyles = themedStyleSheet(() => ({
     gap: spacing.xs + 2,
     paddingVertical: spacing.xs + 2,
     paddingHorizontal: spacing.md,
-    borderRadius: 8,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   copyButtonText: {

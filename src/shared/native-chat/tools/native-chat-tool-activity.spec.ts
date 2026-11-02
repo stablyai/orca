@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatBlock } from '../../native-chat-types'
+import type { NativeChatBlock } from '../native-chat-types'
 import {
   describeActiveToolCall,
   formatActiveToolLabel,

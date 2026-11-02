@@ -14,6 +14,9 @@ import {
 import { journalNativeChatComposerDraftAddition } from './native-chat-composer-draft-journal'
 import {
   clearDraftMemoryForTests,
+  installNativeChatDraftRecord,
+  type NativeChatDraftPosition,
+  nativeChatDraftPositions,
   dirtyScopes,
   hasLocalChange,
   load,
@@ -132,7 +135,8 @@ export function updateNativeChatComposerDraft(
   scopeKey: string,
   change: NativeChatComposerDraftChange,
   persist: 'immediate' | 'deferred',
-  append?: DraftAppend
+  append?: DraftAppend,
+  position?: NativeChatDraftPosition
 ): void {
   if (isNativeChatEditDraft(scopeKey) && !ephemeralDrafts.has(scopeKey)) {
     return
@@ -148,6 +152,7 @@ export function updateNativeChatComposerDraft(
   const images = change.images ?? current.images
   const unsavedText = change.unsavedText ?? current.unsavedText
   if (
+    !position &&
     JSON.stringify(pastedTextFiles) === JSON.stringify(current.pastedTextFiles ?? {}) &&
     text === current.text &&
     sameNativeChatComposerDraftDocument(document, current.document) &&
@@ -160,7 +165,7 @@ export function updateNativeChatComposerDraft(
     return
   }
   if (isEmptyDraft({ text, images })) {
-    records.delete(scopeKey)
+    installNativeChatDraftRecord(scopeKey)
     reconcileRestoredImageChecks(scopeKey, [])
     notifyScope(scopeKey)
     if (!isNativeChatEditDraft(scopeKey)) {
@@ -182,7 +187,7 @@ export function updateNativeChatComposerDraft(
     ...(owner ? { owner } : {}),
     ...(unsavedText === undefined ? {} : { unsavedText })
   }
-  records.set(scopeKey, record)
+  installNativeChatDraftRecord(scopeKey, record, position)
   reconcileRestoredImageChecks(scopeKey, record.images)
   notifyScope(scopeKey)
   if (isNativeChatEditDraft(scopeKey)) {
@@ -195,23 +200,20 @@ export function updateNativeChatComposerDraft(
   }
 }
 
-function withAddition<T extends NativeChatComposerDraft>(
-  draft: T,
-  addition: NativeChatComposerDraftAddition
-): T {
-  return { ...draft, ...withNativeChatComposerDraftAddition(draft, addition) }
-}
-
 /** Replay additions over late hydration without duplicates; true means durable hand-back, allowing deletion of its source copy. */
 export function appendToNativeChatComposerDraft(
   scopeKey: string,
   addition: NativeChatComposerDraftAddition,
-  owner?: NativeChatComposerDraftOwner
+  owner?: NativeChatComposerDraftOwner,
+  position?: (draft: NativeChatComposerDraft) => NativeChatDraftPosition
 ): boolean {
   const before = records.get(scopeKey)
   const current = readNativeChatComposerDraft(scopeKey)
   const placed = placeNativeChatComposerDraftAddition(current, addition)
-  const { text, images, document, pastedTextFiles } = withAddition(current, placed)
+  const { text, images, document, pastedTextFiles } = withNativeChatComposerDraftAddition(
+    current,
+    placed
+  )
   updateNativeChatComposerDraft(
     scopeKey,
     {
@@ -222,7 +224,14 @@ export function appendToNativeChatComposerDraft(
       ...(owner ? { owner } : {})
     },
     'immediate',
-    (loaded) => withAddition(loaded, placed)
+    (loaded) => {
+      const merged = { ...loaded, ...withNativeChatComposerDraftAddition(loaded, placed) }
+      if (position) {
+        nativeChatDraftPositions.set(merged, position(merged))
+      }
+      return merged
+    },
+    position?.({ text, images, document, pastedTextFiles })
   )
   if (text !== current.text) {
     notifyDraftAppend(scopeKey, placed, current)
@@ -271,7 +280,7 @@ function deleteDraftsWhere(
   for (const scopeKey of new Set([...records.keys(), ...scopeListeners.keys()])) {
     const draft = records.get(scopeKey)
     if (matches(scopeKey, draft)) {
-      records.delete(scopeKey)
+      installNativeChatDraftRecord(scopeKey)
       reconcileRestoredImageChecks(scopeKey, [])
       notifyScope(scopeKey)
       if (draft) {

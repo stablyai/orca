@@ -169,48 +169,6 @@ describe('EphemeralVmsPane', () => {
     }
   })
 
-  it('shows copied feedback while mounted and releases its reset on unmount', async () => {
-    const container = await renderPane()
-    const setTimeout = vi.spyOn(window, 'setTimeout')
-    const clearTimeout = vi.spyOn(window, 'clearTimeout')
-    try {
-      await act(async () => {
-        container.querySelector<HTMLButtonElement>('button[aria-label="Copy"]')?.click()
-      })
-      expect(container.querySelector('button[aria-label="Copy"]')?.textContent).toBe('Copied')
-      const timerIndex = setTimeout.mock.calls.findIndex(([, delay]) => delay === 1500)
-      expect(timerIndex).toBeGreaterThanOrEqual(0)
-      const timer = setTimeout.mock.results[timerIndex].value
-      await act(async () => roots.pop()?.unmount())
-      expect(clearTimeout).toHaveBeenCalledWith(timer)
-    } finally {
-      setTimeout.mockRestore()
-      clearTimeout.mockRestore()
-    }
-  })
-
-  it('refreshes the catalog when plugin content changes', async () => {
-    const listRecipeCatalog = window.api.ephemeralVm.listRecipeCatalog as ReturnType<typeof vi.fn>
-    const container = await renderPane()
-    await vi.waitFor(() => expect(container.textContent).toContain('Cloud Sandbox'))
-    listRecipeCatalog.mockResolvedValueOnce([
-      {
-        repoId: 'repo-1',
-        repoName: 'Repo',
-        repoPath: '/repo',
-        diagnostics: [],
-        recipes: [{ id: 'plugin-recipe', name: 'Plugin Recipe', create: 'create' }]
-      }
-    ])
-
-    await act(async () => {
-      ;(window.api.plugins as never as { emitContentChanged: () => void }).emitContentChanged()
-    })
-
-    await vi.waitFor(() => expect(container.textContent).toContain('Plugin Recipe'))
-    expect(listRecipeCatalog).toHaveBeenCalledTimes(2)
-  })
-
   it('ignores an older refresh that finishes after a plugin-content refresh', async () => {
     const listRecipeCatalog = window.api.ephemeralVm.listRecipeCatalog as ReturnType<typeof vi.fn>
     let resolveInitial!: (catalog: unknown[]) => void

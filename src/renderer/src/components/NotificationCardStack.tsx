@@ -6,6 +6,10 @@ import {
   NOTIFICATION_CARD_STACK_BOTTOM,
   subscribeToComposerLayout
 } from '@/lib/notification-card-composer-clearance'
+import {
+  registerNotificationCardLayoutVarReader,
+  setNotificationCardLayoutVar
+} from '@/lib/notification-card-layout-vars'
 
 const STACK_STYLE = {
   bottom: NOTIFICATION_CARD_STACK_BOTTOM,
@@ -21,6 +25,7 @@ export function NotificationCardStack({ children }: { children: ReactNode }): Re
       return
     }
     const root = stack.ownerDocument.documentElement
+    const unregister = registerNotificationCardLayoutVarReader(stack)
     // Why publish: toasts share this corner and would otherwise render behind the cards (z-50).
     const publish = (): void => {
       const height = stack.offsetHeight
@@ -34,19 +39,14 @@ export function NotificationCardStack({ children }: { children: ReactNode }): Re
               window.innerHeight
             )
           : 0
-      if (height > 0) {
-        root.style.setProperty(NOTIFICATION_CARD_STACK_HEIGHT_VAR, `calc(${height}px + 0.5rem)`)
-      } else {
-        root.style.removeProperty(NOTIFICATION_CARD_STACK_HEIGHT_VAR)
-      }
-      if (clearance > 0) {
-        root.style.setProperty(
-          NOTIFICATION_CARD_COMPOSER_CLEARANCE_VAR,
-          `calc(${clearance}px + 0.5rem)`
-        )
-      } else {
-        root.style.removeProperty(NOTIFICATION_CARD_COMPOSER_CLEARANCE_VAR)
-      }
+      setNotificationCardLayoutVar(
+        NOTIFICATION_CARD_STACK_HEIGHT_VAR,
+        height > 0 ? `calc(${height}px + 0.5rem)` : null
+      )
+      setNotificationCardLayoutVar(
+        NOTIFICATION_CARD_COMPOSER_CLEARANCE_VAR,
+        clearance > 0 ? `calc(${clearance}px + 0.5rem)` : null
+      )
     }
     publish()
     const observer = new ResizeObserver(publish)
@@ -57,8 +57,9 @@ export function NotificationCardStack({ children }: { children: ReactNode }): Re
       observer.disconnect()
       unsubscribe()
       window.removeEventListener('resize', publish)
-      root.style.removeProperty(NOTIFICATION_CARD_STACK_HEIGHT_VAR)
-      root.style.removeProperty(NOTIFICATION_CARD_COMPOSER_CLEARANCE_VAR)
+      setNotificationCardLayoutVar(NOTIFICATION_CARD_STACK_HEIGHT_VAR, null)
+      setNotificationCardLayoutVar(NOTIFICATION_CARD_COMPOSER_CLEARANCE_VAR, null)
+      unregister()
     }
   }, [])
 

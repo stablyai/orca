@@ -9,6 +9,7 @@ import {
   type WslHostsGateState
 } from '../../shared/wsl-host-internal-gate'
 import type { OrcadDeploymentLink } from '../../shared/runtime-environments'
+import { wslHostRunRefusal, WSL_HOST_REMOVING_MESSAGE } from './wsl-host-add-admission'
 import type { WslHostsMovedProjects, WslHostsPolicyState } from '../../shared/wsl-hosts-policy'
 
 export const WSL_HOSTS_GATED_OFF_MESSAGE = 'WSL hosts are not available in this build.'
@@ -89,6 +90,8 @@ export function resetWslHostsGateForTests(): void {
   noteWslHostsServeOnly(false)
   notePolicy(null, undefined)
   publishWslHostsGateState(process.env, null)
+  liveBlockNoted = false
+  newWorkListeners.clear()
 }
 
 export function wslHostsGateState(): WslHostsGateState {
@@ -107,9 +110,46 @@ export function wslHostsWindowArguments(): string[] {
   ]
 }
 
+/**
+ * Stage 1 is opt-in: work that changes behaviour for projects the user already has needs the
+ * WSL hosts setting on as well as the gate, so turning the setting off (rollback layer 1) undoes it.
+ * A block learned this run undoes it too, the moment it lands.
+ */
+export function wslHostsOptedIn(
+  settings: { experimentalWslHosts?: boolean } | null | undefined
+): boolean {
+  return settings?.experimentalWslHosts === true && wslHostsAcceptNewWork()
+}
+
 /** The internal gate itself, less a remote policy block: adding hosts and starting moves need it. */
 export function wslHostsGateOpen(): boolean {
   return isWslHostsInternalGateOpen(process.env) && !policyBlocked
+}
+
+// A block the live policy fetch cached during this run. It stops new work at once; the gate
+// itself (and so what is served) changes only at the next launch, so nothing is stranded.
+let liveBlockNoted = false
+const newWorkListeners = new Set<() => void>()
+
+/** The live policy fetch cached a block this run; one-way until the next launch re-reads the cache. */
+export function noteWslHostsLivePolicyBlock(): void {
+  if (liveBlockNoted || !wslHostsGateOpen()) {
+    return
+  }
+  liveBlockNoted = true
+  for (const listener of newWorkListeners) {
+    listener()
+  }
+}
+
+export function onWslHostsNewWorkChanged(listener: () => void): () => void {
+  newWorkListeners.add(listener)
+  return () => newWorkListeners.delete(listener)
+}
+
+/** Adding hosts and starting moves: the gate open at launch, less a block learned since. */
+export function wslHostsAcceptNewWork(): boolean {
+  return wslHostsGateOpen() && !liveBlockNoted
 }
 
 /** The launch environment opened the gate, but the cached remote policy closed it for this run. */
@@ -150,4 +190,19 @@ export function assertWslHostReachable(environment: {
   if (isGatedOffWslHost(environment)) {
     throw new Error(WSL_HOSTS_GATED_OFF_MESSAGE)
   }
+}
+
+export function assertWslHostRunAllowed(
+  gate: Parameters<typeof wslHostRunRefusal>[0],
+  removing: ReadonlySet<string>,
+  environmentId: string
+): void {
+  const refusal = wslHostRunRefusal(gate)
+  if (refusal || removing.has(environmentId)) {
+    throw new Error(refusal?.message ?? WSL_HOST_REMOVING_MESSAGE)
+  }
+}
+
+export function wslHostRuntimeCallGuard(message: string, _reason: 'parked' | 'unavailable'): Error {
+  return new Error(message)
 }

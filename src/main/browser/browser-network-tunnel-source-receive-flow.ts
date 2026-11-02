@@ -29,7 +29,7 @@ export function queueBrowserNetworkSourceData(
   stream: BrowserNetworkTunnelSourceReceiveStream,
   payload: Uint8Array<ArrayBufferLike>,
   claimApplicationBytes: (bytes: number) => (() => void) | null
-): boolean {
+): 'queued' | 'invalid' | 'budget_exhausted' {
   if (
     !stream.opened ||
     stream.remoteEnded ||
@@ -39,17 +39,17 @@ export function queueBrowserNetworkSourceData(
       BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_BYTES ||
     stream.pendingToSocket.length >= BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_CHUNKS
   ) {
-    return false
+    return 'invalid'
   }
   const releaseApplicationBytes = claimApplicationBytes(payload.byteLength)
   if (!releaseApplicationBytes) {
-    return false
+    return 'budget_exhausted'
   }
   stream.receiveCredit -= payload.byteLength
   stream.pendingToSocket.push({ bytes: payload.slice(), releaseApplicationBytes })
   stream.pendingToSocketBytes += payload.byteLength
   flushBrowserNetworkSourceData(stream)
-  return true
+  return 'queued'
 }
 
 export function settleBrowserNetworkSourceData(

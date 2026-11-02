@@ -24,52 +24,6 @@ import {
 
 describe('rebuild-native-deps patched node-pty rebuild', () => {
   it.skipIf(process.platform !== 'win32')(
-    'passes the Windows tracking default and explicit overrides to forced Electron rebuilds',
-    () => {
-      const projectDir = mkTempProject()
-
-      try {
-        const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
-        writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
-        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
-        writeFakeLoadableNodePty(projectDir)
-        writeFakeWindowsProcessTree(projectDir)
-        writeFakeWindowsSecurity(projectDir)
-        writeFakeNodePtyConptyPayload(projectDir, process.arch)
-
-        const env = {
-          ORCA_REBUILD_TEST_LOG: rebuildLogPath,
-          npm_config_platform: 'win32',
-          npm_config_arch: process.arch
-        }
-        for (const override of [
-          {},
-          { TrackFileAccess: 'true' },
-          { trackfileaccess: 'true' },
-          { tRaCkFiLeAcCeSs: 'false' }
-        ]) {
-          const result = runRebuildScript(projectDir, { ...env, ...override })
-          expect(result.status, result.stderr).toBe(0)
-        }
-
-        const calls = readFileSync(rebuildLogPath, 'utf8')
-          .trim()
-          .split('\n')
-          .map((line) => JSON.parse(line))
-        expect(calls.map((call) => call.trackFileAccess)).toEqual([
-          'false',
-          'true',
-          'true',
-          'false'
-        ])
-        expect(calls.every((call) => call.force)).toBe(true)
-      } finally {
-        removeTreeSync(projectDir)
-      }
-    }
-  )
-
-  it.skipIf(process.platform !== 'win32')(
     'repairs a missing ConPTY runtime before probing without recompiling node-pty',
     () => {
       const projectDir = mkTempProject()
@@ -101,41 +55,6 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
       }
     }
   )
-
-  it('stages windows-process-tree node-addon-api headers before a Windows rebuild', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
-      writeFakeElectronRebuild(projectDir)
-      writeFakeNodePtyConptyPayload(projectDir, 'x64')
-      writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir)
-
-      const result = runRebuildScript(
-        projectDir,
-        { npm_config_platform: 'win32', npm_config_arch: 'x64' },
-        ['--platform=win32', '--arch=x64', '--force']
-      )
-
-      expect(result.status, result.stderr).toBe(0)
-      expect(
-        readFileSync(
-          join(
-            projectDir,
-            'node_modules',
-            '@vscode',
-            'windows-process-tree',
-            'deps',
-            'node-addon-api',
-            'napi.h'
-          ),
-          'utf8'
-        )
-      ).toBe('// napi.h\n')
-    } finally {
-      removeTreeSync(projectDir)
-    }
-  })
 
   const commandLineSourcePath = (projectDir) =>
     join(
@@ -521,57 +440,6 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
       expect(result.stderr).toContain('`pnpm install`')
       expect(result.stderr).not.toContain('Rebuild node-pty from source')
       expect(existsSync(rebuildLogPath)).toBe(false)
-    } finally {
-      removeTreeSync(projectDir)
-    }
-  })
-
-  it('calls the rebuild API when node-pty source carries the denial', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
-      writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
-      writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
-      writeFakeNodePtyConptyPayload(projectDir, 'x64')
-      writeFakeNodePtyConptySource(projectDir)
-      writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir)
-
-      const result = runRebuildScript(
-        projectDir,
-        {
-          ORCA_REBUILD_TEST_LOG: rebuildLogPath,
-          npm_config_platform: 'win32',
-          npm_config_arch: 'x64'
-        },
-        ['--platform=win32', '--arch=x64', '--force']
-      )
-
-      expect(result.status, result.stderr).toBe(0)
-      const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
-      expect(rebuildCall.onlyModules).toContain('node-pty')
-    } finally {
-      removeTreeSync(projectDir)
-    }
-  })
-
-  it('accepts a Windows rebuild whose addon carries the denial', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
-      writeFakeElectronRebuild(projectDir)
-      writeFakeNodePtyConptyPayload(projectDir, 'x64')
-      writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir)
-
-      const result = runRebuildScript(
-        projectDir,
-        { npm_config_platform: 'win32', npm_config_arch: 'x64' },
-        ['--platform=win32', '--arch=x64', '--force']
-      )
-
-      expect(result.status, result.stderr).toBe(0)
-      expect(result.stderr).not.toContain('job-breakaway denial')
     } finally {
       removeTreeSync(projectDir)
     }

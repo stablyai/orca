@@ -12,7 +12,7 @@ import type { WorktreeStartupLaunch } from '../../../shared/worktree/launch-type
 import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
 import { navigationTargetsClients, navigationTargetsHost } from '../../../shared/runtime-navigation'
 import { toRuntimeActivateWorktreeEvent } from '../../../shared/runtime-client-events'
-import type { AgentBrowserBridge } from '../../browser/agent-browser-bridge'
+import type { AgentBrowserBridge } from '../../browser/agent-browser/agent-browser-bridge'
 import type { BrowserBackend } from '../../browser/browser-backend'
 import type { EmulatorBridge } from '../../emulator/emulator-bridge'
 

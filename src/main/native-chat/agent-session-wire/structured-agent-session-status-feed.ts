@@ -3,7 +3,7 @@
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import { createSavedStructuredStatusGroup } from './structured-agent-session-saved-status'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { AgentChildWorkRecord } from '../../../shared/agent-status-child-work'

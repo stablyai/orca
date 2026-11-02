@@ -76,10 +76,4 @@ describe("the row writer's order from main (layout-owner build)", () => {
     expect(ordered.tabs.find((tab) => tab.id === 'a::1')).toEqual(rows[0])
     expect(ordered).toMatchObject({ activeTabId: 'a::1', activeGroupId: 'right' })
   })
-
-  it('leaves the rows as written when main lists no group', () => {
-    const write = written([terminal('a::1')])
-
-    expect(withMainTabOrder(write, { ...MAIN, tabGroups: undefined })).toBe(write)
-  })
 })

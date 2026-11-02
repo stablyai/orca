@@ -229,7 +229,7 @@ function LoudOverlay({
           {tone === 'driving' ? (
             <span
               aria-hidden="true"
-              className="absolute -right-0.5 -top-0.5 size-1.5 animate-pulse rounded-full bg-foreground ring-2 ring-card"
+              className="absolute -right-0.5 -top-0.5 size-1.5 animate-pulse rounded-full bg-foreground ring-2 ring-card motion-reduce:animate-none"
             />
           ) : null}
         </div>

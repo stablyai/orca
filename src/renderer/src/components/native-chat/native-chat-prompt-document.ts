@@ -6,7 +6,7 @@ import { imageReferenceToken } from '../../../../shared/native-chat/native-chat-
 import { FILE_REFERENCE_NODE, IMAGE_REFERENCE_NODE } from './native-chat-prompt-document-text'
 import { ReactNodeViewRenderer, Node, type JSONContent } from '@tiptap/react'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
-import type { AgentJournalSkillRef } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalSkillRef } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 export { promptTextContent } from './native-chat-prompt-document-text'
 
 export const NativeChatSkill = Node.create({

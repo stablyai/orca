@@ -5,7 +5,7 @@ import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeProcess from 'node:process'
 import type { Repo } from '../shared/repo-types'
-import type { Store } from './persistence'
+import type { Store } from './persistence/loading-store/store'
 
 const { spawnProcessMock, listRepoWorktreesMock } = vi.hoisted(() => ({
   spawnProcessMock: vi.fn(),

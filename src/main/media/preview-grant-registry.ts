@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { WebContents } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { LocalFileAccess } from '../../shared/local-file-access'
 import { MEDIA_PREVIEW_SCHEME } from '../../shared/media-file-extensions'
 import { isDocumentPreview, type FilePreview } from '../../shared/file-preview-kind'

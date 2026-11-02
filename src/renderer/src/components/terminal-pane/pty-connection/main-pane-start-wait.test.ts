@@ -156,4 +156,41 @@ describe('waitsForMainPaneStart', () => {
     })
     expect(pane.deps.onPtyErrorRef?.current).not.toHaveBeenCalled()
   })
+
+  it('shows the Start card when the refusal carries the readable sentence, not the code', async () => {
+    const { showPaneStartFailure } = await import('./main-pane-start-wait')
+    const { wslDistroStoppedHoldStore } = await import('../wsl-distro-stopped-hold-state')
+    const pane = session()
+
+    showPaneStartFailure(
+      pane,
+      "The WSL distro Debian is stopped, so Orca didn't start this terminal. Start the distro, then try again."
+    )
+
+    expect(wslDistroStoppedHoldStore.getState().panes[PANE_KEY]).toMatchObject({
+      distro: 'Debian',
+      state: 'stopped'
+    })
+    expect(pane.deps.onPtyErrorRef?.current).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['terminal_held_wsl_distro_stopped:Ubuntu'],
+    [
+      "The WSL distro Ubuntu is stopped, so Orca didn't start this terminal. Start the distro, then try again."
+    ]
+  ])(
+    "names the distro on a paired host's held pane instead of the raw code (%s)",
+    async (reason) => {
+      const { showPaneStartFailure } = await import('./main-pane-start-wait')
+      const pane = { ...session(), runtimeEnvironmentId: 'env-1' }
+
+      showPaneStartFailure(pane, reason)
+
+      expect(pane.deps.onPtyErrorRef?.current).toHaveBeenCalledWith(
+        1,
+        "The WSL distro Ubuntu is stopped, so Orca didn't start this terminal. Start the distro, then try again."
+      )
+    }
+  )
 })

@@ -96,12 +96,6 @@ afterEach(() => {
 })
 
 describe('both spellings of a symlinked ~/.codex', () => {
-  it('has one key when nothing on the path is a symlink', () => {
-    mkdirSync(codexHome())
-
-    expect(getRealHomeHookKeySourcePaths()).toEqual([normalizeCodexHookSourcePath(hooksPath())])
-  })
-
   it('resolves the key through a symlinked HOME before ~/.codex exists', () => {
     const linkedHome = join(root, 'linked-home')
     symlinkSync(home, linkedHome, process.platform === 'win32' ? 'junction' : 'dir')

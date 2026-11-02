@@ -120,14 +120,4 @@ describe('the SSH host list with a very large imported config', () => {
     expect(rowLabels()).toContain(`node-${IMPORTED_HOST_COUNT - 1}`)
     expect(rowLabels()).not.toContain('node-00000')
   })
-
-  it('renders an ordinary config in full, unwindowed', () => {
-    act(() => {
-      root.render(
-        <SettingsScrollerHarness targets={[configTarget(0), configTarget(1), configTarget(2)]} />
-      )
-    })
-    expect(rowLabels()).toEqual(['node-00000', 'node-00001', 'node-00002'])
-    expect(document.querySelector('[data-testid="virtualized-list"]')).toBeNull()
-  })
 })

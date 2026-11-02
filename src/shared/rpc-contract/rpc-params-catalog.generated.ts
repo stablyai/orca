@@ -19,6 +19,7 @@ import {
 } from '../browser-client-host-protocol'
 import { BrowserClientPageMetadataParams } from '../browser-client-page-metadata-protocol'
 import {
+  BundledSkillAutoUpdateRequestSchema,
   BundledSkillExecuteRequestSchema,
   BundledSkillPlanRequestSchema
 } from '../bundled-skill-plan'
@@ -42,6 +43,7 @@ import {
   OrcadPeerDesktopsParamsSchema
 } from '../orcad-peer-desktops-contract'
 import { OrcadTerminalCensusParamsSchema } from '../orcad-terminal-census'
+import { CrewSubscribeParams } from '../orchestration-crew'
 import {
   AccountsUnsubscribeParams,
   AddClaudeFromConfigDirParams,
@@ -58,6 +60,7 @@ import {
   RemoveAccountParams,
   RemoveDataAccountParams,
   SelectAccountParams,
+  SelectClaudeAccountParams,
   SelectCodexAccountForTargetParams,
   SelectDataAccountParams
 } from './accounts-params'
@@ -96,6 +99,7 @@ import {
 import { CertificateProceed } from './browser-core-params'
 import { MouseClick } from './browser-extras-params'
 import { BrowserIdentitySet, ProfileCreate } from './browser-identity-params'
+import { Screenshot, Snapshot } from './browser-observation-params'
 import {
   Check,
   ClipboardWrite,
@@ -126,7 +130,6 @@ import {
   ProfileDelete,
   ProfileImportFromBrowser,
   Screencast,
-  Screenshot,
   Scroll,
   Select,
   SelectorPath,
@@ -311,6 +314,7 @@ import {
   ReviewThread
 } from './github-pull-request-params'
 import {
+  MarkPrDraft,
   MarkPrReadyForReview,
   MergePr,
   PRReviewComment,
@@ -328,6 +332,7 @@ import {
   RateLimit,
   WorkItem,
   WorkItemByOwnerRepo,
+  WorkItemDetails,
   WorkItemsCount,
   WorkItemsList
 } from './github-repo-work-item-params'
@@ -349,7 +354,7 @@ import {
   UpdateMrReviewers,
   UpdateMrState,
   WorkItemByPath,
-  WorkItemDetails,
+  WorkItemDetails as WorkItemDetailsOfGitlabParams,
   WorkItemsList as WorkItemsListOfGitlabParams
 } from './gitlab-params'
 import {
@@ -484,7 +489,10 @@ import {
   RunUseParams
 } from './orchestration-runs-params'
 import { WorkerDispatchParams, WorkerReadParams } from './orchestration-worker-control-params'
-import { OrchestrationWorkerTerminalUserInputParams } from './orchestration-worker-release-params'
+import {
+  OrchestrationWorkerKeepOpenParams,
+  OrchestrationWorkerSubjectParams
+} from './orchestration-worker-release-params'
 import {
   WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerReleaseSchemasParams,
   WorkerListParams,
@@ -493,13 +501,23 @@ import {
 import { WorkerStartParams } from './orchestration-worker-start-params'
 import { WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerStopParams } from './orchestration-worker-stop-params'
 import {
+  PluginDevEmitParams,
+  PluginDevInspectParams,
   PluginDevLoadParams,
+  PluginDevRequestParams,
   PluginDevUnloadParams,
   PluginGetLogsParams,
   PluginInvokeCommandParams,
+  PluginOpenParams,
   PluginReadPanelEntryParams,
+  PluginRestartParams,
   PluginRpcConsentParams,
   PluginSetEnabledParams,
+  PluginSetSystemEnabledParams,
+  PluginShotChromeParams,
+  PluginShotEditorParams,
+  PluginShotParams,
+  PluginShotReplayParams,
   PluginsPanelActionParams
 } from './plugins-params'
 import {
@@ -529,6 +547,7 @@ import {
   RepoCreate,
   RepoHooksCheck,
   RepoIssueCommandWrite,
+  RepoList,
   RepoPath,
   RepoReorder,
   RepoSearchRefs,
@@ -575,6 +594,7 @@ import {
   SshTargetAdd,
   SshTargetUpdate
 } from './ssh-params'
+import { StatusGetParams } from './status-params'
 import { ContinueInterruptedParams } from './structured-agent-session-continue-params'
 import { ContinuationContextParams } from './structured-agent-session-identifiers'
 import {
@@ -598,6 +618,7 @@ import {
   RespondToQuestionParams,
   RestartResumableParams,
   RestartResumeParams,
+  RevealParams,
   RewindParams,
   SendParams,
   SetOptionParams,
@@ -738,7 +759,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.removeClaude': RemoveAccountParams,
   'accounts.removeCodex': RemoveAccountParams,
   'accounts.removeData': RemoveDataAccountParams,
-  'accounts.selectClaude': SelectAccountParams,
+  'accounts.selectClaude': SelectClaudeAccountParams,
   'accounts.selectCodex': SelectAccountParams,
   'accounts.selectCodexForTarget': SelectCodexAccountForTargetParams,
   'accounts.selectData': SelectDataAccountParams,
@@ -786,7 +807,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.restartResumable': RestartResumableParams,
   'agentSession.restartResumableDismiss': RestartResumableParams,
   'agentSession.restartResume': RestartResumeParams,
-  'agentSession.reveal': OptionsParams,
+  'agentSession.reveal': RevealParams,
   'agentSession.rewind': RewindParams,
   'agentSession.send': SendParams,
   'agentSession.setOption': SetOptionParams,
@@ -897,7 +918,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.setHeaders': SetHeaders,
   'browser.setMedia': SetMedia,
   'browser.setOffline': SetOffline,
-  'browser.snapshot': BrowserTarget,
+  'browser.snapshot': Snapshot,
   'browser.storage.local.clear': BrowserTarget,
   'browser.storage.local.get': StorageKey,
   'browser.storage.local.set': StorageKeyValue,
@@ -951,6 +972,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'emulator.availability': EmulatorAvailabilityParams,
   'emulator.ax': AxParams,
   'emulator.button': ButtonParams,
+  'emulator.checkInput': ListParams,
   'emulator.exec': ExecParams,
   'emulator.gesture': GestureParams,
   'emulator.kill': KillParams,
@@ -1058,6 +1080,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'github.listIssues': IssuesList,
   'github.listLabels': RepoSelector,
   'github.listWorkItems': WorkItemsList,
+  'github.markPRDraft': MarkPrDraft,
   'github.markPRReadyForReview': MarkPrReadyForReview,
   'github.mergePR': MergePr,
   'github.prCheckDetails': PullRequestCheckDetails,
@@ -1098,7 +1121,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'github.validateAccountBinding': ValidateAccountBinding,
   'github.workItem': WorkItem,
   'github.workItemByOwnerRepo': WorkItemByOwnerRepo,
-  'github.workItemDetails': WorkItem,
+  'github.workItemDetails': WorkItemDetails,
   'gitlab.addIssueComment': AddIssueComment,
   'gitlab.addMRComment': AddMRComment,
   'gitlab.addMRInlineComment': AddMRInlineComment,
@@ -1120,7 +1143,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'gitlab.updateMRReviewers': UpdateMrReviewers,
   'gitlab.updateMRState': UpdateMrState,
   'gitlab.workItemByPath': WorkItemByPath,
-  'gitlab.workItemDetails': WorkItemDetails,
+  'gitlab.workItemDetails': WorkItemDetailsOfGitlabParams,
   'host.declareClient': OrcadDeclareClientParamsSchema,
   'host.gitBash.isAvailable': null,
   'host.peerDesktops': OrcadPeerDesktopsParamsSchema,
@@ -1252,6 +1275,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.ask': AskParams,
   'orchestration.callerShow': null,
   'orchestration.check': CheckParams,
+  'orchestration.crewSubscribe': CrewSubscribeParams,
   'orchestration.dispatch': DispatchParams,
   'orchestration.dispatchShow': DispatchShowParams,
   'orchestration.federationAck': FederationAckParams,
@@ -1262,6 +1286,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.federationRead': FederationReadParams,
   'orchestration.federationReadOutput': FederationOutputReadParams,
   'orchestration.federationRelease': FederationDispatchParams,
+  'orchestration.federationRetain': FederationDispatchParams,
   'orchestration.federationShow': FederationDispatchParams,
   'orchestration.federationStop': FederationDispatchParams,
   'orchestration.gateCreate': GateCreateParams,
@@ -1283,6 +1308,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.taskCreate': TaskCreateParams,
   'orchestration.taskList': TaskListParams,
   'orchestration.workerAbandon': WorkerDispatchParams,
+  'orchestration.workerAutoClose': OrchestrationWorkerSubjectParams,
+  'orchestration.workerChatTouch': OrchestrationWorkerSubjectParams,
+  'orchestration.workerKeepOpen': OrchestrationWorkerKeepOpenParams,
   'orchestration.workerList': WorkerListParams,
   'orchestration.workerRead': WorkerReadParams,
   'orchestration.workerRelease': WorkerDispatchParamsOfOrchestrationWorkerReleaseSchemasParams,
@@ -1290,21 +1318,32 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerShow': WorkerDispatchParams,
   'orchestration.workerStart': WorkerStartParams,
   'orchestration.workerStop': WorkerDispatchParamsOfOrchestrationWorkerStopParams,
-  'orchestration.workerTerminalUserInput': OrchestrationWorkerTerminalUserInputParams,
+  'orchestration.workerTerminalUserInput': OrchestrationWorkerSubjectParams,
   'pairing.delegatedMobileDevice.sync': DelegatedMobileDeviceSyncParamsSchema,
   'pairing.getEndpoints': PairingGetEndpointsParamsSchema,
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
   'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,
   'plugins.consent': PluginRpcConsentParams,
+  'plugins.devEmit': PluginDevEmitParams,
+  'plugins.devHook': PluginDevEmitParams,
+  'plugins.devInspect': PluginDevInspectParams,
   'plugins.devLoad': PluginDevLoadParams,
+  'plugins.devRequest': PluginDevRequestParams,
   'plugins.devUnload': PluginDevUnloadParams,
   'plugins.getLogs': PluginGetLogsParams,
   'plugins.invokeCommand': PluginInvokeCommandParams,
   'plugins.list': null,
+  'plugins.open': PluginOpenParams,
   'plugins.panelAction': PluginsPanelActionParams,
   'plugins.readPanelEntry': PluginReadPanelEntryParams,
   'plugins.refresh': null,
+  'plugins.restart': PluginRestartParams,
   'plugins.setEnabled': PluginSetEnabledParams,
+  'plugins.setSystemEnabled': PluginSetSystemEnabledParams,
+  'plugins.shot': PluginShotParams,
+  'plugins.shotChrome': PluginShotChromeParams,
+  'plugins.shotEditor': PluginShotEditorParams,
+  'plugins.shotReplay': PluginShotReplayParams,
   'preflight.check': PreflightCheck,
   'preflight.detectAgents': PreflightProjectAgentDetection,
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,
@@ -1338,7 +1377,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.hooksCheck': RepoHooksCheck,
   'repo.issueCommandRead': RepoIssueCommandRead,
   'repo.issueCommandWrite': RepoIssueCommandWrite,
-  'repo.list': null,
+  'repo.list': RepoList,
   'repo.reorder': RepoReorder,
   'repo.rm': RepoSelector,
   'repo.saveSparsePreset': RepoSparsePresetSave,
@@ -1387,6 +1426,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'sidebarInputs.workspaceCreations': null,
   'sidebarInputs.workspaceRows': null,
   'sidebarSession.begin': SidebarSessionBeginParams,
+  'skills.autoUpdateBundledOrca': BundledSkillAutoUpdateRequestSchema,
   'skills.beginUpload': SkillUploadBeginRequestSchema,
   'skills.cancelInstall': SkillsCancelInstallParams,
   'skills.cancelUpload': SkillUploadCommitRequestSchema,
@@ -1426,7 +1466,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'ssh.removeTarget': SshTarget,
   'ssh.updateTarget': SshTargetUpdate,
   'stats.summary': null,
-  'status.get': null,
+  'status.get': StatusGetParams,
   'terminal.adoptOrphans': TerminalAdoptOrphans,
   'terminal.agentStatus': TerminalHandle,
   'terminal.clearBuffer': TerminalHandle,

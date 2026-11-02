@@ -44,6 +44,22 @@ describe('nativeChatAppearanceStyle terminal interface', () => {
     expect(style['--chat-code-base']).toBe('transparent')
   })
 
+  it("drops a switched-off plugin's palette like the app does", () => {
+    const id = 'plugin:samples.dawn/dawn'
+    const settings = makeSettings({
+      theme: 'dark',
+      terminalThemeDark: id,
+      terminalPluginPalettes: [
+        { id, colors: { background: '#fdf6e3', foreground: '#586e75', blue: '#268bd2' } }
+      ],
+      nativeChatAppearance: { matchTerminalInterface: true }
+    })
+    expect(nativeChatAppearanceStyle(settings).colorScheme).toBe('light')
+    expect(
+      nativeChatAppearanceStyle({ ...settings, disabledPlugins: ['samples.dawn'] }).colorScheme
+    ).toBe('dark')
+  })
+
   it('resolves custom themes and falls back when the selected theme was removed', () => {
     const settings = makeSettings({
       terminalThemeDark: 'custom:manual:sample',

@@ -145,6 +145,17 @@ describe('leaving a wide detail session for its host route', () => {
 })
 
 describe('the same hop on a phone', () => {
+  it.each([HOST, BOUNCE])('replaces a cold detail session with %s', async (href) => {
+    await hopFromSession(PHONE, [DETAIL], href)
+    expect(applied([DETAIL])).toEqual([href])
+    expect(dependencies.push).not.toHaveBeenCalled()
+  })
+
+  it('updates the existing host notice without retaining the exited detail session', async () => {
+    await hopFromSession(PHONE, [HOST, DETAIL], BOUNCE)
+    expect(applied([HOST, DETAIL])).toEqual([BOUNCE])
+  })
+
   it('returns to the host route below rather than stacking a second one', async () => {
     await hopFromSession(PHONE, [HOST, DETAIL], HOST)
     expect(device.dismissTo).not.toHaveBeenCalled()

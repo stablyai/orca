@@ -12,7 +12,7 @@ import {
   type FileExplorerRowProjection
 } from './file-explorer-row-projection'
 import { isDotfileRelativePath } from './file-explorer-entries'
-import { splitPathSegments } from './path-tree'
+import { splitPathSegments } from '../../../../shared/cross-platform-path'
 import { isPathIgnored } from './status-display'
 
 export type FileExplorerNameFilterProjectionSource = {

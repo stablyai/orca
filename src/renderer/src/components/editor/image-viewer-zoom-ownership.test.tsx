@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ImageViewer from './ImageViewer'
 import ImageDiffViewer from './ImageDiffViewer'
 import { EditorCommandOwnerContext } from './editor-command-owner-context'
@@ -13,7 +13,25 @@ vi.mock('./PdfViewer', () => ({ default: () => null }))
 const PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
 
-afterEach(cleanup)
+// Browsers report the initial size on observe(); happy-dom never does.
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(private readonly callback: ResizeObserverCallback) {}
+      observe(): void {
+        this.callback([], this)
+      }
+      unobserve(): void {}
+      disconnect(): void {}
+    }
+  )
+})
+
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 
 function renderImage(isCommandOwner: boolean, layout: 'fill' | 'intrinsic' = 'fill'): void {
   render(
@@ -46,16 +64,6 @@ describe('ImageViewer app zoom ownership', () => {
     expect(screen.getByText('100%')).toBeTruthy()
   })
 
-  it('zooms the open popup instead of the hidden inline image', () => {
-    renderImage(true)
-    fireEvent.click(screen.getByTitle('Open image in popup'))
-
-    zoom('in')
-
-    expect(within(screen.getByRole('dialog')).getByText('125%')).toBeTruthy()
-    expect(screen.getAllByText('100%')).toHaveLength(1)
-  })
-
   it('releases zoom ownership when focus moves and removes its listener on unmount', () => {
     const image = (ownsCommands: boolean) => (
       <EditorCommandOwnerContext value={ownsCommands}>
@@ -77,7 +85,7 @@ describe('ImageViewer app zoom ownership', () => {
     expect(zoom('in')).toBe(false)
   })
 
-  it('zooms a diff popup without changing the other image behind it', () => {
+  it('zooms both sides of a diff together', () => {
     render(
       <EditorCommandOwnerContext value={true}>
         <ImageDiffViewer
@@ -89,13 +97,7 @@ describe('ImageViewer app zoom ownership', () => {
         />
       </EditorCommandOwnerContext>
     )
-    fireEvent.click(screen.getAllByTitle('Open image in popup')[1])
 
-    expect(zoom('in')).toBe(true)
-    expect(within(screen.getByRole('dialog')).getByText('125%')).toBeTruthy()
-    expect(screen.getAllByText('100%')).toHaveLength(2)
-
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }))
     expect(zoom('in')).toBe(true)
     expect(screen.getAllByText('125%')).toHaveLength(2)
   })
@@ -128,13 +130,6 @@ describe('ImageViewer app zoom ownership', () => {
     expect(zoom('in')).toBe(true)
     expect(within(main).getByText('125%')).toBeTruthy()
     expect(within(floating).getByText('125%')).toBeTruthy()
-
-    floating.focus()
-    fireEvent.click(within(floating).getByTitle('Open image in popup'))
-    expect(zoom('in')).toBe(true)
-    expect(within(screen.getByRole('dialog')).getByText('156%')).toBeTruthy()
-    expect(within(main).getByText('125%')).toBeTruthy()
-    expect(within(floating).getByText('125%')).toBeTruthy()
   })
 
   it.each([true, false])(
@@ -159,6 +154,47 @@ describe('ImageViewer app zoom ownership', () => {
     }
   )
 
+  it('keeps a zoom that arrives before the image has loaded', () => {
+    render(
+      <EditorCommandOwnerContext value={true}>
+        <ImageViewer
+          src="orca-media://file/t?revision=1"
+          filePath="/repo/shot.png"
+          mimeType="image/png"
+        />
+      </EditorCommandOwnerContext>
+    )
+    expect(zoom('in')).toBe(true)
+    const image = screen.getByRole('img', { name: 'shot.png' })
+    Object.defineProperties(image, {
+      naturalWidth: { value: 4000 },
+      naturalHeight: { value: 3000 }
+    })
+    fireEvent.load(image)
+    expect(screen.getByText('125%')).toBeTruthy()
+  })
+
+  it('keeps the zoom when the same file is reminted under a new revision', () => {
+    const image = (revision: number) => (
+      <EditorCommandOwnerContext value={true}>
+        <ImageViewer
+          src={`orca-media://file/t?revision=${revision}`}
+          filePath="/repo/shot.png"
+          mimeType="image/png"
+        />
+      </EditorCommandOwnerContext>
+    )
+    const viewer = render(image(1))
+    const loaded = screen.getByRole('img', { name: 'shot.png' })
+    Object.defineProperties(loaded, { naturalWidth: { value: 400 }, naturalHeight: { value: 300 } })
+    fireEvent.load(loaded)
+    zoom('in')
+    expect(screen.getByText('125%')).toBeTruthy()
+
+    viewer.rerender(image(2))
+    expect(screen.getByText('125%')).toBeTruthy()
+  })
+
   it('leaves zoom to the focused pane when this image is in an unfocused split or hidden worktree', () => {
     renderImage(false)
 
@@ -166,19 +202,14 @@ describe('ImageViewer app zoom ownership', () => {
     expect(screen.getByText('100%')).toBeTruthy()
   })
 
-  it('leaves editor font zoom alone in a combined diff of intrinsic images', () => {
+  it('leaves editor font zoom alone in a combined diff until an image is expanded', () => {
     renderImage(true, 'intrinsic')
-
     expect(zoom('in')).toBe(false)
-    expect(screen.getByText('100%')).toBeTruthy()
-  })
 
-  it('zooms the popup a combined-diff image opened', () => {
-    renderImage(true, 'intrinsic')
-    fireEvent.click(screen.getByTitle('Open image in popup'))
-
+    fireEvent.click(screen.getByRole('button', { name: 'Expand image' }))
+    const expanded = within(screen.getByRole('dialog')).getByRole('img', { name: 'shot.png' })
+    const fitted = expanded.style.width
     expect(zoom('in')).toBe(true)
-    expect(within(screen.getByRole('dialog')).getByText('125%')).toBeTruthy()
-    expect(screen.getAllByText('100%')).toHaveLength(1)
+    expect(expanded.style.width).not.toBe(fitted)
   })
 })

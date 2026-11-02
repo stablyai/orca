@@ -1,7 +1,7 @@
 // Windows-only daily usage; gather registry/WSL state only while transmission is enabled. Reuse confirmed running distros, otherwise share one probe when user distros exist.
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
 import { listEnvironments } from '../../shared/runtime-environment-store'
@@ -152,11 +152,18 @@ export async function gatherWslUsageSnapshotInput(
   const registrations = await readWslDistroRegistrations()
   const userDistros = await listWslHostDistros({
     readRegistrations: async () => registrations,
-    listRunning: () => listRunningDistrosForSnapshot(registrations)
+    readRunning: async () => ({
+      status: 'confirmed',
+      distros: await listRunningDistrosForSnapshot(registrations)
+    })
   })
   return {
     registeredDistroCount: registrations?.length ?? null,
-    userDistros,
+    // A confirmed read never yields 'unverifiable'; the snapshot's schema keeps its two states.
+    userDistros: userDistros.map(({ version, state }) => ({
+      version,
+      state: state === 'running' ? 'running' : 'stopped'
+    })),
     wslPackageVersion: readWslPackageVersion(),
     wslAvailableCached: getCachedWslAvailability(),
     projects: collectWslProjects(

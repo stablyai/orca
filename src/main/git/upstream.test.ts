@@ -607,7 +607,7 @@ describe('getUpstreamStatus', () => {
           'log',
           '--no-show-signature',
           '--no-color',
-          '--oneline',
+          '--format=%m',
           '--cherry-mark',
           '--right-only',
           'HEAD...refs/remotes/fork/feature/fix',

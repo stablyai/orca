@@ -124,8 +124,8 @@ export async function lookupPRByBranchName(args: {
         )
         if (
           data &&
-          pullRequestMatchesHeadRepository(data, candidate, args.headRepo) &&
-          (!args.policy || (await args.policy.accepts(data, candidate)))
+          (!args.policy || (await args.policy.accepts(data, candidate))) &&
+          pullRequestMatchesHeadRepository(data, candidate, args.headRepo)
         ) {
           return { data, dataRepo: candidate }
         }
@@ -152,8 +152,8 @@ export async function lookupPRByBranchName(args: {
           )
           if (
             data &&
-            pullRequestMatchesHeadRepository(data, candidate, args.headRepo) &&
-            (!args.policy || (await args.policy.accepts(data, candidate)))
+            (!args.policy || (await args.policy.accepts(data, candidate))) &&
+            pullRequestMatchesHeadRepository(data, candidate, args.headRepo)
           ) {
             return { data, dataRepo: candidate }
           }

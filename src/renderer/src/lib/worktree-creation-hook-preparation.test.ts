@@ -84,6 +84,39 @@ describe('worktree script preparation', () => {
     })
   })
 
+  it('keeps an explicit Skip distinct from setup trust so issue-command preparation still runs', async () => {
+    const request = { ...makeRequest(), setupDecision: 'skip' as const }
+    mocks.readAndConfirmRuntimeIssueCommand.mockResolvedValue({
+      template: 'issue {{number}}',
+      trustDecision: 'run'
+    })
+    const prepared = await prepareWorktreeCreationHooks('creation-1', request)
+    expect(prepared?.setupDecision).toBe('skip')
+    expect(mocks.readAndConfirmRuntimeIssueCommand).toHaveBeenCalledOnce()
+  })
+
+  it('preserves an omitted decision and quietly settles a late cancelled trust failure', async () => {
+    const request: WorktreeCreationRequest = JSON.parse(
+      JSON.stringify({
+        ...makeRequest(),
+        setupDecision: undefined,
+        hookPreparation: { executionHostId: 'ssh:remote-1' }
+      })
+    )
+    expect(request).not.toHaveProperty('setupDecision')
+    expect(
+      (await prepareWorktreeCreationHooks('creation-1', request))?.setupDecision
+    ).toBeUndefined()
+    store.updatePendingWorktreeCreation.mockClear()
+    const trust = Promise.withResolvers<'run' | 'skip'>()
+    mocks.ensureHooksConfirmed.mockReturnValueOnce(trust.promise)
+    const preparing = prepareWorktreeCreationHooks('creation-1', request)
+    delete store.pendingWorktreeCreations['creation-1']
+    trust.reject(new Error('late trust failure'))
+    await expect(preparing).resolves.toBeNull()
+    expect(store.updatePendingWorktreeCreation).not.toHaveBeenCalled()
+  })
+
   it('does not inspect issue commands when setup trust was refused', async () => {
     mocks.ensureHooksConfirmed.mockResolvedValue('skip')
     expect(await prepareWorktreeCreationHooks('creation-1', makeRequest())).toMatchObject({

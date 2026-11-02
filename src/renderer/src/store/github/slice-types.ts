@@ -1,3 +1,4 @@
+import type { GitHubTaskRecordCache } from './task-record-cache'
 import type { ClassifiedError } from '../../../../shared/classified-error'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import type {
@@ -43,6 +44,7 @@ import type {
 import type { PRRefreshState, PRRefreshStateClearToken } from './pr-refresh-state'
 
 export type GitHubSlice = {
+  githubTaskCache: GitHubTaskRecordCache
   prCache: Record<string, CacheEntry<PRInfo>>
   issueCache: Record<string, CacheEntry<IssueInfo>>
   checksCache: Record<string, CacheEntry<PRCheckDetail[]>>
@@ -66,6 +68,7 @@ export type GitHubSlice = {
       fallbackPRNumber?: number | null
       fallbackPRSource?: GitHubPRFallbackSource | null
       reason?: GitHubPRRefreshReason
+      userRefresh?: boolean
     }
   ) => Promise<PRInfo | null>
   fetchIssue: (
@@ -83,6 +86,7 @@ export type GitHubSlice = {
       throwOnError?: boolean
       /** Refresh or a check action: a user act that may start a stopped WSL distro. */
       wakeWslDistro?: boolean
+      userRefresh?: boolean
     }
   ) => Promise<PRCheckDetail[]>
   fetchPRCheckDetails: (
@@ -99,7 +103,7 @@ export type GitHubSlice = {
   fetchPRComments: (
     repoPath: string,
     prNumber: number,
-    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null }
+    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null; userRefresh?: boolean }
   ) => Promise<PRComment[]>
   addPRConversationComment: (
     repoPath: string,
@@ -136,12 +140,13 @@ export type GitHubSlice = {
   ) => Promise<boolean>
   initGitHubCache: () => Promise<void>
   refreshAllGitHub: () => void
-  refreshGitHubForWorktree: (worktreeId: string) => void
+  refreshGitHubForWorktree: (worktreeId: string, executionHostId?: string) => void
   refreshGitHubForWorktreeIfStale: (worktreeId: string) => void
   enqueueGitHubPRRefresh: (
     worktreeId: string,
     reason: GitHubPRRefreshReason,
-    priority?: number
+    priority?: number,
+    executionHostId?: string
   ) => void
   reportVisibleGitHubPRRefreshCandidates: (
     worktreeIds: string[],
@@ -241,7 +246,8 @@ export type GitHubSlice = {
   ) => void
   patchWorkItem: (
     itemId: string,
-    patch: Partial<GitHubWorkItem>,
+    /** A function patch applies one operation's change to each matching copy's current value. */
+    patch: Partial<GitHubWorkItem> | ((row: GitHubWorkItem) => Partial<GitHubWorkItem>),
     repoId?: string | null,
     options?: GitHubPatchWorkItemOptions
   ) => void

@@ -1,6 +1,6 @@
 // Loader separates layout from view selections, reported content facts and untouched carried fields; Serializer recombines them into compatible disk records.
 
-import type { SleepingAgentSessionRecord } from '../agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
 import type { BrowserWorkspace } from '../browser-workspace-types'
 import type { ClosedTerminalTabTombstonesByTabId } from '../closed-terminal-tab-tombstones'
 import type { TabGroup } from '../tab-types'

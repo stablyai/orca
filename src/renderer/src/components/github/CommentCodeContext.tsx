@@ -340,7 +340,7 @@ export function CommentCodeContext({
       </div>
       <Suspense
         fallback={
-          <pre className="overflow-x-auto py-1 text-[12px] leading-5">
+          <pre className="code-editor-colors overflow-x-auto py-1 text-[12px] leading-5">
             {selectedLines.map((codeLine, index) => {
               const lineNumber = from + index
               const isCommentedLine = lineNumber >= commentFrom && lineNumber <= commentTo
