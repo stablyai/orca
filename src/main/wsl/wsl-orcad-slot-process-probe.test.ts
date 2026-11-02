@@ -68,9 +68,17 @@ describe.skipIf(process.platform === 'win32')('the slot process probe on a real 
   })
 
   it('does not mistake a sibling slot whose name extends this one', async () => {
-    runFromSlot(`${slotDir}.gc-tombstone.1`)
-    runFromSlot(join(base, '.orca-remote', 'orcad-1.5.0+aa01'))
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    const siblings = [`${slotDir}.gc-tombstone.1`, join(base, '.orca-remote', 'orcad-1.5.0+aa01')]
+    for (const sibling of siblings) {
+      mkdirSync(sibling, { recursive: true })
+      runFromSlot(sibling)
+    }
+    // Each sibling must be visibly running, or a DEAD answer here would prove nothing.
+    for (const sibling of siblings) {
+      await expect
+        .poll(() => sh(wslOrcadSlotProcessProbeCommand(host, sibling, userDataDir)))
+        .toBe('LIVE')
+    }
     expect(await sh(wslOrcadSlotProcessProbeCommand(host, slotDir, userDataDir))).toBe('DEAD')
   })
 
