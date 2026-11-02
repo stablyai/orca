@@ -147,8 +147,8 @@ describe('settings navigation capability ownership', () => {
 
   it.each([
     { name: 'advertises', capabilities: AGENT_SESSION_RUNTIME_CAPABILITIES, found: true },
-    { name: 'does not advertise', capabilities: [], found: false }
-  ])('finds Queue follow-ups in search only when this host $name queueing', async (args) => {
+    { name: 'does not advertise', capabilities: [], found: true }
+  ])('keeps Queue follow-ups discoverable when this host $name queueing', async (args) => {
     setLocalRuntimeCapabilitiesForTests([...args.capabilities])
     Object.defineProperty(window, 'api', {
       configurable: true,

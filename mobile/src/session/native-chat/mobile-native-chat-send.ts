@@ -28,7 +28,7 @@ type MobileNativeChatSendArgs = {
 export type MobileNativeChatSendOutcome = 'accepted' | 'rejected' | 'unknown' | 'queued'
 
 /** How one send goes: `alternate` does the other thing than the host's follow-up setting. */
-export type MobileNativeChatSendIntent = { alternate?: true }
+export type MobileNativeChatSendIntent = { alternate?: true; delivery?: 'immediate' }
 
 export type MobileNativeChatWriteOutcome = Exclude<MobileNativeChatSendOutcome, 'queued'>
 
