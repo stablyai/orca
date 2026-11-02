@@ -106,4 +106,16 @@ describe("a message's sender, read through its one reader", () => {
     expect(shown.map((sender) => sender.name)).toEqual(['Agent 0', 'Agent 1', 'Agent 2'])
     expect(more).toBe(2)
   })
+  it('retains peer provenance when a newer or damaged link label cannot be read', () => {
+    expect(
+      readAgentMessageSource({
+        ...FROM,
+        link: { id: 'pair', title: 'Slice 1b', eventId: 'report' }
+      })
+    ).toMatchObject({
+      kind: 'agent',
+      link: { id: 'pair', title: 'Slice 1b', eventId: 'report' }
+    })
+    expect(readAgentMessageSource({ ...FROM, link: { id: 42 } })).toMatchObject({ kind: 'agent' })
+  })
 })

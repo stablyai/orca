@@ -1,3 +1,4 @@
+import { assertSessionLinkMailBoundary } from '../../../../orchestration/session-links/session-link-mail-boundary'
 import type { MessagePriority, MessageType, OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -236,6 +237,10 @@ export async function sendGroupMessage(args: {
       'terminal_not_found',
       `No recipient of ${groupAddress} resolved to a live terminal or durable Run/Dispatch mailbox.`
     )
+  }
+
+  for (const recipient of uniqueRecipients) {
+    assertSessionLinkMailBoundary(db, sender.orcaSessionId, recipient.to)
   }
 
   const threadId = params.threadId ?? `thread_${Date.now()}`

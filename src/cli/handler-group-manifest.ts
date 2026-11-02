@@ -126,6 +126,9 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
     name: 'orchestration',
     keys: [
+      'orchestration link-show',
+      'orchestration link-send',
+      'orchestration link-control',
       'orchestration run-create',
       'orchestration run-use',
       'orchestration run-current',

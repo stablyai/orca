@@ -3089,7 +3089,8 @@
       "messageFromCoordinator": "Message from coordinator",
       "updateFromWorker": "Update from worker",
       "messageFrom": "Message from",
-      "showMore": "Show more"
+      "showMore": "Show more",
+      "sessionLink": "Link"
     }
   },
   "sourceControl": {

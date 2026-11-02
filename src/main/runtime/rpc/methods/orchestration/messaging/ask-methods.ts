@@ -1,3 +1,4 @@
+import { assertSessionLinkMailBoundary } from '../../../../orchestration/session-links/session-link-mail-boundary'
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration-ask-timeout'
@@ -129,6 +130,7 @@ export const ORCHESTRATION_ASK_METHODS = [
         }
         // An explicit Run or coordinator target still reaches the Run; otherwise the asker's creator.
         const to = params.to && params.to !== reportTo ? `run:${run.id}` : reportTo
+        assertSessionLinkMailBoundary(db, orchestrationCaller?.orcaSessionId, to)
         const created = db.createQuestion({
           runId: run.id,
           dispatchId: activeDispatch.id,

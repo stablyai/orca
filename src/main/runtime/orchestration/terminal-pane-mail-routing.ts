@@ -1,3 +1,5 @@
+import { scheduleSessionLinkDelivery } from './session-links/session-link-delivery'
+import { pauseSessionLinkForSession } from './session-links/session-link-lifecycle'
 import {
   ptyRecordForPaneKey,
   type TerminalIdentityReadContext
@@ -167,6 +169,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   /** The structured idle edge: any journal movement is a chance to redrive parked mail. */
   notifyStructuredSessionJournalActivity(sessionId: string): void {
     this.orchestrationStructuredMailboxPointerDelivery.onJournalActivity(sessionId)
+    scheduleSessionLinkDelivery(this.getExistingOrchestrationDb(), sessionId)
   }
 
   /** Retry parked mail on working/idle edges; at idle re-derive owned mailboxes for workers and chats. */
@@ -199,6 +202,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   onStructuredSessionTabHidden(sessionId: string): void {
     try {
       const db = this.getExistingOrchestrationDb()
+      pauseSessionLinkForSession(db, sessionId)
       for (const dispatch of db ? exitedChatDispatchesForSession(sessionId, db) : []) {
         this.failActiveDispatchOnExit(dispatch.assignee_handle, null, 0, OPERATOR_CLOSE_EXIT_CAUSE)
       }
@@ -212,6 +216,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   /** Settlement drops anything parked for the session; nothing will ever redrive it again. */
   forgetStructuredSessionMail(sessionId: string): void {
     this.orchestrationStructuredMailboxPointerDelivery.forgetSession(sessionId)
+    pauseSessionLinkForSession(this.getExistingOrchestrationDb(), sessionId)
   }
 
   /** Resolve every structured-owned mailbox here; declining Run or direct mail would leave both delivery lanes refusing it. */
@@ -280,6 +285,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   }
 
   protected scheduleRestoredMessageRepoints(): void {
+    scheduleSessionLinkDelivery(this.getExistingOrchestrationDb())
     let handles: Set<string>
     try {
       const db = this._orchestrationDb

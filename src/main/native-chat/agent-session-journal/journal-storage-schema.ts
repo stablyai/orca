@@ -99,6 +99,7 @@ const orchestration = z.discriminatedUnion('message', [
   z.object({ message: z.literal('task'), runId: salvaged, taskId: salvaged, dispatchId: salvaged })
 ])
 const messageSource = z.object({
+  link: z.object({ id: salvaged, title: salvaged, eventId: salvaged }).nullable().optional(),
   kind: salvaged,
   senders: z.array(sender.nullable()).nullable().optional(),
   orchestration: orchestration.nullable().optional()

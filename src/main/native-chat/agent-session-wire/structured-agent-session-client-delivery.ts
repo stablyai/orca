@@ -1,3 +1,4 @@
+import { backgroundAdmission } from './structured-agent-session-background-message'
 import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import { StructuredAgentSessionSavedStatus } from './structured-agent-session-saved-status'
 import { createStructuredAgentSessionHostRequestFailures } from './structured-agent-session-host-request-failures'
@@ -240,6 +241,8 @@ export class StructuredAgentSessionClientDelivery {
     const journal = this.sessions.get(sessionId)?.journal
     return journal ? this.currentWork(sessionId, journal) : null
   }
+
+  canAdmitBackgroundMessage = backgroundAdmission(() => this.sessions, this.readCurrentWork)
 
   publishRestored = (sessionId: string): void => {
     this.publications?.publish(sessionId, 'reset')

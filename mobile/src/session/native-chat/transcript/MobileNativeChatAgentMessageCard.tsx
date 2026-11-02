@@ -194,6 +194,11 @@ function Senders({ from }: { from: AgentMessageSource }) {
           <SenderName key={`${identity}:${occurrence}`} sender={sender} from={from} open={open} />
         )
       })}
+      {from.link ? (
+        <Text style={styles.meta} numberOfLines={2}>
+          {t('chat.agentMessage.sessionLink', 'Link')}: {from.link.title}
+        </Text>
+      ) : null}
       {more > 0 ? <Text style={styles.meta}>+{more}</Text> : null}
     </View>
   )

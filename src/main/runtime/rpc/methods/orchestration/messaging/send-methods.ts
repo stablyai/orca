@@ -1,3 +1,4 @@
+import { assertSessionLinkMailBoundary } from '../../../../orchestration/session-links/session-link-mail-boundary'
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isGroupAddress } from '../../../../orchestration/groups'
@@ -247,6 +248,7 @@ export const ORCHESTRATION_SEND_METHODS = [
             sendWarnings.push(runBound.warning)
           }
         }
+        assertSessionLinkMailBoundary(db, orchestrationCaller?.orcaSessionId, to)
         const federatedControl = sendFederatedControlMail({
           params,
           runtime,

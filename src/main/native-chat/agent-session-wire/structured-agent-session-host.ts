@@ -318,6 +318,7 @@ export class StructuredAgentSessionHost {
   appendAgentStart = this.startJournal.appendAgentStart
 
   currentWork = this.clientDelivery.readCurrentWork
+  canAdmitBackgroundMessage = this.clientDelivery.canAdmitBackgroundMessage
   readCurrentRequests: BackgroundTasks['currentRequests'] = (...args) =>
     this.backgroundTasks.currentRequests(...args)
 
