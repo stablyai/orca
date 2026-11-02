@@ -1,3 +1,4 @@
+import { getAppEnvironment } from '../../shared/app-environment'
 import { codebuddyHookService } from '../codebuddy/hook-service'
 import { qwenCodeHookService } from '../qwen-code/hook-service'
 import { qoderCnHookService, qoderHookService } from '../qoder/hook-service'
@@ -9,7 +10,7 @@ import {
   resolveSystemClaudeHookTarget,
   type ManagedHookInvocation
 } from '../claude/claude-hook-target'
-import { claudeHookService } from '../claude/hook-service'
+import { claudeHookService, type ClaudeHookMaintenance } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
 import { commandCodeHookService } from '../command-code/hook-service'
 import { copilotHookService } from '../copilot/hook-service'
@@ -27,7 +28,18 @@ import { museHookService } from '../muse/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { zcodeHookService } from '../zcode/hook-service'
 
-export type ManagedAgentHookInstallOptions = ManagedHookInvocation & {
+export type ManagedHookMaintenanceInvocation = ManagedHookInvocation & { userDataPath?: string }
+
+export async function resolveClaudeHookMaintenance(
+  options: ManagedHookMaintenanceInvocation = {}
+): Promise<ClaudeHookMaintenance> {
+  return {
+    target: await resolveSystemClaudeHookTarget(options),
+    userDataPath: options.userDataPath ?? getAppEnvironment().getPath('userData')
+  }
+}
+
+export type ManagedAgentHookInstallOptions = ManagedHookMaintenanceInvocation & {
   userInitiated?: boolean
   cliVersion?: string
   signal?: AbortSignal
@@ -39,11 +51,17 @@ export type ManagedAgentHookInstaller = readonly [
     options?: ManagedAgentHookInstallOptions
   ) => AgentHookInstallStatus | Promise<AgentHookInstallStatus>
 ]
-export type ManagedAgentHookScriptRefresher = readonly [HookInstallAgent, () => Promise<void>]
+export type ManagedAgentHookScriptRefresher = readonly [
+  HookInstallAgent,
+  (options?: ManagedHookMaintenanceInvocation) => Promise<void>
+]
 export type ManagedAgentHookRemover = readonly [
   HookInstallAgent,
   (
-    options?: ManagedHookInvocation & { signal?: AbortSignal; shouldContinue?: () => boolean }
+    options?: ManagedHookMaintenanceInvocation & {
+      signal?: AbortSignal
+      shouldContinue?: () => boolean
+    }
   ) => AgentHookInstallStatus | Promise<AgentHookInstallStatus>
 ]
 export type ManagedAgentHookAsyncRemover = readonly [
@@ -89,7 +107,11 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
 
 // Refresh shared launchers even after CLI removal; Amp/Hermes manage provider-native plugins separately.
 export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScriptRefresher[] = [
-  ['claude', () => claudeHookService.refreshManagedScripts()],
+  [
+    'claude',
+    async (options) =>
+      claudeHookService.refreshSystemManagedScripts(await resolveClaudeHookMaintenance(options))
+  ],
   ['openclaude', () => openClaudeHookService.refreshManagedScripts()],
   ['codex', () => codexHookService.refreshManagedScripts()],
   ['gemini', () => geminiHookService.refreshManagedScripts()],
@@ -117,7 +139,7 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
     'claude',
     async (options) =>
       claudeHookService.removeSystem({
-        target: await resolveSystemClaudeHookTarget(options),
+        ...(await resolveClaudeHookMaintenance(options)),
         signal: options?.signal,
         shouldContinue: options?.shouldContinue
       })

@@ -1,6 +1,4 @@
 import { ClaudeRemoteHookService } from './claude-remote-hook-service'
-import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
-import { getOrcaUserDataPath } from '../codex/codex-home-paths'
 import {
   listClaudeProfileHomes,
   listClaudeProfileHomesAsync
@@ -50,6 +48,11 @@ import {
   OPENCLAUDE_MANAGED_HOOK_PLAN,
   type ClaudeManagedHookPlan
 } from './claude-managed-hook-events'
+
+export type ClaudeHookMaintenance = {
+  userDataPath: string
+  target: SystemClaudeHookTarget
+}
 
 type ClaudeHookServiceOptions = {
   agent: AgentHookInstallStatus['agent']
@@ -116,17 +119,17 @@ export class ClaudeHookService {
     )
   }
 
-  async refreshManagedScripts(): Promise<void> {
-    if (this.options.agent === 'claude') {
-      const profiles = await listClaudeProfileHomesAsync(getAppEnvironment().getPath('userData'))
-      for (const configDir of [undefined, ...profiles]) {
-        await refreshClaudeAgentView(getConfigPath(this.options.settings, configDir)).catch(
-          (error: unknown) => {
-            console.warn('[agent-hooks] Claude agent view refresh failed', error)
-          }
-        )
-      }
+  async refreshSystemManagedScripts(options: ClaudeHookMaintenance): Promise<void> {
+    const profiles = await listClaudeProfileHomesAsync(options.userDataPath)
+    for (const configPath of this.agentViewPaths(options.target, profiles)) {
+      await refreshClaudeAgentView(configPath).catch((error: unknown) => {
+        console.warn('[agent-hooks] Claude agent view refresh failed', error)
+      })
     }
+    await this.refreshManagedScripts()
+  }
+
+  async refreshManagedScripts(): Promise<void> {
     const scriptPath = getManagedScriptPath(this.options.settings)
     const payload = this.managedScript()
     await (this.usesWindowsEntry
@@ -215,30 +218,35 @@ export class ClaudeHookService {
   }
 
   async removeSystem(
-    options: {
-      target?: SystemClaudeHookTarget
+    options: ClaudeHookMaintenance & {
       signal?: AbortSignal
       shouldContinue?: () => boolean
-    } = {}
+    }
   ): Promise<AgentHookInstallStatus> {
-    const target = options.target ?? systemClaudeHookTarget()
+    const target = options.target
     let failure: unknown
     try {
       await removeClaudeSystemHooks(getConfigPath(this.options.settings, target.configDir), options)
     } catch (error) {
       failure = error
     }
-    this.removeAgentViews()
+    this.removeAgentViews(options)
     const status = this.getStatus({ target })
     return failure ? { ...status, state: 'error', detail: String(failure) } : status
   }
 
-  private removeAgentViews(): void {
-    const dataRoot = hasAppEnvironment()
-      ? getAppEnvironment().getPath('userData')
-      : getOrcaUserDataPath()
-    for (const configDir of [undefined, ...listClaudeProfileHomes(dataRoot)]) {
-      removeClaudeAgentView(getConfigPath(this.options.settings, configDir))
+  private agentViewPaths(target: SystemClaudeHookTarget, profiles: string[]): Set<string> {
+    return new Set(
+      [undefined, ...profiles, target.configDir].map((configDir) =>
+        getConfigPath(this.options.settings, configDir)
+      )
+    )
+  }
+
+  private removeAgentViews(options: ClaudeHookMaintenance): void {
+    const profiles = listClaudeProfileHomes(options.userDataPath)
+    for (const configPath of this.agentViewPaths(options.target, profiles)) {
+      removeClaudeAgentView(configPath)
     }
   }
 

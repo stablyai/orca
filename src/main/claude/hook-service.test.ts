@@ -1,3 +1,4 @@
+import { systemClaudeHookTarget } from './claude-hook-target'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -284,7 +285,10 @@ describe('ClaudeHookService.install', () => {
         command: '/usr/local/bin/my-statusline'
       })
 
-      await new ClaudeHookService().removeSystem()
+      await new ClaudeHookService().removeSystem({
+        target: systemClaudeHookTarget(),
+        userDataPath: join(tmpHome, 'data')
+      })
       const afterRemove = JSON.parse(readFileSync(settingsPath, 'utf-8'))
       expect(afterRemove.statusLine).toEqual({
         type: 'command',
@@ -302,7 +306,10 @@ describe('ClaudeHookService.install', () => {
     vi.stubEnv('USERPROFILE', tmpHome)
     try {
       await new ClaudeHookService().installSystem()
-      await new ClaudeHookService().removeSystem()
+      await new ClaudeHookService().removeSystem({
+        target: systemClaudeHookTarget(),
+        userDataPath: join(tmpHome, 'data')
+      })
       const settings = JSON.parse(readFileSync(join(tmpHome, '.claude', 'settings.json'), 'utf-8'))
       expect(settings.statusLine).toBeUndefined()
     } finally {
@@ -327,7 +334,10 @@ describe('ClaudeHookService.install', () => {
       await new ClaudeHookService().installSystem()
       expect(JSON.parse(readFileSync(settingsPath, 'utf-8')).statusLine).toBeUndefined()
 
-      await new ClaudeHookService().removeSystem()
+      await new ClaudeHookService().removeSystem({
+        target: systemClaudeHookTarget(),
+        userDataPath: join(tmpHome, 'data')
+      })
       await new ClaudeHookService().installSystem()
       expect(JSON.parse(readFileSync(settingsPath, 'utf-8')).statusLine).toBeTruthy()
     } finally {

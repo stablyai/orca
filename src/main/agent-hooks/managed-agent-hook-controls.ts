@@ -19,6 +19,8 @@ import {
   MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS,
   MANAGED_AGENT_HOOK_STATUS_READERS,
   type ManagedAgentHookInstaller,
+  resolveClaudeHookMaintenance,
+  type ManagedHookMaintenanceInvocation,
   type ManagedAgentHookInstallOptions
 } from './managed-agent-hook-registry'
 
@@ -32,7 +34,7 @@ type ManagedHookSettings = Partial<
   Pick<GlobalSettings, 'agentCmdOverrides' | 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
 > | null
 
-type InstallOptions = ManagedHookInvocation & {
+type InstallOptions = ManagedHookMaintenanceInvocation & {
   signal?: AbortSignal
   /** Set only for an explicit user action, never for startup reconciliation. */
   userInitiated?: boolean
@@ -47,7 +49,7 @@ type ApplyOptions = InstallOptions & {
   keepSharedEntries?: boolean
 }
 
-type RemoveOptions = ManagedHookInvocation & {
+type RemoveOptions = ManagedHookMaintenanceInvocation & {
   agents?: readonly AgentHookTarget[]
   signal?: AbortSignal
   shouldContinue?: (agent: AgentHookTarget) => boolean
@@ -131,6 +133,12 @@ async function runInstaller(
   }
 }
 
+async function maintenanceOptions<T extends InstallOptions>(options: T): Promise<T> {
+  return !options.agents || options.agents.includes('claude')
+    ? { ...options, ...(await resolveClaudeHookMaintenance(options)) }
+    : options
+}
+
 // Refresh owned scripts before CLI presence gating; user-wide configs may still invoke them.
 async function refreshExistingManagedScripts(options: InstallOptions): Promise<void> {
   const allowed = options.agents ? new Set(options.agents) : null
@@ -139,7 +147,7 @@ async function refreshExistingManagedScripts(options: InstallOptions): Promise<v
       continue
     }
     try {
-      await refresh()
+      await refresh(options)
     } catch (error) {
       console.error(`[agent-hooks] Failed to refresh ${agent} managed script:`, error)
     }
@@ -150,6 +158,7 @@ export async function installManagedAgentHooks(
   settings: ManagedHookSettings = null,
   options: InstallOptions = {}
 ): Promise<AgentHookInstallStatus[]> {
+  options = await maintenanceOptions(options)
   await refreshExistingManagedScripts(options)
   const installers = selectedInstallers(options)
   const disabled = new Set(normalizeDisabledTuiAgents(settings?.disabledTuiAgents))
@@ -222,6 +231,7 @@ export async function installManagedAgentHooks(
 export async function removeManagedAgentHooks(
   options: RemoveOptions = {}
 ): Promise<AgentHookInstallStatus[]> {
+  options = await maintenanceOptions(options)
   const allowed = options.agents ? new Set(options.agents) : null
   const results: AgentHookInstallStatus[] = []
   for (const [agent, remove] of MANAGED_AGENT_HOOK_REMOVERS) {
@@ -282,6 +292,9 @@ export async function applyAgentStatusHooksEnabled(
   settings: ManagedHookSettings = null,
   options: ApplyOptions = {}
 ): Promise<AgentHookInstallStatus[]> {
+  if (enabled || !options.keepSharedEntries) {
+    options = await maintenanceOptions(options)
+  }
   const removalOptions = {
     ...options,
     shouldContinue: options.shouldContinue

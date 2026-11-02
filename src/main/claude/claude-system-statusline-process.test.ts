@@ -112,7 +112,7 @@ async function fixture(realNative = false) {
           if (m === 'shutdown') { shutdown = true; if (settled && process.connected) process.disconnect(); }
         });
         process.on('disconnect', () => process.exit(0));
-        const options = { target: { kind: 'system-default', configDir: target }, signal: controller.signal, claudeVersion: operation === 'retire' ? '1.0.0' : '2.1.261' };
+        const options = { userDataPath: join(process.env.HOME, 'data'), target: { kind: 'system-default', configDir: target }, signal: controller.signal, claudeVersion: operation === 'retire' ? '1.0.0' : '2.1.261' };
         process.send?.({ phase: 'started', pid: process.pid });
         const service = new ClaudeHookService();
         const residues = async () => {

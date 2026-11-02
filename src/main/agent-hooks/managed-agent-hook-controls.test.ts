@@ -24,6 +24,15 @@ vi.mock('../claude/claude-hook-event-versions', () => ({
 }))
 
 vi.mock('./managed-agent-hook-registry', () => ({
+  resolveClaudeHookMaintenance: async (
+    options: { target?: unknown; userDataPath?: string; env?: NodeJS.ProcessEnv } = {}
+  ) => ({
+    target: options.target ?? {
+      kind: 'system-default',
+      configDir: options.env?.CLAUDE_CONFIG_DIR ?? '/claude'
+    },
+    userDataPath: options.userDataPath ?? '/orca-user-data'
+  }),
   MANAGED_AGENT_HOOK_INSTALLERS: [
     ['claude', mocks.installClaude],
     ['codex', mocks.installCodex]
@@ -82,11 +91,19 @@ describe('managed agent hook controls', () => {
     const env = { CLAUDE_CONFIG_DIR: '/cli/claude' }
     const options = { env, agents: ['claude'] as const }
     await applyAgentStatusHooksEnabled(false, null, options)
-    expect(mocks.removeClaude).toHaveBeenLastCalledWith(options)
+    expect(mocks.removeClaude).toHaveBeenLastCalledWith({
+      ...options,
+      target: { kind: 'system-default', configDir: '/cli/claude' },
+      userDataPath: '/orca-user-data'
+    })
     expect(mocks.removeCodex).not.toHaveBeenCalled()
     mocks.detect.mockResolvedValue({})
     await applyAgentStatusHooksEnabled(true, { disabledTuiAgents: ['claude', 'codex'] }, options)
-    expect(mocks.removeClaude).toHaveBeenLastCalledWith(options)
+    expect(mocks.removeClaude).toHaveBeenLastCalledWith({
+      ...options,
+      target: { kind: 'system-default', configDir: '/cli/claude' },
+      userDataPath: '/orca-user-data'
+    })
     expect(mocks.removeCodex).not.toHaveBeenCalled()
   })
 
@@ -183,7 +200,10 @@ describe('managed agent hook controls', () => {
     await installManagedAgentHooks({ agentCmdOverrides: {} })
 
     expect(mocks.probeClaudeVersion).toHaveBeenCalledWith('/opt/bin/claude')
-    expect(mocks.installClaude).toHaveBeenCalledWith({ cliVersion: '2.1.261' })
+    expect(mocks.installClaude).toHaveBeenCalledWith({
+      cliVersion: '2.1.261',
+      target: { kind: 'system-default', configDir: '/claude' }
+    })
   })
 
   it('only refreshes scripts for the selected agents', async () => {

@@ -195,7 +195,7 @@ async function setAgentHooksEnabled(
   const updatedRuntime = await updateRunningRuntime(client, enabled)
   const offlineUpdate = updatedRuntime ? null : await updateEnabledOnDisk(enabled)
   const settingsPath = offlineUpdate?.settingsPath ?? (await getDataPath())
-  const invocation = hookInvocation()
+  const invocation = { ...hookInvocation(), userDataPath: getDefaultUserDataPath() }
   let statuses: AgentHookInstallStatus[]
   if (origin?.context) {
     const nativeOptions = {

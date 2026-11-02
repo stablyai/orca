@@ -15,6 +15,7 @@ const seam = vi.hoisted(
     probes: number
     nativeBirth: null | ((pid: number) => number | null)
     cim: null | (() => Promise<{ stdout: string; stderr: string }>)
+    disabledTuiAgents: string[]
     online: boolean
     unavailableHost: boolean
     zeroParent: string | null
@@ -28,6 +29,7 @@ const seam = vi.hoisted(
     probes: 0,
     nativeBirth: null,
     cim: null,
+    disabledTuiAgents: [],
     online: true,
     unavailableHost: false,
     zeroParent: null,
@@ -77,7 +79,7 @@ vi.mock('../../cli/runtime-client', () => ({
       legacyPidRunning: seam.online,
       pid: seam.online ? process.pid : null
     })
-    call = async () => ({ result: { settings: {} } })
+    call = async () => ({ result: { settings: { disabledTuiAgents: seam.disabledTuiAgents } } })
   },
   RuntimeClientError: Error,
   getDefaultUserDataPath: () => join(seam.home, 'data')
@@ -186,7 +188,7 @@ vi.mock('node:fs', async (original) => {
       observe('renameSync', args[1], () => actual.renameSync(...args))
   }
 })
-import { ClaudeHookService } from './hook-service'
+import { ClaudeHookService, type ClaudeHookMaintenance } from './hook-service'
 import { getStatusLineSlotState } from './hook-settings'
 export async function applyAgentStatusHooksEnabled(...args: Parameters<typeof ApplyManagedHooks>) {
   return await (
@@ -194,9 +196,7 @@ export async function applyAgentStatusHooksEnabled(...args: Parameters<typeof Ap
   ).applyAgentStatusHooksEnabled(...args)
 }
 export const main = async (args: string[]) => await (await import('../../cli/index')).main(args)
-export function slot(config: Parameters<typeof getStatusLineSlotState>[0]) {
-  return getStatusLineSlotState(config)
-}
+export const slot = getStatusLineSlotState
 export const current = { claudeVersion: '2.1.261' }
 let Service = ClaudeHookService
 export const service = () => new Service()
@@ -206,13 +206,13 @@ export const write = async (path: string, config: Parameters<typeof getStatusLin
   await fs.mkdir(dirname(path), { recursive: true })
   await fs.writeFile(path, JSON.stringify(config))
 }
+const invocation = (name: string): ClaudeHookMaintenance => ({
+  userDataPath: join(seam.home, 'data'),
+  target: { kind: 'system-default', configDir: dirname(file(name)) }
+})
 export const install = (name: string, options = current) =>
-  service().installSystem({
-    ...options,
-    target: { kind: 'system-default', configDir: dirname(file(name)) }
-  })
-export const remove = (name: string) =>
-  service().removeSystem({ target: { kind: 'system-default', configDir: dirname(file(name)) } })
+  service().installSystem({ ...options, ...invocation(name) })
+export const remove = (name: string) => service().removeSystem(invocation(name))
 export const erase = async (name: string) => {
   const config = await read(file(name))
   delete config.statusLine
@@ -228,6 +228,7 @@ export const document = async () => read(await documentPath())
 export const failure = () =>
   Object.assign(new Error('injected storage failure'), { code: 'EACCES' })
 beforeEach(async () => {
+  seam.disabledTuiAgents = []
   seam.online = true
   seam.home = await fs.realpath(await fs.mkdtemp(join(os.tmpdir(), 'pr31199-sl-')))
   vi.stubEnv('HOME', seam.home)

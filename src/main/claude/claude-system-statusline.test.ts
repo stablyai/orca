@@ -373,75 +373,110 @@ it('resets authority before removals and verifies uncertain metadata publication
   expect((await document()).revision).not.toBe(before.revision)
 })
 
-it('runs desktop controls and actual online/offline CLI on/off with independent invocation roots', async () => {
+it('runs desktop controls and actual environment-free online/offline CLI histories at independent roots', async () => {
   const output = vi.spyOn(console, 'log').mockImplementation(() => {})
   const errors = vi.spyOn(console, 'error')
+  const warnings = vi.spyOn(console, 'warn')
+  const environment = getAppEnvironment()
+  const desktopData = join(seam.home, 'desktop-data')
+  const desktopProfile = join(desktopData, 'claude-profiles', 'owned', 'home', 'settings.json')
   const profile = join(seam.home, 'data', 'claude-profiles', 'owned', 'home', 'settings.json')
-  await fs.mkdir(dirname(profile), { recursive: true })
-  expect(installClaudeAgentView(profile)).toBe(true)
-  async function offInPlainNode(name: string) {
-    const environment = getAppEnvironment()
+  await fs.mkdir(dirname(desktopProfile), { recursive: true })
+  expect(installClaudeAgentView(desktopProfile)).toBe(true)
+  setAppEnvironment({
+    ...environment,
+    getPath: (name) => (name === 'userData' ? desktopData : environment.getPath(name))
+  })
+  try {
+    const env = { CLAUDE_CONFIG_DIR: dirname(file('X')) }
+    expect(
+      (await applyAgentStatusHooksEnabled(true, null, { agents: ['claude'], env }))[0].state
+    ).toBe('installed')
+    await applyAgentStatusHooksEnabled(false, null, { agents: ['claude'], env })
+    expect(await read(join(dirname(desktopProfile), 'keybindings.json'))).toEqual({ bindings: [] })
+    expect(await read(file('X'))).not.toHaveProperty('statusLine')
+    // Keep the independent owner's original opt-out history below.
+    await install('X')
+    await erase('X')
     Reflect.deleteProperty(globalThis, Symbol.for('orca.host.appEnvironment'))
-    try {
+    await fs.mkdir(dirname(profile), { recursive: true })
+    expect(installClaudeAgentView(profile)).toBe(true)
+    const legacy = join(seam.home, '.claude', 'skills', 'orca-agent-view')
+    await write(join(legacy, '.claude-plugin', 'orca-managed.json'), {
+      owner: 'stablyai/orca/claude-agent-view',
+      binding: { context: 'Chat', chord: 'ctrl+alt+g' }
+    })
+    await write(join(seam.home, '.claude', 'keybindings.json'), {
+      bindings: [{ context: 'Chat', bindings: { 'ctrl+alt+g': 'command:orca-agent-view' } }]
+    })
+    async function command(action: 'on' | 'off' | 'status', name: string, installed: boolean) {
       expect(hasAppEnvironment()).toBe(false)
-      await main(['agent', 'hooks', 'off', '--json'])
+      await main(['agent', 'hooks', action, '--json'])
       expect(JSON.parse(String(output.mock.calls.at(-1)?.[0])).result.statuses).toContainEqual({
         agent: 'claude',
-        state: 'not_installed',
+        state: installed ? 'installed' : 'not_installed',
         configPath: file(name),
-        managedHooksPresent: false,
+        managedHooksPresent: installed,
         detail: null
       })
-      expect((await read(file(name))).statusLine).toBeUndefined()
-      expect(await read(join(dirname(profile), 'keybindings.json'))).toEqual({ bindings: [] })
       expect(hasAppEnvironment()).toBe(false)
-    } finally {
-      setAppEnvironment(environment)
     }
+    vi.stubEnv('CLAUDE_CONFIG_DIR', dirname(file('Y')))
+    await command('on', 'Y', true)
+    expect((await read(file('Y'))).statusLine).toBeDefined()
+    expect(await read(join(seam.home, '.claude', 'keybindings.json'))).toEqual({ bindings: [] })
+    await expect(fs.stat(legacy)).rejects.toHaveProperty('code', 'ENOENT')
+    await command('on', 'Y', true)
+    await command('status', 'Y', true)
+    await command('off', 'Y', false)
+    expect((await read(file('Y'))).statusLine).toBeUndefined()
+    expect(await read(join(dirname(profile), 'keybindings.json'))).toEqual({ bindings: [] })
+    seam.online = false
+    await fs.mkdir(join(seam.home, 'data'), { recursive: true })
+    vi.stubEnv('CLAUDE_CONFIG_DIR', dirname(file('Z')))
+    await command('on', 'Z', true)
+    expect((await read(file('Z'))).statusLine).toBeDefined()
+    vi.stubEnv('CLAUDE_CONFIG_DIR', dirname(file('X')))
+    await command('on', 'X', true)
+    expect((await read(file('X'))).statusLine).toBeUndefined()
+    vi.stubEnv('CLAUDE_CONFIG_DIR', dirname(file('Z')))
+    await command('status', 'Z', true)
+    await command('off', 'Z', false)
+    expect((await read(file('Z'))).statusLine).toBeUndefined()
+    await command('on', 'Z', true)
+    expect((await read(file('Z'))).statusLine).toBeDefined()
+    const invocation = {
+      agents: ['claude'] as const,
+      env: { CLAUDE_CONFIG_DIR: dirname(file('Z')) },
+      userDataPath: join(seam.home, 'data')
+    }
+    expect(
+      (
+        await applyAgentStatusHooksEnabled(false, null, {
+          ...invocation,
+          shouldContinue: () => false
+        })
+      )[0].state
+    ).toBe('not_installed')
+    expect((await read(file('Z'))).statusLine).toBeUndefined()
+    expect(
+      (await document()).destinations.some((entry: { path: string }) => entry.path === file('X'))
+    ).toBe(true)
+    expect(
+      (
+        await applyAgentStatusHooksEnabled(true, null, {
+          ...invocation,
+          shouldContinue: () => true
+        })
+      )[0].state
+    ).toBe('installed')
+    expect((await read(file('Z'))).statusLine).toBeDefined()
+    expect(errors).not.toHaveBeenCalled()
+    expect(warnings).not.toHaveBeenCalled()
+    expect(process.exitCode).toBeUndefined()
+  } finally {
+    setAppEnvironment(environment)
   }
-  const env = { CLAUDE_CONFIG_DIR: dirname(file('X')) }
-  expect(
-    (await applyAgentStatusHooksEnabled(true, null, { agents: ['claude'], env }))[0].state
-  ).toBe('installed')
-  vi.stubEnv('CLAUDE_CONFIG_DIR', dirname(file('Y')))
-  await main(['agent', 'hooks', 'on', '--json'])
-  expect((await read(file('Y'))).statusLine).toBeDefined()
-  await offInPlainNode('Y')
-  await erase('X')
-  seam.online = false
-  await fs.mkdir(join(seam.home, 'data'), { recursive: true })
-  vi.stubEnv('CLAUDE_CONFIG_DIR', dirname(file('Z')))
-  await main(['agent', 'hooks', 'on', '--json'])
-  expect((await read(file('Z'))).statusLine).toBeDefined()
-  vi.stubEnv('CLAUDE_CONFIG_DIR', dirname(file('X')))
-  await main(['agent', 'hooks', 'on', '--json'])
-  expect((await read(file('X'))).statusLine).toBeUndefined()
-  vi.stubEnv('CLAUDE_CONFIG_DIR', dirname(file('Z')))
-  await offInPlainNode('Z')
-  await main(['agent', 'hooks', 'on', '--json'])
-  expect((await read(file('Z'))).statusLine).toBeDefined()
-  expect(errors).not.toHaveBeenCalled()
-  expect(output).toHaveBeenCalled()
-  expect(process.exitCode).toBeUndefined()
-  const invocation = { agents: ['claude'] as const, env: { CLAUDE_CONFIG_DIR: dirname(file('Z')) } }
-  expect(
-    (
-      await applyAgentStatusHooksEnabled(false, null, {
-        ...invocation,
-        shouldContinue: () => false
-      })
-    )[0].state
-  ).toBe('not_installed')
-  expect((await read(file('Z'))).statusLine).toBeUndefined()
-  expect(
-    (await document()).destinations.some((entry: { path: string }) => entry.path === file('X'))
-  ).toBe(true)
-  expect(
-    (
-      await applyAgentStatusHooksEnabled(true, null, { ...invocation, shouldContinue: () => true })
-    )[0].state
-  ).toBe('installed')
-  expect((await read(file('Z'))).statusLine).toBeDefined()
 })
 
 it('bounds canceled pure current reads, joins other installers, preserves charged slots and retries on a legitimate wake', async () => {

@@ -1,3 +1,4 @@
+import { systemClaudeHookTarget } from './claude-hook-target'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -110,7 +111,10 @@ describe('Windows Claude hook files', () => {
 
   it('keeps inert scripts on uninstall and never creates an entry from an orphan payload', async () => {
     await service.installSystem()
-    await service.removeSystem()
+    await service.removeSystem({
+      target: systemClaudeHookTarget(),
+      userDataPath: join(home.path, 'data')
+    })
     expect(JSON.stringify(readHooksJson(settings))).not.toContain('claude-hook.cmd')
     // Keep scripts callable for sessions still holding the old hook settings.
     expect(readFileSync(entry, 'utf8')).toBe(getWindowsClaudeHookEntry())

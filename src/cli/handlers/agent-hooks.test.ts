@@ -198,11 +198,13 @@ describe('agent hooks CLI handler', () => {
           expect(applyAgentStatusHooksEnabledMock).toHaveBeenCalledWith(
             action === 'on',
             expect.any(Object),
-            { target }
+            { target, userDataPath }
           )
         } else {
           expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
-          expect(getManagedAgentHookStatusesMock).toHaveBeenCalledWith({ target })
+          expect(getManagedAgentHookStatusesMock).toHaveBeenCalledWith(
+            action === 'status' ? { target } : { target, userDataPath }
+          )
           expect(console.log).toHaveBeenCalledWith(
             expect.stringContaining(join(target.configDir, 'settings.json'))
           )
@@ -283,7 +285,8 @@ describe('agent hooks CLI handler', () => {
 
     expect(process.exitCode).not.toBe(1)
     expect(applyAgentStatusHooksEnabledMock).toHaveBeenCalledWith(true, expect.any(Object), {
-      env: { CLAUDE_CONFIG_DIR: configDir }
+      env: { CLAUDE_CONFIG_DIR: configDir },
+      userDataPath
     })
     expect(readFileSync(grokHooks, 'utf8')).toBe('{"hooks":{}}\n')
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining('not_installed'))

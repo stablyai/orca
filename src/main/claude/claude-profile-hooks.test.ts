@@ -1,3 +1,4 @@
+import { systemClaudeHookTarget } from './claude-hook-target'
 import {
   existsSync,
   mkdirSync,
@@ -227,15 +228,32 @@ describe('Claude System default custom configuration', () => {
     expect(readFileSync(join(f.defaultDir, 'settings.json'), 'utf8')).toBe(before)
     // Older builds registered their callbacks in the conventional folder.
     writeFileSync(join(f.defaultDir, 'settings.json'), JSON.stringify(f.settings(f.profile)))
-    expect((await f.service.removeSystem()).state).toBe('not_installed')
+    expect(
+      (
+        await f.service.removeSystem({
+          target: systemClaudeHookTarget(),
+          userDataPath: join(state.home, 'data')
+        })
+      ).state
+    ).toBe('not_installed')
     expect(f.settings(f.profile)).toEqual(user)
     expect(f.settings(f.defaultDir)).toEqual(user)
     await f.service.installSystem(CURRENT)
     writeFileSync(join(f.defaultDir, 'settings.json'), '{invalid')
-    expect((await f.service.removeSystem()).state).toBe('error')
+    expect(
+      (
+        await f.service.removeSystem({
+          target: systemClaudeHookTarget(),
+          userDataPath: join(state.home, 'data')
+        })
+      ).state
+    ).toBe('error')
     expect(f.settings(f.profile)).toEqual(user)
     rmSync(join(f.defaultDir, 'settings.json'))
-    await f.service.removeSystem()
+    await f.service.removeSystem({
+      target: systemClaudeHookTarget(),
+      userDataPath: join(state.home, 'data')
+    })
     expect(existsSync(join(f.defaultDir, 'settings.json'))).toBe(false)
   })
 })

@@ -1,3 +1,4 @@
+import { systemClaudeHookTarget } from './claude-hook-target'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -146,7 +147,10 @@ describe('Claude statusLine on Windows', () => {
       seedStatusLine(command)
       await new ClaudeHookService().installSystem(CURRENT_CLAUDE)
       expect(readSettings().statusLine).toEqual({ type: 'command', command })
-      await new ClaudeHookService().removeSystem()
+      await new ClaudeHookService().removeSystem({
+        target: systemClaudeHookTarget(),
+        userDataPath: join(tmpHome, 'data')
+      })
       expect(readSettings().statusLine).toEqual({ type: 'command', command })
     }
   )
