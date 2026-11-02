@@ -449,7 +449,7 @@ describe('desktop startup activation', () => {
       reconcileLegacyWorkerTerminals: vi.fn(async () => {})
     })
     const store = {
-      getSettings: () => ({}),
+      getSettings: () => ({ claudeAutoSwitchEnabled: true }),
       onSettingsChanged: () => () => {}
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: serve launch only reads settings and subscribes while this probe stands in for rate limits.

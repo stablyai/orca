@@ -156,12 +156,8 @@ describe('main window profile-state update preparation', () => {
   )
 })
 
-const usageOff = {
-  claudeAutoSwitchEnabled: false,
-  claudeSessionMover: 'off' as const,
-  claudeAccountPool: 'off' as const,
-  claudeModelPolicy: { enabled: false }
-}
+const usageOff = { claudeAutoSwitchEnabled: false }
+const usageOn = { claudeAutoSwitchEnabled: true }
 
 describe('serve usage polling', () => {
   const start = state.rateLimits.start
@@ -188,7 +184,7 @@ describe('serve usage polling', () => {
     state.isServeMode = false
     state.stopClaudeUsagePolling?.()
     state.stopClaudeUsagePolling = null
-    store.getSettings.mockImplementation(() => ({}))
+    store.getSettings.mockImplementation(() => usageOn)
     store.onSettingsChanged.mockImplementation(() => () => {})
     info = vi.spyOn(console, 'info').mockImplementation(() => {})
   })
@@ -250,11 +246,8 @@ describe('serve usage polling', () => {
       '[claude-usage] polling switch: mode=serve pollInactive=false pollWithoutWindow=false'
     )
 
-    store.getSettings.mockImplementation(() => ({
-      ...usageOff,
-      claudeModelPolicy: { enabled: true }
-    }))
-    listener?.({ claudeModelPolicy: { enabled: true } })
+    store.getSettings.mockImplementation(() => usageOn)
+    listener?.({ claudeAutoSwitchEnabled: true })
     expect(start).toHaveBeenCalledTimes(1)
     expect(start).toHaveBeenCalledWith({
       fetchImmediately: true,
