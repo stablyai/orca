@@ -6,6 +6,7 @@ import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { makeFolderWorkspace, makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { makeProjectGroup } from '@/components/sidebar/folder-workspace-composer-submit-fixtures'
+import { resolveSourceFolderHost } from '@/lib/workspace-copy-owner'
 import { makeOpenFile } from '@/store/slices/store-session-test-harness'
 import { captureWorktreeOperationGenerationSnapshot } from '@/lib/worktree-operation-generation'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -289,6 +290,55 @@ describe('note owner views', () => {
     }
 
     expect(cost(100)).toBeLessThanOrEqual(cost(10) * 20)
+  })
+
+  it('share one SSH qualification across same-id publications and readers on a listing update', () => {
+    function cost(copies: number) {
+      let hostReads = 0
+      const rows = Array.from({ length: copies }, () =>
+        Object.defineProperty(
+          makeWorktree({ id: WT, repoId: REPO, diffComments: [note('n')] }),
+          'hostId',
+          {
+            enumerable: true,
+            get: () => {
+              hostReads += 1
+              return 'ssh:box'
+            }
+          }
+        )
+      )
+      useAppStore.setState({
+        repos: [{ ...repoOn(REPO, 'ssh:box'), connectionId: 'box' }],
+        worktreesByRepo: { [REPO]: rows }
+      })
+      const { result, unmount } = renderHook(() =>
+        Array.from({ length: 10 }, () => useDiffCommentView(WT, { runtimeEnvironmentId: null }))
+      )
+      expect(result.current[0].owner).toMatchObject({
+        authority: { endpoint: { kind: 'self' }, at: 'ssh:box' }
+      })
+
+      hostReads = 0
+      act(() => useAppStore.setState({ worktreesByRepo: { [REPO]: [...rows] } }))
+      const updateReads = hostReads
+      unmount()
+      return updateReads
+    }
+
+    // Ten readers over C same-id rows: shared qualification grows 10x, per-row peer scans 100x.
+    expect(cost(100)).toBeLessThanOrEqual(cost(10) * 20)
+  })
+
+  it('keep nothing for folders that are not listed', () => {
+    const missing = Array.from({ length: 50 }, (_, index) =>
+      resolveSourceFolderHost(useAppStore.getState(), `folder:gone-${index}`, `gone-${index}`, {
+        runtimeEnvironmentId: null
+      })
+    )
+    expect(missing[0]).toEqual({ kind: 'missing' })
+    // One shared answer: no per-id result was computed and retained.
+    expect(new Set(missing).size).toBe(1)
   })
 
   it('show a sole paired SSH copy selected through its server alias', () => {

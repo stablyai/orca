@@ -80,18 +80,56 @@ function sameEndpoint(a: HostAuthorityEndpoint, b: HostAuthorityEndpoint): boole
     : b.kind === 'environment' && a.environmentId === b.environmentId
 }
 
+type CatalogMemo<R> = WeakMap<object, { inputs: readonly unknown[]; results: Map<string, R> }>
+
+/** One result per key while the anchor snapshot and inputs stay the same, shared by every reader of that snapshot. */
+function memoOnCatalog<R>(
+  cache: CatalogMemo<R>,
+  anchor: object,
+  inputs: readonly unknown[],
+  key: string,
+  compute: () => R
+): R {
+  let cached = cache.get(anchor)
+  if (!cached || cached.inputs.some((input, index) => !Object.is(input, inputs[index]))) {
+    cached = { inputs, results: new Map() }
+    cache.set(anchor, cached)
+  }
+  let result = cached.results.get(key)
+  if (!result) {
+    result = compute()
+    cached.results.set(key, result)
+  }
+  return result
+}
+
+// Rows of one workspace on one host share an answer; resolving each row would rescan its same-id peers.
+const recordOwnerCache: CatalogMemo<OwnerMatch> = new WeakMap()
+
 /** The copy a record belongs to: complete stamps prove it; otherwise its host's evidence decides. */
 export function resolveRecordOwner(
   state: WorktreeOperationRouteState,
   record: WorktreeOperationOwnerRecord
 ): OwnerMatch {
   const route = routeForOwner(record)
-  if (route?.runtimeEnvironmentId) {
-    // Resolving its host instead would merge rival servers proxying the same SSH target.
-    return resolveOwnerOfRoute(state, record.id, route)
+  const stamped = route?.runtimeEnvironmentId ? route : null
+  const hostId = stamped ? null : (record.hostId ?? resolveUnstampedRecordHost(state, record))
+  const compute = (): OwnerMatch =>
+    stamped
+      ? // Resolving its host instead would merge rival servers proxying the same SSH target.
+        resolveOwnerOfRoute(state, record.id, stamped)
+      : hostId
+        ? resolveOwner(state, { workspaceId: record.id, hostId })
+        : { kind: 'missing' }
+  const rows = selectWorktreesByRepo(state)
+  if (!rows) {
+    return compute()
   }
-  const hostId = record.hostId ?? resolveUnstampedRecordHost(state, record)
-  return hostId ? resolveOwner(state, { workspaceId: record.id, hostId }) : { kind: 'missing' }
+  const key = stamped
+    ? `r\0${record.id}\0${stamped.executionHostId ?? ''}\0${stamped.runtimeEnvironmentId}`
+    : `h\0${record.id}\0${hostId ?? ''}`
+  const inputs = [selectDetectedWorktreesByRepo(state), state.repos, state.runtimeEnvironments]
+  return memoOnCatalog(recordOwnerCache, rows, inputs, key, compute)
 }
 
 /** A host's copy, also before it lists: an unlisted SSH copy takes its server from repo setup, as its record would. */
@@ -244,20 +282,20 @@ export function resolveSourceFolderHost(
       ? UNKNOWN_SOURCE
       : resourceEvidence(ownerState, workspaceId, { ...source, externalSshTargetId: undefined })
   const copies = selectFolderWorkspaceCopies(ownerState, folderWorkspaceId)
-  const inputs = FOLDER_OWNER_INPUTS.map((key) => ownerState[key])
-  let cached = folderQualificationCache.get(copies)
-  if (!cached || cached.inputs.some((input, index) => !Object.is(input, inputs[index]))) {
-    cached = { inputs, results: new Map() }
-    folderQualificationCache.set(copies, cached)
+  // An absent folder has nothing to qualify; caching it would key on a shared empty list forever.
+  if (copies.length === 0) {
+    return NO_FOLDER_COPY
   }
-  const key = `${workspaceId}\0${evidenceKey(evidence)}`
-  let result = cached.results.get(key)
-  if (!result) {
-    result = qualifyFolderCopies(ownerState, workspaceId, copies, evidence)
-    cached.results.set(key, result)
-  }
-  return result
+  return memoOnCatalog(
+    folderQualificationCache,
+    copies,
+    FOLDER_OWNER_INPUTS.map((key) => ownerState[key]),
+    `${workspaceId}\0${evidenceKey(evidence)}`,
+    () => qualifyFolderCopies(ownerState, workspaceId, copies, evidence)
+  )
 }
+
+const NO_FOLDER_COPY: FolderQualification = { kind: 'missing' }
 
 /** Every catalog input a folder copy's owner is resolved from, besides the copies themselves. */
 const FOLDER_OWNER_INPUTS = [
@@ -273,10 +311,7 @@ const FOLDER_OWNER_INPUTS = [
 type FolderQualification = ExecutionHostOwnerMatch<ExecutionHostId | undefined>
 
 // Keyed by one id's copies from the folder index, so readers of that folder and evidence share the result until its catalog changes.
-const folderQualificationCache = new WeakMap<
-  readonly unknown[],
-  { inputs: readonly unknown[]; results: Map<string, FolderQualification> }
->()
+const folderQualificationCache: CatalogMemo<FolderQualification> = new WeakMap()
 
 function qualifyFolderCopies(
   state: WorktreeOperationRouteState,
