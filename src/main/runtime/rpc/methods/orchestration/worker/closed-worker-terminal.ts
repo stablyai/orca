@@ -10,8 +10,6 @@ import { userTabHoldingSession } from './worker-follow-up-choice'
 import { reopenWorkerTerminal } from './worker-follow-up-placement'
 
 const opening = new Map<string, Promise<OrchestrationPartyLocation | null>>()
-// Until its agent reports, a resumed pane is known only by the handle or request this host made.
-const attempts = new Map<string, { mutationId: string; handle?: string }>()
 
 /** Null keeps the lookup's answer: the worker's terminal is still there, or its conversation cannot resume here. */
 export function openClosedWorkerTerminal(
@@ -40,24 +38,18 @@ export function openClosedWorkerTerminal(
     ) {
       return null
     }
-    const earlier = attempts.get(resource.id)
-    // A shell the agent exited from no longer holds the conversation; resume it again instead.
-    if (earlier?.handle && (await runtime.isTerminalRunningAgent(earlier.handle))) {
-      return { kind: 'terminal', handle: earlier.handle }
-    }
+    // The terminal that holds this exact conversation, including one a resume is still starting.
     const held = await userTabHoldingSession(runtime, session)
     if (held) {
       return { kind: 'terminal', handle: held }
     }
-    // A failed request keeps its id, so a retry reconciles the pane it may have started.
-    const mutationId = earlier && !earlier.handle ? earlier.mutationId : randomUUID()
-    attempts.set(resource.id, { mutationId })
-    const reopened = await reopenWorkerTerminal(runtime, resource.worktree_id, session, mutationId)
-    if (!reopened) {
-      return null
-    }
-    attempts.set(resource.id, { mutationId, handle: reopened.handle })
-    return { kind: 'terminal', handle: reopened.handle }
+    const reopened = await reopenWorkerTerminal(
+      runtime,
+      resource.worktree_id,
+      session,
+      randomUUID()
+    )
+    return reopened ? { kind: 'terminal', handle: reopened.handle } : null
   })().finally(() => opening.delete(resource.id))
   opening.set(resource.id, open)
   return open

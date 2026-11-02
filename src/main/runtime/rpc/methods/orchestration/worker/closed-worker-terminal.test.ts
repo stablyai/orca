@@ -23,6 +23,19 @@ describe('opening a terminal worker Orca closed', () => {
     }
     await success('worker-release', '--dispatch', helper.dispatchId)
     const live = new Set<string>()
+    let hookRows: AgentStatusIpcPayload[] = []
+    // The runtime's resume claim holds the new pane until its agent's first hook report.
+    let starting = false
+    Object.defineProperty(h.runtime, 'getAgentStatusSnapshotFn', {
+      configurable: true,
+      value: () => hookRows
+    })
+    vi.spyOn(h.runtime, 'getAgentSessionResumePane').mockImplementation(() =>
+      starting ? REOPENED_PANE : undefined
+    )
+    vi.spyOn(h.runtime, 'getTerminalHandleForPaneKey').mockImplementation((paneKey) =>
+      paneKey === REOPENED_PANE && live.has('term_reopened') ? 'term_reopened' : null
+    )
     vi.spyOn(h.runtime, 'getLiveTerminalPaneKey').mockImplementation((handle) =>
       live.has(handle) ? REOPENED_PANE : null
     )
@@ -33,10 +46,26 @@ describe('opening a terminal worker Orca closed', () => {
       .spyOn(h.runtime, 'resumeAgentSessionInWorkspace')
       .mockImplementation(async () => {
         live.add('term_reopened')
+        starting = true
         return { ok: true, handle: 'term_reopened', paneKey: REOPENED_PANE, ptyId: 'pty' }
       })
+    /** The reopened pane's agent reports, which ends the resume claim. */
+    const report = (row: Pick<AgentStatusIpcPayload, 'agentType' | 'providerSession'>) => {
+      starting = false
+      hookRows = [
+        {
+          state: 'working',
+          prompt: '',
+          paneKey: REOPENED_PANE,
+          connectionId: null,
+          receivedAt: 1,
+          stateStartedAt: 1,
+          ...row
+        }
+      ]
+    }
     const resource = h.db.getWorkerTerminalResourceByOwner(helper.dispatchId)!
-    return { helper, resource, resume }
+    return { helper, resource, resume, report }
   }
 
   const open = (address: string) => h.call('orchestration.partyOpen', { address })
@@ -72,27 +101,9 @@ describe('opening a terminal worker Orca closed', () => {
     expect(await open(resource.terminal_handle)).toEqual(await locate(resource.terminal_handle))
   })
 
-  it('sends a later follow-up into the reopened terminal, not a second one', async () => {
+  it('sends a follow-up into the reopened terminal before its agent first reports', async () => {
     const { helper, resource, resume } = await closedHelper()
     await open(resource.terminal_handle)
-    // The resumed agent's hook row, which names the conversation in its pane.
-    const hookRow: AgentStatusIpcPayload = {
-      state: 'working',
-      prompt: '',
-      agentType: 'claude',
-      paneKey: REOPENED_PANE,
-      providerSession: CONVERSATION,
-      connectionId: null,
-      receivedAt: 1,
-      stateStartedAt: 1
-    }
-    Object.defineProperty(h.runtime, 'getAgentStatusSnapshotFn', {
-      configurable: true,
-      value: () => [hookRow]
-    })
-    vi.spyOn(h.runtime, 'getTerminalHandleForPaneKey').mockImplementation((paneKey) =>
-      paneKey === REOPENED_PANE ? 'term_reopened' : null
-    )
     const placement = await chooseWorkerFollowUpPlacement(
       h.runtime,
       h.db,
@@ -104,22 +115,18 @@ describe('opening a terminal worker Orca closed', () => {
     expect(resume).toHaveBeenCalledOnce()
   })
 
-  it('retries an uncertain resume as the same request, so it reconciles the pane it may have started', async () => {
-    const { resource, resume } = await closedHelper()
-    const succeed = resume.getMockImplementation()!
-    resume.mockResolvedValueOnce({ ok: false, reason: 'create_failed' })
-    await expect(open(resource.terminal_handle)).rejects.toThrow()
-    resume.mockImplementation(succeed)
-    expect(await open(resource.terminal_handle)).toEqual({
-      location: { kind: 'terminal', handle: 'term_reopened' }
-    })
-    const [first, second] = resume.mock.calls.map(([, request]) => request.mutationId)
-    expect(second).toBe(first)
+  it('resumes again once the reopened terminal holds another conversation', async () => {
+    const { resource, resume, report } = await closedHelper()
+    await open(resource.terminal_handle)
+    report({ agentType: 'codex', providerSession: { key: 'session_id', id: 'unrelated' } })
+    await open(resource.terminal_handle)
+    expect(resume).toHaveBeenCalledTimes(2)
   })
 
   it('resumes again once the agent left the reopened terminal', async () => {
-    const { resource, resume } = await closedHelper()
+    const { resource, resume, report } = await closedHelper()
     await open(resource.terminal_handle)
+    report({ agentType: 'claude', providerSession: CONVERSATION })
     vi.mocked(h.runtime.isTerminalRunningAgent).mockResolvedValue(false)
     await open(resource.terminal_handle)
     expect(resume).toHaveBeenCalledTimes(2)

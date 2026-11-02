@@ -203,7 +203,9 @@ export async function userTabHoldingSession(
       return handle
     }
   }
-  return undefined
+  // A resume still starting has no hook row yet; its claim names the pane it holds.
+  const starting = runtime.getAgentSessionResumePane(session)
+  return (starting && runtime.getTerminalHandleForPaneKey(starting)) || undefined
 }
 
 function unverifiable(dispatchId: string, reason: string): OrchestrationError {
