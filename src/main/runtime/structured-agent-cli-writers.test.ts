@@ -4,6 +4,11 @@ import type { AgentProcessVerdict } from '../../shared/agent-process-presence'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../shared/structured-agent-cli-conversation-adoption'
 import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { assertCliConversationWritersExited } from './structured-agent-cli-writers'
+import {
+  TerminalIdentityReadContext,
+  ptyRecordForPaneKey
+} from './terminal/query/terminal-identity-read-context'
+import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 
 const row: AgentStatusIpcPayload = {
   paneKey: 'source',
@@ -119,7 +124,7 @@ describe('canonical status store conversation admission', () => {
         {
           rows: () => rows,
           observation: () => ({ current: () => true, presence: async () => 'live', topology }),
-          ptyIdForPaneKey: (paneKey) => ptys[paneKey] ?? null
+          ptyResolver: () => (paneKey) => ptys[paneKey] ?? null
         },
         'claude',
         'conversation',
@@ -131,5 +136,85 @@ describe('canonical status store conversation admission', () => {
     await expect(admit([{ ...row, paneKey: 'tab-1:leaf' }], 'shared')).rejects.toMatchObject(
       conflict
     )
+  })
+
+  // Every create, resume and acquire runs this check: resolving panes for nothing to leave out, or
+  // scanning every terminal for each row, would grow with rows times terminals.
+  it('resolves panes only to leave some out, reading the terminals once', async () => {
+    const run = async (count: number, closingPaneKeys: string[]) => {
+      const visits = { count: 0 }
+      // Counts every terminal record a lookup walks, which is where a per-row scan would show.
+      const counted = <V>(map: Map<string, V>): Map<string, V> =>
+        new Proxy(map, {
+          get(target, prop) {
+            const value = Reflect.get(target, prop, target)
+            if (prop === 'keys' || prop === 'entries' || prop === Symbol.iterator) {
+              return function* () {
+                for (const item of value.call(target)) {
+                  visits.count += 1
+                  yield item
+                }
+              }
+            }
+            return typeof value === 'function' ? value.bind(target) : value
+          }
+        })
+      const leafId = (i: number) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: pane lookup reads only leafId and ptyId.
+      const leaf = (i: number) => ({ leafId: leafId(i), ptyId: `pty-${i}` }) as RuntimeLeafRecord
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: pane lookup reads only ptyId, connected and the pane fields.
+      const pty = (i: number) =>
+        ({ ptyId: `pty-${i}`, connected: true }) as RuntimePtyWorktreeRecord
+      const indices = Array.from({ length: count }, (_, i) => i)
+      const leaves = counted(new Map(indices.map((i) => [`tab-${i}::${leafId(i)}`, leaf(i)])))
+      const ptys = counted(new Map(indices.map((i) => [`pty-${i}`, pty(i)])))
+      const capturePaneOf = () => (record: { ptyId: string }) => {
+        const i = Number(record.ptyId.slice(4))
+        return { tabId: `tab-${i}`, paneKey: `tab-${i}:${leafId(i)}`, recordedAtGraphSequence: 0 }
+      }
+      const source = {
+        leaves,
+        ptys,
+        leafKey: (tab: string, id: string) => `${tab}::${id}`,
+        capturePaneOf
+      }
+      let lookups = 0
+      // The runtime's resolver: one identity read context for the whole check.
+      const ptyResolver = () => {
+        const context = new TerminalIdentityReadContext({
+          ...source,
+          handles: new Map(),
+          reverse: new Map(),
+          sshTerminals: new Map()
+        })
+        return (paneKey: string) => {
+          lookups += 1
+          return ptyRecordForPaneKey(paneKey, source, context)?.ptyId ?? null
+        }
+      }
+      // Rows under keys no terminal is bound to now, which only a scan of the terminals resolves.
+      const rows = indices.map((i) => ({ ...row, paneKey: `legacy-${i}` }))
+      await assertCliConversationWritersExited(
+        {
+          rows: () => rows,
+          observation: () => ({
+            current: () => true,
+            presence: async () => 'exited',
+            topology: 'pane-owned'
+          }),
+          ptyResolver
+        },
+        'claude',
+        'conversation',
+        closingPaneKeys
+      )
+      return { lookups, visits: visits.count }
+    }
+    for (const count of [20, 200]) {
+      expect(await run(count, [])).toEqual({ lookups: 0, visits: 0 })
+      const closing = await run(count, [`tab-0:${'00000000-0000-4000-8000-000000000000'}`])
+      expect(closing.lookups).toBe(count + 1)
+      expect(closing.visits).toBeLessThanOrEqual(4 * count)
+    }
   })
 })
