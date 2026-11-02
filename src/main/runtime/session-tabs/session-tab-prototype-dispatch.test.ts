@@ -367,8 +367,7 @@ describe('session runtime reentry', () => {
       ...input,
       tabId: 'structured-agent-session-session',
       eligible: expect.any(Function),
-      activate: false,
-      selectionDecided: false
+      activate: false
     })
     expect(project.mock.calls[0]?.[0].eligible?.()).toBe(true)
   })
