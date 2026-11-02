@@ -40,6 +40,8 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     defaultTaskViewPreset
   )
   const [tasksLoading, setTasksLoading] = useState(false)
+  // The request key the latest landing run dispatched for; a different current key means a request is owed.
+  const [landingRequestKey, setLandingRequestKey] = useState('')
   const [tasksRefreshing, setTasksRefreshing] = useState(false)
   const [tasksFiltering, setTasksFiltering] = useState(false)
   const [tasksError, setTasksError] = useState<string | null>(null)
@@ -186,6 +188,8 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     setActiveTaskPreset: typeof setActiveTaskPreset
     tasksLoading: typeof tasksLoading
     setTasksLoading: typeof setTasksLoading
+    landingRequestKey: typeof landingRequestKey
+    setLandingRequestKey: typeof setLandingRequestKey
     tasksRefreshing: typeof tasksRefreshing
     setTasksRefreshing: typeof setTasksRefreshing
     tasksFiltering: typeof tasksFiltering
@@ -245,6 +249,8 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   nextModel.setActiveTaskPreset = setActiveTaskPreset
   nextModel.tasksLoading = tasksLoading
   nextModel.setTasksLoading = setTasksLoading
+  nextModel.landingRequestKey = landingRequestKey
+  nextModel.setLandingRequestKey = setLandingRequestKey
   nextModel.tasksRefreshing = tasksRefreshing
   nextModel.setTasksRefreshing = setTasksRefreshing
   nextModel.tasksFiltering = tasksFiltering

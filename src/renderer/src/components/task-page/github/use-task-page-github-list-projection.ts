@@ -13,13 +13,13 @@ import {
   getTaskPageRepoSourceContext
 } from '../task-page-source-context'
 import { sameOptionalGitHubOwnerRepo } from './task-page-github-review-model'
+import { useTaskPageGitHubListPending } from './use-task-page-github-list-pending'
 export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetadataModel) {
   const {
     repos,
     fetchPRChecks,
     taskSource,
     githubMode,
-    tasksLoading,
     tasksFiltering,
     githubPageSize,
     pages,
@@ -61,7 +61,9 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
     () => typeFilteredCurrentPageItems.length - filteredWorkItems.length,
     [filteredWorkItems.length, typeFilteredCurrentPageItems.length]
   )
-  const showGitHubTaskSkeletons = tasksFiltering || (tasksLoading && filteredWorkItems.length === 0)
+  const githubListPending = useTaskPageGitHubListPending(model)
+  const showGitHubTaskSkeletons =
+    tasksFiltering || (githubListPending && filteredWorkItems.length === 0)
   const loadedGitHubAuthorLogins = useMemo(() => {
     const seen = new Set<string>()
     const logins: string[] = []
@@ -172,6 +174,7 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
     typeFilteredCurrentPageItems: typeof typeFilteredCurrentPageItems
     filteredWorkItems: typeof filteredWorkItems
     softHiddenVisibleCount: typeof softHiddenVisibleCount
+    githubListPending: typeof githubListPending
     showGitHubTaskSkeletons: typeof showGitHubTaskSkeletons
     loadedGitHubAuthorLogins: typeof loadedGitHubAuthorLogins
     primaryGithubFilterSlug: typeof primaryGithubFilterSlug
@@ -188,6 +191,7 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
   nextModel.typeFilteredCurrentPageItems = typeFilteredCurrentPageItems
   nextModel.filteredWorkItems = filteredWorkItems
   nextModel.softHiddenVisibleCount = softHiddenVisibleCount
+  nextModel.githubListPending = githubListPending
   nextModel.showGitHubTaskSkeletons = showGitHubTaskSkeletons
   nextModel.loadedGitHubAuthorLogins = loadedGitHubAuthorLogins
   nextModel.primaryGithubFilterSlug = primaryGithubFilterSlug

@@ -1,12 +1,7 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
-import { useEffect } from 'react'
-import { useTaskPageGitHubSearchPagination } from './github/use-task-page-github-search-pagination'
-import { runTaskPageGitHubLandingRefresh } from './github/task-page-github-landing-refresh-run'
-import { taskPageGitHubResumeCache } from './github/task-page-github-resume-cache'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TooltipProvider } from '@/components/ui/tooltip'
+import { describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { i18n } from '@/i18n/i18n'
 import type { WorkItemsCacheSources } from '@/store/github/cache-model'
@@ -15,30 +10,29 @@ import { createGlobalSettingsFixture } from '../../../../shared/global-settings-
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import { getGitHubTaskKind } from '../../../../shared/task-github-search'
 import type { TaskProvider } from '../../../../shared/task-providers'
-import { parseTaskQuery } from '../../../../shared/task-query'
 import { getTaskPageRepoCacheRows } from './task-page-cache-selectors'
 import type * as CacheSelectors from './task-page-cache-selectors'
 import { getTaskPageRepoCacheInput, getTaskPageRepoSourceContext } from './task-page-source-context'
 import { getSourceOptions } from './task-page-localized-options'
-import { useTaskPageStoreBindings } from './use-task-page-store-bindings'
-import { useTaskPageRepoSelection } from './use-task-page-repo-selection'
-import { useTaskPageRuntimeHosts } from './use-task-page-runtime-hosts'
-import { useTaskPageSourceAvailability } from './use-task-page-source-availability'
-import { useTaskPageProviderState } from './use-task-page-provider-state'
-import { useTaskPageGitHubListState } from './github/use-task-page-github-list-state'
-import { useTaskPageGitHubDetail } from './github/use-task-page-github-detail'
-import { useTaskPageGitHubCacheReconciliation } from './github/use-task-page-github-cache-reconciliation'
 import { useTaskPageSourceDisplay } from './use-task-page-source-display'
-import { TaskPageGitHubFilters } from './github/Filters'
-import { TaskPageGitHubList } from './github/List'
-import { useTaskPageGitHubListProjection } from './github/use-task-page-github-list-projection'
-import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'
+import {
+  Q1,
+  Q2,
+  upstream,
+  fork,
+  sources,
+  repo,
+  sshTwin,
+  listAnswers,
+  setIssueSourcePreference,
+  view,
+  harnessRenders,
+  Harness,
+  installSourceDisplayTestLifecycle
+} from './use-task-page-source-display.test-fixture'
 
 vi.mock('@/components/github/PRFilterDropdowns', () => ({ default: () => null }))
-// The list's own states are under test; mounted-rows shows the row titles.
-vi.mock('./github/Rows', () => ({ TaskPageGitHubRows: () => null }))
 // Count the source reader's own work at its boundary; writers keep the uninstrumented cache.
 const readerWork = vi.hoisted(() => ({
   invocations: 0,
@@ -100,123 +94,7 @@ vi.mock('./task-page-cache-selectors', async (importOriginal) => {
   }
 })
 
-const Q1 = 'is:issue is:open'
-const Q2 = 'is:issue label:bug'
-const upstream = { owner: 'upstream-owner', repo: 'project' }
-const fork = { owner: 'fork-owner', repo: 'project', host: 'ghe.example.com' }
-const sources = (issues: GitHubOwnerRepo | null, prs = issues): WorkItemsCacheSources => ({
-  issues,
-  prs,
-  originCandidate: fork,
-  upstreamCandidate: upstream
-})
-// Saved project identity is the upstream; the list's resolved source can differ.
-const repo: Repo = {
-  id: 'repo',
-  path: '/repo',
-  displayName: 'Project',
-  badgeColor: '#000',
-  addedAt: 1,
-  executionHostId: 'local',
-  upstream
-}
-const sshTwin: Repo = {
-  ...repo,
-  path: '/ssh/repo',
-  connectionId: 'box',
-  executionHostId: 'ssh:box'
-}
-
-const initialStore = useAppStore.getState()
-const initialApiDescriptor = Object.getOwnPropertyDescriptor(window, 'api')
-// listWorkItems answers by repo path and query; a missing answer fails the fetch.
-let listAnswers: Map<string, WorkItemsCacheSources>
-const setIssueSourcePreference = vi.fn()
-
-function useMountedSourceDisplay(runRequests = false) {
-  const store = useTaskPageStoreBindings()
-  const selection = useTaskPageRepoSelection(store)
-  const hosts = useTaskPageRuntimeHosts(selection)
-  const availability = useTaskPageSourceAvailability(hosts)
-  const provider = useTaskPageProviderState(availability)
-  const list = useTaskPageGitHubListState(provider)
-  const detail = useTaskPageGitHubDetail(list)
-  const reconciled = useTaskPageGitHubCacheReconciliation(detail)
-  useEffect(() => {
-    return runRequests
-      ? runTaskPageGitHubLandingRefresh({
-          ...reconciled,
-          githubWorkItemMutationQueryKey: 'mounted-source-flow'
-        })
-      : undefined
-    // The production landing hook keys its subscription by this same request context.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    runRequests,
-    reconciled.selectedReposKey,
-    reconciled.appliedTaskSearch,
-    reconciled.workItemsInvalidationNonce,
-    reconciled.taskRefreshNonce,
-    reconciled.taskResumeApplied
-  ])
-  // Stage 21 derives the kind the same way before handing off to the source display.
-  const kindModel = Object.assign(reconciled, {
-    activeGithubTaskKind: getGitHubTaskKind(
-      reconciled.activeTaskPreset,
-      reconciled.appliedTaskSearch
-    )
-  })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: pagination reads the stage-8 list state, source kind and store bindings present here; intervening provider stages add no GitHub pagination inputs.
-  const paginationInput = kindModel as unknown as typeof kindModel &
-    Parameters<typeof useTaskPageGitHubSearchPagination>[0]
-  const withKind = useTaskPageGitHubSearchPagination(paginationInput)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every field the source display reads comes from stages 1-8 or the kind above; stages 9-20 add none of them.
-  const sourceDisplayInput = withKind as unknown as typeof withKind &
-    Parameters<typeof useTaskPageSourceDisplay>[0]
-  return useTaskPageSourceDisplay(sourceDisplayInput)
-}
-let view: ReturnType<typeof useMountedSourceDisplay>
-const NO_ROW_MUTATIONS = { softHiddenItemKeys: new Set<string>() }
-// A child, so the list's own subscriptions never count as Harness renders.
-function MountedList() {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the projection reads stage 1-8 state and the kind; of stages 9-23 it reads only row mutations, stubbed with none hidden.
-  const listInput = { ...view, githubWorkItemMutation: NO_ROW_MUTATIONS } as unknown as Parameters<
-    typeof useTaskPageGitHubListProjection
-  >[0]
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: List reads stage 1-8 state, refs and the projection; Rows, the only reader of later stages, is stubbed.
-  const listModel = useTaskPageGitHubListProjection(
-    listInput
-  ) as unknown as TaskPageComposerActionsModel
-  return <TaskPageGitHubList model={listModel} />
-}
-let harnessRenders = 0
-function Harness({ runRequests = false, list = false }: { runRequests?: boolean; list?: boolean }) {
-  harnessRenders += 1
-  view = useMountedSourceDisplay(runRequests)
-  const filtersFields = {
-    ...view,
-    setIssueSourcePreference: runRequests
-      ? useAppStore.getState().setIssueSourcePreference
-      : setIssueSourcePreference,
-    appliedTaskQuery: parseTaskQuery(view.appliedTaskSearch),
-    loadedGitHubAuthorLogins: [],
-    primaryGithubFilterSlug: null,
-    githubTasksBusy: false,
-    newIssueTargetRepo: null
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mounted stage-8 model plus these stubs cover every field Filters reads; later-stage handlers are never fired here.
-  const filtersModel = filtersFields as unknown as TaskPageComposerActionsModel
-  return (
-    <TooltipProvider>
-      <TaskPageGitHubFilters model={filtersModel} />
-      <output data-testid="mounted-rows">
-        {view.pages[view.currentPage]?.map((row) => row.title).join(',') ?? ''}
-      </output>
-      <output data-testid="mounted-count">{view.countedTotalPages ?? 'unknown'}</output>
-      {list ? <MountedList /> : null}
-    </TooltipProvider>
-  )
-}
+installSourceDisplayTestLifecycle()
 
 function mount(repos: Repo[], query = Q1) {
   useAppStore.setState({
@@ -269,41 +147,6 @@ function expectSurfaces(
   expect(link).toEqual({ url: `https://${source.host ?? 'github.com'}/${slug}`, label: slug })
   expect(sourceRowCount()).toBe(1)
 }
-
-beforeEach(() => {
-  taskPageGitHubResumeCache.clear()
-  listAnswers = new Map()
-  setIssueSourcePreference.mockReset()
-  Object.defineProperty(window, 'api', {
-    configurable: true,
-    value: {
-      gh: {
-        countWorkItems: vi.fn().mockResolvedValue(0),
-        viewer: vi.fn().mockResolvedValue(null),
-        listWorkItems: vi.fn(async ({ repoPath, query = '' }) => {
-          const answer = listAnswers.get(`${repoPath}\0${query}`)
-          if (!answer) {
-            throw new Error('list failed')
-          }
-          return { items: [], sources: answer }
-        })
-      },
-      repos: { update: vi.fn(async ({ repoId }) => ({ ...repo, id: repoId })) },
-      ui: { set: vi.fn().mockResolvedValue(undefined) }
-    }
-  })
-  useAppStore.setState({ ...initialStore, workItemsCache: {} }, true)
-})
-afterEach(async () => {
-  await i18n.changeLanguage('en')
-  cleanup()
-  useAppStore.setState(initialStore, true)
-  if (initialApiDescriptor) {
-    Object.defineProperty(window, 'api', initialApiDescriptor)
-  } else {
-    Reflect.deleteProperty(window, 'api')
-  }
-})
 
 describe('Tasks source display', () => {
   it('carries the last shown entry across a query change, live, until a current entry or eviction', async () => {
@@ -637,11 +480,11 @@ describe('Tasks source collection subscriptions', () => {
         view.githubPerRepoPageLimit
       )
     const rendersFor = async (update: () => unknown) => {
-      harnessRenders = 0
+      harnessRenders.count = 0
       await act(async () => {
         update()
       })
-      return harnessRenders
+      return harnessRenders.count
     }
     for (const row of [neighbour, other]) {
       expect(await rendersFor(() => owner.accept(capture(row), envelope, Q1, true))).toBe(0)
@@ -654,207 +497,5 @@ describe('Tasks source collection subscriptions', () => {
     expect(sourceRowCount()).toBe(1)
     expect(await rendersFor(() => publish(repo, 3, Q1))).toBeGreaterThan(0)
     expect(screen.getByTestId('mounted-count')).toHaveTextContent('3')
-  })
-})
-
-describe('mounted Tasks source lifetime', () => {
-  const flush = async () => {
-    for (let i = 0; i < 16; i++) {
-      await Promise.resolve()
-    }
-  }
-  function item(owner: string): GitHubWorkItem {
-    return {
-      id: 'issue:1',
-      repoId: repo.id,
-      type: 'issue',
-      number: 1,
-      title: owner,
-      state: 'open',
-      url: `https://github.com/${owner}/project/issues/1`,
-      labels: [],
-      author: null,
-      updatedAt: '2026-11-01T00:00:00Z'
-    }
-  }
-  const answer = (owner: GitHubOwnerRepo) => ({
-    items: [item(owner.owner)],
-    sources: sources(owner)
-  })
-  // One selected repo on Upstream, its first list answered and the resume step done.
-  async function mountUpstream(list = false) {
-    useAppStore.setState({
-      repos: [repo],
-      settings: createGlobalSettingsFixture({ defaultRepoSelection: [repo.id] }),
-      taskPageData: { taskSource: 'github' }
-    })
-    let mounted!: ReturnType<typeof render>
-    await act(async () => {
-      mounted = render(<Harness runRequests list={list} />)
-    })
-    await act(async () => {
-      view.setTaskResumeApplied(true)
-      await flush()
-    })
-    return mounted
-  }
-  it('keeps the mounted picker across a held save/list and ends an inverted A→B→A with its own rows and count', async () => {
-    const list = vi.mocked(window.api.gh.listWorkItems).mockResolvedValue(answer(upstream))
-    const count = vi.mocked(window.api.gh.countWorkItems).mockResolvedValue(180)
-    await mountUpstream()
-    expect(screen.getByTestId('mounted-rows')).toHaveTextContent(upstream.owner)
-    const knownA = screen.getByTestId('mounted-count').textContent
-    expect(knownA).not.toBe('unknown')
-    const picker = screen.getByRole('group', { name: 'Issue source' })
-    const save = Promise.withResolvers<Repo>()
-    vi.mocked(window.api.repos.update).mockReturnValueOnce(save.promise)
-    const b = Promise.withResolvers<Awaited<ReturnType<typeof window.api.gh.listWorkItems>>>()
-    list.mockReturnValue(b.promise)
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Origin' }))
-      await flush()
-    })
-    expect(screen.getByRole('group', { name: 'Issue source' })).toBe(picker)
-    expect(screen.getByRole('button', { name: 'Origin' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByTestId('mounted-rows')).toBeEmptyDOMElement()
-    expect(screen.getByTestId('mounted-count')).toHaveTextContent('unknown')
-    await act(async () => {
-      save.resolve({ ...repo, issueSourcePreference: 'origin' })
-      await flush()
-    })
-    const a = Promise.withResolvers<Awaited<ReturnType<typeof window.api.gh.listWorkItems>>>()
-    const nextCount = Promise.withResolvers<number>()
-    list.mockReturnValue(a.promise)
-    count.mockReturnValue(nextCount.promise)
-    vi.mocked(window.api.repos.update).mockImplementation(async ({ updates }) => ({
-      ...repo,
-      issueSourcePreference: updates.issueSourcePreference
-    }))
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Upstream' }))
-      await flush()
-    })
-    expect(screen.getByRole('group', { name: 'Issue source' })).toBe(picker)
-    expect(screen.getByTestId('mounted-count')).toHaveTextContent(knownA!)
-    await act(async () => {
-      a.resolve(answer(upstream))
-      nextCount.resolve(72)
-      await flush()
-    })
-    const currentCount = screen.getByTestId('mounted-count').textContent
-    await act(async () => {
-      b.resolve(answer(fork))
-      await flush()
-    })
-    expect(screen.getByTestId('mounted-rows')).toHaveTextContent(upstream.owner)
-    expect(screen.getByTestId('mounted-count')).toHaveTextContent(currentCount!)
-    expect(view.tasksLoading).toBe(false)
-    expect(view.tasksRefreshing).toBe(false)
-    // A selected source's known total remains visible while its next answer is held.
-    const refresh = Promise.withResolvers<number>()
-    count.mockReturnValue(refresh.promise)
-    await act(async () => {
-      view.setTaskRefreshNonce((n) => n + 1)
-      await flush()
-    })
-    expect(screen.getByTestId('mounted-count')).toHaveTextContent(currentCount!)
-    await act(async () => {
-      refresh.resolve(108)
-      await flush()
-    })
-    expect(screen.getByTestId('mounted-count').textContent).not.toBe(currentCount)
-  })
-  it('shows the loading rows, never the empty state, from a held source click until that source answers', async () => {
-    const list = vi.mocked(window.api.gh.listWorkItems).mockResolvedValue(answer(upstream))
-    vi.mocked(window.api.gh.countWorkItems).mockResolvedValue(180)
-    const { container } = await mountUpstream(true)
-    expect(screen.getByTestId('mounted-rows')).toHaveTextContent(upstream.owner)
-    const save = Promise.withResolvers<Repo>()
-    vi.mocked(window.api.repos.update).mockReturnValueOnce(save.promise)
-    const origin = Promise.withResolvers<Awaited<ReturnType<typeof window.api.gh.listWorkItems>>>()
-    list.mockReturnValue(origin.promise)
-    const expectLoading = (loading: boolean) => {
-      expect(screen.queryByText('No matching GitHub work')).toBeNull()
-      expect(container.querySelector('.animate-pulse') !== null).toBe(loading)
-    }
-    fireEvent.click(screen.getByRole('button', { name: 'Origin' }))
-    expectLoading(true)
-    await act(flush)
-    expectLoading(true)
-    await act(async () => {
-      save.resolve({ ...repo, issueSourcePreference: 'origin' })
-      await flush()
-    })
-    expectLoading(true)
-    await act(async () => {
-      origin.resolve(answer(fork))
-      await flush()
-    })
-    expectLoading(false)
-    expect(screen.getByTestId('mounted-rows')).toHaveTextContent(fork.owner)
-  })
-  it('rejects a held numbered page after a flip and retires mounted/resume data on origin replacement with upstream fixed', async () => {
-    const list = vi.mocked(window.api.gh.listWorkItems).mockResolvedValue(answer(upstream))
-    vi.mocked(window.api.gh.countWorkItems).mockResolvedValue(120)
-    vi.mocked(window.api.repos.update).mockImplementation(async ({ updates }) => ({
-      ...repo,
-      issueSourcePreference: updates.issueSourcePreference
-    }))
-    await mountUpstream()
-    const initialContext = view.githubResumeContextKey
-    expect(taskPageGitHubResumeCache.read(initialContext, 0)?.items[0].title).toBe(upstream.owner)
-    const picker = screen.getByRole('group', { name: 'Issue source' })
-    const page = Promise.withResolvers<Awaited<ReturnType<typeof window.api.gh.listWorkItems>>>()
-    list.mockReturnValueOnce(page.promise).mockResolvedValue(answer(fork))
-    let paging!: Promise<void>
-    await act(async () => {
-      paging = view.handleLoadNextPage(2)
-      await flush()
-    })
-    expect(view.paginationLoading).toBe(true)
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Origin' }))
-      await flush()
-    })
-    await act(async () => {
-      page.resolve(answer(upstream))
-      await paging
-      await flush()
-    })
-    expect(screen.getByTestId('mounted-rows')).toHaveTextContent(fork.owner)
-    expect(view.currentPage).toBe(0)
-    expect(view.paginationLoading).toBe(false)
-    expect(taskPageGitHubResumeCache.read(initialContext, 2)).toBeNull()
-    const originContext = view.githubResumeContextKey
-    const refreshed =
-      Promise.withResolvers<Awaited<ReturnType<typeof window.api.gh.listWorkItems>>>()
-    const replacement = { owner: 'new-fork', repo: 'project', host: 'ghe.example.com' }
-    list
-      .mockResolvedValueOnce({
-        items: [item(replacement.owner)],
-        sources: { ...sources(replacement), originCandidate: replacement }
-      })
-      .mockReturnValue(refreshed.promise)
-    await act(async () => {
-      await useAppStore
-        .getState()
-        .fetchWorkItems(repo.id, repo.path, view.githubPerRepoPageLimit, 'label:replacement', {
-          force: true
-        })
-      await flush()
-    })
-    expect(screen.getByRole('group', { name: 'Issue source' })).toBe(picker)
-    expect(screen.getByTestId('mounted-rows')).toBeEmptyDOMElement()
-    expect(screen.getByTestId('mounted-count')).toHaveTextContent('unknown')
-    expect(taskPageGitHubResumeCache.read(initialContext, 0)).toBeNull()
-    expect(taskPageGitHubResumeCache.read(originContext, 0)).toBeNull()
-    await act(async () => {
-      refreshed.resolve({
-        items: [item(replacement.owner)],
-        sources: { ...sources(replacement), originCandidate: replacement }
-      })
-      await flush()
-    })
-    expect(screen.getByTestId('mounted-rows')).toHaveTextContent(replacement.owner)
   })
 })

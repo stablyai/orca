@@ -23,6 +23,7 @@ import {
   reconcileTaskPagePagesAfterLandingRefresh
 } from '@/components/task-page/task-page-cache-selectors'
 import { translate } from '@/i18n/i18n'
+import { taskPageGitHubLandingRequestKey } from './use-task-page-github-list-pending'
 export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefreshModel) {
   const {
     fetchWorkItemsAcrossRepos,
@@ -164,10 +165,8 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
   setFailedCount(0) // reset so a prior failure banner doesn't linger
   setGithubUnavailable(false)
   setTasksLoading(targetPage > 0 ? cachedTargetPage === null : anyUncached)
+  model.setLandingRequestKey(taskPageGitHubLandingRequestKey(model))
 
-  // Why: a held source save makes an answer obsolete, not empty; its settle bumps the nonce that reruns this.
-  const sourceSaveHeld = () =>
-    selectedRepos.some((r) => useAppStore.getState().githubSourceCollections.saving(r))
   const forceRefresh = taskRefreshNonce !== lastFetchedNonceRef.current
   lastFetchedNonceRef.current = taskRefreshNonce
   // Why: treat a preference-flip nonce bump as a forced refresh so it bypasses the dedupe map and can't reuse pre-flip data.
@@ -270,7 +269,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
         if (!cancelled && paginationGenerationRef.current === requestGeneration) {
           setPaginationLoading(false)
           setLoadingTargetPage(null)
-          setTasksLoading(sourceSaveHeld())
+          setTasksLoading(false)
         }
       })
   }
@@ -302,7 +301,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
         return
       }
       if (!result) {
-        setTasksLoading(sourceSaveHeld())
+        setTasksLoading(false)
         setTasksRefreshing(false)
         setTasksFiltering(false)
         return
