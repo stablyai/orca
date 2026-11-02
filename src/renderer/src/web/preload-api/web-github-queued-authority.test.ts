@@ -207,6 +207,7 @@ it.each([false, true])(
     await expect(
       api.setPRFileViewed({
         ...request,
+        prNumber: 93,
         prRepo: ownerRepo,
         pullRequestId: 'PR_93',
         path: 'same.ts',

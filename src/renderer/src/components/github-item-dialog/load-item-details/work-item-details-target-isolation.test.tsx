@@ -43,7 +43,7 @@ import {
   runIssueUpdate
 } from '@/components/github/github-work-item-edit-mutations'
 import { createRoot } from 'react-dom/client'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import { WorkItemDetails } from '../../../../../shared/rpc-contract/github-repo-work-item-params'
 import { getWorkItemDetails } from '../../../../../main/github/work-item-details'
@@ -187,6 +187,13 @@ function Probe(args: Omit<Parameters<typeof useWorkItemDetailsProbe>[0], 'publis
     }
   })
 }
+
+let actualCallRuntimeRpc: typeof RuntimeRpcClient.callRuntimeRpc
+beforeAll(async () => {
+  actualCallRuntimeRpc = (
+    await vi.importActual<typeof RuntimeRpcClient>('@/runtime/runtime-rpc-client')
+  ).callRuntimeRpc
+})
 
 beforeEach(() => {
   useAppStore.setState({
@@ -635,10 +642,7 @@ it('keeps the captured account through held status, real host selection, metadat
     runtime,
     methods: [...GITHUB_REPO_WORK_ITEM_METHODS, ...GITHUB_PULL_REQUEST_METHODS]
   })
-  const actualClient = await vi.importActual<typeof RuntimeRpcClient>(
-    '@/runtime/runtime-rpc-client'
-  )
-  io.rpc.mockImplementation(actualClient.callRuntimeRpc)
+  io.rpc.mockImplementation(actualCallRuntimeRpc)
   clearRuntimeCompatibilityCache()
   let statusGate: ReturnType<typeof Promise.withResolvers<void>> | undefined =
     Promise.withResolvers<void>()

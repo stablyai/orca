@@ -191,7 +191,15 @@ describe('host account expectation through registered RPC and local preload', ()
   const local = { repoPath: '/repo', repoId: 'repo' }
   const item = { number: 7, type: 'issue' as const, ownerRepo: repository }
   const viewed = { prRepo: repository, pullRequestId: 'PR_7', path: 'same.ts', viewed: true }
-  const operations = [
+  const operations: {
+    method:
+      | 'github.workItemDetails'
+      | 'github.listLabels'
+      | 'github.listAssignableUsers'
+      | 'github.setPRFileViewed'
+    params: Record<string, unknown>
+    local: (expectedGhAccount?: GhAccountBinding | null) => Promise<unknown>
+  }[] = [
     {
       method: 'github.workItemDetails' as const,
       params: { ...item, canonical: true },
