@@ -63,6 +63,27 @@ describe('plain SSH terminal argv', () => {
     ])
   })
 
+  it('passes every stored identity in order when manual target routing is required', () => {
+    const args = buildPlainSshTerminalArgs({
+      ...manual,
+      identityFile: '/keys/legacy',
+      identityFiles: ['/keys/first', '/keys/second']
+    })
+
+    expect(args).toEqual([
+      '-p',
+      '2222',
+      '-i',
+      '/keys/first',
+      '-i',
+      '/keys/second',
+      '-J',
+      'bastion.example.com',
+      '--',
+      'ubuntu@203.0.113.7'
+    ])
+  })
+
   it('passes Windows paths and option-like hosts as single argv elements, after --', () => {
     const windows: SshTarget = {
       ...manual,

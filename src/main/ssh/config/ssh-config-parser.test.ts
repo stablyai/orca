@@ -100,6 +100,21 @@ Host myserver
     expect(hosts[0].identityFile).toBe(testHomePath('.ssh', 'id_ed25519'))
   })
 
+  it('preserves every IdentityFile in directive order', () => {
+    const config = `
+Host myserver
+  HostName example.com
+  IdentityFile ~/.ssh/first
+  IdentityFile ~/.ssh/second
+`
+    const hosts = parseSshConfig(config)
+    expect(hosts[0].identityFile).toBe(testHomePath('.ssh', 'first'))
+    expect(hosts[0].identityFiles).toEqual([
+      testHomePath('.ssh', 'first'),
+      testHomePath('.ssh', 'second')
+    ])
+  })
+
   it('parses Windows-style IdentityFile with ~ expansion', () => {
     const config = `
 Host myserver
@@ -128,6 +143,7 @@ Host quoted
       user: 'deploy',
       port: 2202,
       identityFile: testHomePath('.ssh', 'id with space'),
+      identityFiles: [testHomePath('.ssh', 'id with space')],
       identityAgent: testHomePath('.1password', 'agent sock'),
       identitiesOnly: true,
       proxyJump: 'bastion'
@@ -463,6 +479,35 @@ describe('sshConfigHostsToTargets', () => {
       label: 'dup',
       host: 'first.example.com',
       username: 'first'
+    })
+  })
+
+  it('keeps identity files from a later block for the same alias', () => {
+    const hosts = [
+      {
+        host: 'dup',
+        hostname: 'first.example.com',
+        identityFile: '/keys/first',
+        identityFiles: ['/keys/first']
+      },
+      {
+        host: 'dup',
+        hostname: 'second.example.com',
+        user: 'second',
+        port: 2222,
+        identityFile: '/keys/second',
+        identityFiles: ['/keys/second', '/keys/third']
+      }
+    ]
+    const targets = sshConfigHostsToTargets(hosts, new Set())
+
+    expect(targets).toHaveLength(1)
+    expect(targets[0]).toMatchObject({
+      host: 'first.example.com',
+      username: '',
+      port: 22,
+      identityFile: '/keys/first',
+      identityFiles: ['/keys/first', '/keys/second', '/keys/third']
     })
   })
 })
