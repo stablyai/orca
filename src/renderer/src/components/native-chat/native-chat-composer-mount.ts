@@ -1,13 +1,12 @@
-import { useLayoutEffect, type RefObject } from 'react'
+import { useLayoutEffect } from 'react'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
-import type { NativeChatComposerHandle } from './native-chat-composer-types'
 
 type MountedComposer = {
   input: NativeChatComposerInput
   isComposing: () => boolean
 }
 const inputs = new Map<string, Set<MountedComposer>>()
-const panes = new Map<string, Set<RefObject<NativeChatComposerHandle | null>>>()
+const panes = new Map<string, Set<() => boolean>>()
 const listeners = new Set<() => void>()
 
 export function notifyNativeChatComposerState(): void {
@@ -19,16 +18,13 @@ export function notifyNativeChatComposerState(): void {
   })
 }
 
-export function registerNativeChatPane(
-  tabId: string,
-  composer: RefObject<NativeChatComposerHandle | null>
-): () => void {
+export function registerNativeChatPane(tabId: string, isActionable: () => boolean): () => void {
   const owners = panes.get(tabId) ?? new Set()
   panes.set(tabId, owners)
-  owners.add(composer)
+  owners.add(isActionable)
   notifyNativeChatComposerState()
   return () => {
-    owners.delete(composer)
+    owners.delete(isActionable)
     if (owners.size === 0) {
       panes.delete(tabId)
     }
@@ -85,9 +81,7 @@ export function waitForNativeChatComposerHandoff(
       resolve()
     }
     const check = (): void => {
-      const ready = [...(panes.get(destinationTabId) ?? [])].some((composer) =>
-        composer.current?.acceptsText()
-      )
+      const ready = [...(panes.get(destinationTabId) ?? [])].some((isActionable) => isActionable())
       const composing = [...(inputs.get(sourceScope) ?? [])].some((owner) => owner.isComposing())
       if ((ready && !composing) || signal.aborted) {
         finish()
