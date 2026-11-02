@@ -2,6 +2,7 @@ import {
   getOverlayFocusOwners,
   getOverlayFocusSources,
   isOverlayFocusSourceDismissed,
+  overlayFocusAppliesTo,
   subscribeOverlayFocusChanges
 } from '@/lib/overlay-focus-ownership'
 
@@ -78,7 +79,9 @@ export function captureNativeChatComposerFocusIntent(): NativeChatComposerFocusI
     }
     const destination = pending.tabId ? revealedComposerReclaims.get(pending.tabId) : undefined
     const sources = sourceOverlays.filter(
-      (owner) => !destination?.root || !owner.contains(destination.root)
+      (owner) =>
+        !destination?.root ||
+        (!owner.contains(destination.root) && overlayFocusAppliesTo(owner, destination.root))
     )
     if (
       getOverlayFocusOwners(destination?.root ?? undefined).some(

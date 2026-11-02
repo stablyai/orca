@@ -7,13 +7,21 @@ const listeners = new Set<() => void>()
 
 type FocusEventHandler = (event: Event) => void
 
+/** Pane recovery cards cover their parent surface; portaled menus keep window ownership. */
+export function overlayFocusAppliesTo(owner: HTMLElement, target?: Element | null): boolean {
+  return (
+    owner.dataset.overlayFocusScope !== 'parent' ||
+    (target != null && owner.parentElement?.contains(target) === true)
+  )
+}
+
 /** Page lists and editor suggestions do not take focus; their nested popups still do. */
 export function getOverlayFocusOwners(containing?: Element): HTMLElement[] {
   return getVisibleOverlays({
     ignoreMatches: NON_OWNING_SURFACES,
     ignoreContaining: containing,
     ignoreDismissed: true
-  }).filter((owner) => !hasDismissedFocusScope(owner))
+  }).filter((owner) => !hasDismissedFocusScope(owner) && overlayFocusAppliesTo(owner, containing))
 }
 
 /** Include parent scopes hidden from accessibility by a nested modal. */
@@ -22,7 +30,10 @@ export function getOverlayFocusSources(): HTMLElement[] {
     ignoreMatches: NON_OWNING_SURFACES,
     ignoreDismissed: true,
     includeAriaHidden: true
-  }).filter((owner) => !hasDismissedFocusScope(owner))
+  }).filter(
+    (owner) =>
+      !hasDismissedFocusScope(owner) && overlayFocusAppliesTo(owner, document.activeElement)
+  )
 }
 
 export function isOverlayFocusSourceDismissed(owner: HTMLElement): boolean {
@@ -50,7 +61,15 @@ export function subscribeOverlayFocusChanges(listener: () => void): () => void {
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ['class', 'style', 'hidden', 'role', 'data-state', 'data-focus-behavior']
+    attributeFilter: [
+      'class',
+      'style',
+      'hidden',
+      'role',
+      'data-state',
+      'data-focus-behavior',
+      'data-overlay-focus-scope'
+    ]
   })
   return () => {
     listeners.delete(listener)
