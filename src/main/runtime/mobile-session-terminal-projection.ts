@@ -60,13 +60,14 @@ export function buildHeadlessMobileSessionTerminalTabs(
         const ptyId = layout?.ptyIdsByLeafId?.[leafId] ?? (leafIds.length === 1 ? tab.ptyId : null)
         const fallbackTitle = tab.defaultTitle?.trim() || `Terminal ${index + 1}`
         const liveTitle = layout?.titlesByLeafId?.[leafId]?.trim() || tab.title?.trim()
+        // A split leaf must not inherit the parent custom title or a headless rebuild renames every pane.
         const title = tabWide
           ? resolveTerminalTabTitle(
               { ...tab, title: liveTitle },
               generatedTitlesEnabled,
               fallbackTitle
             )
-          : tab.customTitle?.trim() || liveTitle || fallbackTitle
+          : layout?.titlesByLeafId?.[leafId]?.trim() || 'Terminal'
         return [
           {
             type: 'terminal' as const,
@@ -74,7 +75,7 @@ export function buildHeadlessMobileSessionTerminalTabs(
             parentTabId: tab.id,
             leafId,
             title,
-            customTitle: tab.customTitle?.trim() || null,
+            ...(tabWide ? { customTitle: tab.customTitle?.trim() || null } : {}),
             ...(tabWide && tab.quickCommandLabel?.trim()
               ? { quickCommandLabel: tab.quickCommandLabel.trim() }
               : {}),
