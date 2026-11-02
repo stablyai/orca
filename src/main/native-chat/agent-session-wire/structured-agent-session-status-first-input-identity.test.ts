@@ -1,4 +1,4 @@
-import type { AgentSessionFailureSentence } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import type { ResolveDispatchInput } from '../agent-session-journal/journal-store-contracts'
 import { projectStructuredAgentSessionStatusState } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { newestAcceptedSendKey } from './structured-agent-session-status-child-work'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -42,6 +42,15 @@ async function open(now: () => number) {
     now
   })
 }
+function historicalDispatchRejection(
+  input: Omit<Extract<ResolveDispatchInput, { state: 'rejected' }>, 'reason' | 'rejection'> & {
+    reason: string
+  }
+): ResolveDispatchInput {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: historical rows predate typed rejection facts and branded reasons; preserve their exact stored shape.
+  return input as ResolveDispatchInput
+}
+
 const command = {
   kind: 'message' as const,
   role: 'user' as const,
@@ -237,14 +246,15 @@ it('retains historical status evidence and exact digested attribution across log
     body,
     handoverRecorded: true
   })
-  await journal.resolveDispatch({
-    clientMessageId: 'steer',
-    state: 'rejected',
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: historical unbranded reasons must keep their exact retained-status interpretation.
-    reason: 'provider ended the steered input' as AgentSessionFailureSentence,
-    answeredInTurn: { turn, via: 'steer' },
-    fence: 7
-  })
+  await journal.resolveDispatch(
+    historicalDispatchRejection({
+      clientMessageId: 'steer',
+      state: 'rejected',
+      reason: 'provider ended the steered input',
+      answeredInTurn: { turn, via: 'steer' },
+      fence: 7
+    })
+  )
   await journal.appendTombstone({ provider: 'orca', clientMessageId: 'steer' }, { fence: 7 })
   check()
   expect(projections.read(journal, null).state.latestRequest?.selfStarted).toBeUndefined()
@@ -259,13 +269,14 @@ it('retains historical status evidence and exact digested attribution across log
     body,
     handoverRecorded: true
   })
-  await journal.resolveDispatch({
-    clientMessageId: 'refused',
-    state: 'rejected',
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: historical unbranded reasons must keep their exact retained-status interpretation.
-    reason: 'provider refused the request' as AgentSessionFailureSentence,
-    fence: 7
-  })
+  await journal.resolveDispatch(
+    historicalDispatchRejection({
+      clientMessageId: 'refused',
+      state: 'rejected',
+      reason: 'provider refused the request',
+      fence: 7
+    })
+  )
   check()
   await journals.closeAll()
   journal = await open(() => clock)
