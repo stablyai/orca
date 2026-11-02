@@ -25,7 +25,7 @@ vi.mock('react-native-reanimated', async () =>
   (await import('../test-support/reanimated-pager-stub')).reanimatedPagerStub()
 )
 // Stub the drawer's sheet machinery, not BottomDrawer: the option pager under test lives in that module.
-vi.mock('../components/keyed-bottom-drawer', () => ({
+vi.mock('../components/bottom-drawer/keyed-bottom-drawer', () => ({
   KeyedBottomDrawer: ({ children }: { children: () => unknown }) => children()
 }))
 vi.mock('../components/MobileSearchField', () => ({ MobileSearchField: 'MobileSearchField' }))

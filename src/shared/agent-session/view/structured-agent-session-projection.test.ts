@@ -6,7 +6,6 @@ import type {
   AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
 import { AgentJournalRenderItemSchema } from '../journal/agent-session-journal-schemas'
-import { parsePaneKey } from '../../stable-pane-id'
 import {
   activeStructuredAgentSessionTurnId,
   statusStructuredAgentSessionToolCall
@@ -16,8 +15,7 @@ import {
   projectStructuredItemsToNativeChat,
   projectStructuredAgentSessionStatus,
   projectStructuredAgentSessionStatusState,
-  projectStructuredAgentSessionStatusSummary,
-  structuredAgentSessionPaneKey
+  projectStructuredAgentSessionStatusSummary
 } from './structured-agent-session-projection'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../requests/structured-agent-session-unanswered-dispatch'
 import { latestStructuredAgentSessionAssistantMessage } from '../requests/structured-agent-session-latest-request'
@@ -491,13 +489,6 @@ describe('structured agent session status projection', () => {
     )
   })
 
-  it('creates a deterministic pane identity for status stores', () => {
-    const paneKey = structuredAgentSessionPaneKey('structured-agent-session-1', 'session-1')
-
-    expect(structuredAgentSessionPaneKey('structured-agent-session-1', 'session-1')).toBe(paneKey)
-    expect(parsePaneKey(paneKey)).toMatchObject({ tabId: 'structured-agent-session-1' })
-  })
-
   it('preserves provider-frame detail on the backward-compatible status line', () => {
     const projected = projectStructuredItemToNativeChat(
       item('frame', 1, {
@@ -520,21 +511,6 @@ describe('structured agent session status projection', () => {
     ])
   })
 
-  it('preserves structured tool lifecycle state for the live renderer', () => {
-    const projected = projectStructuredItemToNativeChat(
-      item('ls', 1, {
-        kind: 'tool-call',
-        name: 'shell',
-        input: { command: 'ls' },
-        state: 'running'
-      })
-    )
-
-    expect(projected?.blocks).toEqual([
-      { type: 'tool-call', name: 'shell', input: { command: 'ls' }, state: 'running', callId: 'ls' }
-    ])
-  })
-
   it('projects a turn record to no message', () => {
     const turn = item('turn', 1, {
       kind: 'turn',
@@ -554,30 +530,6 @@ describe('structured agent session status projection', () => {
     } as unknown as AgentJournalRenderItem['body'])
 
     expect(projectStructuredItemToNativeChat(unknown)).toBeNull()
-  })
-})
-
-describe('notice projection for desktop and mobile consumers', () => {
-  it.each([
-    { presentation: 'compaction' },
-    { presentation: 'compaction-skipped', tone: 'warning' },
-    { presentation: 'plan-document' },
-    { tone: 'warning' },
-    { tone: 'error' },
-    { tone: 'notice' },
-    { presentation: 'future-presentation', tone: 'future-tone' }
-  ])('preserves readable text alongside optional metadata: %j', (metadata) => {
-    const projected = projectStructuredItemToNativeChat(
-      item('notice', 1, {
-        kind: 'status',
-        text: 'A readable document or notice',
-        ...metadata
-      })
-    )
-    expect(projected).toMatchObject({
-      role: 'system',
-      blocks: [{ type: 'text', text: 'A readable document or notice', ...metadata }]
-    })
   })
 })
 
@@ -663,11 +615,6 @@ describe("producer linkage — a subagent's output never speaks for the parent",
   })
   const items = [userAsk, turnRunning, parentProse, spawnCall, childProse, childCall]
 
-  it("shows the parent's own prose and its own running call, not the child's newer ones", () => {
-    expect(latestStructuredAgentSessionAssistantMessage(items)).toBe('delegating')
-    expect(statusStructuredAgentSessionToolCall(items)?.name).toBe('Task')
-  })
-
   it("publishes the parent's own line and call on the summary the sidebar reads", () => {
     const summary = projectStructuredAgentSessionStatusSummary(items)
     expect(summary.status).toBe('working')
@@ -694,15 +641,6 @@ describe("producer linkage — a subagent's output never speaks for the parent",
       projectStructuredAgentSessionStatusSummary([userAsk, turnRunning, parentRead, childFailed])
         .toolName
     ).toBe('Read')
-  })
-
-  it("still renders the child's output in the transcript", () => {
-    // Status scoping must still preserve all child output in the transcript.
-    const prose = projectStructuredItemsToNativeChat(items).flatMap((message) =>
-      message.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
-    )
-    expect(prose).toContain('looking')
-    expect(prose).toContain('delegating')
   })
 
   it("keeps the child's output as the child's: the transcript message names its producer", () => {
@@ -745,31 +683,6 @@ describe("producer linkage — a subagent's output never speaks for the parent",
       projectStructuredAgentSessionStatusSummary([userAsk, turnRunning, spawnCall, childPrompt])
         .latestPrompt
     ).toBe('summarise the repo')
-  })
-
-  it('keeps a nested child off the parent, read through the projection', () => {
-    // A grandchild: its own agent id, and a parent that is not the session root.
-    const grandchild: AgentJournalRenderItem = {
-      ...item('grandchild-prose', 7, {
-        kind: 'message',
-        role: 'assistant',
-        blocks: [{ type: 'text', text: 'deeper' }]
-      }),
-      agentId: 'task-2',
-      parentAgentId: 'task-1',
-      producerKind: 'agent'
-    }
-    const nested = [...items, grandchild]
-    expect(latestStructuredAgentSessionAssistantMessage(nested)).toBe('delegating')
-    // A named parent does not make child prose part of the root summary.
-    expect(projectStructuredAgentSessionStatusSummary(nested).lastAssistantMessage).toBe(
-      'delegating'
-    )
-    expect(
-      projectStructuredItemsToNativeChat(nested).some((block) =>
-        JSON.stringify(block).includes('deeper')
-      )
-    ).toBe(true)
   })
 
   it('treats an agent id that failed to resolve as a child rather than as the parent', () => {

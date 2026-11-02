@@ -171,10 +171,20 @@ export function connectPanePty(
     tuiAgent: resolvePaneKeyboardProtocolAgent(session.paneStartup, session.tab?.launchAgent)
   }
   // Capture backend policy before the tracker and transport copy xterm's initial capability flags.
+  const keyboardProtocol = buildTerminalKeyboardProtocolOptions(backendContext)
   Object.assign(
     session.pane.terminal.options,
     buildWindowsPtyCompatibilityOptions(backendContext),
-    buildTerminalKeyboardProtocolOptions(backendContext)
+    keyboardProtocol,
+    // Merge: replacing vtExtensions would re-enable xterm's own mode-2031 reports.
+    keyboardProtocol.vtExtensions
+      ? {
+          vtExtensions: {
+            ...session.pane.terminal.options.vtExtensions,
+            ...keyboardProtocol.vtExtensions
+          }
+        }
+      : {}
   )
   // xterm exposes no Kitty read; mirror the flags its encoder applies.
   session.kittyKeyboardModes = (() => {

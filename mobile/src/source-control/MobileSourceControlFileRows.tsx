@@ -9,7 +9,7 @@ import Animated, {
   withTiming
 } from 'react-native-reanimated'
 import { SHEET_CURVE } from '../components/sheet-motion-values'
-import { useDrawerReducedMotion } from '../components/bottom-drawer-constants'
+import { useDrawerReducedMotion } from '../components/bottom-drawer/bottom-drawer-constants'
 import { Minus, Plus, Undo2 } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { STATUS_LABELS } from '../../../src/shared/git-status-labels'

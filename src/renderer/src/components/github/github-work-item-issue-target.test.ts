@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { runIssueUpdate, runWorkItemBodyUpdate } from './github-work-item-edit-mutations'
+import { runIssueUpdate } from './github-work-item-edit-mutations'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { runGHEditLabelToggle } from '../github-item-dialog/edit-item-fields/gh-edit-section-mutations'
@@ -46,48 +46,6 @@ describe('issue edits retain the displayed repository', () => {
         gh: { updateIssue: vi.fn().mockResolvedValue({ ok: true }), updateIssueBySlug: vi.fn() }
       }
     })
-  })
-
-  it('keeps body edits on the registered repo path and passes the opened issue target', async () => {
-    await runWorkItemBodyUpdate({
-      item,
-      repoPath: '/home/fixture/widgets',
-      projectOrigin: undefined,
-      body: 'Origin edit',
-      parsedSlug: ORIGIN
-    })
-
-    expect(window.api.gh.updateIssue).toHaveBeenCalledWith({
-      repoId: 'repo-1',
-      repoPath: '/home/fixture/widgets',
-      sourceContext: undefined,
-      number: 12,
-      updates: { body: 'Origin edit' },
-      ownerRepo: ORIGIN
-    })
-    expect(window.api.gh.updateIssueBySlug).not.toHaveBeenCalled()
-  })
-
-  it('saves a Project row body in its upstream repository instead of the fork workspace', async () => {
-    vi.mocked(window.api.gh.updateIssueBySlug).mockResolvedValue({ ok: true })
-
-    await runWorkItemBodyUpdate({
-      item: { ...item, url: 'https://github.com/upstream-owner/widgets/issues/12' },
-      repoPath: '/home/fixture/fork-widgets',
-      sourceContext: localSource,
-      projectOrigin,
-      body: 'Project edit',
-      parsedSlug: UPSTREAM
-    })
-
-    expect(window.api.gh.updateIssueBySlug).toHaveBeenCalledWith({
-      ...UPSTREAM,
-      number: 12,
-      updates: { body: 'Project edit' },
-      // An edit is a click: it may start a stopped WSL distro (E9).
-      wakeWslDistro: true
-    })
-    expect(window.api.gh.updateIssue).not.toHaveBeenCalled()
   })
 
   it.each([
