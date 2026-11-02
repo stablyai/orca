@@ -1,6 +1,5 @@
 import type { TaskPageSourceAvailabilityPreludeModel } from './use-task-page-source-availability'
 import { useMemo } from 'react'
-import { useAppStore } from '@/store'
 import type { TaskProvider } from '../../../../shared/work-items/task-providers'
 import type {
   TaskSourceAvailabilityNotice,
@@ -29,7 +28,6 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     accountBackedTaskSourceHostId,
     accountBackedTaskSourceHostAvailability
   } = model
-  const planeStatus = useAppStore((s) => s.planeStatus)
   const taskSourceAvailabilityNoticeByProvider = useMemo<
     Partial<Record<TaskProvider, TaskSourceAvailabilityNotice>>
   >(() => {

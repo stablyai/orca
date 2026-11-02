@@ -2,12 +2,12 @@ import type { DiscoveredSkill } from '../../../shared/skills'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   hasInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
 import {
   buildAgentFeatureSkillInstallCommand,
   PLANE_TICKETS_SKILL_NAME,
   ORCA_PLANE_SKILL_NAME
-} from '@/lib/agent-feature-install-commands'
+} from '@/lib/skills/installation/agent-feature-install-commands'
 
 export type PlaneAgentSkillUpdateTarget = {
   skillName: typeof ORCA_PLANE_SKILL_NAME | typeof PLANE_TICKETS_SKILL_NAME

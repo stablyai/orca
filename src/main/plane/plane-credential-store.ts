@@ -6,7 +6,7 @@ import {
   CredentialDecryptionError,
   credentialFileHasContent,
   readStoredCredentialToken
-} from '../integration-credential-file'
+} from '../credentials/integration-credential-file'
 import type { PlaneAuthType, PlaneViewer, PlaneWorkspace } from '../../shared/plane-types'
 
 export type PlaneConfigFile = {
@@ -67,7 +67,8 @@ function readConfigFileFromDisk(): PlaneConfigFile {
     return {
       version: 1,
       instanceType: parsed.instanceType === 'self_hosted' ? 'self_hosted' : 'cloud',
-      instanceUrl: typeof parsed.instanceUrl === 'string' ? parsed.instanceUrl : 'https://api.plane.so',
+      instanceUrl:
+        typeof parsed.instanceUrl === 'string' ? parsed.instanceUrl : 'https://api.plane.so',
       viewer: parsed.viewer ?? null,
       activeWorkspaceSlug: parsed.activeWorkspaceSlug ?? null,
       workspaces: Array.isArray(parsed.workspaces) ? parsed.workspaces : []

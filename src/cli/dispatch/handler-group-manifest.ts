@@ -254,7 +254,6 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () =>
       (await import('../discovery/agent-context-handlers.js')).INTROSPECTION_HANDLERS
   },
-  },
   ...HOST_HANDLER_GROUPS,
   {
     name: 'skill-sharing',

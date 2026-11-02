@@ -4,7 +4,7 @@ import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ORCA_PLANE_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import { ORCA_PLANE_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import { getPlaneUsageExamples } from '@/lib/plane-usage-examples'
 import { PlaneAgentSkillPane } from './PlaneAgentSkillPane'
 
@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
   openSettingsTarget: vi.fn()
 }))
 
-vi.mock('./AgentSkillSetupPanel', () => ({
+vi.mock('../../../skills/setup/AgentSkillSetupPanel', () => ({
   AgentSkillSetupPanel: (props: Record<string, unknown> & { footer?: ReactNode }) => {
     mocks.panelProps.push(props)
     return (
@@ -41,7 +41,7 @@ vi.mock('@/lib/plane-agent-skill-update-command', () => ({
   })
 }))
 
-vi.mock('@/hooks/useInstalledAgentSkills', () => ({
+vi.mock('@/hooks/skills/discovery/useInstalledAgentSkills', () => ({
   GLOBAL_AGENT_SKILL_SOURCE_KINDS: ['home'],
   useInstalledAgentSkillNames: () => ({
     installed: mocks.skillInstalled,
@@ -52,7 +52,7 @@ vi.mock('@/hooks/useInstalledAgentSkills', () => ({
   })
 }))
 
-vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
+vi.mock('@/hooks/skills/runtime/useActiveProjectSkillRuntime', () => ({
   useActiveProjectSkillRuntime: () => ({
     discoveryTarget: undefined,
     agentRuntime: { runtime: mocks.runtime },

@@ -229,10 +229,7 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
             ) : null}
             {visibleTaskProviders.includes('plane') ? (
               <TaskProviderShortcut
-                label={translate(
-                  'auto.components.sidebar.SidebarNav.openPlaneTasks',
-                  'Open Plane tasks'
-                )}
+                label={t('auto.components.sidebar.SidebarNav.openPlaneTasks', 'Open Plane tasks')}
                 onOpen={() => openTaskPage({ taskSource: 'plane' })}
               >
                 <PlaneIcon className="size-3.5" />
