@@ -31,6 +31,7 @@ import {
   readProfileStateCopySavedTimes
 } from './persistence/profile-state/profile-state-startup-recovery-dialog'
 import { profileStateDesktopRecoveryArgs } from './startup/profile-state-recovery-preflight'
+import { profileStateRepairSectionApproval } from '../shared/profile-state-recovery-command'
 import { prepareEarlyMainUiLanguage, translateMain } from './i18n/main-i18n'
 import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/profile-state-recovery-required'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
@@ -222,7 +223,7 @@ if (preflightReady) {
                   profileId: error.profileId,
                   selector: {
                     kind: 'repair',
-                    sections: sections.map(({ domain, backupId }) => ({ domain, backupId }))
+                    sections: sections.map(profileStateRepairSectionApproval)
                   }
                 })
               })

@@ -159,6 +159,35 @@ describe('profile-state CLI recovery', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
+  it('keeps current history through CLI repair and reports its source honestly', async () => {
+    const profile = createProfile()
+    getDefaultUserDataPathMock.mockReturnValue(profile.userDataPath)
+    rmSync(profile.databaseFile)
+    rmSync(`${profile.databaseFile}-wal`)
+    rmSync(profile.dataFile)
+    const runs = [{ id: 'recent-run', status: 'completed' }]
+    const opened = openProfileStateDatabase(profile.databaseFile, 'profile-cli-recovery')
+    try {
+      importProfileStateJson(opened.db, JSON.stringify({ automationRuns: runs }))
+      opened.db.exec(
+        "UPDATE profile_state_documents SET content_hash = 'broken' WHERE domain = 'automationRuns'"
+      )
+    } finally {
+      opened.db.close()
+    }
+    await main(['profile', 'state', 'rollback', '--repair'], profile.userDataPath)
+    expect(process.exitCode).toBe(0)
+    const output = String(vi.mocked(console.log).mock.calls.at(-1)?.[0])
+    expect(output).toContain('repaired automationRuns: current runs kept')
+    expect(output).not.toContain('starts empty')
+    const repaired = openProfileStateDatabaseReadOnly(profile.databaseFile, 'profile-cli-recovery')
+    try {
+      expect(JSON.parse(exportProfileStateJson(repaired.db))).toEqual({ automationRuns: runs })
+    } finally {
+      repaired.db.close()
+    }
+  })
+
   it('restores the selected export through the offline CLI command', async () => {
     const profile = createProfile()
     getDefaultUserDataPathMock.mockReturnValue(profile.userDataPath)
