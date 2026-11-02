@@ -94,6 +94,9 @@ export type PluginHostListEntry = {
   }[]
   /** The manifest's status bar items; a worker's changes arrive separately. Absent on older hosts. */
   statusBarItems?: PluginStatusBarItemContribution[]
+  /** The hooks its manifest lists, so a window can skip asking when none applies. Absent on older
+   *  hosts. */
+  hooks?: string[]
   hasWorker: boolean
   vmRecipes?: {
     id: string
