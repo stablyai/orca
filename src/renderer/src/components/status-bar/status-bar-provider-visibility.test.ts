@@ -76,6 +76,7 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     grokAuthConfigured: false,
     cursorAuthConfigured: false,
     zcodePlanApiKeyConfigured: false,
+    deepseekAuthConfigured: false,
     ...overrides
   }
 }
@@ -144,6 +145,7 @@ describe('hasUsageProviderSettings', () => {
     expect(hasUsageProviderSettings(usageSettings({ minimaxCookieConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ minimaxApiKeyConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ grokAuthConfigured: true }))).toBe(true)
+    expect(hasUsageProviderSettings(usageSettings({ deepseekAuthConfigured: true }))).toBe(true)
   })
 
   it('does not treat empty or unloaded settings as configured', () => {
@@ -227,6 +229,17 @@ describe('hasUsageProviderSettingsForProvider', () => {
     ).toBe(true)
     expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
     expect(hasUsageProviderSettingsForProvider('grok', null)).toBe(false)
+  })
+
+  it('treats deepseekAuthConfigured as the durable signal for DeepSeek', () => {
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'deepseek',
+        usageSettings({ deepseekAuthConfigured: true })
+      )
+    ).toBe(true)
+    expect(hasUsageProviderSettingsForProvider('deepseek', usageSettings())).toBe(false)
+    expect(hasUsageProviderSettingsForProvider('deepseek', null)).toBe(false)
   })
 })
 
@@ -324,6 +337,21 @@ describe('getVisibleUsageProvider', () => {
     })
   })
 
+  it('keeps DeepSeek visible while the snapshot is pending when an API key is configured', () => {
+    const visible = getVisibleUsageProvider(
+      'deepseek',
+      null,
+      usageSettings({ deepseekAuthConfigured: true })
+    )
+    expect(visible).toMatchObject({
+      provider: 'deepseek',
+      status: 'fetching',
+      session: null,
+      weekly: null,
+      monthly: null
+    })
+  })
+
   it('keeps MiniMax visible when the fetch returns unavailable for a configured cookie', () => {
     const unavailable = provider('unavailable', {
       provider: 'minimax',
@@ -417,7 +445,8 @@ describe('isUsageEmptyState', () => {
           antigravity: undefined,
           minimax: undefined,
           grok: undefined,
-          cursor: undefined
+          cursor: undefined,
+          deepseek: undefined
         },
         usageSettings()
       )
@@ -437,6 +466,7 @@ describe('isUsageEmptyState', () => {
           minimax: provider('unavailable', { provider: 'minimax' }),
           grok: provider('unavailable', { provider: 'grok' }),
           cursor: provider('unavailable', { provider: 'cursor' }),
+          deepseek: provider('unavailable', { provider: 'deepseek' }),
           zcode: provider('unavailable', { provider: 'zcode' })
         },
         usageSettings()
@@ -457,6 +487,7 @@ describe('isUsageEmptyState', () => {
           minimax: provider('unavailable', { provider: 'minimax' }),
           grok: provider('unavailable', { provider: 'grok' }),
           cursor: provider('unavailable', { provider: 'cursor' }),
+          deepseek: provider('unavailable', { provider: 'deepseek' }),
           zcode: provider('unavailable', { provider: 'zcode' })
         },
         usageSettings({
@@ -495,6 +526,23 @@ describe('isUsageEmptyState', () => {
     expect(isUsageEmptyState(settledProviders, usageSettings())).toBe(true)
     expect(isUsageEmptyState({ ...settledProviders, zcode: undefined }, usageSettings())).toBe(true)
     expect(isUsageEmptyState({ ...settledProviders, zcode: null }, usageSettings())).toBe(false)
+    expect(
+      isUsageEmptyState(
+        {
+          claude: provider('unavailable', { provider: 'claude' }),
+          codex: provider('unavailable', { provider: 'codex' }),
+          gemini: provider('unavailable'),
+          opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
+          kimi: provider('unavailable', { provider: 'kimi' }),
+          antigravity: null,
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          grok: provider('unavailable', { provider: 'grok' }),
+          cursor: provider('unavailable', { provider: 'cursor' }),
+          deepseek: provider('unavailable', { provider: 'deepseek' })
+        },
+        usageSettings()
+      )
+    ).toBe(true)
   })
 
   it('does not show the setup CTA while checked Antigravity usage is awaiting a snapshot', () => {
@@ -510,6 +558,7 @@ describe('isUsageEmptyState', () => {
           grok: provider('unavailable', { provider: 'grok' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
           cursor: provider('unavailable', { provider: 'cursor' }),
+          deepseek: provider('unavailable', { provider: 'deepseek' }),
           zcode: provider('unavailable', { provider: 'zcode' })
         },
         usageSettings({ antigravityUsageConfigured: true })
@@ -530,6 +579,7 @@ describe('isUsageEmptyState', () => {
           grok: provider('unavailable', { provider: 'grok' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
           cursor: provider('unavailable', { provider: 'cursor' }),
+          deepseek: provider('unavailable', { provider: 'deepseek' }),
           zcode: provider('unavailable', { provider: 'zcode' })
         },
         usageSettings()

@@ -31,6 +31,11 @@ vi.mock('./antigravity-usage-fetcher', () => ({
 
 vi.mock('./cursor-fetcher', () => ({ fetchCursorRateLimits: vi.fn() }))
 vi.mock('./cursor-auth', () => ({ readCursorAuthSession: vi.fn() }))
+
+vi.mock('./deepseek-fetcher', () => ({
+  fetchDeepSeekRateLimits: vi.fn(),
+  isDeepSeekAuthConfigured: vi.fn(() => false)
+}))
 vi.mock('../minimax/minimax-cookie-store', () => ({ hasMiniMaxSessionCookie: vi.fn(() => false) }))
 
 type JwtSegment = Record<string, unknown>
