@@ -5,6 +5,7 @@ import { parseMessageTypes } from '../routing'
 import { checkRunMailbox } from './check-run'
 import { checkWorkerMailbox } from './check-worker'
 import { checkDirectMailbox } from './check-direct'
+import { checkedMailboxes } from './mailbox-message-receipt'
 import { withRunCheckNext } from '../receipt-next'
 import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration-rpc-contract'
 import { hasRunBindingKey } from '../../../../orchestration/orchestration-caller-identity'
@@ -48,7 +49,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
       // Mail this check takes may still wait as a card in a chat's queue; that card must not run too.
       const releasing = <T>(result: T): T => {
         if (consumingCheck) {
-          runtime.withdrawStaleChatMail()
+          runtime.withdrawStaleChatMail(checkedMailboxes(result))
         }
         return result
       }
@@ -69,7 +70,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
         })
         return releasing(
           consumingCheck && !(params.ack && !params.wait)
-            ? withRunCheckNext(runtime, result)
+            ? await withRunCheckNext(runtime, result)
             : result
         )
       }

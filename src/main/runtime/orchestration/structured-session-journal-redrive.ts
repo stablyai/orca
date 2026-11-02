@@ -22,11 +22,16 @@ export function subscribeForRedrive(
     maxWaitMs: REDRIVE_MAX_WAIT_MS
   })
   try {
-    const unsubscribe = host.observeJournalPublications(sessionId, (journal) => {
-      if (relevant(journal)) {
-        coalescer.schedule(sessionId)
-      }
-    })
+    const unsubscribe = host.observeJournalPublications(
+      sessionId,
+      (journal) => {
+        if (relevant(journal)) {
+          coalescer.schedule(sessionId)
+        }
+      },
+      // The journal as it is now is the baseline: only a later change wakes the subscriber.
+      (journal) => journal && relevant(journal)
+    )
     // Discard pending redrive on settlement so it cannot nudge a session no dispatch owns.
     return () => {
       coalescer.dispose()

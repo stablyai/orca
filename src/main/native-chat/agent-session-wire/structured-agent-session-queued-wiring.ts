@@ -40,13 +40,22 @@ export function wireStructuredAgentSessionQueuedMessages(
     owed: (sessionId, from) => context().deps.queuedAgentMessageOwed?.(sessionId, from) ?? 'owed',
     logger: deferredStructuredAgentSessionLogger(() => context().deps.logger)
   })
+  /** Sessions with a republish waiting in their lane: more wakes before it runs add nothing. */
+  const republishing = new Set<string>()
   /** Publish the queue again and look for work: what it can hand over may have changed with no write. */
   const refresh = (sessionId: string) => {
-    const journal = sessions.get(sessionId)?.journal
-    if (journal) {
+    if (sessions.get(sessionId)?.journal && !republishing.has(sessionId)) {
+      republishing.add(sessionId)
       void context()
-        .serialize(sessionId, async () => republish(context(), sessionId, journal))
-        .catch(() => {})
+        .serialize(sessionId, async () => {
+          // Off before publishing: a wake during it queues one more, so none is lost.
+          republishing.delete(sessionId)
+          const journal = sessions.get(sessionId)?.journal
+          if (journal) {
+            republish(context(), sessionId, journal)
+          }
+        })
+        .catch(() => republishing.delete(sessionId))
     }
     drain.schedule(sessionId)
   }

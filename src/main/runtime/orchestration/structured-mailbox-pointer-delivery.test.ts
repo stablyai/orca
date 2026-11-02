@@ -72,6 +72,15 @@ function harness(options: { busy?: boolean } = {}) {
     getStructuredMailSends: (handle: string) =>
       [...records.values()].filter((row) => row.mailbox_handle === handle),
     getStructuredMailSend: (_handle: string, id: string) => records.get(id),
+    hasStructuredMailSend: (handle: string) =>
+      [...records.values()].some((row) => row.mailbox_handle === handle),
+    getStructuredMailSendMailboxesForSession: (sessionId: string) => [
+      ...new Set(
+        [...records.values()]
+          .filter((row) => row.session_id === sessionId)
+          .map((row) => row.mailbox_handle)
+      )
+    ],
     getStructuredMailSendMailboxes: () => [
       ...new Set([...records.values()].map((row) => row.mailbox_handle))
     ],
@@ -143,21 +152,29 @@ function harness(options: { busy?: boolean } = {}) {
       return true
     })
   }
-  const delivery = new OrchestrationStructuredMailboxPointerDelivery({
-    getDb: () => orchestrationDb,
-    getMessageWaiters: () => undefined,
-    resolveStructuredTarget: (handle) =>
-      handle === mailbox && !ended ? { sessionId: owner, dispatchId: 'd1' } : null,
-    mailboxEnded: () => ended,
-    unresolvedCustody: () => 'unverifiable',
-    getCliCommand: () => 'orca-dev',
-    senderSnapshot: () => ({ name: 'Coordinator', agent: null }),
-    host
-  })
+  const start = () =>
+    new OrchestrationStructuredMailboxPointerDelivery({
+      getDb: () => orchestrationDb,
+      getMessageWaiters: () => undefined,
+      resolveStructuredTarget: (handle) =>
+        handle === mailbox && !ended ? { sessionId: owner, dispatchId: 'd1' } : null,
+      mailboxEnded: () => ended,
+      unresolvedCustody: () => 'unverifiable',
+      getCliCommand: () => 'orca-dev',
+      senderSnapshot: () => ({ name: 'Coordinator', agent: null }),
+      host
+    })
+  let delivery = start()
   let sequence = 0
   const operation = (id: string) => records.get(id)!.operation_id
   return {
-    delivery,
+    get delivery() {
+      return delivery
+    },
+    /** Orca starting again over the same databases: nothing settled is remembered. */
+    restart: () => {
+      delivery = start()
+    },
     host,
     /** The queue's question at handover, for a card carrying message `id`. */
     handover: (sessionId: string, id: string) =>
@@ -278,6 +295,7 @@ describe('structured mailbox delivery: each message whole', () => {
     await h.deliver()
     // A crash before the delivered stamp: the record and the card survive, the stamp does not.
     h.mail.get('m1')!.delivered_at = null
+    h.restart()
     await h.deliver()
     expect(h.host.send).toHaveBeenCalledTimes(1)
     expect(h.mail.get('m1')?.delivered_at).toBe('now')
@@ -290,6 +308,7 @@ describe('structured mailbox delivery: each message whole', () => {
     const first = h.operation('m1')
     // Recorded, then Orca stopped before the host admitted it.
     h.chat.delete(first)
+    h.restart()
     await h.deliver()
     expect(h.host.send).toHaveBeenCalledTimes(2)
     expect(h.sent.map((send) => send.operationId)).toEqual([first, first])
@@ -340,7 +359,8 @@ describe('structured mailbox delivery: each message whole', () => {
       return { kind: 'sent', state: 'rejected' }
     })
     await h.deliver()
-    await h.deliver()
+    // The stop settles the handoff: a journal edge on the chat.
+    await h.journal()
     expect(h.host.send).toHaveBeenCalledTimes(1)
     expect(h.records.size).toBe(0)
     expect(h.mail.get('m1')).toMatchObject({ read: 0, delivered_at: 'now' })

@@ -229,6 +229,7 @@ CREATE TABLE IF NOT EXISTS structured_mail_sends (
   minted_at_ms   INTEGER NOT NULL,
   PRIMARY KEY (mailbox_handle, message_id)
 );
+CREATE INDEX IF NOT EXISTS idx_structured_mail_sends_session ON structured_mail_sends(session_id);
 
 CREATE TABLE IF NOT EXISTS worker_terminal_archives (
   dispatch_id   TEXT PRIMARY KEY,

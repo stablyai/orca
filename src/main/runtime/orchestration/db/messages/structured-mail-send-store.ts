@@ -50,6 +50,26 @@ export function getStructuredMailSend(
   return row && readStructuredMailSendRow(row)
 }
 
+/** Whether a chat still holds any of this mailbox's mail: one row, never all of them. */
+export function hasStructuredMailSend(this: OrchestrationDb, mailboxHandle: string): boolean {
+  return (
+    this.db
+      .prepare('SELECT 1 AS held FROM structured_mail_sends WHERE mailbox_handle = ? LIMIT 1')
+      .get(mailboxHandle) !== undefined
+  )
+}
+
+/** The mailboxes whose mail one session holds, by the session index: what its release can touch. */
+export function getStructuredMailSendMailboxesForSession(
+  this: OrchestrationDb,
+  sessionId: string
+): string[] {
+  return this.db
+    .prepare('SELECT DISTINCT mailbox_handle FROM structured_mail_sends WHERE session_id = ?')
+    .all(sessionId)
+    .flatMap(({ mailbox_handle }) => (typeof mailbox_handle === 'string' ? [mailbox_handle] : []))
+}
+
 export function getStructuredMailSendMailboxes(this: OrchestrationDb): string[] {
   return this.db
     .prepare('SELECT DISTINCT mailbox_handle FROM structured_mail_sends')
@@ -158,6 +178,8 @@ export type StructuredMailSendStoreMethods = {
   getStructuredMailSends: typeof getStructuredMailSends
   getStructuredMailSend: typeof getStructuredMailSend
   getStructuredMailSendMailboxes: typeof getStructuredMailSendMailboxes
+  hasStructuredMailSend: typeof hasStructuredMailSend
+  getStructuredMailSendMailboxesForSession: typeof getStructuredMailSendMailboxesForSession
   reserveStructuredMailSend: typeof reserveStructuredMailSend
   releaseStructuredMailSend: typeof releaseStructuredMailSend
   retireStructuredMailSend: typeof retireStructuredMailSend
@@ -168,6 +190,8 @@ export function attachStructuredMailSendStore(ctor: { prototype: object }): void
     getStructuredMailSends,
     getStructuredMailSend,
     getStructuredMailSendMailboxes,
+    hasStructuredMailSend,
+    getStructuredMailSendMailboxesForSession,
     reserveStructuredMailSend,
     releaseStructuredMailSend,
     retireStructuredMailSend

@@ -237,7 +237,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
         orchestrationCaller?.address
       )
       // Mail still queued as cards for the abandoned Dispatch must not run.
-      runtime.withdrawStaleChatMail()
+      runtime.withdrawStaleChatMail([`dispatch:${params.dispatch}`])
       if (abandoned.disposition === 'context_only') {
         if (!abandoned.alreadySettled) {
           runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')

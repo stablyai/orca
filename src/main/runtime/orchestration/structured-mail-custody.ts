@@ -135,7 +135,7 @@ export class StructuredMailAuthority {
 
 export function hasStructuredMailSends(db: OrchestrationDb | null, mailboxHandle: string): boolean {
   try {
-    return (db?.getStructuredMailSends(mailboxHandle).length ?? 0) > 0
+    return db?.hasStructuredMailSend(mailboxHandle) ?? false
   } catch {
     // A database closing under shutdown has nothing left to settle.
     return false
@@ -155,6 +155,8 @@ export async function settleStructuredMailSends(input: {
   const { db, mailboxHandle, host } = input
   const outstanding = new Set<string>()
   const resend: StructuredMailResend[] = []
+  // Once per chat after the pass, however many of its cards the queue may now hand over.
+  const wake = new Set<string>()
   let released = false
   for (const row of db.getStructuredMailSends(mailboxHandle)) {
     const owed = input.owed(row.session_id, [row.message_id])
@@ -225,11 +227,12 @@ export async function settleStructuredMailSends(input: {
         }
         if (owed === 'owed' && state.kind === 'waiting') {
           // Its owner may only now be readable: a card the queue passed over goes without a later action.
-          host.wakeQueue(row.session_id)
+          wake.add(row.session_id)
         }
         outstanding.add(row.message_id)
         continue
     }
   }
+  wake.forEach((sessionId) => host.wakeQueue(sessionId))
   return { outstanding, resend, released }
 }

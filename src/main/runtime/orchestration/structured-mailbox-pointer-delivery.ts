@@ -19,6 +19,7 @@ import {
   type AgentMessageSource
 } from '../../../shared/agent-session/agent-session-message-source'
 import { StructuredMailboxParking } from './structured-mailbox-parking'
+import { StructuredMailSettledState } from './structured-mail-settled-state'
 import {
   hasStructuredMailSends,
   settleStructuredMailSends,
@@ -64,6 +65,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
   })
 
   private readonly authority: StructuredMailAuthority
+  private readonly settledState = new StructuredMailSettledState()
 
   constructor(private readonly deps: StructuredPointerDeliveryDependencies<TWaiter>) {
     this.authority = new StructuredMailAuthority({ ...deps, resolve: deps.resolveStructuredTarget })
@@ -85,28 +87,47 @@ export class OrchestrationStructuredMailboxPointerDelivery<
   onJournalActivity(sessionId: string): void {
     // The watch stays through its own redrive: only a move, or the last obligation ending, ends it.
     for (const [mailboxHandle, parked] of this.parking.parkedFor(sessionId)) {
+      this.settledState.invalidate(mailboxHandle)
       void this.deliver(mailboxHandle, parked.reservedTypes).catch(() => undefined)
     }
+  }
+
+  /** Whether a status callback is news to this session's mail; see StructuredMailSettledState. */
+  statusChanged(sessionId: string, status: string | null): boolean {
+    return this.settledState.statusChanged(
+      sessionId,
+      status,
+      this.deps.host.currentFence(sessionId)
+    )
   }
 
   /** Prune only this recorded session; settlement removes resolver identity and transient nulls also affect siblings. */
   forgetSession(sessionId: string): void {
     this.parking.forget(sessionId)
-    // Settlement can end the Dispatch a card still waits for.
-    this.withdrawStale()
+    this.settledState.forgetSession(sessionId)
+    // Settlement can end the Dispatch a card still waits for: this session's mailboxes, by its index.
+    try {
+      this.withdrawStale(
+        this.deps.getDb()?.getStructuredMailSendMailboxesForSession(sessionId) ?? []
+      )
+    } catch {
+      // A database closing under shutdown has no cards left to settle.
+    }
   }
 
   /** Mail a check took, a move re-addressed, or an owner gave up may still wait as a card: delete
-   *  those cards so no agent is handed it. Visible cleanup only; the queue asks at handover anyway. */
-  withdrawStale(): void {
-    let mailboxes: string[]
+   *  those cards so no agent is handed it. Visible cleanup only; the queue asks at handover anyway.
+   *  Only the mailboxes the action touched; every one only at startup and reset. */
+  withdrawStale(mailboxes?: Iterable<string>): void {
+    let scope: Iterable<string>
     try {
-      mailboxes = this.deps.getDb()?.getStructuredMailSendMailboxes() ?? []
+      scope = mailboxes ?? this.deps.getDb()?.getStructuredMailSendMailboxes() ?? []
     } catch {
       // A database closing under shutdown has no cards left to settle.
       return
     }
-    for (const mailboxHandle of mailboxes) {
+    for (const mailboxHandle of scope) {
+      this.settledState.invalidate(mailboxHandle)
       this.deliverForHandle(mailboxHandle)
     }
   }
@@ -138,6 +159,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
         }
       }
       // After the queue's write lane unwinds, through whichever lane owns the mailbox now.
+      this.settledState.invalidate(mail.mailbox)
       queueMicrotask(() => this.redeliver(mail.mailbox))
     }
     return owed
@@ -172,18 +194,28 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       if (!db) {
         return
       }
-      const { outstanding, resend, released } = await settleStructuredMailSends({
-        db,
-        mailboxHandle,
-        host: this.deps.host,
-        cliCommand: this.deps.getCliCommand(),
-        owed: (sessionId, messageIds) => this.authority.owedTo(sessionId, mailboxHandle, messageIds)
-      })
+      // Earlier sends only when something they wait on moved: a fresh arrival or the next page
+      // finds them reserved (stamped delivered), so selection skips them anyway.
+      const owner = this.deps.resolveStructuredTarget(mailboxHandle)?.sessionId ?? null
+      const { outstanding, resend, released } =
+        this.settledState.needsSettling(mailboxHandle, owner) || this.authority.ended(mailboxHandle)
+          ? await this.settledState.settle(mailboxHandle, owner, () =>
+              settleStructuredMailSends({
+                db,
+                mailboxHandle,
+                host: this.deps.host,
+                cliCommand: this.deps.getCliCommand(),
+                owed: (sessionId, messageIds) =>
+                  this.authority.owedTo(sessionId, mailboxHandle, messageIds)
+              })
+            )
+          : { outstanding: new Set<string>(), resend: [], released: false }
       let target = this.deps.resolveStructuredTarget(mailboxHandle)
       if (!target || this.authority.ended(mailboxHandle)) {
         if (!hasStructuredMailSends(db, mailboxHandle)) {
           // Nothing of it is left in any chat: no edge is owed to it.
           this.parking.unpark(mailboxHandle)
+          this.settledState.forget(mailboxHandle)
         }
         if (released) {
           // Mail a chat gave back goes to whoever owns the mailbox now, a terminal included.
@@ -211,11 +243,12 @@ export class OrchestrationStructuredMailboxPointerDelivery<
           !outstanding.has(message.id) && !offered.has(`${message.id}:${target?.sessionId}`)
       )
       if (batch.length === 0) {
-        if (outstanding.size > 0 || resend.length > 0) {
+        if (hasStructuredMailSends(db, mailboxHandle)) {
           // Cards still in the chat: their handover or deletion is read on this session's next edge.
           this.parking.park(mailboxHandle, target.sessionId, currentReservedTypes)
         } else {
           this.parking.unpark(mailboxHandle)
+          this.settledState.forget(mailboxHandle)
         }
         return
       }

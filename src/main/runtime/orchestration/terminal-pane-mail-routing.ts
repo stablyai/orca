@@ -178,7 +178,13 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     sessionId: string
     status: 'working' | 'attention' | 'idle' | null
   }): void {
-    if (summary.status === 'attention') {
+    // A repeat (a streamed revision republishes the same status) is nothing new to mail; what the
+    // journal changes, the parked mail's own watch hears.
+    const delivery = this.orchestrationStructuredMailboxPointerDelivery
+    if (
+      !delivery.statusChanged(summary.sessionId, summary.status) ||
+      summary.status === 'attention'
+    ) {
       return
     }
     // Log failures without blocking the later first-turn workspace rename.
@@ -219,9 +225,10 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   }
 
   /** After a check, move, takeover or reset, delete the cards that would hand a chat mail it no
-   *  longer owes. Visible cleanup only: it never holds up the action that called it. */
-  withdrawStaleChatMail(): void {
-    this.orchestrationStructuredMailboxPointerDelivery.withdrawStale()
+   *  longer owes. Visible cleanup only: it never holds up the action that called it. `mailboxes`:
+   *  only those the action touched; without it, every mailbox (a reset, a store becoming readable). */
+  withdrawStaleChatMail(mailboxes?: Iterable<string>): void {
+    this.orchestrationStructuredMailboxPointerDelivery.withdrawStale(mailboxes)
   }
 
   /** Asked as a chat's queue hands over an agent's card, or, with `peek`, as it chooses its next card;

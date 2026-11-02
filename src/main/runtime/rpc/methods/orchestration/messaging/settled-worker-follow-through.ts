@@ -172,21 +172,24 @@ export function passHeldWorkerMail(
   db: OrchestrationDb,
   followUpId: string
 ): void {
-  // The follow-up's claim and the moves below re-address mail a chat may still hold as a card.
-  const custody = custodyOf(db, followUpId)
-  if (custody === 'starting') {
-    runtime.withdrawStaleChatMail()
-    return
-  }
-  const worker = db.getWorkerDispatch(followUpId)
+  // The follow-up's claim and the moves below re-address mail a chat may still hold as a card: the
+  // lineage's mailboxes are the only ones whose cards can go stale.
   const seen = new Set([followUpId])
-  let source = db.getDispatchContextById(followUpId)?.follow_up_of_dispatch_id
   for (
-    ;
+    let source = db.getDispatchContextById(followUpId)?.follow_up_of_dispatch_id;
     source && !seen.has(source);
     source = db.getDispatchContextById(source)?.follow_up_of_dispatch_id
   ) {
     seen.add(source)
+  }
+  const lineageMailboxes = [...seen].map((id) => `dispatch:${id}`)
+  const custody = custodyOf(db, followUpId)
+  if (custody === 'starting') {
+    runtime.withdrawStaleChatMail(lineageMailboxes)
+    return
+  }
+  const worker = db.getWorkerDispatch(followUpId)
+  for (const source of [...seen].slice(1)) {
     const first = db.getDispatchContextById(source)?.follow_up_mail_at
       ? db.getUnreadMessages(`dispatch:${source}`, [...FOLLOW_UP_MESSAGE_TYPES])[0]
       : undefined
@@ -218,7 +221,7 @@ export function passHeldWorkerMail(
     // A follow-up that already finished holds this mail as any finished worker does.
     markUnreadFollowUpMail(db, followUpId)
   }
-  runtime.withdrawStaleChatMail()
+  runtime.withdrawStaleChatMail(lineageMailboxes)
   if (custody === 'ready') {
     // Its Task is in: a chat's moved mail follows it, each message whole.
     runtime.deliverPendingMessagesForHandle(`dispatch:${followUpId}`)

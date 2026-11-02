@@ -120,13 +120,15 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
     watchJournal(sessionId, onActivity) {
       const host = getStructuredAgentSessionHost()
       let seen: string | undefined
-      // Only what mail waits on: cards and queue room, settled handoffs, an accepted turn, a /clear,
-      // a new item. A streamed token revises an existing item and changes none of these.
+      // Only what mail waits on: a card handed over, deleted or edited (each moves the queue's
+      // revision without adding a card, so a new card, the lane's own included, changes nothing),
+      // handoffs settling, an accepted turn, a /clear, a new item. A streamed token changes none.
       const relevant = (journal: AgentSessionJournal) => {
         const order = journal.inputOrder
         const state = journal.queuedMessages.inputState()
         const cleared = state.queuePauseMarks.cleared?.sequence
-        const key = `${journal.queuedMessages.revision()}:${order.version()}:${order.links.version()}:${order.links.acceptedHandover()}:${cleared}:${state.items.size}`
+        const changes = state.queue.revision - state.queue.cards.size
+        const key = `${state.epoch}:${changes}:${order.unsettledSubmissions().length}:${order.links.version()}:${order.links.acceptedHandover()}:${cleared}:${state.items.size}`
         const changed = key !== seen
         seen = key
         return changed

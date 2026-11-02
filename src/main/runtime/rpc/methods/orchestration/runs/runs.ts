@@ -118,11 +118,12 @@ export const ORCHESTRATION_RUN_METHODS = [
       runtime.cancelMessageWaiters(params.from)
       cancelBoundDispatchWaiters(runtime, caller, run.id)
       // run-use keeps only this Run, so every Run it held before has a new or no consumer.
-      for (const runId of new Set([params.id, ...priorRuns.map((prior) => prior.id)])) {
-        runtime.cancelMessageWaiters(`run:${runId}`)
-      }
+      const moved = [...new Set([params.id, ...priorRuns.map((prior) => prior.id)])].map(
+        (runId) => `run:${runId}`
+      )
+      moved.forEach((mailbox) => runtime.cancelMessageWaiters(mailbox))
       // The former coordinator's waiting report cards are the new one's mail now.
-      runtime.withdrawStaleChatMail()
+      runtime.withdrawStaleChatMail(moved)
       return { run: exposeRun(run) }
     }
   }),
