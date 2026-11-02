@@ -38,7 +38,8 @@ export const SELF_CONTAINED_TRANSCRIPT_AGENTS = {
   kimi: false, // agents/main/wire.jsonl supplies messages.
   muse: true,
   jcode: true,
-  kiro: false // A .jsonl sidecar supplies messages.
+  kiro: false, // A .jsonl sidecar supplies messages.
+  'qwen-code': true
 } satisfies Record<AiVaultAgent, boolean>
 
 /** Persist index progress independently: declined appends become due, failed reads retry against their stat. */

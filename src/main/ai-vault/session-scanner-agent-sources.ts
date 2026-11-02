@@ -19,6 +19,7 @@ import {
   isKiroSessionMetadataPath,
   kiroTranscriptPathForMetadata
 } from './session-scanner-kiro-parser'
+import { qwenProjectsRootDirs } from './session-scanner-qwen-parser'
 import { OPENCLAW_AGENT_SOURCE } from './openclaw-session-layout'
 import { isOmpConversationDirectory } from './session-scanner-omp-subagent-transcripts'
 import {
@@ -299,6 +300,14 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     extensions: ['.jsonl'],
     // Exclude log, SQLite and materialized-projection sidecars.
     filePredicate: (filePath) => basename(filePath) === 'session.jsonl'
+  },
+  'qwen-code': {
+    rootDirs: (options, wslHomeDirs) => qwenProjectsRootDirs(options.qwenProjectsDir, wslHomeDirs),
+    extensions: ['.jsonl'],
+    directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME,
+    // Why: resumable sessions live at <project>/chats/<id>.jsonl; ignore
+    // anything outside a chats/ dir. Same segment convention as cursor.
+    filePredicate: (filePath) => pathSegments(filePath).includes('chats')
   }
 }
 

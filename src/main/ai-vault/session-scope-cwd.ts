@@ -97,6 +97,7 @@ export const AI_VAULT_SCOPE_CWD_SOURCES: Record<AiVaultAgent, SessionScopeCwdSou
     64 * 1024
   ),
   qoder: head((record) => record.cwd),
+  'qwen-code': head((record) => record.cwd),
   omp: SESSION_HEADER,
   'prime-agent': SESSION_HEADER,
   openclaw: SESSION_HEADER,
