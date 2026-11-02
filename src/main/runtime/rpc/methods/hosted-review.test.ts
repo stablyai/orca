@@ -1,3 +1,6 @@
+import { z } from 'zod'
+import { requiredString } from '../../../../shared/rpc-contract/rpc-param-primitives'
+import { OptionalGitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
 import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
@@ -5,11 +8,49 @@ import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { HOSTED_REVIEW_METHODS } from './hosted-review'
 
+// Shipped pre-force host schema at 9905765e3b8; unknown intent must remain ignorable.
+const preForceHostParams = z.object({
+  repo: requiredString('Missing repo selector'),
+  branch: requiredString('Missing branch'),
+  admissionTier: OptionalGitAdmissionTier,
+  currentHeadOid: z.string().nullable().optional(),
+  // Only the caller's selected worktree; the host caps how many earn the fast tier.
+  active: z.boolean().optional(),
+  linkedGitHubPR: z.number().int().positive().nullable().optional(),
+  fallbackGitHubPR: z.number().int().positive().nullable().optional(),
+  linkedGitLabMR: z.number().int().positive().nullable().optional(),
+  linkedBitbucketPR: z.number().int().positive().nullable().optional(),
+  linkedAzureDevOpsPR: z.number().int().positive().nullable().optional(),
+  linkedGiteaPR: z.number().int().positive().nullable().optional()
+})
+
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
 }
 
 describe('hosted review RPC methods', () => {
+  it('keeps the same operation callable on hosts before intent and before force forwarding', () => {
+    const request = {
+      repo: '/repo',
+      branch: 'feature',
+      force: true,
+      userRefresh: true,
+      linkedGitLabMR: 7
+    }
+    expect(preForceHostParams.parse(request)).toEqual({
+      repo: '/repo',
+      branch: 'feature',
+      linkedGitLabMR: 7
+    })
+    const preIntentHostParams = preForceHostParams.extend({ force: z.boolean().optional() })
+    expect(preIntentHostParams.parse(request)).toEqual({
+      repo: '/repo',
+      branch: 'feature',
+      force: true,
+      linkedGitLabMR: 7
+    })
+  })
+
   it('fetches branch review status on the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -50,7 +91,7 @@ describe('hosted review RPC methods', () => {
     })
   })
 
-  it('carries a selected-worktree claim and explicit refresh through to the runtime', async () => {
+  it('carries a selected-worktree claim, explicit refresh and outcome request through to the runtime', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getHostedReviewForBranch: vi.fn().mockResolvedValue(null)
@@ -62,13 +103,20 @@ describe('hosted review RPC methods', () => {
         repo: '/repo',
         branch: 'feature/selected',
         active: true,
-        force: true
+        force: true,
+        userRefresh: true,
+        reportReadOutcome: true
       })
     )
 
     // Mobile PR sidebar refresh must bypass card-list pacing to discover reviews opened elsewhere (#11532).
     expect(runtime.getHostedReviewForBranch).toHaveBeenCalledWith(
-      expect.objectContaining({ active: true, force: true })
+      expect.objectContaining({
+        active: true,
+        force: true,
+        userRefresh: true,
+        reportReadOutcome: true
+      })
     )
   })
 

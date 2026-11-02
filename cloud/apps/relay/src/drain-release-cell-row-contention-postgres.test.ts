@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { RelayAssignmentRowBusyError, RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentRowBusyError, RelayAssignmentStore } from './assignment/assignment-store.js'
 import {
   encodeMembership,
   type CellAdmissionMembership,

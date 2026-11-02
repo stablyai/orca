@@ -1,5 +1,5 @@
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
-import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { isStructuredTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { Tab } from '../../../../shared/tab-types'
 
 export type StructuredTab = Tab & { contentType: 'agent-session' }

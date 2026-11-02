@@ -197,7 +197,8 @@ private final class ParkedNavigationDelegate: NSObject, WKNavigationDelegate {
   }
 }
 
-final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate {
+final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate,
+  UIGestureRecognizerDelegate {
   private static var retainedSlot: RetainedMobileWebShellSlot?
   private static let parkedDelegate = ParkedNavigationDelegate()
 
@@ -244,7 +245,10 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   let onLoadState = EventDispatcher()
   let onBridgeMessage = EventDispatcher()
   let onExternalNavigation = EventDispatcher()
+  let onBackEdgeSwipe = EventDispatcher()
 
+  // The page's own Back: the stack's swipe is off while the page claims Back, and a strip overlay would eat taps.
+  private let backEdgePan = UIPanGestureRecognizer()
   private var schemeHandler = MobileWebShellSchemeHandler()
   private var bridgeReceiver = MobileWebShellBridgeReceiver()
   private let bridgeGate = MobileWebShellBridgeGate()
@@ -289,6 +293,36 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     ignoreKeyboardNotifications(in: webView)
     attachWebView(webView)
     installNetworkBlock(into: configuration.userContentController)
+    backEdgePan.isEnabled = false
+    backEdgePan.addTarget(self, action: #selector(handleBackEdgePan(_:)))
+    backEdgePan.delegate = self
+    addGestureRecognizer(backEdgePan)
+    webView.scrollView.panGestureRecognizer.require(toFail: backEdgePan)
+  }
+
+  func setBackEdgeSwipe(_ value: Bool) {
+    backEdgePan.isEnabled = value
+  }
+
+  /// Only touches that start at the shell's left edge; a landscape safe area insets it from the screen's.
+  func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+    recognizer !== backEdgePan || touch.location(in: self).x <= 20
+  }
+
+  override func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+    guard recognizer === backEdgePan else { return super.gestureRecognizerShouldBegin(recognizer) }
+    let velocity = backEdgePan.velocity(in: self)
+    return velocity.x > abs(velocity.y)
+  }
+
+  /// Commit like the stack's own swipe: past half the width, or a rightward flick.
+  @objc private func handleBackEdgePan(_ pan: UIPanGestureRecognizer) {
+    guard pan.state == .ended else { return }
+    let travel = pan.translation(in: self).x
+    let speed = pan.velocity(in: self).x
+    if speed > 300 || (speed > -300 && travel > bounds.width / 2) {
+      onBackEdgeSwipe()
+    }
   }
 
   private func attachWebView(_ target: WKWebView) {
@@ -384,6 +418,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     webView.navigationDelegate = self
     webView.uiDelegate = self
     webView.isHidden = false
+    webView.scrollView.panGestureRecognizer.require(toFail: backEdgePan)
     attachWebView(webView)
     loadState.reset()
     loadState.committed()
@@ -606,10 +641,11 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     if #available(iOS 14.5, *) {
       isDownload = navigationAction.shouldPerformDownload
     }
+    let isMainFrame = navigationAction.targetFrame?.isMainFrame == true
     // linkActivated gates only opener offers; gesture-free subframe top navigation must never authorize a load.
     let verdict = MobileWebShellNavigationPolicy.verdict(
       url: navigationAction.request.url?.absoluteString,
-      isMainFrame: navigationAction.targetFrame?.isMainFrame == true,
+      isMainFrame: isMainFrame,
       isDocumentUrl: isDocumentUrl(navigationAction.request.url),
       isShellLoad: loadState.isShellLoad,
       hasGesture: navigationAction.navigationType == .linkActivated,
@@ -618,7 +654,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     if case let .cancelAndOffer(url) = verdict {
       onExternalNavigation(["url": url])
     }
-    if verdict == .allow {
+    if verdict == .allow && isMainFrame {
       // Spend before handing back the decision so another main-frame action cannot reuse the allowance.
       loadState.shellLoadConsumed()
     }
@@ -630,8 +666,13 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     decidePolicyFor navigationResponse: WKNavigationResponse,
     decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
   ) {
-    let allowed = navigationResponse.isForMainFrame &&
-      navigationResponse.canShowMIMEType &&
+    // Only srcdoc subframes pass the action policy; refusing one must not fail the shell document.
+    guard navigationResponse.isForMainFrame else {
+      let url = navigationResponse.response.url?.absoluteString
+      decisionHandler(url == MobileWebShellNavigationPolicy.inlineDocumentUrl ? .allow : .cancel)
+      return
+    }
+    let allowed = navigationResponse.canShowMIMEType &&
       isDocumentUrl(navigationResponse.response.url)
     if !allowed {
       reportDocumentFailure()

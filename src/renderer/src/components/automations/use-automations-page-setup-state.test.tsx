@@ -57,12 +57,12 @@ describe('automation hooks cache key', () => {
       'runtime owner',
       [{ id: 'repo-1', executionHostId: 'runtime:owner' }],
       'focused',
-      'owner:repo-1'
+      'runtime:owner:repo-1'
     ],
     ['local owner', [{ id: 'repo-1', executionHostId: 'local' }], 'focused', 'local:repo-1'],
     ['unstamped row stays local', [{ id: 'repo-1' }], 'focused', 'local:repo-1'],
-    ['missing row follows focus', [], 'focused', 'focused:repo-1'],
-    ['missing row, local focus', [], null, 'local:repo-1'],
+    ['missing row stays unresolved despite focus', [], 'focused', 'unresolved:repo-1'],
+    ['missing row, local focus', [], null, 'unresolved:repo-1'],
     [
       'duplicates name no server, focus or not',
       [
@@ -70,7 +70,7 @@ describe('automation hooks cache key', () => {
         { id: 'repo-1', executionHostId: 'runtime:owner' }
       ],
       'other',
-      'local:repo-1'
+      'unresolved:repo-1'
     ]
   ])('%s', (_name, repos, focused, expected) => {
     expect(cacheKeyFor(repos, focused)).toBe(expected)

@@ -8,8 +8,11 @@ import * as correspondence from '../../../../shared/ai-vault-session-cwd-aliases
 import {
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
-import { makeFolderWorkspace, makeWorktree } from '../worktree-jump-palette-test-fixtures'
+} from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import {
+  makeFolderWorkspace,
+  makeWorktree
+} from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import { aiVaultSessionOwnerWorkspaces } from './ai-vault-session-worktree'
 import { resolveAiVaultHistoryRowResume } from './ai-vault-session-resume-in-chat-workspace'
 import { useSubagentSessions } from './use-subagent-sessions'

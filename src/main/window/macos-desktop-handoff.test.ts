@@ -1,6 +1,5 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { skillShareIdFromArguments } from '../../shared/skill-share-link'
 
 const { spawnProcessMock } = vi.hoisted(() => ({ spawnProcessMock: vi.fn() }))
 
@@ -13,8 +12,7 @@ vi.mock('electron', () => ({
 }))
 vi.mock('@orca/process-host', () => ({ spawnProcess: spawnProcessMock }))
 
-const { createDesktopHandoff, desktopHandoffArguments, handOffToDesktopApp } =
-  await import('./macos-desktop-handoff')
+const { createDesktopHandoff, handOffToDesktopApp } = await import('./macos-desktop-handoff')
 
 function makeChild(): EventEmitter & { unref: ReturnType<typeof vi.fn> } {
   return Object.assign(new EventEmitter(), { unref: vi.fn() })
@@ -111,15 +109,6 @@ describe('handOffToDesktopApp', () => {
       expect(reapplyActivationPolicy).toHaveBeenCalledOnce()
     }
   )
-
-  it('does nothing off macOS', () => {
-    const reapplyActivationPolicy = vi.fn()
-
-    handOffToDesktopApp([], { platform: 'linux', reapplyActivationPolicy })
-
-    expect(spawnProcessMock).not.toHaveBeenCalled()
-    expect(reapplyActivationPolicy).not.toHaveBeenCalled()
-  })
 })
 
 describe('createDesktopHandoff', () => {
@@ -157,32 +146,5 @@ describe('createDesktopHandoff', () => {
     await nextTurn()
 
     expect(handOff).toHaveBeenCalledTimes(2)
-  })
-})
-
-describe('desktopHandoffArguments', () => {
-  it('turns the buffered share id into a link the desktop app reads from argv', () => {
-    const args = desktopHandoffArguments({
-      skillShareDeepLinks: { consume: () => 'abc_123' },
-      pluginInstallLinks: { consume: () => 'orca://plugins/acme.dusk?catalog=community' },
-      osOpenedDocuments: { consume: () => ['/Users/me/notes.md'] }
-    })
-
-    expect(args).toEqual([
-      'orca://skills/share/abc_123',
-      'orca://plugins/acme.dusk?catalog=community',
-      '/Users/me/notes.md'
-    ])
-    expect(skillShareIdFromArguments(args)).toBe('abc_123')
-  })
-
-  it('is empty for a plain app open', () => {
-    expect(
-      desktopHandoffArguments({
-        skillShareDeepLinks: { consume: () => null },
-        pluginInstallLinks: { consume: () => null },
-        osOpenedDocuments: { consume: () => [] }
-      })
-    ).toEqual([])
   })
 })

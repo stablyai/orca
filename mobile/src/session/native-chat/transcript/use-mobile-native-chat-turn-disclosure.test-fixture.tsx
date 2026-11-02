@@ -1,7 +1,7 @@
 import { createElement } from 'react'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
-import type { NativeChatTurnJournal } from '../../../../../src/shared/native-chat-turn-membership'
-import type { NativeChatSettledTurns } from '../../../../../src/shared/native-chat-turn-status'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
+import type { NativeChatTurnJournal } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
+import type { NativeChatSettledTurns } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 
 export function userMessage(id: string): NativeChatMessage {

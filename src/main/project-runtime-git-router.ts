@@ -22,7 +22,7 @@ import {
   type LocalGitRuntimeRouter
 } from './git/command-runner/local-git-runtime-route'
 import { isWslDistroRunningForBackgroundWork } from './wsl-background-distro-gate'
-import { wslHostsGateOpen } from './wsl/wsl-host-gate'
+import { onWslHostsNewWorkChanged, wslHostsGateOpen, wslHostsOptedIn } from './wsl/wsl-host-gate'
 import {
   followWslAutomountRoots,
   knownWslAutomountRoots,
@@ -33,7 +33,9 @@ import {
 export type ProjectRuntimeGitRouterStore = {
   getRepos: () => Repo[]
   getProjects: () => Project[]
-  getSettings: () => Partial<Pick<GlobalSettings, 'localWindowsRuntimeDefault'>>
+  getSettings: () => Partial<
+    Pick<GlobalSettings, 'localWindowsRuntimeDefault' | 'experimentalWslHosts'>
+  >
   getAllWorktreeMeta: () => Record<string, unknown>
 }
 
@@ -273,16 +275,24 @@ export function installProjectRuntimeGitRouter(
     setBackgroundWslGitGate(null)
     return
   }
-  setBackgroundWslGitGate(isWslDistroRunningForBackgroundWork)
   const router = createProjectRuntimeGitRouter(store)
+  // Stage 1 is opt-in: with the WSL hosts setting off, Git runs exactly as before D1c.
+  const optedIn = (): boolean => wslHostsOptedIn(store.getSettings())
+  const applyOptIn = (): void => {
+    setLocalGitRuntimeRouter(optedIn() ? router : null)
+    setBackgroundWslGitGate(optedIn() ? isWslDistroRunningForBackgroundWork : null)
+  }
+  applyOptIn()
+  // A block learned this run uninstalls both at once, as turning the setting off does.
+  onWslHostsNewWorkChanged(applyOptIn)
   // Synchronous with the write, so no Git call can run between a change and the table's drop.
   store.onStateWritten((domains) => {
     if (!domains || domains.some((domain) => ROUTE_DOMAINS.has(domain))) {
       router.invalidate()
+      applyOptIn()
     }
   })
   // A distro's mount root changes how links its Git wrote map back to a drive.
-  followWslAutomountRoots(router.distros)
+  followWslAutomountRoots(() => (optedIn() ? router.distros() : []))
   onWslAutomountRootsChanged(router.invalidate)
-  setLocalGitRuntimeRouter(router)
 }

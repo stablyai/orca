@@ -38,12 +38,9 @@ export function ChatSettingsSection({
   searchEntries: SettingsSearchEntry[]
   showDesktopOnlySettings: boolean
   isMounted: boolean
-}): React.JSX.Element | null {
+}): React.JSX.Element {
   const query = useAppStore((state) => state.settingsSearchQuery)
-  if (settings.experimentalNativeChat !== true) {
-    return null
-  }
-  const title = translate('settings.appearance.chat.title', 'Chat')
+  const title = translate('settings.appearance.chat.title', 'Chat UI')
   const appearanceTitle = translate('auto.components.settings.Settings.2b4474780a', 'Appearance')
   const showAllBehavior = matchesSettingsSearch(query, [
     { title },

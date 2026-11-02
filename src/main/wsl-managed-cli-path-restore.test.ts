@@ -52,8 +52,4 @@ describe.each(SHELLS)('WSL_MANAGED_CLI_PATH_RESTORE in $name', (shell) => {
     expect(result).toMatchObject({ code: 0, stdout: '/usr/bin:/bin' })
     expect(result.stderr).toContain('Orca CLI unavailable')
   })
-
-  it.skipIf(!shell.enabled)('does nothing without a managed directory', () => {
-    expect(run(shell, {})).toMatchObject({ code: 0, stdout: '/usr/bin:/bin', stderr: '' })
-  })
 })

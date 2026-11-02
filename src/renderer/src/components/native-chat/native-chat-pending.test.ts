@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import type { NativeChatPendingSend } from '../../../../shared/native-chat-pending-sends'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import type { NativeChatPendingSend } from '../../../../shared/native-chat/transcript/native-chat-pending-sends'
 import {
   appendPendingSendCache,
   clearPendingSendCacheForTests,
@@ -18,7 +18,7 @@ import {
   commandMarkersAsMessages,
   readCommandMarkerCache
 } from './native-chat-command-marker'
-import { stripNoiseMessages } from './native-chat-noise'
+import { stripNoiseMessages } from '../../../../shared/native-chat/native-chat-noise'
 
 function userMessage(id: string, text: string, timestamp = 1): NativeChatMessage {
   return {

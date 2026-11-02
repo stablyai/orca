@@ -148,7 +148,7 @@ describe('automation creates: main provisions setup and default tabs', () => {
   ])(
     'runs a $platform runner with the $platform command',
     async ({ runnerScriptPath, platform }) => {
-      createSetupRunnerScriptMock.mockReturnValueOnce({ runnerScriptPath, envVars: {} })
+      createSetupRunnerScriptMock.mockResolvedValueOnce({ runnerScriptPath, envVars: {} })
 
       await handlers['worktrees:create'](null, {
         repoId: 'repo-1',

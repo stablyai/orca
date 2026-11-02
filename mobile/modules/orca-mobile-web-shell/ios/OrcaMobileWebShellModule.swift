@@ -29,7 +29,7 @@ public class OrcaMobileWebShellModule: Module {
     }.runOnQueue(.main)
 
     View(OrcaMobileWebShellView.self) {
-      Events("onLoadState", "onBridgeMessage", "onExternalNavigation")
+      Events("onLoadState", "onBridgeMessage", "onExternalNavigation", "onBackEdgeSwipe")
 
       Prop("generationDirectory") { (view: OrcaMobileWebShellView, value: String) in
         view.setGenerationDirectory(value)
@@ -45,6 +45,10 @@ public class OrcaMobileWebShellModule: Module {
 
       Prop("retainsSlot") { (view: OrcaMobileWebShellView, value: Bool) in
         view.setRetainsSlot(value)
+      }
+
+      Prop("backEdgeSwipe") { (view: OrcaMobileWebShellView, value: Bool) in
+        view.setBackEdgeSwipe(value)
       }
 
       AsyncFunction("postBridgeMessage") {

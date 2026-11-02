@@ -1,3 +1,4 @@
+import { markUnreadFollowUpMail } from './worker-follow-up-lineage'
 import type { WorkerReportOutcome, WorkerReportSettlement } from '../../types'
 import type { OrchestrationDb } from '../orchestration-db'
 import { AGENT_PROMPT_STALLED_ERROR } from '../../../agent-prompt-submission-verification'
@@ -279,7 +280,11 @@ export function settleWorkerReportInTransaction(
   if (params.outcome === 'succeeded') {
     this.promoteReadyTasks(params.taskId)
   }
+  if (reportingWorker && this.workerAutoReleaseEnabled?.() !== false) {
+    this.armWorkerTerminalAutoReleaseStatement(params.dispatchId)
+  }
   recordAcceptedReportFact(this, params)
+  markUnreadFollowUpMail(this, params.dispatchId)
   this.db.exec('RELEASE settle_worker_report')
   return { action: 'settled', outcome: params.outcome, duplicate: false }
 }

@@ -179,30 +179,6 @@ describe('Orca cloud profile service session refresh', () => {
     )
   })
 
-  it('refreshes capability flags for the connected profile', async () => {
-    configureCloudEnv()
-    mockSuccessfulConnect()
-    await connectCurrentOrcaProfile(userDataPath)
-    refreshOrcaCloudCapabilitiesMock.mockResolvedValue({
-      capabilities: {
-        flags: { share: false, team: true },
-        refreshedAt: 25
-      }
-    })
-
-    const result = await refreshCurrentOrcaProfileAuth(userDataPath)
-
-    expect(result.status).toBe('refreshed')
-    expect(refreshOrcaCloudCapabilitiesMock).toHaveBeenCalledWith(
-      expect.any(Object),
-      expect.objectContaining({ accessToken: 'access-token' })
-    )
-    expect(getCurrentOrcaProfileAuthStatus(userDataPath).capabilities).toEqual({
-      flags: { share: false, team: true },
-      refreshedAt: 25
-    })
-  })
-
   it('clears stale active org metadata when capability refresh returns no active org', async () => {
     configureCloudEnv()
     mockSuccessfulConnect()

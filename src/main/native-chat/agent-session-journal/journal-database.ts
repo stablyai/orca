@@ -1,5 +1,6 @@
 // Read user_version before persistent pragmas/DDL: even enabling WAL mutates newer databases.
 
+import { ensureJournalOutcomeTables } from './journal-outcome-format'
 import Database from '../../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
 import {
@@ -72,6 +73,9 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
     // Additive tables must exist on every writable open, even when version migration returns early.
     ensureQueuedMessagesTable(probe)
     ensureCommandReceiptsTable(probe)
+    ensureJournalOutcomeTables(probe)
+    // An earlier build indexed clear successors for a query that no longer exists; writes stop paying for it.
+    probe.exec('DROP INDEX IF EXISTS idx_agent_session_clear_successor')
     ensureAgentSessionAttachmentClaimTables(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true

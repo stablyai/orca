@@ -1,4 +1,4 @@
-import { terminalLaunchFacts } from '../../../../shared/agent-session-resume'
+import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { OrcaRuntimeWithCreateTerminal } from '../launch/terminal-create'
 import { OrcaRuntimeWithRestoredHandlePaneStart } from '../surface/restored-handle-pane-start'
 import type {
@@ -167,7 +167,9 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     const recovery = this.createTerminal(`id:${expectedWorktreeId}`, {
       tabId: parsed.tabId,
       leafId: parsed.leafId,
-      focus: false
+      focus: false,
+      // Replacing a pane its relay lost is no new work in the workspace.
+      reopensPane: true
     }).then((terminal) => ({
       ...terminalLaunchFacts(terminal),
       handle: terminal.handle,

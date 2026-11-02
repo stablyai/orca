@@ -1,6 +1,6 @@
 import { getAppEnvironment } from '../../shared/app-environment'
 import type { Automation } from '../../shared/automations-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { listOrcadMigrationCutoverChainForTarget } from '../ssh/orcad-migration-cutover-journal'
 
 export const ORCAD_FENCED_AUTOMATION = "This automation now runs on its SSH host's Orca server."

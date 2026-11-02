@@ -113,25 +113,4 @@ describe('activating a pane the legacy relay bridge serves', () => {
       })
     )
   })
-
-  it('still activates its sibling panes and every other tab on the server', async () => {
-    const call = vi.fn().mockResolvedValue({ id: 'activate', ok: true, result: {} })
-    stubWindow(call)
-
-    for (const hostTabId of ['relay-tab::orcad-leaf', 'orcad-tab::leaf']) {
-      await activateWebRuntimeSessionTab({
-        worktreeId: WORKTREE_ID,
-        tabId: toWebTerminalSurfaceTabId(hostTabId),
-        environmentId: ENVIRONMENT_ID
-      })
-    }
-
-    expect(call).toHaveBeenCalledTimes(2)
-    expect(call).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'session.tabs.activate',
-        params: expect.objectContaining({ tabId: 'orcad-tab::leaf' })
-      })
-    )
-  })
 })

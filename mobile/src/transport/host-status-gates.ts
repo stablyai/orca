@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionState } from './types'
 import { evaluateCompat, type CompatVerdict } from './protocol-compat'
-import type { HostStatusReply } from './host-status-reply-schema'
+import { hostStatusSchema, type HostStatusReply } from './host-status-reply-schema'
 import { normalizeHostAppVersion } from './host-app-version'
 import { recordHostAppVersion } from './host-app-version-store'
 import { recordHostDescriptorFromStatus } from './host-descriptor-recorder'
@@ -82,6 +82,26 @@ function dropProvenGates(client: RpcClient | null, hostId: string | undefined): 
   }
 }
 
+/** What a readable status means to this client: the verdict is this build's own window check. */
+export function hostStatusGatesFromStatus(
+  status: HostStatusReply
+): Omit<HostStatusGates, 'statusPending'> {
+  return {
+    hostCapabilities: status.capabilities ?? [],
+    floatingWorkspaceEnabled: status.floatingWorkspaceEnabled === true,
+    desktopAppVersion: normalizeHostAppVersion(status.appVersion),
+    compatVerdict: evaluateCompat({
+      desktopProtocolVersion: status.protocolVersion,
+      desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
+    }),
+    hostProtocolWindow: {
+      protocolVersion: status.protocolVersion,
+      minCompatibleMobileVersion: status.minCompatibleMobileVersion
+    },
+    statusReadable: true
+  }
+}
+
 // Reads status.get on connect for capabilities, protocol-compat verdict, and the
 // floating-workspace flag. Compat constants are wide-open today so this never blocks yet.
 export function useHostStatusGates(args: {
@@ -93,6 +113,12 @@ export function useHostStatusGates(args: {
   const [loaded, setLoaded] = useState<LoadedHostStatusGates | null>(() =>
     readProvenGates(client, hostId, connState)
   )
+  // A page starts from the status its shell already proved, so its first mount skips a round trip.
+  const shellStatus = client?.getShellHostStatus?.() ?? null
+  const seeded = useMemo(() => {
+    const status = shellStatus === null ? null : hostStatusSchema.safeParse(shellStatus)
+    return status?.success ? hostStatusGatesFromStatus(status.data) : null
+  }, [shellStatus])
   // Why (F10): a drop must not erase proven capabilities, but it does invalidate them — this keeps
   // statusPending true across the reconnect refetch, so gates stay "unknown" while the data survives.
   const [unverified, setUnverified] = useState(false)
@@ -116,6 +142,10 @@ export function useHostStatusGates(args: {
     loaded && loaded.hostId === hostId && loaded.client === client
       ? loaded
       : readProvenGates(client, hostId, connState)
+  // The seed stands only for the connection the shell proved it on; after a drop the page reads again.
+  if (!proven && seeded && !unverified && connState === 'connected' && client !== null) {
+    return { ...seeded, statusPending: false }
+  }
   if (!proven) {
     return {
       hostCapabilities: EMPTY_HOST_CAPABILITIES,
@@ -160,11 +190,8 @@ function startHostStatusRead(
         settleClosed()
         return
       }
-      const verdict = evaluateCompat({
-        desktopProtocolVersion: status.protocolVersion,
-        desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
-      })
-      const desktopAppVersion = normalizeHostAppVersion(status.appVersion)
+      const gates = hostStatusGatesFromStatus(status)
+      const { compatVerdict: verdict, desktopAppVersion } = gates
       if (hostId && desktopAppVersion) {
         void recordHostAppVersion(hostId, desktopAppVersion)
       }
@@ -172,17 +199,7 @@ function startHostStatusRead(
         // Record here too because pages lack the connection-layer probe; the recorder tolerates duplicate feeds.
         recordHostDescriptorFromStatus(hostId, status)
       }
-      settle({
-        hostCapabilities: status.capabilities ?? [],
-        floatingWorkspaceEnabled: status.floatingWorkspaceEnabled === true,
-        desktopAppVersion,
-        compatVerdict: verdict,
-        hostProtocolWindow: {
-          protocolVersion: status.protocolVersion,
-          minCompatibleMobileVersion: status.minCompatibleMobileVersion
-        },
-        statusReadable: true
-      })
+      settle(gates)
       if (verdict.kind === 'blocked') {
         // Why: support breadcrumb to confirm a block fired vs a render bug; no PII, just version ints.
         console.warn('[protocol-compat] blocked', {

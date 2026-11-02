@@ -82,10 +82,16 @@ export function acquireRetainedOrCreateBridgeHost(args: {
     route: latest.route,
     safeAreaInsets: latest.safeAreaInsets,
     keyboardInset: latest.keyboardInset,
+    pageGeometry: latest.pageGeometry,
+    foldDivision: latest.foldDivision,
+    terminalKeyRail: latest.terminalKeyRail,
+    colorScheme: latest.colorScheme,
+    uiLocale: latest.uiLocale,
     pageRoutes: latest.pageRoutes,
     pageRouteGrants: latest.pageRouteGrants,
     routeGrants: latest.routeGrants,
     ownsHostArea: latest.ownsHostArea === true,
+    readHostStatus: () => binding.args.hostStatus ?? null,
     sessionEstablished: latest.sessionEstablished,
     ...(sessionBack === undefined ? {} : { sessionBack }),
     host: snapshot.host,
@@ -98,7 +104,7 @@ export function acquireRetainedOrCreateBridgeHost(args: {
         recordShellLifecycleLine(binding.args.hostId, line)
       }
     }),
-    onNavigate: (href) => binding.args.onNavigate(href),
+    onNavigate: (href, replace) => binding.args.onNavigate(href, replace),
     onNavigateBack: () => binding.args.onNavigateBack(),
     onExternalLink: (url) => binding.args.onExternalLink(url),
     onHaptic: (kind) => binding.args.onHaptic(kind),
@@ -118,7 +124,10 @@ export function acquireRetainedOrCreateBridgeHost(args: {
     onBinaryFramesDropped: (total) => binding.args.onBinaryFramesDropped(total),
     onPageReady: () => binding.args.onPageReady(),
     onPagePainted: () => binding.args.onPagePainted(),
-    onPageBackClaim: (claimed) => binding.args.onPageBackClaim(claimed)
+    onPageBackClaim: (claimed) => binding.args.onPageBackClaim(claimed),
+    onPageLocation: (href) => binding.args.onPageLocation(href),
+    onTerminalKeyRailClaim: (claimed, inputOwner, toolbar) =>
+      binding.args.onTerminalKeyRailClaim(claimed, inputOwner, toolbar)
   })
   latest.onBinaryFramesDropped(0)
   return { host, binding }

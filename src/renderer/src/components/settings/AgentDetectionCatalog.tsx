@@ -43,7 +43,8 @@ export function AgentDetectionCatalog({
         </div>
       )}
 
-      <section id={AGENTS_INSTALLED_SECTION_ID}>
+      {/* Focusable so "Choose per agent" can move focus here. */}
+      <section id={AGENTS_INSTALLED_SECTION_ID} tabIndex={-1} className="scroll-mt-8 outline-none">
         {[
           ...detectedAgents.map((agent) => ({ agent, installed: true })),
           ...undetectedAgents.map((agent) => ({ agent, installed: false }))

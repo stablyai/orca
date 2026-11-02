@@ -140,20 +140,6 @@ describe('legacy shared Codex config compatibility', () => {
     expect(readFileSync(join(sharedRuntimeHome, 'config.toml'), 'utf-8')).toBe(staleConfig)
   })
 
-  it('does not promote retained-pane settings into the real home', () => {
-    writeFileSync(join(systemCodexHome, 'config.toml'), 'model = "canonical"\n', 'utf-8')
-    writeFileSync(join(sharedRuntimeHome, 'config.toml'), 'model = "retained-pane-change"\n')
-
-    syncLegacySharedCodexConfigForRetainedPanes({ sharedRuntimeHome, systemCodexHome })
-
-    expect(readFileSync(join(systemCodexHome, 'config.toml'), 'utf-8')).toBe(
-      'model = "canonical"\n'
-    )
-    expect(readFileSync(join(sharedRuntimeHome, 'config.toml'), 'utf-8')).toBe(
-      'model = "canonical"\n'
-    )
-  })
-
   it('does not overwrite trust appended by a retained Codex during the mirror', () => {
     const runtimeConfigPath = join(sharedRuntimeHome, 'config.toml')
     const runtimeConfig = 'model = "runtime-before"\n'

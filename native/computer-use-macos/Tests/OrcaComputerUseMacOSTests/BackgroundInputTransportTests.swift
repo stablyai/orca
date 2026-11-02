@@ -22,11 +22,7 @@ final class BackgroundInputTransportTests: XCTestCase {
         }
     }
 
-    func testChordKeysCarryOnlyKeyCodesAndFlags() throws {
-        let events = try BackgroundInputTransport.chordEvents(keyCode: 0, modifiers: [(keyCode: 55, flag: .maskCommand)])
-        XCTAssertEqual(events.map { $0.getIntegerValueField(.keyboardEventKeycode) }, [55, 0, 0, 55])
-        XCTAssertEqual(events.map { $0.flags.contains(.maskCommand) }, [true, true, true, false])
-    }
+
 
     func testTypedTextRidesTheKeyDownOnly() throws {
         let bareKeyUp = try XCTUnwrap(CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false))

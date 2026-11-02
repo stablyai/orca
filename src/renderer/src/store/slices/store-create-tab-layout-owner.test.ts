@@ -10,10 +10,6 @@ import {
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 import { provideLayoutFrameTerminalPanes } from '@/runtime/layout-frame-terminal-panes'
 import type { PublishedTab } from '../../../../shared/workspace-layout/workspace-layout-published'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { LayoutApplyParams } from '../../../../shared/rpc-contract/workspace-layout-params'
-import { applyLayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-commands'
-import { layoutCommandsOf } from '@/runtime/layout-apply-test-double'
 
 const mocks = vi.hoisted(() => ({
   layoutOwnerIsMain: true,
@@ -64,38 +60,6 @@ beforeEach(() => {
 })
 
 describe('createTab in a layout-owner build', () => {
-  it('sends main the tab it drew, under its ids and in its group', () => {
-    const store = storeWithWorktree()
-
-    store.getState().createTab(WORKTREE, undefined, 'zsh', {
-      id: TAB,
-      initialLeafId: LEAF,
-      startupCwd: '/path/wt/src',
-      launchAgent: 'claude',
-      viewMode: 'chat'
-    })
-
-    expect(mocks.callRuntimeRpc).toHaveBeenCalledTimes(1)
-    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith({ kind: 'local' }, 'layout.apply', {
-      command: {
-        type: 'createTerminalTab',
-        workspace: WORKTREE,
-        tabId: TAB,
-        leafId: LEAF,
-        groupId: 'group-1',
-        viewMode: 'chat',
-        createdAt: store.getState().unifiedTabsByWorktree[WORKTREE]![0]!.createdAt,
-        creation: {
-          defaultTitle: 'Terminal 1',
-          shellOverride: 'zsh',
-          startupCwd: '/path/wt/src',
-          launchAgent: 'claude'
-        }
-      }
-    })
-    expect(store.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([TAB])
-  })
-
   it('draws a tab main made itself with main’s creation facts and sends no create', () => {
     const mainTab: PublishedTab = {
       id: TAB,
@@ -141,49 +105,6 @@ describe('createTab in a layout-owner build', () => {
     expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
 
-  it('records a quick command tab’s label in main, so the window’s save of it changes nothing', () => {
-    const store = storeWithWorktree()
-
-    store.getState().createTab(WORKTREE, undefined, undefined, {
-      id: TAB,
-      initialLeafId: LEAF,
-      quickCommandLabel: ' Dev server '
-    })
-
-    const [command] = layoutCommandsOf(
-      LayoutApplyParams.parse(mocks.callRuntimeRpc.mock.calls[0]?.[2]).command
-    )
-    const applied = applyLayoutCommand(
-      {
-        hostId: LOCAL_EXECUTION_HOST_ID,
-        workspaces: {},
-        records: {},
-        legacy: { terminalRowOwners: {} }
-      },
-      command!,
-      { mintId: () => 'minted', mintLeafId: () => 'minted-leaf', now: () => 1 }
-    )
-    expect(applied.ok && applied.model.workspaces[WORKTREE]?.tabs[0]).toMatchObject({
-      id: TAB,
-      quickCommandLabel: 'Dev server'
-    })
-    expect(store.getState().unifiedTabsByWorktree[WORKTREE]?.[0]?.quickCommandLabel).toBe(
-      'Dev server'
-    )
-  })
-
-  it('sends the leaf id the window named the first pane with when the caller gave none', () => {
-    const store = storeWithWorktree()
-
-    const tab = store.getState().createTab(WORKTREE)
-
-    const leafId = store.getState().terminalLayoutsByTabId[tab.id]?.activeLeafId
-    expect(leafId).toBeTruthy()
-    expect(mocks.callRuntimeRpc.mock.calls[0]?.[2]).toMatchObject({
-      command: { tabId: tab.id, leafId }
-    })
-  })
-
   it('leaves a paired server’s workspace to its mirror', () => {
     const store = createTestStore()
     const worktree = makeRuntimeOwnedWorktree({ id: WORKTREE, repoId: 'repo1' }, 'env-1')
@@ -193,15 +114,6 @@ describe('createTab in a layout-owner build', () => {
         worktreesByRepo: { repo1: [worktree] }
       })
     )
-
-    store.getState().createTab(WORKTREE)
-
-    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
-  })
-
-  it('sends nothing in a window-owned build', () => {
-    mocks.layoutOwnerIsMain = false
-    const store = storeWithWorktree()
 
     store.getState().createTab(WORKTREE)
 

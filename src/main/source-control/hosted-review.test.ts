@@ -81,6 +81,41 @@ describe('getHostedReviewForBranch', () => {
     __resetHostedReviewBranchCacheForTests()
   })
 
+  it('refreshes a self-managed GitLab MR through the provider while old metadata is pending', async () => {
+    getProjectSlugMock.mockResolvedValue({ host: 'gitlab.example.test', path: 'g/p' })
+    const old = {
+      number: 7,
+      title: 'MR',
+      state: 'opened',
+      url: 'https://gitlab.example.test/g/p/-/merge_requests/7',
+      pipelineStatus: 'success',
+      updatedAt: '2026-05-10T00:00:00.000Z',
+      mergeable: 'MERGEABLE'
+    }
+    let finishOld: (value: typeof old) => void = () => {}
+    getMergeRequestForBranchMock
+      .mockReturnValueOnce(
+        new Promise<typeof old>((resolve) => {
+          finishOld = resolve
+        })
+      )
+      .mockResolvedValueOnce({ ...old, state: 'merged' })
+    const input = {
+      repoPath: '/repo',
+      executionHostId: 'ssh:ssh-1',
+      branch: 'feature',
+      force: true
+    } as const
+    const before = getHostedReviewForBranch(input)
+    await vi.waitFor(() => expect(getMergeRequestForBranchMock).toHaveBeenCalledTimes(1))
+    const click = getHostedReviewForBranch({ ...input, userRefresh: true })
+    finishOld(old)
+    await before
+    await expect(click).resolves.toMatchObject({ provider: 'gitlab', state: 'merged', number: 7 })
+    expect(getMergeRequestForBranchMock).toHaveBeenCalledTimes(2)
+    expect(getMergeRequestForBranchMock).toHaveBeenLastCalledWith('/repo', 'feature', null, 'ssh-1')
+  })
+
   it('maps GitLab merge requests into the hosted review surface', async () => {
     getProjectSlugMock.mockResolvedValue({ host: 'gitlab.com', path: 'g/p' })
     getMergeRequestForBranchMock.mockResolvedValue({

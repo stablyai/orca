@@ -37,6 +37,7 @@ export const WSL_DRIVE_UNC_STATE_DISPOSITIONS = {
   // Partitions of SSH and paired hosts; the local partition is `workspaceSession`.
   workspaceSessionsByHostId: 'keep',
   remoteLayoutSnapshots: 'keep',
+  hostRepoCatalogSnapshots: 'keep',
   sshTargets: 'keep',
   sshTargetGenerationCounter: 'keep',
   deletedSshConfigAliases: 'keep',
@@ -54,5 +55,5 @@ export const WSL_DRIVE_UNC_STATE_DISPOSITIONS = {
   onboarding: 'keep',
   featureInteractionTelemetryBuckets: 'keep',
   codexResetCreditAttemptLedger: 'keep',
-  nativeChatUpgradeTipAudience: 'keep'
+  chatUiLaunchTipAudience: 'keep'
 } as const satisfies Record<keyof PersistedState, Disposition>

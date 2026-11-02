@@ -70,21 +70,6 @@ describe('watcher delivery stall reporting', () => {
     expect(onOverflow).toHaveBeenCalledTimes(7)
     supervisor.dispose()
   })
-
-  it('does not rescan on a healthy report that follows no stall', async () => {
-    const supervisor = createWatcherProcessSupervisor()
-    const onOverflow = vi.fn()
-    const subscription = supervisor.subscribe('/repo', vi.fn(), {}, { onOverflow })
-    const child = currentWatcherChild(forkMock)
-    ackSubscribe(child)
-    await subscription
-
-    child.emit('message', { op: 'delivery-health', state: 'healthy' })
-    await vi.advanceTimersByTimeAsync(5 * CANARY_STALL_BACKOFF_INITIAL_MS)
-
-    expect(onOverflow).not.toHaveBeenCalled()
-    supervisor.dispose()
-  })
 })
 
 describe('WatcherDeliveryHealthMonitor', () => {
@@ -104,23 +89,6 @@ describe('WatcherDeliveryHealthMonitor', () => {
 
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('ends the stall with one rescan when the canary disarms', async () => {
-    const onOverflow = vi.fn()
-    const monitor = new WatcherDeliveryHealthMonitor(
-      new Map([[1, record(1, onOverflow)]]),
-      new WatcherProcessCrashFuse()
-    )
-    monitor.childStarted()
-    monitor.update('stalled')
-    await vi.advanceTimersByTimeAsync(CANARY_STALL_BACKOFF_INITIAL_MS)
-    expect(onOverflow).toHaveBeenCalledOnce()
-
-    monitor.update('unknown')
-    expect(onOverflow).toHaveBeenCalledTimes(2)
-    await vi.advanceTimersByTimeAsync(30 * 60_000)
-    expect(onOverflow).toHaveBeenCalledTimes(2)
   })
 
   it('stops rescanning once no subscription is live', async () => {

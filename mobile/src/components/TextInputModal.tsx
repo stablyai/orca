@@ -4,7 +4,7 @@ import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { BottomDrawer } from './BottomDrawer'
+import { BottomDrawer } from './bottom-drawer/BottomDrawer'
 import { TextField } from './composer-input/TextField'
 
 type Props = {
@@ -129,13 +129,13 @@ const styles = themedStyleSheet(() => ({
   cancelButton: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   submitButton: {
     backgroundColor: colors.textPrimary,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   buttonPressed: {
     opacity: 0.7

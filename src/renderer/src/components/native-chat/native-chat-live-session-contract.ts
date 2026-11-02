@@ -2,7 +2,7 @@ import type {
   NativeChatMessage,
   NativeChatSession,
   NativeChatTurnLifecycle
-} from '../../../../shared/native-chat-types'
+} from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 
 export type ReadState =

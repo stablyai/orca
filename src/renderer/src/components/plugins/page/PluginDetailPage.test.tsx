@@ -194,6 +194,45 @@ describe('PluginDetailPage', () => {
     )
     await act(async () => repository?.click())
     expect(window.api.shell.openUrl).toHaveBeenCalledWith('https://github.com/acme/icons')
+    const readme = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Read the README on GitHub'
+    )
+    await act(async () => readme?.click())
+    expect(window.api.shell.openUrl).toHaveBeenCalledWith(
+      `https://github.com/acme/icons/tree/${'d'.repeat(40)}#readme`
+    )
+  })
+
+  it("links a mirrored community plugin to its author's repository at the pinned commit", async () => {
+    const container = await render(
+      pluginListEntryFromListing({
+        ...listing,
+        pluginKey: 'acme.icons',
+        official: false,
+        source: {
+          kind: 'git',
+          url: 'https://github.com/stablyai/orca-community-mirror.git',
+          ref: 'refs/tags/acme/icons/1.0.0'
+        },
+        release: { ...listing.release!, repository: 'https://github.com/Acme/Icons' }
+      }),
+      () => Promise.resolve({ ok: true, preview })
+    )
+    const click = async (label: string) => {
+      const button = Array.from(container.querySelectorAll('button')).find(
+        (candidate) => candidate.textContent === label
+      )
+      await act(async () => button?.click())
+    }
+    await click('Repository')
+    expect(window.api.shell.openUrl).toHaveBeenCalledWith('https://github.com/acme/icons')
+    await click('Read the README on GitHub')
+    expect(window.api.shell.openUrl).toHaveBeenCalledWith(
+      `https://github.com/acme/icons/tree/${'d'.repeat(40)}#readme`
+    )
+    expect(window.api.shell.openUrl).not.toHaveBeenCalledWith(
+      expect.stringContaining('orca-community-mirror')
+    )
   })
 
   it('never claims no access when the plugin could not be read, and retries', async () => {

@@ -40,16 +40,17 @@ function createDoc(atomLabel = 'locked') {
 function mountSearch() {
   let state = EditorState.create({ doc: createDoc() })
   const listeners = new Set<() => void>()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only these editor members.
   const editor = {
     get state() {
       return state
     },
-    commands: { focus: vi.fn() },
     on: (_event: string, listener: () => void) => listeners.add(listener),
     off: (_event: string, listener: () => void) => listeners.delete(listener),
     registerPlugin: vi.fn(),
     unregisterPlugin: vi.fn(),
     view: {
+      focus: vi.fn(),
       dispatch: (tr: EditorState['tr']) => {
         state = state.apply(tr)
         if (tr.docChanged) {

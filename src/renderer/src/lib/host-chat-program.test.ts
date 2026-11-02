@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { agentMenuShortcutLabels } from '../components/tab-bar/agent-menu-shortcut-labels'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { getDefaultSourceControlAiSettings } from '../../../shared/source-control-ai-settings'
@@ -8,10 +9,12 @@ import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compati
 import { MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY as INSTALL } from '../../../shared/managed-runtime-install'
 import {
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG,
+  STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as HEALTH
+} from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
-  STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as HEALTH,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as MODE
-} from '../../../shared/protocol-version'
+} from '../../../shared/agent-session/agent-session-runtime-capabilities'
 const rpc = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn(), direct: vi.fn() }))
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: rpc.call }))
 vi.mock('@/runtime/runtime-rpc-subscribe', () => ({ subscribeRuntimeRpc: rpc.subscribe }))
@@ -47,7 +50,7 @@ beforeEach(() => {
   rpc.subscribe.mockReset().mockResolvedValue({ unsubscribe: vi.fn() })
   setLocalRuntimeCapabilitiesForTests(CAPS)
   useAppStore.setState({
-    settings: { ...getDefaultSettings('/tmp'), experimentalNativeChat: true },
+    settings: { ...getDefaultSettings('/tmp'), nativeChatProviders: EVERY_AGENT_CHAT },
     runtimeStatusByEnvironmentId: new Map([['B', status()]])
   })
 })
@@ -133,7 +136,7 @@ it('adapts only absent publication on older hosts and shares the saved Checks ga
   setLocalRuntimeCapabilitiesForTests([CHAT, CATALOG, INSTALL])
   const local = { kind: 'git-worktree' } as const
   const settings = getDefaultSettings('/tmp')
-  settings.experimentalNativeChat = true
+  settings.nativeChatProviders = EVERY_AGENT_CHAT
   settings.sourceControlAi = getDefaultSourceControlAiSettings()
   settings.sourceControlAi.actions = { fixChecks: { agentId: 'antigravity' } }
   useAppStore.setState({ settings, ensureDetectedAgents: async () => [] })
