@@ -661,12 +661,14 @@ describe('createWebRuntimeSessionTerminal', () => {
     )?.[0]
     expect(createRequest).toMatchObject({ params: { agent: 'claude' } })
     expect(createRequest?.params).not.toHaveProperty('prompt')
+    // A refusal is reported once, by this launch's caller, so the paste reports through it.
     expect(mocks.deliverLaunchPromptToAgentTab).toHaveBeenCalledWith({
       tabId: 'web-terminal-host-tab-2',
       content: 'continue the unfinished task',
       agent: 'claude',
       submit: true,
-      forcePaste: true
+      forcePaste: true,
+      onTimeout: expect.any(Function)
     })
   })
 

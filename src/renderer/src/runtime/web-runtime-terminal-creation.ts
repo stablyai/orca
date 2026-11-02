@@ -69,7 +69,11 @@ export async function createWebRuntimeAgentSessionTerminal(
       promptCertainty = certainty
     }
   }).catch(() => false)
-  return { outcome: created.outcome, promptDelivered, promptCertainty }
+  return {
+    outcome: created.outcome,
+    promptDelivered,
+    ...(promptDelivered ? {} : { promptCertainty })
+  }
 }
 
 /** Argv-prefill carries draft in the command without post-ready paste; seed the composer once mirrored host tab ID is known. */
