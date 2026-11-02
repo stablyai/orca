@@ -25,7 +25,7 @@ const identitySetArg = (key: string, value: string): string =>
 
 /** The variant hooks let a saved restore reuse this exact body: same order, plus its check. */
 export type AgentFunctionVariant = { name: string; prologue: string; check: string }
-const PUBLIC_CODEX: AgentFunctionVariant = { name: 'codex', prologue: '', check: '' }
+export const PUBLIC_CODEX_VARIANT: AgentFunctionVariant = { name: 'codex', prologue: '', check: '' }
 
 export function posixCodexFunction(v: AgentFunctionVariant): string {
   return `  function ${v.name} {
@@ -64,7 +64,9 @@ __orca_codex_binary="$(unalias codex 2>/dev/null || :; command -v codex 2>/dev/n
 if [[ -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
   # Why the function reserved word: it suppresses alias expansion of the name,
   # which otherwise rewrites this header at parse time and aborts the whole file.
-${posixCodexFunction(PUBLIC_CODEX)}
+${posixCodexFunction(PUBLIC_CODEX_VARIANT)}
+  # Recorded where Orca defines it, only for a launch that owns a saved restore's start.
+  [ -z "\${__orca_sr_action:-}" ] || __orca_sr_def_codex="$(typeset -f codex)"
 fi
 unset __orca_codex_binary
 `
@@ -90,13 +92,14 @@ ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      test -n "$${key}"; and not
   end`
 }
 
-export function getFishCodexShellLaunchPreflight(): string {
+/** `recordForRestore` only for a launch that owns a saved restore's start (fish -C is per launch). */
+export function getFishCodexShellLaunchPreflight(recordForRestore = false): string {
   return `# Why captured: an unquoted (type -t codex) expands to zero words when codex is
 # absent, leaving "test = file" — fish then errors instead of failing closed.
 # Quoting in place is not the fix; fish never substitutes inside double quotes.
 set -l __orca_codex_type (type -t codex 2>/dev/null)
 if test "$__orca_codex_type" = file
-${fishCodexFunction(PUBLIC_CODEX)}
+${fishCodexFunction(PUBLIC_CODEX_VARIANT)}${recordForRestore ? '\n  set -g __orca_sr_def_codex (functions codex | string join \\n)' : ''}
 end
 set -e __orca_codex_type`
 }
@@ -151,7 +154,7 @@ export function getPowerShellCodexShellLaunchPreflight(): string {
   return `$orcaCodexCommand = Get-Command codex -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($orcaCodexCommand -and
     $orcaCodexCommand.CommandType -in @("Application", "ExternalScript")) {
-${powerShellCodexFunction(PUBLIC_CODEX)}
+${powerShellCodexFunction(PUBLIC_CODEX_VARIANT)}
 }
 Remove-Variable orcaCodexCommand -ErrorAction SilentlyContinue`
 }

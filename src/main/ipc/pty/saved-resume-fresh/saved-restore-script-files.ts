@@ -1,7 +1,16 @@
-import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs'
+import { createHash, randomBytes } from 'node:crypto'
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../../../shared/app-environment'
+import { getSavedRestoreActionFiles } from '../../../../shared/saved-restore-dispatch'
 import {
   getFishSavedRestoreScript,
   getPosixSavedRestoreScript,
@@ -41,4 +50,44 @@ export function ensureSavedRestoreScripts(): string | null {
   }
   cached = { base, root }
   return base
+}
+
+// A launch reads its action within the receipt's lifetime; anything older is a crash leftover.
+const STALE_ACTION_MS = 60 * 60 * 1000
+
+function actionRoot(): string {
+  return join(getAppEnvironment().getPath('userData'), 'shell-wrappers', 'saved-restore', 'launch')
+}
+
+/** This launch's private action data, readable only by the user; its path without extension. */
+export function writeSavedRestoreAction(
+  data: Parameters<typeof getSavedRestoreActionFiles>[0]
+): string | null {
+  const root = actionRoot()
+  try {
+    mkdirSync(root, { recursive: true, mode: 0o700 })
+    for (const name of readdirSync(root)) {
+      const dir = join(root, name)
+      if (Date.now() - statSync(dir).mtimeMs > STALE_ACTION_MS) {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+    const dir = join(root, randomBytes(8).toString('hex'))
+    mkdirSync(dir, { mode: 0o700 })
+    for (const [extension, text] of Object.entries(getSavedRestoreActionFiles(data))) {
+      writeFileSync(join(dir, `action.${extension}`), text, { mode: 0o600 })
+    }
+    return join(dir, 'action')
+  } catch (error) {
+    console.warn('[pty] could not write a saved restore action', error)
+    return null
+  }
+}
+
+export function discardSavedRestoreAction(action: string): void {
+  // Only a directory this module created: the root's launch folder for one action.
+  const dir = join(action, '..')
+  if (join(dir, '..') === actionRoot()) {
+    rmSync(dir, { recursive: true, force: true })
+  }
 }

@@ -17,6 +17,7 @@ const seam = vi.hoisted(() => ({
 vi.mock('../../../agent-hooks/server', () => ({
   agentHookServer: { launchSeedSince: seam.seed, forgetRefusedPaneResume: seam.forget }
 }))
+vi.mock('./saved-restore-script-files', () => ({ discardSavedRestoreAction: vi.fn() }))
 vi.mock('./store-presence', () => ({ probeSavedResumeStore: seam.probe }))
 vi.mock('../pane/agent-session-owner-release', () => ({
   releaseAgentSessionOwnerForFresh: seam.release,
@@ -37,6 +38,7 @@ function armed({ owner }: { owner?: AgentSessionOwnerBinding } = { owner: OWNER 
   const token = (next += 1).toString(16).padStart(32, '0')
   mintSavedRestoreReceipt(token, {
     entry: CALLER.entry,
+    action: '/actions/a/action',
     paneKey: 'tab-1:leaf',
     paneEnvKey: 'tab-1:leaf',
     launchEnvToken: CALLER.launchToken,

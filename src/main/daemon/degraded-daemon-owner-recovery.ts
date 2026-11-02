@@ -24,7 +24,8 @@ export class DegradedDaemonOwnerRecovery {
   resolveFencedOwner = (id: string, incarnationId: string) =>
     this.attachResolver.resolveTermination(id, incarnationId)
 
-  resolveAuthority = async (id: string, incarnationId: string): Promise<IPtyProvider | null> => {
+  /** The provider this exact incarnation's recorded route or a fresh inventory proves owns it. */
+  authority = async (id: string, incarnationId: string): Promise<IPtyProvider | null> => {
     const owner = await this.resolveFencedOwner(id, incarnationId)
     return owner.kind === 'owner' ? owner.provider : null
   }

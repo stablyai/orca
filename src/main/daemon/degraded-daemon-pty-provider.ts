@@ -113,13 +113,14 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   providesAgentSessionOwnerListings = (ptyId: string): boolean =>
     this.ownerRecovery.getVerifiedRoute(ptyId)?.providesAgentSessionOwnerListings?.(ptyId) === true
 
+  // Local fallback owns it; a daemon destination's connection rechecks its hello before sending.
+  supportsSavedRestorePrivateStartup = (): boolean => true
   supportsFencedTermination = (id: string): boolean =>
     this.ownerRecovery.getVerifiedRoute(id)?.supportsFencedTermination?.(id) === true
 
   // The fallback local provider, a recovered current daemon or a retained one: whichever the
   // recorded route or a fresh inventory proves owns this incarnation.
-  resolveAgentSessionAuthority = (id: string, incarnationId: string) =>
-    this.ownerRecovery.resolveAuthority(id, incarnationId)
+  resolveAgentSessionAuthority = (id: string, i: string) => this.ownerRecovery.authority(id, i)
 
   killFenced = (request: PtyFencedTerminationRequest) =>
     terminateResolvedDaemonSession(request, () =>

@@ -11,6 +11,7 @@ import {
   releaseAgentSessionOwnerForFresh
 } from '../pane/agent-session-owner-release'
 import { probeSavedResumeStore } from './store-presence'
+import { discardSavedRestoreAction } from './saved-restore-script-files'
 import type { SavedResumeStoreQuery, SavedRestoreRoots } from './store-query'
 
 // A shell's startup files run between the spawn and the check; the receipt waits that long at most.
@@ -32,7 +33,11 @@ export type SavedRestoreLaunch = {
 type Caller = { entry: string; paneKey: string | null; launchToken: string | null }
 
 type Receipt = {
+  /** Minted per physical launch and held only in that launch's private action file: a check that
+   *  carries it came from that launch's root shell, with or without a renderer launch token. */
   entry: string
+  /** This launch's private action data, discarded once its check is taken or it can never run. */
+  action: string
   paneKey: string
   /** The spawn env's pane key and renderer launch token, which the check reports from its own env. */
   paneEnvKey: string
@@ -71,6 +76,7 @@ function expire<T>(map: Map<string, T>, proof: string, entry: T, ms: number): vo
       map.delete(proof)
       if (map === receipts) {
         ;(entry as Receipt).settleLaunch(null)
+        discardSavedRestoreAction((entry as Receipt).action)
       }
     }
   }, ms).unref?.()
@@ -129,6 +135,7 @@ export function settleSavedRestoreLaunch(
     receipt.launched = launch
   } else {
     receipts.delete(proof!)
+    discardSavedRestoreAction(receipt.action)
   }
   receipt.settleLaunch(launch)
 }
@@ -161,6 +168,7 @@ export async function decideSavedRestore(check: SavedRestoreCheck): Promise<'fre
   if (!receipt) {
     return 'resume'
   }
+  discardSavedRestoreAction(receipt.action)
   deciding.add(receipt)
   try {
     return await decide(receipt, check)

@@ -113,6 +113,9 @@ export class DaemonPtyRouter implements IPtyProvider {
     )
   }
 
+  // New launches go to the current daemon, whose own hello the connection rechecks before sending.
+  supportsSavedRestorePrivateStartup = (): boolean => true
+
   supportsFencedTermination(id: string): boolean {
     return this.ownerResolver.getVerifiedRoute(id)?.supportsFencedTermination?.(id) === true
   }

@@ -45,8 +45,18 @@ vi.mock('../../../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ isPackaged: () => true, getPath: () => '/user-data' }),
   hasAppEnvironment: () => true
 }))
+// The launch's private action, as the arm hands it to the PTY host's root shell.
+const actions = vi.hoisted(
+  () => new Map<string, { entry: string; token: string; freshArgs: readonly string[] }>()
+)
 vi.mock('./saved-restore-script-files', () => ({
-  ensureSavedRestoreScripts: () => '/scripts/restore'
+  ensureSavedRestoreScripts: () => '/scripts/restore',
+  writeSavedRestoreAction: (data: { entry: string; token: string; freshArgs: string[] }) => {
+    const path = `/actions/${actions.size}/action`
+    actions.set(path, data)
+    return path
+  },
+  discardSavedRestoreAction: () => {}
 }))
 vi.mock('../runtime/spawn-preflight', () => ({ prepareRuntimePtySpawn: vi.fn(async () => null) }))
 // Host env routing settled on this Codex home; everything after it is the real spawn and commit.
@@ -142,6 +152,7 @@ function savedRestore(id: string) {
     cwd: home,
     expectedWslDistro: null,
     isDaemonHostSpawn: true,
+    provider: { supportsSavedRestorePrivateStartup: () => true },
     launchCommand: command,
     deps: { getSettings: () => ({ codexManagedAccounts: [], agentCmdOverrides: {} }) }
   }
@@ -171,7 +182,7 @@ function savedRestore(id: string) {
   }
   /** What the check reports from its own env: the installed entry and this pane, no launch token. */
   const caller = () => ({
-    entry: state.spawnOptions.env?.ORCA_SAVED_RESTORE_ENTRY ?? '',
+    entry: actions.get(state.spawnOptions.env?.ORCA_SAVED_RESTORE_ACTION ?? '')?.entry ?? '',
     paneKey: PANE,
     launchToken: null
   })
@@ -228,8 +239,6 @@ async function hook(event: string, id: string): Promise<void> {
   expect(response.status).toBe(204)
 }
 
-const ARMED = /^codex 'resume' '[^']+' # __orca_saved_restore:[0-9a-f]{16}:[0-9a-f]{32}$/
-
 describe('a saved pane whose conversation its agent no longer has', () => {
   it('resumes once, starts fresh on the next restart, then follows the new conversation', async () => {
     await restart()
@@ -246,11 +255,13 @@ describe('a saved pane whose conversation its agent no longer has', () => {
     await restart()
     launch = savedRestore(OLD)
     await expect(launch.arm()).resolves.toMatch(/^[0-9a-f]{32}$/)
-    expect(launch.state.spawnOptions.command).toMatch(ARMED)
+    expect(launch.state.spawnOptions.command).toBe(`codex 'resume' '${OLD}'`)
     expect(launch.state.spawnOptions.env).toMatchObject({
       [SAVED_RESTORE_CHECK_ENV]: '/app/bin/orca',
-      ORCA_SAVED_RESTORE_FRESH_ARGS: expect.stringMatching(/^'--sandbox' 'workspace-write'/)
+      ORCA_SAVED_RESTORE_ORIGINAL: `codex 'resume' '${OLD}'`
     })
+    const action = actions.get(launch.state.spawnOptions.env?.ORCA_SAVED_RESTORE_ACTION ?? '')
+    expect(action?.freshArgs.slice(0, 2)).toEqual(['--sandbox', 'workspace-write'])
     launch.commit()
     await expect(launch.check()).resolves.toBe('fresh')
     // Nothing is forgotten or shown until the generated line reports it ran the fresh arguments.
@@ -276,6 +287,17 @@ describe('a saved pane whose conversation its agent no longer has', () => {
     launch = savedRestore(NEW)
     await expect(launch.arm()).resolves.toBeUndefined()
     expect(launch.state.spawnOptions.command).toBe(`codex 'resume' '${NEW}'`)
+  })
+
+  it('gives a destination that cannot own the start the plain resume and no startup inputs', async () => {
+    await restart()
+    savedRestore(OLD).commit()
+    await restart()
+    const launch = savedRestore(OLD)
+    launch.state.provider.supportsSavedRestorePrivateStartup = () => false
+    await expect(launch.arm()).resolves.toBeUndefined()
+    expect(launch.state.spawnOptions.command).toBe(`codex 'resume' '${OLD}'`)
+    expect(launch.state.spawnOptions.env).not.toHaveProperty('ORCA_SAVED_RESTORE_ACTION')
   })
 
   it('keeps resuming when the agent reported anything after the launch', async () => {
@@ -377,9 +399,9 @@ describe('a saved pane whose conversation its agent no longer has', () => {
       // Restart 2: that resumed launch's own seed is last; the pane's function asks main.
       await restore()
       const armed = spawn.mock.calls[1]?.[0]
-      expect(armed?.command).toMatch(ARMED)
-      const [, entry = '', token = ''] =
-        armed?.command?.match(/:([0-9a-f]{16}):([0-9a-f]{32})$/) ?? []
+      expect(armed?.command).toBe(`codex 'resume' '${OLD}'`)
+      const { entry = '', token = '' } =
+        actions.get(armed?.env?.ORCA_SAVED_RESTORE_ACTION ?? '') ?? {}
       await expect(
         decideSavedRestore({
           entry,

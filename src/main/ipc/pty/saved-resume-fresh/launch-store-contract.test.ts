@@ -16,15 +16,14 @@ import { getPosixClaudeShellFunction } from '../../../../shared/claude-shell-fun
 import { getPosixCodexShellLaunchPreflight } from '../../../../shared/codex-shell-function'
 import { getPosixSavedRestoreScript } from '../../../../shared/saved-restore-scripts'
 import {
-  SAVED_RESTORE_CHECK_ENV,
-  SAVED_RESTORE_FRESH_ARGS_ENV,
-  SAVED_RESTORE_ENTRY_ENV,
-  SAVED_RESTORE_ROOT_KEYS,
-  SAVED_RESTORE_SCRIPT_ENV,
-  annotateSavedRestore,
+  getSavedRestoreActionFiles,
   POSIX_SAVED_RESTORE_CAPTURE,
   POSIX_SAVED_RESTORE_INSTALL,
-  renderSavedRestoreStartupCommand
+  SAVED_RESTORE_ACTION_ENV,
+  SAVED_RESTORE_CHECK_ENV,
+  SAVED_RESTORE_ORIGINAL_ENV,
+  SAVED_RESTORE_ROOT_KEYS,
+  SAVED_RESTORE_SCRIPT_ENV
 } from '../../../../shared/saved-restore-dispatch'
 import { encodeClaudeProjectPath } from '../../../ai-vault/claude-project-dir-encoding'
 import { stripInheritedOrcaCodexHomeOverride } from '../host-env/codex-home'
@@ -49,17 +48,33 @@ const ENTRY = '0123456789abcdef'
 const TOKEN = '0123456789abcdef0123456789abcdef'
 
 /** The root bash shell's order: capture, the user's profile, Orca's functions and installer, then
- *  the generated line for `command`. */
+ *  the startup action its first prompt runs. Only a bare agent word is armed, as main arms it; a
+ *  path runs as an ordinary command. */
 function rootShell(root: string, command: string, profile = ''): string[] {
+  const [agent = '', ...resumeArgs] = command.split(' ').map((word) => word.replace(/^'|'$/g, ''))
+  const armed = agent === 'claude' || agent === 'codex'
   writeFileSync(join(root, 'restore.sh'), getPosixSavedRestoreScript())
+  const files = getSavedRestoreActionFiles({
+    entry: ENTRY,
+    token: TOKEN,
+    agent,
+    resumeArgs,
+    freshArgs: []
+  })
+  writeFileSync(join(root, 'action.sh'), files.sh)
   return [
-    `${SAVED_RESTORE_ENTRY_ENV}=${ENTRY}`,
-    `${SAVED_RESTORE_SCRIPT_ENV}=${join(root, 'restore')}`,
+    ...(armed
+      ? [
+          `${SAVED_RESTORE_ACTION_ENV}=${join(root, 'action')}`,
+          `${SAVED_RESTORE_SCRIPT_ENV}=${join(root, 'restore')}`,
+          `${SAVED_RESTORE_ORIGINAL_ENV}=${command}`
+        ]
+      : []),
     BASH,
     '--norc',
     '--noprofile',
     '-c',
-    `${POSIX_SAVED_RESTORE_CAPTURE}\n${profile}\n${getPosixCodexShellLaunchPreflight()}${getPosixClaudeShellFunction()}${POSIX_SAVED_RESTORE_INSTALL}\n${renderSavedRestoreStartupCommand(annotateSavedRestore(command, ENTRY, TOKEN), BASH)}`
+    `${POSIX_SAVED_RESTORE_CAPTURE}\n${profile}\n${getPosixCodexShellLaunchPreflight()}${getPosixClaudeShellFunction()}${POSIX_SAVED_RESTORE_INSTALL}\n${armed ? '__orca_sr_prompt' : command}`
   ]
 }
 const roots: string[] = []
@@ -115,14 +130,14 @@ function claudeFixture() {
         `PATH=${bin}:/usr/bin:/bin`,
         `ORCA_CLAUDE_PROFILE_POINTER=${pointer}`,
         `${SAVED_RESTORE_CHECK_ENV}=${gate.path}`,
-        `${SAVED_RESTORE_FRESH_ARGS_ENV}=`,
         ...env,
         ...rootShell(root, command, '[ -f "$HOME/.bash_profile" ] && . "$HOME/.bash_profile"')
       ],
       { encoding: 'utf8', cwd }
     )
     expect(result.stderr).toBe('')
-    const home = result.stdout || join(root, '.claude')
+    // The pane shows the plain command first; the agent prints the folder it read last.
+    const home = result.stdout.split('\n').at(-1) || join(root, '.claude')
     for (const store of [a, b, join(root, '.claude')]) {
       mkdirSync(join(store, 'projects', encodeClaudeProjectPath(cwd)), { recursive: true })
     }
@@ -216,7 +231,6 @@ describe('the Codex store a non-daemon restore checks against the one its child 
         `HOME=${root}`,
         `PATH=${bin}:/usr/bin:/bin`,
         `${SAVED_RESTORE_CHECK_ENV}=${gate.path}`,
-        `${SAVED_RESTORE_FRESH_ARGS_ENV}=`,
         ...Object.entries(childEnv).map(([key, value]) => `${key}=${value}`),
         ...rootShell(root, `codex 'resume' '${CODEX_ID}'`)
       ],

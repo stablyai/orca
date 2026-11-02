@@ -131,6 +131,8 @@ ${BASH_PROMPT_COMMAND_COMPOSITION_BLOCK}
 __orca_prepend_prompt_command "__orca_osc133_precmd"
 __orca_append_prompt_command '__orca_in_debug_capture=1; __orca_prompt_had_functrace=""; if [[ -o functrace ]]; then __orca_prompt_had_functrace=1; set +T; fi; __orca_outer_debug_trap_spec="$(trap -p DEBUG)"; [[ -z "$__orca_prompt_had_functrace" ]] || set -T; unset __orca_prompt_had_functrace __orca_in_debug_capture'
 __orca_append_prompt_command "__orca_osc133_epilogue"
+# A root that owns a saved restore's start runs it once, after its first prompt is ready.
+[ -n "\${__orca_sr_action:-}" ] && __orca_append_prompt_command "__orca_sr_prompt"
 __orca_had_functrace=""
 [[ -o functrace ]] && __orca_had_functrace=1
 set +T

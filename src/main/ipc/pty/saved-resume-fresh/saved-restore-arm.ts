@@ -7,14 +7,12 @@ import {
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   SAVED_RESTORE_BUDGET_ENV,
+  SAVED_RESTORE_ACTION_ENV,
   SAVED_RESTORE_CHECK_ENV,
-  SAVED_RESTORE_ENTRY_ENV,
-  SAVED_RESTORE_FRESH_ARGS_ENV,
-  SAVED_RESTORE_SCRIPT_ENV,
-  annotateSavedRestore
+  SAVED_RESTORE_ORIGINAL_ENV,
+  SAVED_RESTORE_SCRIPT_ENV
 } from '../../../../shared/saved-restore-dispatch'
 import {
-  quoteStartupArg,
   tokenizeStartupCommand,
   type AgentStartupShell
 } from '../../../../shared/tui-agent-startup-shell'
@@ -28,7 +26,7 @@ import {
   type SavedResumeLaunchFacts
 } from './saved-resume-fresh-launch'
 import { mintSavedRestoreReceipt } from './saved-restore-receipt'
-import { ensureSavedRestoreScripts } from './saved-restore-script-files'
+import { ensureSavedRestoreScripts, writeSavedRestoreAction } from './saved-restore-script-files'
 
 // Agents whose store is chosen by env inside the pane: their own shell function checks it there.
 const IN_PANE_AGENTS = new Set(['codex', 'claude', 'opencode', 'opencode2'])
@@ -54,12 +52,6 @@ function splitAgentCommand(command: string, shell: AgentStartupShell): SplitComm
   }
   const agent = parsed.tokens[index]
   return agent ? { lead, agent, args: parsed.tokens.slice(index + 1) } : null
-}
-
-function freshArgsValue(args: string[], shell: AgentStartupShell): string {
-  return shell === 'powershell'
-    ? JSON.stringify(args)
-    : args.map((arg) => quoteStartupArg(arg, shell)).join(' ')
 }
 
 function orcaCliLauncher(): string | null {
@@ -99,6 +91,8 @@ export async function armSavedRestoreCheck(
     !providerSession ||
     !resume ||
     resume.includes('\n') ||
+    // Only a destination whose shells can own the start gets one; any other gets the plain resume.
+    ctx.provider.supportsSavedRestorePrivateStartup?.() !== true ||
     // The check proves its pane from its own env, so the pane must have one to prove.
     !env.ORCA_PANE_KEY ||
     args.connectionId ||
@@ -138,8 +132,19 @@ export async function armSavedRestoreCheck(
   }
   const entry = randomBytes(8).toString('hex')
   const token = randomBytes(16).toString('hex')
+  const action = writeSavedRestoreAction({
+    entry,
+    token,
+    agent,
+    resumeArgs: resumeWords.args,
+    freshArgs: freshWords.args
+  })
+  if (!action) {
+    return
+  }
   mintSavedRestoreReceipt(token, {
     entry,
+    action,
     paneKey,
     paneEnvKey: env.ORCA_PANE_KEY,
     launchEnvToken: env.ORCA_AGENT_LAUNCH_TOKEN ?? null,
@@ -151,14 +156,13 @@ export async function armSavedRestoreCheck(
     settings: ctx.deps.getSettings?.()
   })
   ctx.savedRestoreProof = token
+  // The command stays the plain resume: it's what the pane shows, records and falls back to.
   ctx.spawnOptions.env = {
     ...env,
     [SAVED_RESTORE_CHECK_ENV]: launcher,
-    [SAVED_RESTORE_FRESH_ARGS_ENV]: freshArgsValue(freshWords.args, fresh.shell),
     [SAVED_RESTORE_BUDGET_ENV]: String(SAVED_RESTORE_CHECK_BUDGET_MS),
-    [SAVED_RESTORE_ENTRY_ENV]: entry,
-    [SAVED_RESTORE_SCRIPT_ENV]: script
+    [SAVED_RESTORE_ACTION_ENV]: action,
+    [SAVED_RESTORE_SCRIPT_ENV]: script,
+    [SAVED_RESTORE_ORIGINAL_ENV]: resume
   }
-  // The PTY host renders this into the receiving shell's dispatch, or drops it.
-  ctx.spawnOptions.command = annotateSavedRestore(resume, entry, token)
 }

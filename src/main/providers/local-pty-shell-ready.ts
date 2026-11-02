@@ -1,15 +1,10 @@
-import {
-  FISH_SAVED_RESTORE_INSTALL,
-  renderSavedRestoreStartupCommand
-} from '../../shared/saved-restore-dispatch'
 import { basename, win32 as pathWin32 } from 'node:path'
 import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
-import { getFishCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
-import { getFishClaudeShellFunction } from '../../shared/claude-shell-function'
+import { getFishAgentInit } from '../saved-restore-shell-launch'
 import { getFishXdgDataDirsLaunchEnv } from '../fish-xdg-data-dirs-handoff'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-command'
 import { getFishShellReadyInitCommand } from '../shell-templates'
@@ -37,6 +32,8 @@ export type ShellReadyLaunchConfig = {
   args: string[] | null
   env: Record<string, string>
   supportsReadyMarker: boolean
+  /** The root shell runs this launch's saved-restore startup itself; nothing types the command. */
+  ownsSavedRestore?: true
 }
 
 const UNWRAPPED: ShellReadyLaunchConfig = {
@@ -64,9 +61,15 @@ export function getShellLaunchConfig(
   fishLaunch?: {
     inheritedXdgDataDirs: string | undefined
     shellArgs?: readonly string[]
-  }
+  },
+  savedRestore = false
 ): ShellReadyLaunchConfig {
   const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
+  // A wrapped root that owns a saved restore's start takes no typed or env-delivered command.
+  const owned = savedRestore ? ({ ownsSavedRestore: true } as const) : {}
+  if (savedRestore) {
+    startupCommand = undefined
+  }
   const wrapperFeatures =
     startupCommand !== undefined && !features.includes('startup')
       ? [...features, 'startup' as const]
@@ -87,15 +90,11 @@ export function getShellLaunchConfig(
         ZDOTDIR: `${getShellReadyWrapperRoot()}/zsh`,
         [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(wrapperFeatures),
         ...(startupCommand !== undefined
-          ? {
-              [POSIX_SHELL_STARTUP_COMMAND_ENV]: renderSavedRestoreStartupCommand(
-                startupCommand,
-                shellPath
-              )
-            }
+          ? { [POSIX_SHELL_STARTUP_COMMAND_ENV]: startupCommand }
           : {})
       },
-      supportsReadyMarker: features.includes('ready')
+      supportsReadyMarker: features.includes('ready'),
+      ...owned
     }
   }
 
@@ -113,15 +112,11 @@ export function getShellLaunchConfig(
       env: {
         [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(wrapperFeatures),
         ...(startupCommand !== undefined
-          ? {
-              [POSIX_SHELL_STARTUP_COMMAND_ENV]: renderSavedRestoreStartupCommand(
-                startupCommand,
-                shellPath
-              )
-            }
+          ? { [POSIX_SHELL_STARTUP_COMMAND_ENV]: startupCommand }
           : {})
       },
-      supportsReadyMarker: features.includes('ready')
+      supportsReadyMarker: features.includes('ready'),
+      ...owned
     }
   }
 
@@ -140,7 +135,10 @@ export function getShellLaunchConfig(
   }
 
   // Ready/startup fish needs -C initialization; plain fish uses only the env handoff below.
-  if (shellName === 'fish' && (features.includes('ready') || startupCommand !== undefined)) {
+  if (
+    shellName === 'fish' &&
+    (features.includes('ready') || startupCommand !== undefined || savedRestore)
+  ) {
     return {
       args: [
         '-l',
@@ -148,19 +146,14 @@ export function getShellLaunchConfig(
         `${getFishShellReadyInitCommand(
           SHELL_READY_MARKER_ESCAPED,
           features.includes('ready'),
-          startupCommand !== undefined
-        )}\n${getFishCodexShellLaunchPreflight() + getFishClaudeShellFunction()}\n${FISH_SAVED_RESTORE_INSTALL}`
+          startupCommand !== undefined,
+          savedRestore
+        )}\n${getFishAgentInit(savedRestore)}`
       ],
       env:
-        startupCommand !== undefined
-          ? {
-              [POSIX_SHELL_STARTUP_COMMAND_ENV]: renderSavedRestoreStartupCommand(
-                startupCommand,
-                shellPath
-              )
-            }
-          : {},
-      supportsReadyMarker: features.includes('ready')
+        startupCommand !== undefined ? { [POSIX_SHELL_STARTUP_COMMAND_ENV]: startupCommand } : {},
+      supportsReadyMarker: features.includes('ready'),
+      ...owned
     }
   }
 

@@ -163,7 +163,13 @@ ${
     ? `  # The permanent hook was added during this sweep; run it now so the first prompt gets its mark.
   __orca_has_feature markers && __orca_osc133_precmd\n`
     : ''
-}  builtin unset _orca_shell_features _orca_histfile
+}  # A root that owns a saved restore's start runs it once, marking readiness first.
+  if (( $+functions[__orca_sr_prompt] )); then
+    __orca_has_feature ready && __orca_sr_ready=1
+    __orca_emit_ready_marker=""
+    __orca_sr_prompt
+  fi
+  builtin unset _orca_shell_features _orca_histfile
 ${ZSH_DEFERRED_LINE_INIT_CLEANUP_BLOCK}
   builtin unfunction __orca_deferred_init __orca_has_feature __orca_arm_deferred_line_init
 }`

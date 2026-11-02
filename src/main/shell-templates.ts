@@ -70,7 +70,7 @@ export function getZshShellReadyMarkerRegistrationBlock(
     ? `  if [[ "\${__orca_emit_ready_marker-1}" == 1 ]]; then
     printf "${escapedMarker}"
   fi`
-    : `  printf "${escapedMarker}"`
+    : `  [[ "\${__orca_emit_ready_marker-1}" != 1 ]] || printf "${escapedMarker}"`
   const startupCommandBlock = supportsStartupCommand
     ? `
   if (( \${+${POSIX_SHELL_STARTUP_COMMAND_ENV}} )); then
@@ -102,7 +102,9 @@ zle -N zle-line-init __orca_prompt_mark`.replace(/\n\n}\n$/, '\n}\n')
 export function getFishShellReadyInitCommand(
   escapedMarker: string,
   emitReadyMarker = true,
-  supportsStartupCommand = false
+  supportsStartupCommand = false,
+  // The root owns a saved restore's start: run it once the shell is ready.
+  savedRestore = false
 ): string {
   const readyMarkerBlock = emitReadyMarker ? `  builtin printf "${escapedMarker}"\n` : ''
   const startupCommandBlock = supportsStartupCommand
@@ -116,5 +118,5 @@ export function getFishShellReadyInitCommand(
     : ''
   return `function __orca_shell_ready_marker --on-event fish_prompt
 ${readyMarkerBlock}  functions -e __orca_shell_ready_marker
-${startupCommandBlock}end`
+${savedRestore ? '  __orca_sr_prompt\n  return $status\n' : startupCommandBlock}end`
 }

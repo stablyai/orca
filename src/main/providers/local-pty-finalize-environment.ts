@@ -1,4 +1,5 @@
 import { win32 as pathWin32 } from 'node:path'
+import { hasSavedRestoreLaunch, stripSavedRestoreLaunch } from '../../shared/saved-restore-dispatch'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import { expandWindowsPathEnvironmentVariables } from '../../shared/windows-environment-expansion'
 import { dropInheritedOrcaFishHistory } from '../fish-history-session'
@@ -104,6 +105,8 @@ export function finalizeLocalPtySpawnEnvironment(args: {
       inheritedXdgDataDirs: env.XDG_DATA_DIRS,
       shellArgs: plan.shellArgs
     }
+    // A root that owns a saved restore's start runs it itself; any other shell gets the plain command.
+    const savedRestore = hasSavedRestoreLaunch(env)
     plan.getFallbackShellReadyConfig = (shell) => {
       const wrapperStartupCommand =
         codexStartupCommand !== undefined && supportsPosixShellStartupCommand(shell)
@@ -123,10 +126,14 @@ export function finalizeLocalPtySpawnEnvironment(args: {
           emitsStartupIdentity: waitsForShellReady
         }),
         wrapperStartupCommand,
-        fishLaunch
+        fishLaunch,
+        savedRestore
       )
     }
     const shellLaunch = plan.getFallbackShellReadyConfig(plan.shellPath)
+    if (!shellLaunch.ownsSavedRestore) {
+      stripSavedRestoreLaunch(env)
+    }
     plan.primaryPreLaunchEnv = Object.fromEntries(
       Object.keys(shellLaunch.env).map((key) => [key, env[key]])
     )

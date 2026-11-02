@@ -1,4 +1,3 @@
-import { FISH_SAVED_RESTORE_INSTALL } from '../../shared/saved-restore-dispatch'
 import { tmpdir } from 'node:os'
 import { basename, join, win32 as pathWin32 } from 'node:path'
 import { statSync } from 'node:fs'
@@ -7,8 +6,7 @@ import {
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
-import { getFishCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
-import { getFishClaudeShellFunction } from '../../shared/claude-shell-function'
+import { getFishAgentInit } from '../saved-restore-shell-launch'
 import { getFishXdgDataDirsLaunchEnv } from '../fish-xdg-data-dirs-handoff'
 import { getFishShellReadyInitCommand } from '../shell-templates'
 import {
@@ -109,6 +107,8 @@ export type ShellLaunchConfig = {
   args: string[] | null
   env: Record<string, string>
   supportsReadyMarker: boolean
+  /** The root shell runs this launch's saved-restore startup itself; nothing types the command. */
+  ownsSavedRestore?: true
 }
 
 const UNWRAPPED: ShellLaunchConfig = {
@@ -124,9 +124,12 @@ export function getShellLaunchConfig(
     hasStartupCommand?: boolean
     inheritedXdgDataDirs: string | undefined
     shellArgs?: readonly string[]
+    savedRestore?: boolean
   }
 ): ShellLaunchConfig {
   const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
+  const savedRestore = options?.savedRestore === true
+  const owned = savedRestore ? ({ ownsSavedRestore: true } as const) : {}
 
   if (shellName === 'zsh') {
     if (features.length === 0) {
@@ -143,7 +146,8 @@ export function getShellLaunchConfig(
         ZDOTDIR: join(getShellReadyWrapperRoot(), 'zsh'),
         [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(features)
       },
-      supportsReadyMarker: features.includes('ready')
+      supportsReadyMarker: features.includes('ready'),
+      ...owned
     }
   }
 
@@ -156,7 +160,8 @@ export function getShellLaunchConfig(
       env: {
         [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(features)
       },
-      supportsReadyMarker: features.includes('ready')
+      supportsReadyMarker: features.includes('ready'),
+      ...owned
     }
   }
 
@@ -180,10 +185,11 @@ export function getShellLaunchConfig(
       args: [
         '-l',
         '-C',
-        `${getFishShellReadyInitCommand(SHELL_READY_MARKER, features.includes('ready'))}\n${getFishCodexShellLaunchPreflight() + getFishClaudeShellFunction()}\n${FISH_SAVED_RESTORE_INSTALL}`
+        `${getFishShellReadyInitCommand(SHELL_READY_MARKER, features.includes('ready'), false, savedRestore)}\n${getFishAgentInit(savedRestore)}`
       ],
       env: {},
-      supportsReadyMarker: features.includes('ready')
+      supportsReadyMarker: features.includes('ready'),
+      ...owned
     }
   }
 

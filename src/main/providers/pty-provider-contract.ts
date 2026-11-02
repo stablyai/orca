@@ -147,6 +147,9 @@ export type IPtyProvider = {
   /** A routing container's verified owner of this exact PTY incarnation, or null when it can't
    *  prove one; never a guess from where new spawns go. */
   resolveAgentSessionAuthority?: (id: string, incarnationId: string) => Promise<IPtyProvider | null>
+  /** Whether a new launch's shell can own a saved restore's start. A daemon connection rechecks
+   *  its own daemon's hello before sending, so routers can answer for their destinations. */
+  supportsSavedRestorePrivateStartup?: () => boolean
   /** Whether this PTY's owner can remove one conversation claim while the PTY keeps running. */
   supportsAgentSessionClaimRelease?: (id: string) => boolean
   releaseAgentSessionClaim?: (

@@ -1,4 +1,10 @@
 import { win32 as pathWin32 } from 'node:path'
+import {
+  hasSavedRestoreLaunch,
+  savedRestoreWindowsStartup,
+  settleSavedRestoreWindowsLaunch,
+  stripSavedRestoreLaunch
+} from '../../../shared/saved-restore-dispatch'
 import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../../git-bash'
 import { isPwshAvailable } from '../../pwsh'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../../pty/codex-home-wsl-env'
@@ -105,12 +111,14 @@ export function createPtyShellLaunchPlan(
     ) {
       env[ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV] = '"'
     }
+    // A saved restore's start is owned by PowerShell's startup slot, or delivered plain.
+    const startupCommand = savedRestoreWindowsStartup(shellPath, opts.command, env)
     windowsFallbackAttempts = buildWindowsPowerShellSpawnAttempts({
       shellPath,
       cwd: spawnCwd,
       defaultCwd: resolveSafePtyDefaultCwd(),
       wslContext: resolvedWslContext,
-      startupCommand: opts.command
+      startupCommand
     })
     const primaryAttempt = windowsFallbackAttempts[0]
     if (primaryAttempt) {
@@ -125,7 +133,7 @@ export function createPtyShellLaunchPlan(
         spawnCwd,
         resolveSafePtyDefaultCwd(),
         resolvedWslContext,
-        opts.command,
+        startupCommand,
         env.ORCA_CODEX_LAUNCH_PREFLIGHT
       )
       shellArgs = resolved.shellArgs
@@ -133,6 +141,7 @@ export function createPtyShellLaunchPlan(
       validationCwd = resolved.validationCwd
       startupCommandDeliveredInShellArgs = resolved.startupCommandDeliveredInShellArgs === true
     }
+    settleSavedRestoreWindowsLaunch(env, shellPath, startupCommandDeliveredInShellArgs)
     if (isWindowsGitBashShellPath(shellPath)) {
       env.CHERE_INVOKING ??= '1'
     }
@@ -210,9 +219,16 @@ export function createPtyShellLaunchPlan(
       {
         hasStartupCommand: Boolean(opts.command),
         inheritedXdgDataDirs: env.XDG_DATA_DIRS,
-        shellArgs: userShellArgs
+        shellArgs: userShellArgs,
+        savedRestore: hasSavedRestoreLaunch(env)
       }
     )
+    // A root that owns a saved restore's start runs it itself; any other shell gets it typed plain.
+    if (shellLaunch.ownsSavedRestore) {
+      startupCommandDeliveredInShellArgs = true
+    } else {
+      stripSavedRestoreLaunch(env)
+    }
     Object.assign(env, shellLaunch.env)
     shellArgs = userShellArgs ?? shellLaunch.args ?? ['-l']
   }

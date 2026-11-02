@@ -1,19 +1,26 @@
 // A synthesized saved restore of an env-owned agent store asks Orca, from inside the agent's own
 // shell invocation, whether its conversation still exists in the store that invocation reads.
-// Authority is a private one-shot function the root shell installs at startup, outside any
-// recalled command text; the generated line only calls it if it still exists.
-import { quoteStartupArg, tokenizeStartupCommand } from './tui-agent-startup-shell'
+// The root shell owns that start: it shows and records only the plain resume command, and runs a
+// private one-shot startup action that no typed or recalled line can reach.
+import { quoteStartupArg } from './tui-agent-startup-shell'
 
-/** The pane's bundled CLI; inert without the private entry. */
+/** The pane's bundled CLI; inert without the private startup action. */
 export const SAVED_RESTORE_CHECK_ENV = 'ORCA_SAVED_RESTORE_CHECK'
-/** Main's prebuilt fresh argument tail: portable-quoted for POSIX/fish, a JSON array for PowerShell. */
-export const SAVED_RESTORE_FRESH_ARGS_ENV = 'ORCA_SAVED_RESTORE_FRESH_ARGS'
 /** The check's whole budget in milliseconds, counted from the CLI's own start. */
 export const SAVED_RESTORE_BUDGET_ENV = 'ORCA_SAVED_RESTORE_BUDGET_MS'
-/** The root shell's installer inputs: the entry name and the restore script path (no extension).
- *  Orca's wrapper reads and removes both before user startup files run. */
-export const SAVED_RESTORE_ENTRY_ENV = 'ORCA_SAVED_RESTORE_ENTRY'
+/** The root shell's startup inputs: this launch's action data and the restore definitions (paths
+ *  without extension), and the plain command it shows and falls back to. Orca's wrapper reads and
+ *  removes them before user startup files run. */
+export const SAVED_RESTORE_ACTION_ENV = 'ORCA_SAVED_RESTORE_ACTION'
 export const SAVED_RESTORE_SCRIPT_ENV = 'ORCA_SAVED_RESTORE_SCRIPT'
+export const SAVED_RESTORE_ORIGINAL_ENV = 'ORCA_SAVED_RESTORE_ORIGINAL'
+const LAUNCH_ENV_KEYS = [
+  SAVED_RESTORE_ACTION_ENV,
+  SAVED_RESTORE_SCRIPT_ENV,
+  SAVED_RESTORE_ORIGINAL_ENV,
+  SAVED_RESTORE_CHECK_ENV,
+  SAVED_RESTORE_BUDGET_ENV
+]
 export const SAVED_RESTORE_FRESH_EXIT_CODE = 75
 /** The store selectors the check reports from the invocation's own env. */
 export const SAVED_RESTORE_ROOT_KEYS = [
@@ -25,84 +32,144 @@ export const SAVED_RESTORE_ROOT_KEYS = [
   'OPENCODE_DB'
 ] as const
 export const SAVED_RESTORE_CHECK_COMMAND = ['agent', 'saved-restore-check'] as const
+const READY_MARKER = '\\033]777;orca-shell-ready\\007'
 
-// Main appends this to the original command; the PTY host that knows the receiving shell turns
-// it into that shell's dispatch, or drops it. Only Orca's arm writes it.
-const ANNOTATION = /^([^\n]*) # __orca_saved_restore:([0-9a-f]{16}):([0-9a-f]{32})$/
-
-export function annotateSavedRestore(command: string, entry: string, token: string): string {
-  return `${command} # __orca_saved_restore:${entry}:${token}`
+export function hasSavedRestoreLaunch(
+  env: Record<string, string | undefined> | undefined
+): boolean {
+  return Boolean(env?.[SAVED_RESTORE_ACTION_ENV])
 }
 
-function readAnnotation(command: string) {
-  const match = ANNOTATION.exec(command)
-  return match ? { original: match[1], entry: match[2], token: match[3] } : null
-}
-
-/** The command an annotated line runs, for readers that recognize agents by command. */
-export function withoutSavedRestoreAnnotation(command: string): string {
-  return readAnnotation(command)?.original ?? command
-}
-
-function shellName(shellPath: string | undefined): string {
-  return (shellPath?.split(/[\\/]/).pop() ?? '')
-    .replace(/^-/, '')
-    .replace(/\.exe$/i, '')
-    .toLowerCase()
-}
-
-/** The receiving shell's line: the private entry if this root shell still has it, else the
- *  original command. Shells without an Orca installer always get the original. */
-export function renderSavedRestoreStartupCommand(
-  command: string,
-  shellPath: string | undefined
-): string {
-  const annotated = readAnnotation(command)
-  if (!annotated) {
-    return command
+/** A destination that can't own the startup gets the plain resume and no startup inputs. */
+export function stripSavedRestoreLaunch(env: Record<string, string | undefined> | undefined): void {
+  for (const key of env && hasSavedRestoreLaunch(env) ? LAUNCH_ENV_KEYS : []) {
+    delete env![key]
   }
-  const { original, entry, token } = annotated
-  const shell = shellName(shellPath)
-  const powershell = shell === 'powershell' || shell === 'pwsh'
-  const callable = powershell && original.startsWith('& ') ? original.slice(2) : original
-  const words = tokenizeStartupCommand(callable, powershell ? 'powershell' : 'posix')
-  if (!words.ok || words.tokens.length === 0) {
-    return original
-  }
-  const quote = (value: string) => quoteStartupArg(value, powershell ? 'powershell' : 'posix')
-  const call = `__orca_sr_${entry} ${quote(token)} ${quote(original)} ${words.tokens.map(quote).join(' ')}`
-  if (shell === 'bash' || shell === 'zsh') {
-    return `if typeset -f __orca_sr_${entry} >/dev/null 2>&1; then ${call}; else ${original}; fi`
-  }
-  if (shell === 'fish') {
-    return `if functions -q __orca_sr_${entry}; ${call}; else; ${original}; end`
-  }
-  return powershell
-    ? `if (Test-Path function:__orca_sr_${entry}) { ${call} } else { ${original} }`
-    : original
 }
 
-/** bash/zsh, before user startup files: take the installer inputs into unexported shell state. */
-export const POSIX_SAVED_RESTORE_CAPTURE = `__orca_sr_entry="\${${SAVED_RESTORE_ENTRY_ENV}:-}" __orca_sr_script="\${${SAVED_RESTORE_SCRIPT_ENV}:-}"
-builtin unset ${SAVED_RESTORE_ENTRY_ENV} ${SAVED_RESTORE_SCRIPT_ENV}`
+export function withoutSavedRestoreLaunch<Env extends Record<string, string> | undefined>(
+  env: Env
+): Env {
+  if (!env || !hasSavedRestoreLaunch(env)) {
+    return env
+  }
+  const rest = { ...env }
+  stripSavedRestoreLaunch(rest)
+  return rest
+}
 
-/** bash/zsh, after Orca's agent functions: an armed restore loads its script, which installs the
- *  entry once. Nothing runs for any other start. */
-export const POSIX_SAVED_RESTORE_INSTALL = `if [ -n "\${__orca_sr_entry:-}" ] && [ -r "\${__orca_sr_script:-}.sh" ]; then
-  . "\${__orca_sr_script}.sh"
-fi
-builtin unset __orca_sr_entry __orca_sr_script`
+const isPowerShell = (shellPath: string) => /(^|[\\/])(powershell|pwsh)(\.exe)?$/i.test(shellPath)
 
-/** fish -C initialization (root shell argv only), after Orca's agent functions. */
-export const FISH_SAVED_RESTORE_INSTALL = `if set -q ${SAVED_RESTORE_ENTRY_ENV}
-  set -g __orca_sr_entry $${SAVED_RESTORE_ENTRY_ENV}
-  set -l __orca_sr_script $${SAVED_RESTORE_SCRIPT_ENV}
-  set -e ${SAVED_RESTORE_ENTRY_ENV}
-  set -e ${SAVED_RESTORE_SCRIPT_ENV}
-  test -r "$__orca_sr_script.fish"; and source "$__orca_sr_script.fish"
-  set -e __orca_sr_entry
+/** Windows: only PowerShell carrying the startup slot in its encoded command owns the start. */
+export function savedRestoreWindowsStartup(
+  shellPath: string,
+  command: string | undefined,
+  env: Record<string, string | undefined> | undefined
+): string | undefined {
+  return command !== undefined && hasSavedRestoreLaunch(env) && isPowerShell(shellPath)
+    ? renderPowerShellSavedRestoreStartup(command)
+    : command
+}
+
+export function settleSavedRestoreWindowsLaunch(
+  env: Record<string, string | undefined> | undefined,
+  shellPath: string,
+  startupInShellArgs: boolean
+): void {
+  if (!isPowerShell(shellPath) || !startupInShellArgs) {
+    stripSavedRestoreLaunch(env)
+  }
+}
+
+/** This launch's private data for each shell family; literal argument lists, never parsed text. */
+export function getSavedRestoreActionFiles(data: {
+  entry: string
+  token: string
+  agent: string
+  resumeArgs: readonly string[]
+  freshArgs: readonly string[]
+}): { sh: string; fish: string; ps1: string } {
+  const unix = (value: string) => quoteStartupArg(value, 'posix')
+  const ps = (value: string) => quoteStartupArg(value, 'powershell')
+  const list = (values: readonly string[], quote: (value: string) => string) =>
+    values.map(quote).join(' ')
+  const psList = (values: readonly string[]) => `@(${values.map(ps).join(', ')})`
+  return {
+    sh: `__orca_sr_entry=${data.entry} __orca_sr_token=${data.token} __orca_sr_agent=${data.agent}
+__orca_sr_resume=(${list(data.resumeArgs, unix)})
+__orca_sr_fresh=(${list(data.freshArgs, unix)})
+`,
+    fish: `set -g __orca_sr_entry ${data.entry}
+set -g __orca_sr_token ${data.token}
+set -g __orca_sr_agent ${data.agent}
+set -g __orca_sr_resume ${list(data.resumeArgs, unix)}
+set -g __orca_sr_fresh ${list(data.freshArgs, unix)}
+`,
+    ps1: `$global:__OrcaSRData = @{ entry = '${data.entry}'; token = '${data.token}'; agent = '${data.agent}'; resume = ${psList(data.resumeArgs)}; fresh = ${psList(data.freshArgs)} }
+`
+  }
+}
+
+/** bash/zsh, before user startup files: take the startup inputs into unexported shell state. */
+export const POSIX_SAVED_RESTORE_CAPTURE = `__orca_sr_action="\${${SAVED_RESTORE_ACTION_ENV}:-}" __orca_sr_script="\${${SAVED_RESTORE_SCRIPT_ENV}:-}" __orca_sr_original="\${${SAVED_RESTORE_ORIGINAL_ENV}:-}"
+builtin unset ${SAVED_RESTORE_ACTION_ENV} ${SAVED_RESTORE_SCRIPT_ENV} ${SAVED_RESTORE_ORIGINAL_ENV}`
+
+/** bash/zsh, after Orca's agent functions: an armed root defines its one-shot startup action.
+ *  It shows and records only the plain command, and runs it as typed if anything is missing. */
+export const POSIX_SAVED_RESTORE_INSTALL = `if [ -n "\${__orca_sr_action:-}" ]; then
+  __orca_sr_ready="\${__orca_ready_marker:-}"
+  # One shot by consumption: the first call takes the inputs, so any later call does nothing.
+  __orca_sr_prompt() {
+    [ -n "\${__orca_sr_action:-}" ] || return 0
+    local __orca_sr_line="$__orca_sr_original" __orca_sr_act="$__orca_sr_action" __orca_sr_defs="$__orca_sr_script"
+    [ -z "\${__orca_sr_ready:-}" ] || printf '${READY_MARKER}'
+    builtin unset __orca_sr_action __orca_sr_script __orca_sr_original __orca_sr_ready
+    printf '%s\\n' "$__orca_sr_line"
+    builtin history -s "$__orca_sr_line" 2>/dev/null || builtin print -s -- "$__orca_sr_line" 2>/dev/null
+    if [ -r "$__orca_sr_defs.sh" ] && [ -r "$__orca_sr_act.sh" ] && . "$__orca_sr_defs.sh" && . "$__orca_sr_act.sh"; then
+      __orca_sr_run "$__orca_sr_line"
+    else
+      eval "$__orca_sr_line"
+    fi
+  }
+else
+  builtin unset __orca_sr_action __orca_sr_script __orca_sr_original
+fi`
+
+/** fish -C (root argv only), before Orca's agent functions so their definitions are recorded. */
+export const FISH_SAVED_RESTORE_CAPTURE = `set -g __orca_sr_action $${SAVED_RESTORE_ACTION_ENV}
+set -g __orca_sr_script $${SAVED_RESTORE_SCRIPT_ENV}
+set -g __orca_sr_original $${SAVED_RESTORE_ORIGINAL_ENV}
+set -e ${SAVED_RESTORE_ACTION_ENV}
+set -e ${SAVED_RESTORE_SCRIPT_ENV}
+set -e ${SAVED_RESTORE_ORIGINAL_ENV}`
+
+/** fish -C, after Orca's agent functions. fish 3.0 has no supported way to add a history entry,
+ *  so the plain command is shown once and not recorded. */
+export const FISH_SAVED_RESTORE_INSTALL = `function __orca_sr_prompt
+  functions -e __orca_sr_prompt
+  test -n "$__orca_sr_action"; or return 0
+  set -l line $__orca_sr_original
+  printf '%s\\n' "$line"
+  if test -r "$__orca_sr_script.fish"; and test -r "$__orca_sr_action.fish"; and source "$__orca_sr_script.fish"; and source "$__orca_sr_action.fish"
+    set -e __orca_sr_action
+    set -e __orca_sr_script
+    set -e __orca_sr_original
+    __orca_sr_run "$line"
+  else
+    set -e __orca_sr_action
+    set -e __orca_sr_script
+    set -e __orca_sr_original
+    eval $line
+  end
 end`
 
-/** PowerShell bootstrap, after Orca's agent wrappers under the FullLanguage guard. Kept to one
- *  short line: every PowerShell start carries it in its encoded command. */
-export const POWERSHELL_SAVED_RESTORE_INSTALL = `if ($env:${SAVED_RESTORE_ENTRY_ENV}) { $orcaSrEntry = $env:${SAVED_RESTORE_ENTRY_ENV}; $orcaSrScript = "$env:${SAVED_RESTORE_SCRIPT_ENV}.ps1"; Remove-Item Env:${SAVED_RESTORE_ENTRY_ENV}, Env:${SAVED_RESTORE_SCRIPT_ENV} -ea 0; try { . ([scriptblock]::Create([IO.File]::ReadAllText($orcaSrScript))) } catch {}; Remove-Variable orcaSrEntry, orcaSrScript -ea 0 }`
+/** PowerShell bootstrap, after Orca's agent wrappers: capture only. Constant size, so every
+ *  PowerShell start carries the same short line whatever the launch. */
+export const POWERSHELL_SAVED_RESTORE_INSTALL = `if ($env:${SAVED_RESTORE_ACTION_ENV}) { $global:__OrcaSR = @($env:${SAVED_RESTORE_ACTION_ENV}, $env:${SAVED_RESTORE_SCRIPT_ENV}); Remove-Item Env:${SAVED_RESTORE_ACTION_ENV}, Env:${SAVED_RESTORE_SCRIPT_ENV}, Env:${SAVED_RESTORE_ORIGINAL_ENV} -ea 0 }`
+
+/** PowerShell's startup slot for an armed launch: load the restore definitions, then run the
+ *  one-shot action, or the plain command when it isn't there. */
+export function renderPowerShellSavedRestoreStartup(original: string): string {
+  return `if ($global:__OrcaSR) { try { . ([scriptblock]::Create([IO.File]::ReadAllText("$($global:__OrcaSR[1]).ps1"))) } catch {} }; if (Get-Command __OrcaSRStart -ea 0) { __OrcaSRStart ${quoteStartupArg(original, 'powershell')} } else { ${original} }`
+}

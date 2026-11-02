@@ -64,6 +64,8 @@ export {
 
 export class LocalPtyProvider implements IPtyProvider {
   private opts: LocalPtyProviderOptions
+  // Its shells come from this build's wrappers, which own a saved restore's start.
+  supportsSavedRestorePrivateStartup = (): boolean => true
 
   constructor(opts: LocalPtyProviderOptions = {}) {
     this.opts = opts

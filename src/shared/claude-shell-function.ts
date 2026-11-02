@@ -5,7 +5,7 @@ export type ClaudeFunctionVariant = AgentFunctionVariant & {
   call: string
   fishCall: (env: string) => string
 }
-const PUBLIC_CLAUDE: ClaudeFunctionVariant = {
+export const PUBLIC_CLAUDE_VARIANT: ClaudeFunctionVariant = {
   name: 'claude',
   prologue: '',
   check: '',
@@ -41,7 +41,8 @@ export function posixClaudeFunction(v: ClaudeFunctionVariant): string {
 export function getPosixClaudeShellFunction(): string {
   return `__orca_claude_binary="$(unalias claude 2>/dev/null || :; command -v claude 2>/dev/null || :)"
 if [[ -n "\${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "\${__orca_claude_binary:-}" && -x "\${__orca_claude_binary}" ]]; then
-${posixClaudeFunction(PUBLIC_CLAUDE)}
+${posixClaudeFunction(PUBLIC_CLAUDE_VARIANT)}
+  [ -z "\${__orca_sr_action:-}" ] || __orca_sr_def_claude="$(typeset -f claude)"
 fi
 unset __orca_claude_binary
 `
@@ -75,11 +76,11 @@ export function fishClaudeFunction(v: ClaudeFunctionVariant): string {
 }
 
 /** Leading newline separates the preceding codex fragment, which has no trailing newline. */
-export function getFishClaudeShellFunction(): string {
+export function getFishClaudeShellFunction(recordForRestore = false): string {
   return `
 set -l __orca_claude_type (type -t claude 2>/dev/null)
 if test -n "$ORCA_CLAUDE_PROFILE_POINTER"; and test "$__orca_claude_type" = file
-${fishClaudeFunction(PUBLIC_CLAUDE)}
+${fishClaudeFunction(PUBLIC_CLAUDE_VARIANT)}${recordForRestore ? '\n  set -g __orca_sr_def_claude (functions claude | string join \\n)' : ''}
 end
 set -e __orca_claude_type
 `
@@ -131,7 +132,7 @@ export function getPowerShellClaudeShellFunction(): string {
   return `$orcaClaudeCommand = Get-Command claude -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($env:ORCA_CLAUDE_PROFILE_POINTER -and $orcaClaudeCommand -and
     $orcaClaudeCommand.CommandType -in @("Application", "ExternalScript")) {
-${powerShellClaudeFunction(PUBLIC_CLAUDE)}
+${powerShellClaudeFunction(PUBLIC_CLAUDE_VARIANT)}
 }
 Remove-Variable orcaClaudeCommand -ErrorAction SilentlyContinue
 `

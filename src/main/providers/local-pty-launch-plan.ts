@@ -1,4 +1,8 @@
 import { win32 as pathWin32 } from 'node:path'
+import {
+  savedRestoreWindowsStartup,
+  settleSavedRestoreWindowsLaunch
+} from '../../shared/saved-restore-dispatch'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from '../git-bash'
@@ -147,15 +151,22 @@ function createWindowsLocalPtyLaunchPlan(
           }) ?? shellFamily)
         : shellFamily
     }
+    // A saved restore's start is owned by PowerShell's startup slot, or delivered plain.
+    const startupCommand = savedRestoreWindowsStartup(shellPath, args.command, args.env)
     // Bare pwsh.exe may resolve to a failing Store alias; use absolute executable/fallback attempts.
     const windowsFallbackAttempts = buildWindowsPowerShellSpawnAttempts({
       shellPath,
       cwd,
       defaultCwd,
       wslContext: seed.launchWslContext,
-      startupCommand: args.command
+      startupCommand
     })
     const primaryAttempt = windowsFallbackAttempts[0]
+    settleSavedRestoreWindowsLaunch(
+      args.env,
+      shellPath,
+      primaryAttempt?.startupCommandDeliveredInShellArgs ?? false
+    )
     if (primaryAttempt) {
       return finalizeLocalPtyLaunchPlan(seed, {
         shellPath: primaryAttempt.shellPath,
@@ -171,7 +182,12 @@ function createWindowsLocalPtyLaunchPlan(
       cwd,
       defaultCwd,
       seed.launchWslContext,
-      args.command
+      startupCommand
+    )
+    settleSavedRestoreWindowsLaunch(
+      args.env,
+      shellPath,
+      resolved.startupCommandDeliveredInShellArgs === true
     )
     return finalizeLocalPtyLaunchPlan(seed, {
       shellPath,
