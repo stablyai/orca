@@ -31,7 +31,7 @@ const { app, BrowserWindow } = require('electron')
 const { writeFileSync } = require('node:fs')
 const { join, dirname } = require('node:path')
 if (process.platform === 'darwin') app.setActivationPolicy('accessory')
-const resultPath = join(dirname(process.argv[process.argv.length - 2]), 'result.json')
+const resultPath = join(dirname(process.argv[2]), 'result.json')
 app.whenReady().then(() => {
   const win = new BrowserWindow({ show: false, focusable: false })
   const messages = []
