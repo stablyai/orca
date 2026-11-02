@@ -1,4 +1,4 @@
-import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
+import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type { RuntimeEnvironmentSetupFailure } from '../../../shared/runtime-environment-subscription-setup'
 import { runtimeEnvironmentSetupFailure } from '../../../shared/runtime-environment-subscription-setup'
 import type {
@@ -124,27 +124,26 @@ export async function enrollWebRuntimeSubscription({
   sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean
   deviceToken: string
 }): Promise<WebRuntimeSubscriptionHandle> {
-  await waitForConnected(options?.timeoutMs, options?.signal)
+  // The outer wait keeps main's normalized abort reason; the inner signal frees the waiter early.
+  await waitForPromiseWithSignal(
+    waitForConnected(options?.timeoutMs, options?.signal),
+    options?.signal
+  )
   throwIfSignalAborted(options?.signal)
   options?.assertCurrent?.()
   const id = nextId()
   const subscription = { id, method, params, callbacks, needsReplay: false }
   subscriptions.set(id, subscription)
-  try {
-    if (
-      !sendEncrypted({
-        id,
-        deviceToken: deviceToken,
-        method,
-        params
-      })
-    ) {
-      subscriptions.delete(id)
-      throw new Error('Remote Orca runtime is not connected.')
-    }
-  } catch (error) {
+  if (
+    !sendEncrypted({
+      id,
+      deviceToken: deviceToken,
+      method,
+      params
+    })
+  ) {
     subscriptions.delete(id)
-    throw error
+    throw new Error('Remote Orca runtime is not connected.')
   }
   return {
     unsubscribe: () => {
