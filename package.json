@@ -245,7 +245,7 @@
     "proper-lockfile": "4.1.2",
     "qrcode": "^1.5.4",
     "react-i18next": "17.0.19",
-    "serve-sim": "0.1.47",
+    "serve-sim": "0.1.49-beta.139.1",
     "smol-toml": "1.9.1",
     "ssh2": "^1.17.0",
     "stream-chain": "4.2.6",

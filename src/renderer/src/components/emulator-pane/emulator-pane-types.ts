@@ -13,6 +13,7 @@ export type EmulatorStreamInfo = {
   device?: string
   displayName?: string
   streamUrl?: string
+  avccStreamUrl?: string
   url?: string
   wsUrl?: string
   state?: string

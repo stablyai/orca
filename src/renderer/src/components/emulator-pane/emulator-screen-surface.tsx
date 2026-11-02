@@ -15,6 +15,8 @@ import type {
 } from './emulator-device-frame-layout'
 
 type EmulatorScreenSurfaceProps = {
+  avccStreamUrl?: string
+  deviceId?: string
   frameLayout: DeviceFrameLayout | null
   isLive: boolean
   keyboardCaptureActive: boolean
@@ -38,6 +40,8 @@ type EmulatorScreenSurfaceProps = {
 }
 
 export function EmulatorScreenSurface({
+  avccStreamUrl,
+  deviceId,
   frameLayout,
   isLive,
   keyboardCaptureActive,
@@ -87,6 +91,8 @@ export function EmulatorScreenSurface({
     >
       {/* Use the real streamed screen; extra in-screen chrome would duplicate iOS status bars and distort bezels. */}
       <EmulatorScreenStreamContent
+        avccStreamUrl={avccStreamUrl}
+        deviceId={deviceId}
         loading={loading}
         onStreamError={onStreamError}
         onStreamSize={onStreamSize}

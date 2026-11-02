@@ -143,9 +143,22 @@ export function createEmulatorApi(): NonNullable<Partial<PreloadApi>['emulator']
   return {
     onPaneFocus: () => noopUnsubscribe,
     onAutoAttach: () => noopUnsubscribe,
+    startControlStream: () => Promise.reject(new Error('Mobile emulator is unavailable on web.')),
+    sendControlFrame: () => {},
+    stopControlStream: () => {},
+    onControlStreamStatus: () => noopUnsubscribe,
+    sendScrcpyTouch: () => {
+      throw new Error('Mobile emulator is unavailable on web.')
+    },
+    sendScrcpyKeyboard: () => Promise.reject(new Error('Mobile emulator is unavailable on web.')),
     startFrameStream: () => Promise.reject(new Error('Mobile emulator is unavailable on web.')),
     stopFrameStream: () => Promise.resolve(),
     onFrameStreamFrame: () => noopUnsubscribe,
-    onFrameStreamError: () => noopUnsubscribe
-  } as unknown as NonNullable<Partial<PreloadApi>['emulator']>
+    onFrameStreamError: () => noopUnsubscribe,
+    startVideoStream: () => Promise.reject(new Error('Mobile emulator is unavailable on web.')),
+    stopVideoStream: () => Promise.resolve(),
+    onVideoStreamMeta: () => noopUnsubscribe,
+    onVideoStreamFrame: () => noopUnsubscribe,
+    onVideoStreamError: () => noopUnsubscribe
+  }
 }
