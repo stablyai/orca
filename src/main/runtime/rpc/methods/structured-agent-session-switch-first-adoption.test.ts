@@ -1,3 +1,4 @@
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -260,3 +261,96 @@ it('refuses a WSL pane before anything is stopped', async () => {
   })
   expect(stopped).not.toHaveBeenCalled()
 })
+
+// Only a captured source the switch stopped is the switched tab (Brennan 11-01): a pane it could
+// not capture, or a History open, stopped nothing, so main's writer check still runs.
+it.each(['uncaptured', 'history', 'captured'] as const)(
+  'checks only a stopped, captured source: a %s create keeps main\u2019s writer check',
+  async (route) => {
+    const codexHome = join(rig.root, 'codex-account')
+    const transcriptPath = join(
+      codexHome,
+      'sessions',
+      '2026',
+      '10',
+      '31',
+      `rollout-${THREAD}.jsonl`
+    )
+    await mkdir(dirname(transcriptPath), { recursive: true })
+    await writeFile(
+      transcriptPath,
+      [
+        { type: 'session_meta', payload: { id: THREAD, timestamp: '2026-10-31T12:00:00Z' } },
+        { type: 'event_msg', payload: { type: 'user_message', message: 'hello' } }
+      ]
+        .map((row) => `${JSON.stringify(row)}\n`)
+        .join('')
+    )
+    const { runtime } = setupMainOwnedWorkspace({
+      runtimeDeps: {
+        prepareCodexStructuredLaunch: () => codexHome,
+        resolveCodexStructuredLaunchHome: () => codexHome
+      }
+    })
+    const incarnationId = '11111111-1111-4111-8111-111111111111'
+    runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
+    const pane = runtime.resolveTerminalPane(PANE, WORKTREE_ID)
+    const row: AgentStatusIpcPayload = {
+      paneKey: PANE,
+      worktreeId: WORKTREE_ID,
+      agentType: 'codex',
+      connectionId: null,
+      receivedAt: 1,
+      stateStartedAt: 1,
+      state: 'done',
+      prompt: '',
+      providerSession: { key: 'session_id', id: THREAD, transcriptPath }
+    }
+    vi.spyOn(runtime, 'getAgentProviderSessionRows').mockReturnValue([row])
+    vi.spyOn(runtime.agentTransitions, 'latestRow').mockReturnValue(row)
+    vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
+      supported: true
+    })
+    const writer = vi
+      .spyOn(runtime, 'assertStructuredAdoptionTerminalWritersExited')
+      .mockRejectedValue(
+        agentSessionRefusalError('agent_session_operation_invalid', {
+          reason: 'conversationOpenInTerminal'
+        })
+      )
+    vi.spyOn(runtime, 'resolveRuntimeFileTarget').mockResolvedValue(worktreeTarget())
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      getForegroundProcess: async () => 'codex',
+      stopAndWait: async () => {
+        await runtime.onPtyExit(PTY_A, 0, incarnationId, { hostExitConfirmed: true })
+        return true
+      }
+    })
+    const source =
+      route === 'captured'
+        ? {
+            terminal: pane.handle,
+            expectedIncarnationId: incarnationId,
+            originalPresentation: pane.presentation!
+          }
+        : undefined
+    const params = switchParams(SESSION, source)
+    if (route === 'history') {
+      delete params.execution.create.resumeFrom.cliSource
+    }
+    const result = await executeStructuredSessionSwitch(params, { runtime }, 'chat')
+    if (route === 'captured') {
+      expect(writer).not.toHaveBeenCalled()
+      expect(rig.store.getRecord(SESSION)).toBeTruthy()
+    } else {
+      expect(writer).toHaveBeenCalledWith('codex', THREAD)
+      expect(result).toMatchObject({
+        status: 'refused',
+        refusal: { details: { reason: 'conversationOpenInTerminal' } }
+      })
+      expect(rig.store.getRecord(SESSION)).toBeFalsy()
+    }
+  }
+)
