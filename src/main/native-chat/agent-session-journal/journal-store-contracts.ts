@@ -17,6 +17,7 @@ import type { AgentJournalTurnScope } from '../../../shared/agent-session/journa
 import type { AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import type { JournalHostDatabase } from './journal-host-database'
+import type { JournalStopEvent } from './journal-row-schema'
 import type { JournalLifecycleMutationInput } from './journal-row-builders'
 import type { JournalRowsRead } from './journal-read-row'
 import type { JournalReducerState } from './journal-reducer'
@@ -133,6 +134,10 @@ export type JournalSubmissionInput = {
   source?: Pick<AgentSessionMessageSource, 'kind'>
   options?: AgentSessionExecutionOptions
 }
+
+/** Asked on the write lane with the send it admits, given the person's Stop in force: throwing
+ *  refuses the send, and nothing is written. */
+export type JournalSendAdmission = (stop: JournalStopEvent | null) => void
 
 /** The submission's queue link constitutes the entire handoff. */
 export type JournalSubmissionConsume = {

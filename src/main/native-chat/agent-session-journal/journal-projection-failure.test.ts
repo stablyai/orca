@@ -211,11 +211,12 @@ it('adopts nothing on an outcome, coverage, receipt, outer-abort or COMMIT failu
       "SELECT seq,value_json FROM journal_outcomes WHERE field='inputCards' AND entry_key=? AND deleted=0 ORDER BY seq"
     )
     .all(JSON.stringify('overlay'))
-  // Both rows touch the introduced object after the legacy-baseline cleanup in the first row.
-  expect(overlayWrites.map((row) => row.seq)).toEqual([live.lastSequence - 1, live.lastSequence])
-  expect(overlayWrites.map((row) => row.value_json)).toEqual(
-    Array(2).fill(JSON.stringify(['overlay', live.inputCards.get('overlay')]))
-  )
+  // The first row introduces it with the legacy-baseline cleanup; the accepted dispatch lifts no
+  // Stop, so the send after it re-indexes nothing.
+  expect(overlayWrites.map((row) => row.seq)).toEqual([live.lastSequence - 1])
+  expect(overlayWrites.map((row) => row.value_json)).toEqual([
+    JSON.stringify(['overlay', live.inputCards.get('overlay')])
+  ])
 
   expect(receipt.committed).toHaveBeenCalledTimes(2)
   expectProjectionMatches(database, live)

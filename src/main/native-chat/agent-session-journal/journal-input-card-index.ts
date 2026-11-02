@@ -93,6 +93,16 @@ export class JournalInputCardIndex {
       (this.cleared.has(card.messageId) || Boolean(queuePauseHolding(this.pauses, card)))
     )
   }
+  /** Held by the personal Stop alone: a card queued after that Stop may pass it. */
+  stopHeldOnly(card: QueuedMessageRow): boolean {
+    const [stop, ...others] = this.pauses
+    return (
+      stop?.reason === 'stopped' &&
+      !this.cleared.has(card.messageId) &&
+      queuePauseHolding([stop], card) !== undefined &&
+      !queuePauseHolding(others, card)
+    )
+  }
   admission(
     state: JournalReducerState,
     row: JournalSubmissionRow,
@@ -158,7 +168,7 @@ export class JournalInputCardIndex {
       floor?.epoch === state.epoch ? floor.sequence : 0
     )
     const pauseInputs = [
-      journalQueueStopHolds(marks, state.latestAcceptedTurnSequence) ? marks.latestStop : null,
+      journalQueueStopHolds(marks) ? marks.latestStop : null,
       reopened > lifted ? reopened : 0,
       marks.cleared && !marks.cleared.lifted && marks.cleared.sequence > lifted
         ? marks.cleared

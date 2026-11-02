@@ -12,6 +12,7 @@ import type { AgentSessionWireRefusal } from '../../../shared/agent-session/fail
 import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../shared/orchestration-timing-budgets'
 import { structuredAgentSessionMessageSendMutation } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
+import type { JournalSendAdmission } from '../../native-chat/agent-session-journal/journal-store-contracts'
 import { dispatchPreambleSendOptions, type DispatchPreambleSendOptions } from './preamble'
 import type { RuntimeAgentPromptWriteOptions } from '../runtime-terminal-contracts'
 
@@ -31,8 +32,8 @@ export type StructuredSessionTurn = {
   operationId: string
   expectedRuntimeFence: number
   delivery: AgentTurnDelivery
-  /** Host-local admission for an automated send. */
-  beforeRun?: () => void
+  /** Host-local admission for an automated send, asked on the chat's journal write lane. */
+  admit?: JournalSendAdmission
 }
 
 export type StructuredSessionTurnSend = {
@@ -138,7 +139,7 @@ async function sendStructuredSessionTurn(
   })
   const result = await send.host.send(
     { callerKey: send.callerKey },
-    turn.beforeRun ? { ...message, beforeRun: turn.beforeRun } : message
+    turn.admit ? { ...message, admit: turn.admit } : message
   )
   if (!result.ok) {
     return { kind: 'refused', refusal: result.refusal }
