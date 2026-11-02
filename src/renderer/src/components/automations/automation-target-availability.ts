@@ -179,17 +179,10 @@ function getAutomationSourceAvailability(
   const providerLabel = getAutomationSourceProviderLabel(sourceContext.provider)
   switch (availability.reason) {
     case undefined:
-      break
     case 'missing-provider-auth':
-      return unavailable(
-        'source-auth-needed',
-        `Connect the saved ${providerLabel} source account before running manually.`
-      )
     case 'unavailable-source-tool':
-      return unavailable(
-        'source-tool-unavailable',
-        `Install or configure the ${providerLabel} source tool before running manually.`
-      )
+      // Runs use the saved workspace; repository source tooling is not a launch prerequisite.
+      break
     case 'unsupported-provider':
     case 'missing-task-source-capability':
       return unavailable(

@@ -25,6 +25,7 @@ import { useAutomationsPageStoreState } from './use-automations-page-store-state
 import { AutomationListLocalRow } from './AutomationListLocalRow'
 import { AutomationDetail } from './AutomationDetail'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import type { TaskSourceHostAvailability } from '../task-source-context-summary'
 
 export function registerCapturedAutomationRunActionTests({
   actionMocks,
@@ -47,6 +48,8 @@ export function registerCapturedAutomationRunActionTests({
   it.each([
     ['local', false, false],
     ['local', true, false],
+    ['local-no-source-tool', false, false],
+    ['local-no-source-auth', false, false],
     ['ssh', false, false],
     ['ssh', true, false],
     ['ssh-offline', false, false],
@@ -115,6 +118,28 @@ export function registerCapturedAutomationRunActionTests({
           hostId: isSsh ? 'ssh:box' : isRuntime ? 'local' : host
         }
       })
+      const sourceUnavailable = kind === 'local-no-source-tool' || kind === 'local-no-source-auth'
+      if (sourceUnavailable) {
+        saved.sourceContext = {
+          kind: 'task-source',
+          provider: 'github',
+          projectId: 'github:stablyai/orca',
+          hostId: 'local',
+          repoId: 'repo-1',
+          providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
+        }
+      }
+      const sourceAvailability: TaskSourceHostAvailability[] = sourceUnavailable
+        ? [
+            {
+              hostId: 'local',
+              reason:
+                kind === 'local-no-source-tool'
+                  ? 'unavailable-source-tool'
+                  : 'missing-provider-auth'
+            }
+          ]
+        : []
       const before = structuredClone(saved)
       if (kind === 'ambiguous') {
         saved.runContext = null
@@ -267,7 +292,8 @@ export function registerCapturedAutomationRunActionTests({
           projectHostSetups: store.projectHostSetups,
           sshConnectionStates: store.sshConnectionStates,
           sshStateByEnvironment: store.sshStateByEnvironment,
-          automationHostTarget: hostTargetFor()
+          automationHostTarget: hostTargetFor(),
+          sourceHostAvailability: sourceAvailability
         })
         return createElement(
           TooltipProvider,
@@ -281,7 +307,7 @@ export function registerCapturedAutomationRunActionTests({
             lastRunByAutomationId: new Map(),
             relativeNow: 1,
             hostTargetFor,
-            automationSourceHostAvailabilityByRowKey: new Map(),
+            automationSourceHostAvailabilityByRowKey: new Map([[row.key, sourceAvailability]]),
             onSelect: vi.fn(),
             onRunNow,
             onEdit: vi.fn(),
@@ -327,7 +353,9 @@ export function registerCapturedAutomationRunActionTests({
           reportOwnerAction: vi.fn(),
           invalidateRowHost: vi.fn()
         },
-        sourceAvailability: { automationSourceHostAvailabilityByRowKey: new Map() },
+        sourceAvailability: {
+          automationSourceHostAvailabilityByRowKey: new Map([[row.key, sourceAvailability]])
+        },
         pageRefresh: { hydratePersistedUIState: refresh, refresh }
       } satisfies Parameters<typeof createAutomationRunActions>[0])
       runNow = () => actions.runNow(row)
