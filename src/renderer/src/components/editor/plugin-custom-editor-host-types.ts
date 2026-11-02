@@ -30,6 +30,8 @@ export type CustomEditorHostOptions = {
   onKeyChord?: (chord: CustomEditorKeyChord, context: PluginFrameMessageContext) => void
   /** The frame got a document, or asked for one; `orca plugin shot --editor` waits on both. */
   onFrameProgress?: (step: 'delivered' | 'subscribed') => void
+  /** The frame's document session merges outside changes; set once per frame. */
+  onMergesOutside?: () => void
   /** The edit lane; every other message spends the frame's shared budget. */
   budget?: PanelMessageBudget
   now?: () => number
@@ -48,4 +50,8 @@ export type CustomEditorHost = {
   currentText: () => string
   /** A new document mounted in the frame; it must announce ready again. */
   reset: () => void
+  /** Sends a disk change to a frame whose session merges it into the unsaved edits, and resolves
+   *  with the merged text once the session's merged edit is in the buffer; null when the frame
+   *  cannot or does not within the flush deadline, so the caller keeps the banner. */
+  mergeOutsideChange: (diskText: string, ancestorText: string) => Promise<string | null>
 }
