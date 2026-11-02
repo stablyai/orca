@@ -9,6 +9,7 @@ import {
   initSessionParseCachePersistence
 } from './session-parse-cache-persistence'
 import { scanAiVaultSessions } from './session-scanner'
+import { generatedSessionTitle } from './session-scanner-accumulator'
 import { invalidateSessionParseCacheEntry } from './session-scanner-parse-cache'
 import { SessionScannerServiceSearch } from './session-scanner-service-search'
 import {
@@ -110,11 +111,16 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
     const startedAt = performance.now()
     const { result, work } = await scanReportingProgress(request, controller.signal)
     for (const session of result.sessions) {
-      if ((session.agent === 'claude' || session.agent === 'codex') && session.title.trim()) {
+      const trimmedTitle = session.title.trim()
+      if (
+        (session.agent === 'claude' || session.agent === 'codex') &&
+        trimmedTitle &&
+        trimmedTitle !== generatedSessionTitle(session.agent, session.sessionId)
+      ) {
         cacheServiceTitle(titleIndex, {
           agent: session.agent,
           sessionId: session.sessionId,
-          title: session.title.trim()
+          title: trimmedTitle
         })
       }
     }

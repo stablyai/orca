@@ -134,13 +134,13 @@ export function consumeClaudeSessionRecord(
   if (record.type === 'user') {
     accumulator.messageCount++
     const title = extractMessageText(record.message)
+    const isHarnessInjectedTurn = title != null && isKnownHarnessInjectedUserTurnText(title)
     // Known injected tags may lack isMeta; custom tags must remain real prompts rather than fallback titles.
-    const isMetaUserTurn =
-      record.isMeta === true || (title != null && isKnownHarnessInjectedUserTurnText(title))
+    const isMetaUserTurn = record.isMeta === true || isHarnessInjectedTurn
     addSessionContent(accumulator, 'user', asRecord(record.message)?.content, record.timestamp, {
       seedFirstUserPrompt: !isMetaUserTurn
     })
-    if (title) {
+    if (title && !isHarnessInjectedTurn) {
       if (isMetaUserTurn) {
         state.metaTitle ??= title
       } else {
