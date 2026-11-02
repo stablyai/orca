@@ -67,6 +67,11 @@ export function notifyStructuredLaunchListeners(): void {
   for (const state of structuredLaunchesBySessionId.values()) {
     persistStructuredLaunchState(state)
   }
+  publishStructuredLaunchChange()
+}
+
+/** For a change no saved record holds, such as a failure's wording: listeners only, no save. */
+export function publishStructuredLaunchChange(): void {
   for (const listener of structuredLaunchListeners) {
     listener()
   }

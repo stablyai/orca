@@ -4,7 +4,7 @@ import { joinSentences } from '../../../../../shared/sentence-joining'
 import { readStructuredChatTabSavedName } from '@/runtime/structured-chat-tab-name'
 import {
   getStructuredLaunchStateBySessionId,
-  notifyStructuredLaunchListeners
+  publishStructuredLaunchChange
 } from './structured-agent-session-launch-registry'
 import { focusTerminalTabSurface } from '../../focus-terminal-tab-surface'
 import type { Tab } from '../../../../../shared/tab-types'
@@ -121,7 +121,7 @@ export async function openTerminalForDeclinedChat(
       code: 'structured_agent_session_unsupported',
       causeText
     }
-    notifyStructuredLaunchListeners()
+    publishStructuredLaunchChange()
   }
   if (completed.outcome.status !== 'created') {
     if (terminal.refusal) {
