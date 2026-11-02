@@ -3,6 +3,7 @@ import { useAppStore } from '../store'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import { preventUnloadAndScheduleShutdownCheckpointReset } from '@/lib/shutdown-checkpoint-guard'
 import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
+import { runAfterEditorFramesFlush } from './editor/editor-pending-flush'
 import {
   collectBrowserWebviewIds,
   destroyWebviewsRemovedFromStore
@@ -44,15 +45,23 @@ export function useTerminalWindowLifecycle(controller: TerminalActivationControl
       if (windowCloseAfterDirtyRef.current) {
         return
       }
-      const dirtyFiles = useAppStore.getState().openFiles.filter((file) => file.isDirty)
-      if (dirtyFiles.length > 0) {
-        queueEditorCloseRequests(
-          dirtyFiles.map((file) => file.id),
-          { isQuitting }
-        )
-        return
-      }
-      proceedToNativeWindowClose(isQuitting)
+      const state = useAppStore.getState()
+      // Why: a custom editor frame may still hold debounced edits the dirty check must see.
+      runAfterEditorFramesFlush(
+        state,
+        state.openFiles.map((file) => file.id),
+        () => {
+          const dirtyFiles = useAppStore.getState().openFiles.filter((file) => file.isDirty)
+          if (dirtyFiles.length > 0) {
+            queueEditorCloseRequests(
+              dirtyFiles.map((file) => file.id),
+              { isQuitting }
+            )
+            return
+          }
+          proceedToNativeWindowClose(isQuitting)
+        }
+      )
     })
     return () => setWindowCloseRequestHandler(null)
   }, [proceedToNativeWindowClose, queueEditorCloseRequests, windowCloseAfterDirtyRef])

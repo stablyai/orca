@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { useAppStore } from '../store'
 import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
-import { closeAfterEditorFramesFlush } from './editor/editor-pending-flush'
+import { runAfterEditorFramesFlush } from './editor/editor-pending-flush'
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser-workspace-tab-close'
@@ -99,7 +99,7 @@ export function useTerminalBulkCloseActions(
       const tabs = activeWorktreeId ? (state.unifiedTabsByWorktree[activeWorktreeId] ?? []) : []
       const fileIds = tabIds.map((id) => tabs.find((tab) => tab.id === id)?.entityId ?? id)
       // Why: a custom editor frame may still hold edits the dirty checks must see.
-      closeAfterEditorFramesFlush(state, fileIds, () => closeTabBarTabsNow(tabIds))
+      runAfterEditorFramesFlush(state, fileIds, () => closeTabBarTabsNow(tabIds))
     },
     [activeWorktreeId, closeTabBarTabsNow]
   )
@@ -162,7 +162,7 @@ export function useTerminalBulkCloseActions(
           .map((file) => file.id)
       },
       (fileIds) =>
-        closeAfterEditorFramesFlush(useAppStore.getState(), fileIds, () => {
+        runAfterEditorFramesFlush(useAppStore.getState(), fileIds, () => {
           const selectedIds = new Set(fileIds)
           const files = useAppStore.getState().openFiles.filter((file) => selectedIds.has(file.id))
           const dirtyFileIds: string[] = []

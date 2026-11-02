@@ -3,7 +3,7 @@ import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
 import { requestEditorFileClose } from '../editor/editor-autosave'
-import { closeAfterEditorFramesFlush } from '../editor/editor-pending-flush'
+import { runAfterEditorFramesFlush } from '../editor/editor-pending-flush'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { closeWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-close'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
@@ -113,7 +113,7 @@ export function createWorkspaceTabCloseCommands({
       closeUnifiedTab(item.id)
     } else {
       // Why: a custom editor frame may still hold edits the dirty check must see.
-      closeAfterEditorFramesFlush(useAppStore.getState(), [item.entityId], (deferred) => {
+      runAfterEditorFramesFlush(useAppStore.getState(), [item.entityId], (deferred) => {
         const tabs = useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []
         if (deferred && !tabs.some((tab) => tab.id === item.id)) {
           return

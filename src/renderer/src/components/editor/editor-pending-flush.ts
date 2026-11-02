@@ -128,13 +128,13 @@ export async function flushEditorViewsForSave(
   return framesFlushed
 }
 
-/** Runs `close` once every frame view of these files handed over its pending edits, so the dirty
- *  check `close` makes sees them; synchronous when none is mounted, else `deferred` (re-check what
- *  is still open). Each frame flush has its own deadline, so a silent frame delays at most that. */
-export function closeAfterEditorFramesFlush(
+/** Runs `run` (a close or view switch that unmounts frames) once every frame view of these files
+ *  handed over its pending edits, so a dirty check sees them; synchronous when none is mounted, else
+ *  `deferred` (re-check what is still open). Each flush has its own deadline, bounding the delay. */
+export function runAfterEditorFramesFlush(
   state: EditorBufferViewIndex,
   fileIds: Iterable<string>,
-  close: (deferred: boolean) => void
+  run: (deferred: boolean) => void
 ): void {
   const flushes = new Set<FrameFlush>()
   for (const fileId of fileIds) {
@@ -145,8 +145,8 @@ export function closeAfterEditorFramesFlush(
     }
   }
   if (flushes.size === 0) {
-    close(false)
+    run(false)
     return
   }
-  void Promise.all([...flushes].map((flush) => flush().catch(() => false))).then(() => close(true))
+  void Promise.all([...flushes].map((flush) => flush().catch(() => false))).then(() => run(true))
 }

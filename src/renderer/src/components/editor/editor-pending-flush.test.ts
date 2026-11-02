@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import {
-  closeAfterEditorFramesFlush,
+  runAfterEditorFramesFlush,
   flushClosingEditorBuffers,
   flushPendingEditorBuffer,
   hasPendingEditorBufferChange,
@@ -80,7 +80,7 @@ const drainMicrotasks = () => new Promise((resolve) => setImmediate(resolve))
 
 it('closes at once without frames, and after every frame of the closing files settles', async () => {
   const close = vi.fn()
-  closeAfterEditorFramesFlush(NO_SHARING, ['plain'], close)
+  runAfterEditorFramesFlush(NO_SHARING, ['plain'], close)
   expect(close).toHaveBeenCalledWith(false)
 
   let answer: (flushed: boolean) => void = () => {}
@@ -91,7 +91,7 @@ it('closes at once without frames, and after every frame of the closing files se
   ]
   try {
     const deferred = vi.fn()
-    closeAfterEditorFramesFlush(NO_SHARING, ['frame', 'broken'], deferred)
+    runAfterEditorFramesFlush(NO_SHARING, ['frame', 'broken'], deferred)
     await drainMicrotasks()
     expect(deferred).not.toHaveBeenCalled()
     // A failed or unanswered flush still closes; only the closing files' frames are asked.
