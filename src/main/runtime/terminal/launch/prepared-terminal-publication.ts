@@ -171,7 +171,9 @@ async function publish(
   }
   await controller.preparedAgentLaunch({ action: 'ackPublication', identity })
   // Any observer may publish; only the creator writes, and every observer returns its one answer.
-  const answer = await joinPreparedPromptContinuation(identity, descriptor, terminal)
+  const answer = await joinPreparedPromptContinuation(identity, descriptor, terminal, () =>
+    ports.store.listOperationRows()
+  )
   // Recording is bookkeeping: a failed write keeps the answer for the next observation, never the input.
   await controller
     .preparedAgentLaunch({ action: 'retireInput', identity })

@@ -29,7 +29,9 @@ import {
 } from './prepared-terminal-publication'
 import {
   forgetPreparedPromptContinuation,
-  installPreparedPromptContinuation
+  hasPreparedPrompts,
+  installPreparedPromptContinuation,
+  PREPARED_LAUNCH_ROW_CALLER
 } from './prepared-terminal-prompt-delivery'
 
 export type PreparedTerminalStart = {
@@ -137,7 +139,7 @@ export async function startPreparedWorktreeTerminals(args: {
       reservationGeneration: prepared.reservationGeneration
     }
     // Draft and followup stay with this flow; the daemon holds only the accepted launch itself.
-    const promptOwnerRef = args.prompts
+    const promptOwnerRef = hasPreparedPrompts(args.prompts)
       ? installPreparedPromptContinuation(
           identity,
           prepared.claim.agent,
@@ -185,7 +187,7 @@ export async function startPreparedWorktreeTerminals(args: {
       ...(promptOwnerRef ? { promptOwnerRef } : {})
     }
     const recorded = await ports.store.recordPreparedAgentLaunch({
-      callerKey: 'worktree-startup',
+      callerKey: PREPARED_LAUNCH_ROW_CALLER,
       operationId,
       fingerprint,
       now: Date.now(),

@@ -171,11 +171,17 @@ async function fixture(
     }),
     preparedLaunch: descriptor
   }
-  // Like the store, only the call that removes the descriptor reports it.
-  const retire = vi.fn(
-    async (): Promise<boolean> =>
-      'preparedLaunch' in row && Reflect.deleteProperty(row, 'preparedLaunch')
-  )
+  // Like the store, only the call that removes the descriptor reports it and saves the answer.
+  const retire = vi.fn(async (args: { answer?: unknown }): Promise<boolean> => {
+    if (!('preparedLaunch' in row)) {
+      return false
+    }
+    Reflect.deleteProperty(row, 'preparedLaunch')
+    if (args.answer) {
+      row.outcome = { status: 'succeeded', sessionId: '', launch: args.answer }
+    }
+    return true
+  })
   const createTerminal = vi.fn<PreparedPublicationPorts['createTerminal']>(
     async (_selector, options) => ({
       handle: options.sessionId === 'agent' ? 'term_agent' : 'term_setup',
@@ -306,46 +312,46 @@ describe('prepared terminal publication recovery', () => {
     })
   })
 
-  it('writes once across overlapping controllers and gives every observer the same final answer', async () => {
-    const f = await fixture()
-    const delivery = Promise.withResolvers<boolean>()
-    f.deliver.mockReturnValueOnce(delivery.promise)
-    const handle = f.ports.controller.preparedAgentLaunch!
-    // An old and a new connection both publish the launch; neither may write or answer alone.
-    const old: PreparedPublicationPorts = {
-      ...f.ports,
-      controller: { ...f.ports.controller, preparedAgentLaunch: (request) => handle(request) }
+  it.each([
+    ['written', true, undefined],
+    ['refused', false, UNCERTAIN]
+  ] as const)(
+    'writes once across overlapping controllers and replays the saved %s answer to a delayed one',
+    async (_case, written, warning) => {
+      const f = await fixture()
+      f.deliver.mockResolvedValueOnce(written)
+      const handle = f.ports.controller.preparedAgentLaunch!
+      const held = Promise.withResolvers<void>()
+      // An old connection publishes too, but its reply is held until after the creator has
+      // written, saved its answer and retired the launch.
+      const old: PreparedPublicationPorts = {
+        ...f.ports,
+        controller: {
+          ...f.ports.controller,
+          preparedAgentLaunch: async (request) => {
+            const reply = await handle(request)
+            if (request.action === 'ackPublication') {
+              await held.promise
+            }
+            return reply
+          }
+        }
+      }
+      const delayed = publishPreparedTerminal(f.identity, f.descriptor, old)
+      await vi.advanceTimersByTimeAsync(0)
+      const current = await publishPreparedTerminal(f.identity, f.descriptor, f.ports)
+      expect(current?.warning).toBe(warning)
+      expect(f.retire).toHaveBeenCalledOnce()
+      held.resolve()
+      // The saved answer, not this observer's own inference, is what it returns.
+      expect((await delayed)?.warning).toBe(warning)
+      // So does a later publication from a stale descriptor.
+      expect((await publishPreparedTerminal(f.identity, f.descriptor, old))?.warning).toBe(warning)
+      expect(f.deliver).toHaveBeenCalledOnce()
+      expect(f.ports.notifyLaunchNotice).toHaveBeenCalledTimes(warning ? 1 : 0)
+      expect(f.owner.pending).toBe(0)
     }
-    const answers: unknown[] = []
-    const publications = [f.ports, old].map((ports) =>
-      publishPreparedTerminal(f.identity, f.descriptor, ports).then((answer) => {
-        answers.push(answer)
-        return answer
-      })
-    )
-    await vi.advanceTimersByTimeAsync(0)
-    expect(f.createTerminal).toHaveBeenCalledTimes(2)
-    expect(f.deliver).toHaveBeenCalledOnce()
-    expect(answers).toEqual([])
-    // The first recording fails; the other observer's retirement is the one that consumes it.
-    f.retire.mockRejectedValueOnce(new Error('store write failed'))
-    // The draft may have pasted before the followup was refused: neither caller hears success.
-    delivery.resolve(false)
-    const [current, stale] = await Promise.all(publications)
-    expect(current?.warning).toBe(UNCERTAIN)
-    expect(stale).toEqual(current)
-    // A delayed observer of the retired launch neither writes nor shows the notice again.
-    expect(await publishPreparedTerminal(f.identity, f.descriptor, old)).toMatchObject({
-      warning: UNCERTAIN
-    })
-    await reconcilePreparedTerminalPublications(f.ports)
-    expect(f.deliver).toHaveBeenCalledOnce()
-    expect(f.retire).toHaveBeenCalledTimes(3)
-    expect(f.ports.notifyLaunchNotice).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ operationId: f.identity.operationId, kind: 'prompt-uncertain' })
-    )
-    expect(f.owner.pending).toBe(0)
-  })
+  )
 
   it('retries only the recording of a written prompt whose answer could not be saved', async () => {
     const f = await fixture()

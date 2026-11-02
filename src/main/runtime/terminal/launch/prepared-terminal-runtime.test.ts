@@ -57,7 +57,8 @@ async function fixture() {
           fingerprint: string
           preparedLaunch: PreparedAgentLaunchDescriptor
         }) => {
-          row = { ...args }
+          // A won claim leaves the outcome unknown until the launch's answer is saved.
+          row = { ...args, outcome: { status: 'unknown' } }
           return { claim: { claim: 'won' as const } }
         }
       ),
@@ -197,6 +198,31 @@ describe('late prepared agent waiter', () => {
         })
       ]
     ])
+  })
+
+  it('never reports a recovered launch with no draft or followup as having lost its prompt', async () => {
+    const f = await fixture()
+    // The first publication fails, so the saved launch is recovered without any creator, as after a restart.
+    f.ports.createTerminal.mockRejectedValueOnce(new Error('main restarted'))
+    const started = await startPreparedWorktreeTerminals({
+      worktreeId: 'wt',
+      targetKind: 'new-git',
+      // The task already rides in the command; the runtime passes an empty bundle beside it.
+      startupOptions: { command: "codex 'the complete task'", launchAgent: 'codex' },
+      prompts: {},
+      ports: f.ports
+    })
+    vi.useRealTimers()
+    await vi.waitFor(() => expect(f.ports.createTerminal).toHaveBeenCalledOnce())
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(
+      f.ports.store.recordPreparedAgentLaunch.mock.calls[0][0].preparedLaunch
+    ).not.toHaveProperty('promptOwnerRef')
+    const terminal = await f.wait(started.pending)
+    expect(terminal.warning).toBeUndefined()
+    expect(f.ports.deliverPrompts).not.toHaveBeenCalled()
+    expect(f.ports.notifyLaunchNotice).not.toHaveBeenCalled()
+    expect(f.notifier.preparedAgentLaunchNotice).not.toHaveBeenCalled()
   })
 
   it('reports a Setup timeout once in Setup and names the agent to an attached caller', async () => {

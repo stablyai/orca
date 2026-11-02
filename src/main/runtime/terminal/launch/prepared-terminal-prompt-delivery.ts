@@ -6,6 +6,10 @@ import type {
   PreparedAgentLaunchIdentity
 } from '../../../../shared/prepared-agent-launch'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
+import type { AgentSessionOperationRow } from '../../../../shared/agent-session-operation-ledger'
+
+/** The operation namespace main records prepared worktree launches under. */
+export const PREPARED_LAUNCH_ROW_CALLER = 'worktree-startup'
 
 export function preparedPromptUncertainText(agent: string): string {
   const name = tuiAgentDisplayName(agent) ?? agent
@@ -54,25 +58,63 @@ export function installPreparedPromptContinuation(
   return PROMPT_OWNER_REF
 }
 
+/** Only an actual draft or followup is post-start input; an empty bundle owes nothing. */
+export function hasPreparedPrompts(
+  prompts: PreparedTerminalPrompts | undefined
+): prompts is PreparedTerminalPrompts {
+  return Boolean(prompts?.draft || prompts?.followup)
+}
+
 /**
  * Publication hands the exact agent to its creator and joins the one answer; it never writes.
- * Without a creator, a prompt-bearing launch may have been written before main restarted.
+ * Once the creator is gone, the saved answer is the launch's answer; with none, only a launch
+ * an earlier main created may have lost its prompt to the restart.
  */
 export function joinPreparedPromptContinuation(
   identity: PreparedAgentLaunchIdentity,
   descriptor: PreparedAgentLaunchDescriptor,
-  terminal: RuntimeTerminalCreate
+  terminal: RuntimeTerminalCreate,
+  rows: () => readonly AgentSessionOperationRow[]
 ): Promise<RuntimeTerminalCreate> {
   const continuation = continuations.get(preparedLaunchKey(identity))
   if (continuation) {
     continuation.publish(terminal)
     return continuation.answer
   }
-  return Promise.resolve(
-    typeof descriptor.promptOwnerRef === 'string'
-      ? { ...terminal, warning: preparedPromptUncertainText(descriptor.claim.agent) }
-      : terminal
+  const saved = readPreparedLaunchAnswer(rows(), identity, terminal.incarnationId)
+  const restarted =
+    typeof descriptor.promptOwnerRef === 'string' && descriptor.promptOwnerRef !== PROMPT_OWNER_REF
+  const warning = saved
+    ? saved.warning
+    : restarted
+      ? preparedPromptUncertainText(descriptor.claim.agent)
+      : undefined
+  return Promise.resolve(warning ? { ...terminal, warning } : terminal)
+}
+
+/** The final answer the retiring transaction saved for this exact launch and agent incarnation. */
+export function readPreparedLaunchAnswer(
+  rows: readonly AgentSessionOperationRow[],
+  identity: PreparedAgentLaunchIdentity,
+  incarnationId: string | null | undefined
+): { warning?: string } | null {
+  const row = rows.find(
+    (candidate) =>
+      candidate.callerKey === PREPARED_LAUNCH_ROW_CALLER &&
+      candidate.operationId === identity.operationId &&
+      candidate.fingerprint === identity.fingerprint
   )
+  const answer = row?.outcome.status === 'succeeded' ? row.outcome.launch : undefined
+  if (
+    typeof answer !== 'object' ||
+    answer === null ||
+    !incarnationId ||
+    Reflect.get(answer, 'incarnationId') !== incarnationId
+  ) {
+    return null
+  }
+  const warning: unknown = Reflect.get(answer, 'warning')
+  return typeof warning === 'string' ? { warning } : {}
 }
 
 /** Kept until its answer is recorded or the launch is gone, so a failed write retries recording only. */

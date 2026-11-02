@@ -7,7 +7,7 @@ import {
   publishPreparedTerminal
 } from './prepared-terminal-publication'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { AgentSessionOperationOutcome } from '../../../../shared/agent-session-operation-ledger'
+import { readPreparedLaunchAnswer } from './prepared-terminal-prompt-delivery'
 import type { PreparedTerminalPrompts } from '../../../daemon/prepared-agent-launch-protocol'
 import {
   isPreparedAgentLaunchDescriptor,
@@ -142,7 +142,15 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
         return terminal
       }
       status = await readPreparedTerminalStatus(controller, identity)
-      const published = this.publishedPreparedTerminal(status, row?.outcome)
+      // Read the saved answer now: a publication above may have recorded it after the first read.
+      const published = this.publishedPreparedTerminal(
+        status,
+        readPreparedLaunchAnswer(
+          store.listOperationRows(),
+          identity,
+          status.physical?.incarnationId
+        )
+      )
       if (published) {
         return published
       }
@@ -158,7 +166,7 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
   /** An already published agent is read from this runtime's own records, never attached again. */
   private publishedPreparedTerminal(
     status: PreparedAgentLaunchStatus,
-    outcome: AgentSessionOperationOutcome | undefined
+    answer: { warning?: string } | null
   ): dependencies.RuntimeTerminalCreate | null {
     const { physical, surface } = status
     if (!physical || !status.published || status.execution !== 'started') {
@@ -172,14 +180,6 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
     ) {
       return null
     }
-    // The retiring observer recorded the launch's one final answer; a late caller replays its warning.
-    const answer = outcome?.status === 'succeeded' ? outcome.launch : undefined
-    const warning =
-      typeof answer === 'object' &&
-      answer !== null &&
-      Reflect.get(answer, 'incarnationId') === physical.incarnationId
-        ? Reflect.get(answer, 'warning')
-        : undefined
     return {
       handle: surface.terminalHandle,
       worktreeId: surface.worktreeId,
@@ -188,7 +188,8 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
       tabId: surface.tabId,
       paneKey: makePaneKey(surface.tabId, surface.leafId),
       title: null,
-      ...(typeof warning === 'string' ? { warning } : {})
+      // The retiring observer recorded the launch's one final answer; a late caller replays it.
+      ...(answer?.warning ? { warning: answer.warning } : {})
     }
   }
 
