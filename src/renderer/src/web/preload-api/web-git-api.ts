@@ -5,6 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { callRuntimeResult } from './web-runtime-calls'
 import { mutateGitPath, mutateGitPaths, resolveGitConflict } from './web-git-mutations'
 import { requireGitStageWorktreeScopeReceipt } from '../../../../shared/git-stage-worktree-scope'
+import { unsupportedMergeReviewApi } from './web-git-merge-review-api'
 import { requireActiveEnvironment, updateEnvironmentFromResponse } from './web-runtime-session'
 import {
   resolveRuntimeFilePath,
@@ -284,6 +285,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         await mutateGitPath('git.discard', worktreePath, filePath)
       }
     },
+    ...unsupportedMergeReviewApi,
     remoteFileUrl: async ({ worktreePath, relativePath, line, endLine }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.remoteFileUrl', {

@@ -8,7 +8,7 @@ import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/
 import type { StructuredChatSleptAtByPaneKey } from '@/store/slices/structured-chat-slept-at'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 
-type WorkspaceActivityMaps = {
+export type WorkspaceActivityMaps = {
   tabsByWorktree: Record<string, { id: string }[]>
   ptyIdsByTabId: Record<string, string[]>
   browserTabsByWorktree: Record<string, { id: string }[]>
@@ -68,7 +68,9 @@ const EMPTY_LINEAGE_MENU_ACTIONS: WorkspaceLineageMenuActions = {
 }
 
 export function useWorkspaceLineageMenuActions(
-  args: Parameters<typeof getWorkspaceLineageMenuActions>[0] & { enabled: boolean }
+  args: Parameters<typeof getWorkspaceLineageMenuActions>[0] & {
+    enabled: boolean
+  }
 ): WorkspaceLineageMenuActions {
   const { enabled, parent, worktrees, lineageById, activity } = args
   const {

@@ -5,6 +5,12 @@ import type { ConflictResolution } from '../../shared/source-control-entry-actio
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitStageWorktreeScope } from '../../shared/git-stage-worktree-scope'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type {
+  WorktreeMergeReviewAcceptOutcome,
+  WorktreeMergeReviewRejectOutcome,
+  WorktreeMergeReviewState,
+  WorktreeMergeReviewSyncOutcome
+} from '../../shared/git-merge-review'
 import type { PreloadApi } from '../api-types'
 
 export const gitApi = {
@@ -210,6 +216,27 @@ export const gitApi = {
     filePaths: string[]
     connectionId?: string
   }): Promise<void> => ipcRenderer.invoke('git:bulkDiscard', args),
+  worktreeMergeReviewState: (args: {
+    worktreePath: string
+    connectionId?: string
+  }): Promise<WorktreeMergeReviewState> => ipcRenderer.invoke('git:worktreeMergeReviewState', args),
+  worktreeMergeReviewSync: (args: {
+    worktreePath: string
+    connectionId?: string
+  }): Promise<WorktreeMergeReviewSyncOutcome> =>
+    ipcRenderer.invoke('git:worktreeMergeReviewSync', args),
+  worktreeMergeReviewAccept: (args: {
+    worktreePath: string
+    connectionId?: string
+    message?: string
+  }): Promise<WorktreeMergeReviewAcceptOutcome> =>
+    ipcRenderer.invoke('git:worktreeMergeReviewAccept', args),
+  worktreeMergeReviewReject: (args: {
+    worktreePath: string
+    connectionId?: string
+    assumeYes?: boolean
+  }): Promise<WorktreeMergeReviewRejectOutcome> =>
+    ipcRenderer.invoke('git:worktreeMergeReviewReject', args),
   remoteFileUrl: (args: {
     worktreePath: string
     relativePath: string

@@ -9,21 +9,13 @@ import {
 import { useContextWorkspaceStatuses } from './use-workspace-board-statuses'
 import { useMenuScopedWorktreeCatalog } from './use-menu-scoped-worktree-catalog'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
-import {
-  hasSleepableWorkspaceActivity,
-  useWorkspaceLineageMenuActions
-} from './workspace-lineage-menu-actions'
+import { useWorkspaceLineageMenuActions } from './workspace-lineage-menu-actions'
+import { useWorkspaceSleepActivity } from './use-workspace-sleep-activity'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 import {
-  EMPTY_AGENT_STATUS_BY_PANE_KEY,
-  EMPTY_BROWSER_TABS_BY_WORKTREE,
   EMPTY_CYCLIC_LINEAGE_IDS,
   EMPTY_DELETE_STATE_BY_WORKTREE_ID,
-  EMPTY_STRUCTURED_CHAT_SLEPT_AT,
-  EMPTY_PTY_IDS_BY_TAB_ID,
-  EMPTY_TABS_BY_WORKTREE,
-  EMPTY_UNIFIED_TABS_BY_WORKTREE,
   EMPTY_WORKSPACE_LINEAGE_BY_CHILD_KEY,
   EMPTY_WORKTREE_LINEAGE_BY_ID,
   getSharedWorkspaceStatus,
@@ -32,6 +24,7 @@ import {
   selectMenuScopedMap,
   shouldRemoveProjectFromContextMenu
 } from './worktree-context-menu-policy'
+import { useWorktreeMergeReviewMenu } from './use-worktree-merge-review-menu'
 import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
 import { useWorktreeParentPickerTransition } from './use-worktree-parent-picker-transition'
 import { useWorktreeContextMenuSecondaryActions } from './use-worktree-context-menu-secondary-actions'
@@ -107,24 +100,6 @@ export function useWorktreeContextMenuModel({
     )
   )
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
-  const tabsByWorktree = useAppStore((s) =>
-    selectMenuScopedMap(menuOpen, s.tabsByWorktree, EMPTY_TABS_BY_WORKTREE)
-  )
-  const ptyIdsByTabId = useAppStore((s) =>
-    selectMenuScopedMap(menuOpen, s.ptyIdsByTabId, EMPTY_PTY_IDS_BY_TAB_ID)
-  )
-  const browserTabsByWorktree = useAppStore((s) =>
-    selectMenuScopedMap(menuOpen, s.browserTabsByWorktree, EMPTY_BROWSER_TABS_BY_WORKTREE)
-  )
-  const unifiedTabsByWorktree = useAppStore((s) =>
-    selectMenuScopedMap(menuOpen, s.unifiedTabsByWorktree, EMPTY_UNIFIED_TABS_BY_WORKTREE)
-  )
-  const agentStatusByPaneKey = useAppStore((s) =>
-    selectMenuScopedMap(menuOpen, s.agentStatusByPaneKey, EMPTY_AGENT_STATUS_BY_PANE_KEY)
-  )
-  const structuredChatSleptAtByPaneKey = useAppStore((s) =>
-    selectMenuScopedMap(menuOpen, s.structuredChatSleptAtByPaneKey, EMPTY_STRUCTURED_CHAT_SLEPT_AT)
-  )
   const deleteStateByWorktreeId = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.deleteStateByWorktreeId, EMPTY_DELETE_STATE_BY_WORKTREE_ID)
   )
@@ -137,31 +112,10 @@ export function useWorktreeContextMenuModel({
   const workspaceScope = parseWorkspaceKey(worktree.id)
   const folderWorkspaceId =
     workspaceScope?.type === 'folder' ? workspaceScope.folderWorkspaceId : null
-  const sleepActivity = useMemo(
-    () => ({
-      tabsByWorktree,
-      ptyIdsByTabId,
-      browserTabsByWorktree,
-      unifiedTabsByWorktree,
-      agentStatusByPaneKey,
-      structuredChatSleptAtByPaneKey
-    }),
-    [
-      agentStatusByPaneKey,
-      browserTabsByWorktree,
-      structuredChatSleptAtByPaneKey,
-      ptyIdsByTabId,
-      tabsByWorktree,
-      unifiedTabsByWorktree
-    ]
-  )
-  const sleepableWorktrees = useMemo(
-    () =>
-      activeContextWorktrees.filter((item) =>
-        hasSleepableWorkspaceActivity(item.id, sleepActivity)
-      ),
-    [activeContextWorktrees, sleepActivity]
-  )
+  const { sleepActivity, sleepableWorktrees } = useWorkspaceSleepActivity({
+    menuOpen,
+    activeContextWorktrees
+  })
   const lineageMenuActions = useWorkspaceLineageMenuActions({
     enabled: menuOpen && !isMultiContext,
     parent: worktree,
@@ -195,6 +149,14 @@ export function useWorktreeContextMenuModel({
     [activeContextWorktrees, repoMap]
   )
   const removesProject = shouldRemoveProjectFromContextMenu(repo, worktree)
+  const { mainWorktreeId, mergeReviewMode } = useWorktreeMergeReviewMenu({
+    worktree,
+    repo,
+    allWorktrees,
+    isMultiContext,
+    folderWorkspaceId,
+    menuOpen
+  })
   const { sleepLabel, deleteLabel } = getWorktreeContextMenuBatchLabels({
     isMultiContext,
     sleepableCount: sleepableWorktrees.length,
@@ -301,6 +263,7 @@ export function useWorktreeContextMenuModel({
     createProjectGroup,
     folderWorkspaceId,
     isMultiContext,
+    mainWorktreeId,
     moveProjectToGroup,
     onAssignWorkspaceStatus,
     openModal,
@@ -355,7 +318,7 @@ export function useWorktreeContextMenuModel({
     ...commands,
     activeContextWorktrees,
     batchDeleteWorktrees,
-    browserTabsByWorktree,
+    browserTabsByWorktree: sleepActivity.browserTabsByWorktree,
     children,
     contentClassName,
     contextDeletePending,
@@ -381,11 +344,12 @@ export function useWorktreeContextMenuModel({
     lineageDescendantCount,
     menuOpen,
     menuPoint,
+    mergeReviewMode,
     onContextMenuSelect,
     parentPicker,
     parentPickerOpen,
     projectGroups,
-    ptyIdsByTabId,
+    ptyIdsByTabId: sleepActivity.ptyIdsByTabId,
     removesProject,
     repo,
     scopeRef,
@@ -397,7 +361,7 @@ export function useWorktreeContextMenuModel({
     sleepableWorktrees,
     subtreeSleepableWorktrees,
     suppressOpeningPointerEvent,
-    tabsByWorktree,
+    tabsByWorktree: sleepActivity.tabsByWorktree,
     validParentWorktreeId,
     worktree,
     workspaceStatuses
