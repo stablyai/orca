@@ -59,7 +59,7 @@ describe('hook plugin warming', () => {
   it('starts each enabled hook plugin once per approved revision', () => {
     let plugins = [plugin('acme.guard', ['terminal.send']), plugin('acme.plain', [])]
     const enabled = new Set(['acme.guard', 'acme.plain'])
-    const ensureWorker = vi.fn(async () => worker())
+    const ensureWorker = vi.fn(async (_plugin: ValidDiscoveredPlugin) => worker())
     const warm = createPluginHookWarmer({
       plugins: () => plugins,
       isRuntimeApproved: (candidate) => enabled.has(candidate.pluginKey),
