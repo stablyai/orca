@@ -70,6 +70,7 @@ vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
   handleEmptyFloatingWorkspacePanelCloseShortcut: () => false,
   isEventTargetInsideFloatingWorkspacePanel: () => mocks.targetInsideFloatingPanel,
   isFloatingWorkspacePanelFocused: () => mocks.floatingFocused,
+  switchFloatingWorkspaceRecentTab: vi.fn(),
   switchFloatingWorkspaceTab: vi.fn()
 }))
 vi.mock('@/lib/terminal-shortcut-capture-notification', () => ({
@@ -402,6 +403,41 @@ describe('shared tab navigation routing', () => {
     expect(switchFloatingWorkspaceTab).toHaveBeenCalledTimes(2)
     expect(switchFloatingWorkspaceTab).toHaveBeenLastCalledWith(mocks.state, 1, 'all-types')
     expect(handleSwitchTabAcrossAllTypes).not.toHaveBeenCalled()
+  })
+})
+
+describe('Agents scope chords sharing a tab-switching chord', () => {
+  const keybindings = {
+    'sidebar.agents.scopeNext': ['Mod+Shift+BracketRight'],
+    'tab.previousRecent': ['Mod+Shift+BracketRight']
+  }
+
+  function pressSharedChord(focusInAgents: boolean): KeyboardEvent {
+    const host = document.createElement('div')
+    if (focusInAgents) {
+      host.setAttribute('data-ai-vault-panel', 'true')
+    }
+    const input = document.createElement('input')
+    host.appendChild(input)
+    document.body.appendChild(host)
+    input.focus()
+    const event = new KeyboardEvent('keydown', {
+      key: ']',
+      metaKey: true,
+      shiftKey: true,
+      cancelable: true
+    })
+    handleTerminalWorkspaceKeyDown(event, { ...controller, keybindings }, 'darwin')
+    host.remove()
+    return event
+  }
+
+  it('leaves the chord to Agents while focus is inside the sidebar panel', () => {
+    expect(pressSharedChord(true).defaultPrevented).toBe(false)
+  })
+
+  it('keeps switching tabs when focus is elsewhere, including the /resume dialog', () => {
+    expect(pressSharedChord(false).defaultPrevented).toBe(true)
   })
 })
 

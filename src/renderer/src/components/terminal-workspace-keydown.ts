@@ -215,6 +215,10 @@ export function handleTerminalWorkspaceKeyDown(
     handleCloseAllFiles()
     return
   }
+  // Why: while focus is in Agents, its scope chords beat every tab-switching chord, recent-tab included.
+  if (agentsScopeShortcutOwnsChord(matchShortcut)) {
+    return
+  }
   if (
     matchesRecentTabSwitcherChord(event, shortcutPlatform, keybindings, {
       context,
@@ -234,10 +238,6 @@ export function handleTerminalWorkspaceKeyDown(
     if (claimTabSwitch()) {
       dispatchWorkspaceTabCommand({ type: 'previous-recent' })
     }
-    return
-  }
-  // Why: while the Agents tab shows, its scope chords beat tab switching on a shared key.
-  if (agentsScopeShortcutOwnsChord(matchShortcut)) {
     return
   }
   const switchSameTypeDirection = matchShortcut('tab.nextSameType')

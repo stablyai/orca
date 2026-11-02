@@ -258,7 +258,8 @@ export default function AiVaultPanel({
 
   return (
     <div
-      data-ai-vault-panel="true"
+      // Why: only the sidebar host (which passes onSearchEscape) owns Agents shortcuts; the /resume dialog does not.
+      data-ai-vault-panel={onSearchEscape ? 'true' : undefined}
       className="@container/ai-vault flex h-full min-h-0 flex-col bg-sidebar outline-none"
       {...aiVaultPanelKeyboardRootProps(keyboardRows ? listKeyboardRef : undefined)}
     >
