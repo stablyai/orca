@@ -30,7 +30,7 @@ import '@/lib/workspace/creation/new-workspace-project-options'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store/index'
 import { resolveExecutionHostAgentStartupShell } from '@/runtime/hosts/platform/execution-host-facts'
-import { getLinkedWorkItemPromptTemplate } from '@/lib/work-items/linked-work-item-context'
+import { getDesktopLinkedWorkItemPromptTemplate } from '@/lib/work-items/linked-work-item-context'
 import {
   buildFolderWorkspaceLinkedStartupPlan,
   getFolderWorkspaceAgentLaunchFact,
@@ -81,7 +81,13 @@ export async function submitFolderWorkspaceCreate({
     linkedWorkItem
   })
   const launchState = useAppStore.getState()
-  const promptTemplate = getLinkedWorkItemPromptTemplate(launchState)
+  const promptTemplate = linkedWorkItem
+    ? getDesktopLinkedWorkItemPromptTemplate(
+        launchState,
+        linkedWorkItem.repoId,
+        getRepoExecutionHostId(projectGroup)
+      )
+    : undefined
   const launchHost = getFolderWorkspaceAgentLaunchFact(launchState, projectGroup)
   const launchPlatform = launchHost.kind === 'known' ? launchHost.platform : null
   // SSH folders use the plain orca relay shim; keep the Linux-only local executable rename out of remote launches.
