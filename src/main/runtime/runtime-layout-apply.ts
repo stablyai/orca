@@ -39,7 +39,12 @@ export async function applyWindowLayoutCommand(
   /** Agent status and orchestration records follow a pane moved into a new tab. */
   onPaneMoved: (move: TerminalLeafMoveRequest) => void = () => {},
   /** Layout-owner build: main's live facts in, the command's effects out (never in the reply). */
-  run?: LayoutCommandRunOptions
+  run?: LayoutCommandRunOptions,
+  /** The holders of many tabs in one pass, in their order; one lookup per tab when absent. */
+  hostIdsForTabs: (worktreeId: string, tabIds: readonly string[]) => ExecutionHostId[] = (
+    worktreeId,
+    tabIds
+  ) => [...new Set(tabIds.flatMap((tabId) => hostIdsFor(worktreeId, tabId)))]
 ): Promise<LayoutApplyReply> {
   if (command.type === 'renameTabs') {
     return renameTabs(store, hostIdsFor, command)
@@ -61,7 +66,9 @@ export async function applyWindowLayoutCommand(
   // A close goes to every partition holding any of its tabs; a window sends one tab at a time.
   const hostIds =
     command.type === 'closeTabs'
-      ? [...new Set(command.tabIds.flatMap((tabId) => hostIdsFor(command.workspace, tabId)))]
+      ? command.tabIds.length === 1
+        ? hostIdsFor(command.workspace, command.tabIds[0])
+        : hostIdsForTabs(command.workspace, command.tabIds)
       : hostIdsFor(command.workspace, routedTabId)
   // Paired servers keep mirrored layout until they advertise ownership.
   if (!hostIds[0] || parseExecutionHostId(hostIds[0])?.kind === 'runtime') {

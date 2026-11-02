@@ -71,22 +71,35 @@ export function chatTabLayoutCommand(
   }
 }
 
-/** One command closing every listed chat whose tab here is still the one it names; null when none is. */
+/** One command closing what the same closes, one at a time, would close: each takes its chat's
+ *  first remaining tab here when that is the tab it names. Null when none does. */
 export function chatTabCloseCommand(
   workspace: WorkspaceLayout | undefined,
   worktreeId: string,
   closes: readonly Extract<ChatTabChange, { close: string }>[]
 ): Extract<ChatTabLayoutCommand, { type: 'closeTabs' }> | null {
-  // A chat's tab is the first one listing it, as a single close reads it.
-  const tabOf = new Map<string, string>()
+  // Each chat's tabs in the order a single close searches them, and how many are taken.
+  const tabsOf = new Map<string, string[]>()
   for (const tab of workspace?.tabs ?? []) {
-    if (tab.kind === 'agent-session' && !tabOf.has(tab.entityId)) {
-      tabOf.set(tab.entityId, tab.id)
+    if (tab.kind === 'agent-session') {
+      const tabs = tabsOf.get(tab.entityId)
+      if (tabs) {
+        tabs.push(tab.id)
+      } else {
+        tabsOf.set(tab.entityId, [tab.id])
+      }
     }
   }
-  const [first, ...rest] = closes.flatMap((change) =>
-    change.tabId && tabOf.get(change.close) === change.tabId ? [change.tabId] : []
-  )
+  const taken = new Map<string, number>()
+  const tabIds: string[] = []
+  for (const change of closes) {
+    const next = taken.get(change.close) ?? 0
+    if (change.tabId && tabsOf.get(change.close)?.[next] === change.tabId) {
+      tabIds.push(change.tabId)
+      taken.set(change.close, next + 1)
+    }
+  }
+  const [first, ...rest] = tabIds
   return first
     ? { type: 'closeTabs', workspace: worktreeId, tabIds: [first, ...rest], force: true }
     : null

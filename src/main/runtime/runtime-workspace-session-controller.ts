@@ -159,6 +159,54 @@ export class RuntimeWorkspaceSessionController {
     return holders.length > 0 ? holders : [routedHostId]
   }
 
+  /** `getHostIdsForTab` for many tabs at once, in their order: one pass over each partition's rows. */
+  getHostIdsForTabs(worktreeId: string, tabIds: readonly string[]): ExecutionHostId[] {
+    const routedHostId = this.tryGetHostId(worktreeId)
+    if (!routedHostId) {
+      return []
+    }
+    const store = this.deps.getStore()
+    if (!store?.getWorkspaceSession) {
+      return [routedHostId]
+    }
+    const requested = new Set(tabIds)
+    const holdersOf = new Map<string, ExecutionHostId[]>()
+    const hold = (tabId: string, hostId: ExecutionHostId) => {
+      const holders = holdersOf.get(tabId)
+      if (!holders) {
+        holdersOf.set(tabId, [hostId])
+      } else if (holders.at(-1) !== hostId) {
+        holders.push(hostId)
+      }
+    }
+    for (const hostId of new Set([routedHostId, ...(store.getWorkspaceSessionHostIds?.() ?? [])])) {
+      const session = store.getWorkspaceSession(hostId)
+      // The rows `workspaceSessionListsTerminalTab` reads: terminal rows, and terminal unified tabs.
+      for (const tab of session?.tabsByWorktree[worktreeId] ?? []) {
+        if (requested.has(tab.id)) {
+          hold(tab.id, hostId)
+        }
+      }
+      for (const tab of session?.unifiedTabs?.[worktreeId] ?? []) {
+        if (tab.contentType !== 'terminal') {
+          continue
+        }
+        for (const tabId of new Set([tab.entityId, tab.id])) {
+          if (requested.has(tabId)) {
+            hold(tabId, hostId)
+          }
+        }
+      }
+    }
+    const holders = new Set<ExecutionHostId>()
+    for (const tabId of tabIds) {
+      for (const hostId of holdersOf.get(tabId) ?? [routedHostId]) {
+        holders.add(hostId)
+      }
+    }
+    return [...holders]
+  }
+
   get(worktreeId: string): WorkspaceSessionState | null {
     const hostId = this.tryGetHostId(worktreeId)
     return hostId ? (this.deps.getStore()?.getWorkspaceSession?.(hostId) ?? null) : null

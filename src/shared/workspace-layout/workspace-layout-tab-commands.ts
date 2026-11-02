@@ -34,6 +34,7 @@ import {
 import { admitsInitialSurface } from './workspace-layout-initial-surface'
 import { adoptedLeaf, appliedHeldAdoption } from './workspace-layout-terminal-adoption'
 import { removeTabFromWorkspace, withWorkspace } from './workspace-layout-removal'
+import { closeChatTabsTogether } from './workspace-layout-chat-tab-close'
 
 type RefusedClose = NonNullable<LayoutCommandResult['refused']>[number]
 
@@ -125,12 +126,14 @@ export function closeTabs(
   command: CommandOf<'closeTabs'>,
   context?: LayoutContext
 ): Applied {
-  let next = model
-  const closed: string[] = []
-  const recorded: string[] = []
-  const refused: RefusedClose[] = []
+  // Many chats close in one pass; every other close goes tab by tab.
+  const together = closeChatTabsTogether(model, command)
+  let next = together?.model ?? model
+  const closed: string[] = together?.closed ?? []
+  const recorded: string[] = together?.missing ?? []
+  const refused: RefusedClose[] = together?.refused ?? []
   const stopPtyIds: string[] = []
-  for (const tabId of command.tabIds) {
+  for (const tabId of together ? [] : command.tabIds) {
     const tab = findTab(next.workspaces[command.workspace]!, tabId)
     if (!tab) {
       closed.push(tabId)

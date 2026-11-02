@@ -269,13 +269,11 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     const apply = (): Promise<LayoutApplyReply> =>
       applyWindowLayoutCommand(
         this.requireStore(),
-        (worktreeId, tabId) =>
-          tabId !== null
-            ? this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
-            : [this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) ?? []].flat(),
+        (worktreeId, tabId) => this.layoutCommandHostIds(worktreeId, tabId),
         command,
         (move) => rekeyMovedPaneOwners(this, move),
-        { ...this.layoutCommandRun(command), ...run }
+        { ...this.layoutCommandRun(command), ...run },
+        (worktreeId, tabIds) => this.getWorkspaceSessionHostIdsForTabs(worktreeId, tabIds)
       )
     // Order sleep/wake after previously accepted hook statuses.
     const reply = await (ORCA_LAYOUT_OWNER_IS_MAIN && ['sleep', 'wake'].includes(command.type)

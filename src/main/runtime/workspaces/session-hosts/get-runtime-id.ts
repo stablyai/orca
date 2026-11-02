@@ -182,6 +182,20 @@ export abstract class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExac
     return this.workspaceSessions.getHostIdsForTab(worktreeId, tabId)
   }
 
+  /** The partitions a layout command reaches: its tab's holders, else the worktree's own. */
+  protected layoutCommandHostIds(worktreeId: string, tabId: string | null): ExecutionHostId[] {
+    return tabId !== null
+      ? this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
+      : [this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) ?? []].flat()
+  }
+
+  protected getWorkspaceSessionHostIdsForTabs(
+    worktreeId: string,
+    tabIds: readonly string[]
+  ): ExecutionHostId[] {
+    return this.workspaceSessions.getHostIdsForTabs(worktreeId, tabIds)
+  }
+
   protected getWorkspaceSessionHostIdForTab(worktreeId: string, tabId: string): ExecutionHostId {
     return (
       this.workspaceSessions.getHostIdsForTab(worktreeId, tabId)[0] ??

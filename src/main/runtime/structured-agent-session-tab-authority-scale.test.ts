@@ -23,6 +23,11 @@ import {
 import * as seed from './agent-session/structured-agent-session-tab-index-seed'
 import * as layoutLoad from '../../shared/workspace-layout/workspace-layout-load'
 import { withChatTabChanges, type ChatTabChange } from './agent-session/agent-session-tab-layout'
+import * as tabLayout from './agent-session/agent-session-tab-layout'
+import * as tabCommands from '../../shared/workspace-layout/workspace-layout-tab-commands'
+import * as removal from '../../shared/workspace-layout/workspace-layout-removal'
+import { RuntimeWorkspaceSessionController } from './runtime-workspace-session-controller'
+import { collectionVisits } from './collection-visits.test-fixture'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
 
@@ -245,20 +250,51 @@ async function startupPopulation(n: number, hints: boolean) {
     }))
   })
   if (hints) {
-    input.profile.setWorkspaceSession(
-      withChatTabChanges(
-        'local',
-        getDefaultWorkspaceSession(),
-        OLD,
-        moved.map((sessionId) => ({
-          open: { sessionId, agent: 'codex', tabId: structuredAgentSessionTabId(sessionId) }
+    const session = withChatTabChanges(
+      'local',
+      getDefaultWorkspaceSession(),
+      OLD,
+      moved.map((sessionId) => ({
+        open: { sessionId, agent: 'codex', tabId: structuredAgentSessionTabId(sessionId) }
+      }))
+    )!
+    // Every tenth moved chat holds a second saved tab there too, after its first.
+    const again = (tabId: string) => (twice.has(tabId) ? [tabId, `${tabId}-again`] : [tabId])
+    input.profile.setWorkspaceSession({
+      ...session,
+      unifiedTabs: {
+        ...session.unifiedTabs,
+        [OLD]: (session.unifiedTabs?.[OLD] ?? []).flatMap((row) =>
+          again(row.id).map((id) => ({ ...row, id }))
+        )
+      },
+      tabGroups: {
+        ...session.tabGroups,
+        [OLD]: (session.tabGroups?.[OLD] ?? []).map((group) => ({
+          ...group,
+          tabOrder: group.tabOrder.flatMap(again)
         }))
-      )!
-    )
+      }
+    })
   }
   await input.profile.flushPendingOrThrowAsync()
   return { input, moved, shared }
 }
+
+/** The old-key tabs of the moved chats, each tenth one's second tab right after its first. */
+const twice = new Set(
+  Array.from({ length: 20 }, (_, i) =>
+    structuredAgentSessionTabId(`moved-${(i * 10).toString().padStart(5, '0')}`)
+  )
+)
+const oldKeyCloses = (moved: readonly string[]) =>
+  moved.flatMap((sessionId) => {
+    const tabId = structuredAgentSessionTabId(sessionId)
+    return (twice.has(tabId) ? [tabId, `${tabId}-again`] : [tabId]).map((id) => ({
+      close: sessionId,
+      tabId: id
+    }))
+  })
 
 /** One real startup restore, settled, with the builder's own accumulation and each later phase
  *  counted. */
@@ -280,7 +316,7 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
   const writes: { map: Map<unknown, unknown>; carried: number }[] = []
   let building = false
   const set = Map.prototype.set
-  vi.spyOn(Map.prototype, 'set').mockImplementation(function (
+  const mapSet = vi.spyOn(Map.prototype, 'set').mockImplementation(function (
     this: Map<unknown, unknown>,
     key: unknown,
     value: unknown
@@ -301,6 +337,8 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
       return result
     } finally {
       building = false
+      // The builder runs once; later phases' own map writes are not this spy's work.
+      mapSet.mockRestore()
     }
   })
   const loads = { calls: 0, rows: 0 }
@@ -311,6 +349,58 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
     return load(...args)
   })
   const commands = vi.spyOn(rig.runtime, 'applyLayoutCommand')
+  // The old key's close, as the elements its holder lookup, command resolver and reducer visit
+  // and the workspace map keys its reducer copies.
+  const work = { holders: 0, resolver: 0, reducer: 0, rootCopies: 0, rootKeysCopied: 0 }
+  const counted =
+    <A extends unknown[], R>(part: 'holders' | 'resolver' | 'reducer', run: (...args: A) => R) =>
+    (...args: A): R => {
+      const { value, visits } = collectionVisits(() => run(...args))
+      work[part] += visits
+      return value
+    }
+  const controller = RuntimeWorkspaceSessionController.prototype
+  for (const name of ['getHostIdsForTab', 'getHostIdsForTabs'] as const) {
+    const lookup = controller[name]
+    // Absent only in the scalar build this measurement is checked against.
+    if (lookup) {
+      vi.spyOn(controller, name).mockImplementation(function (
+        this: RuntimeWorkspaceSessionController,
+        worktreeId: string,
+        tabs: never
+      ) {
+        const call = () => lookup.call(this, worktreeId, tabs)
+        return worktreeId === OLD ? counted('holders', call)() : call()
+      } as never)
+    }
+  }
+  const resolve = tabLayout.chatTabCloseCommand
+  vi.spyOn(tabLayout, 'chatTabCloseCommand').mockImplementation((workspace, worktreeId, closes) =>
+    worktreeId === OLD
+      ? counted('resolver', resolve)(workspace, worktreeId, closes)
+      : resolve(workspace, worktreeId, closes)
+  )
+  let reducing = false
+  const close = tabCommands.closeTabs
+  vi.spyOn(tabCommands, 'closeTabs').mockImplementation((model, command, context) => {
+    if (command.workspace !== OLD) {
+      return close(model, command, context)
+    }
+    reducing = true
+    try {
+      return counted('reducer', close)(model, command, context)
+    } finally {
+      reducing = false
+    }
+  })
+  const copy = removal.withWorkspace
+  vi.spyOn(removal, 'withWorkspace').mockImplementation((model, key, workspace) => {
+    if (reducing) {
+      work.rootCopies++
+      work.rootKeysCopied += Object.keys(model.workspaces).length
+    }
+    return copy(model, key, workspace)
+  })
   const saves = vi.spyOn(rig.profile, 'setWorkspaceSession')
   let notified = 0
   rig.runtime.onMobileSessionTabsChanged(() => notified++)
@@ -328,15 +418,9 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
   for (const [index, sessionId] of moved.entries()) {
     expect(opened(`current-${index}::/current/${index}`)).toEqual([sessionId])
   }
-  expect(result.get(OLD) ?? []).toEqual(
-    hints && closing
-      ? moved.map((sessionId) => ({
-          close: sessionId,
-          tabId: structuredAgentSessionTabId(sessionId)
-        }))
-      : []
-  )
-  expect(contributed).toBe(hints && closing ? 3 * n : 2 * n)
+  const oldCloses = hints && closing ? oldKeyCloses(moved) : []
+  expect(result.get(OLD) ?? []).toEqual(oldCloses)
+  expect(contributed).toBe(2 * n + oldCloses.length)
   const closes = commands.mock.calls.flatMap(([command]) =>
     command.type === 'closeTabs' && command.workspace === OLD ? [command.tabIds.length] : []
   )
@@ -351,7 +435,8 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
     oldKeyTabsClosedPerCommand: closes[0] ?? 0,
     savedOldKeyTabs: savedOld.length,
     saves: saves.mock.calls.length,
-    notified
+    notified,
+    ...work
   }
   expect(counts.buckets).toBe(result.size)
   expect(counts.carried).toBe(0)
@@ -382,18 +467,33 @@ it.each([
       }
     }
     console.log('S2_STARTUP_COUNTS', JSON.stringify({ mode, tally }))
-    expect(tally.contributed).toEqual(closing ? [60, 600] : [40, 400])
+    expect(tally.contributed).toEqual(closing ? [62, 620] : [40, 400])
     expect(tally.carried).toEqual([0, 0])
     expect(tally.buckets![1]).toBeLessThanOrEqual(12 * tally.buckets![0]!)
     if (main) {
       // The moved cohort's closes are one command whatever N is, and add only a fixed number of
       // whole-layout loads; the opens' per-change layout work is inherited and reported only.
       expect(tally.oldKeyCloseCommands).toEqual([1, 1])
-      expect(tally.oldKeyTabsClosedPerCommand).toEqual([20, 200])
+      expect(tally.oldKeyTabsClosedPerCommand).toEqual([22, 220])
       expect(tally.savedOldKeyTabs).toEqual([0, 0])
       const added = tally.loads!.map((value, i) => value - tally['withoutHints.loads']![i]!)
       expect(added[1]).toBe(added[0])
       expect(added[0]).toBeLessThanOrEqual(4)
+      // Inside that command: a pass over the old key's T tabs per partition to find holders, two
+      // resolutions (the command and its admission) and one reducer pass with one workspace-map
+      // copy, each a fixed cost plus a few visits per tab. One lookup or close per tab instead
+      // grows with T² and fails these.
+      for (const [i, tabs] of [22, 220].entries()) {
+        expect(tally.holders![i]).toBeLessThanOrEqual(5 * tabs + 16)
+        expect(tally.resolver![i]).toBeLessThanOrEqual(10 * tabs + 16)
+        expect(tally.reducer![i]).toBeLessThanOrEqual(8 * tabs + 32)
+      }
+      for (const part of ['holders', 'resolver', 'reducer']) {
+        expect(tally[part]![1]).toBeLessThanOrEqual(12 * tally[part]![0]!)
+        expect(tally[`withoutHints.${part}`]).toEqual([0, 0])
+      }
+      expect(tally.rootCopies).toEqual([1, 1])
+      expect(tally.rootKeysCopied![1]).toBe(tally.rootKeysCopied![0])
     }
   },
   180_000

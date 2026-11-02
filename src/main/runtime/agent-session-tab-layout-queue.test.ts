@@ -1,6 +1,16 @@
-import { expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { createChatTabLayoutQueue } from './agent-session-tab-layout-queue'
 import type { ChatTabLayoutCommand } from './agent-session/agent-session-tab-layout'
+
+const layoutOwner = vi.hoisted(() => ({ main: false }))
+vi.mock('../../shared/layout-owner-switch', () => ({
+  get ORCA_LAYOUT_OWNER_IS_MAIN() {
+    return layoutOwner.main
+  }
+}))
+afterEach(() => {
+  layoutOwner.main = false
+})
 
 const open = (sessionId: string) => ({
   worktreeId: 'wt',
@@ -346,5 +356,122 @@ it.each(['accepted', 'refused'] as const)(
         ? [['tab-a', 'tab-b', 'tab-c']]
         : [['tab-a', 'tab-b', 'tab-c'], ['tab-a'], ['tab-b'], ['tab-c']]
     )
+  }
+)
+
+/** Chat A in three tabs (a3 never requested), chat C and an editor; a2 and a3 each alone in a
+ *  split group, and the first group's selection and recent tabs saved. */
+async function savedDuplicateChats(workspace: string) {
+  const { fixture } =
+    await import('../persistence/loading-store/profile-state-delayed-authority-fixture')
+  const { store } = await fixture()
+  const chat = (sessionId: string, tabId: string) =>
+    store.applyLayoutCommand({
+      type: 'openAgentSessionTab',
+      workspace,
+      sessionId,
+      agent: 'codex',
+      tabId
+    })
+  await chat('A', 'a1')
+  await chat('C', 'c')
+  await store.applyLayoutCommand({
+    type: 'openEditorTab',
+    workspace,
+    tabId: 'e',
+    fileId: '/w/e.ts',
+    contentType: 'editor',
+    file: { filePath: '/w/e.ts', relativePath: 'e.ts', language: 'typescript' }
+  })
+  await chat('A', 'a2')
+  await chat('A', 'a3')
+  const groupOf = (tabId: string) =>
+    store
+      .getWorkspaceSession()
+      .tabGroups?.[workspace]?.find((group) => group.tabOrder.includes(tabId))?.id ?? 'no-group'
+  for (const [tabId, beside, direction] of [
+    ['a2', 'a1', 'right'],
+    ['a3', 'a2', 'down']
+  ] as const) {
+    await store.applyLayoutCommand({
+      type: 'splitGroup',
+      workspace,
+      tabId,
+      besideGroupId: groupOf(beside),
+      direction
+    })
+  }
+  const session = store.getWorkspaceSession()
+  const [first, ...rest] = session.tabGroups?.[workspace] ?? []
+  expect(first!.tabOrder).toEqual(['a1', 'c', 'e'])
+  expect(rest.map((group) => group.tabOrder)).toEqual([['a2'], ['a3']])
+  return {
+    ...session,
+    tabGroups: {
+      ...session.tabGroups,
+      [workspace]: [{ ...first!, activeTabId: 'a1', recentTabIds: ['e', 'c', 'a1'] }, ...rest]
+    }
+  }
+}
+
+it.each(
+  [true, false].flatMap((main) =>
+    [
+      { closes: ['a1', 'a2'], left: ['c', 'e', 'a3'] },
+      // A close names the first A tab left, or closes nothing: a2 first finds a1 there.
+      { closes: ['a2', 'a1'], left: ['c', 'e', 'a2', 'a3'] },
+      { closes: ['a1', 'a1'], left: ['c', 'e', 'a2', 'a3'] },
+      { closes: ['a1', 'a2', 'a3'], left: ['c', 'e'] }
+    ].map((row) => ({ ...row, main }))
+  )
+)(
+  'closes $closes of one chat together exactly as one at a time would, keeping C and the editor (main owner: $main)',
+  async ({ closes, left, main }) => {
+    layoutOwner.main = main
+    const { fixture } =
+      await import('../persistence/loading-store/profile-state-delayed-authority-fixture')
+    const { applyWindowLayoutCommand } = await import('./runtime-layout-apply')
+    const workspace = 'duplicate-chat-tabs'
+    const saved = await savedDuplicateChats(workspace)
+    const changes = closes.map((tabId) => ({
+      worktreeId: workspace,
+      change: { close: 'A', tabId }
+    }))
+    const closing = async (together: boolean) => {
+      const { store } = await fixture()
+      store.setWorkspaceSession(structuredClone(saved))
+      await store.flushPendingOrThrowAsync()
+      const commands: string[][] = []
+      const queue = createChatTabLayoutQueue({
+        sessionOf: () => store.getWorkspaceSession(),
+        hostIdOf: () => 'local',
+        apply: (command, run) => {
+          commands.push(command.type === 'closeTabs' ? [...command.tabIds] : [])
+          return applyWindowLayoutCommand(store, () => ['local'], command, undefined, run)
+        }
+      })
+      if (together) {
+        await queue(changes)
+      } else {
+        for (const change of changes) {
+          await queue([change])
+        }
+      }
+      const session = store.getWorkspaceSession()
+      return {
+        commands,
+        tabs: session.unifiedTabs?.[workspace],
+        groups: session.tabGroups?.[workspace],
+        tree: session.tabGroupLayouts?.[workspace]
+      }
+    }
+    const one = await closing(false)
+    const together = await closing(true)
+    expect(together.commands).toHaveLength(1)
+    expect(together.commands[0]).toEqual(one.commands.flat())
+    expect({ ...together, commands: [] }).toEqual({ ...one, commands: [] })
+    expect(together.tabs?.map((tab) => tab.id).toSorted()).toEqual(left.toSorted())
+    // The first group keeps C and the editor, its selection following the close in both.
+    expect(together.groups?.[0]).toMatchObject({ tabOrder: ['c', 'e'], recentTabIds: ['e', 'c'] })
   }
 )
