@@ -9,49 +9,37 @@ import { readWorkerResumeSession } from '../../../../orchestration/db/dispatch-c
 import { userTabHoldingSession } from './worker-follow-up-choice'
 import { reopenWorkerTerminal } from './worker-follow-up-placement'
 
-const opening = new Map<string, Promise<OrchestrationPartyLocation | null>>()
 // A resume that failed may still have spawned; its retry keeps the request id so it reconciles that pane.
+// Taken before any await, so opens that overlap (desktop and phone) share one request and get one terminal.
 const uncertain = new Map<string, string>()
 
 /** Null keeps the lookup's answer: the worker's terminal is still there, or its conversation cannot resume here. */
-export function openClosedWorkerTerminal(
+export async function openClosedWorkerTerminal(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   handle: string
 ): Promise<OrchestrationPartyLocation | null> {
   const resource = db.getWorkerTerminalResourceByHandle(handle)
-  if (!resource) {
-    return Promise.resolve(null)
+  const session = readWorkerResumeSession(resource)
+  if (
+    !resource?.worktree_id ||
+    !session ||
+    !isResumableTuiAgent(session.agent) ||
+    (resource.ownership_state !== 'released' && resource.release_state !== 'released') ||
+    // An issued handle outlives its pane; only a connected PTY means the terminal is still there.
+    runtime.getLiveTerminalPaneKey(handle) !== null
+  ) {
+    return null
   }
-  // Desktop and phone may click at once; both get the one terminal.
-  const inFlight = opening.get(resource.id)
-  if (inFlight) {
-    return inFlight
-  }
-  const open = (async (): Promise<OrchestrationPartyLocation | null> => {
-    const session = readWorkerResumeSession(resource)
-    if (
-      !resource.worktree_id ||
-      !session ||
-      !isResumableTuiAgent(session.agent) ||
-      (resource.ownership_state !== 'released' && resource.release_state !== 'released') ||
-      // An issued handle outlives its pane; only a connected PTY means the terminal is still there.
-      runtime.getLiveTerminalPaneKey(handle) !== null
-    ) {
-      return null
-    }
-    const held = await userTabHoldingSession(runtime, session)
-    if (held) {
-      // An earlier uncertain resume is settled once its conversation reports.
-      uncertain.delete(resource.id)
-      return { kind: 'terminal', handle: held }
-    }
-    const mutationId = uncertain.get(resource.id) ?? randomUUID()
-    uncertain.set(resource.id, mutationId)
-    const reopened = await reopenWorkerTerminal(runtime, resource.worktree_id, session, mutationId)
+  const mutationId = uncertain.get(resource.id) ?? randomUUID()
+  uncertain.set(resource.id, mutationId)
+  const held = await userTabHoldingSession(runtime, session)
+  if (held) {
+    // An earlier uncertain resume is settled once its conversation reports.
     uncertain.delete(resource.id)
-    return reopened ? { kind: 'terminal', handle: reopened.handle } : null
-  })().finally(() => opening.delete(resource.id))
-  opening.set(resource.id, open)
-  return open
+    return { kind: 'terminal', handle: held }
+  }
+  const reopened = await reopenWorkerTerminal(runtime, resource.worktree_id, session, mutationId)
+  uncertain.delete(resource.id)
+  return reopened ? { kind: 'terminal', handle: reopened.handle } : null
 }
