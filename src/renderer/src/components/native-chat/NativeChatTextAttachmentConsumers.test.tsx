@@ -168,7 +168,11 @@ it('opens draft and sent sources, exports exact bytes and scrolls a giant-line p
       ? Number.parseFloat(this.style.height) || viewportHeight
       : viewportHeight
   })
-  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(() => viewportHeight)
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    return this.clientHeight
+  })
   vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (
     this: HTMLElement
   ) {

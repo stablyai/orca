@@ -24,20 +24,24 @@ function TextViewport({
   const scroll = useRef<HTMLDivElement>(null)
   const viewport = useRef<HTMLDivElement>(null)
   const probe = useRef<HTMLDivElement>(null)
-  const [position, setPosition] = useState({ height: 0, rowHeight: 20, cellWidth: 8 })
+  const [position, setPosition] = useState({ height: 0, boxHeight: 0, rowHeight: 20, cellWidth: 8 })
   const measured = useMemo(
     () => new AttachmentTextViewport(source, position.rowHeight, position.height, revision),
-    [source, revision, position.rowHeight, position.height]
+    [source, revision, position.rowHeight, position.height, position.boxHeight]
   )
-  const [projection, setProjection] = useState(() => ({ layout: measured, top: 0 }))
+  const [projection, setProjection] = useState(() => ({ layout: measured, top: 0, boxHeight: 0 }))
   const { layout } = projection
   // Keep the old host extent until its live position has been read, before the next track can clamp it.
   useLayoutEffect(() => {
     if (layout !== measured) {
       const live = scroll.current?.scrollTop ?? projection.top
-      setProjection({ layout: measured, top: measured.restore(layout, live) })
+      setProjection({
+        layout: measured,
+        top: measured.restore(layout, live),
+        boxHeight: position.boxHeight
+      })
     }
-  }, [measured, layout, projection.top])
+  }, [measured, layout, projection.top, position.boxHeight])
   useLayoutEffect(() => {
     const node = scroll.current
     if (!node) {
@@ -54,11 +58,15 @@ function TextViewport({
       return
     }
     const measure = () => {
-      const height = node.clientHeight
+      const boxHeight = node.clientHeight
+      const scrollbar = scroll.current
+        ? scroll.current.offsetHeight - scroll.current.clientHeight
+        : 0
       const cell = probe.current?.getBoundingClientRect()
       setPosition((old) => ({
         ...old,
-        height,
+        boxHeight,
+        height: Math.max(0, boxHeight - scrollbar),
         rowHeight: cell?.height || old.rowHeight,
         cellWidth: cell?.width || old.cellWidth
       }))
@@ -66,6 +74,9 @@ function TextViewport({
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(node)
+    if (scroll.current) {
+      observer.observe(scroll.current)
+    }
     if (probe.current) {
       observer.observe(probe.current)
     }
@@ -113,7 +124,7 @@ function TextViewport({
         ref={scroll}
         tabIndex={0}
         className="scrollbar-editor overflow-auto px-4"
-        style={{ height: layout.height }}
+        style={{ height: projection.boxHeight }}
         onKeyDown={(event) => {
           const node = event.currentTarget
           const pixels =

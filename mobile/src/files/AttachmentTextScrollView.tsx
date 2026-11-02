@@ -28,6 +28,7 @@ export function AttachmentTextScrollView({
   demand: (window: AttachmentTextWindow) => void
 }) {
   const scroll = useRef<ScrollView>(null)
+  const viewport = useRef<ScrollView>(null)
   const nativeOffset = useRef(0)
   const [position, setPosition] = useState({ height: 0, rowHeight: 19 })
   const measured = useMemo(
@@ -95,12 +96,15 @@ export function AttachmentTextScrollView({
   const contentWidth = Math.max(width, source.displayUnits * cellWidth + 32)
   return (
     <ScrollView
+      ref={viewport}
       horizontal
       style={styles.scroll}
       contentContainerStyle={{ flexGrow: 1 }}
       onLayout={(event) => {
         setWidth(event.nativeEvent.layout.width)
-        setPosition((old) => ({ ...old, height: event.nativeEvent.layout.height }))
+        const height =
+          scrollElement(viewport.current)?.clientHeight ?? event.nativeEvent.layout.height
+        setPosition((old) => ({ ...old, height }))
       }}
     >
       <ScrollView
