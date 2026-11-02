@@ -9,6 +9,7 @@ import {
   ptyRecordForPaneKey
 } from './terminal/query/terminal-identity-read-context'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import { identityFixture } from './terminal/query/terminal-identity.test-fixture'
 
 const row: AgentStatusIpcPayload = {
   paneKey: 'source',
@@ -141,6 +142,7 @@ describe('canonical status store conversation admission', () => {
   // Every create, resume and acquire runs this check: resolving panes for nothing to leave out, or
   // scanning every terminal for each row, would grow with rows times terminals.
   it('resolves panes only to leave some out, reading the terminals once', async () => {
+    const { owner } = identityFixture()
     const run = async (count: number, closingPaneKeys: string[]) => {
       const visits = { count: 0 }
       // Counts every terminal record a lookup reads: a scan of all terminals per row reads each one.
@@ -151,17 +153,14 @@ describe('canonical status store conversation admission', () => {
         }
       }
       const leafId = (i: number) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: pane lookup reads only leafId and ptyId.
-      const leaf = (i: number) => ({ leafId: leafId(i), ptyId: `pty-${i}` }) as RuntimeLeafRecord
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: pane lookup reads only ptyId, connected and the pane fields.
-      const pty = (i: number) =>
-        ({ ptyId: `pty-${i}`, connected: true }) as RuntimePtyWorktreeRecord
       const indices = Array.from({ length: count }, (_, i) => i)
-      const leaves = new CountedMap<RuntimeLeafRecord>(
-        indices.map((i) => [`tab-${i}::${leafId(i)}`, leaf(i)])
-      )
+      // No leaf is bound: every row and closing pane resolves through the terminals' recorded panes.
+      const leaves = new CountedMap<RuntimeLeafRecord>()
       const ptys = new CountedMap<RuntimePtyWorktreeRecord>(
-        indices.map((i) => [`pty-${i}`, pty(i)])
+        indices.map((i) => [
+          `pty-${i}`,
+          owner.recordPtyWorktree(`pty-${i}`, 'workspace', { connected: true })
+        ])
       )
       const capturePaneOf = () => (record: { ptyId: string }) => {
         const i = Number(record.ptyId.slice(4))
