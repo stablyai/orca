@@ -16,8 +16,19 @@ afterEach(() => {
   }
 })
 
+type PreToolUseAnswer = {
+  hookSpecificOutput: {
+    hookEventName: 'PreToolUse'
+    permissionDecision?: 'allow' | 'deny' | 'ask'
+    permissionDecisionReason?: string
+    updatedInput?: Record<string, unknown>
+  }
+}
+
 /** Runs one turn whose Bash call a PreToolUse hook answers with `answer`. */
-async function runWithAnswer(answer: object): Promise<{ folder: string; stdout: string }> {
+async function runWithAnswer(
+  answer: PreToolUseAnswer
+): Promise<{ folder: string; stdout: string }> {
   const folder = mkdtempSync(join(tmpdir(), 'orca-pre-tool-use-'))
   folders.push(folder)
   const hook = join(folder, 'hook.sh')
