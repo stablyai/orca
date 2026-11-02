@@ -78,6 +78,21 @@ describe('subscribeToTerminalUserInput', () => {
 })
 
 describe('subscribeToTerminalInputData', () => {
+  it('keeps input unclassified when the core provenance signal is unavailable', () => {
+    const terminal = new Terminal({ allowProposedApi: true })
+    const core: CoreServiceAccess['_core']['coreService'] = Reflect.get(
+      terminal,
+      '_core'
+    ).coreService
+    Object.defineProperty(core, 'onUserInput', { value: undefined })
+    const listener = vi.fn()
+    const subscription = subscribeToTerminalInputData(terminal, listener)
+    core.triggerDataEvent('typed without the private signal', true)
+    expect(listener).toHaveBeenCalledExactlyOnceWith('typed without the private signal', null)
+    subscription.dispose()
+    terminal.dispose()
+  })
+
   it('classifies real xterm events independently and disposes both subscriptions', () => {
     const terminal = new Terminal({ allowProposedApi: true })
     const core = (terminal as unknown as CoreServiceAccess)._core.coreService

@@ -29,6 +29,7 @@ import {
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
 import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
+import { registerPtyConnectionInputProvenanceTests } from './pty-connection-input-provenance.spec'
 
 export function registerPtyConnectionCommandFinishedCleanupTests(): void {
   let mockStoreState: StoreState
@@ -840,6 +841,12 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
 
       expect(window.api.agentStatus.inferInterrupt).toHaveBeenCalled()
       expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
+    })
+
+    registerPtyConnectionInputProvenanceTests({
+      getState: () => mockStoreState,
+      getTransportQueue: () => transportFactoryQueue,
+      createDeps
     })
   })
 }

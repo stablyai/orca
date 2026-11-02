@@ -38,7 +38,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     return writer.inference
   }
   session.releaseTerminalInputWriter = () => writer?.inference.release()
-  session.forwardPtyInput = (data: string, wasUserInput = false): void => {
+  session.forwardPtyInput = (data: string, wasUserInput: boolean | null = null): void => {
     // During replay, drop query replies and pointer-generated mouse/arrows but preserve typing; stale TUI modes could send reports or recall history in the fresh shell (replay-guard.ts).
     if (
       isPaneReplaying(session.deps.replayingPanesRef, session.pane.id) &&
@@ -84,7 +84,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       session.clearPendingTerminalInputIntent()
       return
     }
-    if (session.captureAgentPreReadyInput?.(data, wasUserInput)) {
+    if (session.captureAgentPreReadyInput?.(data, wasUserInput === true)) {
       session.clearPendingTerminalInputIntent()
       return
     }
@@ -109,7 +109,8 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     const pending = acknowledged ? Promise.withResolvers<boolean | null>() : undefined
     const call: TerminalInputCall = {
       onEligible: (ptyId) => {
-        if (folded || acknowledged) {
+        // Replies reach the PTY without becoming new command intent at either D fence.
+        if (folded || acknowledged || wasUserInput === false) {
           return
         }
         const resident = getTerminalSemanticResident(ptyId)
@@ -215,11 +216,17 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
   }
   // Bind once so provenance survives deferred input without allocating per-keystroke closures.
   const forwardUserInput = (data: string): void => session.forwardPtyInput(data, true)
-  const forwardUnclassifiedInput = (data: string): void => session.forwardPtyInput(data, false)
+  const forwardQueryReply = (data: string): void => session.forwardPtyInput(data, false)
+  const forwardUnclassifiedInput = (data: string): void => session.forwardPtyInput(data, null)
   session.onDataDisposable = subscribeToTerminalInputData(
     session.pane.terminal,
     (data, wasUserInput) => {
-      const forward = wasUserInput ? forwardUserInput : forwardUnclassifiedInput
+      const forward =
+        wasUserInput === null
+          ? forwardUnclassifiedInput
+          : wasUserInput
+            ? forwardUserInput
+            : forwardQueryReply
       if (session.deps.deferPtyInput) {
         session.deps.deferPtyInput(session.pane.id, data, forward)
         return

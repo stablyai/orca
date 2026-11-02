@@ -33,7 +33,7 @@ export function subscribeToTerminalUserInput(
 /** Preserve xterm's input provenance across deferred PTY forwarding. */
 export function subscribeToTerminalInputData(
   terminal: Terminal,
-  listener: (data: string, wasUserInput: boolean) => void
+  listener: (data: string, wasUserInput: boolean | null) => void
 ): { dispose: () => void } {
   let pendingUserInput = false
   const userInput = subscribeToTerminalUserInput(terminal, () => {
@@ -42,7 +42,8 @@ export function subscribeToTerminalInputData(
   const dataInput = terminal.onData((data) => {
     const wasUserInput = pendingUserInput
     pendingUserInput = false
-    listener(data, wasUserInput)
+    // A missing core signal cannot prove that unclassified bytes are automatic replies.
+    listener(data, userInput ? wasUserInput : null)
   })
   return {
     dispose: () => {
