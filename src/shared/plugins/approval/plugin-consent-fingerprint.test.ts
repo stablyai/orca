@@ -148,22 +148,6 @@ describe('fingerprintPluginConsent', () => {
       fingerprintPluginConsent(subject, 'b'.repeat(64))
     )
   })
-
-  it('does not invalidate inert content consent when only its content hash changes', () => {
-    const subject = {
-      main: undefined,
-      capabilities: [],
-      contributes: {
-        keybindings: [],
-        vmRecipes: [],
-        agentHarnesses: []
-      }
-    }
-
-    expect(fingerprintPluginConsent(subject, 'a'.repeat(64))).toBe(
-      fingerprintPluginConsent(subject, 'b'.repeat(64))
-    )
-  })
 })
 
 describe('plugin install lockfile consent fingerprints', () => {

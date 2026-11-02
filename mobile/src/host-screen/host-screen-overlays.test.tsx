@@ -17,7 +17,7 @@ vi.mock('../agent-history/worktree-navigation-actions', () => ({
   buildWorktreeNavigationActions: () => []
 }))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetContent: 'ActionSheetContent' }))
-vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
+vi.mock('../components/bottom-drawer/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
 vi.mock('../components/ConfirmModal', () => ({ ConfirmModal: 'ConfirmModal' }))
 vi.mock('../components/NewWorktreeModalController', () => ({
   NewWorktreeModalController: 'NewWorktreeModalController'

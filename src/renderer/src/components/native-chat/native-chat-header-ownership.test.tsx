@@ -13,7 +13,7 @@ import {
   makeRepo,
   makeUnifiedTab,
   makeWorktree
-} from '../worktree-jump-palette-test-fixtures'
+} from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import * as subjects from '../tab-bar/tab-session-history-switch'
 import * as history from '../right-sidebar/ai-vault-panel-session-list-request'
 import type { NativeChatCliForkPreparation } from '@/lib/native-chat-cli-fork-preparation'

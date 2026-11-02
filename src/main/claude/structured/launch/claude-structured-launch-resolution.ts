@@ -1,5 +1,5 @@
 import type { ClaudeAccountRecipe } from '../../../../shared/agent-session-acquired-account'
-import { prepareClaudeReceivingAccount } from '../../claude-receiving-account'
+import { prepareClaudeLaunchAccount } from '../../claude-launch-account'
 import { assertStructuredAgentResolutionCurrent } from '../../../native-chat/structured-agent-command-resolution'
 import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
 import { getClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
@@ -233,8 +233,7 @@ export function claudeStructuredLaunchPart(
         hasTranscript: deps.hasTranscript
       }))
     // Fixed homes can be checked before the final account-routing recheck.
-    const resumedWithoutRouter =
-      router || basis.accountRecipe ? undefined : await resumes(accountHome.path)
+    const resumedWithoutRouter = router ? undefined : await resumes(accountHome.path)
     // Resolve auth after awaited launch preparation; account routing is rechecked below.
     const { command, prefixArgs, env } = await resolveClaudeStructuredInvocation(
       envDeps,
@@ -250,12 +249,7 @@ export function claudeStructuredLaunchPart(
       sources,
       { runtimeOnPath: false }
     )
-    const accountRecipe = await prepareClaudeReceivingAccount(
-      router,
-      env,
-      accountHome.path,
-      basis.accountRecipe
-    )
+    const accountRecipe = await prepareClaudeLaunchAccount(router, env, accountHome.path)
     const launchHome = accountRecipe.home
     const resumesTranscript = resumedWithoutRouter ?? (await resumes(launchHome))
     if (fork?.throughEntryId && !resumesTranscript) {

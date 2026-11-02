@@ -1,4 +1,5 @@
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
+import { notifyNativeChatComposerState } from './native-chat-composer-mount'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
@@ -220,6 +221,7 @@ export function NativeChatComposerField({
     if (compositionWasActive) {
       settleImeValue(textareaRef.current!)
     }
+    notifyNativeChatComposerState()
   })
   const editorCompositionStart = useLatestHandler(() => {
     if (imeEnterGesture.isComposing()) {
@@ -236,6 +238,7 @@ export function NativeChatComposerField({
     if (compositionWasActive) {
       settleImeValue(textareaRef.current!)
     }
+    notifyNativeChatComposerState()
   })
   const editorPaste = useLatestHandler(onPaste)
   const attach = useLatestHandler(onAttach)
@@ -334,6 +337,7 @@ export function NativeChatComposerField({
               positionTarget={positionTarget}
               imageRow={imageRow}
               inputRef={textareaRef}
+              isComposing={imeEnterGesture.isComposing}
               initialValue={draft}
               disabled={disabled}
               onChange={editorChange}

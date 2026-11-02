@@ -4017,7 +4017,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "다른 계정 없음",
-            "9332ba8684": "다음으로 전환",
             "d450654fa2": "Claude 계정",
             "11e2354daf": "Claude 사용 런타임",
             "3dd7ddfae1": "Claude 세부정보 및 계정 전환 도구 열기",
@@ -5751,11 +5750,7 @@
           "93cbea12c2": "메모",
           "dbe2d18972": "추가 {{value0}} 작업",
           "2c67730e07": "Orca에서 열기",
-          "e42941631a": "Linear에서 보기",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "이슈 편집",
-          "b22f058067": "GitHub에서 보기",
-          "e97d8f2876": "이슈 #{{value0}}",
           "3ea2702e62": "연결됨 {{value0}} #{{value1}}",
           "b105fd3057": "연결된 Linear {{value0}}",
           "3f2649eeb8": "연결된 이슈 #{{value0}}",
@@ -5778,8 +5773,6 @@
           "cliCreatedFromShell": "`orca worktree create`로 생성",
           "cliStartupAgent": "{{value0}}(으)로 시작됨",
           "cliCreated": "Orca CLI로 생성됨",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "Jira에서 보기",
           "linkedJira": "연결된 Jira {{value0}}",
           "openInOrcaBrowser": "Orca 브라우저에서 열기"
         },
@@ -21437,7 +21430,8 @@
       "checksNeutral": "중립",
       "allReviewChecks": "리뷰: {{count}} · 체크: {{status}}",
       "showLinked_other": "연결된 리뷰 및 작업 {{count}}개 표시",
-      "linkedCount_other": "{{count}}개 연결됨"
+      "linkedCount_other": "{{count}}개 연결됨",
+      "labels": "레이블: {{labels}}"
     },
     "attachments": {
       "updateRuntime": "워크스페이스 링크를 변경하려면 원격 런타임을 업데이트하세요",

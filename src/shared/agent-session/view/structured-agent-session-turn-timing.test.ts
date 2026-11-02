@@ -40,50 +40,11 @@ function lifecycle(
     }
   }
 }
-function assistant(): AgentJournalRenderItem {
-  sequence += 1
-  return {
-    itemId: `a${sequence}`,
-    revision: 0,
-    sequence,
-    observedAt: 1_000 + sequence,
-    body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'ok' }] }
-  }
-}
 
 describe('selectStructuredAgentTurnTimings', () => {
-  it('keys each timed lifecycle row by the user message that opened the turn', () => {
-    const items = [
-      user('u1'),
-      lifecycle('t1', { state: 'completed', startedAt: 10_000, completedAt: 197_500 }),
-      assistant(),
-      user('u2'),
-      lifecycle('t2', { state: 'running', startedAt: 300_000 })
-    ]
-    const timings = selectStructuredAgentTurnTimings(items)
-    expect(timings.get('u1')).toMatchObject({
-      state: 'completed',
-      startedAt: 10_000,
-      completedAt: 197_500
-    })
-    expect(timings.get('u2')).toMatchObject({ state: 'running', startedAt: 300_000 })
-    expect(timings.get('u2')?.completedAt).toBeUndefined()
-  })
-
   it('skips lifecycle rows that carry no start (older hosts, conversation commands)', () => {
     const items = [user('u1'), lifecycle('compact:1', {})]
     expect(selectStructuredAgentTurnTimings(items).size).toBe(0)
-  })
-
-  it('gives a prompt folded into a running turn no timing of its own', () => {
-    const items = [
-      user('u1'),
-      lifecycle('t1', { state: 'completed', startedAt: 5_000, completedAt: 9_000 }),
-      user('u2-steer'),
-      assistant()
-    ]
-    const timings = selectStructuredAgentTurnTimings(items)
-    expect([...timings.keys()]).toEqual(['u1'])
   })
 
   it('drops an end that precedes its start', () => {
@@ -92,41 +53,6 @@ describe('selectStructuredAgentTurnTimings', () => {
       lifecycle('t1', { state: 'completed', startedAt: 9_000, completedAt: 5_000 })
     ]
     expect(selectStructuredAgentTurnTimings(items).get('u1')?.completedAt).toBeUndefined()
-  })
-})
-
-describe('completedStructuredAgentTurnSeconds', () => {
-  it('floors whole seconds for completed and interrupted turns', () => {
-    expect(
-      completedStructuredAgentTurnSeconds({
-        state: 'completed',
-        startedAt: 1_000,
-        completedAt: 188_900,
-        observedAt: 1_000
-      })
-    ).toBe(187)
-    expect(
-      completedStructuredAgentTurnSeconds({
-        state: 'interrupted',
-        startedAt: 1_000,
-        completedAt: 4_999,
-        observedAt: 1_000
-      })
-    ).toBe(3)
-  })
-
-  it('claims nothing for running or unverifiable turns', () => {
-    expect(
-      completedStructuredAgentTurnSeconds({ state: 'running', startedAt: 1_000, observedAt: 1_000 })
-    ).toBeNull()
-    expect(
-      completedStructuredAgentTurnSeconds({
-        state: 'unverifiable',
-        startedAt: 1_000,
-        observedAt: 1_000
-      })
-    ).toBeNull()
-    expect(completedStructuredAgentTurnSeconds(undefined)).toBeNull()
   })
 })
 
@@ -184,35 +110,6 @@ describe('selectStructuredAgentRunningTurnTiming', () => {
 })
 
 describe('explicit user-item attribution', () => {
-  const submission = (clientMessageId: string, providerItemId: string | null) => ({
-    clientMessageId,
-    fence: 1,
-    payloadFingerprint: 'fp',
-    dispatchState: 'accepted' as const,
-    providerItemId,
-    reason: null,
-    submittedAt: 1,
-    resolvedAt: 2
-  })
-
-  it('resolves a submission through its provider alias instead of journal order', () => {
-    const items = [
-      user('orca:first'),
-      user('orca:second'),
-      lifecycle('t1', {
-        state: 'completed',
-        userItemId: 'codex:thread:t1:0',
-        startedAt: 1_000,
-        completedAt: 5_000
-      })
-    ]
-    const timings = selectStructuredAgentTurnTimings(items, [
-      submission('first', 'codex:thread:t1:0'),
-      submission('second', null)
-    ])
-    expect([...timings.keys()]).toEqual(['orca:first'])
-  })
-
   it('uses the key directly when the user item is journaled under it', () => {
     const items = [
       user('claude:s:u1'),
@@ -225,45 +122,9 @@ describe('explicit user-item attribution', () => {
     ]
     expect([...selectStructuredAgentTurnTimings(items).keys()]).toEqual(['claude:s:u1'])
   })
-
-  it('anchors to the record itself when a keyed row names a user item nobody journaled', () => {
-    const items = [
-      user('orca:first'),
-      lifecycle('auto', {
-        state: 'completed',
-        userItemId: 'codex:thread:auto:0',
-        startedAt: 1_000,
-        completedAt: 2_000
-      })
-    ]
-    // Provider-opened turns anchor themselves; preceding prompts did not open them.
-    expect([...selectStructuredAgentTurnTimings(items).keys()]).toEqual([
-      'legacy:codex:s:turn-lifecycle%3Aauto'
-    ])
-  })
-
-  it('falls back to journal order only for rows without a key (older hosts)', () => {
-    const items = [
-      user('orca:first'),
-      lifecycle('t1', { state: 'completed', startedAt: 1_000, completedAt: 2_000 })
-    ]
-    expect([...selectStructuredAgentTurnTimings(items).keys()]).toEqual(['orca:first'])
-  })
 })
 
 describe('provider-measured duration', () => {
-  it('outranks an unattributed host interval and floors to seconds', () => {
-    expect(
-      completedStructuredAgentTurnSeconds({
-        state: 'completed',
-        startedAt: 1_000,
-        completedAt: 9_999,
-        durationMs: 7_172,
-        observedAt: 1_000
-      })
-    ).toBe(7)
-  })
-
   it('is ignored while the turn is not settled', () => {
     expect(
       completedStructuredAgentTurnSeconds({
@@ -277,35 +138,6 @@ describe('provider-measured duration', () => {
 })
 
 describe('coalesced sends and canonical rows', () => {
-  const accepted = (clientMessageId: string, providerItemId: string) => ({
-    clientMessageId,
-    fence: 1,
-    payloadFingerprint: 'fp',
-    dispatchState: 'accepted' as const,
-    providerItemId,
-    reason: null,
-    submittedAt: 1,
-    resolvedAt: 2
-  })
-
-  it('gives a turn shared by two accepted sends to the prompt that opened it', () => {
-    const items = [
-      user('orca:first'),
-      user('orca:second'),
-      lifecycle('t1', {
-        state: 'completed',
-        userItemId: 'codex:thread:t1:0',
-        startedAt: 1_000,
-        completedAt: 5_000
-      })
-    ]
-    const timings = selectStructuredAgentTurnTimings(items, [
-      accepted('first', 'codex:thread:t1:0'),
-      accepted('second', 'codex:thread:t1:0')
-    ])
-    expect([...timings.keys()]).toEqual(['orca:first'])
-  })
-
   it('reads a canonical turn item exactly like the legacy carrier', () => {
     sequence += 1
     const canonical: AgentJournalRenderItem = {

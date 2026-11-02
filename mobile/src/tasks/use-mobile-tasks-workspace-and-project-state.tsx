@@ -1,4 +1,4 @@
-import { useBottomDrawerFollowUp } from '../components/use-bottom-drawer-follow-up'
+import { useBottomDrawerFollowUp } from '../components/bottom-drawer/use-bottom-drawer-follow-up'
 import type { RouteAndItemStateModel } from './use-mobile-tasks-route-and-item-state'
 import type { WorkspaceSshRecord } from './workspace-ssh-gate'
 import {

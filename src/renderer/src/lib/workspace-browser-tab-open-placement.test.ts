@@ -18,7 +18,10 @@ import {
   seedPairedWorktree,
   wrapperForRemotePage
 } from '../runtime/web-runtime-browser-creation-placement-test-rig'
-import { makeRepo, makeWorktree } from '../components/worktree-jump-palette-test-fixtures'
+import {
+  makeRepo,
+  makeWorktree
+} from '../components/worktree-jump/worktree-jump-palette-test-fixtures'
 
 vi.mock('../runtime/web-runtime-session-snapshot', async (importOriginal) => ({
   ...(await importOriginal<typeof SnapshotModule>()),

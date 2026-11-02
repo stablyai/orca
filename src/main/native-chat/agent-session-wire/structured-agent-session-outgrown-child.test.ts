@@ -1,7 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { acquiredAgentSessionAccount } from '../../../shared/agent-session-acquired-account'
 import {
   agentSessionAccountHome,
@@ -14,11 +13,9 @@ import {
   type ClaudeProfileRouterSettings
 } from '../../claude-accounts/claude-profile-router'
 import type { ClaudeProfileSetupReport } from '../../claude-accounts/claude-profile-setup'
-import { prepareClaudeReceivingAccount } from '../../claude/claude-receiving-account'
+import { prepareClaudeLaunchAccount } from '../../claude/claude-launch-account'
 import { CLAUDE_STRUCTURED_AGENT } from '../../claude/structured/claude-structured-agent-definition'
 import { resolveStructuredClaudeAccountHomePath } from '../../runtime/structured-agent-account-home'
-import { createReceivingAccountFixture } from './structured-agent-session-receiving-account.test-support'
-import { structuredAgentSessionReceivingAccount } from './structured-agent-session-receiving-account'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
@@ -34,7 +31,6 @@ import {
   type RestTestRig
 } from './structured-agent-session-rest-test-rig'
 import { hostTestAttachParams } from './structured-agent-session-host-test-data'
-import { retireOutgrownStructuredAgentSessionChild } from './structured-agent-session-outgrown-child'
 
 const accountHome = (path: string): LegacyAgentSessionAccountHome => ({
   variable: 'CODEX_HOME',
@@ -131,7 +127,7 @@ describe('a send while the selected account folder is not set up yet', () => {
       launchAccountHome: async (_record, purpose) =>
         agentSessionAccountHome(
           CLAUDE_STRUCTURED_AGENT,
-          resolveStructuredClaudeAccountHomePath({
+          await resolveStructuredClaudeAccountHomePath({
             launchEnv: {},
             wslDistro: null,
             ...(purpose === 'identity' ? { purpose } : {}),
@@ -145,7 +141,7 @@ describe('a send while the selected account folder is not set up yet', () => {
     }
     rig.adapter.acquire.mockImplementation(async (input) => {
       // The real router prepares the selected account, joining or failing its setup, as a launch does.
-      const recipe = await prepareClaudeReceivingAccount(router, {}, home('a'), input.accountRecipe)
+      const recipe = await prepareClaudeLaunchAccount(router, {}, home('a'))
       const acquired = await base(input)
       if (!acquired.link) {
         throw new Error('the rig acquisition always links a provider handle')
@@ -294,77 +290,5 @@ describe('a send after the agent said it is not signed in', () => {
     expect((await rig.host.send(CALLER, restTestSend('and again', fence()))).ok).toBe(true)
     await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(4))
     expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
-  })
-})
-
-describe('retireOutgrownStructuredAgentSessionChild', () => {
-  const idle: Parameters<typeof retireOutgrownStructuredAgentSessionChild>[2]['work'] = {
-    currentWork: () => ({ activeTurnId: () => null, hasActionablePrompt: () => false }),
-    childWork: () => [],
-    childWorkOpen: () => false,
-    hasOpenDispatch: () => false,
-    providerHoldsDispatch: () => false
-  }
-  it('keeps healthy acquired Claude A for canonical native result mail without provider children', async () => {
-    const fixture = await createReceivingAccountFixture()
-    try {
-      await fixture.turn('completed-lead', 'completed')
-      const next = await fixture.submit({
-        kind: 'message',
-        role: 'user',
-        blocks: [
-          {
-            type: 'text',
-            text: 'You have 1 orchestration message. Run `orca-dev orchestration check --run run_01227aad9fcf`.'
-          }
-        ],
-        from: {
-          kind: 'agent',
-          senders: [
-            {
-              party: {
-                address: 'structworker_e7f53907-0cde-40b9-81c5-d18eb66c07a4',
-                terminalHandle: 'structworker_e7f53907-0cde-40b9-81c5-d18eb66c07a4',
-                orcaSessionId: testOrcaSessionId('d93bb955-2f5f-4206-93e9-cbbc9460d7e3')
-              },
-              name: 'QA30955 wake-home child'
-            }
-          ],
-          orchestration: {
-            message: 'mail-notice',
-            mailbox: 'run:run_01227aad9fcf',
-            dispatchId: null,
-            messages: [
-              {
-                messageId: 'msg_1df05968e9bb',
-                runId: 'run_01227aad9fcf',
-                from: 'structworker_e7f53907-0cde-40b9-81c5-d18eb66c07a4'
-              }
-            ]
-          }
-        }
-      })
-      const child = fixture.session.child
-      const stopAgent = vi.fn(async () => undefined)
-      await retireOutgrownStructuredAgentSessionChild(fixture.root, fixture.session, {
-        next,
-        work: idle,
-        launchAccountHome: async () =>
-          (
-            await structuredAgentSessionReceivingAccount(
-              fixture.deps,
-              fixture.record,
-              fixture.session,
-              next
-            )
-          ).home,
-        stopAgent,
-        logger: { warn: vi.fn(), error: vi.fn() }
-      })
-      expect(stopAgent).not.toHaveBeenCalled()
-      expect(fixture.session.child).toBe(child)
-    } finally {
-      await fixture.dispose()
-    }
   })
 })

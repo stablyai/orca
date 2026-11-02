@@ -424,7 +424,7 @@ describe('complete handback acceptance', () => {
       const fixture = acceptanceFixture()
       updateNativeChatComposerDraft(scope, { text: '/goal ship it' }, 'immediate')
       const hook = fixture.mount()
-      let pending: Promise<void> | undefined
+      let pending: Promise<boolean> | undefined
       act(() => {
         pending = hook.result.current.send('/goal ship it', [])
       })
@@ -482,7 +482,7 @@ describe('complete handback acceptance', () => {
     updateNativeChatComposerDraft(scope, readNativeChatComposerDraft(seed.scopeKey), 'immediate')
     discardNativeChatQueuedEdit(seed)
     const hook = fixture.mount()
-    let pending: Promise<void> | undefined
+    let pending: Promise<boolean> | undefined
     act(() => {
       pending = hook.result.current.send('$review sent', [])
     })
@@ -548,7 +548,7 @@ describe('complete handback acceptance', () => {
     const fixture = acceptanceFixture()
     updateNativeChatComposerDraft(scope, { text: '/goal ship it' }, 'immediate')
     const hook = fixture.mount()
-    let pending: Promise<void> | undefined
+    let pending: Promise<boolean> | undefined
     act(() => {
       pending = hook.result.current.send('/goal ship it', [])
     })
@@ -622,7 +622,7 @@ describe('complete handback acceptance', () => {
         )
         const hook = fixture.mount()
         expect(active.get(scope)).toBe(1)
-        let pending: Promise<void> | undefined
+        let pending: Promise<boolean> | undefined
         act(() => {
           pending = hook.result.current.send('/goal ship it', [])
         })

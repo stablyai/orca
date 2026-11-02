@@ -5,7 +5,6 @@ import Database from '../../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
 import {
   createAgentSessionRecordTablesSql,
-  AGENT_SESSION_CLEAR_SUCCESSOR_INDEX_SQL,
   createJournalTablesSql,
   JOURNAL_DB_OLDEST_RELEASED_VERSION,
   JOURNAL_DB_SCHEMA_VERSION
@@ -75,7 +74,8 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
     ensureQueuedMessagesTable(probe)
     ensureCommandReceiptsTable(probe)
     ensureJournalOutcomeTables(probe)
-    probe.exec(AGENT_SESSION_CLEAR_SUCCESSOR_INDEX_SQL)
+    // An earlier build indexed clear successors for a query that no longer exists; writes stop paying for it.
+    probe.exec('DROP INDEX IF EXISTS idx_agent_session_clear_successor')
     ensureAgentSessionAttachmentClaimTables(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true

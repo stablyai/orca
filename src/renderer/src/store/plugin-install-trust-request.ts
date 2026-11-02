@@ -6,7 +6,7 @@ type PendingPluginInstallTrust = {
   resolve: (confirmed: boolean) => void
 }
 
-/** The one install waiting for "Make sure you trust …"; the Plugins pane renders it. */
+/** The one install waiting for "Make sure you trust …"; the Settings page renders it. */
 export const usePluginInstallTrustStore = create<{ pending: PendingPluginInstallTrust | null }>()(
   () => ({ pending: null })
 )

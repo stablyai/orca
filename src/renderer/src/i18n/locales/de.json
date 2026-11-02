@@ -4546,7 +4546,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "Keine weiteren Konten",
-            "9332ba8684": "Wechseln zu",
             "d450654fa2": "Claude-Konto",
             "11e2354daf": "Claude-Nutzung: Laufzeitumgebung",
             "3dd7ddfae1": "Claude-Details und Kontowechsel öffnen",
@@ -6401,11 +6400,7 @@
           "dbe2d18972": "Weitere Aktionen für {{value0}}",
           "openInOrcaBrowser": "Im Orca-Browser öffnen",
           "2c67730e07": "In Orca öffnen",
-          "e42941631a": "In Linear anzeigen",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "Issue bearbeiten",
-          "b22f058067": "Auf GitHub anzeigen",
-          "e97d8f2876": "Issue #{{value0}}",
           "moreIssueActions": "Weitere Issue-Aktionen",
           "copyLink": "Link kopieren",
           "copyLinkSuccess": "{{value0}} kopiert",
@@ -6428,8 +6423,6 @@
           "cliCreatedFromShell": "Über `orca worktree create` erstellt",
           "cliStartupAgent": "Mit {{value0}} gestartet",
           "cliCreated": "Durch Orca CLI erstellt",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "In Jira anzeigen",
           "linkedJira": "Verknüpft mit Jira {{value0}}"
         },
         "WorktreeCardMetadataStatusBadges": {
@@ -21726,7 +21719,8 @@
       "showLinked_one": "{{count}} verknüpftes Review oder verknüpfte Aufgabe anzeigen",
       "showLinked_other": "{{count}} verknüpfte Reviews und Aufgaben anzeigen",
       "linkedCount_one": "{{count}} verknüpft",
-      "linkedCount_other": "{{count}} verknüpft"
+      "linkedCount_other": "{{count}} verknüpft",
+      "labels": "Labels: {{labels}}"
     },
     "attachments": {
       "updateRuntime": "Die entfernte Laufzeitumgebung aktualisieren, um Verknüpfungen des Arbeitsbereichs zu ändern",

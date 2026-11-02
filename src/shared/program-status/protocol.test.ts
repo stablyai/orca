@@ -44,6 +44,32 @@ describe('parseProgramStatusBody', () => {
     expect(parseProgramStatusBody(`state=clear:id=${'a'.repeat(129)}:id=ok`)).toBeNull()
   })
 
+  it('discards an over-limit text value even when it is also outside the value grammar', () => {
+    expect(parseProgramStatusBody(`state=done:title=${'t'.repeat(256)}!`)).toBeNull()
+    expect(parseProgramStatusBody(`state=done:msg=${'m'.repeat(2732)}!`)).toBeNull()
+    expect(parseProgramStatusBody(`state=done:title=${'t'.repeat(255)}!`)).toEqual({
+      type: 'report',
+      report: { id: null, state: 'done' }
+    })
+  })
+
+  it('measures key, app and encoded text caps in UTF-8 bytes', () => {
+    const idle = { type: 'report', report: { id: null, state: 'idle' } }
+    expect(parseProgramStatusBody(`state=idle:${'é'.repeat(8)}=v`)).toEqual(idle)
+    expect(parseProgramStatusBody(`state=idle:${'é'.repeat(8)}k=v`)).toBeNull()
+    expect(parseProgramStatusBody(`state=idle:app=${'é'.repeat(16)}`)).toEqual(idle)
+    expect(parseProgramStatusBody(`state=idle:app=${'é'.repeat(16)}a`)).toBeNull()
+    expect(parseProgramStatusBody(`state=idle:title=${'é'.repeat(128)}`)).toEqual(idle)
+    expect(parseProgramStatusBody(`state=idle:title=${'é'.repeat(128)}a`)).toBeNull()
+  })
+
+  it('caps the body at 4087 UTF-8 bytes', () => {
+    const atCap = `state=idle:x=${'é'.repeat(2037)}`
+    expect(Buffer.byteLength(atCap)).toBe(4087)
+    expect(parseProgramStatusBody(atCap)).not.toBeNull()
+    expect(parseProgramStatusBody(`${atCap}a`)).toBeNull()
+  })
+
   it('skips malformed pairs, trims whitespace, and lets the last repeat win', () => {
     expect(parseProgramStatusBody(' state = idle :junk:K=v:app=a:app=b:x=has space')).toEqual({
       type: 'report',
@@ -56,6 +82,16 @@ describe('parseProgramStatusBody', () => {
       report: { state: 'working', progress: 40 }
     })
     expect(parseProgramStatusBody('state=working:progress=101')).toEqual({
+      type: 'report',
+      report: { id: null, state: 'working' }
+    })
+    expect(parseProgramStatusBody('state=working:progress=0050')).toMatchObject({
+      report: { progress: 50 }
+    })
+    expect(parseProgramStatusBody('state=blocked:progress=000')).toMatchObject({
+      report: { progress: 0 }
+    })
+    expect(parseProgramStatusBody('state=working:progress=0101')).toEqual({
       type: 'report',
       report: { id: null, state: 'working' }
     })

@@ -12,7 +12,7 @@ import { registerPtyHandlers } from './register-handlers'
 import { setLocalPtyProvider, getLocalPtyProvider } from './provider/registry'
 import { join } from 'node:path'
 // Wrapper roots are content-addressed.
-import { getShellReadyWrapperRoot } from '../../providers/local-pty-shell-ready-wrapper-root'
+import { getShellReadyWrapperRoot } from '../../providers/local-pty/local-pty-shell-ready-wrapper-root'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))

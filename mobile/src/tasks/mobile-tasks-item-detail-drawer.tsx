@@ -2,7 +2,6 @@ import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   ActionSheetModal,
-  BottomDrawer,
   View,
   TaskProviderLogo,
   colors,
@@ -11,6 +10,7 @@ import {
   RefreshCw,
   useState
 } from './mobile-tasks-dependencies'
+import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { styles } from './mobile-tasks-legacy-styles'
 import { taskKindLabel } from './mobile-tasks-legacy-foundation'
 import { renderMobileTasksItemDetailContent } from './mobile-tasks-item-detail-content'
