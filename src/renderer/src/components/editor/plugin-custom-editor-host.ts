@@ -35,14 +35,6 @@ import type {
   CustomEditorUnappliedEdit
 } from './plugin-custom-editor-host-types'
 
-export type {
-  CustomEditorBinaryDocument,
-  CustomEditorEditRefusal,
-  CustomEditorHost,
-  CustomEditorHostOptions,
-  CustomEditorUnappliedEdit
-} from './plugin-custom-editor-host-types'
-
 /** The frame only ever holds the document: Orca owns the buffer, dirty state and save. */
 export function createCustomEditorHost(options: CustomEditorHostOptions): CustomEditorHost {
   const budget =
@@ -94,6 +86,7 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
 
   const postDocument = (document: CustomEditorDocument, transfer: Transferable[] = []): void => {
     post(pluginEvent(FRAME_EVENTS.editorDocument, document), transfer)
+    options.onFrameProgress?.('delivered')
   }
 
   const pushBinaryDocument = (force: boolean, binary: CustomEditorBinaryDocument | null): void => {
@@ -253,6 +246,10 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
         pushDocument(true)
       },
       onEvent(event, context) {
+        if (event.event === FRAME_EVENTS.editorSubscribed) {
+          options.onFrameProgress?.('subscribed')
+          return
+        }
         const chord =
           event.event === FRAME_EVENTS.editorKeydown
             ? readCustomEditorKeyChord(event.payload)

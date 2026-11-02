@@ -11,7 +11,7 @@ import {
   Trash2
 } from 'lucide-react-native'
 import { colors, pressedStyle } from '../theme/mobile-theme'
-import { queuedMessageCardSteers } from '../../../src/shared/structured-agent-session-queued-cards'
+import { queuedMessageCardSteers } from '../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
 import type { MobileQueuedMessageInlineEditor } from './use-mobile-structured-queued-edit'

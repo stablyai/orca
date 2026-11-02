@@ -8,12 +8,16 @@ export function posixCurlCommand(curlCommand = 'curl'): string {
 
 export function buildPosixAgentHookPostCommand(
   source: AgentHookSource,
-  options: { curlCommand?: string; indent?: string } = {}
+  options: { curlCommand?: string; indent?: string; decisionHeaderVar?: string } = {}
 ): string[] {
   const curlCommand = posixCurlCommand(options.curlCommand ?? 'curl')
   const indent = options.indent ?? '  '
   // Only Claude's capture sets this; the host checks the attachment itself before trusting it.
   const tmux = source === 'claude'
+  // Names the decision format the script prints; absent, Orca never waits on plugins.
+  const decision = options.decisionHeaderVar
+    ? [`  ${indent}-H "X-Orca-Hook-Decision: \${${options.decisionHeaderVar}:-}" \\`]
+    : []
   return [
     `if [ "\${ORCA_AGENT_HOOK_TRANSPORT:-}" = "${ORCA_HOOK_RAW_JSON_TRANSPORT}" ] && command -v base64 >/dev/null 2>&1 && command -v tr >/dev/null 2>&1; then`,
     `  orca_hook_metadata=$(printf '%s\\037%s\\037%s\\037%s\\037%s\\037%s' "$ORCA_PANE_KEY" "$ORCA_TAB_ID" "$ORCA_AGENT_LAUNCH_TOKEN" "$ORCA_WORKTREE_ID" "$ORCA_AGENT_HOOK_ENV" "$ORCA_AGENT_HOOK_VERSION" | base64 | tr -d '\\n') && \\`,
@@ -27,6 +31,7 @@ export function buildPosixAgentHookPostCommand(
     `  ${indent}-H "X-Orca-Agent-Hook-Meta: \${orca_hook_metadata}" \\`,
     `  ${indent}-H "X-Orca-Agent-Process: \${orca_agent_process:-}" \\`,
     ...(tmux ? [`  ${indent}-H "X-Orca-Tmux-Pane: \${orca_tmux_pane:-}" \\`] : []),
+    ...decision,
     `  ${indent}--data-binary @-`,
     'else',
     `  printf '%s' "$payload" | ${curlCommand} -sS -X POST "http://127.0.0.1:\${ORCA_AGENT_HOOK_PORT}/hook/${source}" \\`,
@@ -34,6 +39,7 @@ export function buildPosixAgentHookPostCommand(
     `  ${indent}--noproxy "127.0.0.1" \\`,
     `  ${indent}-H "Content-Type: application/x-www-form-urlencoded" \\`,
     `  ${indent}-H "X-Orca-Agent-Hook-Token: \${ORCA_AGENT_HOOK_TOKEN}" \\`,
+    ...decision,
     `  ${indent}--data-urlencode "paneKey=\${ORCA_PANE_KEY}" \\`,
     `  ${indent}--data-urlencode "tabId=\${ORCA_TAB_ID}" \\`,
     `  ${indent}--data-urlencode "launchToken=\${ORCA_AGENT_LAUNCH_TOKEN}" \\`,

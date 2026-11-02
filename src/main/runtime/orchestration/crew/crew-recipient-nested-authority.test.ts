@@ -3,7 +3,7 @@ import { fixture } from './crew-read-model.test-fixture'
 import { meterCrewSql, sqlTotals } from './crew-recipient-sql.test-fixture'
 import { CrewReadModel } from './crew-read-model'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
 import { formatOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import {

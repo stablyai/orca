@@ -5,7 +5,7 @@ import { useMobileStructuredSelectionController } from './use-mobile-structured-
 import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
 import { forgetMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
-import { createStructuredAgentSessionOptionsReadOwner } from '../../../src/shared/structured-agent-session-options-read-owner'
+import { createStructuredAgentSessionOptionsReadOwner } from '../../../src/shared/agent-session/options/structured-agent-session-options-read-owner'
 import type { RpcClient } from '../transport/rpc-client'
 import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session/options/agent-session-option-catalog-types'
 import { usesInstalledAgentModelCatalog } from '../../../src/shared/agent-model-catalog-ownership'
