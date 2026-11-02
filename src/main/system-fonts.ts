@@ -1,5 +1,5 @@
 import { runProcess } from '@orca/process-host'
-import { listWindowsInstalledFontFamilies } from './windows-installed-font-families'
+import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
 
 let cachedFonts: string[] | null = null
 let fontsPromise: Promise<string[]> | null = null
@@ -78,17 +78,26 @@ function listLinuxFonts(): Promise<string[]> {
 }
 
 function listWindowsFonts(): Promise<string[]> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  // A stalled read (e.g. a font registered on an offline share) must not hang settings IPC.
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new Error('Timed out reading Windows font files')),
-      SYSTEM_FONT_LIST_TIMEOUT_MS
+  // Pin UTF-8 before output; PowerShell 5.1 otherwise uses the OEM code page.
+  const script = `
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+Add-Type -AssemblyName System.Drawing
+$fonts = New-Object System.Drawing.Text.InstalledFontCollection
+$fonts.Families | ForEach-Object { $_.Name }
+`
+
+  return execFileText(
+    windowsPowerShellPath(),
+    ['-NoProfile', '-NonInteractive', '-Command', script],
+    8 * 1024 * 1024
+  ).then((output) =>
+    uniqueSorted(
+      output
+        .split('\n')
+        .map((name) => name.trim())
+        .filter(Boolean)
     )
-  })
-  return Promise.race([listWindowsInstalledFontFamilies(), timeout])
-    .then(uniqueSorted)
-    .finally(() => clearTimeout(timer))
+  )
 }
 
 async function execFileText(

@@ -16,7 +16,3 @@ export function windowsSystem32Binary(
 ): string {
   return pathWin32.join(systemRoot(env), 'System32', fileName)
 }
-
-export function windowsFontsDirectory(env: NodeJS.ProcessEnv = process.env): string {
-  return pathWin32.join(systemRoot(env), 'Fonts')
-}

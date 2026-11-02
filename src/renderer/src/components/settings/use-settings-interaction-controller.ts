@@ -3,7 +3,7 @@ import type { SourceControlAiSettingsPatch } from '../../../../shared/source-con
 import { useAppStore } from '../../store'
 import { translate } from '@/i18n/i18n'
 import { mergeFontSuggestions } from './SettingsConstants'
-import { setInstalledFontsUnavailable } from './installed-font-list-status'
+import { listInstalledFontFamilies, setInstalledFontsUnavailable } from './installed-font-list'
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsDeepLinkTargetWatch } from './settings-deep-link-target-watcher'
 import {
@@ -146,8 +146,7 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
       return
     }
 
-    installedFontsLoadPromiseRef.current = window.api.settings
-      .listFonts()
+    installedFontsLoadPromiseRef.current = listInstalledFontFamilies()
       .then((fonts) => {
         if (!settingsMountedRef.current) {
           return

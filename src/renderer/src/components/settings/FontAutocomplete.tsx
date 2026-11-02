@@ -5,7 +5,7 @@ import { Input } from '../ui/input'
 import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover'
 import { ScrollArea } from '../ui/scroll-area'
 import { filterFontSuggestions, getRenderedFontSuggestions } from './settings-form-option-filter'
-import { useInstalledFontsUnavailable } from './installed-font-list-status'
+import { useInstalledFontsUnavailable } from './installed-font-list'
 import { translate } from '@/i18n/i18n'
 
 type FontAutocompleteProps = {
