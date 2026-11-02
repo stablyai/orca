@@ -497,5 +497,5 @@ export type GlobalSettings = GlobalSettingsBase & {
 }
 
 // Retain one import entry point while keeping feature shapes separate from the max-lines-limited settings module.
-export type { GhosttyImportPreview } from './ghostty-import-preview'
+export type { GhosttyImportPreview, GhosttyImportSource } from './ghostty-import-preview'
 export type { OrcaWorkspaceLayout } from './orca-workspace-layout'
