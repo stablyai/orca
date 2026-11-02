@@ -14,6 +14,7 @@ import { MAX_TOKENIZATION_LINE_LENGTH } from '@/lib/monaco-languages/monarch-emb
 import { buildFileEditorWordWrapOptions } from './file-editor-word-wrap-options'
 import { toEditorModelUri } from './editor-model-uri'
 import { getEditorModelOwnerKey } from './editor-model-owner'
+import { NO_RESOURCE_EVIDENCE, type WorkspaceResource } from '@/lib/workspace-copy-owner'
 import { getMonacoAutoHeightForContent, isMonacoAutoHeightCapped } from './monaco-auto-height'
 import { monacoFindOptions } from './monaco-find-options'
 import { useMonacoRevealScheduler } from './use-monaco-reveal-scheduler'
@@ -48,6 +49,8 @@ type MonacoEditorProps = {
   revealMatchLength?: number
   markdownDocuments?: MarkdownDocument[]
   worktreeId?: string
+  /** The open file's tab; its review notes belong to the copy it names. */
+  noteSource?: WorkspaceResource
   markdownAnnotationsEnabled?: boolean
   conflictDecorationsEnabled?: boolean
   readOnly?: boolean
@@ -72,6 +75,7 @@ export default function MonacoEditor({
   revealMatchLength,
   markdownDocuments,
   worktreeId,
+  noteSource = NO_RESOURCE_EVIDENCE,
   markdownAnnotationsEnabled = false,
   conflictDecorationsEnabled = false,
   readOnly = false,
@@ -161,6 +165,7 @@ export default function MonacoEditor({
     content,
     language,
     worktreeId,
+    noteSource,
     markdownAnnotationsEnabled
   })
 

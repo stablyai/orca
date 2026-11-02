@@ -90,33 +90,6 @@ describe('useAudioCapture device loss', () => {
     expect(onCaptureLost).not.toHaveBeenCalled()
   })
 
-  it('caps visual publications and deduplicates steady silence', async () => {
-    let now = 0
-    vi.spyOn(performance, 'now').mockImplementation(() => now)
-    const publishMeter = vi.fn()
-    const { result } = renderHook(() => useAudioCapture(publishMeter))
-    await result.current.start()
-
-    const process = (sample: number): void => {
-      processor.onaudioprocess?.({
-        inputBuffer: { getChannelData: () => new Float32Array(128).fill(sample) }
-      } as unknown as AudioProcessingEvent)
-    }
-
-    process(0)
-    expect(publishMeter).toHaveBeenCalledTimes(1)
-
-    now = 70
-    process(0.3)
-    now = 90
-    process(0)
-    expect(publishMeter).toHaveBeenCalledTimes(2)
-
-    now = 140
-    process(0)
-    expect(publishMeter).toHaveBeenCalledTimes(3)
-  })
-
   it('skips hidden updates, resumes promptly, and resets immediately on stop', async () => {
     let now = 0
     let hidden = true

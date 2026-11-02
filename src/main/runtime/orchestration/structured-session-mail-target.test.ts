@@ -91,6 +91,7 @@ function probe(extra: Record<string, unknown> = {}): MailTargetProbe {
     _orchestrationDb: db,
     crewChanges: new CrewChanges(),
     ptysById: new Map(),
+    orchestrationStructuredMailboxPointerDelivery: { statusChanged: () => true },
     ...extra
   })
 }

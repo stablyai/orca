@@ -215,7 +215,7 @@ export function AgentLaunchSetupPanel({
             agent: entry.label
           })}
         />
-        <CommandList className="max-h-56">
+        <CommandList className="max-h-56" data-focus-behavior="page">
           <CommandEmpty>
             {translate('agentPicker.noModels', 'No models match your search.')}
           </CommandEmpty>

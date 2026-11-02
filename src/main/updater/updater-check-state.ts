@@ -39,14 +39,14 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     return 'default'
   }
 
-  protected launchPendingUserInitiatedCheckAfterInFlight(variant: UpdateCheckVariant): void {
+  protected launchPendingUserInitiatedCheckAfterInFlight(options: UpdateCheckOptions): void {
     this.pendingUserInitiatedCheckAfterInFlight = null
     setTimeout(() => {
       // Wait one tick for electron-updater to clear its promise or the modifier check dedupes into the stable check.
       if (this.currentStatus.state === 'checking') {
         this.currentStatus = { state: 'idle' }
       }
-      this.checkForUpdatesFromMenu(this.getOptionsForUpdateCheckVariant(variant))
+      this.checkForUpdatesFromMenu(options)
     }, 0)
   }
 
@@ -195,9 +195,14 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     return this.consumeMissingManifestPrereleaseFallbackResult() !== null
   }
 
-  protected completeSilentUpdateCheck(userInitiated: boolean | undefined): boolean {
+  protected completeSilentUpdateCheck(
+    userInitiated: boolean | undefined,
+    options?: { preserveAvailableUpdate?: boolean }
+  ): boolean {
     const shouldRetrySoon = this.consumeSilentCheckShortRetryReason()
-    this.clearAvailableUpdateContext()
+    if (!options?.preserveAvailableUpdate) {
+      this.clearAvailableUpdateContext()
+    }
     if (shouldRetrySoon) {
       // Last-good silent results remain release transitions; preserve the short publishing retry.
       this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)

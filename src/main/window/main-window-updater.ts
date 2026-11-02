@@ -8,6 +8,7 @@ import { logStartupMilestone } from '../startup/startup-diagnostics'
 import { applyProxyToElectronUpdaterSession } from '../updater/electron-updater-proxy-session'
 import { updaterErrorMessage } from '../updater/updater-coded-error'
 import { updaterCodedMessage } from '../../shared/updater-failure-copy'
+import { normalizeUpdateDelayDays } from '../../shared/update-delay'
 import {
   checkForUpdatesFromMenu,
   dismissAvailableUpdate,
@@ -67,6 +68,7 @@ function buildUpdaterSetupOptions(store: Store, options?: UpdaterSetupHooks): Up
       store.updateUI({ dismissedUpdateNudgeId: id })
     },
     getReleaseChannelOverride: () => store.getUI().releaseChannelOverride ?? null,
+    getUpdateDelayDays: () => normalizeUpdateDelayDays(store.getSettings().updateDelayDays),
     onBeforeQuitFailure: options?.onBeforeUpdateQuitFailure,
     installMode: options?.updateInstallMode
   }

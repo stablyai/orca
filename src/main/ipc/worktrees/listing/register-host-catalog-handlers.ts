@@ -11,8 +11,8 @@ import { isFolderRepo } from '../../../../shared/repo-kind'
 import { projectWorktreeLineageWithHostPeers } from '../../../worktree-lineage-host-peers'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { agentHookServer } from '../../../agent-hooks/server'
-import { pruneWorkspaceCleanupScanSnapshots } from '../../../workspace-cleanup-scan-snapshot'
-import { pruneWorkspaceSpaceAnalysisSnapshots } from '../../../workspace-space-analysis-snapshot'
+import { pruneWorkspaceCleanupScanSnapshots } from '../../../workspaces/cleanup/workspace-cleanup-scan-snapshot'
+import { pruneWorkspaceSpaceAnalysisSnapshots } from '../../../workspaces/space-analysis/workspace-space-analysis-snapshot'
 import { findExactRepoOwner, hasConflictingStoredWorktreeOwner } from './worktree-host-ownership'
 import {
   buildDisconnectedDetectedWorktrees,
