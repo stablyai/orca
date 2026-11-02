@@ -64,7 +64,7 @@ shows, then `orca.events.on(event, handler)` in `activate(orca)`. Fire one at th
 ## A status bar item a worker updates
 
 Declare it in `contributes.statusBarItems` (`{ "id", "text"?, "icon"?, "tone"?, "tooltip"?,
-"command"? }`, `engines.orca` `>=1.4.247`); a static item needs only `declarative`, and pressing it
+"command"? }`, `engines.orca` `>=1.4.248`); a static item needs only `declarative`, and pressing it
 runs `command`, one of the plugin's own `contributes.commands`. From a worker, change it with
 `orca.host.call('statusBar.update', { id, text, tone, tooltip, visible })`; fields you leave out
 keep their value and `visible: false` hides it. Bind a key to the same command with

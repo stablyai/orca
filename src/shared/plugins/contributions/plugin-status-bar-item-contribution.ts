@@ -1,15 +1,12 @@
 import { z, type RefinementCtx } from 'zod'
 import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import { pluginCommandIdSchema, pluginIdSchema } from '../manifest/plugin-manifest-fields'
-import {
-  pluginFieldDoc,
-  PLUGIN_COMPONENTS_CATALOG_2_SINCE
-} from '../manifest/plugin-schema-field-docs'
+import { pluginFieldDoc } from '../manifest/plugin-schema-field-docs'
 import { PLUGIN_DECLARATIVE_TONES } from '../declarative/plugin-declarative-prop-schemas'
 import { PLUGIN_PANEL_ICONS } from './plugin-panel-contribution'
 
 /** First release that reads `contributes.statusBarItems` and `statusBar.update`. */
-export const PLUGIN_STATUS_BAR_SINCE = PLUGIN_COMPONENTS_CATALOG_2_SINCE
+export const PLUGIN_STATUS_BAR_SINCE = '1.4.248'
 export const PLUGIN_STATUS_BAR_ITEM_LIMIT = 8
 export const PLUGIN_STATUS_BAR_TEXT_MAX_LENGTH = 64
 export const PLUGIN_STATUS_BAR_TOOLTIP_MAX_LENGTH = 256

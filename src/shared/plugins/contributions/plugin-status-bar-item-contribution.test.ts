@@ -3,7 +3,7 @@ import { parsePluginManifest } from '../manifest/plugin-manifest'
 import { derivePluginExecutionProfile } from './plugin-execution-profile'
 import { pluginStatusBarItemPatchSchema } from './plugin-status-bar-item-contribution'
 
-function manifest(statusBarItems: unknown[], engines = '>=1.4.247') {
+function manifest(statusBarItems: unknown[], engines = '>=1.4.248') {
   return {
     manifestVersion: 2,
     execution: 'declarative',
@@ -52,7 +52,7 @@ describe('contributes.statusBarItems', () => {
   })
 
   it('needs an engines floor that reads the field', () => {
-    expect(issues(manifest([{ id: 'a', text: 'x' }], '>=1.4.246'))).toContain('1.4.247')
+    expect(issues(manifest([{ id: 'a', text: 'x' }], '>=1.4.247'))).toContain('1.4.248')
   })
 
   it('needs only the declarative profile', () => {
