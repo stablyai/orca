@@ -5,6 +5,7 @@ import {
   isPreviousMessageStop,
   previousMessageChained,
   previousMessageTarget,
+  tailOffsetBeforeFirstScroll,
   trailingStopAboveViewport,
   type PreviousMessageStop
 } from './mobile-native-chat-previous-message'
@@ -68,6 +69,13 @@ describe('previous message target', () => {
     expect(isPreviousMessageStop('system', {})).toBe(false)
     expect(isPreviousMessageStop('assistant', { joinsWorkRun: true })).toBe(false)
     expect(isPreviousMessageStop('user', { foldedAway: true })).toBe(false)
+  })
+
+  it('reads the tail from measured rows before the first scroll event', () => {
+    expect(tailOffsetBeforeFirstScroll(false, 0, 700, [80, 200, 2400])).toBe(1700)
+    expect(tailOffsetBeforeFirstScroll(true, 0, 700, [80, 200, 2400])).toBe(0)
+    expect(tailOffsetBeforeFirstScroll(false, 0, 0, [2400])).toBe(0)
+    expect(tailOffsetBeforeFirstScroll(false, 40, 700, [100])).toBe(40)
   })
 
   it('moves an end-anchored list toward older rows to bring a top down to the viewport', () => {
