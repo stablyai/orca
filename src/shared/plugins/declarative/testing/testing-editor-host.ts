@@ -1,5 +1,12 @@
 import { runInThisContext } from 'node:vm'
 import {
+  isMockEditorFrameApi,
+  type MockEditorFrameApi,
+  type MockEditorShellDocument,
+  type MockEditorShellRunner,
+  type MockEditorShellWindow
+} from './testing-editor-frame-api'
+import {
   CUSTOM_EDITOR_CONFLICT,
   CUSTOM_EDITOR_DOCUMENT_MAX_BYTES,
   CUSTOM_EDITOR_FLUSH_TIMEOUT_MS,
@@ -38,7 +45,7 @@ export type MockEditorEdit = {
 }
 export type MockEditorHost = {
   /** The frame API, also installed as `globalThis.orca`. */
-  readonly orca: unknown
+  readonly orca: MockEditorFrameApi
   /** The file as Orca holds it now: text, or undefined for a bytes file. */
   readonly text: string | undefined
   readonly bytes: Uint8Array | undefined
@@ -57,6 +64,9 @@ export type MockEditorHost = {
   dispose(): void
 }
 
+const isFrameMessage = (value: unknown): value is FrameMessage =>
+  typeof value === 'object' && value !== null
+
 type FrameMessage = {
   kind?: unknown
   event?: unknown
@@ -65,7 +75,6 @@ type FrameMessage = {
   params?: unknown
   error?: unknown
 }
-type ShellRunner = (window: object, document: object, navigator: object) => void
 
 const SHELL_SCRIPT = /<script>\n'use strict'\n([\s\S]*?)<\/script>/.exec(
   buildPluginGuestShellHtml('', 'editor')
@@ -195,9 +204,9 @@ export function mockEditorHost(
     theme: theme()
   })
 
-  const frameWindow = {
+  const frameWindow: MockEditorShellWindow = {
     __orcaPluginFrameTransport: {
-      send: (message: FrameMessage) => fromFrame(message),
+      send: (message) => fromFrame(isFrameMessage(message) ? message : {}),
       subscribe: (fn: (message: unknown) => void) => {
         receive = fn
       }
@@ -205,7 +214,7 @@ export function mockEditorHost(
     addEventListener: () => {}
   }
   const classes = new Set<string>()
-  const frameDocument = {
+  const frameDocument: MockEditorShellDocument = {
     documentElement: {
       classList: {
         add: (name: string) => classes.add(name),
@@ -214,11 +223,14 @@ export function mockEditorHost(
     },
     getElementById: () => null
   }
-  const run: ShellRunner = runInThisContext(
+  const run: MockEditorShellRunner = runInThisContext(
     `(function (window, document, navigator) {\n'use strict'\n${SHELL_SCRIPT}\n})`
   )
   run(frameWindow, frameDocument, { language: options.locale ?? 'en-US' })
   const orca: unknown = Object.getOwnPropertyDescriptor(frameWindow, 'orca')?.value
+  if (!isMockEditorFrameApi(orca)) {
+    throw new Error('orca/testing: the frame shell did not define window.orca')
+  }
   Object.defineProperty(globalThis, 'orca', { value: orca, configurable: true, writable: true })
 
   const host: MockEditorHost = {

@@ -1,32 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { mockEditorHost, type MockEditorHost } from './testing-editor-host'
+import type { MockEditorSession, MockEditorSessionOptions } from './testing-editor-frame-api'
 
-type Session = {
-  value: unknown
-  readOnly: boolean
-  change: (next: unknown) => void
-  flush: () => Promise<void>
-  onReplace: (fn: (value: unknown) => void) => { dispose: () => void }
-  dispose: () => void
-}
-
-function isSession(value: unknown): value is Session {
-  return typeof value === 'object' && value !== null && 'change' in value && 'flush' in value
-}
-
-/** `globalThis.orca.document.session(options)`, as an editor would call it. */
-async function session(options: object = {}): Promise<Session> {
-  const orca: unknown = Reflect.get(globalThis, 'orca')
-  const document: unknown = typeof orca === 'object' && orca ? Reflect.get(orca, 'document') : null
-  const open: unknown = document ? Reflect.get(document, 'session') : null
-  if (typeof open !== 'function') {
-    throw new Error('no orca.document.session')
+/** `orca.document.session(options)` on the installed host, as an editor would call it. */
+function session(options: MockEditorSessionOptions = {}): Promise<MockEditorSession> {
+  if (!host) {
+    throw new Error('no mockEditorHost')
   }
-  const opened: unknown = await Reflect.apply(open, document, [{ debounceMs: 0, ...options }])
-  if (!isSession(opened)) {
-    throw new Error('not a session')
-  }
-  return opened
+  return host.orca.document.session({ debounceMs: 0, ...options })
 }
 
 let host: MockEditorHost | null = null
@@ -77,30 +58,22 @@ describe('mockEditorHost', () => {
     await host.flush()
     expect([...(host.bytes ?? [])]).toEqual([2, 3])
     const themes: unknown[] = []
-    const orca: unknown = Reflect.get(globalThis, 'orca')
-    Reflect.apply(Reflect.get(Object(orca), 'on'), orca, ['theme', (t: unknown) => themes.push(t)])
+    host.orca.on('theme', (theme) => themes.push(theme))
     host.setTheme('dark')
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(themes).toEqual([{ colorScheme: 'dark' }])
     doc.dispose()
     host.dispose()
-    expect(Reflect.get(globalThis, 'orca')).toBeUndefined()
+    expect('orca' in globalThis).toBe(false)
   })
 })
 
 describe('mockEditorHost saves as Orca does', () => {
   it('blocks a save after an oversized edit until a later edit lands', async () => {
     host = mockEditorHost({ text: 'a' })
-    const orca: unknown = Reflect.get(globalThis, 'orca')
-    const document: unknown = Reflect.get(Object(orca), 'document')
-    const applyEdit: unknown = Reflect.get(Object(document), 'applyEdit')
-    if (typeof applyEdit !== 'function') {
-      throw new Error('no applyEdit')
-    }
+    const { document } = host.orca
     const send = (text: string): Promise<unknown> =>
-      Promise.resolve(
-        Reflect.apply(applyEdit, document, [{ baseVersion: 1, content: { kind: 'text', text } }])
-      )
+      document.applyEdit({ baseVersion: 1, content: { kind: 'text', text } })
     await session()
     await expect(send('x'.repeat(64 * 1024 * 1024 + 1))).rejects.toMatchObject({
       code: 'too_large'
