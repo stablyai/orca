@@ -4,7 +4,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { getShellLaunchConfig } from './providers/local-pty-shell-ready'
+import { getShellLaunchConfig } from './providers/local-pty/local-pty-shell-ready'
 import { selectShellStartupFeatures } from './shell-startup-features'
 import { hasZsh, makeZshHome, MARKERS, runZshPty, ZSH_PATH } from './zsh-startup-hook-pty-harness'
 

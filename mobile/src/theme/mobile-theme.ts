@@ -18,6 +18,8 @@ const darkColors = {
   composerSurface: '#1f1f1f',
   composerBorder: 'rgba(250, 250, 250, 0.09)',
   composerControl: '#262626',
+  // A text field's edge, 3:1 on the screen, a sheet and a sheet group (WCAG 1.4.11): desktop's dark --ring.
+  inputBorder: '#737373',
   skillToken: '#8ab4f8',
   skillTokenSurface: 'rgba(59, 130, 246, 0.2)',
   // Your own message: --chat-user-surface and --chat-user-border over --chat-canvas, text in --chat-foreground-strong.
@@ -88,6 +90,8 @@ const lightColors: MobilePalette = {
   composerSurface: '#ffffff',
   composerBorder: 'rgba(10, 10, 10, 0.11)',
   composerControl: '#f5f5f5',
+  // Desktop's light --ring (#a1a1a1) is under 3:1 on white, so both schemes share the dark one.
+  inputBorder: '#737373',
   skillToken: '#1d4ed8',
   skillTokenSurface: 'rgba(59, 130, 246, 0.12)',
   chatUserSurface: '#f5f5f5',

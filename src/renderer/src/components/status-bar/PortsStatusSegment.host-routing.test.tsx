@@ -61,7 +61,7 @@ vi.mock('@/runtime/runtime-rpc-client', async () => {
   }
 })
 
-vi.mock('@/lib/workspace-port-scan-client', () => ({
+vi.mock('@/lib/workspace-ports/workspace-port-scan-client', () => ({
   runWorkspacePortScanForTarget: runWorkspacePortScanForTargetMock
 }))
 

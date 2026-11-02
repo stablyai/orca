@@ -1,10 +1,12 @@
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
+import { notifyNativeChatComposerState } from './native-chat-composer-mount'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
+import { useNotificationCardComposerClearance } from '@/lib/notification-card-composer-clearance'
 import type {
   ComposerAutocomplete,
   NativeChatPickerItem
@@ -219,6 +221,7 @@ export function NativeChatComposerField({
     if (compositionWasActive) {
       settleImeValue(textareaRef.current!)
     }
+    notifyNativeChatComposerState()
   })
   const editorCompositionStart = useLatestHandler(() => {
     if (imeEnterGesture.isComposing()) {
@@ -235,6 +238,7 @@ export function NativeChatComposerField({
     if (compositionWasActive) {
       settleImeValue(textareaRef.current!)
     }
+    notifyNativeChatComposerState()
   })
   const editorPaste = useLatestHandler(onPaste)
   const attach = useLatestHandler(onAttach)
@@ -265,11 +269,14 @@ export function NativeChatComposerField({
 
   // Stable so the memoized option pickers keep their identity.
   const focusComposer = useCallback(() => textareaRef.current?.focus(), [textareaRef])
+  const paneRef = useRef<HTMLDivElement>(null)
+  const columnRef = useRef<HTMLDivElement>(null)
+  useNotificationCardComposerClearance(paneRef, columnRef, editSession === undefined)
 
   return (
-    <div className="shrink-0 bg-chat-pane">
+    <div ref={paneRef} className="shrink-0 bg-chat-pane">
       <div className="px-3 pt-2 pb-4 sm:px-4">
-        <div className="relative mx-auto w-full max-w-(--chat-content-max-width)">
+        <div ref={columnRef} className="relative mx-auto w-full max-w-(--chat-content-max-width)">
           {autocomplete.mode === 'slash' ? (
             <NativeChatPickerMenu
               autocomplete={autocomplete}
@@ -330,6 +337,7 @@ export function NativeChatComposerField({
               positionTarget={positionTarget}
               imageRow={imageRow}
               inputRef={textareaRef}
+              isComposing={imeEnterGesture.isComposing}
               initialValue={draft}
               disabled={disabled}
               onChange={editorChange}

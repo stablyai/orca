@@ -32,11 +32,6 @@ export const automationStyles = themedStyleSheet(() => ({
   error: { color: colors.statusRed, fontSize: typography.bodySize, lineHeight: 21 },
   field: { gap: spacing.sm },
   input: {
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.control,
-    color: colors.textPrimary,
     padding: spacing.md,
     fontSize: TEXT_INPUT_FONT_SIZE,
     minHeight: 44

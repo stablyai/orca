@@ -78,7 +78,7 @@ vi.mock('../../../platform/clipboard', () => ({ useClipboardWriter: () => ({ wri
 vi.mock('react-native-reanimated', async () =>
   (await import('../../../test-support/reanimated-pager-stub')).reanimatedPagerStub()
 )
-vi.mock('../../../components/mounted-bottom-drawer', () => ({
+vi.mock('../../../components/bottom-drawer/mounted-bottom-drawer', () => ({
   MountedBottomDrawer: 'MountedDrawer'
 }))
 

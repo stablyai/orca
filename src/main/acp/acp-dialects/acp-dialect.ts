@@ -9,7 +9,12 @@ import type {
 import type { ProviderTimelineRequestBody } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpAgentError } from '../acp-errors'
 import type { AgentSessionOptionChoice } from '../../../shared/agent-session/agent-session-wire'
-import type { ModelInfo, ToolCallUpdate } from '../generated/acp-protocol.generated'
+import type {
+  AvailableCommand,
+  InitializeResponse,
+  ModelInfo,
+  ToolCallUpdate
+} from '../generated/acp-protocol.generated'
 
 export type AcpRequestPresentation = {
   body: ProviderTimelineRequestBody
@@ -129,6 +134,8 @@ export type AcpDialect = {
   compactionReply?(text: string): AcpCompactionReply | undefined
   /** Hide these commands and reject command-only prompts before dispatch. */
   withheldCommands?: readonly string[]
+  /** Which session rows are the agent's own built-ins, as this process's initialize response proves. */
+  builtinCommands?(initialized: InitializeResponse): (command: AvailableCommand) => boolean
 }
 
 export type AcpChildStops = { subagents: boolean; backgroundTasks: boolean }
