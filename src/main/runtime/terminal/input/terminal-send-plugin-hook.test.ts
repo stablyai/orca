@@ -7,6 +7,7 @@ import {
 } from '../../../plugins/hooks/plugin-hook-dispatch'
 import {
   runTerminalSendPluginHook,
+  terminalHookOrderKind,
   TerminalPluginHookOrder,
   terminalSendHookApplies
 } from './terminal-send-plugin-hook'
@@ -87,34 +88,79 @@ describe('terminal.send hook site', () => {
 })
 
 describe('TerminalPluginHookOrder', () => {
-  it('holds a later Enter until the hooked text before it is written', async () => {
+  const pass = async <A>(value: A) => value
+
+  it('holds a later write until the hooked decision before it, and only the decision', async () => {
     const order = new TerminalPluginHookOrder()
     const written: string[] = []
     let decide!: () => void
     const decided = new Promise<void>((resolve) => (decide = resolve))
-    const text = order.run('t', true, async () => {
-      await decided
-      written.push('text')
-    })
-    const enter = order.run('t', false, async () => void written.push('enter'))
-    const other = order.run('other', false, async () => void written.push('other terminal'))
+    let finishDelivery!: () => void
+    // A delivery that waits (on a permission prompt, say) must not hold what comes after it.
+    const slowDelivery = new Promise<void>((resolve) => (finishDelivery = resolve))
+    const text = order.run(
+      't',
+      'hooked',
+      'text',
+      async (value) => {
+        await decided
+        return value
+      },
+      async (value) => {
+        written.push(value)
+        await slowDelivery
+      }
+    )
+    const enter = order.run(
+      't',
+      'ordered',
+      'enter',
+      pass,
+      async (value) => void written.push(value)
+    )
+    const other = order.run(
+      'u',
+      'ordered',
+      'other',
+      pass,
+      async (value) => void written.push(value)
+    )
     await other
-    expect(written).toEqual(['other terminal'])
+    expect(written).toEqual(['other'])
     decide()
-    await Promise.all([text, enter])
-    expect(written).toEqual(['other terminal', 'text', 'enter'])
+    await enter
+    expect(written).toEqual(['other', 'text', 'enter'])
+    finishDelivery()
+    await text
   })
 
-  it('keeps going after a denied send and runs unhooked writes at once when idle', async () => {
+  it('lets a person’s input and interrupts bypass a pending decision', async () => {
     const order = new TerminalPluginHookOrder()
-    const denied = order.run('t', true, async () => {
-      throw new Error('denied')
-    })
+    void order.run('t', 'hooked', 'x', () => new Promise<string>(() => undefined), pass)
+    await expect(order.run('t', 'bypass', 'ctrl-c', pass, pass)).resolves.toBe('ctrl-c')
+    expect(terminalHookOrderKind(false, { interrupt: true }, {})).toBe('bypass')
+    expect(terminalHookOrderKind(false, {}, { inputSource: 'mobile' })).toBe('bypass')
+    expect(terminalHookOrderKind(false, {}, { inputKind: 'query-reply' })).toBe('bypass')
+    expect(terminalHookOrderKind(false, {}, { inputSource: 'programmatic' })).toBe('ordered')
+    expect(terminalHookOrderKind(true, {}, {})).toBe('hooked')
+  })
+
+  it('keeps going after a denied send, and delivers unhooked writes at once when idle', async () => {
+    const order = new TerminalPluginHookOrder()
+    const denied = order.run(
+      't',
+      'hooked',
+      'x',
+      async () => {
+        throw new Error('denied')
+      },
+      pass
+    )
     await expect(denied).rejects.toThrow('denied')
-    await expect(order.run('t', false, async () => 'next')).resolves.toBe('next')
-    const work = vi.fn(async () => 'direct')
-    const result = order.run('idle', false, work)
-    expect(work).toHaveBeenCalledOnce()
+    await expect(order.run('t', 'ordered', 'next', pass, pass)).resolves.toBe('next')
+    const deliver = vi.fn(async (value: string) => value)
+    const result = order.run<string, string>('idle', 'ordered', 'direct', pass, deliver)
+    expect(deliver).toHaveBeenCalledOnce()
     await expect(result).resolves.toBe('direct')
   })
 })

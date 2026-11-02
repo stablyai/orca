@@ -45,27 +45,58 @@ export async function runTerminalSendPluginHook(
   return { ...action, text, enter }
 }
 
+/** How a write joins its terminal's hook order: `hooked` waits for earlier decisions and holds
+ *  later writes while its own runs; `ordered` waits but holds nothing; `bypass` (a person's
+ *  input, an interrupt) never waits. */
+export type TerminalHookOrderKind = 'hooked' | 'ordered' | 'bypass'
+
+export function terminalHookOrderKind(
+  hooked: boolean,
+  action: { interrupt?: boolean },
+  options: { inputKind?: TerminalInputKind; inputSource?: TerminalInputSource }
+): TerminalHookOrderKind {
+  if (hooked) {
+    return 'hooked'
+  }
+  const human = options.inputSource !== undefined && options.inputSource !== 'programmatic'
+  return human || action.interrupt === true || options.inputKind === 'query-reply'
+    ? 'bypass'
+    : 'ordered'
+}
+
 /**
- * Keeps one terminal's writes in order while a hook decides: a later write (an Enter alone, say)
- * waits for an earlier hooked one instead of overtaking it. Unhooked writes with nothing pending
- * run at once.
+ * Keeps one terminal's writes in the order they were asked for while a hook decides: a later
+ * write (an Enter alone, say) waits for an earlier hooked decision instead of overtaking it.
+ * Only the decision holds the order; delivery (which may wait on a permission prompt) does not.
  */
 export class TerminalPluginHookOrder {
-  private readonly tails = new Map<string, Promise<unknown>>()
+  private readonly decisions = new Map<string, Promise<unknown>>()
 
-  run<T>(handle: string, hooked: boolean, work: () => Promise<T>): Promise<T> {
-    const previous = this.tails.get(handle)
-    if (!hooked && !previous) {
-      return work()
+  run<A, T>(
+    handle: string,
+    kind: TerminalHookOrderKind,
+    value: A,
+    decide: (value: A) => Promise<A>,
+    deliver: (value: A) => Promise<T>
+  ): Promise<T> {
+    const previous = this.decisions.get(handle)
+    if (kind === 'bypass' || (kind === 'ordered' && !previous)) {
+      return deliver(value)
     }
-    const result = (previous ?? Promise.resolve()).catch(() => undefined).then(work)
-    const tail = result.catch(() => undefined)
-    this.tails.set(handle, tail)
-    void tail.then(() => {
-      if (this.tails.get(handle) === tail) {
-        this.tails.delete(handle)
-      }
-    })
-    return result
+    const waited = (previous ?? Promise.resolve()).catch(() => undefined)
+    const decided = kind === 'hooked' ? waited.then(() => decide(value)) : waited.then(() => value)
+    if (kind === 'hooked') {
+      const tail = decided.then(
+        () => undefined,
+        () => undefined
+      )
+      this.decisions.set(handle, tail)
+      void tail.then(() => {
+        if (this.decisions.get(handle) === tail) {
+          this.decisions.delete(handle)
+        }
+      })
+    }
+    return decided.then(deliver)
   }
 }

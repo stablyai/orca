@@ -4,6 +4,7 @@ import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
 import { OrcaRuntimeWithControllerKnowsPtyIsLive } from './terminal-input-dispatch'
 import {
   runTerminalSendPluginHook,
+  terminalHookOrderKind,
   TerminalPluginHookOrder,
   terminalSendHookApplies
 } from './terminal-send-plugin-hook'
@@ -21,16 +22,19 @@ export abstract class OrcaRuntimeWithPluginHookedTerminalInput extends OrcaRunti
     options: RuntimeTerminalWriteOptions
   ): Promise<RuntimeTerminalSend> {
     const hooked = terminalSendHookApplies(action, options)
-    return this.pluginHookOrder.run(handle, hooked, async () => {
+    return this.pluginHookOrder.run(
+      handle,
+      terminalHookOrderKind(hooked, action, options),
+      action,
       // Why recheck inputKind: it narrows the type; terminalSendHookApplies already refused replies.
-      const final =
-        hooked && options.inputKind !== 'query-reply'
-          ? await runTerminalSendPluginHook(handle, action, options.inputKind, (text) =>
+      (value) =>
+        options.inputKind === 'query-reply'
+          ? Promise.resolve(value)
+          : runTerminalSendPluginHook(handle, value, options.inputKind, (text) =>
               this.assertRewrittenTerminalTextAllowed(text)
-            )
-          : action
-      return this.sendTerminalAfterPluginHooks(handle, final, options)
-    })
+            ),
+      (final) => this.sendTerminalAfterPluginHooks(handle, final, options)
+    )
   }
 
   /** The checks callers ran on the original text, run again on what a plugin wrote. */
