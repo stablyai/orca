@@ -53,6 +53,24 @@ const KEYWORD_SCORE: SettingsSearchScoreTier = {
   substring: 200
 }
 
+const SETTINGS_SEARCH_SYNONYM_SCORE_SCALE = 0.2
+
+const SETTINGS_SEARCH_SYNONYM_GROUPS = [
+  [
+    'shortcut',
+    'shortcuts',
+    'hotkey',
+    'hotkeys',
+    'keybinding',
+    'keybindings',
+    'keymap',
+    'keymaps',
+    'keybind',
+    'keybinds'
+  ],
+  ['settings', 'preferences', 'options', 'config']
+] as const
+
 export function isSettingsSearchQueryTooLarge(
   query: string,
   maxBytes = SETTINGS_SEARCH_QUERY_MAX_BYTES
@@ -106,6 +124,43 @@ export type SettingsSearchScoreOptions = {
   firstEntryIsPane?: boolean
 }
 
+function scoreSettingsSearchEntries(
+  normalizedQuery: string,
+  entries: readonly SettingsSearchEntry[],
+  { firstEntryIsPane = true }: SettingsSearchScoreOptions = {}
+): number {
+  return entries.reduce((score, entry, index) => {
+    // The first entry is the pane title; rank it above setting titles.
+    const titleScore = index === 0 && firstEntryIsPane ? PANE_TITLE_SCORE : ENTRY_TITLE_SCORE
+    return Math.max(
+      score,
+      scoreSettingsSearchText(normalizedQuery, entry.title, titleScore),
+      scoreSettingsSearchText(normalizedQuery, entry.description, DESCRIPTION_SCORE),
+      scoreSettingsSearchValues(normalizedQuery, entry.keywords, KEYWORD_SCORE)
+    )
+  }, SETTINGS_SEARCH_NO_MATCH_SCORE)
+}
+
+/** Expands only complete known synonyms, leaving partial and multiword queries literal. */
+function getSettingsSearchQueryAlternatives(normalizedQuery: string): readonly string[] {
+  const synonymGroup = SETTINGS_SEARCH_SYNONYM_GROUPS.find((group) =>
+    group.some((term) => term === normalizedQuery)
+  )
+  if (!synonymGroup) {
+    return []
+  }
+
+  const seen = new Set([normalizedQuery])
+  return synonymGroup.filter((alternative) => {
+    if (seen.has(alternative)) {
+      return false
+    }
+    seen.add(alternative)
+    return true
+  })
+}
+
+/** Ranks literal query text above its known synonyms so direct matches stay more relevant. */
 export function scoreSettingsSearch(
   query: string,
   entries: SettingsSearchEntry | SettingsSearchEntry[],
@@ -120,16 +175,21 @@ export function scoreSettingsSearch(
   }
 
   const values = Array.isArray(entries) ? entries : [entries]
-  return values.reduce((score, entry, index) => {
-    // The first entry is the pane title; rank it above setting titles.
-    const titleScore = index === 0 && firstEntryIsPane ? PANE_TITLE_SCORE : ENTRY_TITLE_SCORE
-    return Math.max(
-      score,
-      scoreSettingsSearchText(normalizedQuery, entry.title, titleScore),
-      scoreSettingsSearchText(normalizedQuery, entry.description, DESCRIPTION_SCORE),
-      scoreSettingsSearchValues(normalizedQuery, entry.keywords, KEYWORD_SCORE)
-    )
-  }, SETTINGS_SEARCH_NO_MATCH_SCORE)
+  const scoreOptions = { firstEntryIsPane }
+  const literalScore = scoreSettingsSearchEntries(normalizedQuery, values, scoreOptions)
+  const alternatives = getSettingsSearchQueryAlternatives(normalizedQuery)
+  const synonymScore = alternatives.reduce(
+    (score, alternative) =>
+      Math.max(
+        score,
+        Math.floor(
+          scoreSettingsSearchEntries(alternative, values, scoreOptions) *
+            SETTINGS_SEARCH_SYNONYM_SCORE_SCALE
+        )
+      ),
+    SETTINGS_SEARCH_NO_MATCH_SCORE
+  )
+  return Math.max(literalScore, synonymScore)
 }
 
 export function getSettingsSectionSearchEntries(section: {
@@ -170,4 +230,29 @@ export function matchesSettingsSearch(
   entries: SettingsSearchEntry | SettingsSearchEntry[]
 ): boolean {
   return scoreSettingsSearch(query, entries) > SETTINGS_SEARCH_NO_MATCH_SCORE
+}
+
+/** Checks exact normalized labels and aliases without accepting prefixes or substrings. */
+export function matchesExactSettingsSearchTerm(
+  query: string,
+  entries: SettingsSearchEntry | SettingsSearchEntry[]
+): boolean {
+  if (isSettingsSearchQueryTooLarge(query)) {
+    return false
+  }
+  const normalizedQuery = normalizeSettingsSearchQuery(query)
+  if (!normalizedQuery) {
+    return false
+  }
+
+  const exactTerms = new Set([
+    normalizedQuery,
+    ...getSettingsSearchQueryAlternatives(normalizedQuery)
+  ])
+  const values = Array.isArray(entries) ? entries : [entries]
+  return values.some((entry) =>
+    [entry.title, entry.description, ...(entry.keywords ?? [])].some(
+      (value) => value !== undefined && exactTerms.has(normalizeSettingsSearchQuery(value))
+    )
+  )
 }

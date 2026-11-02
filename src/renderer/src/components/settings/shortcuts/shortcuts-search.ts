@@ -35,6 +35,17 @@ export const getTerminalShortcutPolicySearchEntry = createLocalizedCatalog(
   })
 )
 
+export const getShortcutsPaneTitleSearchEntry = createLocalizedCatalog((): SettingsSearchEntry => {
+  const title = translate('auto.hooks.useSettingsNavigationMetadata.94295ebfb3', 'Shortcuts')
+  return {
+    title,
+    keywords: translateSearchKeyword(
+      'auto.hooks.useSettingsNavigationMetadata.94295ebfb3',
+      'Shortcuts'
+    )
+  }
+})
+
 const getShortcutDefinitionSearchEntries = createLocalizedCatalog(() =>
   KEYBINDING_DEFINITIONS.map(localizeKeybindingDefinition).map((item) => ({
     actionId: item.id,
