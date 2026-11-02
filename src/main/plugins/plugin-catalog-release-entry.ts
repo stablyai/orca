@@ -19,6 +19,7 @@ import { validatePluginInstallTree } from './plugin-artifact-validation'
 import { materializePluginGitTree, type PluginGitBytesRunner } from './installation/plugin-git-tree'
 import { hashPluginTree } from './plugin-content-hash'
 import { readPluginManifestText } from './plugin-manifest-file'
+import { formatPluginSchemaIssues } from '../../shared/plugins/manifest/plugin-schema-issues'
 
 const GIT_QUERY_TIMEOUT_MS = 30_000
 const GIT_QUERY_MAX_BYTES = 1024 * 1024
@@ -93,12 +94,14 @@ async function committedReleaseEntry(
       const detail = error instanceof Error ? error.message : String(error)
       return { note: `no catalog release entry: HEAD has no installable plugin here (${detail})` }
     }
+    // Why: the tree is a deleted temp copy, so its paths only confuse the author.
+    const withoutTree = (message: string) => message.replaceAll(`${tree}${sep}`, '')
     const hashed = await hashPluginTree(tree)
     let rawManifest: unknown
     try {
       rawManifest = JSON.parse(await readPluginManifestText(tree))
     } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error)
+      const detail = withoutTree(error instanceof Error ? error.message : String(error))
       return {
         note: `no catalog release entry: HEAD has no valid ${PLUGIN_MANIFEST_FILENAME} (${detail})`
       }
@@ -116,7 +119,7 @@ async function committedReleaseEntry(
     // Why: install refuses a commit whose declared files are missing, e.g. a manifest committed alone.
     const files = await validatePluginInstallTree(tree, parsed.manifest)
     if (!files.ok) {
-      return notInstallable(files.error.replaceAll(`${tree}${sep}`, ''))
+      return notInstallable(withoutTree(files.error))
     }
     const release = pluginCatalogReleaseEntry(parsed.manifest, {
       commit,
@@ -139,15 +142,20 @@ async function committedReleaseEntry(
     const entry = images ? { ...release, images } : release
     // Why: install compares the entry as a catalog parses it, which can drop or reject fields.
     const listed = pluginCatalogReleaseSchema.safeParse(entry)
-    const listedError = listed.success
-      ? pluginCatalogReleaseError({
-          release: listed.data,
-          manifest: parsed.manifest,
-          resolvedCommit: commit,
-          contentHash: hashed.hash
-        })
-      : `a catalog cannot list it: ${listed.error.issues[0]?.message}`
-    return listedError ? notInstallable(listedError) : { entry }
+    if (!listed.success) {
+      return notInstallable(
+        `a catalog cannot list it: ${formatPluginSchemaIssues(listed.error.issues, entry)}`
+      )
+    }
+    const listedError = pluginCatalogReleaseError({
+      release: listed.data,
+      manifest: parsed.manifest,
+      resolvedCommit: commit,
+      contentHash: hashed.hash
+    })
+    return listedError
+      ? notInstallable(`a catalog would list it differently: ${listedError}`)
+      : { entry }
   } finally {
     await rm(tree, { recursive: true, force: true })
   }
