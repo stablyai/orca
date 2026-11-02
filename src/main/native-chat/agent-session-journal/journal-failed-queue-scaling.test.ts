@@ -12,6 +12,7 @@ import { readQueuePublication } from '../agent-session-wire/structured-agent-ses
 import { StructuredAgentSessionCurrentWork } from '../agent-session-wire/structured-agent-session-current-work'
 import { journalInputOrder } from './journal-input-order'
 import { JournalInputCardIndex } from './journal-input-card-index'
+import { JournalInputPlaceIndex } from './journal-input-place-index'
 import {
   buildJournalQueueClearRow,
   buildJournalQueueResumeRow
@@ -539,19 +540,65 @@ describe.each([100, 1_000])('queue failures beside %s retained cards', (size) =>
     const cards = Object.values(journalInputOrder(state)).find(
       (value) => value instanceof JournalInputCardIndex
     )!
-    // Reads after adoption see only the failure change: count every walk of the cards or index.
-    const walks = [
-      state.queue.cards,
-      ...Object.values(cards).filter((v) => v instanceof Map)
-    ].flatMap((map) =>
-      (['keys', 'values', 'entries', 'forEach', Symbol.iterator] as const).map((method) =>
-        vi.spyOn(map, method)
-      )
-    )
-    const walked = () => walks.reduce((sum, spy) => sum + spy.mock.calls.length, 0)
+    const warmLegacy = () => {
+      const source = { epoch: 'epoch', sequence: state.lastSequence + 1 }
+      const cut = journalInputOrder(state).lineage.at(state.lastSequence) + 1
+      cards.query({ coordinate: source, context: { basis: 'legacy', source, cut } })
+    }
+    warmLegacy()
+    // Count every walk of the canonical cards and of each Map the card index owns, place and
+    // domain collections included, as plain call counts.
+    const methods = ['keys', 'values', 'entries', 'forEach', Symbol.iterator] as const
+    const canonical = methods.map((method) => vi.spyOn(state.queue.cards, method))
+    const watched = new Set<object>([state.queue.cards])
+    const owned: (typeof canonical)[number][] = []
+    const attach = () => {
+      const seen = new Set<unknown>()
+      const collect = (value: unknown) => {
+        if (typeof value !== 'object' || value === null || seen.has(value)) {
+          return
+        }
+        seen.add(value)
+        const entries =
+          value instanceof Map || value instanceof Set
+            ? [...value.values()]
+            : Reflect.ownKeys(value).map((key) => Reflect.get(value, key))
+        if (value instanceof Map && !watched.has(value)) {
+          watched.add(value)
+          owned.push(
+            ...methods.map((method) => vi.spyOn(value as typeof state.queue.cards, method))
+          )
+        }
+        entries.forEach(collect)
+      }
+      collect(cards)
+    }
+    attach()
+    const sum = (spies: typeof owned) => spies.reduce((n, spy) => n + spy.mock.calls.length, 0)
     const visits = vi.spyOn(JournalInputCardIndex.prototype, 'indexCard')
-    /** Commits one row; `inDraft` reads before adoption too. No step may visit a card. */
+    const sets = vi.spyOn(JournalInputPlaceIndex.prototype, 'set')
+    // Outside the clear's rebuild, every ensure keeps the indexes and walks nothing.
+    const kept = ['index', 'currentCoordinates', 'domains', 'indexed']
+    const ensure = JournalInputCardIndex.prototype.ensure
+    let rebuilding = false
+    let ensures = 0
+    vi.spyOn(JournalInputCardIndex.prototype, 'ensure').mockImplementation(function (
+      this: JournalInputCardIndex,
+      target,
+      floor
+    ) {
+      const walked = sum(canonical) + sum(owned)
+      const before = kept.map((key) => Reflect.get(this, key))
+      ensure.call(this, target, floor)
+      if (!rebuilding) {
+        ensures++
+        expect(sum(canonical) + sum(owned)).toBe(walked)
+        expect(kept.filter((key, n) => Reflect.get(this, key) !== before[n])).toEqual([])
+      }
+    })
+    /** Commits one row; `inDraft` reads before adoption too. No step may visit or place a card. */
     const commit = (row: JournalRow, paused: boolean, inDraft = false) => {
+      const before = [sum(canonical), sum(owned), sets.mock.calls.length, ensures]
       const pending = isolateJournalTransition(state, (draft) => {
         applyJournalRow(draft, row)
         if (inDraft) {
@@ -559,10 +606,13 @@ describe.each([100, 1_000])('queue failures beside %s retained cards', (size) =>
         }
       })
       pending.adopt()
-      const before = walked()
       expect(read()).toBe(paused)
-      expect(walked()).toBe(before)
-      expect(visits).not.toHaveBeenCalled()
+      // Main's spendReportedCommandCards fold scans the canonical cards once per item row.
+      expect(sum(canonical) - before[0]).toBe(row.kind === 'item' ? 1 : 0)
+      expect([sum(owned), sets.mock.calls.length]).toEqual(before.slice(1, 3))
+      expect(ensures).toBeGreaterThan(before[3])
+      expect(visits.mock.calls.length).toBe(0)
+      expect(pending.trackedDerived()).toBeLessThanOrEqual(512)
     }
     const turn = (n: number, outcome?: 'failure'): JournalRow => ({
       ...base(),
@@ -583,9 +633,10 @@ describe.each([100, 1_000])('queue failures beside %s retained cards', (size) =>
       expect(read(draft)).toBe(false)
     })
     expect(read()).toBe(true)
-    expect(visits).not.toHaveBeenCalled()
+    expect(visits.mock.calls.length).toBe(0)
     commit(buildJournalQueueResumeRow(place()), false)
     // A clear naming every retained card rebuilds the index once, as it always has.
+    rebuilding = true
     applyJournalRow(
       state,
       buildJournalQueueClearRow({
@@ -594,6 +645,9 @@ describe.each([100, 1_000])('queue failures beside %s retained cards', (size) =>
       })
     )
     expect(read()).toBe(true)
+    warmLegacy()
+    rebuilding = false
+    attach()
     visits.mockClear()
     // A failure beneath the clear neither revisits a card nor reads the clear's payload again.
     const payload = vi.spyOn(state.queuePauseMarks.cleared!.messageIds, Symbol.iterator)
