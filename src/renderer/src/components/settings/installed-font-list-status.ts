@@ -1,14 +1,14 @@
 import { useSyncExternalStore } from 'react'
 
-// Main caches the font list per process, so one failure applies to every font picker.
+// One font list backs every font picker, so its availability is shared too.
 let installedFontsUnavailable = false
 const listeners = new Set<() => void>()
 
-export function markInstalledFontsUnavailable(): void {
-  if (installedFontsUnavailable) {
+export function setInstalledFontsUnavailable(unavailable: boolean): void {
+  if (installedFontsUnavailable === unavailable) {
     return
   }
-  installedFontsUnavailable = true
+  installedFontsUnavailable = unavailable
   for (const listener of listeners) {
     listener()
   }

@@ -5,9 +5,11 @@ export type FontVariationInstance = {
 }
 
 type StyleAxis = { tag: number; ordering: number }
-type AxisValue = { axisIndex: number; nameId: number; elidable: boolean; min: number; max: number }
+type AxisCondition = { axisIndex: number; min: number; max: number }
+type AxisValue = { conditions: AxisCondition[]; nameId: number; elidable: boolean }
 
 const ELIDABLE_AXIS_VALUE_FLAG = 0x0002
+const SUBFAMILY_NAME_ID = 2
 
 export function parseFontVariationInstances(fvar: Buffer): FontVariationInstance[] {
   if (fvar.length < 16) {
@@ -19,12 +21,13 @@ export function parseFontVariationInstances(fvar: Buffer): FontVariationInstance
   const instanceCount = fvar.readUInt16BE(12)
   const instanceSize = fvar.readUInt16BE(14)
   const instancesOffset = axesOffset + axisCount * axisSize
-  if (axisSize < 4 || instanceSize < 4 + axisCount * 4 || instancesOffset > fvar.length) {
+  if (axisSize < 12 || instanceSize < 4 + axisCount * 4 || instancesOffset > fvar.length) {
     return []
   }
-  const axisTags = Array.from({ length: axisCount }, (_, index) =>
-    fvar.readUInt32BE(axesOffset + index * axisSize)
-  )
+  const axes = Array.from({ length: axisCount }, (_, index) => {
+    const record = axesOffset + index * axisSize
+    return { tag: fvar.readUInt32BE(record), defaultValue: fvar.readInt32BE(record + 8) }
+  })
   const instances: FontVariationInstance[] = []
   for (let index = 0; index < instanceCount; index++) {
     const instance = instancesOffset + index * instanceSize
@@ -34,8 +37,17 @@ export function parseFontVariationInstances(fvar: Buffer): FontVariationInstance
     instances.push({
       subfamilyNameId: fvar.readUInt16BE(instance),
       coordinates: new Map(
-        axisTags.map((tag, axis) => [tag, fvar.readInt32BE(instance + 4 + axis * 4)])
+        axes.map(({ tag }, axis) => [tag, fvar.readInt32BE(instance + 4 + axis * 4)])
       )
+    })
+  }
+  // The default instance exists even when fvar lists no record for it.
+  const isDefault = (instance: FontVariationInstance): boolean =>
+    axes.every(({ tag, defaultValue }) => instance.coordinates.get(tag) === defaultValue)
+  if (!instances.some(isDefault)) {
+    instances.push({
+      subfamilyNameId: SUBFAMILY_NAME_ID,
+      coordinates: new Map(axes.map(({ tag, defaultValue }) => [tag, defaultValue]))
     })
   }
   return instances
@@ -52,32 +64,55 @@ export function createStatStyleNamer(
   if (!parsed) {
     return () => null
   }
-  const orderedAxes = parsed.axes
-    .map((axis, axisIndex) => ({ ...axis, axisIndex }))
-    .sort((a, b) => a.ordering - b.ordering)
+  // Multi-axis (format 4) values outrank single-axis ones, and exact values outrank ranges.
+  const values = [...parsed.values].sort(
+    (a, b) => b.conditions.length - a.conditions.length || rangeWidth(a) - rangeWidth(b)
+  )
   return (instance) => {
-    const nameIds: number[] = []
-    for (const axis of orderedAxes) {
-      const coordinate = instance.coordinates.get(axis.tag)
-      if (coordinate === undefined) {
+    const coordinateOf = (axisIndex: number): number | undefined => {
+      const axis = parsed.axes[axisIndex]
+      return axis ? instance.coordinates.get(axis.tag) : undefined
+    }
+    const covered = new Set<number>()
+    const named: { ordering: number; value: AxisValue }[] = []
+    for (const value of values) {
+      const matches = value.conditions.every(({ axisIndex, min, max }) => {
+        const coordinate = coordinateOf(axisIndex)
+        return (
+          !covered.has(axisIndex) &&
+          coordinate !== undefined &&
+          min <= coordinate &&
+          coordinate <= max
+        )
+      })
+      if (!matches) {
         continue
       }
-      const matches = parsed.values.filter(
-        (candidate) =>
-          candidate.axisIndex === axis.axisIndex &&
-          candidate.min <= coordinate &&
-          coordinate <= candidate.max
+      for (const { axisIndex } of value.conditions) {
+        covered.add(axisIndex)
+      }
+      const ordering = Math.min(
+        ...value.conditions.map(
+          ({ axisIndex }) => parsed.axes[axisIndex]?.ordering ?? Number.MAX_SAFE_INTEGER
+        )
       )
-      const value = matches.find((match) => match.min === match.max) ?? matches[0]
-      if (!value) {
-        return null
-      }
-      if (!value.elidable) {
-        nameIds.push(value.nameId)
-      }
+      named.push({ ordering, value })
     }
-    return nameIds
+    const unnamedAxis = parsed.axes.some(
+      (axis, axisIndex) => instance.coordinates.has(axis.tag) && !covered.has(axisIndex)
+    )
+    if (unnamedAxis) {
+      return null
+    }
+    return named
+      .sort((a, b) => a.ordering - b.ordering)
+      .flatMap(({ value }) => (value.elidable ? [] : [value.nameId]))
   }
+}
+
+function rangeWidth(value: AxisValue): number {
+  const condition = value.conditions[0]
+  return value.conditions.length === 1 && condition ? condition.max - condition.min : 0
 }
 
 function parseStyleAttributes(stat: Buffer): { axes: StyleAxis[]; values: AxisValue[] } | null {
@@ -111,23 +146,32 @@ function parseStyleAttributes(stat: Buffer): { axes: StyleAxis[]; values: AxisVa
   return { axes, values }
 }
 
-// Formats 1 and 3 name one coordinate, format 2 a range; format 4 combines axes and is skipped.
+// Formats 1 and 3 name one coordinate, format 2 a range, format 4 a combination of axes.
 function parseAxisValue(stat: Buffer, offset: number): AxisValue | null {
   if (offset + 12 > stat.length) {
     return null
   }
   const format = stat.readUInt16BE(offset)
-  const base = {
-    axisIndex: stat.readUInt16BE(offset + 2),
-    elidable: (stat.readUInt16BE(offset + 4) & ELIDABLE_AXIS_VALUE_FLAG) !== 0,
-    nameId: stat.readUInt16BE(offset + 6)
-  }
+  const elidable = (stat.readUInt16BE(offset + 4) & ELIDABLE_AXIS_VALUE_FLAG) !== 0
+  const nameId = stat.readUInt16BE(offset + 6)
+  const axisIndex = stat.readUInt16BE(offset + 2)
   if (format === 1 || format === 3) {
     const value = stat.readInt32BE(offset + 8)
-    return { ...base, min: value, max: value }
+    return { conditions: [{ axisIndex, min: value, max: value }], nameId, elidable }
   }
   if (format === 2 && offset + 20 <= stat.length) {
-    return { ...base, min: stat.readInt32BE(offset + 12), max: stat.readInt32BE(offset + 16) }
+    const min = stat.readInt32BE(offset + 12)
+    const max = stat.readInt32BE(offset + 16)
+    return { conditions: [{ axisIndex, min, max }], nameId, elidable }
+  }
+  // Format 4 stores its axis count where the other formats store the axis index.
+  if (format === 4 && axisIndex > 0 && offset + 8 + axisIndex * 6 <= stat.length) {
+    const conditions = Array.from({ length: axisIndex }, (_, index) => {
+      const record = offset + 8 + index * 6
+      const value = stat.readInt32BE(record + 2)
+      return { axisIndex: stat.readUInt16BE(record), min: value, max: value }
+    })
+    return { conditions, nameId, elidable }
   }
   return null
 }

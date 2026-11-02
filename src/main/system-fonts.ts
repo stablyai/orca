@@ -37,7 +37,7 @@ function loadSystemFontFamilies(): Promise<string[]> {
     return listMacFonts()
   }
   if (process.platform === 'win32') {
-    return listWindowsInstalledFontFamilies().then(uniqueSorted)
+    return listWindowsFonts()
   }
   return listLinuxFonts()
 }
@@ -75,6 +75,20 @@ function listLinuxFonts(): Promise<string[]> {
         .filter(Boolean)
     )
   )
+}
+
+function listWindowsFonts(): Promise<string[]> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  // A stalled read (e.g. a font registered on an offline share) must not hang settings IPC.
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error('Timed out reading Windows font files')),
+      SYSTEM_FONT_LIST_TIMEOUT_MS
+    )
+  })
+  return Promise.race([listWindowsInstalledFontFamilies(), timeout])
+    .then(uniqueSorted)
+    .finally(() => clearTimeout(timer))
 }
 
 async function execFileText(

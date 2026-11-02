@@ -9,7 +9,7 @@ const STYLE_ATTRIBUTES_TABLE_TAG = 0x53544154 // 'STAT'
 const FAMILY_NAME_ID = 1
 const TYPOGRAPHIC_FAMILY_NAME_ID = 16
 // GDI keeps these styles inside the base family rather than naming a family after them.
-const RIBBI_STYLE_WORDS = new Set(['regular', 'bold', 'italic'])
+const RIBBI_STYLE_WORDS = new Set(['regular', 'bold', 'italic', 'oblique'])
 // "Semi Bold" names a weight of its own, so its "Bold" must survive.
 const STYLE_WORD_MODIFIERS = new Set(['semi', 'demi', 'extra', 'ultra'])
 const MAC_PLATFORM_ID = 1
@@ -17,7 +17,6 @@ const WINDOWS_PLATFORM_ID = 3
 const MAC_ENGLISH_LANGUAGE_ID = 0
 const WINDOWS_ENGLISH_US_LANGUAGE_ID = 0x0409
 // Never allocate what a corrupt header claims.
-const MAX_COLLECTION_FONTS = 64
 const MAX_TABLE_COUNT = 1024
 const MAX_NAME_TABLE_BYTES = 1024 * 1024
 const MAX_VARIATION_TABLE_BYTES = 256 * 1024
@@ -106,9 +105,9 @@ function nameRecordRank(platformId: number, languageId: number): number | null {
 }
 
 async function readCollectionOffsets(file: FileHandle, header: Buffer): Promise<number[]> {
-  const fontCount = Math.min(header.readUInt32BE(8), MAX_COLLECTION_FONTS)
-  if (fontCount === 0) {
-    throw new Error('Empty font collection')
+  const fontCount = header.readUInt32BE(8)
+  if (fontCount === 0 || 12 + fontCount * 4 > (await file.stat()).size) {
+    throw new Error(`Invalid font collection size ${fontCount}`)
   }
   const offsets = await readBytes(file, 12, fontCount * 4)
   return Array.from({ length: fontCount }, (_, index) => offsets.readUInt32BE(index * 4))

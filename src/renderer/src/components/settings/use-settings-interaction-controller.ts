@@ -3,7 +3,7 @@ import type { SourceControlAiSettingsPatch } from '../../../../shared/source-con
 import { useAppStore } from '../../store'
 import { translate } from '@/i18n/i18n'
 import { mergeFontSuggestions } from './SettingsConstants'
-import { markInstalledFontsUnavailable } from './installed-font-list-status'
+import { setInstalledFontsUnavailable } from './installed-font-list-status'
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsDeepLinkTargetWatch } from './settings-deep-link-target-watcher'
 import {
@@ -154,13 +154,12 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
         }
         // Latch empty results too so an unreadable font list is not re-requested on every focus.
         installedFontsLoadedRef.current = true
-        if (fonts.length === 0) {
-          markInstalledFontsUnavailable()
-          return
+        setInstalledFontsUnavailable(fonts.length === 0)
+        if (fonts.length > 0) {
+          setFontSuggestions((prev) => mergeFontSuggestions(fonts, prev))
         }
-        setFontSuggestions((prev) => mergeFontSuggestions(fonts, prev))
       })
-      .catch(markInstalledFontsUnavailable)
+      .catch(() => setInstalledFontsUnavailable(true))
       .finally(() => {
         installedFontsLoadPromiseRef.current = null
       })
