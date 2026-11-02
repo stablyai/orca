@@ -3,6 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { usePluginEditorCaptureReport } from '@/components/editor/plugin-editor-capture-status'
+import { registerEditorFrameFlush } from '@/components/editor/editor-pending-flush'
 import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
 import { captureOpenEditor } from './plugin-view-editor-capture'
 
@@ -30,6 +31,7 @@ function Frame(): React.JSX.Element {
           if (element) {
             element.getBoundingClientRect = () =>
               DOMRect.fromRect({ x: 5, y: 6, width: 300, height: 200 })
+            Object.assign(element, { getWebContentsId: () => 42 })
           }
         }}
       />
@@ -61,7 +63,9 @@ describe('an editor capture', () => {
     progress('subscribed')
     let reply: Awaited<ReturnType<typeof captureOpenEditor>> | null = null
     await act(async () => {
-      void captureOpenEditor('r', FILE, { timeoutMs: 1_000 }).then((value) => (reply = value))
+      void captureOpenEditor('r', FILE, { captureId: 'c', timeoutMs: 1_000 }).then(
+        (value) => (reply = value)
+      )
     })
     // The earlier load's progress does not count: the capture remounted the frame.
     expect(reply).toBeNull()
@@ -74,6 +78,7 @@ describe('an editor capture', () => {
       panel: {
         rect: { x: 5, y: 6, width: 300, height: 200 },
         guestUrl: 'orca-plugin-frame://x/e.html',
+        guestContentsId: 42,
         subscribed: true,
         settled: true,
         issue: null
@@ -85,7 +90,9 @@ describe('an editor capture', () => {
     vi.useFakeTimers()
     let reply: Awaited<ReturnType<typeof captureOpenEditor>> | null = null
     await act(async () => {
-      void captureOpenEditor('r', FILE, { timeoutMs: 1_000 }).then((value) => (reply = value))
+      void captureOpenEditor('r', FILE, { captureId: 'c', timeoutMs: 1_000 }).then(
+        (value) => (reply = value)
+      )
     })
     await act(async () => progress('delivered'))
     await act(async () => vi.advanceTimersByTimeAsync(5_000))
@@ -93,5 +100,18 @@ describe('an editor capture', () => {
       ok: true,
       panel: { subscribed: false, issue: expect.stringContaining('never asked for its document') }
     })
+  })
+
+  it('flushes the open editor before reloading it, and refuses the shot when that fails', async () => {
+    const unregister = registerEditorFrameFlush(FILE, async () => false)
+    const loadsBefore = usePluginViewCaptureStore.getState().editorLoads[FILE]
+    try {
+      const reply = await captureOpenEditor('r', FILE, { captureId: 'c', timeoutMs: 1_000 })
+      expect(reply).toMatchObject({ ok: false, code: 'editor_flush_failed' })
+      // Not reloaded, so its unflushed edits are still in the frame.
+      expect(usePluginViewCaptureStore.getState().editorLoads[FILE]).toBe(loadsBefore)
+    } finally {
+      unregister()
+    }
   })
 })

@@ -183,9 +183,9 @@ async function openEditor(
   if (!capture) {
     return { requestId, ok: true }
   }
-  planEditorShotCleanup({
+  planEditorShotCleanup(capture.captureId, {
     fileId,
-    openedByShot: !openBefore.has(fileId),
+    openedByShot: !openBefore.has(fileId) && !capture.keepOpen,
     scratchRepoId: capture.scratch ? (workspace.addedRepoId ?? null) : null,
     previousWorktreeId
   })
@@ -206,7 +206,7 @@ export async function handlePluginViewRequest(
       case 'end-capture': {
         endPluginShotReplay()
         usePluginViewCaptureStore.getState().end()
-        await runEditorShotCleanup()
+        await runEditorShotCleanup(request.captureId)
         const restored = await restoreActedPanel()
         return {
           requestId: request.requestId,

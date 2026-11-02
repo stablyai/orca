@@ -8,6 +8,8 @@ import {
   subscribePluginEditorCapture,
   type PluginEditorCaptureStatus
 } from '@/components/editor/plugin-editor-capture-status'
+import { flushEditorFrames } from '@/components/editor/editor-pending-flush'
+import { useAppStore } from '@/store'
 import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
 import { nextPaintedFrames, waitForColorScheme } from './plugin-view-panel-settle'
 
@@ -37,14 +39,33 @@ export function waitForPluginEditor(
   })
 }
 
-function measureEditorFrame(fileId: string): Rect | null {
+function editorFrameOf(fileId: string): Element | null {
   const surface = document.querySelector(`[data-plugin-editor-surface="${CSS.escape(fileId)}"]`)
-  const frame = surface?.querySelector('webview, iframe')
+  return surface?.querySelector('webview, iframe') ?? null
+}
+
+function measureEditorFrame(fileId: string): Rect | null {
+  const frame = editorFrameOf(fileId)
   if (!frame) {
     return null
   }
   const { x, y, width, height } = frame.getBoundingClientRect()
   return width > 0 && height > 0 ? { x, y, width, height } : null
+}
+
+/** This tab's guest: another tab of the same editor loads the same URL. */
+function editorGuestContentsId(fileId: string): number | undefined {
+  const frame = editorFrameOf(fileId)
+  if (!frame || !('getWebContentsId' in frame) || typeof frame.getWebContentsId !== 'function') {
+    return undefined
+  }
+  try {
+    const id: unknown = frame.getWebContentsId()
+    return typeof id === 'number' && Number.isInteger(id) && id > 0 ? id : undefined
+  } catch {
+    // Not attached yet.
+    return undefined
+  }
 }
 
 const loaded = (status: PluginEditorCaptureStatus): boolean =>
@@ -56,6 +77,16 @@ export async function captureOpenEditor(
   fileId: string,
   capture: PluginViewEditorCapture
 ): Promise<PluginViewReply> {
+  // The capture reloads an open editor's frame, so edits still in its debounce window go first.
+  if (!(await flushEditorFrames(useAppStore.getState(), fileId))) {
+    return {
+      requestId,
+      ok: false,
+      code: 'editor_flush_failed',
+      message:
+        'The open editor did not hand over its latest edits, so Orca did not reload it for the shot. Save or wait, then shoot again.'
+    }
+  }
   const wantDark = capture.colorScheme === undefined ? null : capture.colorScheme === 'dark'
   const size =
     capture.width !== undefined || capture.height !== undefined
@@ -107,6 +138,7 @@ export async function captureOpenEditor(
   }
   const dark = document.documentElement.classList.contains('dark')
   const guestUrl = load.status?.guestUrl ?? null
+  const guestContentsId = guestUrl ? editorGuestContentsId(fileId) : undefined
   return {
     requestId,
     ok: true,
@@ -115,6 +147,7 @@ export async function captureOpenEditor(
       ui: 'html',
       guestUrl,
       ...(guestUrl ? { guestRect: rect } : {}),
+      ...(guestContentsId === undefined ? {} : { guestContentsId }),
       issue: !load.met
         ? 'The editor did not load its document in time.'
         : subscription.met

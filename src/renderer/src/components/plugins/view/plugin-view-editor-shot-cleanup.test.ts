@@ -24,13 +24,13 @@ beforeEach(() => {
 
 describe('after an editor shot', () => {
   it('closes a copy and removes its folder workspace, then shows the workspace from before', async () => {
-    planEditorShotCleanup({
+    planEditorShotCleanup('shot', {
       fileId: 'copy',
       openedByShot: true,
       scratchRepoId: 'scratch-repo',
       previousWorktreeId: 'before'
     })
-    await runEditorShotCleanup()
+    await runEditorShotCleanup('shot')
     expect(closeFile).toHaveBeenCalledWith('copy')
     expect(removeProject).toHaveBeenCalledWith('scratch-repo', {
       hostId: 'local',
@@ -39,30 +39,48 @@ describe('after an editor shot', () => {
     })
     expect(activate).toHaveBeenCalledWith('before', { providesInitialSurface: true })
     // Nothing is left to undo twice.
-    await runEditorShotCleanup()
+    await runEditorShotCleanup('shot')
     expect(closeFile).toHaveBeenCalledTimes(1)
   })
 
   it('closes the real file only when the shot opened it, and keeps its workspace', async () => {
-    planEditorShotCleanup({
+    planEditorShotCleanup('shot', {
       fileId: 'real',
       openedByShot: false,
       scratchRepoId: null,
       previousWorktreeId: 'shot-workspace'
     })
-    await runEditorShotCleanup()
+    await runEditorShotCleanup('shot')
     expect(closeFile).not.toHaveBeenCalled()
     expect(removeProject).not.toHaveBeenCalled()
     expect(activate).not.toHaveBeenCalled()
 
-    planEditorShotCleanup({
+    planEditorShotCleanup('shot', {
       fileId: 'real',
       openedByShot: true,
       scratchRepoId: null,
       previousWorktreeId: null
     })
-    await runEditorShotCleanup()
+    await runEditorShotCleanup('shot')
     expect(closeFile).toHaveBeenCalledWith('real')
     expect(removeProject).not.toHaveBeenCalled()
+  })
+
+  it('undoes only its own capture when shots overlap, and nothing without an id', async () => {
+    const plan = (fileId: string) => ({
+      fileId,
+      openedByShot: true,
+      scratchRepoId: null,
+      previousWorktreeId: null
+    })
+    planEditorShotCleanup('a', plan('a-file'))
+    planEditorShotCleanup('b', plan('b-file'))
+    await runEditorShotCleanup(undefined)
+    expect(closeFile).not.toHaveBeenCalled()
+    await runEditorShotCleanup('a')
+    expect(closeFile).toHaveBeenCalledWith('a-file')
+    expect(closeFile).not.toHaveBeenCalledWith('b-file')
+    await runEditorShotCleanup('b')
+    expect(closeFile).toHaveBeenCalledWith('b-file')
   })
 })

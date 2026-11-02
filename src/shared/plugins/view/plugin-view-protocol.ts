@@ -34,6 +34,10 @@ export type PluginViewEditorCapture = {
   height?: number
   /** The file is a temporary copy: its tab and folder workspace go when the capture ends. */
   scratch?: true
+  /** `--act --in-place`: the acted tab and its unsaved edits stay when the capture ends. */
+  keepOpen?: true
+  /** Names this capture's cleanup, so `end-capture` undoes only what this shot changed. */
+  captureId: string
   timeoutMs: number
 }
 
@@ -52,8 +56,8 @@ export type PluginViewRequestBody =
     }
   /** `shot --scenario`: draws a validated tree in a detached preview; no plugin panel or guest. */
   | { kind: 'replay-panel'; replay: PluginViewReplay }
-  /** Puts back the width and theme a capture changed. */
-  | { kind: 'end-capture' }
+  /** Puts back the width and theme a capture changed, and undoes editor capture `captureId`. */
+  | { kind: 'end-capture'; captureId?: string }
 
 export type PluginViewReplay = {
   tree: PluginDeclarativeNode | null
@@ -84,6 +88,8 @@ export type PluginViewDrawnPanel = {
   actions?: PluginShotActResult[]
   /** An editor capture: the frame asked for its document (`orca.document.get` or `onDidChange`). */
   subscribed?: boolean
+  /** An editor capture's guest, exactly: other tabs of the same editor share its URL. */
+  guestContentsId?: number
 }
 
 export type PluginViewReply =

@@ -1,8 +1,11 @@
 import { toWorktreeRelativePath } from '../../../../../shared/terminal-links'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import type { FolderWorkspace } from '../../../../../shared/folder-workspace-types'
+import { getFolderWorkspaceWorktreeHostId } from '../../../../../shared/folder-workspace-worktree'
+import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type WorkspaceRow = { id: string; path: string; hostId?: string; isArchived?: boolean }
 
@@ -14,15 +17,32 @@ export type PluginEditorWorkspace = {
   addedRepoId?: string
 }
 
+/** Folder workspaces as rows keyed like the tabs they hold, on their own host. */
+export function folderWorkspaceRows(
+  folderWorkspaces:
+    | readonly Pick<
+        FolderWorkspace,
+        'id' | 'folderPath' | 'executionHostId' | 'connectionId' | 'isArchived'
+      >[]
+    | undefined
+): WorkspaceRow[] {
+  return (folderWorkspaces ?? []).map((workspace) => ({
+    id: folderWorkspaceKey(workspace.id),
+    path: workspace.folderPath,
+    hostId: getFolderWorkspaceWorktreeHostId(workspace),
+    isArchived: workspace.isArchived
+  }))
+}
+
 /** The deepest local workspace whose folder holds one of `paths` (the same file, spelled as given
  *  and as its real path, since `/tmp` and `/private/tmp` name one folder on macOS). */
 export function findWorkspaceShowingFile(
-  worktreesByRepo: Readonly<Record<string, readonly WorkspaceRow[]>> | undefined,
+  workspaces: readonly WorkspaceRow[],
   paths: readonly string[],
   activeWorktreeId: string | null
 ): PluginEditorWorkspace | null {
   let best: (PluginEditorWorkspace & { depth: number; active: boolean }) | null = null
-  for (const worktree of Object.values(worktreesByRepo ?? {}).flat()) {
+  for (const worktree of workspaces) {
     const local = worktree.hostId === undefined || worktree.hostId === LOCAL_EXECUTION_HOST_ID
     if (!local || worktree.isArchived) {
       continue
@@ -59,7 +79,11 @@ export async function showWorkspaceForFile(
 ): Promise<PluginEditorWorkspace | null> {
   const find = (): PluginEditorWorkspace | null => {
     const state = useAppStore.getState()
-    return findWorkspaceShowingFile(selectWorktreesByRepo(state), paths, state.activeWorktreeId)
+    const rows = [
+      ...Object.values(selectWorktreesByRepo(state) ?? {}).flat(),
+      ...folderWorkspaceRows(selectFolderWorkspaces(state))
+    ]
+    return findWorkspaceShowingFile(rows, paths, state.activeWorktreeId)
   }
   let found = find()
   let addedRepoId: string | undefined
@@ -80,7 +104,10 @@ export async function showWorkspaceForFile(
   const state = useAppStore.getState()
   if (state.activeWorktreeId !== found.worktreeId || state.activeView !== 'terminal') {
     // The editor tab is the surface, so activation must not start a terminal of its own.
-    activateAndRevealWorktree(found.worktreeId, { providesInitialSurface: true })
+    activateAndRevealWorkspace(found.worktreeId, {
+      providesInitialSurface: true,
+      executionHostId: LOCAL_EXECUTION_HOST_ID
+    })
   }
   return addedRepoId ? { ...found, addedRepoId } : found
 }

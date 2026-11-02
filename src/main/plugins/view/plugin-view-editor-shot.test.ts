@@ -37,10 +37,11 @@ const CAPTURED = {
   toPNG: () => Buffer.from('png')
 } as unknown as NativeImage
 
-function fakeContents(url = '') {
+function fakeContents(url = '', id = 1) {
   const sent: unknown[] = []
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shot reads only these WebContents members.
   const contents = {
+    id,
     isDestroyed: () => false,
     getURL: () => url,
     getBackgroundThrottling: () => false,
@@ -53,7 +54,11 @@ function fakeContents(url = '') {
   return { contents, sent }
 }
 
-function deps(guest: WebContents, errors: string[] = []): PluginViewDesktopDeps {
+function deps(
+  guest: WebContents,
+  errors: string[] = [],
+  others: WebContents[] = []
+): PluginViewDesktopDeps {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only these members.
   const plugin = {
     pluginKey: KEY,
@@ -74,12 +79,16 @@ function deps(guest: WebContents, errors: string[] = []): PluginViewDesktopDeps 
       lines: cursor ? errors.map((line) => ({ level: 'error', line })) : [],
       cursor: 'n:1'
     }),
-    guestsOf: () => [guest],
+    guestsOf: () => [...others, guest],
     imageFromBitmap: vi.fn(() => CAPTURED)
   }
 }
 
-function drawn(subscribed: boolean, issue: string | null = null): PluginViewReply {
+function drawn(
+  subscribed: boolean,
+  issue: string | null = null,
+  guestContentsId?: number
+): PluginViewReply {
   return {
     requestId: 'r',
     ok: true,
@@ -92,7 +101,8 @@ function drawn(subscribed: boolean, issue: string | null = null): PluginViewRepl
       colorScheme: 'light',
       themeApplied: true,
       settled: true,
-      subscribed
+      subscribed,
+      ...(guestContentsId === undefined ? {} : { guestContentsId })
     }
   }
 }
@@ -133,7 +143,11 @@ describe('shot --editor', () => {
     const copied = open?.kind === 'open-editor' ? open.filePath : ''
     expect(copied.startsWith(join(scratch, 'orca-editor-shot-'))).toBe(true)
     expect(basename(copied)).toBe('a.sketch')
-    expect(end).toEqual({ kind: 'end-capture' })
+    // Ends only this capture: a shot running beside it keeps its tab.
+    expect(end).toEqual({
+      kind: 'end-capture',
+      captureId: open?.kind === 'open-editor' ? open.capture?.captureId : 'missing'
+    })
     // The copy and its folder are gone, and the author's file was never opened for input.
     expect(readdirSync(scratch)).toEqual([])
     expect(readFileSync(file, 'utf8')).toBe('{"shapes":[]}')
@@ -167,6 +181,25 @@ describe('shot --editor', () => {
       expect.objectContaining({ filePath: '/w/a.sketch', fallbackFolder: '/w' })
     ])
     expect(opens.every((body) => body?.kind === 'open-editor' && !body.capture?.scratch)).toBe(true)
+    // In place, the acted tab and its unsaved edits stay.
+    expect(opens.map((body) => body?.kind === 'open-editor' && body.capture?.keepOpen)).toEqual([
+      undefined,
+      true
+    ])
+  })
+
+  it("acts on this tab's own guest when another tab of the editor shares its URL", async () => {
+    const other = fakeContents(GUEST_URL, 7)
+    const mine = fakeContents(GUEST_URL, 8)
+    relay.requestPluginViewFromRenderer.mockImplementation(answer(drawn(true, null, 8)))
+    await shootPluginEditor(deps(mine.contents, [], [other.contents]), fakeContents().contents, {
+      pluginKey: KEY,
+      filePath: '/w/a.sketch',
+      acts: [{ key: 'r' }],
+      inPlace: true
+    })
+    expect(other.sent).toEqual([])
+    expect(mine.sent.length).toBeGreaterThan(0)
   })
 
   it('reports a frame that never asked for its document and the errors it logged', async () => {

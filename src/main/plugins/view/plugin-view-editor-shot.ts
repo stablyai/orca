@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { copyFile, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
@@ -110,6 +111,7 @@ export async function shootPluginEditor(
       ? await mkdtemp(join(deps.shotScratchRoot?.() ?? tmpdir(), 'orca-editor-shot-'))
       : null
   const shotPath = scratchDir ? join(scratchDir, basename(filePath)) : filePath
+  const captureId = randomUUID()
   return withPaintingWhileHidden([contents, ...deps.guestsOf(pluginKey)], async () => {
     let wokeGuest: WebContents | undefined
     try {
@@ -126,6 +128,8 @@ export async function shootPluginEditor(
           ...(await pluginEditorFileTarget(shotPath)),
           capture: {
             ...(scratchDir ? { scratch: true as const } : {}),
+            ...(acts && params.inPlace ? { keepOpen: true as const } : {}),
+            captureId,
             ...(colorScheme === undefined ? {} : { colorScheme }),
             ...(params.width === undefined ? {} : { width: params.width }),
             ...(params.height === undefined ? {} : { height: params.height }),
@@ -148,7 +152,13 @@ export async function shootPluginEditor(
       }
       // The guest isolates its own page, so its painting is kept awake here too.
       const guest = drawn.guestUrl
-        ? deps.guestsOf(pluginKey).find((each) => each.getURL() === drawn.guestUrl)
+        ? deps
+            .guestsOf(pluginKey)
+            .find((each) =>
+              drawn.guestContentsId === undefined
+                ? each.getURL() === drawn.guestUrl
+                : each.id === drawn.guestContentsId
+            )
         : undefined
       if (guest?.getBackgroundThrottling()) {
         guest.setBackgroundThrottling(false)
@@ -197,9 +207,11 @@ export async function shootPluginEditor(
         wokeGuest.setBackgroundThrottling(true)
       }
       // Puts back the theme and the editor's size, and closes what the shot opened.
-      await requestPluginViewFromRenderer(contents, { kind: 'end-capture' }, OPEN_TIMEOUT_MS).catch(
-        () => null
-      )
+      await requestPluginViewFromRenderer(
+        contents,
+        { kind: 'end-capture', captureId },
+        OPEN_TIMEOUT_MS
+      ).catch(() => null)
       if (scratchDir) {
         await rm(scratchDir, { recursive: true, force: true })
       }
