@@ -100,9 +100,10 @@ export async function openTerminalForDeclinedChat(
   }
   const state = useAppStore.getState()
   let current = source()
-  let replacement = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
-    (candidate) => candidate.id === completed.tabId
-  )
+  // The launch answers with the new terminal's id; the tab holding it may have another id.
+  const holdsLaunched = (candidate: { contentType: string; entityId: string }) =>
+    candidate.contentType === 'terminal' && candidate.entityId === completed.tabId
+  let replacement = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(holdsLaunched)
   const ownsFailure = () =>
     launchState &&
     getStructuredLaunchStateBySessionId(tab.entityId) === launchState &&
@@ -147,7 +148,7 @@ export async function openTerminalForDeclinedChat(
   const placed = useAppStore.getState()
   current = source()
   replacement = (placed.unifiedTabsByWorktree[worktreeId] ?? []).find(
-    (candidate) => candidate.id === completed.tabId && candidate.entityId === replacementEntityId
+    (candidate) => holdsLaunched(candidate) && candidate.entityId === replacementEntityId
   )
   const group = (placed.groupsByWorktree[worktreeId] ?? []).find((g) => g.id === current?.groupId)
   if (

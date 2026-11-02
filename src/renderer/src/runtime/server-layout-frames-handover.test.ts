@@ -366,3 +366,59 @@ describe('two desktop windows', () => {
     expect(treeOf(second.getState(), WT)).toEqual(treeOf(first.getState(), WT))
   })
 })
+
+describe('a server switch in a tab the frames draw', () => {
+  it('keeps the selected middle tab, its place and its recent order', async () => {
+    const store = mirroredStore()
+    install(store)
+    setServers(store, [CAPABLE])
+    const before = serverTerminalTab('before', 'before-leaf', null)
+    const after = serverTerminalTab('after', 'after-leaf', null)
+    const chat = {
+      id: 'host-T',
+      kind: 'agent-session' as const,
+      entityId: 'chat-S',
+      agentSessionAgent: 'codex' as const,
+      executionHostId: 'local' as const,
+      createdAt: 1,
+      customTitle: null,
+      color: null
+    }
+    const stream = streams.openTo(ENV)
+    streams.send(stream, {
+      type: 'snapshot',
+      epoch: 'e',
+      seq: 1,
+      workspaces: [{ key: WT, layout: serverLayout([before, chat, after]) }]
+    })
+    await settle()
+    const group = store.getState().groupsByWorktree[WT]![0]!
+    store.setState({
+      groupsByWorktree: {
+        ...store.getState().groupsByWorktree,
+        [WT]: [{ ...group, activeTabId: 'host-T', recentTabIds: ['host-T'] }]
+      }
+    })
+    // The server keeps host-T and puts a terminal whose id is neither the tab's nor the chat's there.
+    const switched = { ...serverTerminalTab('host-T', LEAF_ID, null), entityId: 'terminal-E' }
+    streams.send(stream, {
+      type: 'workspace',
+      key: WT,
+      layout: serverLayout([before, switched, after])
+    })
+    await settle()
+
+    const tabs = store.getState().unifiedTabsByWorktree[WT] ?? []
+    expect(
+      tabs.find((tab) => tab.entityId === toWebTerminalSurfaceTabId('terminal-E'))
+    ).toMatchObject({ id: 'host-T', mirroredHostTab: { tabId: 'host-T' } })
+    const shown = store.getState().groupsByWorktree[WT]![0]!
+    expect(shown.tabOrder).toEqual([
+      toWebTerminalSurfaceTabId('before'),
+      'host-T',
+      toWebTerminalSurfaceTabId('after')
+    ])
+    expect(shown.activeTabId).toBe('host-T')
+    expect(shown.recentTabIds).toEqual(['host-T'])
+  })
+})

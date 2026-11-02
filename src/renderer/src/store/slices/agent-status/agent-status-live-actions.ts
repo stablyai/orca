@@ -21,7 +21,7 @@ import type { FreshnessLiveEntryDelta } from './agent-status-freshness-scheduler
 import {
   agentStatusTabAlreadyHasProtectedOrGeneratedTitle,
   getTabIdFromPaneKey,
-  isRecentlyClosedAgentStatusTab
+  isRecentlyClosedAgentStatusPane
 } from './agent-status-pane-key-tab-binding'
 import {
   generatedTitleReplacesExisting,
@@ -58,10 +58,7 @@ export function createAgentStatusLiveActions(
       (paneKey in current.recentlyRetiredAgentStatusPaneKeys &&
         (typeof current.recentlyRetiredAgentStatusPaneKeys[paneKey] !== 'string' ||
           current.recentlyRetiredAgentStatusPaneKeys[paneKey] !== metadata?.authorityRestartId)) ||
-      isRecentlyClosedAgentStatusTab(
-        current.recentlyClosedAgentStatusTabIds,
-        getTabIdFromPaneKey(paneKey)
-      )
+      isRecentlyClosedAgentStatusPane(current, paneKey)
     ) {
       return
     }
@@ -72,10 +69,7 @@ export function createAgentStatusLiveActions(
       if (
         (retirement !== undefined &&
           (typeof retirement !== 'string' || retirement !== metadata?.authorityRestartId)) ||
-        isRecentlyClosedAgentStatusTab(
-          state.recentlyClosedAgentStatusTabIds,
-          getTabIdFromPaneKey(paneKey)
-        )
+        isRecentlyClosedAgentStatusPane(state, paneKey)
       ) {
         return state
       }

@@ -9,6 +9,7 @@ import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
 import { tabHasProtectedTitle } from '../../../../../shared/agent-generated-tab-title-rules'
 import type { DropAgentStatusByWorktreeOptions, RetainedAgentEntry } from './agent-status-contract'
 import type { AgentStatusTabPrefixDropState } from './agent-status-drop-reducer'
+import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 export function paneKeyMatchesAnyTabPrefix(paneKey: string, tabPrefixes: string[]): boolean {
   for (const prefix of tabPrefixes) {
@@ -112,6 +113,27 @@ export function isRecentlyClosedAgentStatusTab(
     return false
   }
   return closedTabs[tabId] === true
+}
+
+/** A terminal's closed-tab marker refuses its own panes' writes, and never a chat's that a switch
+ *  left in a tab whose id the retired terminal's id equals: that chat writes under its own pane
+ *  key, which names its tab and its session together. */
+export function isRecentlyClosedAgentStatusPane(
+  state: Pick<AppState, 'recentlyClosedAgentStatusTabIds' | 'unifiedTabsByWorktree'>,
+  paneKey: string
+): boolean {
+  const tabId = getTabIdFromPaneKey(paneKey)
+  return (
+    isRecentlyClosedAgentStatusTab(state.recentlyClosedAgentStatusTabIds, tabId) &&
+    !Object.values(state.unifiedTabsByWorktree).some((tabs) =>
+      tabs.some(
+        (tab) =>
+          tab.id === tabId &&
+          tab.contentType === 'agent-session' &&
+          structuredAgentSessionPaneKey(tab.id, tab.entityId) === paneKey
+      )
+    )
+  )
 }
 
 export function findAgentPaneWorktreeId(state: AppState, paneKey: string): string | null {

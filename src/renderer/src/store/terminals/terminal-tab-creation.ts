@@ -154,10 +154,15 @@ export function createTerminalTabCreationActions(
           'terminal'
         )
         const groupsForWorktree = groupsByWorktree[worktreeId] ?? []
-        const cleanedGroups = removeOrphanTerminalsFromGroups(groupsForWorktree, orphanTerminalIds)
+        const liveTabIds = new Set(existingUnifiedTabs.map((entry) => entry.id))
+        const cleanedGroups = removeOrphanTerminalsFromGroups(
+          groupsForWorktree,
+          orphanTerminalIds,
+          liveTabIds
+        )
         const cleanedTargetGroup = cleanedGroups.find((entry) => entry.id === group.id) ?? group
         const cleanedGroupOrder = dedupeTabOrder(cleanedTargetGroup.tabOrder).filter(
-          (tabId) => !orphanTerminalIds.has(tabId)
+          (tabId) => !orphanTerminalIds.has(tabId) || liveTabIds.has(tabId)
         )
         const unifiedTab = existingTerminalTab ?? {
           id,
@@ -183,7 +188,9 @@ export function createTerminalTabCreationActions(
           : sanitizeRecentTabIds(cleanedTargetGroup.recentTabIds, nextGroupOrder)
         const cleanedActiveTabIdForWorktree = orphanCleanupPatch.activeTabIdByWorktree[worktreeId]
         const cleanedGroupActiveTabId =
-          cleanedTargetGroup.activeTabId && !orphanTerminalIds.has(cleanedTargetGroup.activeTabId)
+          cleanedTargetGroup.activeTabId &&
+          (!orphanTerminalIds.has(cleanedTargetGroup.activeTabId) ||
+            liveTabIds.has(cleanedTargetGroup.activeTabId))
             ? cleanedTargetGroup.activeTabId
             : null
         const nextActiveTabIdForWorktree = shouldActivate

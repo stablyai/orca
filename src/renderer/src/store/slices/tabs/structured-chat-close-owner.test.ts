@@ -11,7 +11,9 @@ vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 vi.mock('@/runtime/structured-agent-session-tab-retirement', () => ({
-  beginStructuredAgentSessionTabClose: mocks.beginClose
+  beginStructuredAgentSessionTabClose: mocks.beginClose,
+  publishedChatRowId: (...[, , , tab]: [unknown, unknown, unknown, { entityId: string }]) =>
+    `agent-session:${tab.entityId}`
 }))
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (

@@ -114,7 +114,11 @@ export function createNotificationDeliveryService(
             body: notificationOptions.body,
             worktreeId: request.worktreeId,
             // The phone asks the execution host for tabs, which never name this window's mirror tabs.
-            ...(request.paneKey ? { paneKey: toHostSessionPaneKey(request.paneKey) } : {}),
+            ...(request.hostPaneKey
+              ? { paneKey: request.hostPaneKey }
+              : request.paneKey
+                ? { paneKey: toHostSessionPaneKey(request.paneKey) }
+                : {}),
             ...(request.executionHost ? { executionHost: request.executionHost } : {}),
             ...(request.notificationId ? { notificationId: request.notificationId } : {}),
             // Push needs real agent state to distinguish input/completion and silence running agents.

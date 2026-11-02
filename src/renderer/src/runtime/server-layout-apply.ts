@@ -34,10 +34,18 @@ type ServerRoutedCommand = Extract<
 
 const ROUTED: ReadonlySet<string> = new Set(SERVER_ROUTED_LAYOUT_COMMANDS)
 
-function isServerRouted(command: WindowLayoutCommand): command is ServerRoutedCommand {
-  // A terminal's own name goes by terminal.rename, which also names the server's terminal.
+function isServerRouted(
+  command: WindowLayoutCommand,
+  drawn: ServerMoveDrawnTabs,
+  worktreeId: string
+): command is ServerRoutedCommand {
+  // A terminal's own name goes by terminal.rename, which also names the server's terminal. What the
+  // tab holds decides, never its id: a tab first seen as a chat may hold a terminal now.
   if (command.type === 'renameTab' && command.kind === 'custom') {
-    return !isWebTerminalSurfaceTabId(command.tabId)
+    const tab = drawn.unifiedTabsByWorktree?.[worktreeId]?.find(
+      (entry) => entry.id === command.tabId
+    )
+    return tab ? tab.contentType !== 'terminal' : !isWebTerminalSurfaceTabId(command.tabId)
   }
   // This desktop's guess that a launched agent exited must not clear the server's relaunch record.
   if (command.type === 'setTabProps' && command.clearLaunchAgent) {
@@ -65,7 +73,7 @@ export function serverLayoutApplyFor(
   command: WindowLayoutCommand,
   drawn: ServerMoveDrawnTabs = {}
 ): ServerLayoutApply | null {
-  if (!isServerRouted(command)) {
+  if (!isServerRouted(command, drawn, worktreeId)) {
     return null
   }
   const route = serverLayoutApplyRoute(environmentId, worktreeId)

@@ -66,7 +66,9 @@ function openServerFrames(
   const translator = createServerLayoutFrameTranslator(
     environmentId,
     (worktreeId) => (hostTabId, leafId) =>
-      mirroredTerminalHandle(environmentId, worktreeId, hostTabId, leafId)
+      mirroredTerminalHandle(environmentId, worktreeId, hostTabId, leafId),
+    // The tabs drawn here, with the host tab each saved it mirrors, including the mirror's own.
+    (key) => store.getState().unifiedTabsByWorktree[key] ?? []
   )
   const owns = (key: string): boolean =>
     mirroredRuntimeEnvironmentIdForWorkspace(store.getState(), key) === environmentId

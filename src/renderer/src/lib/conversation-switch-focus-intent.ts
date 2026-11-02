@@ -12,7 +12,20 @@ import {
   resolveWebSessionVisibleTabId
 } from '@/runtime/web-session-focus-intent'
 import { agentSessionRowId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
+import { publishedChatRowId } from '@/runtime/structured-agent-session-tab-retirement'
 import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-pane-tree'
+
+/** The row the chat will be listed under: the one it publishes from a tab here that already holds
+ *  it (the host reuses that tab), else its session row. */
+function chatRowOf(target: RuntimeClientTarget, worktreeId: string, sessionId: string): string {
+  const state = useAppStore.getState()
+  const holder = state.unifiedTabsByWorktree[worktreeId]?.find(
+    (tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId
+  )
+  return holder
+    ? publishedChatRowId(state, target, worktreeId, holder)
+    : agentSessionRowId(sessionId)
+}
 
 /**
  * A paired client's switch of a split pane to chat: the chat opens beside the source's tab, and
@@ -47,7 +60,7 @@ export function recordConversationSwitchFocus(args: {
     return () => {}
   }
   const owner = structuredAgentSessionFocusOwner(args.target)
-  const hostTabId = agentSessionRowId(args.chatSessionId)
+  const hostTabId = chatRowOf(args.target, args.workspaceId, args.chatSessionId)
   recordWebSessionFocusIntent(
     owner,
     args.workspaceId,
@@ -75,7 +88,7 @@ export function uncapturedSwitchChat(
 ) {
   const { worktreeId } = intent
   const owner = structuredAgentSessionFocusOwner(intent.target)
-  const hostTabId = agentSessionRowId(intent.sessionId)
+  const hostTabId = chatRowOf(intent.target, worktreeId, intent.sessionId)
   const sourceTabId = sourceTab
     ? toHostSessionTabId(sourceTab).split(HOST_TERMINAL_SURFACE_SEPARATOR)[0]
     : undefined

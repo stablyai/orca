@@ -10,17 +10,16 @@ import {
 } from '../tab-group-state'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
 import { buildActiveSurfacePatch } from './tabs-surface'
-import { beginStructuredAgentSessionTabClose } from '@/runtime/structured-agent-session-tab-retirement'
+import {
+  beginStructuredAgentSessionTabClose,
+  publishedChatRowId
+} from '@/runtime/structured-agent-session-tab-retirement'
 import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   shouldRetainStructuredAgentSessionLaunchTab
 } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
-import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
 import { ownsGlobalSelection } from '../../global-selection-owner'
-import {
-  structuredAgentSessionFocusOwner,
-  structuredAgentSessionTargetForTab
-} from '@/runtime/structured-agent-session-owner'
+import { structuredAgentSessionTargetForTab } from '@/runtime/structured-agent-session-owner'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
 import { removeTabsAttention } from '../workspace-attention/subject-attention-transitions'
 import { settleAttentionRemovedBy } from '../workspace-attention/attention-removal-follow-up'
@@ -32,7 +31,6 @@ import type { TuiAgent } from '../../../../../shared/tui-agent'
 import { isTuiAgent } from '../../../../../shared/tui-agent-config'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { forgetDesktopCreatedServerTab } from '@/lib/desktop-created-server-tabs'
-import { agentSessionRowId } from '../../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 
 export function createTabsCloseActions(
   set: TabsSliceSet,
@@ -74,17 +72,11 @@ export function createTabsCloseActions(
           retireStructuredAgentSessionReadOwner(tab.entityId, null, tab.executionHostId ?? '')
         }
         if (target) {
-          if (provisional) {
-            clearWebSessionFocusIntentIfMatches(
-              structuredAgentSessionFocusOwner(target),
-              worktreeId,
-              agentSessionRowId(tab.entityId)
-            )
-          }
           beginStructuredAgentSessionTabClose({
             target,
             worktreeId,
             sessionId: tab.entityId,
+            rowId: publishedChatRowId(state, target, worktreeId, tab),
             provisional,
             layoutOwner: state,
             // Switch point: main's frames draw this machine's chats, so main opens it again.

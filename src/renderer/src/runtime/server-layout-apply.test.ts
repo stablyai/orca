@@ -111,7 +111,7 @@ const TWO_TABS: PublishedWorkspaceLayout = (() => {
 const { setServers, mirroredStore, install, uninstallAll } = createServerHarness(hoisted)
 
 async function drawnByServer(layout = TWO_TABS) {
-  const store = mirroredStore()
+  const store = mirroredStore('bar-1')
   install(store)
   setServers(store, [CAPABLE])
   const stream = streams.openTo(ENV)

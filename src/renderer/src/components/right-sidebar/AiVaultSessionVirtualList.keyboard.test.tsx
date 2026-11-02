@@ -72,7 +72,9 @@ vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
   })
 }))
 vi.mock('@/runtime/structured-agent-session-tab-retirement', () => ({
-  beginStructuredAgentSessionTabClose: vi.fn()
+  beginStructuredAgentSessionTabClose: vi.fn(),
+  publishedChatRowId: (...[, , , tab]: [unknown, unknown, unknown, { entityId: string }]) =>
+    `agent-session:${tab.entityId}`
 }))
 const opening = vi.hoisted(() => ({ successor: false, refused: false }))
 vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({

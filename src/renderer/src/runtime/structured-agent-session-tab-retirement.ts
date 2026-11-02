@@ -15,6 +15,7 @@ import {
   structuredAgentSessionFocusOwner
 } from './structured-agent-session-owner'
 import { clearWebSessionCloseIntent, recordWebSessionCloseIntent } from './web-session-close-intent'
+import { clearWebSessionFocusIntentIfMatches } from './web-session-focus-intent'
 import type { WebSessionIntentOwner } from './web-session-intent-owner'
 import { captureWebSessionIntentOwner } from './web-runtime-session-environment'
 import { callRuntimeRpc } from './runtime-rpc-client'
@@ -22,8 +23,28 @@ import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { agentSessionRowId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
+import type { Tab } from '../../../shared/tab-types'
+import { hostTabIdOf } from './web-session-tabs-sync/host-tab-address'
+import { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'
 
 const inFlightRetirements = new Map<string, Promise<boolean>>()
+
+/** The row the chat's host lists it under now, read from the tab holding it while it still does:
+ *  a chat reopened under its own row, or one a switch put in such a tab, publishes that row, and a
+ *  close or close intent naming its session row would name nothing there. */
+export function publishedChatRowId(
+  state: Parameters<typeof hostTabIdOf>[0],
+  target: RuntimeClientTarget,
+  worktreeId: string,
+  tab: Pick<Tab, 'id' | 'entityId'>
+): string {
+  const environmentId =
+    target.kind === 'environment' ? target.environmentId : LOCAL_STRUCTURED_SESSION_OWNER
+  return (
+    hostTabIdOf(state, { environmentId, worktreeId, tabId: tab.id }) ??
+    agentSessionRowId(tab.entityId)
+  )
+}
 
 function retirementKey(target: RuntimeClientTarget, worktreeId: string, sessionId: string): string {
   return `${target.kind}:${target.kind === 'environment' ? target.environmentId : 'local'}:${worktreeId}:${sessionId}`
@@ -37,6 +58,8 @@ export function retireStructuredAgentSessionTab(args: {
   target: RuntimeClientTarget
   worktreeId: string
   sessionId: string
+  /** The row the host lists the chat under (`publishedChatRowId`); its session row when unknown. */
+  rowId?: string
   onError?: (error: unknown) => void
 }): Promise<boolean> {
   retireStructuredAgentSessionReadOwner(args.sessionId, args.target)
@@ -46,7 +69,7 @@ export function retireStructuredAgentSessionTab(args: {
   if (existing) {
     return existing
   }
-  const hostTabId = agentSessionRowId(args.sessionId)
+  const hostTabId = args.rowId ?? agentSessionRowId(args.sessionId)
   // Why: main echoes the host tab id it was asked to close, never this window's tab id.
   const closeHostTab = () =>
     withLocalSessionTabCloseOwner(args.worktreeId, hostTabId, () =>
@@ -123,18 +146,15 @@ export function retireSwitchedStructuredAgentSessionContent(args: {
   target: RuntimeClientTarget
   worktreeId: string
   sessionId: string
+  /** The row the chat published before the switch took it out. */
+  rowId: string
 }): void {
   retireStructuredAgentSessionReadOwner(args.sessionId, args.target)
   forgetStructuredSessionSelection(args.sessionId, args.target)
   const intentOwner = captureWebSessionIntentOwner(
     structuredAgentSessionFocusOwner(args.target).environmentId
   )
-  recordWebSessionCloseIntent(
-    intentOwner,
-    args.worktreeId,
-    agentSessionRowId(args.sessionId),
-    Date.now()
-  )
+  recordWebSessionCloseIntent(intentOwner, args.worktreeId, args.rowId, Date.now())
 }
 
 /** Mark cancellation before removing the row so a late host publication cannot resurrect it. */
@@ -144,12 +164,20 @@ export function beginStructuredAgentSessionTabClose(args: {
   sessionId: string
   provisional: boolean
   layoutOwner: StructuredLaunchSlotOwner
+  rowId?: string
   onError?: (error: unknown) => void
   /** Main dropped the tab before the host answered: a host still listing the chat shows it again. */
   reopen?: () => void
 }): void {
   forgetUnlistedCreatedChat(args.worktreeId, args.sessionId)
+  const hostTabId = args.rowId ?? agentSessionRowId(args.sessionId)
   if (args.provisional) {
+    // A launch still opening never lands where its focus was asked for.
+    clearWebSessionFocusIntentIfMatches(
+      structuredAgentSessionFocusOwner(args.target),
+      args.worktreeId,
+      hostTabId
+    )
     markStructuredAgentSessionLaunchCancelled(
       args.worktreeId,
       args.sessionId,
@@ -165,7 +193,6 @@ export function beginStructuredAgentSessionTabClose(args: {
   const intentOwner = captureWebSessionIntentOwner(
     structuredAgentSessionFocusOwner(args.target).environmentId
   )
-  const hostTabId = agentSessionRowId(args.sessionId)
   // Hold close intent until a host frame omits the chat; pre-close frames would otherwise reappend it.
   recordWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId, Date.now())
   void retireStructuredAgentSessionTab(args).then((hostTabClosed) => {

@@ -196,21 +196,26 @@ export function buildOrphanTerminalCleanupPatch(
   }
 }
 
-/** Repair every group before adding a tab, including inactive/background creation. */
+/** Repair every group before adding a tab, including inactive/background creation. A group lists
+ *  tabs, not terminals: an orphan terminal's id that a live tab also has (a tab a switch left
+ *  holding a chat) names that tab, which stays. */
 export function removeOrphanTerminalsFromGroups(
   groups: TabGroup[],
-  orphanTerminalIds: ReadonlySet<string>
+  orphanTerminalIds: ReadonlySet<string>,
+  liveTabIds: ReadonlySet<string> = new Set()
 ): TabGroup[] {
   return orphanTerminalIds.size === 0
     ? groups
     : groups.map((entry) => {
         // Why: repair every group before adding the new tab, or inactive/background creation can revive stale focus.
         const tabOrder = dedupeTabOrder(entry.tabOrder).filter(
-          (tabId) => !orphanTerminalIds.has(tabId)
+          (tabId) => !orphanTerminalIds.has(tabId) || liveTabIds.has(tabId)
         )
         const recentTabIds = sanitizeRecentTabIds(entry.recentTabIds, tabOrder)
         const replacedActiveTabId = Boolean(
-          entry.activeTabId && orphanTerminalIds.has(entry.activeTabId)
+          entry.activeTabId &&
+          orphanTerminalIds.has(entry.activeTabId) &&
+          !liveTabIds.has(entry.activeTabId)
         )
         const fallbackActiveTabId = recentTabIds.at(-1) ?? tabOrder[0] ?? null
         const activeTabId = replacedActiveTabId ? fallbackActiveTabId : entry.activeTabId

@@ -14,7 +14,9 @@ const mocks = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: mocks.launch }))
 vi.mock('@/runtime/structured-agent-session-tab-retirement', () => ({
-  beginStructuredAgentSessionTabClose: vi.fn()
+  beginStructuredAgentSessionTabClose: vi.fn(),
+  publishedChatRowId: (...[, , , tab]: [unknown, unknown, unknown, { entityId: string }]) =>
+    `agent-session:${tab.entityId}`
 }))
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (

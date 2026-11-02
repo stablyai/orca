@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  toRemoteRuntimePtyId,
-  parseRemoteRuntimePtyId
-} from '../../../shared/remote-runtime/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { ownedEditorFileId } from '../../../shared/workspace-session-pane-ownership'
 import type {
@@ -11,7 +8,6 @@ import type {
 } from '../../../shared/workspace-layout/workspace-layout-published'
 import {
   createServerLayoutFrameTranslator,
-  desktopLayoutForServer,
   serverLayoutForDesktop,
   type ServerTerminalHandleOf
 } from './server-layout-frame-ids'
@@ -147,32 +143,45 @@ describe('a server layout under desktop ids', () => {
     expect(pending.tabs[0]!.terminal!.panes[0]).toEqual({ leafId: 'leaf-1' })
   })
 
-  it('maps every id kind desktop to server to desktop as the identity', () => {
-    const handleOfPtyId: ServerTerminalHandleOf = (hostTabId, leafId) => {
-      const pane = desktop.tabs
-        .find((entry) => entry.entityId === toWebTerminalSurfaceTabId(hostTabId))
-        ?.terminal?.panes.find((candidate) => candidate.leafId === leafId)
-      return pane?.ptyId ? parseRemoteRuntimePtyId(pane.ptyId)!.handle : null
+  it("keeps a server tab's desktop tab through a server switch, and after a restart", () => {
+    // A tab first seen as a chat, then holding a terminal whose id is neither its tab's nor its own.
+    const chat = tab({ id: 'host-T', entityId: 'chat-S', kind: 'agent-session' })
+    const layout = (held: PublishedTab): PublishedWorkspaceLayout => ({
+      ...serverLayout(),
+      groups: [{ id: 'g-1', tabIds: ['tab-1', 'host-T'] }],
+      tabs: [serverLayout().tabs[0]!, held]
+    })
+    const switched = { ...terminal('host-T', 'terminal-E', [['leaf-9', 'pty-9']]) }
+    const translator = createServerLayoutFrameTranslator(ENV, () => handles)
+    translator.translate({ type: 'snapshot', workspaces: [{ key: WT, layout: layout(chat) }] })
+    const frame = translator.translate({ type: 'workspace', key: WT, layout: layout(switched) })
+    if (frame.type !== 'workspace') {
+      throw new Error('expected a workspace frame')
     }
-    // The server's own panes are bound wherever the desktop's are.
-    const server = desktopLayoutForServer(desktop)
-    const boundServer = {
-      ...server,
-      tabs: server.tabs.map((entry) =>
-        entry.terminal
-          ? {
-              ...entry,
-              terminal: {
-                ...entry.terminal,
-                panes: entry.terminal.panes.map((pane) =>
-                  handleOfPtyId(entry.entityId, pane.leafId) ? { ...pane, ptyId: 'bound' } : pane
-                )
-              }
-            }
-          : entry
-      )
-    }
-    expect(serverLayoutForDesktop(boundServer, ENV, handleOfPtyId)).toEqual(desktop)
+    const held = frame.layout.tabs.find(
+      (entry) => entry.kind === 'terminal' && entry.id !== toWebTerminalSurfaceTabId('tab-1')
+    )!
+    expect(held).toMatchObject({
+      id: 'host-T',
+      entityId: toWebTerminalSurfaceTabId('terminal-E'),
+      mirroredHostTab: { hostId: 'runtime:env-1', workspaceId: WT, tabId: 'host-T' }
+    })
+    expect(frame.layout.groups[0]!.tabIds).toEqual([toWebTerminalSurfaceTabId('tab-1'), 'host-T'])
+    expect(translator.serverTabId(WT, 'host-T')).toBe('host-T')
+    expect(translator.desktopTabId(WT, 'host-T')).toBe('host-T')
+    // After a restart the saved tabs, relation included, are all a new stream has.
+    const restarted = createServerLayoutFrameTranslator(
+      ENV,
+      () => handles,
+      () => frame.layout.tabs
+    )
+    const first = restarted.translate({
+      type: 'snapshot',
+      workspaces: [{ key: WT, layout: layout(chat) }]
+    })
+    expect(
+      first.type === 'snapshot' && first.workspaces[0]!.layout.tabs.map((entry) => entry.id)
+    ).toEqual([toWebTerminalSurfaceTabId('tab-1'), 'host-T'])
   })
 
   it('refuses a tab kind it does not know rather than show it under raw ids', () => {

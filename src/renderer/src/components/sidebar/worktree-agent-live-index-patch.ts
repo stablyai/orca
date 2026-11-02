@@ -30,12 +30,16 @@ export function liveEntryWorktreeId(
   tabIdToWorktreeId: Map<string, string>,
   representedTabs?: ReadonlyMap<string, Tab>
 ): string | undefined {
-  const parsed = parseAgentStatusPaneIdentity(paneKey, representedTabs?.get(paneKey))
+  const represented = representedTabs?.get(paneKey)
+  const parsed = parseAgentStatusPaneIdentity(paneKey, represented)
   if (!parsed) {
     return undefined
   }
   const tabWorktreeId = tabIdToWorktreeId.get(parsed.tabId)
-  const remote = Boolean(entry.connectionId) || isWebTerminalSurfaceTabId(parsed.tabId)
+  // A mirrored terminal's own id names its host; a chat's tab id names only this client's tab.
+  const remote =
+    Boolean(entry.connectionId) ||
+    (represented?.contentType !== 'agent-session' && isWebTerminalSurfaceTabId(parsed.tabId))
   if (remote) {
     return resolveAgentStatusWorktreeId(entry, tabIdToWorktreeId) ?? undefined
   }

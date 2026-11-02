@@ -9,7 +9,10 @@ import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/ba
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 import { requestNativeChatComposerFocus } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import { recordUnlistedCreatedChat } from './structured-agent-session-unlisted-created-chats'
-import { retireSwitchedStructuredAgentSessionContent } from '@/runtime/structured-agent-session-tab-retirement'
+import {
+  publishedChatRowId,
+  retireSwitchedStructuredAgentSessionContent
+} from '@/runtime/structured-agent-session-tab-retirement'
 import { sourceTabGroupInView, sourceTabHoldsSelection } from './switch-source-selection'
 import { tabHolding } from './switched-tab-holding'
 
@@ -63,6 +66,11 @@ export function setWindowTabContent(
     sourceTabHoldsSelection(state, worktreeId, tab) &&
     sourceTabGroupInView(state, worktreeId, tab.groupId)
   const kept = tabHolding(tab, content)
+  // The row the chat publishes, read while this tab still holds it.
+  const chatRowId =
+    expectSource.kind === 'agent-session'
+      ? publishedChatRowId(state, { kind: 'local' }, worktreeId, tab)
+      : null
   useAppStore.setState((current) => ({
     unifiedTabsByWorktree: {
       ...current.unifiedTabsByWorktree,
@@ -92,11 +100,12 @@ export function setWindowTabContent(
       store.setTabCustomTitle(content.terminalId, content.title, { recordInteraction: false })
     }
     // The chat left with its conversation still the host's: only this window's readers go.
-    if (expectSource.kind === 'agent-session') {
+    if (expectSource.kind === 'agent-session' && chatRowId) {
       retireSwitchedStructuredAgentSessionContent({
         target: { kind: 'local' },
         worktreeId,
-        sessionId: expectSource.sessionId
+        sessionId: expectSource.sessionId,
+        rowId: chatRowId
       })
     }
     if (shown) {

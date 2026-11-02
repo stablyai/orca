@@ -51,6 +51,9 @@ export type NotificationDispatchRequest = {
   executionHost?: `runtime:${string}`
   /** Stable `${tabId}:${leafId}` terminal pane key for click-to-focus routing. */
   paneKey?: string
+  /** The execution host's own key for this pane when this client's tab has another id (a paired
+   *  chat's tab); phones address the host. Absent: the pane key names a terminal, read as the host's. */
+  hostPaneKey?: string
   repoLabel?: string
   worktreeLabel?: string
   /** Legacy senders may still provide this; project labels are now always shown. */

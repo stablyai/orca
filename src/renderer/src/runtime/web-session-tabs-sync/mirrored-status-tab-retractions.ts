@@ -14,12 +14,19 @@ export function collectUnhydratedMirroredTabRetractions(args: {
   batchContext?: WebSessionTabsBatchContext
 }): string[] {
   const candidates = new Set<string>()
+  // The mapping also keys containers; a container's id names no terminal, whatever its spelling.
+  const containerIds = new Set(
+    (args.state.unifiedTabsByWorktree[args.worktreeId] ?? []).flatMap((tab) =>
+      tab.contentType === 'terminal' && tab.entityId === tab.id ? [] : [tab.id]
+    )
+  )
   for (const [tabId, hostTabId] of hostSessionTabIdsByLocalTabForWorktree(
     args.environmentId,
     args.worktreeId
   )) {
     if (
       isWebTerminalSurfaceTabId(tabId) &&
+      !containerIds.has(tabId) &&
       !args.currentTerminalIds.has(tabId) &&
       !args.nextHostTerminalTabIds.has(hostTabId)
     ) {

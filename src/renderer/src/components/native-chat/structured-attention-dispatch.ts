@@ -107,6 +107,8 @@ function dispatchStructuredAttention(
           ? { executionHostId: null, runtimeEnvironmentId: subscriptionTarget.environmentId }
           : resolveNotificationTabOwner(state, tab)
       const executionHost = notificationExecutionHostForOwner(owner)
+      // A paired chat's tab here mirrors a host tab with its own id; the host keys the pane by that.
+      const hostTab = tab.mirroredHostTab?.tabId
       deliverAgentAttentionNotification(
         {
           source: 'agent-task-complete',
@@ -120,6 +122,7 @@ function dispatchStructuredAttention(
           worktreeId: request.workspaceId,
           ...(executionHost ? { executionHost } : {}),
           paneKey: request.subjectKey ?? undefined,
+          ...(hostTab ? { hostPaneKey: structuredAgentSessionPaneKey(hostTab, tab.entityId) } : {}),
           ...getNotificationWorkspaceLabels(state, request.workspaceId, tab.label),
           notificationSourceId: notificationSourceForOwner(owner, state),
           terminalTitle: tab.label,

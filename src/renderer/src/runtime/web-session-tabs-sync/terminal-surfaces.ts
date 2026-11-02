@@ -84,16 +84,14 @@ export function buildMirroredAgentTabs(
     )
   const occupiedIds = new Set(currentUnifiedTabs.map((tab) => tab.id))
   const assignedIds = new Set<string>()
-  const allocate =
-    hostTabs?.allocate ??
-    ((preferred: string) => {
-      let id = preferred
-      for (let suffix = 2; occupiedIds.has(id); suffix++) {
-        id = `${preferred}-${suffix}`
-      }
-      occupiedIds.add(id)
-      return id
-    })
+  const allocate = (preferred: string) => {
+    let id = preferred
+    for (let suffix = 2; occupiedIds.has(id); suffix++) {
+      id = `${preferred}-${suffix}`
+    }
+    occupiedIds.add(id)
+    return id
+  }
   const replacementTabs = new Map<string, Tab>()
   const replacementIds = new Set<string>()
   const currentAgentTabs = new Map<string, { tabs: Tab[]; nextAvailable: number }>()
@@ -133,7 +131,9 @@ export function buildMirroredAgentTabs(
     const existing = replacementTabs.get(tab.sessionId) ?? firstUnreplaced(tab.sessionId)
     // The host tab's own tab here, whatever it held: the chat takes its place, pin and color.
     const hostTabId = logicalTabIdOf(tab)
-    const own = hostTabs ? hostTabs.containerOf(hostTabId, existing) : existing
+    const baseId = structuredAgentSessionTabId(tab.sessionId)
+    const resolved = hostTabs?.resolve(hostTabId, existing, baseId)
+    const own = resolved ? resolved.tab : existing
     const launch = readStructuredAgentLaunchRecord(tab.sessionId)
     const address =
       executionHostId === 'local' &&
@@ -141,10 +141,11 @@ export function buildMirroredAgentTabs(
       launch.surfaceAddress?.worktreeId === snapshot.worktree
         ? launch.surfaceAddress
         : undefined
-    const baseId = structuredAgentSessionTabId(tab.sessionId)
-    let localId = own?.id
+    let localId = resolved?.id ?? own?.id
     if (localId === undefined || assignedIds.has(localId)) {
-      localId = allocate(baseId)
+      // This window's own chat goes in the tab main recorded for it, so main's rows for this
+      // tab name one layout tab whatever it later holds.
+      localId = allocate(hostTabs ? baseId : hostTabId)
     }
     assignedIds.add(localId)
     return {

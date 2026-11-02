@@ -214,12 +214,13 @@ export function prepareWebSessionTabsSnapshotBase(
     (surface, localTabId) => {
       const hostTabId = logicalTabIdOf(surface)
       const holder = terminalContainers.get(localTabId)
-      const tab = hostTabs ? hostTabs.containerOf(hostTabId, holder) : holder
-      const preferred = toWebTerminalSurfaceTabId(hostTabId)
+      if (!hostTabs) {
+        return { id: holder?.id ?? toWebTerminalSurfaceTabId(hostTabId), tab: holder }
+      }
+      // A new tab takes its terminal's own id, as the frame codec's and every earlier build's do.
       return {
-        id: tab?.id ?? hostTabs?.allocate(preferred) ?? preferred,
-        tab,
-        ...(hostTabs ? { origin: hostTabs.origin(hostTabId) } : {})
+        ...hostTabs.resolve(hostTabId, holder, localTabId),
+        origin: hostTabs.origin(hostTabId)
       }
     }
   )

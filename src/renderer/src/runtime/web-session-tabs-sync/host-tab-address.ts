@@ -51,3 +51,18 @@ export function hostTabIdOf(
 function hostTerminalIdOf(terminalId: string): string | null {
   return isWebTerminalSurfaceTabId(terminalId) ? toHostSessionTabId(terminalId) : null
 }
+
+/** A tab's id in its host's layout, for a command naming the layout tab itself (a switch's
+ *  source): a paired client's tab by the host tab it saved as mirroring (in both draw modes), the
+ *  host's own window's tab by its own id. A row command names the tab's row instead
+ *  (`hostTabIdOf`), and a terminal's transport its terminal. */
+export function hostLayoutTabIdOf(
+  state: HostTabAddressState,
+  worktreeId: string,
+  tabId: string
+): string {
+  return (
+    state.unifiedTabsByWorktree?.[worktreeId]?.find((tab) => tab.id === tabId)?.mirroredHostTab
+      ?.tabId ?? tabId
+  )
+}

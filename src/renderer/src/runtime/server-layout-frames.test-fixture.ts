@@ -277,10 +277,13 @@ export function createServerHarness(mocks: { owners: Map<string, string> }) {
       })
     },
     /** A store whose WT mirrors ENV's one terminal, bound to `terminal-1`. */
-    mirroredStore: (): TestStore => {
+    /** `logicalTabId`: the server's tab-bar id for host-tab-1 when it differs from the terminal's,
+     *  which a main-owned server publishes on the terminal's rows. */
+    mirroredStore: (logicalTabId?: string): TestStore => {
       const store = createTestStore()
       mocks.owners.set(WT, ENV)
-      mirrorSnapshot(store, ENV, sessionTabs([surface('host-tab-1', LEAF_ID, 'terminal-1')], 1))
+      const row = surface('host-tab-1', LEAF_ID, 'terminal-1')
+      mirrorSnapshot(store, ENV, sessionTabs([logicalTabId ? { ...row, logicalTabId } : row], 1))
       return store
     },
     install: (store: TestStore): void => {

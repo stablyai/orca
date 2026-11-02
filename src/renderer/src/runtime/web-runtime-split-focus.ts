@@ -70,12 +70,12 @@ export function captureWebRuntimeSplitFocusTarget(
     return null
   }
   const expectedActiveWorktreeId = state.activeWorktreeId ?? null
+  // The focus intent compares tabs; the leaf is read from the terminal that tab shows.
   const expectedCurrentLocalTabId = expectedActiveWorktreeId
-    ? shownTerminalId(
-        state,
-        expectedActiveWorktreeId,
-        resolveWebSessionVisibleTabId(state, expectedActiveWorktreeId)
-      )
+    ? resolveWebSessionVisibleTabId(state, expectedActiveWorktreeId)
+    : null
+  const shownTerminal = expectedActiveWorktreeId
+    ? shownTerminalId(state, expectedActiveWorktreeId, expectedCurrentLocalTabId)
     : null
   return {
     worktreeId: source.worktreeId,
@@ -85,8 +85,8 @@ export function captureWebRuntimeSplitFocusTarget(
     expectedActiveWorktreeId,
     expectedExecutionHostId: state.activeWorkspaceExecutionHostId ?? null,
     expectedCurrentLocalTabId,
-    expectedCurrentLocalLeafId: expectedCurrentLocalTabId
-      ? (state.terminalLayoutsByTabId?.[expectedCurrentLocalTabId]?.activeLeafId ?? null)
+    expectedCurrentLocalLeafId: shownTerminal
+      ? (state.terminalLayoutsByTabId?.[shownTerminal]?.activeLeafId ?? null)
       : null
   }
 }
@@ -120,14 +120,13 @@ function matchesWebRuntimeSplitFocusTarget(
   ) {
     return false
   }
-  const currentTabId = target.expectedActiveWorktreeId
-    ? shownTerminalId(
-        state,
-        target.expectedActiveWorktreeId,
-        resolveWebSessionVisibleTabId(state, target.expectedActiveWorktreeId)
-      )
+  const visibleTabId = target.expectedActiveWorktreeId
+    ? resolveWebSessionVisibleTabId(state, target.expectedActiveWorktreeId)
     : null
-  if (currentTabId === target.expectedCurrentLocalTabId) {
+  const currentTabId = target.expectedActiveWorktreeId
+    ? shownTerminalId(state, target.expectedActiveWorktreeId, visibleTabId)
+    : null
+  if (visibleTabId === target.expectedCurrentLocalTabId) {
     const currentLeafId = currentTabId
       ? (state.terminalLayoutsByTabId?.[currentTabId]?.activeLeafId ?? null)
       : null

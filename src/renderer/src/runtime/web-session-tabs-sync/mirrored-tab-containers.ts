@@ -2,14 +2,24 @@ import type { MirroredHostTab, Tab } from '../../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 
-export type MirroredTabContainers = {
+/** What the index reads of a local tab: the snapshot mirror's tabs and the frame codec's alike. */
+export type ContainerTab = Pick<Tab, 'id' | 'mirroredHostTab' | 'executionHostId'>
+
+export type MirroredTabContainers<T extends ContainerTab = Tab> = {
   /** The association a tab built for this host tab saves. */
   origin: (hostTabId: string) => MirroredHostTab
-  /** This client's tab for a host tab, whatever it held: the tab saved as mirroring it, else (once,
-   *  for a tab saved before the association existed) the tab its id form or what it holds names. */
-  containerOf: (hostTabId: string, contentHolder?: Tab) => Tab | undefined
-  /** A new tab's id: the preferred one unless another tab here holds it. */
-  allocate: (preferred: string) => string
+  /** This client's tab for a host tab, whatever it holds: the tab saved as mirroring it, else (once,
+   *  for a tab saved before the association existed) the tab its id form or what it holds names,
+   *  else a new id, the preferred one unless another tab here has it. One answer per host tab for
+   *  the whole batch. */
+  resolve: (
+    hostTabId: string,
+    contentHolder: T | undefined,
+    preferred: string
+  ) => {
+    id: string
+    tab?: T
+  }
 }
 
 /**
@@ -20,15 +30,16 @@ export type MirroredTabContainers = {
  * client's own and never decoded. A tab saved before the association existed is adopted once by
  * the id form it has always had (a terminal tab's `web-terminal-<id>`, a chat tab's own id) or by
  * what it holds, keeping its id. Another host's tabs, and a tab mirroring another host tab, are
- * never matched.
+ * never matched. The snapshot mirror and the main-owned frame codec both draw through this one
+ * index, so a workspace moving between them keeps its tabs.
  */
-export function mirroredTabContainers(
-  unifiedTabs: readonly Tab[],
+export function mirroredTabContainers<T extends ContainerTab>(
+  unifiedTabs: readonly T[],
   hostId: ExecutionHostId,
   workspaceId: string
-): MirroredTabContainers {
-  const byHostTab = new Map<string, Tab>()
-  const unassociated = new Map<string, Tab>()
+): MirroredTabContainers<T> {
+  const byHostTab = new Map<string, T>()
+  const unassociated = new Map<string, T>()
   const occupied = new Set<string>()
   for (const tab of unifiedTabs) {
     occupied.add(tab.id)
@@ -43,30 +54,33 @@ export function mirroredTabContainers(
     }
   }
   const claimed = new Set<string>()
-  const claim = (tab: Tab | undefined): Tab | undefined => {
-    if (tab) {
-      claimed.add(tab.id)
-    }
-    return tab
-  }
-  const adoptable = (tab: Tab | undefined): Tab | undefined =>
+  const resolved = new Map<string, { id: string; tab?: T }>()
+  const adoptable = (tab: T | undefined): T | undefined =>
     tab && unassociated.has(tab.id) && !claimed.has(tab.id) ? tab : undefined
   return {
     origin: (tabId) => ({ hostId, workspaceId, tabId }),
-    containerOf: (hostTabId, contentHolder) =>
-      claim(
-        byHostTab.get(hostTabId) ??
-          adoptable(unassociated.get(toWebTerminalSurfaceTabId(hostTabId))) ??
-          adoptable(unassociated.get(hostTabId)) ??
-          adoptable(contentHolder)
-      ),
-    allocate: (preferred) => {
-      let id = preferred
-      for (let suffix = 2; occupied.has(id); suffix++) {
-        id = `${preferred}-${suffix}`
+    resolve: (hostTabId, contentHolder, preferred) => {
+      const known = resolved.get(hostTabId)
+      if (known) {
+        return known
       }
-      occupied.add(id)
-      return id
+      const tab =
+        byHostTab.get(hostTabId) ??
+        adoptable(unassociated.get(toWebTerminalSurfaceTabId(hostTabId))) ??
+        adoptable(unassociated.get(hostTabId)) ??
+        adoptable(contentHolder)
+      let id = tab?.id ?? preferred
+      if (tab) {
+        claimed.add(tab.id)
+      } else {
+        for (let suffix = 2; occupied.has(id); suffix++) {
+          id = `${preferred}-${suffix}`
+        }
+        occupied.add(id)
+      }
+      const result = tab ? { id, tab } : { id }
+      resolved.set(hostTabId, result)
+      return result
     }
   }
 }

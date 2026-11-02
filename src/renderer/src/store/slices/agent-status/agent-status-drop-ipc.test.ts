@@ -5,6 +5,7 @@ import type { RetainedAgentEntry } from './agent-status-contract'
 import './agent-status'
 import { RECENTLY_CLOSED_AGENT_STATUS_TAB_IDS_MAX } from './agent-status-pane-keyed-records'
 import { createTestStore } from '../store-test-helpers'
+import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 // Propagate renderer dismissal to main’s persisted hook cache or restart resurrects dismissed paneKeys.
 
@@ -52,6 +53,41 @@ describe('dropAgentStatusByTabPrefix -> IPC fan-out', () => {
     expect(dropByTabPrefix).toHaveBeenCalledWith('tab-1')
     expect(store.getState().agentStatusByPaneKey['tab-1:0']).toBeUndefined()
     expect(store.getState().agentStatusByPaneKey['tab-2:0']).toBeDefined()
+  })
+
+  it("refuses a retired terminal's panes, never the chat a switch left in the tab with its id", () => {
+    stubWindowApi()
+    const store = createTestStore()
+    // A paired tab first seen holding terminal E0 kept that id; the host's switch retired E0.
+    const tabId = 'web-terminal-E0'
+    store.getState().dropAgentStatusByTabPrefix(tabId)
+    store.setState({
+      unifiedTabsByWorktree: {
+        wt: [
+          {
+            id: tabId,
+            entityId: 'session-S',
+            contentType: 'agent-session',
+            groupId: 'g',
+            worktreeId: 'wt',
+            label: 'Codex',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    })
+    const chatPane = structuredAgentSessionPaneKey(tabId, 'session-S')
+    const terminalPane = `${tabId}:11111111-1111-4111-8111-111111111111`
+    store.getState().setAgentStatus(chatPane, { state: 'working', prompt: 'p', agentType: 'codex' })
+    store
+      .getState()
+      .setAgentStatus(terminalPane, { state: 'working', prompt: 'p', agentType: 'codex' })
+
+    expect(store.getState().agentStatusByPaneKey[chatPane]?.state).toBe('working')
+    expect(store.getState().agentStatusByPaneKey[terminalPane]).toBeUndefined()
   })
 
   it('FIFO-caps recentlyClosedAgentStatusTabIds so it cannot grow unbounded', () => {

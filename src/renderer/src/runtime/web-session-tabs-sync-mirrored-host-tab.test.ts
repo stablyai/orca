@@ -199,8 +199,8 @@ it('keeps two hosts’ tabs with equal layout ids apart, each addressing its own
 })
 
 // After a restart, before any frame from the host: a command on a host tab first seen as a chat,
-// which a host switch since gave a terminal, and on a second host's tab whose layout id another
-// host took here first, names each host tab as that host does.
+// which a host switch since gave a terminal, and on a second host's tab with the same layout id as
+// another host's, names each host tab as that host does.
 it('names the host tab in every command on a tab it mirrors, before any frame after a restart', async () => {
   let state = apply(makeState(), [chatRow('chat-1', 'agent-session:chat-1', 'host-T')], 1)
   state = apply(state, [terminalRow('terminal-E', 'host-T')], 2)
@@ -211,7 +211,8 @@ it('names the host tab in every command on a tab it mirrors, before any frame af
   const switched = tabs.find((tab) => tab.mirroredHostTab?.tabId === 'host-T')!
   const suffixed = tabs.find((tab) => tab.mirroredHostTab?.hostId === 'runtime:host-two')!
   expect(switched).toMatchObject({ id: 'structured-agent-session-chat-1', contentType: 'terminal' })
-  expect(suffixed.id).toBe(`${toWebTerminalSurfaceTabId('same')}-2`)
+  // A new tab takes its terminal's own id, so equal layout ids from two hosts never meet.
+  expect(suffixed.id).toBe(toWebTerminalSurfaceTabId('two'))
   store.state = {
     ...state,
     settings: { activeRuntimeEnvironmentId: ENV },

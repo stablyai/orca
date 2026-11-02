@@ -215,4 +215,25 @@ describe('local structured session tab host isolation', () => {
 
     expect(next).toBe(state)
   })
+
+  it("places this window's own chat in the tab main recorded for it, so one layout tab has one id", () => {
+    // A chat reopened from a phone: main records it in its own reopened tab.
+    const reopened = 'agent-chat-tab-v1-reopened'
+    const snapshot = structuredSnapshot()
+    const listed = {
+      ...snapshot,
+      tabs: snapshot.tabs.map((tab) => ({ ...tab, id: reopened })),
+      activeTabId: reopened,
+      tabGroups: [{ id: STRUCTURED_GROUP, activeTabId: reopened, tabOrder: [reopened] }]
+    }
+    const state = applySnapshot(
+      makeState(),
+      projectLocalStructuredSessionTabs(listed),
+      'local-structured-session',
+      { contentScope: 'agent-session', preserveLocalLayout: true, terminalPtyMode: 'local' }
+    )
+    expect(state.unifiedTabsByWorktree[WT]?.find((tab) => tab.entityId === 'codex-1')?.id).toBe(
+      reopened
+    )
+  })
 })
