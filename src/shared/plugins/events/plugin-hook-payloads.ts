@@ -1,0 +1,141 @@
+import { z } from 'zod'
+import { TERMINAL_INPUT_MAX_BYTES } from '../../terminal-input'
+import type { PluginHookName } from '../contributions/plugin-hook-contribution'
+import { PLUGIN_TERMINAL_ID_MAX_LENGTH } from '../workers/plugin-host-api'
+
+/** How long Orca waits on one plugin's hook before it carries on as if the plugin passed. */
+export const PLUGIN_HOOK_DEFAULT_DEADLINE_MS = 2_000
+
+const denyResultSchema = z.strictObject({
+  /** Why Orca refused; shown to whoever asked for the action. */
+  deny: z.string().min(1).max(500)
+})
+
+type PluginHookSpec = {
+  payload: z.ZodObject
+  /** What a handler may return to stop the chain; null when the hook only observes. */
+  result: z.ZodType | null
+  /** Payload fields `next(event)` may change; any other change is ignored. */
+  mutable: readonly string[]
+  deadlineMs: number
+  summary: string
+}
+
+export const terminalSendHookPayloadSchema = z.object({
+  /** As `workspace.readContext` and `terminal.sendText` name it. */
+  terminalId: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH),
+  text: z.string().max(TERMINAL_INPUT_MAX_BYTES),
+  /** Whether Enter follows the text. */
+  enter: z.boolean(),
+  /** `driving`: the CLI or a plugin sending on someone's behalf; `orchestration`: Orca's own
+   *  dispatches and relayed messages; `launch`: startup commands and drafts. */
+  inputKind: z.enum(['driving', 'orchestration', 'launch'])
+})
+
+export const workspaceCreateBeforeHookPayloadSchema = z.object({
+  kind: z.enum(['worktree', 'folder']),
+  /** The project the workspace is created in. */
+  projectId: z.string().min(1).max(2048),
+  name: z.string().min(1).max(1024),
+  /** Branch to create or open; absent when Orca derives it from `name`. Worktrees only. */
+  branch: z.string().min(1).max(1024).optional(),
+  /** Ref the new branch starts from; absent for the project's default. Worktrees only. */
+  base: z.string().min(1).max(1024).optional()
+})
+
+export const workspaceCreateAfterHookPayloadSchema = z.object({
+  workspaceId: z.string().min(1).max(2048),
+  kind: z.enum(['worktree', 'folder']),
+  path: z
+    .string()
+    .min(1)
+    .max(32 * 1024),
+  /** Empty for folder workspaces. */
+  branch: z.string().max(1024)
+})
+
+/** Variables a hook may add or override; Orca's own (`ORCA_*`) stay Orca's. */
+export const pluginHookEnvSchema = z
+  .record(
+    z
+      .string()
+      .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
+      .max(256)
+      .refine((key) => !key.toUpperCase().startsWith('ORCA_'), 'ORCA_* variables are reserved'),
+    z.string().max(32 * 1024)
+  )
+  .refine((env) => Object.keys(env).length <= 64, 'at most 64 variables')
+
+const workspaceKindSchema = z.enum(['worktree', 'folder'])
+
+export const agentLaunchBeforeHookPayloadSchema = z.object({
+  /** The agent CLI, e.g. `claude` or `codex`. */
+  agent: z.string().min(1).max(64),
+  /** Null for a terminal outside any workspace. */
+  workspaceId: z.string().min(1).max(2048).nullable(),
+  workspaceKind: workspaceKindSchema.nullable(),
+  /** As `terminal.sendText` names it, when Orca has one before the process starts. */
+  terminalId: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH).optional(),
+  /** The command line Orca runs in the terminal's shell; a prompt given at launch is part of it. */
+  command: z.string().min(1).max(TERMINAL_INPUT_MAX_BYTES),
+  /** Starts empty: variables to add or override. Orca never shows the agent's environment. */
+  env: pluginHookEnvSchema
+})
+
+export const agentPromptBeforeHookPayloadSchema = z.object({
+  /** The agent running in the terminal, when Orca knows it. */
+  agent: z.string().min(1).max(64).nullable(),
+  terminalId: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH),
+  prompt: z.string().max(TERMINAL_INPUT_MAX_BYTES),
+  /** `launch`: the prompt an agent starts with; `driving`/`orchestration` as for `terminal.send`. */
+  inputKind: z.enum(['driving', 'orchestration', 'launch'])
+})
+
+export const PLUGIN_HOOK_SPECS = {
+  'terminal.send': {
+    payload: terminalSendHookPayloadSchema,
+    result: denyResultSchema,
+    mutable: ['text', 'enter'],
+    deadlineMs: PLUGIN_HOOK_DEFAULT_DEADLINE_MS,
+    summary:
+      'Text Orca, the CLI or a plugin is about to send to a terminal. A person typing (on the desktop, a phone or a paired client) is never hooked, and prompts Orca submits to an agent take `agent.prompt.before` instead. Writes to one terminal stay in order while a hook decides. Rewrite `text` or `enter` with `next`, or return `{ deny }` to refuse the send.'
+  },
+  'workspace.create.before': {
+    payload: workspaceCreateBeforeHookPayloadSchema,
+    result: denyResultSchema,
+    mutable: ['name', 'branch', 'base'],
+    deadlineMs: PLUGIN_HOOK_DEFAULT_DEADLINE_MS,
+    summary:
+      'A worktree or folder workspace is about to be created. Change `name`, `branch` or `base` with `next`, or return `{ deny }` to refuse it.'
+  },
+  'workspace.create.after': {
+    payload: workspaceCreateAfterHookPayloadSchema,
+    result: null,
+    mutable: [],
+    deadlineMs: PLUGIN_HOOK_DEFAULT_DEADLINE_MS,
+    summary:
+      'A worktree or folder workspace was created. Observe only: Orca does not wait for it, and results are ignored.'
+  },
+  'agent.launch.before': {
+    payload: agentLaunchBeforeHookPayloadSchema,
+    result: denyResultSchema,
+    mutable: ['command', 'env'],
+    deadlineMs: PLUGIN_HOOK_DEFAULT_DEADLINE_MS,
+    summary:
+      'Orca is about to start an agent CLI in a terminal, from any launcher (new tab, workspace create, CLI, automation, orchestration). Change `command` or add `env` with `next`, or return `{ deny }` to refuse the launch. Restores of saved sessions are not hooked.'
+  },
+  'agent.prompt.before': {
+    payload: agentPromptBeforeHookPayloadSchema,
+    result: denyResultSchema,
+    mutable: ['prompt'],
+    deadlineMs: PLUGIN_HOOK_DEFAULT_DEADLINE_MS,
+    summary:
+      'Orca is about to submit a prompt to an agent in a terminal: a launch prompt, an orchestration dispatch, an issue or task prompt, or `orca terminal send` to an agent. A prompt a person submits is never hooked, and writes to one terminal stay in order while it decides. Rewrite `prompt` with `next`, or return `{ deny }` to refuse it.'
+  }
+} satisfies Record<PluginHookName, PluginHookSpec>
+
+export type PluginHookPayload<H extends PluginHookName> = z.infer<
+  (typeof PLUGIN_HOOK_SPECS)[H]['payload']
+>
+
+export type PluginHookDenyResult = z.infer<typeof denyResultSchema>

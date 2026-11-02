@@ -47,10 +47,10 @@ const PAGE = `<!doctype html><html><head>
 
 const MAIN = String.raw`
 const { app, BrowserWindow } = require('electron')
-const { writeFileSync } = require('node:fs')
-const { join, dirname } = require('node:path')
+const { readFileSync, writeFileSync } = require('node:fs')
 if (process.platform === 'darwin') app.setActivationPolicy('accessory')
-const resultPath = join(dirname(process.argv[process.argv.length - 2]), 'result.json')
+// Why the config: Linux launches append --no-sandbox, so a position counted from the end moves.
+const { resultPath } = JSON.parse(readFileSync(process.argv[2], 'utf8'))
 app.whenReady().then(() => {
   const win = new BrowserWindow({ show: false, focusable: false })
   const messages = []
@@ -74,7 +74,10 @@ describe('content-policy refusals from the bundled Electron', () => {
     roots.push(root)
     const mainPath = join(root, 'main.cjs')
     writeFileSync(mainPath, MAIN)
-    writeFileSync(join(root, 'config.json'), '{}')
+    writeFileSync(
+      join(root, 'config.json'),
+      JSON.stringify({ resultPath: join(root, 'result.json') })
+    )
 
     const { messages } = await runBrowserRouteEgressElectron(root, mainPath)
 

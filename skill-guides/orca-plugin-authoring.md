@@ -27,27 +27,28 @@ Pass `--json` to every `ORCA plugin` command and branch on `error.code`, not on 
 
 Use the lowest `execution` profile that covers the request; it decides what the user must approve.
 
-| The user asks for                                         | Build (manifest)                                                    | Start from                                       |
-| --------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------ |
-| An app color theme                                        | `data`; `contributes.themes`                                        | `--template theme`                               |
-| A terminal color palette                                  | `data`; `contributes.terminalThemes`                                | `--template terminal-theme`                      |
-| File icons                                                | `data`; `contributes.iconThemes`                                    | `--template icon-theme`                          |
-| Highlighting for a language                               | `data`; `contributes.syntaxes` (TextMate grammar)                   | `--template syntax`; example `orca-gleam-syntax` |
-| Orca's UI in another language                             | `data`; `contributes.languagePacks`                                 | `--template language-pack`                       |
-| A custom view or editor for a file type                   | `sandboxed-ui`; `contributes.customEditors`, optionally `newFiles`  | `--template editor`                              |
-| A sidebar panel of lists, forms, buttons, status          | `sandboxed-ui`; `panels` entry `.tsx` with `"ui": "components"`     | `--template components`; example `hello-tsx`     |
-| A sidebar panel needing its own HTML, canvas or libraries | `sandboxed-ui`; `panels` entry `.html` (or `.ts`/`.tsx`)            | `--template panel`                               |
-| A palette command or shortcut for a built-in Orca action  | `declarative`; `commands[].action`, `keybindings`                   | hand-written; fields in `references/manifest.md` |
-| A command that runs code, storage, secrets, terminal text | `trusted-worker`; `main`, `commands` (no `action`), `capabilities`  | example `hello-orca`                             |
-| A panel backed by its own Node code, storage or settings  | `trusted-worker`; `main`, a panel, `capabilities`, `settings`       | `--template worker-panel`                        |
-| Settings the user edits in Orca's Settings                | `contributes.settings` and `settings:own`                           | `references/manifest.md`                         |
-| Reacting to workspace or agent status changes             | `trusted-worker`; `main`, `contributes.events`, `*:read` capability | example `hello-orca`                             |
-| A virtual machine environment recipe                      | `declarative`; `contributes.vmRecipes`                              | hand-written; fields in `references/manifest.md` |
-| A status bar item (a worker can update it)                | `declarative`; `contributes.statusBarItems`                         | `references/recipes.md`                          |
+| The user asks for                                                                   | Build (manifest)                                                    | Start from                                       |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------ |
+| An app color theme                                                                  | `data`; `contributes.themes`                                        | `--template theme`                               |
+| A terminal color palette                                                            | `data`; `contributes.terminalThemes`                                | `--template terminal-theme`                      |
+| File icons                                                                          | `data`; `contributes.iconThemes`                                    | `--template icon-theme`                          |
+| Highlighting for a language                                                         | `data`; `contributes.syntaxes` (TextMate grammar)                   | `--template syntax`; example `orca-gleam-syntax` |
+| Orca's UI in another language                                                       | `data`; `contributes.languagePacks`                                 | `--template language-pack`                       |
+| A custom view or editor for a file type                                             | `sandboxed-ui`; `contributes.customEditors`, optionally `newFiles`  | `--template editor`                              |
+| A sidebar panel of lists, forms, buttons, status                                    | `sandboxed-ui`; `panels` entry `.tsx` with `"ui": "components"`     | `--template components`; example `hello-tsx`     |
+| A sidebar panel needing its own HTML, canvas or libraries                           | `sandboxed-ui`; `panels` entry `.html` (or `.ts`/`.tsx`)            | `--template panel`                               |
+| A palette command or shortcut for a built-in Orca action                            | `declarative`; `commands[].action`, `keybindings`                   | hand-written; fields in `references/manifest.md` |
+| A command that runs code, storage, secrets, terminal text                           | `trusted-worker`; `main`, `commands` (no `action`), `capabilities`  | example `hello-orca`                             |
+| A panel backed by its own Node code, storage or settings                            | `trusted-worker`; `main`, a panel, `capabilities`, `settings`       | `--template worker-panel`                        |
+| Settings the user edits in Orca's Settings                                          | `contributes.settings` and `settings:own`                           | `references/manifest.md`                         |
+| Reacting to workspace or agent status changes                                       | `trusted-worker`; `main`, `contributes.events`, `*:read` capability | example `hello-orca`                             |
+| Changing or refusing terminal text, workspace creates or agent launches and prompts | `trusted-worker`; `main`, `contributes.hooks`                       | `--template hook`; `references/recipes.md`       |
+| A virtual machine environment recipe                                                | `declarative`; `contributes.vmRecipes`                              | hand-written; fields in `references/manifest.md` |
+| A status bar item (a worker can update it)                                          | `declarative`; `contributes.statusBarItems`                         | `references/recipes.md`                          |
 
-Examples are in `examples/plugins/` of github.com/stablyai/orca. Sidebar cards,
-task sources, connections, MCP servers, skills and hooks are reserved and not buildable yet: say
-so instead of faking them. A panel cannot type into a terminal; only a worker
+Examples are in `examples/plugins/` of github.com/stablyai/orca. Sidebar cards, task sources,
+connections, MCP servers and skills are reserved and not buildable yet: say so instead of faking
+them. A panel cannot type into a terminal; only a worker
 with `terminal:send` can.
 
 ## No build step
@@ -120,7 +121,7 @@ need (`--references` lists them; `--full` if `--reference` is rejected).
 | -------------------------------------------------------------------- | -------------------------- |
 | Reading `dev watch` events; shots, `open`, `dev emit`; test examples | `references/workflow.md`   |
 | The full test kit: `mount`, `mountWorker`, `mockHost`, every act     | `references/testing.md`    |
-| A panel with its own worker, storage, settings; agent status; events | `references/recipes.md`    |
+| A worker panel, storage, settings; agent status; events; hooks       | `references/recipes.md`    |
 | Writing a components panel: components, props, atoms, `host`         | `references/components.md` |
 | Calling the host from a worker, frame or panel; capabilities         | `references/host-api.md`   |
 | Subscribing to worker, frame or panel events and their payloads      | `references/events.md`     |
