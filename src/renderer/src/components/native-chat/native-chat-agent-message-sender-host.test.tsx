@@ -64,6 +64,7 @@ vi.mock('@/components/terminal-pane/terminal-handle-links', async (original) => 
 
 import StructuredAgentSessionPaneOverlayLayer from './StructuredAgentSessionPaneOverlayLayer'
 import * as sleepingResume from '@/lib/resume-sleeping-agent-session'
+import * as openExistingStructuredSession from '@/lib/open-existing-structured-session'
 import { structuredSessionOpenFeedback } from '@/lib/activate-ai-vault-structured-session'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { Repo } from '../../../../shared/repo-types'
@@ -488,13 +489,17 @@ it('leaves the user where they went while server-1 was still listing the workspa
   let release = () => {}
   transport.catalog = new Promise((resolve) => (release = resolve))
   const unavailable = vi.spyOn(structuredSessionOpenFeedback, 'unavailable')
+  const opens = vi.spyOn(openExistingStructuredSession, 'openDesktopStructuredSessionInteraction')
   await mount()
   await act(async () => fireEvent.click(remoteLink()))
   await vi.waitFor(() => expect(calls('repo.list')).toBe(1))
   act(() => useAppStore.setState({ activeWorktreeId: 'repo-1::/elsewhere' }))
   await act(async () => release())
-  await vi.waitFor(() => expect(calls('worktree.detectedList')).toBe(1))
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 50)))
+  // The open itself settles; nothing it did afterwards can move the user.
+  await act(async () => {
+    await opens.mock.results[0]!.value
+  })
+  expect(calls('worktree.detectedList')).toBe(1)
   const state = useAppStore.getState()
   expect(state.activeWorktreeId).toBe('repo-1::/elsewhere')
   expect(state.activeWorkspaceExecutionHostId).toBe('local')

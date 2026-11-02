@@ -15,16 +15,18 @@ import * as recordRows from '../../src/main/runtime/agent-session/records/agent-
 import * as storeDraft from '../../src/main/runtime/agent-session/records/agent-session-store-draft'
 import * as attribution from '../../src/main/runtime/agent-session/agent-session-runtime-attribution'
 import { sessionCrewChanges } from '../../src/main/runtime/orchestration/crew/crew-changes'
+import { StructuredAgentSessionHostRuntimeState } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-runtime-state'
 import { storeRepo } from '../../src/main/runtime/runtime-store-partial-fixture'
 import type { Tab } from '../../src/shared/tab-types'
 import { ProfileStateSqliteAuthority } from '../../src/main/persistence/profile-state/profile-state-sqlite-authority'
 import type { ProfileStateDomainReplacement } from '../../src/main/persistence/loading-store/profile-state-authority'
 import * as placement from '../../src/main/runtime/session-tabs/structured-session-placement'
+import * as tabFilter from '../../src/shared/workspace-session-tab-filter'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../src/shared/runtime-types'
-import { collectionVisits } from '../../src/main/runtime/collection-visits.test-fixture'
+import { collectionVisits, fieldReads } from '../../src/main/runtime/collection-visits.test-fixture'
 import type { WorkspaceSessionState } from '../../src/shared/workspace-session-state-types'
 import {
   retired,
@@ -57,6 +59,17 @@ const chatIds = (prefix: string, n: number) =>
 // Per-phase budget for the graph contract: visits/lookups per listed chat, plus a fixed cost.
 const GRAPH_PER_CHAT = 40
 const GRAPH_FIXED = 400
+// Projections or frame merges of one workspace per graph phase.
+const GRAPH_PASSES = 4
+// The per-workspace maps the saved-tab filter reads or rebuilds.
+const OWNER_MAPS = [
+  'unifiedTabs',
+  'tabGroups',
+  'tabGroupLayouts',
+  'activeGroupIdByWorktree',
+  'activeTabIdByWorktree',
+  'activeTabTypeByWorktree'
+] as const
 const linear = (tally: Record<string, number[]>) => {
   for (const [key, [small, large]] of Object.entries(tally)) {
     expect([key, large]).toEqual([key, expect.any(Number)])
@@ -67,7 +80,7 @@ const linear = (tally: Record<string, number[]>) => {
 // Each population gets its own profile and journal, so the N and 10N runs are separate cases.
 const graphTally: Record<string, number[]> = {}
 it.each([20, 200])(
-  'a window graph over %i chats costs linear work to accept, resend, go stale after a move, be omitted and stay unchanged',
+  'a window graph over %i chats adds work additive in its input to accept, resend, go stale after a move, be omitted and stay unchanged',
   async (n) => {
     const tally = graphTally
     const others = chatIds('other', n)
@@ -101,11 +114,20 @@ it.each([20, 200])(
         }))
       }
     }
-    // Inherited from main, unchanged here, counted apart and reported, not bounded: each chat tab's
-    // title searches the workspace's saved tabs (prune-mobile-session-tab-group-layout.ts), and
-    // merging a frame searches every group's order once per chat (appendChatTabOrder); both read
-    // N² entries for N chats in one workspace.
-    const inherited = { titleVisits: 0, chatOrderVisits: 0 }
+    // Two unchanged main costs, counted apart and reported but outside the bound on the work this
+    // change adds (byte-identical to main): each chat tab's title searches the workspace's saved
+    // tabs (prune-mobile-session-tab-group-layout.ts:119), and merging a frame searches every
+    // group's order once per chat (mobile-session-tab-merge.ts:209). Both read N² entries for N
+    // chats in one workspace, so this graph as a whole is not linear. What is bounded instead is
+    // how often their callers run and how much input they get: a fixed number of passes per phase.
+    const inherited = {
+      titleVisits: 0,
+      chatOrderVisits: 0,
+      projections: 0,
+      projectedTabs: 0,
+      chatOrderMerges: 0,
+      chatOrderInput: 0
+    }
     const title = rig.runtime['structuredConversationTabName'].bind(rig.runtime)
     Object.defineProperty(rig.runtime, 'structuredConversationTabName', {
       value: (workspaceId: string, sessionId: string) => {
@@ -114,9 +136,21 @@ it.each([20, 200])(
         return named.value
       }
     })
+    const project = rig.runtime['toMobileSessionTabsResult'].bind(rig.runtime)
+    Object.defineProperty(rig.runtime, 'toMobileSessionTabsResult', {
+      value: (snapshot: RuntimeMobileSessionTabsSnapshot) => {
+        inherited.projections++
+        inherited.projectedTabs += snapshot.tabs.length
+        return project(snapshot)
+      }
+    })
     const order = tabMerge.appendChatTabOrder
-    vi.spyOn(tabMerge, 'appendChatTabOrder').mockImplementation((...args) => {
-      const ordered = collectionVisits(() => order(...args))
+    vi.spyOn(tabMerge, 'appendChatTabOrder').mockImplementation((groups, prior, tabs, active) => {
+      const orders = (list: typeof groups | undefined) =>
+        (list ?? []).reduce((sum, group) => sum + group.tabOrder.length, 0)
+      inherited.chatOrderMerges++
+      inherited.chatOrderInput += orders(groups) + orders(prior) + tabs.length
+      const ordered = collectionVisits(() => order(groups, prior, tabs, active))
       inherited.chatOrderVisits += ordered.visits
       return ordered.value
     })
@@ -135,7 +169,9 @@ it.each([20, 200])(
       identities.mockClear()
       rows.mockClear()
       Object.assign(delivered, { notifications: 0, elements: 0, bytes: 0 })
-      Object.assign(inherited, { titleVisits: 0, chatOrderVisits: 0 })
+      for (const key of Object.keys(inherited) as (keyof typeof inherited)[]) {
+        inherited[key] = 0
+      }
       const records = recordQueries(rig.store)
       const synced = collectionVisits(run)
       const published = collectionVisits(() =>
@@ -189,6 +225,14 @@ it.each([20, 200])(
       if (/\.(syncVisits|syncLookups|publishVisits|recordLookups)$/.test(key)) {
         expect(counts[at], key).toBeLessThanOrEqual(GRAPH_PER_CHAT * listed.length + GRAPH_FIXED)
       }
+      // The main-cost callers run a fixed number of times per phase, each over about the
+      // workspace's own rows: never once per chat, never on inflated input.
+      if (/\.(projections|chatOrderMerges)$/.test(key)) {
+        expect(counts[at], key).toBeLessThanOrEqual(GRAPH_PASSES)
+      }
+      if (/\.(projectedTabs|chatOrderInput)$/.test(key)) {
+        expect(counts[at], key).toBeLessThanOrEqual(GRAPH_PASSES * 3 * (listed.length + 2))
+      }
     }
     if (n === 200) {
       console.log('S3_GRAPH_COUNTS', JSON.stringify(tally))
@@ -228,6 +272,42 @@ it('saved get, set and patch through the real handlers filter N and 10N workspac
   }
   rig.profile.onStateWritten(() => written.notified++)
   const placements = vi.spyOn(placement, 'structuredSessionPlacementAllowed')
+  // The pure filter the handlers run, on its real input: the owner-map keys and tree-node fields
+  // it reads (a spread reads every key), and what it returns, for identity checks.
+  const filtered: { input: WorkspaceSessionState; output: WorkspaceSessionState }[] = []
+  const filterReads = { ownerKeys: 0, ownerKeyReads: 0, treeNodes: 0, treeNodeReads: 0 }
+  const filter = tabFilter.filterWorkspaceSessionTabs
+  vi.spyOn(tabFilter, 'filterWorkspaceSessionTabs').mockImplementation((input, keep) => {
+    // Watching and unwatching are this test's work: a nested measurement keeps them out of the
+    // handler's own counts.
+    const { value: watching } = collectionVisits(() => {
+      const owners = fieldReads()
+      const trees = fieldReads()
+      for (const tree of Object.values(input.tabGroupLayouts ?? {})) {
+        filterReads.treeNodes += trees.watchTree(tree)
+      }
+      for (const name of OWNER_MAPS) {
+        const map: Record<string, unknown> | undefined = input[name]
+        if (map) {
+          filterReads.ownerKeys += Object.keys(map).length
+          owners.watch(map)
+        }
+      }
+      return { owners, trees }
+    })
+    try {
+      const output = filter(input, keep)
+      filtered.push({ input, output })
+      return output
+    } finally {
+      collectionVisits(() => {
+        filterReads.ownerKeyReads += watching.owners.reads()
+        filterReads.treeNodeReads += watching.trees.reads()
+        watching.owners.restore()
+        watching.trees.restore()
+      })
+    }
+  })
   for (const n of [20, 200]) {
     // N workspaces hold the moved chat, a terminal, an editor and another host's tab with the same
     // ID, in a nested split whose order, selection and recent tabs name the moved chat; N more
@@ -326,6 +406,8 @@ it('saved get, set and patch through the real handlers filter N and 10N workspac
         spy.mockClear()
       }
       Object.assign(written, { domains: 0, bytes: 0, notified: 0 })
+      Object.assign(filterReads, { ownerKeys: 0, ownerKeyReads: 0, treeNodes: 0, treeNodeReads: 0 })
+      filtered.length = 0
       const records = recordQueries(rig.store)
       const handled = collectionVisits(run)
       records.restore()
@@ -339,6 +421,8 @@ it('saved get, set and patch through the real handlers filter N and 10N workspac
         placements: placements.mock.calls.length,
         sets: sets.mock.calls.length,
         patches: patches.mock.calls.length,
+        filterCalls: filtered.length,
+        ...filterReads,
         ...written
       })) {
         ;(tally[`${name}.${key}`] ??= []).push(value)
@@ -367,6 +451,20 @@ it('saved get, set and patch through the real handlers filter N and 10N workspac
         twin(workspace) ? moved!.id : undefined
       )
     }
+    // The filter keeps what it does not change: unaffected owners' arrays and trees, and the
+    // other host's rows, are its input's own objects.
+    const { input: unfiltered, output: kept } = filtered.at(-1)!
+    for (const workspace of unaffected) {
+      expect(kept.unifiedTabs[workspace]).toBe(unfiltered.unifiedTabs[workspace])
+      expect(kept.tabGroups?.[workspace]).toBe(unfiltered.tabGroups?.[workspace])
+      expect(kept.tabGroupLayouts?.[workspace]).toBe(unfiltered.tabGroupLayouts?.[workspace])
+    }
+    for (const workspace of workspaces.filter(twin)) {
+      const foreign = (state: WorkspaceSessionState) =>
+        state.unifiedTabs[workspace]?.find((tab) => tab.executionHostId === 'runtime:other')
+      expect(foreign(kept)).toBe(foreign(unfiltered))
+    }
+    // After the store, the saved values match.
     for (const workspace of unaffected) {
       expect(placed.unifiedTabs[workspace]).toEqual(session.unifiedTabs[workspace])
       expect(placed.tabGroups[workspace]).toEqual(session.tabGroups[workspace])
@@ -385,6 +483,8 @@ it('saved get, set and patch through the real handlers filter N and 10N workspac
     )
     // A second save of the normalized result keeps it.
     await phase('resave', () => handlers.get('session:set')!({}, read, 'local'))
+    // Nothing left to remove: the filter returns its input itself.
+    expect(filtered.at(-1)!.output).toBe(filtered.at(-1)!.input)
     expect(rig.profile.getWorkspaceSession('local')!.unifiedTabs).toEqual(placed.unifiedTabs)
   }
   console.log('S3_SAVED_COUNTS', JSON.stringify(tally))
@@ -401,18 +501,27 @@ it('saved get, set and patch through the real handlers filter N and 10N workspac
   // two record lookups per moved row, a fixed number of visits and lookups per workspace, and at
   // most one database write and one write notice.
   for (const [key, counts] of Object.entries(tally)) {
+    const phase = key.slice(0, key.indexOf('.'))
     for (const [i, n] of [20, 200].entries()) {
-      const bound = key.endsWith('.placements')
-        ? n
-        : key.endsWith('.recordLookups')
-          ? 2 * n + 8
-          : key.endsWith('.visits')
-            ? 40 * 2 * n + 200
-            : key.endsWith('.lookups')
-              ? 15 * 2 * n + 50
-              : key.endsWith('.domains') || key.endsWith('.notified')
-                ? 1
-                : Infinity
+      // Through the filter: each owner-map key and tree node read a fixed number of times.
+      const input = (name: string) => tally[`${phase}.${name}`]![i]!
+      const bound = key.endsWith('.ownerKeyReads')
+        ? 2 * input('ownerKeys') + 8
+        : key.endsWith('.treeNodeReads')
+          ? 3 * input('treeNodes') + 8
+          : key.endsWith('.filterCalls')
+            ? 1
+            : key.endsWith('.placements')
+              ? n
+              : key.endsWith('.recordLookups')
+                ? 2 * n + 8
+                : key.endsWith('.visits')
+                  ? 40 * 2 * n + 200
+                  : key.endsWith('.lookups')
+                    ? 15 * 2 * n + 50
+                    : key.endsWith('.domains') || key.endsWith('.notified')
+                      ? 1
+                      : Infinity
       expect(counts[i], key).toBeLessThanOrEqual(bound)
     }
   }
@@ -454,15 +563,15 @@ it.each([20, 200])(
     // Catalog rows read, while the reveal prepares and while its receipt admits the destination.
     let stage: 'prepare' | 'admission' = 'prepare'
     for (const name of ['getRepos', 'getFolderWorkspaces', 'getProjectGroups'] as const) {
-      const read = rig.profile[name].bind(rig.profile) as () => object[]
+      const read = rig.profile[name].bind(rig.profile) as () => unknown[]
       vi.spyOn(rig.profile, name).mockImplementation(
         (() =>
           new Proxy(read(), {
-            get: (rows, key, receiver) => {
+            get: (rows, key) => {
               if (typeof key === 'string' && /^\d+$/.test(key)) {
                 add(`${stage}CatalogRows`, 1)
               }
-              return Reflect.get(rows, key, receiver)
+              return rows[key as keyof typeof rows]
             }
           })) as never
       )
@@ -518,11 +627,22 @@ it.each([20, 200])(
       }
       return statement
     })
+    // Every owner probe this host starts, with the chat it probes: a released, settled population
+    // gives the receipt nothing to probe, the moved chat or any other.
+    const probed: string[] = []
+    const probe = StructuredAgentSessionHostRuntimeState.prototype.probeRecord
+    vi.spyOn(StructuredAgentSessionHostRuntimeState.prototype, 'probeRecord').mockImplementation(
+      function (this: StructuredAgentSessionHostRuntimeState, record) {
+        probed.push(record.sessionId)
+        return probe.call(this, record)
+      }
+    )
     const unsubscribe = sessionCrewChanges.subscribe((facets) =>
       add(facets.has('records') ? 'topologyNotices' : 'otherNotices', 1)
     )
     const phase = async (name: string, run: () => Promise<unknown>) => {
       writes.mockClear()
+      probed.length = 0
       for (const key of Object.keys(work)) {
         work[key] = 0
       }
@@ -530,6 +650,8 @@ it.each([20, 200])(
       const rows = writes.mock.calls.map(([, write]) => write)
       tally[name] = {
         ...work,
+        ownerProbes: probed.length,
+        unrelatedProbes: probed.filter((sessionId) => sessionId !== B).length,
         recordsWritten: rows.reduce((sum, write) => sum + write.records.upsert.length, 0),
         recordsRemoved: rows.reduce((sum, write) => sum + write.records.remove.length, 0),
         operationsWritten: rows.reduce((sum, write) => sum + write.operations.upsert.length, 0),
@@ -577,6 +699,9 @@ it.each([20, 200])(
       // The moved record's commit and its placement's follow-up, at any N.
       topologyNotices: 2
     })
+    for (const counts of Object.values(tally)) {
+      expect(counts).toMatchObject({ ownerProbes: 0, unrelatedProbes: 0 })
+    }
     for (const name of ['overtaken', 'repeat']) {
       expect(tally[name], name).toMatchObject({ recordsWritten: 0, operationsWritten: 0 })
       expect(tally[name]!.journalUpdates ?? 0, name).toBe(0)
