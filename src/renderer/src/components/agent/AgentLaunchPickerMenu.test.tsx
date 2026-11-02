@@ -1,4 +1,8 @@
-import { entry, compilePickerTerminalLaunch } from './agent-launch-picker-menu-test-fixture'
+import {
+  entry,
+  compilePickerTerminalLaunch,
+  codexAskRetainedArgsTokens
+} from './agent-launch-picker-menu-test-fixture'
 // @vitest-environment happy-dom
 import { clearNativeChatComposerDraftsForTests } from '../native-chat/native-chat-composer-draft-store'
 import { act } from 'react'
@@ -707,19 +711,7 @@ it('retains authored Arguments on close/reopen and rebinds their acquisition aut
     })
   ).toMatchObject({
     ok: true,
-    tokens: [
-      'codex',
-      '-c',
-      'disable_paste_burst=true',
-      '-a',
-      'on-request',
-      '-s',
-      'read-only',
-      '-c',
-      'approvals_reviewer=user',
-      '--add-dir',
-      'old-owner'
-    ]
+    tokens: codexAskRetainedArgsTokens
   })
 })
 

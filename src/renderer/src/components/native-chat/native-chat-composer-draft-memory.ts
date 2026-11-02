@@ -128,16 +128,7 @@ export function reconcileRestoredImageChecks(
 }
 export const scopeListeners = new Map<string, Set<() => void>>()
 
-/** Pre-hydration appends replay over loaded drafts; ordinary edits replace them. */
-export type DraftAppend = (draft: StoredNativeChatComposerDraft) => StoredNativeChatComposerDraft
-
-/** Atomically append in storage, then replay onto hydration if that load could not have read it. */
-export type AppendBeforeLoad = {
-  /** In-run order, compared with the order at which a load attempt read storage. */
-  readonly sequence: number
-  readonly append: DraftAppend
-  committed: boolean
-}
+export type { DraftAppend, AppendBeforeLoad } from './native-chat-composer-draft-load'
 
 export const load: LoadBookkeeping = {
   hydrated: false,

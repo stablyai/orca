@@ -1,3 +1,4 @@
+import type { AgentLaunchSetupPanelProps } from './AgentLaunchSetupButton'
 import {
   agentLaunchSetupOptionRows,
   agentLaunchSetupCatalogState as catalogState
@@ -34,8 +35,6 @@ import {
   agentPickerModels,
   agentPickerEntryOptions,
   agentPickerPermissions,
-  type AgentPickerEntry,
-  type AgentPickerDraft,
   type AgentPickerSurface
 } from '../../../../shared/agent-launch-picker'
 
@@ -47,15 +46,7 @@ export function AgentLaunchSetupPanel({
   disabled,
   onDraftChange,
   onUse
-}: {
-  entry: AgentPickerEntry
-  draft: AgentPickerDraft
-  getDraft: () => AgentPickerDraft | undefined
-  mode?: 'launch' | 'select'
-  disabled?: boolean
-  onDraftChange: (draft: AgentPickerDraft) => void
-  onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
-}) {
+}: AgentLaunchSetupPanelProps) {
   const footer = useRef<AgentLaunchSetupFooterHandle>(null)
   const editDraft = (edit: AgentPickerEdit) => {
     const current = getDraft()

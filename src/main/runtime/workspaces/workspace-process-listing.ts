@@ -242,6 +242,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
       logger,
       ...catalogDeps,
       claudeCliFlags: claudeCliFlagSupport,
+      usageLimitAutoContinue: this.usageLimitAutoContinueHostDeps(),
       nativeChatVisuals: {
         isEnabled: () => this.requireStore().getSettings().nativeChatInlineVisuals !== false
       },

@@ -20,6 +20,16 @@ export {
 } from './agent-launch-picker-drafts'
 export type { AgentPickerSetupIdentity } from './agent-launch-picker-drafts'
 
+export type AgentLaunchSetupPanelProps = {
+  entry: AgentPickerEntry
+  draft: AgentPickerDraft
+  getDraft: () => AgentPickerDraft | undefined
+  mode?: 'launch' | 'select'
+  disabled?: boolean
+  onDraftChange: (draft: AgentPickerDraft) => void
+  onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
+}
+
 function setupKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault()

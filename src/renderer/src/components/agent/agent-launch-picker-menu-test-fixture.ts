@@ -41,3 +41,17 @@ export function compilePickerTerminalLaunch(draft: AgentPickerDraft, entry: Agen
   }
   return tokenizeStartupCommand(compiled.command, 'posix')
 }
+
+export const codexAskRetainedArgsTokens = [
+  'codex',
+  '-c',
+  'disable_paste_burst=true',
+  '-a',
+  'on-request',
+  '-s',
+  'read-only',
+  '-c',
+  'approvals_reviewer=user',
+  '--add-dir',
+  'old-owner'
+]

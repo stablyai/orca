@@ -10,7 +10,6 @@ import {
   notifyScope,
   records,
   reconcileRestoredImageChecks,
-  type AppendBeforeLoad,
   type NativeChatDraftPosition
 } from './native-chat-composer-draft-memory'
 import {
@@ -28,6 +27,17 @@ import {
   removeLegacyLocalStorageNativeChatComposerDrafts,
   type StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
+
+/** Pre-hydration appends replay over loaded drafts; ordinary edits replace them. */
+export type DraftAppend = (draft: StoredNativeChatComposerDraft) => StoredNativeChatComposerDraft
+
+/** Atomically append in storage, then replay onto hydration if that load could not have read it. */
+export type AppendBeforeLoad = {
+  /** In-run order, compared with the order at which a load attempt read storage. */
+  readonly sequence: number
+  readonly append: DraftAppend
+  committed: boolean
+}
 
 export type LoadBookkeeping = {
   hydrated: boolean

@@ -37,10 +37,7 @@ import {
   type AgentPickerEntry
 } from '../../../../shared/agent-launch-picker'
 
-export {
-  useAgentPickerInventoryEntries,
-  type AgentPickerInventorySource
-} from './agent-launch-picker-acquisition'
+export { useAgentPickerInventoryEntries, type AgentPickerInventorySource }
 
 /** Forms consume entries; menu owners can retain the source without subscribing. */
 export function useAgentLaunchPickerInventory(
