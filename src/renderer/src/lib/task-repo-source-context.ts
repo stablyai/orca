@@ -8,7 +8,7 @@ import { projectHostSetupProjectionFromRepos } from '../../../shared/project-hos
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 export function getTaskPageRepoSourceContext(
   repo: Repo | null | undefined,
-  provider: 'github' | 'gitlab',
+  provider: 'github' | 'gitlab' | 'gitea',
   gitlabProjectRef?: GitLabProjectRef | null
 ): TaskSourceContext | null {
   if (!repo) {
@@ -22,7 +22,9 @@ export function getTaskPageRepoSourceContext(
       ? project.providerIdentity
       : provider === 'gitlab' && gitlabProjectRef
         ? buildGitLabProviderIdentity(gitlabProjectRef)
-        : null
+        : provider === 'gitea'
+          ? buildGiteaProviderIdentity(repo)
+          : null
   return normalizeTaskSourceContext({
     provider,
     projectId: setup?.projectId ?? project?.id ?? repo.id,
@@ -31,6 +33,14 @@ export function getTaskPageRepoSourceContext(
     repoId: repo.id,
     providerIdentity
   })
+}
+export function buildGiteaProviderIdentity(repo: Repo) {
+  const [host, ...pathParts] = repo.gitRemoteIdentity?.canonicalKey.split('/') ?? []
+  return {
+    provider: 'gitea' as const,
+    host: host || null,
+    path: pathParts.join('/') || null
+  }
 }
 export function buildGitLabProviderIdentity(projectRef: GitLabProjectRef) {
   const pathParts = projectRef.path

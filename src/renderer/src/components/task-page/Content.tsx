@@ -6,6 +6,8 @@ import ProjectViewWrapper from '@/components/github-project/ProjectViewWrapper'
 import { TaskPageGitHubList } from './github/List'
 import { TaskPageGitLabTodoList } from './gitlab/TodoList'
 import { TaskPageGitLabItemList } from './gitlab/ItemList'
+import { TaskPageGiteaNotificationList } from './gitea/NotificationList'
+import { TaskPageGiteaItemList } from './gitea/ItemList'
 import { TaskPageJiraContent } from './jira/Content'
 export function TaskPageContent({
   model
@@ -17,6 +19,7 @@ export function TaskPageContent({
     taskSource,
     githubMode,
     gitlabView,
+    giteaView,
     dialogInitialTab,
     dialogWorkItem,
     dialogRepoPath,
@@ -73,6 +76,10 @@ export function TaskPageContent({
     <TaskPageGitLabTodoList model={model} />
   ) : taskSource === 'gitlab' ? (
     <TaskPageGitLabItemList model={model} />
+  ) : taskSource === 'gitea' && giteaView === 'notifications' ? (
+    <TaskPageGiteaNotificationList model={model} />
+  ) : taskSource === 'gitea' ? (
+    <TaskPageGiteaItemList model={model} />
   ) : (
     <TaskPageJiraContent model={model} />
   )

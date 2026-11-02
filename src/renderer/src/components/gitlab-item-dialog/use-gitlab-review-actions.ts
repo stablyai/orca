@@ -1,5 +1,5 @@
-import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import { useCallback } from 'react'
+import { dialogFeatureInteractionId } from './gitlab-dialog-forge'
 import { toast } from 'sonner'
 import { getCommentBodySubmitState } from '@/lib/comment-body-submit-state'
 import { translate } from '@/i18n/i18n'
@@ -30,7 +30,8 @@ export function useGitLabReviewActions(
     setReviewerDraftId,
     setReviewerOptions,
     setReviewerOptionsLoading,
-    setReviewerUpdating
+    setReviewerUpdating,
+    forge
   } = state
   const loadGitLabReviewerOptions = useCallback(async (): Promise<void> => {
     if (!repoSelector || reviewerOptions !== null || reviewerOptionsLoading) {
@@ -38,7 +39,7 @@ export function useGitLabReviewActions(
     }
     setReviewerOptionsLoading(true)
     try {
-      const users = await gitLabApiFor(repoSelector).listAssignableUsers(repoSelector)
+      const users = await forge.apiFor(repoSelector).listAssignableUsers(repoSelector)
       if (mountedRef.current) {
         setReviewerOptions(dedupeGitLabUsers(users))
       }
@@ -53,6 +54,7 @@ export function useGitLabReviewActions(
     }
   }, [
     mountedRef,
+    forge,
     repoSelector,
     reviewerOptions,
     reviewerOptionsLoading,
@@ -79,7 +81,7 @@ export function useGitLabReviewActions(
       }
       setReviewerUpdating(true)
       try {
-        const result = await gitLabApiFor(repoSelector).updateMRReviewers({
+        const result = await forge.apiFor(repoSelector).updateMRReviewers({
           ...repoSelector,
           iid: item.number,
           reviewerIds,
@@ -96,7 +98,7 @@ export function useGitLabReviewActions(
           setReviewerOptions((current) =>
             current ? dedupeGitLabUsers([...current, ...result.reviewers]) : current
           )
-          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+          useAppStore.getState().recordFeatureInteraction(dialogFeatureInteractionId(forge))
         } else {
           toast.error(codeHostErrorText(result))
         }
@@ -114,6 +116,7 @@ export function useGitLabReviewActions(
       details,
       item,
       mountedRef,
+      forge,
       repoSelector,
       setDetails,
       setReviewerDraftId,
@@ -158,7 +161,7 @@ export function useGitLabReviewActions(
     }
     setInlineCommentSubmitting(true)
     try {
-      const result = await gitLabApiFor(repoSelector).addMRInlineComment({
+      const result = await forge.apiFor(repoSelector).addMRInlineComment({
         ...repoSelector,
         iid: item.number,
         projectRef: details.item.projectRef ?? item.projectRef ?? null,
@@ -180,7 +183,7 @@ export function useGitLabReviewActions(
           current ? { ...current, comments: [...current.comments, result.comment] } : current
         )
         setInlineCommentBody('')
-        useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+        useAppStore.getState().recordFeatureInteraction(dialogFeatureInteractionId(forge))
         toast.success(
           translate('auto.components.GitLabItemDialog.60c13320c4', 'Inline comment added')
         )
@@ -203,6 +206,7 @@ export function useGitLabReviewActions(
     inlineCommentLine,
     item,
     mountedRef,
+    forge,
     repoSelector,
     setDetails,
     setInlineCommentBody,
@@ -216,7 +220,7 @@ export function useGitLabReviewActions(
       }
       setResolvingThreadId(threadId)
       try {
-        const res = await gitLabApiFor(repoSelector).resolveMRDiscussion({
+        const res = await forge.apiFor(repoSelector).resolveMRDiscussion({
           ...repoSelector,
           iid: item.number,
           discussionId: threadId,
@@ -234,7 +238,7 @@ export function useGitLabReviewActions(
                   }
                 : current
             )
-            useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+            useAppStore.getState().recordFeatureInteraction(dialogFeatureInteractionId(forge))
           }
         } else if (mountedRef.current) {
           toast.error(codeHostErrorText(res))
@@ -249,7 +253,7 @@ export function useGitLabReviewActions(
         }
       }
     },
-    [item, repoSelector, mountedRef, setDetails, setResolvingThreadId]
+    [forge, item, repoSelector, mountedRef, setDetails, setResolvingThreadId]
   )
 
   return {

@@ -40,6 +40,7 @@ function createInput(overrides: Partial<Input> = {}): Input {
     setForkPushWarning: vi.fn(),
     setLinkedGitLabIssue: vi.fn(),
     setLinkedGitLabMR: vi.fn(),
+    clearLinkedGiteaItems: vi.fn(),
     setLinkedIssue: vi.fn(),
     setLinkedPR: vi.fn(),
     setLinkedTaskSourceContext: vi.fn(),

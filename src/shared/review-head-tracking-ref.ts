@@ -16,6 +16,10 @@ export function gitlabMergeRequestHeadLocalRef(remoteComponent: string, mrIid: n
   return `refs/orca/merge-requests/${remoteComponent}/${mrIid}`
 }
 
+export function giteaPullRequestHeadLocalRef(remoteComponent: string, prNumber: number): string {
+  return `refs/orca/review-heads/${remoteComponent}/pr-${prNumber}`
+}
+
 // Lossy remote-name sanitization is safe because the URL hash supplies uniqueness.
 function sanitizeRemoteRefComponent(remote: string): string {
   const cleaned = remote.replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^[-.]+|\.+$/g, '')

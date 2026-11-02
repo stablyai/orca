@@ -75,6 +75,17 @@ export type WorktreeApi = {
     /** The user creating or launching from the PR: it may start a stopped WSL distro. */
     wakeWslDistro?: boolean
   }) => Promise<GitHubPrStartPoint | { error: string }>
+  /** Same-repo Gitea PRs return a remote branch; forks fetch refs/pull/N/head and return its SHA. */
+  resolveGiteaPrBase: (args: {
+    repoId: string
+    prNumber: number
+    headRefName?: string
+    baseRefName?: string
+    isCrossRepository?: boolean
+    wakeWslDistro?: boolean
+  }) => Promise<
+    { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget } | { error: string }
+  >
   /** Same-project MRs return a remote branch; forks fetch the MR head ref and return its SHA. */
   resolveMrBase: (args: {
     repoId: string

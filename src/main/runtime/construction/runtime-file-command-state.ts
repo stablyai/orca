@@ -8,6 +8,8 @@ import { createRuntimeFileWatcherRemoval } from '../runtime-file-watcher-removal
 import { RuntimeGitCommands } from '../orca-runtime-git'
 import { RuntimeHostedReviewCommands } from '../runtime-hosted-review-commands'
 import { RuntimeGitHubRepositoryQueryCommands } from '../runtime-github-repository-query-commands'
+import { RuntimeGiteaMutationCommands } from '../runtime-gitea-mutation-commands'
+import { RuntimeGiteaQueryCommands } from '../runtime-gitea-query-commands'
 import { RuntimeGitLabQueryCommands } from '../runtime-gitlab-query-commands'
 import { recordGitLabProjectRecent } from '../../gitlab/gitlab-project-recents'
 import { RuntimeGitLabMutationCommands } from '../runtime-gitlab-mutation-commands'
@@ -226,6 +228,16 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
   })
 
   protected readonly gitHubRepositoryQueries = new RuntimeGitHubRepositoryQueryCommands({
+    resolveRepo: (selector) => this.resolveRepoSelector(selector),
+    getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
+  })
+
+  protected readonly giteaQueryCommands = new RuntimeGiteaQueryCommands({
+    resolveRepo: (selector) => this.resolveRepoSelector(selector),
+    getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
+  })
+
+  protected readonly giteaMutationCommands = new RuntimeGiteaMutationCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })

@@ -153,6 +153,7 @@ export const WorktreeSet = WorktreeSelector.extend({
   linkedBitbucketPR: TriStateLinkedIssue,
   linkedAzureDevOpsPR: TriStateLinkedIssue,
   linkedGiteaPR: TriStateLinkedIssue,
+  linkedGiteaIssue: TriStateLinkedIssue,
   linkedWorkItem: WorkspaceLinkedItemSchema.nullable().optional(),
   linkedItems: WorkspaceAttachmentsSchema.optional(),
   linkedItemsBase: WorkspaceAttachmentsSchema.optional(),
@@ -234,6 +235,22 @@ export const WorktreeResolvePrBase = z.object({
   baseRefName: OptionalString,
   isCrossRepository: OptionalBoolean,
   /** The user creating or launching from the PR; older hosts drop it. */
+  wakeWslDistro: OptionalBoolean
+})
+
+export const WorktreeResolveGiteaPrBase = z.object({
+  repo: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string().min(1, 'Missing repo selector')),
+  prNumber: z
+    .unknown()
+    .transform((v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0))
+    .pipe(z.number().int().positive('Missing PR number')),
+  headRefName: OptionalString,
+  baseRefName: OptionalString,
+  isCrossRepository: OptionalBoolean,
+  /** The user creating from the PR; older hosts drop it. */
   wakeWslDistro: OptionalBoolean
 })
 

@@ -96,6 +96,29 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     return initialLinkedWorkItem?.type === 'mr' ? initialLinkedWorkItem.number : null
   })
 
+  const [linkedGiteaIssue, setLinkedGiteaIssue] = useState<number | null>(() => {
+    if (persistDraft && newWorkspaceDraft?.linkedGiteaIssue !== undefined) {
+      return newWorkspaceDraft.linkedGiteaIssue
+    }
+    return initialLinkedWorkItem?.provider === 'gitea' && initialLinkedWorkItem.type === 'issue'
+      ? initialLinkedWorkItem.number
+      : null
+  })
+
+  const [linkedGiteaPR, setLinkedGiteaPR] = useState<number | null>(() => {
+    if (persistDraft && newWorkspaceDraft?.linkedGiteaPR !== undefined) {
+      return newWorkspaceDraft.linkedGiteaPR
+    }
+    return initialLinkedWorkItem?.provider === 'gitea' && initialLinkedWorkItem.type === 'pr'
+      ? initialLinkedWorkItem.number
+      : null
+  })
+
+  const clearLinkedGiteaItems = useCallback((): void => {
+    setLinkedGiteaIssue(null)
+    setLinkedGiteaPR(null)
+  }, [])
+
   const [baseBranch, setBaseBranch] = useState<string | undefined>(
     persistDraft ? newWorkspaceDraft?.baseBranch : initialBaseBranch
   )
@@ -209,9 +232,14 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     linkedPR,
     setLinkedPR,
     linkedGitLabIssue,
+    linkedGiteaIssue,
     setLinkedGitLabIssue,
+    setLinkedGiteaIssue,
     linkedGitLabMR,
+    linkedGiteaPR,
     setLinkedGitLabMR,
+    setLinkedGiteaPR,
+    clearLinkedGiteaItems,
     baseBranch,
     setBaseBranch,
     baseBranchNamesWorkspace,

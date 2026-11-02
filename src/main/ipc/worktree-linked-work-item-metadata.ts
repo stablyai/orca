@@ -8,6 +8,7 @@ type LinkedWorkItemMetadata = Pick<
   | 'linkedBitbucketPR'
   | 'linkedAzureDevOpsPR'
   | 'linkedGiteaPR'
+  | 'linkedGiteaIssue'
   | 'linkedWorkItem'
   | 'linkedItems'
   | 'linkedTaskSourceContext'
@@ -20,6 +21,7 @@ export function getLinkedWorkItemMetadata(meta: WorktreeMeta | undefined): Linke
     linkedBitbucketPR: meta?.linkedBitbucketPR ?? null,
     linkedAzureDevOpsPR: meta?.linkedAzureDevOpsPR ?? null,
     linkedGiteaPR: meta?.linkedGiteaPR ?? null,
+    linkedGiteaIssue: meta?.linkedGiteaIssue ?? null,
     linkedWorkItem: meta?.linkedWorkItem ?? null,
     ...(meta?.linkedItems !== undefined ? { linkedItems: meta.linkedItems } : {}),
     linkedTaskSourceContext: meta?.linkedTaskSourceContext ?? null

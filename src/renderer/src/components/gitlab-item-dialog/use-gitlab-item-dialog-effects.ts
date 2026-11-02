@@ -1,4 +1,3 @@
-import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import { useEffect } from 'react'
 import type { GitLabWorkItem, GitLabWorkItemDetails } from '../../../../shared/gitlab-types'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
@@ -9,7 +8,7 @@ export function useGitLabItemDetailsEffect(
   repoSelector: GitLabDialogRepoSelector | null,
   state: GitLabItemDialogState
 ): void {
-  const { refreshNonce, setDetails, setEditingDetails, setError, setLoading } = state
+  const { forge, refreshNonce, setDetails, setEditingDetails, setError, setLoading } = state
   useEffect(() => {
     if (!item || !repoSelector) {
       setDetails(null)
@@ -21,7 +20,8 @@ export function useGitLabItemDetailsEffect(
     let stale = false
     setLoading(true)
     setError(null)
-    void gitLabApiFor(repoSelector)
+    void forge
+      .apiFor(repoSelector)
       .workItemDetails({ ...repoSelector, iid: item.number, type: item.type })
       .then((data) => {
         if (stale) {
@@ -46,7 +46,7 @@ export function useGitLabItemDetailsEffect(
     return () => {
       stale = true
     }
-  }, [item, refreshNonce, repoSelector, setDetails, setEditingDetails, setError, setLoading])
+  }, [forge, item, refreshNonce, repoSelector, setDetails, setEditingDetails, setError, setLoading])
 }
 
 export function useGitLabItemScopeResetEffect(

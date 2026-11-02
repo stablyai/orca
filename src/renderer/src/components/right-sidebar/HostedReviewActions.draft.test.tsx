@@ -58,7 +58,8 @@ function renderDraft(provider: HostedReviewActionInfo['provider']): string {
 describe('HostedReviewActions draft state', () => {
   it.each([
     ['github', 'PR'],
-    ['gitlab', 'MR']
+    ['gitlab', 'MR'],
+    ['gitea', 'PR']
   ] as const)('renders Ready as primary and Close as secondary for %s', (provider, shortLabel) => {
     const markup = renderDraft(provider)
 
@@ -68,12 +69,9 @@ describe('HostedReviewActions draft state', () => {
     expect(markup).not.toContain('auto-merge')
   })
 
-  it.each(['azure-devops', 'gitea'] as const)(
-    'does not misroute unsupported %s drafts through GitHub',
-    (provider) => {
-      expect(renderDraft(provider)).toBe('')
-    }
-  )
+  it('does not misroute unsupported azure-devops drafts through GitHub', () => {
+    expect(renderDraft('azure-devops')).toBe('')
+  })
 })
 
 describe('HostedReviewActions GitHub merge selection', () => {

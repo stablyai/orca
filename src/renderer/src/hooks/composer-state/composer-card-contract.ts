@@ -73,6 +73,7 @@ export type ComposerCardActionProps = {
   onParentWorktreeIdChange: ComposerModel['setParentWorktreeId']
   onSmartGitHubItemSelect: ComposerModel['handleSmartGitHubItemSelect']
   onSmartGitLabItemSelect: ComposerModel['handleSmartGitLabItemSelect']
+  onSmartGiteaItemSelect: ComposerModel['handleSmartGiteaItemSelect']
   onSmartBranchSelect: ComposerModel['handleSmartBranchSelect']
   onSmartNameModeChange?: ComposerModel['setSmartNameMode']
   onSmartLinearIssueSelect: ComposerModel['handleSmartLinearIssueSelect']

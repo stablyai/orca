@@ -184,6 +184,10 @@ function externalUrl(item: WorkspaceAttachment): string | undefined {
       return identity.webUrl
         ? `${identity.webUrl.replace(/\/+$/, '')}/-/${item.type === 'mr' ? 'merge_requests' : 'issues'}/${item.number}`
         : undefined
+    case 'gitea':
+      return identity.host && identity.path
+        ? `https://${identity.host}/${identity.path}/${item.type === 'pr' ? 'pulls' : 'issues'}/${item.number}`
+        : undefined
     case 'jira':
       return identity.siteUrl && identifier
         ? `${identity.siteUrl.replace(/\/+$/, '')}/browse/${identifier}`

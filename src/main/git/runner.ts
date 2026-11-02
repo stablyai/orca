@@ -30,6 +30,7 @@ export { isTransientGhError } from './command-runner/gh-retry-policy'
 export { applyGhHostToArgs } from './command-runner/gh-host-args'
 export { ghExecFileAsync, ghExecFileWithScopeAsync } from './command-runner/gh-exec-file'
 export { glabExecFileAsync, redirectPortedHostnameToEnv } from './command-runner/glab-exec-file'
+export { teaExecFileAsync, type TeaExecOptions } from './command-runner/tea-exec-file'
 export { wslAwareSpawn } from './command-runner/wsl-aware-spawn'
 export { translateWslOutputPaths } from './command-runner/wsl-path-translation'
 

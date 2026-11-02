@@ -19,6 +19,7 @@ type GitHubSubmitResolutionInput = Pick<
   | 'setForkPushWarning'
   | 'setLinkedGitLabIssue'
   | 'setLinkedGitLabMR'
+  | 'clearLinkedGiteaItems'
   | 'setLinkedIssue'
   | 'setLinkedPR'
   | 'setLinkedTaskSourceContext'
@@ -71,6 +72,7 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
     setForkPushWarning,
     setLinkedGitLabIssue,
     setLinkedGitLabMR,
+    clearLinkedGiteaItems,
     setLinkedIssue,
     setLinkedPR,
     setLinkedTaskSourceContext,
@@ -233,6 +235,7 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
       setLinkedPR(resolution.linkedPR)
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
+      clearLinkedGiteaItems()
       setLinkedWorkItem(resolution.linkedWorkItem)
       setLinkedTaskSourceContext(selectedRepoGitHubSourceContext)
       setName(resolution.workspaceName)
@@ -275,6 +278,7 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
       setForkPushWarning,
       setLinkedGitLabIssue,
       setLinkedGitLabMR,
+      clearLinkedGiteaItems,
       setLinkedIssue,
       setLinkedPR,
       setLinkedTaskSourceContext,

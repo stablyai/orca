@@ -40,6 +40,8 @@ export const worktreesApi = {
 
   resolvePrBase: (args) => ipcRenderer.invoke('worktrees:resolvePrBase', args),
 
+  resolveGiteaPrBase: (args) => ipcRenderer.invoke('worktrees:resolveGiteaPrBase', args),
+
   resolveMrBase: (args) => ipcRenderer.invoke('worktrees:resolveMrBase', args),
 
   previewNestedRemoval: (args) => ipcRenderer.invoke('worktrees:previewNestedRemoval', args),

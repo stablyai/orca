@@ -1,21 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
 
-const { gitExecFileAsyncMock } = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn()
+const { gitExecFileAsyncMock, teaExecFileAsyncMock } = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn(),
+  teaExecFileAsyncMock: vi.fn()
 }))
 
 vi.mock('../git/runner', () => ({
-  gitExecFileAsync: gitExecFileAsyncMock
+  gitExecFileAsync: gitExecFileAsyncMock,
+  teaExecFileAsync: teaExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/tea-exec-file', () => ({
+  teaExecFileAsync: teaExecFileAsyncMock
 }))
 
 import {
   getGiteaAuthStatus,
+  getGiteaPullRequest,
   getGiteaPullRequestForBranch,
   getGiteaPullRequestForBranchOrThrow,
   normalizeGiteaApiBaseUrl
 } from './client'
 import { _resetGiteaRepoRefCache } from './repository-ref'
+import { _resetTeaKnownHostsCache } from './gitea-known-host-probe'
 import {
   _getGiteaPullRequestScanCacheSize,
   _resetGiteaPullRequestScanCache,
@@ -35,6 +43,20 @@ function primeGitExecWithDefaultBranch(defaultRef = 'refs/remotes/origin/main'):
     }
     throw new Error(`unexpected git call: ${args.join(' ')}`)
   })
+}
+
+function authorizationHeader(headers: HeadersInit | undefined): string | undefined {
+  if (!headers) {
+    return undefined
+  }
+  if (headers instanceof Headers) {
+    return headers.get('Authorization') ?? undefined
+  }
+  if (Array.isArray(headers)) {
+    const match = headers.find((pair) => pair[0]?.toLowerCase() === 'authorization')
+    return match?.[1]
+  }
+  return headers.Authorization ?? headers.authorization
 }
 
 function giteaPr(index = 7, branch = 'feature/gitea') {
@@ -63,7 +85,10 @@ describe('Gitea client', () => {
       stdout: 'https://git.example.com/team/repo.git\n',
       stderr: ''
     })
+    teaExecFileAsyncMock.mockReset()
+    teaExecFileAsyncMock.mockRejectedValue(new Error('tea missing'))
     _resetGiteaRepoRefCache()
+    _resetTeaKnownHostsCache()
     _resetGiteaPullRequestScanCache()
     __resetRepoDefaultBranchCacheForTests()
     vi.unstubAllGlobals()
@@ -147,7 +172,7 @@ describe('Gitea client', () => {
       if (!init) {
         throw new Error('expected request init')
       }
-      expect((init.headers as Record<string, string>).Authorization).toBe('token gitea-token')
+      expect(authorizationHeader(init.headers)).toBe('token gitea-token')
       if (parsed.pathname.endsWith('/commits/abc123/status')) {
         return Response.json({ state: 'success' })
       }
@@ -443,5 +468,129 @@ describe('Gitea client', () => {
 
     expect(fetchMock).toHaveBeenCalled()
     expect(cancelledBodies).toBe(fetchMock.mock.calls.length)
+  })
+
+  it('loads a pull request through tea api when no token is set and the repo login is active', async () => {
+    delete process.env.ORCA_GITEA_TOKEN
+    delete process.env.GITEA_TOKEN
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    teaExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'login') {
+        return {
+          stdout: JSON.stringify([
+            {
+              name: 'work',
+              url: 'https://git.example.com',
+              ssh_host: 'git.example.com',
+              user: 'octo',
+              default: true
+            }
+          ]),
+          stderr: ''
+        }
+      }
+      const apiPath = args.find((arg) => arg.startsWith('/')) ?? ''
+      if (apiPath.endsWith('/commits/abc123/status')) {
+        return { stdout: JSON.stringify({ state: 'success' }), stderr: 'HTTP/1.1 200 OK\n' }
+      }
+      return { stdout: JSON.stringify(giteaPr()), stderr: 'HTTP/1.1 200 OK\n' }
+    })
+
+    await expect(getGiteaPullRequest('/repo', 7)).resolves.toMatchObject({
+      number: 7,
+      status: 'success'
+    })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(teaExecFileAsyncMock).toHaveBeenCalledWith(
+      ['api', '-i', '--repo', 'team/repo', '--login', 'work', '/repos/team/repo/pulls/7'],
+      expect.objectContaining({ timeout: 5000 })
+    )
+  })
+
+  it('scans branch pull requests through tea api when the repo login is active and no token is set', async () => {
+    delete process.env.ORCA_GITEA_TOKEN
+    delete process.env.GITEA_TOKEN
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    teaExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'login') {
+        return {
+          stdout: JSON.stringify([
+            {
+              name: 'work',
+              url: 'https://git.example.com',
+              ssh_host: 'git.example.com',
+              user: 'octo',
+              default: true
+            }
+          ]),
+          stderr: ''
+        }
+      }
+      const apiPath = args.find((arg) => arg.startsWith('/')) ?? ''
+      if (apiPath.includes('/commits/abc123/status')) {
+        return { stdout: JSON.stringify({ state: 'success' }), stderr: 'HTTP/1.1 200 OK\n' }
+      }
+      return { stdout: JSON.stringify([giteaPr()]), stderr: 'HTTP/1.1 200 OK\n' }
+    })
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toMatchObject({
+      number: 7,
+      status: 'success'
+    })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(teaExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'api',
+        '-i',
+        '--repo',
+        'team/repo',
+        '--login',
+        'work',
+        '/repos/team/repo/pulls?state=all&sort=recentupdate&page=1&limit=50'
+      ],
+      expect.objectContaining({ timeout: 15_000 })
+    )
+  })
+
+  it('keeps direct HTTP fetch when GITEA_TOKEN is configured even if a tea login matches', async () => {
+    delete process.env.ORCA_GITEA_TOKEN
+    process.env.GITEA_TOKEN = 'instance-token'
+    teaExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'login') {
+        return {
+          stdout: JSON.stringify([
+            {
+              name: 'work',
+              url: 'https://git.example.com',
+              ssh_host: 'git.example.com',
+              user: 'octo',
+              default: true
+            }
+          ]),
+          stderr: ''
+        }
+      }
+      throw new Error(`tea api should not run: ${args.join(' ')}`)
+    })
+    const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
+      if (String(url).includes('/status')) {
+        return Response.json({ state: 'pending' })
+      }
+      return Response.json(giteaPr())
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getGiteaPullRequest('/repo', 7)).resolves.toMatchObject({
+      number: 7,
+      status: 'pending'
+    })
+    expect(fetchMock).toHaveBeenCalled()
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/api/v1/repos/team/repo/pulls/7')
+    const init = fetchMock.mock.calls[0]?.[1]
+    expect(authorizationHeader(init?.headers)).toBe('token instance-token')
   })
 })

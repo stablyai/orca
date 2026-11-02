@@ -236,6 +236,8 @@ function getAutomationSourceProviderLabel(provider: TaskSourceContext['provider'
       return 'GitHub'
     case 'gitlab':
       return 'GitLab'
+    case 'gitea':
+      return 'Gitea'
     case 'linear':
       return 'Linear'
     case 'jira':

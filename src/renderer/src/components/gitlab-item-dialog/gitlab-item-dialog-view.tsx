@@ -51,9 +51,10 @@ export function GitLabItemDialogView({
   handleRefresh,
   updateCommentDraft
 }: Props) {
-  const { actionInFlight, commentDraft, commentSubmitting, details, error, loading } = state
+  const { actionInFlight, commentDraft, commentSubmitting, details, error, forge, loading } = state
+  const isGitea = forge.kind === 'gitea'
   const Icon = item?.type === 'mr' ? GitMerge : CircleDot
-  const prefix = item?.type === 'mr' ? '!' : '#'
+  const prefix = item?.type === 'mr' && !isGitea ? '!' : '#'
   const isMR = item?.type === 'mr'
   const canClose = isMR && item?.state === 'opened'
   const canReopen = isMR && item?.state === 'closed'
@@ -77,7 +78,12 @@ export function GitLabItemDialogView({
               : translate('auto.components.GitLabItemDialog.3a051b8ade', 'Work item')}
           </SheetTitle>
           <SheetDescription>
-            {translate('auto.components.GitLabItemDialog.30c97083c2', 'GitLab work item detail')}
+            {isGitea
+              ? translate(
+                  'auto.components.GiteaItemDialog.workItemDetail',
+                  'Gitea work item detail'
+                )
+              : translate('auto.components.GitLabItemDialog.30c97083c2', 'GitLab work item detail')}
           </SheetDescription>
         </VisuallyHidden.Root>
 
@@ -242,7 +248,9 @@ export function GitLabItemDialogView({
                   className="gap-1.5"
                 >
                   <ExternalLink className="size-3.5" />
-                  {translate('auto.components.GitLabItemDialog.f2e64d1c20', 'Open in GitLab')}
+                  {isGitea
+                    ? translate('auto.components.GiteaItemDialog.openInGitea', 'Open in Gitea')
+                    : translate('auto.components.GitLabItemDialog.f2e64d1c20', 'Open in GitLab')}
                 </Button>
                 <div className="flex items-center gap-2">
                   {onCreateWorkspace ? (

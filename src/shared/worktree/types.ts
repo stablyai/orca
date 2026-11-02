@@ -37,7 +37,7 @@ export type WorkspaceAttachment = {
 }
 
 export type WorkspaceLinkedItem = {
-  provider: 'github' | 'gitlab' | 'linear' | 'jira'
+  provider: 'github' | 'gitlab' | 'linear' | 'jira' | 'gitea'
   type: 'issue' | 'pr' | 'mr'
   number: number
   title: string
@@ -123,6 +123,7 @@ export type Worktree = {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
+  linkedGiteaIssue?: number | null
   linkedWorkItem?: WorkspaceLinkedItem | null
   /** All attachments; singular fields select the active review/task for older readers. */
   linkedItems?: WorkspaceAttachment[]

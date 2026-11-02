@@ -14517,7 +14517,9 @@
             "crossRepoDifferentTaskSource": "GitHub URL 指向 {{repo}}，与所选任务来源不同。",
             "crossRepoDifferentProject": "GitHub URL 指向 {{repo}}，与所选项目不同。",
             "useAsWorkspaceName": "使用 <name>“{{name}}”</name> 作为工作区名称",
-            "createNewBranchNamed": "创建新分支 <name>{{name}}</name>"
+            "createNewBranchNamed": "创建新分支 <name>{{name}}</name>",
+            "giteaMode": "Gitea",
+            "searchGitea": "搜索 Gitea PR 和议题"
           },
           "ProjectCombobox": {
             "empty": "没有匹配搜索的项目。",
@@ -21414,7 +21416,8 @@
         "jira_task_url": "Jira 任务（URL）",
         "bitbucket_pr": "Bitbucket PR",
         "azure_devops_pr": "Azure DevOps PR",
-        "gitea_pr": "Gitea PR"
+        "gitea_pr": "Gitea PR",
+        "gitea_issue": "Gitea 议题"
       },
       "mrReference": "MR !{{number}}",
       "prReference": "PR #{{number}}",

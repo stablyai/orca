@@ -64,6 +64,8 @@ function setup() {
       setGithubMode: setter,
       gitlabDialogItem: null,
       setGitlabDialogItem: setter,
+      giteaDialogItem: null,
+      setGiteaDialogItem: setter,
       appliedTaskSearch: '',
       githubPerRepoPageLimit: 36,
       githubResumeContextKey: 'local',

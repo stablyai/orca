@@ -99,7 +99,13 @@ describe('Store', () => {
     expect(store.getSettings().showTasksButton).toBe(true)
     expect(store.getSettings().showAutomationsButton).toBe(true)
     expect(store.getSettings().combinedDiffFileTreeVisibleByDefault).toBe(false)
-    expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'gitlab', 'linear', 'jira'])
+    expect(store.getSettings().visibleTaskProviders).toEqual([
+      'github',
+      'gitlab',
+      'gitea',
+      'linear',
+      'jira'
+    ])
     expect(store.getSettings().experimentalActivity).toBe(false)
     expect(store.getSettings().experimentalActivityDefaultedOffForAllUsers).toBe(true)
     expect(store.getSettings().experimentalTerminalAttention).toBe(false)
@@ -520,7 +526,7 @@ describe('Store', () => {
     })
 
     const store = await createStore()
-    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab', 'jira'])
+    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab', 'jira', 'gitea'])
   })
 
   it('preserves a deliberate Jira provider opt-out after migration', async () => {
@@ -530,7 +536,8 @@ describe('Store', () => {
       worktreeMeta: {},
       settings: {
         visibleTaskProviders: ['gitlab'],
-        visibleTaskProvidersDefaultedForJira: true
+        visibleTaskProvidersDefaultedForJira: true,
+        visibleTaskProvidersDefaultedForGitea: true
       },
       ui: {},
       githubCache: { pr: {}, issue: {} },
@@ -584,7 +591,7 @@ describe('Store', () => {
 
     const store = await createStore()
     expect(store.getSettings().defaultTaskSource).toBe('github')
-    expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'linear', 'jira'])
+    expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'linear', 'jira', 'gitea'])
   })
 
   it('normalizes invalid task provider defaults on load', async () => {
@@ -600,7 +607,7 @@ describe('Store', () => {
 
     const store = await createStore()
     expect(store.getSettings().defaultTaskSource).toBe('gitlab')
-    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab', 'jira'])
+    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab', 'jira', 'gitea'])
   })
 
   it('normalizes persisted open-in applications on load', async () => {

@@ -14517,7 +14517,9 @@
             "crossRepoDifferentTaskSource": "GitHub URL は、選択したタスクソースとは異なる {{repo}} を指しています。",
             "crossRepoDifferentProject": "GitHub URL は、選択したプロジェクトとは異なる {{repo}} を指しています。",
             "useAsWorkspaceName": "<name>「{{name}}」</name>をワークスペース名に使用",
-            "createNewBranchNamed": "新規ブランチ <name>{{name}}</name> を作成"
+            "createNewBranchNamed": "新規ブランチ <name>{{name}}</name> を作成",
+            "giteaMode": "Gitea",
+            "searchGitea": "Gitea の PR と Issue を検索"
           },
           "ProjectCombobox": {
             "empty": "検索条件に一致するプロジェクトはありません。",
@@ -21413,7 +21415,8 @@
         "jira_task_url": "Jira タスク (URL)",
         "bitbucket_pr": "Bitbucket PR",
         "azure_devops_pr": "Azure DevOps PR",
-        "gitea_pr": "Gitea PR"
+        "gitea_pr": "Gitea PR",
+        "gitea_issue": "Gitea Issue"
       },
       "mrReference": "MR !{{number}}",
       "prReference": "PR #{{number}}",

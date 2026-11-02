@@ -76,7 +76,8 @@ export function openCmdJTask(result: CmdJTaskSearchResult, createWorkspace = fal
   const state = useAppStore.getState()
   state.closeModal()
   const task = result.task
-  if (createWorkspace) {
+  // Why: Gitea has no task page, so opening a Gitea task always starts the workspace composer.
+  if (createWorkspace || task.provider === 'gitea') {
     const linkedWorkItem: LinkedWorkItemSummary =
       task.provider === 'linear'
         ? buildLinearIssueLinkedWorkItem(task.issue)
@@ -100,7 +101,8 @@ export function openCmdJTask(result: CmdJTaskSearchResult, createWorkspace = fal
         linkedWorkItem,
         prefilledName,
         initialRepoId: result.initialRepoId,
-        taskSourceContext: result.sourceContext,
+        // Why: the repo-host binding carries a GitHub provider that must not tag a Gitea item.
+        ...(task.provider === 'gitea' ? {} : { taskSourceContext: result.sourceContext }),
         telemetrySource: 'command_palette'
       })
     )

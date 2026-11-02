@@ -9,6 +9,7 @@ const baseState: TaskPageListChromeVisibilityState = {
   taskSource: 'github',
   hasGitHubDetail: false,
   hasGitLabDetail: false,
+  hasGiteaDetail: false,
   hasJiraDetail: false,
   hasLinearIssueDetail: false,
   hasLinearProjectContext: false,

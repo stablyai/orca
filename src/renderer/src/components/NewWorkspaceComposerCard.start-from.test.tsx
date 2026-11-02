@@ -99,6 +99,7 @@ function renderCard(
         onBranchNameOverrideChange={() => {}}
         onSmartGitHubItemSelect={() => {}}
         onSmartGitLabItemSelect={() => {}}
+        onSmartGiteaItemSelect={() => {}}
         onSmartBranchSelect={() => {}}
         onSmartLinearIssueSelect={() => {}}
         smartNameSelection={{ kind: 'jira', label: 'ERP-1491' }}

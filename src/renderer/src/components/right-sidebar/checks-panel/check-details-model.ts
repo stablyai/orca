@@ -22,6 +22,9 @@ function getCheckIdentityKey(check: PRCheckDetail, index: number): string {
   if (check.gitlabJobId) {
     return `gitlab-job:${check.gitlabJobId}`
   }
+  if (check.giteaJobId) {
+    return `gitea-job:${check.giteaJobId}`
+  }
   if (check.url) {
     return `url:${check.url}`
   }

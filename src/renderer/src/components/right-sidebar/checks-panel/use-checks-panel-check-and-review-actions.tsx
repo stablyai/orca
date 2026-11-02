@@ -12,6 +12,7 @@ import {
 } from '../../../../../shared/pr-checks-fix-prompt'
 
 import { loadGitLabJobLogDetails } from '@/runtime/gitlab-job-trace-client'
+import { loadGiteaJobLogDetails } from '@/runtime/gitea-job-trace-client'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { openChecksPanelHostedReviewUrl } from '../checks-panel-hosted-review-click-routing'
 import { isMacPlatform } from '../../terminal-pane/terminal-link-open-hints'
@@ -83,14 +84,24 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
         fixChecks,
         async (check) => {
           const isGitLabJob = Boolean(check.gitlabJobId)
+          const isGiteaJob = Boolean(check.giteaJobId)
           if (
             !isGitLabJob &&
+            !isGiteaJob &&
             (activeReview.provider === 'gitlab' || !hasGitHubCheckHandle(check))
           ) {
             return null
           }
           try {
             // Give GitLab fix prompts the same failure logs as the sidebar, not just check names.
+            if (isGiteaJob) {
+              return await loadGiteaJobLogDetails({
+                repoPath: repo.path,
+                repoId: repo.id,
+                repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
+                check
+              })
+            }
             return isGitLabJob
               ? await loadGitLabJobLogDetails({
                   repoPath: repo.path,

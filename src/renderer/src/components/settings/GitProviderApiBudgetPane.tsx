@@ -3,6 +3,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { GitHubRateLimitPanel } from '../github/github-rate-limit-display'
 import { GitLabRateLimitPanel } from '../gitlab/gitlab-rate-limit-display'
+import { GiteaRateLimitPanel } from '../gitea/gitea-rate-limit-display'
 import { translate } from '@/i18n/i18n'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
@@ -71,6 +72,30 @@ export function GitProviderApiBudgetPane({
         className="space-y-3"
       >
         <GitLabRateLimitPanel target={target} />
+      </SearchableSetting>
+    ) : null,
+    matchesSettingsSearch(searchQuery, {
+      title: translate('auto.components.gitea.gitea.rate.limit.display.title', 'Gitea API Budget'),
+      description: translate(
+        'auto.components.settings.GitPane.giteaBudgetDescription',
+        'Current Gitea CLI REST rate-limit headers and tea login status.'
+      ),
+      keywords: ['gitea', 'tea', 'rate limit', 'api budget']
+    }) ? (
+      <SearchableSetting
+        key="gitea-api-budget"
+        title={translate(
+          'auto.components.gitea.gitea.rate.limit.display.title',
+          'Gitea API Budget'
+        )}
+        description={translate(
+          'auto.components.settings.GitPane.giteaBudgetDescription',
+          'Current Gitea CLI REST rate-limit headers and tea login status.'
+        )}
+        keywords={['gitea', 'tea', 'rate limit', 'api budget']}
+        className="space-y-3"
+      >
+        <GiteaRateLimitPanel target={target} />
       </SearchableSetting>
     ) : null
   ].filter(Boolean)

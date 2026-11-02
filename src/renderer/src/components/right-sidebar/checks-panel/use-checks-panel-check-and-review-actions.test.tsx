@@ -18,7 +18,8 @@ afterEach(() => {
 const mocks = vi.hoisted(() => ({
   toastError: vi.fn(),
   startFixChecksAgent: vi.fn(),
-  loadGitLabJobLogDetails: vi.fn()
+  loadGitLabJobLogDetails: vi.fn(),
+  loadGiteaJobLogDetails: vi.fn()
 }))
 vi.mock('sonner', () => ({
   toast: { error: mocks.toastError, message: vi.fn(), success: vi.fn() }
@@ -26,6 +27,9 @@ vi.mock('sonner', () => ({
 vi.mock('@/lib/fix-checks-agent-launch', () => ({ startFixChecksAgent: mocks.startFixChecksAgent }))
 vi.mock('@/runtime/gitlab-job-trace-client', () => ({
   loadGitLabJobLogDetails: mocks.loadGitLabJobLogDetails
+}))
+vi.mock('@/runtime/gitea-job-trace-client', () => ({
+  loadGiteaJobLogDetails: mocks.loadGiteaJobLogDetails
 }))
 
 function renderActions(overrides: Partial<ChecksPanelCheckAndReviewActionsInput> = {}) {
@@ -259,6 +263,7 @@ describe('useChecksPanelCheckAndReviewActions AI details diagnostics', () => {
   beforeEach(() => {
     mocks.startFixChecksAgent.mockReset().mockResolvedValue(true)
     mocks.loadGitLabJobLogDetails.mockReset().mockResolvedValue(null)
+    mocks.loadGiteaJobLogDetails.mockReset().mockResolvedValue(null)
   })
 
   function githubInput(overrides: Partial<Input> = {}): Input {
@@ -411,6 +416,34 @@ describe('useChecksPanelCheckAndReviewActions AI details diagnostics', () => {
     const prompt = JSON.stringify(mocks.startFixChecksAgent.mock.calls)
     expect(prompt).toContain('Pipeline #99')
     expect(prompt).toContain('https://gitlab.example.com/group/repo/-/pipelines/99')
+  })
+
+  it('loads Gitea Actions job logs for the AI fix prompt', async () => {
+    const input = makeInput({
+      sourceControlAiActionsVisible: true,
+      checks: [
+        {
+          name: 'Gitea build',
+          status: 'completed',
+          conclusion: 'failure',
+          url: null,
+          giteaJobId: 7
+        }
+      ]
+    })
+    const { result } = renderHook(() => useChecksPanelCheckAndReviewActions(input))
+
+    await act(() => result.current.handleFixChecksWithAI())
+
+    expect(mocks.loadGiteaJobLogDetails).toHaveBeenCalledWith({
+      repoPath: '/workspace/repo',
+      repoId: 'repo-1',
+      repoOwnerExecutionHostId: 'ssh:ssh-1',
+      check: input.checks[0]
+    })
+    expect(mocks.loadGitLabJobLogDetails).not.toHaveBeenCalled()
+    expect(input.fetchPRCheckDetails).not.toHaveBeenCalled()
+    expect(mocks.startFixChecksAgent).toHaveBeenCalledOnce()
   })
 })
 

@@ -80,6 +80,7 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
     linkedBitbucketPR: null,
     linkedAzureDevOpsPR: null,
     linkedGiteaPR: null,
+    linkedGiteaIssue: null,
     linkedWorkItem: linkedTask,
     ...(folderWorkspace.linkedItems !== undefined
       ? { linkedItems: folderWorkspace.linkedItems }

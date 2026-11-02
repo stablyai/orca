@@ -38,7 +38,7 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
   } = model
   const getTaskPickerRepoHostLabel = useCallback(
     (repo: Repo): string | null => {
-      const provider = taskSource === 'gitlab' ? 'gitlab' : 'github'
+      const provider = taskSource === 'gitlab' || taskSource === 'gitea' ? taskSource : 'github'
       const context = getTaskPageRepoSourceContext(repo, provider)
       const hostId = context?.hostId ?? repo.executionHostId ?? 'local'
       return hostRegistryById.get(hostId)?.label ?? null
@@ -46,7 +46,7 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
     [hostRegistryById, taskSource]
   )
   const taskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
-    if (taskSource !== 'github' && taskSource !== 'gitlab') {
+    if (taskSource !== 'github' && taskSource !== 'gitlab' && taskSource !== 'gitea') {
       return []
     }
     return [

@@ -17,6 +17,8 @@ export type PRCheckDetail = {
   workflowRunId?: number
   // GitLab trace retrieval requires numeric job id, so carry it through the Checks row.
   gitlabJobId?: number
+  // Gitea Actions log retrieval also needs a numeric job id.
+  giteaJobId?: number
 }
 
 export type PRCheckAnnotation = {

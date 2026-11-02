@@ -122,6 +122,9 @@ export async function createRuntimeFolderWorktree(args: {
       ? { linkedAzureDevOpsPR: request.linkedAzureDevOpsPR }
       : {}),
     ...(request.linkedGiteaPR !== undefined ? { linkedGiteaPR: request.linkedGiteaPR } : {}),
+    ...(request.linkedGiteaIssue !== undefined
+      ? { linkedGiteaIssue: request.linkedGiteaIssue }
+      : {}),
     ...(request.linkedWorkItem !== undefined ? { linkedWorkItem: request.linkedWorkItem } : {}),
     ...(request.linkedItems !== undefined ? { linkedItems: request.linkedItems } : {}),
     ...(request.linkedTaskSourceContext !== undefined

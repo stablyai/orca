@@ -4,6 +4,7 @@ import type { JiraSite } from '../../../../shared/jira/jira-types'
 import {
   buildGitHubWorkspaceSource,
   buildGitLabWorkspaceSource,
+  buildGiteaWorkspaceSource,
   buildLinearWorkspaceSource,
   buildJiraWorkspaceSource,
   type WorkspaceSourceLinkedItem
@@ -47,6 +48,11 @@ export function resolveWorkItemSourceRow(
       repoId,
       taskSourceContext: context ? { ...context, providerIdentity: identity } : undefined
     }
+  }
+  if (row.kind === 'gitea') {
+    const { type, number, title, url, repoId } = row.item
+    // Why: Gitea has no task-source provider, so the attachment carries no source context.
+    return { ...buildGiteaWorkspaceSource(row.item), type, number, title, url, repoId }
   }
   if (row.kind === 'linear') {
     const { linearBranchName: _branchName, ...source } = buildLinearWorkspaceSource(row.issue)

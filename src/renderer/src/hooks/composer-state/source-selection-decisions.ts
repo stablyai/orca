@@ -1,6 +1,7 @@
 import type { GitHubPrStartPoint, GitPushTarget } from '../../../../shared/worktree/types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import type { GiteaWorkItem } from '../../../../shared/gitea-types'
 import { getLinkedWorkItemProvider } from '@/lib/linked-work-item-provider'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { SmartGitHubSubmitResolution } from '@/lib/smart-github-submit'
@@ -30,6 +31,7 @@ export type SmartGitHubPrStartPointSelection = {
 export type SmartSourceSelection =
   | SmartGitHubPrStartPointSelection
   | { kind: 'gitlab-mr'; repoId: string; item: GitLabWorkItem }
+  | { kind: 'gitea-pr'; repoId: string; item: GiteaWorkItem }
   | { kind: 'github-submit-lookup'; query: string }
 
 export function getGitHubLinkedWorkItemIdentity(
