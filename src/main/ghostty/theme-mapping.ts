@@ -13,6 +13,7 @@ import {
   normalizeTerminalCustomThemes,
   normalizeTerminalThemeId,
   normalizeTerminalThemeName,
+  TERMINAL_ANSI_COLOR_KEYS,
   type TerminalCustomTheme
 } from '../../shared/terminal-custom-themes'
 import { DEFAULT_TERMINAL_THEME_DARK } from '../../shared/terminal-theme-selection'
@@ -99,6 +100,13 @@ function ghosttyThemeTerminalColors(overrides: TerminalColorOverrides): Terminal
   })
 }
 
+function hasSamePalette(terminal: TerminalColorOverrides, builtIn: unknown): boolean {
+  const builtInColors = normalizeTerminalColorOverrides(builtIn)
+  return (['background', 'foreground', ...TERMINAL_ANSI_COLOR_KEYS] as const).every(
+    (key) => terminal[key] === builtInColors[key]
+  )
+}
+
 type ResolvedTheme = { selection: string; name: string; custom?: TerminalCustomTheme }
 
 async function resolveTheme(
@@ -107,16 +115,22 @@ async function resolveTheme(
   existingThemes: TerminalCustomTheme[]
 ): Promise<ResolvedTheme | null> {
   const colors = await resolveGhosttyThemeColors(themeName, pickedConfigDir)
+  const builtIn = findBuiltInThemeName(themeName)
   if (colors === null) {
-    const builtIn = findBuiltInThemeName(themeName)
     return builtIn ? { selection: builtIn, name: builtIn } : null
   }
 
-  const name = normalizeTerminalThemeName(path.basename(themeName.replaceAll('\\', '/')))
-  const id = `ghostty:${normalizeTerminalThemeId(name)}`
   const terminal = ghosttyThemeTerminalColors(
     mapGhosttyToOrca(colors).diff.terminalColorOverrides ?? {}
   )
+  // A Ghostty theme Orca already ships selects the built-in instead of adding a same-named duplicate.
+  if (builtIn && hasSamePalette(terminal, TERMINAL_THEME_CATALOG[builtIn])) {
+    return { selection: builtIn, name: builtIn }
+  }
+  const fileName = normalizeTerminalThemeName(path.basename(themeName.replaceAll('\\', '/')))
+  // Ghostty's palette differs from Orca's same-named built-in, so the label tells the two apart.
+  const name = builtIn ? `${fileName} (Ghostty)` : fileName
+  const id = `ghostty:${normalizeTerminalThemeId(name)}`
   const existing = existingThemes.find((theme) => theme.id === id)
   // Re-importing an unchanged theme keeps its record so the preview does not report a no-op change.
   const custom: TerminalCustomTheme =

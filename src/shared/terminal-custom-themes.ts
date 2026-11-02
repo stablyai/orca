@@ -69,7 +69,7 @@ export const TERMINAL_COLOR_KEYS = [
   'bold'
 ] as const satisfies readonly (keyof TerminalColorOverrides)[]
 
-const TERMINAL_ANSI_COLOR_KEYS = [
+export const TERMINAL_ANSI_COLOR_KEYS = [
   'black',
   'red',
   'green',
