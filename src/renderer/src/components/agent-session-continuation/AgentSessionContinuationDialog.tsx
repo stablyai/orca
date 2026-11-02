@@ -118,6 +118,21 @@ export function AgentSessionContinuationDialog({
         offered.includes(agent) &&
         rows.some((row) => row.agent === agent && row.kind !== 'chat-unavailable')
     )
+  // Why: the explanation must read the same host rows the picker shows, before the family filter.
+  const openableRows =
+    observation.model.state === 'settled'
+      ? observation.model.rows.filter((row) => row.kind !== 'chat-unavailable')
+      : []
+  const onlySourceFamilyOffered =
+    openableRows.length > 0 &&
+    openableRows.every(
+      (row) =>
+        !isContinuationAgentAllowed(
+          row.agent,
+          request?.source.sourceAgent,
+          request?.avoidSourceAgent
+        )
+    )
   const preparing = request === null
   const controlsDisabled = preparing || detecting || starting
   const hasFullContext = request ? hasFullAgentSessionContext(request.source) : false
@@ -269,10 +284,16 @@ export function AgentSessionContinuationDialog({
                 </p>
               ) : destinationModel.state === 'settled' && rows.length === 0 ? (
                 <p className="text-[11px] text-muted-foreground">
-                  {translate(
-                    'components.agentSessionContinuation.noAgents',
-                    'No enabled Agents were detected on this workspace host.'
-                  )}
+                  {onlySourceFamilyOffered && sourceAgentLabel
+                    ? translate(
+                        'components.agentSessionContinuation.onlySourceFamilyDetected',
+                        'Only Agents sharing the usage limit with {{agent}} are available on this workspace host. Enable or install a different Agent.',
+                        { agent: sourceAgentLabel }
+                      )
+                    : translate(
+                        'components.agentSessionContinuation.noAgents',
+                        'No enabled Agents were detected on this workspace host.'
+                      )}
                 </p>
               ) : null}
             </div>

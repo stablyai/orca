@@ -8,7 +8,11 @@ import {
   keptClosedEditorTabs,
   type ClosedEditorTab
 } from './closed-editor-tab-disposal'
-import type { MonacoModelRegistry, DisposableMonacoModel } from './diff-monaco-model-disposal'
+import {
+  hasDiffViewerModelPaths,
+  type MonacoModelRegistry,
+  type DisposableMonacoModel
+} from './diff-monaco-model-disposal'
 import { toEditorModelUri } from './editor-model-uri'
 import { createEditorModelOwnerKeyCache } from './editor-model-owner-key-cache'
 import type { EditorBufferViewIndex } from '@/store/slices/editor/buffers/editor-buffer-views'
@@ -241,7 +245,7 @@ export function attachClosedEditorTabCleanup(
     const priorOwnerOf = ownerKeyReaderFor(closedState)
     const liveFiles = new Map(openFiles.map((file) => [file.id, file]))
     let removed = false
-    let removedDiff = false
+    let removedDiffOwner = false
     for (const file of previous) {
       const liveFile = liveFiles.get(file.id)
       if (
@@ -265,12 +269,14 @@ export function attachClosedEditorTabCleanup(
           if (model) {
             candidateModels.add(model)
           }
-        } else if (file.mode === 'diff') {
-          removedDiff = true
+        }
+        // Edit tabs that showed Changes mode own diff models too.
+        if (file.mode === 'diff' || (file.mode === 'edit' && hasDiffViewerModelPaths(file.id))) {
+          removedDiffOwner = true
         }
       }
     }
-    if (removedDiff && registry) {
+    if (removedDiffOwner && registry) {
       for (const model of registry.editor.getModels()) {
         candidateModels.add(model)
       }

@@ -5,7 +5,7 @@ import {
 } from '../../../src/shared/native-chat-ask-answer'
 import { nativeChatAnswerSendIntent } from '../../../src/shared/native-chat-follow-up-behavior'
 import type { AskPrompt } from '../../../src/shared/native-chat/input/native-chat-ask-types'
-import type { QueuedMessageCard } from '../../../src/shared/structured-agent-session-queued-cards'
+import type { QueuedMessageCard } from '../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import type { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
 export type MobileStructuredAskSession = Pick<

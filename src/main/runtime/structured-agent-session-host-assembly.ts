@@ -89,7 +89,6 @@ export async function installOnJournal(
     ...(deps.startupLimits ? { startupLimits: deps.startupLimits } : {}),
     ...(deps.onSessionTabHidden ? { onSessionTabHidden: deps.onSessionTabHidden } : {}),
     ...(deps.launchAccountHome ? { launchAccountHome: deps.launchAccountHome } : {}),
-    ...(deps.parentAccountWork ? { parentAccountWork: deps.parentAccountWork } : {}),
     ...(deps.assertNoTerminalWriter ? { assertNoTerminalWriter: deps.assertNoTerminalWriter } : {}),
     ...(await modelCatalogHostDeps({
       host: () => host,

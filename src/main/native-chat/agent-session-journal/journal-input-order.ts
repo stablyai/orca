@@ -8,7 +8,7 @@ import {
 
 import { JournalSubmissionLinks } from './journal-submission-links'
 import { JournalSubmissionIndex } from './journal-submission-index'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { JournalNewestTurn } from './journal-newest-turn'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'

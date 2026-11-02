@@ -5,6 +5,8 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import type { Tab } from '../../../../shared/tab-types'
 import { resolveWorktreeStatus } from '@/lib/worktree-status'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
@@ -62,6 +64,44 @@ function makeTab(id: string, worktreeId: string): TerminalTab {
 describe('selectWorktreeAgentActivitySummary', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+  })
+
+  it('updates when a represented chat arrives after its status without changing other inputs', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const worktreeId = 'repo::/wt-1'
+    const tab: Tab = {
+      id: 'restored:chat',
+      entityId: 'session-1',
+      worktreeId,
+      groupId: 'group-1',
+      contentType: 'agent-session',
+      agentSessionAgent: 'claude',
+      label: 'Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    }
+    const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+    const state: AgentActivityInput = {
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      agentStatusEpoch: 0,
+      agentStatusByPaneKey: {
+        [paneKey]: makeAgentStatusEntry({ paneKey, worktreeId, state: 'working' })
+      },
+      migrationUnsupportedByPtyId: {},
+      retainedAgentsByPaneKey: {},
+      runtimeAgentOrchestrationByPaneKey: {}
+    }
+
+    expect(selectWorktreeAgentActivitySummary(state, worktreeId).hasLiveWorking).toBe(false)
+    const represented = { ...state, unifiedTabsByWorktree: { [worktreeId]: [tab] } }
+    expect(selectWorktreeAgentActivitySummary(represented, worktreeId).hasLiveWorking).toBe(true)
+    expect(
+      selectWorktreeAgentActivitySummary({ ...represented, unifiedTabsByWorktree: {} }, worktreeId)
+        .hasLiveWorking
+    ).toBe(false)
   })
 
   it('attributes migration-blocked UUID and legacy terminal panes without affecting other worktrees', () => {
@@ -128,7 +168,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
     expect(nowSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('reuses the cached summary when same-state agent pings only clone the status map', () => {
+  it('reuses equal summaries when same-state agent pings clone the status map', () => {
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const tabsByWorktree = {
@@ -158,16 +198,15 @@ describe('selectWorktreeAgentActivitySummary', () => {
       }
     }
 
-    expect(selectWorktreeAgentActivitySummary(state, 'repo::/wt-1')).toMatchObject({
+    const before = selectWorktreeAgentActivitySummary(state, 'repo::/wt-1')
+    expect(before).toMatchObject({
       hasLiveWorking: true
     })
-    expect(selectWorktreeAgentActivitySummary(sameStatePing, 'repo::/wt-1')).toMatchObject({
-      hasLiveWorking: true
-    })
-    expect(nowSpy).toHaveBeenCalledTimes(1)
+    expect(selectWorktreeAgentActivitySummary(sameStatePing, 'repo::/wt-1')).toBe(before)
+    expect(nowSpy).toHaveBeenCalledTimes(2)
   })
 
-  it('rebuilds the summary when the agent status epoch changes', () => {
+  it.each([0, 1])('rebuilds for a changed status snapshot with epoch %i', (epoch) => {
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const tabsByWorktree = {
@@ -187,7 +226,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
     }
     const changedState = {
       ...state,
-      agentStatusEpoch: 1,
+      agentStatusEpoch: epoch,
       agentStatusByPaneKey: {
         [paneKey]: makeAgentStatusEntry({ paneKey, state: 'done' })
       }

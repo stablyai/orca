@@ -37,11 +37,14 @@ function loadSources() {
     typeText: 'src/shared/plugins/workers/plugin-schema-type-text.ts',
     events: 'src/shared/plugins/events/plugin-events.ts',
     eventContribution: 'src/shared/plugins/contributions/plugin-event-contribution.ts',
+    hooks: 'src/shared/plugins/events/plugin-hook-payloads.ts',
+    hookContribution: 'src/shared/plugins/contributions/plugin-hook-contribution.ts',
     capabilities: 'src/shared/plugins/capabilities/plugin-capabilities.ts',
     schema: 'src/shared/plugins/manifest/plugin-json-schema.ts',
     fieldDocs: 'src/shared/plugins/manifest/plugin-schema-field-docs.ts',
     cli: 'src/cli/specs/plugin.ts',
-    cliView: 'src/cli/specs/plugin-view.ts'
+    cliView: 'src/cli/specs/plugin-view.ts',
+    themeTokens: 'src/shared/plugins/artifacts/plugin-theme-token-reference-doc.ts'
   })
 }
 
@@ -162,12 +165,17 @@ function renderTesting({ testing }) {
       ['## `TestPanel` (from `mount`)', '', ...members('TestPanel'), ''],
       ['## `TestWorker` (from `mountWorker`)', '', ...members('TestWorker'), ''],
       ['## `MockHost` (from `mockHost`)', '', ...members('MockHost'), ''],
+      ['## `MockEditorHost` (from `mockEditorHost`)', '', ...members('MockEditorHost'), ''],
       [
         '## Options',
         '',
-        ...['MountOptions', 'MountWorkerOptions', 'MockHostOptions', 'CheckScenario'].map(
-          (name) => `- ${code(testing.typeDeclaration(name))}`
-        )
+        ...[
+          'MountOptions',
+          'MountWorkerOptions',
+          'MockHostOptions',
+          'MockEditorHostOptions',
+          'CheckScenario'
+        ].map((name) => `- ${code(testing.typeDeclaration(name))}`)
       ]
     ]
   )
@@ -181,6 +189,18 @@ function signature({ typeText }, spec) {
   const { REFERENCE_TYPE_TEXT, zodTypeText } = typeText
   const omittable = spec.params.safeParse(undefined).success
   return `(params${omittable ? '?' : ''}: ${zodTypeText(spec.params, 'input', REFERENCE_TYPE_TEXT)}) => ${zodTypeText(spec.result, 'output', REFERENCE_TYPE_TEXT)}`
+}
+
+/** Each hook's event, what `next` may change and what stops the chain. */
+function hookLines({ hooks, hookContribution, typeText }) {
+  const { REFERENCE_TYPE_TEXT, zodTypeText } = typeText
+  const type = (schema) => code(zodTypeText(schema, 'output', REFERENCE_TYPE_TEXT))
+  return hookContribution.PLUGIN_HOOK_NAMES.map((name) => {
+    const spec = hooks.PLUGIN_HOOK_SPECS[name]
+    const changes = spec.mutable.length > 0 ? spec.mutable.map(code).join(', ') : 'nothing'
+    const stops = spec.result === null ? 'nothing (observe only)' : type(spec.result)
+    return `- ${code(name)} (since ${hookContribution.PLUGIN_HOOK_SINCE[name]}): ${spec.summary}\n  event ${type(spec.payload)}; \`next\` may change ${changes}; stop with ${stops}`
+  })
 }
 
 function renderHostApi(sources, { frame, worker }) {
@@ -229,7 +249,27 @@ function renderHostApi(sources, { frame, worker }) {
           .map((m) => bullet({ ...m, text: `document.${m.text}` })),
         ''
       ],
+      [
+        '## Theme variables in frames',
+        '',
+        "HTML panels and custom editors get these CSS variables from Orca's active theme, plus a `light` or `dark` class on `<html>`. A theme change updates them in place and emits `theme` (`orca.on('theme', ...)`); the frame is not reloaded. Style from them, not fixed colours.",
+        '',
+        ...sources.themeTokens.pluginFrameThemeVariables().map(({ variable, paints }) => {
+          // Name the frame's own variables, not the app theme tokens behind them.
+          const role = paints.replace(/`--([\w-]+)`/g, '`--orca-$1`')
+          return `- ${code(variable)}${role ? `: ${role}` : ''}`
+        }),
+        ''
+      ],
       ['## Methods', '', ...methods, ''],
+      [
+        '## Hooks',
+        '',
+        `List each in \`contributes.hooks\` (\`{ "event", "onError"? }\`; \`main\` and \`trusted-worker\`) and handle it with \`orca.hooks.on(event, (event, next) => ...)\`. Return \`next(event)\` (or nothing) to go on, or the stop result. Plugins run in turn, ${sources.hooks.PLUGIN_HOOK_DEFAULT_DEADLINE_MS / 1000} s each; a throw, timeout or crash passes unless the entry says \`"onError": "deny"\`. Decide first: an awaited call before you return (a notification, say) can fail or time out and turn your deny into a pass.`,
+        '',
+        ...hookLines(sources),
+        ''
+      ],
       [
         '## Capabilities',
         '',

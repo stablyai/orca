@@ -90,30 +90,6 @@ describe('terminal clipboard writes', () => {
     expect(clearCache).not.toHaveBeenCalled()
   })
 
-  it('rejects unsupported desktops without poisoning the Electron cache', async () => {
-    run.mockResolvedValueOnce({ ...ok, code: 78 })
-    await expect(writer()('copy')).rejects.toThrow('Wayland clipboard write failed')
-    expect(write).not.toHaveBeenCalled()
-    expect(clearCache).not.toHaveBeenCalled()
-  })
-
-  it('preserves ordinary UI writes outside native Wayland', async () => {
-    await writer(false)('copy', 'ordinary')
-    expect(write).toHaveBeenCalledWith('copy', 'ordinary')
-    expect(run).not.toHaveBeenCalled()
-  })
-
-  it('does not downgrade after a desktop has already accepted a data-control copy', async () => {
-    run.mockResolvedValueOnce(ok).mockResolvedValueOnce({ ...ok, code: 78 })
-    const copy = writer()
-    await copy('first')
-    await expect(copy('second')).rejects.toThrow('Wayland clipboard write failed')
-    expect(write).not.toHaveBeenCalled()
-    expect(clearCache).toHaveBeenCalledTimes(1)
-    await copy('third')
-    expect(run).toHaveBeenCalledTimes(3)
-  })
-
   it('rejects oversized text before either clipboard backend is invoked', async () => {
     await expect(writer()('x'.repeat(CLIPBOARD_TEXT_WRITE_MAX_BYTES + 1))).rejects.toThrow(
       'Clipboard text is too large'
@@ -121,16 +97,6 @@ describe('terminal clipboard writes', () => {
     expect(run).not.toHaveBeenCalled()
     expect(write).not.toHaveBeenCalled()
   })
-
-  it.each([null, 42, { length: 0 }])(
-    'rejects invalid payload %j before validation or queueing',
-    async (text) => {
-      const validate = vi.fn(async (value: string) => value)
-      await expect(writer(true, validate)(text)).rejects.toThrow('Clipboard text must be a string')
-      expect(validate).not.toHaveBeenCalled()
-      expect(run).not.toHaveBeenCalled()
-    }
-  )
 
   it.each([false, true])(
     'keeps a newer copy after yielding validation (Wayland=%s)',

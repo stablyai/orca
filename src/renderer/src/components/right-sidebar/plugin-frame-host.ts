@@ -238,7 +238,12 @@ export function createPluginFrameEnvelopeHandler(
           options.declarative.onGuestEvent?.(message.event, message.payload)
         } else {
           // A guest's shell-posted chords are page-forgeable; only the preload's count there.
-          if (context.transport !== 'guest' || context.trustedChord === true) {
+          // Why subscribed passes: it only tells `plugin shot` the editor is wired.
+          if (
+            message.event === FRAME_EVENTS.editorSubscribed ||
+            context.transport !== 'guest' ||
+            context.trustedChord === true
+          ) {
             options.editor?.onEvent(message, context)
           }
         }

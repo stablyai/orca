@@ -3,7 +3,7 @@ import type { ClaudeCliFlagCheck, ClaudeCliFlagFact } from '../claude-cli-flag-s
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type * as SessionAdapter from '../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type {
@@ -175,11 +175,7 @@ export type ClaudeSession = {
   appliedOptions?: { model?: string; effort?: string }
   /** CLI settings resolved before a turn changed them, when no launch override hid that value. */
   configuredDefaults?: { model?: string; effort?: string }
-  /** Mutation at which the provider last reported its Fast routing state. */
-  fastModeReportedMutation?: number
   fastModeState?: AgentSessionFastModeState
-  fastModeDisabledReason?: string
-  fastModeDisabledMutation?: number
   fastModePerSessionOptIn?: boolean
   /** Mutation sequence of the last model report; newer writes outrank it. */
   reportedModelMutation: number

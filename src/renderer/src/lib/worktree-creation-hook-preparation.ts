@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import type { WorktreeCreationRequest } from './pending-worktree-creation'
 import { ensureHooksConfirmed, readAndConfirmRuntimeIssueCommand } from './ensure-hooks-confirmed'
+import { confirmWorkspaceSetupDecision } from './workspace-setup-trust'
 import { buildTrustedComposerIssueCommand } from './composer-issue-command'
 import { getInitialWorktreeCreationPhase } from './worktree-creation-flow-startup'
 
@@ -23,11 +24,18 @@ export async function prepareWorktreeCreationHooks(
       undefined,
       isCancelled
     )
-  const trustDecision = await confirmHook('setup')
-  if (isCancelled()) {
+  const confirmed = await confirmWorkspaceSetupDecision(
+    useAppStore.getState,
+    request.repoId,
+    request.setupDecision,
+    preparation.executionHostId,
+    isCancelled
+  )
+  if (confirmed === 'cancelled') {
     return null
   }
 
+  const { setupDecision, trustDecision } = confirmed
   let issueCommand = request.issueCommand
   if (preparation.issueCommand && preparation.executionHostId && trustDecision !== 'skip') {
     const confirmed = await readAndConfirmRuntimeIssueCommand(
@@ -62,7 +70,7 @@ export async function prepareWorktreeCreationHooks(
     ...request,
     hookPreparation: undefined,
     executionHostId: request.executionHostId ?? preparation.executionHostId,
-    setupDecision: trustDecision === 'skip' ? 'skip' : request.setupDecision,
+    setupDecision,
     issueCommand
   }
   useAppStore.getState().updatePendingWorktreeCreation(creationId, {

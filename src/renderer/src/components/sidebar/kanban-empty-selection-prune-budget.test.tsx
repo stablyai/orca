@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
-import { makeWorktree } from '../worktree-jump-palette-test-fixtures'
+import { makeWorktree } from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import * as policy from '@/lib/list-multi-selection'
 import { useWorkspaceKanbanSelection } from './use-workspace-kanban-selection'
 
