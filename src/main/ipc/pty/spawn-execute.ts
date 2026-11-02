@@ -23,7 +23,10 @@ import {
   type ResumeSpawnRefusal
 } from './host-env/saved-resume-admission'
 import { failPtySpawnExecute } from './spawn-execute-failure'
-import { SavedResumeStartedFresh } from './saved-resume-fresh/saved-resume-fresh-launch'
+import {
+  SavedResumeStartedFresh,
+  startJoinedSavedResumeFresh
+} from './saved-resume-fresh/saved-resume-fresh-launch'
 import type { PtySpawnOperationState, PtySpawnExecutionFacts } from './spawn-operation-state'
 import { excludeReplacedPaneOwner } from './pane/replaced-pane-owner'
 import { attachViewWithoutOwner } from './pane/attach-only-view'
@@ -124,8 +127,8 @@ export async function executePtySpawn(
             if (refusal) {
               throw new SavedResumeFreshRefusal(refusal)
             }
-            if (ctx.savedResumeStartedFresh) {
-              throw new SavedResumeStartedFresh()
+            if (ctx.savedResumeStartedFresh && ctx.resumeAdmission) {
+              throw new SavedResumeStartedFresh(ctx.resumeAdmission.refused)
             }
             validateDispatch()
             providerResult = await ctx.provider.spawn(ctx.spawnOptions)
@@ -162,6 +165,12 @@ export async function executePtySpawn(
           facts.suppressRefusedLaunch?.()
         } else if (!(error instanceof SavedResumeStartedFresh)) {
           throw error
+        } else if (!ctx.savedResumeStartedFresh) {
+          // Another request on this claim found the conversation gone; never run its resume here.
+          if (!(await startJoinedSavedResumeFresh(ctx, facts.savedResumeLaunch, error))) {
+            throw error
+          }
+          ctx.savedResumeStartedFresh = true
         }
         delete args.agentSessionEnsure
         delete ctx.spawnOptions.agentSessionEnsure

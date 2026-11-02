@@ -6,13 +6,17 @@ import { AgentHookServer, _internals } from '../../../agent-hooks/server'
 import { buildBody, PANE, postHookEvent } from '../../../agent-hooks/server.test-fixtures'
 import type { ResumeSpawnAdmission } from '../host-env/saved-resume-admission'
 import type { PtySpawnOperationState } from '../spawn-operation-state'
+import { localProvider } from '../provider/registry'
+import { spawnPtyFromRuntimeController } from '../runtime/spawn'
+import type { createRuntimePtySpawnState } from '../runtime/spawn-state'
+import { savedResumeDeps, savedResumeHost } from '../runtime/spawn-saved-resume.test-fixture'
 import { CODEX_HEADER, codexSessionsDay, writeStoreFile } from './agent-store.test-fixture'
 import {
   forgetStartedFreshResume,
   startSavedResumeFreshWhenMissing
 } from './saved-resume-fresh-launch'
 
-const live = vi.hoisted(() => ({ server: null as unknown as AgentHookServer }))
+const live = vi.hoisted(() => ({ server: null as unknown as AgentHookServer, home: '' }))
 
 vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
@@ -31,6 +35,33 @@ vi.mock('../../../agent-hooks/server', async (importOriginal) => {
   return { ...actual, agentHookServer }
 })
 
+vi.mock('../runtime/spawn-preflight', () => ({ prepareRuntimePtySpawn: vi.fn(async () => null) }))
+// Host env routing settled on this Codex home; everything after it is the real spawn and commit.
+vi.mock('../runtime/spawn-options', () => ({
+  buildRuntimePtySpawnOptions: vi.fn(async (ctx: ReturnType<typeof createRuntimePtySpawnState>) => {
+    const codexHome = join(live.home, 'codex')
+    ctx.spawnIdentityPaneKey = PANE
+    ctx.launchCommand = ctx.args.command
+    ctx.selectedCodexHomePath = codexHome
+    ctx.codexHomeLaunchStartedAt = new Date()
+    ctx.spawnOptions = {
+      cols: ctx.args.cols,
+      rows: ctx.args.rows,
+      command: ctx.args.command,
+      env: {
+        ...ctx.args.env,
+        HOME: live.home,
+        SHELL: '/bin/zsh',
+        CODEX_HOME: codexHome,
+        ORCA_CODEX_HOME: codexHome
+      },
+      launchAgent: ctx.args.launchAgent
+    }
+    ctx.env = ctx.spawnOptions.env
+    return null
+  })
+}))
+
 const OLD = '019f1abc-0000-7000-8000-00000000aaaa'
 const NEW = '019f1abc-0000-7000-8000-00000000bbbb'
 let userData: string
@@ -41,6 +72,7 @@ beforeEach(() => {
   _internals.resetCachesForTests()
   userData = mkdtempSync(join(tmpdir(), 'orca-fresh-loop-data-'))
   home = realpathSync(mkdtempSync(join(tmpdir(), 'orca-fresh-loop-home-')))
+  live.home = home
   mkdirSync(join(home, 'codex', 'sessions'), { recursive: true })
 })
 
@@ -227,5 +259,45 @@ describe('a saved pane whose conversation its agent no longer has', () => {
     })
     await expect(choice).resolves.toBe(false)
     expect(launch.state.spawnOptions.command).toBe(`codex 'resume' '${OLD}'`)
+  })
+
+  it('re-seeds over the retained remnant teardown leaves, so the next restart can start fresh', async () => {
+    await restart()
+    await hook('SessionStart', OLD)
+    await hook('Stop', OLD)
+    // Teardown keeps the hook row's identity as a session-only remnant that still names its hook.
+    live.server.dropStatusEntry(PANE)
+    expect(live.server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({
+      providerSessionOnly: true
+    })
+
+    const spawn = vi.spyOn(localProvider, 'spawn').mockResolvedValue({ id: 'restored-pty' })
+    const restore = () =>
+      spawnPtyFromRuntimeController(
+        savedResumeDeps(savedResumeHost(() => live.server.getStatusSnapshot())),
+        {
+          cols: 80,
+          rows: 24,
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          command: `codex 'resume' '${OLD}'`,
+          launchAgent: 'codex',
+          resumeOrigin: 'saved',
+          resumeProviderSession: { key: 'session_id', id: OLD },
+          launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} },
+          env: { ORCA_PANE_KEY: PANE }
+        }
+      )
+    try {
+      // Restart 1, through the real spawn and commit: the remnant names a hook, so this resumes.
+      await restore()
+      expect(spawn.mock.calls[0]?.[0].command).toBe(`codex 'resume' '${OLD}'`)
+      await restart()
+      // Restart 2: that resumed launch's own seed is last and the store lacks it.
+      await restore()
+      expect(spawn.mock.calls[1]?.[0].command).not.toContain(OLD)
+    } finally {
+      spawn.mockRestore()
+    }
   })
 })

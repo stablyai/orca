@@ -1,14 +1,10 @@
-import type { BrowserWindow } from 'electron'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
-import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import * as owners from '../pane/agent-session-owners'
 import { localProvider } from '../provider/registry'
-import { finishPtyShutdown } from '../provider/liveness'
-import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { spawnPtyFromRuntimeController } from './spawn'
+import { savedResumeDeps, savedResumeHost } from './spawn-saved-resume.test-fixture'
 import type { createRuntimePtySpawnState } from './spawn-state'
 import { startSavedResumeFreshWhenMissing } from '../saved-resume-fresh/saved-resume-fresh-launch'
 
@@ -39,70 +35,21 @@ vi.mock('./spawn-options', () => ({
 const ID = '019f1abc-0000-7000-8000-00000000aaaa'
 const RESUME = `codex 'resume' '${ID}'`
 
-function host() {
-  return {
-    openAgentSessionRecordStore: async () =>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission reads only these two members.
-      ({
-        listConversations: () => [],
-        getVisibleSessionTabIndex: () => ({ present: true, sessionIds: [] })
-      }) as unknown as AgentSessionRecordStore,
-    getTerminalLaunchResult: vi.fn(),
-    forgetRefusedSavedResume: vi.fn(async () => {}),
-    registerPty: vi.fn(),
-    noteTerminalSpawnCommand: vi.fn(),
-    reflowHeadlessTerminalToPtyGrid: vi.fn(),
-    getAgentProviderSessionRows: () => [
-      {
-        paneKey: 'tab-1:leaf',
-        connectionId: null,
-        agentType: 'codex' as const,
-        state: 'done' as const,
-        prompt: '',
-        receivedAt: 5,
-        stateStartedAt: 5,
-        providerSessionOnly: true,
-        providerSession: { key: 'session_id' as const, id: ID }
-      }
-    ]
+const SEED_ROWS = () => [
+  {
+    paneKey: 'tab-1:leaf',
+    connectionId: null,
+    agentType: 'codex' as const,
+    state: 'done' as const,
+    prompt: '',
+    receivedAt: 5,
+    stateStartedAt: 5,
+    providerSessionOnly: true,
+    providerSession: { key: 'session_id' as const, id: ID }
   }
-}
-
-function deps(runtime: ReturnType<typeof host>): PtyRuntimeControllerDeps {
-  const noCodexResumeLaunch: PtyRuntimeControllerDeps['noCodexResumeLaunch'] = (command) => ({
-    codexResumeHome: null,
-    command
-  })
-  return {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the spawn reads only the members `host` provides.
-    runtime: runtime as unknown as OrcaRuntimeService,
-    store: undefined,
-    getSettings: () => getDefaultSettings('/tmp'),
-    adoptStablePane: async (args) => {
-      await args.spawnFresh?.({ mustExist: false })
-      return null
-    },
-    getLocalPtyStartupPromise: () => undefined,
-    getLocalPtyProviderStartupPromise: () => undefined,
-    prepareCodexResumeHome: () => null,
-    resolveCodexResumeLaunch: async (command) => noCodexResumeLaunch(command),
-    noCodexResumeLaunch,
-    reconcileSharedRuntimeResumeHome: async (resumeHome) => resumeHome.codexHomePath,
-    assertWorkspaceAcceptsNewPty: () => undefined,
-    resolvePtySpawnStartupCwd: (_worktreeId, cwd) => cwd,
-    requestSerializedBuffer: async () => null,
-    shutdownProviderAndDetectExit: async () => false,
-    rememberSyntheticKillExit: () => {},
-    rememberRetiredRejectedPty: () => {},
-    sendPtyExitToRenderer: () => {},
-    sendPtySpawnedToRenderer: () => {},
-    finishPtyShutdown,
-    trustedTerminalHandleEnv: new Set(),
-    retiredRejectedPtyIds: new Map(),
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the spawn never touches `mainWindow`.
-    mainWindow: {} as BrowserWindow
-  }
-}
+]
+const host = () => savedResumeHost(SEED_ROWS)
+const deps = savedResumeDeps
 
 async function spawnSaved(
   runtime: ReturnType<typeof host>,
@@ -210,6 +157,63 @@ describe('a saved restore whose conversation is gone', () => {
       expect(owners.agentSessionOwners.find(claim as never)).toBeNull()
     } finally {
       inventory.mockRestore()
+    }
+  })
+
+  it('gives a request that joined the claim the same fresh start, never the replaced resume', async () => {
+    hooks.captureLaunchSeed.mockReset().mockReturnValue(() => true)
+    let reportMissing: (presence: string) => void = () => {}
+    probe.mockReset().mockImplementation(() => new Promise((resolve) => (reportMissing = resolve)))
+    const claim = {
+      agent: 'codex' as const,
+      digestVersion: 1 as const,
+      keyId: 'key',
+      identityDigest: 'joined-conversation',
+      worktreeScopeDigest: 'scope'
+    }
+    const ensure = {
+      claim,
+      surface: { worktreeId: 'wt-1', tabId: 'tab-1', leafId: 'leaf', terminalHandle: 'h' }
+    }
+    const inventory = vi.spyOn(owners, 'reconcileAgentSessionOwnerListings').mockResolvedValue()
+    const spawn = vi
+      .spyOn(localProvider, 'spawn')
+      .mockImplementation(async () => ({ id: `pty-${spawn.mock.calls.length}` }))
+    const request = () =>
+      spawnPtyFromRuntimeController(deps(host()), {
+        cols: 80,
+        rows: 24,
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        command: RESUME,
+        launchAgent: 'codex',
+        resumeOrigin: 'saved',
+        resumeProviderSession: { key: 'session_id', id: ID },
+        launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} },
+        env: {},
+        agentSessionEnsure: ensure
+      })
+    try {
+      const creator = request()
+      await vi.waitFor(() => expect(probe).toHaveBeenCalledOnce())
+      const joiner = request()
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      reportMissing('missing')
+      const results = await Promise.all([creator, joiner])
+      expect(spawn.mock.calls.map(([options]) => options.command)).toEqual([
+        expect.not.stringContaining(ID),
+        expect.not.stringContaining(ID)
+      ])
+      for (const result of results) {
+        expect(result).toMatchObject({ agentResumeUnavailable: true })
+        expect(result.resumeProviderSession).toBeUndefined()
+      }
+      // The joiner applied the creator's verdict; it neither read the seed nor the store again.
+      expect(hooks.captureLaunchSeed).toHaveBeenCalledOnce()
+      expect(probe).toHaveBeenCalledOnce()
+    } finally {
+      inventory.mockRestore()
+      spawn.mockRestore()
     }
   })
 

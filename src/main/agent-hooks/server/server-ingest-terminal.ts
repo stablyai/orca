@@ -315,9 +315,9 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       !preservedProviderSession
     )
     const kept = preservedProviderSession ? withHookProvenance(previous, applied) : null
+    // The write above already scheduled a persist, which serializes the map as it is when it runs.
     if (kept && this.writeLegacyStatusRow(kept)) {
       this.commitStatusRowMutation(applied, kept, false)
-      this.scheduleStatusPersist()
     }
   }
 }

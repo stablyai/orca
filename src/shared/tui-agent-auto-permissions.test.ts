@@ -7,6 +7,7 @@ import {
   tuiAgentArgsBypassPermissions
 } from './tui-agent-launch-defaults'
 import { tokenizeStartupCommand } from './tui-agent-startup-shell'
+import { buildAgentRecipeFreshLaunch } from './tui-agent-resume-startup'
 
 describe('automatic terminal permissions', () => {
   it.each(['posix', 'powershell', 'cmd'] as const)(
@@ -107,4 +108,72 @@ describe('codex resume permissions', () => {
       expect(resume(true)?.launchCommand).toContain('--dangerously-bypass-approvals-and-sandbox')
     }
   )
+})
+
+describe('a fresh restart of a resumed Codex pane', () => {
+  const platform = 'linux'
+  const shell = 'posix'
+  const providerSession = { key: 'session_id' as const, id: 'saved-session' }
+  const textSettings = agentLaunchSettingsMutationUpdates(
+    {},
+    AgentLaunchSettingsMutation.parse({ type: 'permissions', mode: 'auto' }),
+    platform
+  )
+  const typedSettings = { agentPermissionDefault: 'auto' as const }
+  const tokens = (command: string | undefined) => {
+    const parsed = tokenizeStartupCommand(command ?? '', shell)
+    return parsed.ok ? parsed.tokens : []
+  }
+
+  it.each([
+    ['flag text', textSettings],
+    ['a typed choice', typedSettings]
+  ])(
+    'gets back the permission its resume dropped when settings store it as %s',
+    (_label, settings) => {
+      const startup = buildAgentStartupPlan({
+        agent: 'codex',
+        agentArgs: resolveTuiAgentLaunchArgs('codex', settings),
+        prompt: '',
+        cmdOverrides: {},
+        platform,
+        shell,
+        allowEmptyPromptLaunch: true
+      })
+      const resumed = buildAgentResumeStartupPlan({
+        agent: 'codex',
+        ...startup?.launchConfig,
+        providerSession,
+        cmdOverrides: {},
+        platform,
+        shell
+      })
+      expect(tokens(resumed?.launchCommand)).not.toContain('--approve-for-me')
+      const fresh = buildAgentRecipeFreshLaunch({
+        agent: 'codex',
+        ...resumed?.launchConfig,
+        cmdOverrides: {},
+        platform,
+        shell,
+        permissionSettings: settings
+      })
+      expect(tokens(fresh?.command)).toContain('--approve-for-me')
+      expect(tokens(fresh?.command)).not.toContain('resume')
+    }
+  )
+
+  it('keeps a permission the recipe names over the current setting', () => {
+    const bypass = '--dangerously-bypass-approvals-and-sandbox'
+    const fresh = buildAgentRecipeFreshLaunch({
+      agent: 'codex',
+      agentCommand: `codex ${bypass}`,
+      agentArgs: bypass,
+      cmdOverrides: {},
+      platform,
+      shell,
+      permissionSettings: typedSettings
+    })
+    expect(tokens(fresh?.command)).toContain(bypass)
+    expect(tokens(fresh?.command)).not.toContain('--approve-for-me')
+  })
 })
