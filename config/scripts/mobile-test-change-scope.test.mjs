@@ -156,7 +156,7 @@ it('skips only tests, after successful detection, and retains all other mobile g
   }
 })
 
-it('overlaps both typechecks with tests and collects their failures before the summary', () => {
+it('finishes both typechecks before tests and waits for the fastlane tools before the summary', () => {
   const workflow = parse(
     readFileSync(new URL('../../.github/workflows/mobile.yml', import.meta.url), 'utf8')
   )
@@ -167,8 +167,13 @@ it('overlaps both typechecks with tests and collects their failures before the s
   const waits = steps.filter((step) => step.wait !== undefined)
   expect(waits.map((step) => step.wait)).toEqual([
     'ruby-setup',
-    ['production-types', 'test-types', 'ruby-tools']
+    ['production-types', 'test-types'],
+    'ruby-tools'
   ])
+  // Compiler work finishes before the mobile Vitest workers start; only the fastlane tools overlap the tests.
+  const compilers = waits[1]
+  expect(compilers.if).toBeUndefined()
+  expect(steps.indexOf(compilers)).toBe(test - 1)
   const wait = waits.at(-1)
   expect(wait.if).toBeUndefined()
   expect(steps.indexOf(wait)).toBeGreaterThan(test)
