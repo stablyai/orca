@@ -46,7 +46,36 @@ age as specs change. Full CI runs on the existing runner classes are required to
 measure elapsed-time and occupancy improvements, including discovery overhead.
 No retries, assertions, coverage exclusions, runner classes or shard counts changed.
 
-## Current unit refresh: October 25, 2026
+## Current unit refresh: November 2, 2026
+
+The baseline imports all twelve successful unit shards from
+[run 41403569437, attempt 1](https://github.com/stablyai/orca/actions/runs/41403569437/attempts/1),
+the shape PR shards now use: twelve `blacksmith-4vcpu-ubuntu-2404` shards with four workers,
+Node 24.22.2, Bun 1.4.4, source `03f72d195563ce15ec2c5a6f96801054b6696340`. The October 25
+baseline came from five eight-worker shards, lacked 1,595 measured files and kept 374 deleted
+ones, so its weights no longer matched twelve four-worker shards after the November 1
+test-time fixes.
+Assigning the files of an independent full run (41400829349) and evaluating with that run's
+own measurements, the refreshed baseline projects 1,365–1,466 worker-seconds per shard
+(7.4% spread), against 1,343–1,504 (12.0%) for the October 25 baseline. The remaining spread
+is run-to-run timing noise; the baseline's own run projects to an even split.
+
+| Shard | Job ID       | Measured worker-seconds | Job seconds |
+| ----- | ------------ | ----------------------: | ----------: |
+| 1     | 125141039376 |               1,455.263 |         441 |
+| 2     | 125141039373 |               1,404.175 |         433 |
+| 3     | 125141039366 |               1,361.687 |         405 |
+| 4     | 125141039499 |               1,394.542 |         428 |
+| 5     | 125141039500 |               1,382.133 |         430 |
+| 6     | 125141039468 |               1,413.680 |         432 |
+| 7     | 125141039409 |               1,393.401 |         434 |
+| 8     | 125141039412 |               1,365.097 |         412 |
+| 9     | 125141039515 |               1,337.848 |         400 |
+| 10    | 125141039421 |               1,476.121 |         458 |
+| 11    | 125141039397 |               1,286.769 |         386 |
+| 12    | 125141039643 |               1,387.448 |         412 |
+
+## Historical unit refresh: October 25, 2026
 
 The baseline imports all five successful unit shards from
 [run 40276310369, attempt 1](https://github.com/stablyai/orca/actions/runs/40276310369/attempts/1),
