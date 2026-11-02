@@ -565,7 +565,8 @@ describe('Claude stream-json connection', () => {
         })
       writeFileSync(go, '')
       await exited.promise
-      await new Promise((resolve) => setTimeout(resolve, 30))
+      // A fault-first start would already have settled; one macrotask drains its rejection chain.
+      await new Promise((resolve) => setImmediate(resolve))
 
       expect(reports).toEqual(['exit-fault', 'exit'])
       expect(settled).toBe(false)
@@ -580,7 +581,7 @@ describe('Claude stream-json connection', () => {
     } finally {
       await adapter.closeAll()
     }
-  }, 20_000)
+  })
 
   it.runIf(process.platform !== 'win32')(
     'proves a natural SDK exit and cleans up its descendant before recovery',
