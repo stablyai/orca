@@ -97,6 +97,9 @@ it('joins recorded declarations to unchanged configured policy, host capture and
     expect(live.listedModelIds).toBeUndefined()
     expect(resting.listedModelIds).toContain(model)
     for (const result of [live, resting]) {
+      // A readback without this model's effort menu shows no effort, whatever the declaration.
+      const shown =
+        result.models.find((row) => row.id === model)!.efforts.length > 0 ? display : null
       const owned = applyStructuredAgentSessionOptions(
         createStructuredAgentSessionOptionState(agent, seed),
         seed,
@@ -104,7 +107,7 @@ it('joins recorded declarations to unchanged configured policy, host capture and
       )
       expect(
         structuredAgentSessionShownSnapshot(owned).find((o) => o.id === 'effort')?.kind.currentValue
-      ).toBe(display ?? undefined)
+      ).toBe(shown ?? undefined)
       expect(structuredAgentSessionMessageSelection(owned)).toEqual({ model })
       set.mockClear()
       const capture = captureStructuredExecutionOptions(

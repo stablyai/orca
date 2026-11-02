@@ -4017,7 +4017,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "没有其他账户",
-            "9332ba8684": "切换到",
             "d450654fa2": "Claude 账户",
             "11e2354daf": "Claude 使用量运行时",
             "3dd7ddfae1": "打开 Claude 详情和账户切换器",
@@ -6691,6 +6690,7 @@
       },
       "settings": {
         "AccountsPane": {
+          "locationSaveFailed": "无法保存账户位置。请重试。",
           "c2d2751587": "删除账户",
           "dbb9626ed1": "取消",
           "63843e37e2": "删除 Claude 账户？",

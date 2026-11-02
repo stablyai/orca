@@ -33,13 +33,28 @@ const oauthAccount = z.object({
   organizationName: text
 })
 
-export function claudeStateFile(configDir: string | undefined, userHome = homedir()): string {
+export function claudeStateFile(
+  configDir: string | undefined,
+  userHome = homedir(),
+  exists: (path: string) => boolean = existsSync
+): string {
   return resolveClaudeGlobalConfigFile({
     env: { CLAUDE_CONFIG_DIR: configDir },
     homeDir: userHome,
     style: process.platform === 'win32' ? 'win32' : 'posix',
-    exists: existsSync
+    exists
   })
+}
+
+/** Same file as claudeStateFile, without blocking main on the legacy-file check. */
+export async function claudeStateFileAsync(
+  configDir: string | undefined,
+  userHome = homedir()
+): Promise<string> {
+  const legacy = claudeStateFile(configDir, userHome, () => true)
+  return (await stat(legacy).catch(() => null))
+    ? legacy
+    : claudeStateFile(configDir, userHome, () => false)
 }
 
 // Cache large, frequently rewritten state files across account-list refreshes.
@@ -96,6 +111,12 @@ export function readClaudeFolderLogin(stateFile: string, maxAgeMs = 0): ClaudeFo
   return login
 }
 
+// Concurrent chat reads of one state-file revision share a single read and parse.
+const pendingLogins = new Map<
+  string,
+  { mtimeMs: number; size: number; login: Promise<ClaudeFolderLogin | null> }
+>()
+
 /** Avoid blocking main on state files across WSL shares. */
 export async function readClaudeFolderLoginAsync(
   stateFile: string
@@ -103,28 +124,38 @@ export async function readClaudeFolderLoginAsync(
   const current = await stat(stateFile).catch(() => null)
   if (!current) {
     logins.delete(stateFile)
+    pendingLogins.delete(stateFile)
     return null
   }
   const recent = logins.get(stateFile)
   if (recent?.mtimeMs === current.mtimeMs && recent.size === current.size) {
     return recent.login
   }
-  let login: ClaudeFolderLogin | null = null
+  const pending = pendingLogins.get(stateFile)
+  if (pending?.mtimeMs === current.mtimeMs && pending.size === current.size) {
+    return pending.login
+  }
+  const read = { mtimeMs: current.mtimeMs, size: current.size, login: readStateLogin(stateFile) }
+  pendingLogins.set(stateFile, read)
+  const login = await read.login
+  // A read superseded by a newer revision (or a deleted file) must not repopulate the cache.
+  if (pendingLogins.get(stateFile) === read) {
+    pendingLogins.delete(stateFile)
+    logins.set(stateFile, { mtimeMs: read.mtimeMs, size: read.size, readAt: Date.now(), login })
+  }
+  return login
+}
+
+async function readStateLogin(stateFile: string): Promise<ClaudeFolderLogin | null> {
   try {
     const state: unknown = JSON.parse(await readFile(stateFile, 'utf8'))
     if (state && typeof state === 'object' && !Array.isArray(state)) {
-      login = claudeStateLogin(Object.fromEntries(Object.entries(state)))
+      return claudeStateLogin(Object.fromEntries(Object.entries(state)))
     }
   } catch {
     // Treat unreadable state as signed out.
   }
-  logins.set(stateFile, {
-    mtimeMs: current.mtimeMs,
-    size: current.size,
-    readAt: Date.now(),
-    login
-  })
-  return login
+  return null
 }
 
 /** Removes current profiles only; legacy `claude-accounts/` folders stay untouched. */

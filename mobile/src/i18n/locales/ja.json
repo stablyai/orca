@@ -1521,21 +1521,6 @@
       "showMore": "さらに {{count}} 件を表示",
       "title": "コメント"
     },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "{{count}} コミット遅れ（ベースコミット: {{baseCommit}}）",
-      "commitsBehind_other": "{{count}} コミット遅れ（ベースコミット: {{baseCommit}}）",
-      "copyCommands": "コマンドをコピー",
-      "copyFailed": "テキストのコピーに失敗しました",
-      "copyRefreshCommands": "マージ可否を再取得するコマンドをコピー",
-      "detailsUnavailable": "競合ファイルの詳細は利用できません",
-      "filesHeading": "競合するファイル",
-      "localMergeClean": "GitHub では競合が報告されていますが、ローカルの Git では再現されませんでした。PR を更新するか、ブランチをプッシュしてマージ可否を再計算してください。",
-      "mustResolve": "このブランチには解決する必要のある競合があります",
-      "refreshing": "競合の詳細を更新しています…",
-      "resolveWithAi": "AI で競合を解決",
-      "runFromWorktree": "このワークツリーから実行",
-      "title": "競合"
-    },
     "linkPrForm": {
       "linkButton": "PR をリンク",
       "linkNumber": "#{{number}} をリンク",
@@ -2666,7 +2651,6 @@
       "checkingReviewStatus": "レビュー状態を確認中です。",
       "checkoutBeforePublish": "コミットを公開する前にブランチをチェックアウトしてください。",
       "commitStagedChanges": "ステージ済みの変更をコミットします。",
-      "commits": "コミット",
       "committing": "コミット中です。",
       "createPr": "PR を作成",
       "enterCommitMessage": "コミットするには、コミットメッセージを入力してください。",
@@ -2694,23 +2678,11 @@
       "resolveFailed": "ベースブランチを特定できませんでした。"
     },
     "branchCard": {
-      "branchCount": "ブランチ内 {{count}} 件",
-      "changedCount": "変更 {{count}} 件",
-      "cherryPickState": "チェリーピック",
-      "mergeState": "マージ",
-      "rebaseState": "リベース",
-      "stagedCount": "ステージ済み {{count}} 件",
       "completingMerge": "完了しています…",
       "completeMerge": "マージを完了"
     },
     "branchCompare": {
-      "commits_one": "{{count}} 件のコミット",
-      "commits_other": "{{count}} 件のコミット",
-      "files_one": "{{count}} 個のファイル",
-      "files_other": "{{count}} 個のファイル",
-      "sectionTitle": "ブランチのコミット済み変更",
-      "summary": "{{files}} - {{baseRef}} との比較",
-      "summaryWithCommits": "{{files}} - {{commits}} - {{baseRef}} との比較"
+      "sectionTitle": "ブランチのコミット済み変更"
     },
     "branchCompareOutcome": {
       "baseBranchUnavailable": "比較用のベースブランチを特定できませんでした。",
@@ -2769,11 +2741,8 @@
       "emptyMessage": "ワークツリーに変更はありません。",
       "emptyTitle": "ローカルの変更なし",
       "generateMessage": "AIでコミットメッセージを生成",
-      "openActions": "ソース管理の操作を開く",
       "reconnecting": "デスクトップに再接続中…",
-      "regenerateHint": "再生成するには、メッセージをクリアしてください。",
-      "stageAll": "ステージオール",
-      "unstageAll": "すべてステージ解除"
+      "regenerateHint": "再生成するには、メッセージをクリアしてください。"
     },
     "createPrAction": {
       "checkingStatus": "レビュー状態を確認中…",
@@ -2802,20 +2771,15 @@
       "titleUnpublishedForcePushCount_one": "{{count}} 件のブランチコミットを lease 付きで強制プッシュし、必要に応じてアップストリームを設定します。",
       "titleUnpublishedForcePushCount_other": "{{count}} 件のブランチコミットを lease 付きで強制プッシュし、必要に応じてアップストリームを設定します。"
     },
-    "fileList": {
-      "committedSection": "ブランチのコミット済み変更"
-    },
     "fileRows": {
       "addedByThem": "相手側で追加",
       "addedByUs": "こちら側で追加",
       "bothAdded": "双方で追加",
       "bothDeleted": "双方で削除",
       "bothModified": "双方で変更",
-      "committedSection": "ブランチのコミット済み変更",
       "committedUnavailable": "コミット済みの変更を表示できません。",
       "deletedByThem": "相手側で削除",
       "deletedByUs": "こちら側で削除",
-      "discardFile": "{{path}} の変更を破棄",
       "loadingCommitted": "コミット済みの変更を読み込み中…",
       "openChangedFile": "変更されたファイル {{path}} を開く",
       "openCommittedChange": "{{path}} のコミット済みの変更を開く",
@@ -2848,9 +2812,7 @@
       "waitingForDesktop": "デスクトップからの応答を待機中…"
     },
     "gitStatus": {
-      "changes": "変更点",
-      "conflicts": "競合",
-      "stagedChanges": "ステージ済みの変更"
+      "conflicts": "競合"
     },
     "header": {
       "backToSession": "セッションに戻る",
@@ -2918,7 +2880,6 @@
       "waitingForDesktop": "デスクトップへの接続を待機中…"
     },
     "modals": {
-      "actionsTitle": "ソース管理",
       "currentBranch": "現在",
       "discardButton": "破棄",
       "discardConfirmMessage": "「{{path}}」への変更を破棄しますか？この操作は取り消せません。",
@@ -2930,15 +2891,6 @@
     },
     "panel": {
       "unavailableTitle": "ソース管理を利用できません"
-    },
-    "prChip": {
-      "createPr": "PR を作成",
-      "loading": "PR を読み込み中…",
-      "loadingLabel": "PR を読み込み中",
-      "openLabel": "PR #{{number}}、{{state}}、{{checks}}。PR を開く。",
-      "openWithComments_one": "PR #{{number}}、{{state}}、{{checks}}、未解決のコメント {{count}} 件。PR を開く。",
-      "openWithComments_other": "PR #{{number}}、{{state}}、{{checks}}、未解決のコメント {{count}} 件。PR を開く。",
-      "unavailableLabel": "PR を表示できません：{{message}}"
     },
     "prCreate": {
       "authRequired": "{{reviewLabel}} を作成する前に認証してください。",
@@ -3027,7 +2979,6 @@
       "noBranch": "ブランチなし"
     },
     "state": {
-      "noUpstream": "アップストリームなし",
       "syncStatus": "{{ahead}} コミット先行、{{behind}} コミット遅れ"
     },
     "textGenerationFailure": {

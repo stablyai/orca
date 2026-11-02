@@ -7,6 +7,7 @@ import type { PluginHostListEntry } from '../../../../preload/api-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { PluginsSettingsSection } from './PluginsSettingsSection'
+import { PluginInstallTrustDialogHost } from '../plugins/dialogs/PluginInstallTrustDialog'
 import { applyPluginThemesNow } from '../plugins/state/plugin-theme-apply'
 
 vi.mock('../plugins/state/plugin-theme-apply', () => ({
@@ -209,11 +210,14 @@ async function renderSection(
   const root = createRoot(container)
   await act(async () => {
     root.render(
-      <PluginsSettingsSection
-        mounted={mounted}
-        settings={settings}
-        updateSettings={updateSettings}
-      />
+      <>
+        <PluginsSettingsSection
+          mounted={mounted}
+          settings={settings}
+          updateSettings={updateSettings}
+        />
+        <PluginInstallTrustDialogHost />
+      </>
     )
   })
   return { root, container, updateSettings }

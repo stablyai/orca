@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronsUpDown, Sparkles } from 'lucide-react-native'
 import { colors, pressedStyle, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -35,6 +35,7 @@ import { MobileCommitFailurePanel } from '../../source-control/MobileCommitFailu
 import type { MobilePrTab } from './use-mobile-pr-tab'
 import { prSheetStyles as sheetStyles } from './pr-tab-styles'
 import { PrBasePicker } from './PrBasePicker'
+import { FieldTextInput } from '../composer-input/FieldTextInput'
 
 type Fields = { title: string; body: string; base: string; draft: boolean }
 
@@ -258,14 +259,12 @@ export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
         <View style={sheetStyles.body}>
           <View style={styles.field}>
             <Text style={styles.label}>{t('pullRequest.createSheet.titleLabel', 'Title')}</Text>
-            <TextInput
+            <FieldTextInput
               value={fields.title}
               onChangeText={(value) => update({ title: value })}
               // Write with AI rewrites the title too, so it is locked until the answer lands.
               editable={!creating && !generating}
               multiline
-              placeholderTextColor={colors.textMuted}
-              selectionColor={colors.accentBlue}
               style={sheetStyles.field}
               accessibilityLabel={t('pullRequest.createSheet.titleLabel', 'Title')}
             />
@@ -292,14 +291,12 @@ export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
                 </Text>
               </Pressable>
             </View>
-            <TextInput
+            <FieldTextInput
               value={fields.body}
               onChangeText={(value) => update({ body: value })}
               editable={!creating && !generating}
               multiline
               placeholder={t('pullRequest.createSheet.descriptionPlaceholder', 'Optional')}
-              placeholderTextColor={colors.textMuted}
-              selectionColor={colors.accentBlue}
               style={[sheetStyles.field, sheetStyles.multiline]}
               accessibilityLabel={t('pullRequest.createSheet.descriptionLabel', 'Description')}
             />

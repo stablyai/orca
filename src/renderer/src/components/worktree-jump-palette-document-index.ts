@@ -1,6 +1,6 @@
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import type { SidebarHostOption } from '@/components/sidebar/sidebar-host-options'
-import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
+import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-ports/workspace-port-groups'
 import { buildWorktreePaletteDocuments } from '@/lib/worktree-palette-document'
 import {
   getPaletteWorktreeIdentity,

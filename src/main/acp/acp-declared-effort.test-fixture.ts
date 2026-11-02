@@ -239,7 +239,8 @@ export const recordedEffortCase: AcpDeclaredEffortFixtureModule['recordedEffortC
     agent: source.agent,
     model: source.model,
     policy: source.agent === 'grok' ? 'high' : 'low',
-    display: input === 'low' ? 'low' : input === 'absent' ? undefined : null,
+    display:
+      input === 'low' || input === 'opencode' ? 'low' : input === 'absent' ? undefined : null,
     catalog: source.catalog,
     live,
     resting,

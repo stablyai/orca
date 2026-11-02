@@ -24,7 +24,7 @@ import {
   ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
   resolveWindowsShellLaunchArgs
 } from '../../providers/windows-shell-args'
-import { resolveUnixShellPath } from '../../providers/local-pty-utils'
+import { resolveUnixShellPath } from '../../providers/local-pty/local-pty-executable-spawn'
 import { selectShellStartupFeatures } from '../../shell-startup-features'
 import { parseWslPath } from '../../wsl'
 import { addWslEnvKeys } from '../../wsl-env'

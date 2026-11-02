@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as DaemonBashRcfileModule from './daemon-bash-shell-ready-rcfile'
-import { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready-bash-rcfile'
+import { getBashShellReadyRcfileContent } from '../providers/local-pty/local-pty-shell-ready-bash-rcfile'
 import { getDaemonBashShellReadyRcfileContent } from './daemon-bash-shell-ready-rcfile'
 import { prependOrcaCliDirToChildPath } from '../cli/orca-cli-child-path'
 import {

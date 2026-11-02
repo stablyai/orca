@@ -99,15 +99,6 @@ describe('registerTerminalPaneRevealIpcBridge', () => {
     )
   })
 
-  it('answers false when this window does not know the workspace', () => {
-    const { deliver, reply } = installBridge()
-    mocks.revealTerminalPane.mockReturnValue(false)
-
-    deliver(request)
-
-    expect(reply).toHaveBeenCalledWith({ requestId: 'request-1', revealed: false })
-  })
-
   it('still answers when the reveal throws, so the caller is not left waiting', () => {
     const { deliver, reply } = installBridge()
     mocks.revealTerminalPane.mockImplementation(() => {

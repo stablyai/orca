@@ -5,7 +5,7 @@ export const SHELL_PREFIXES = [
   'src/main/daemon/daemon-bash-shell-ready',
   'src/main/daemon/daemon-shell-ready-wrapper',
   'src/main/daemon/node-pty-fd-leak',
-  'src/main/providers/local-pty-shell-ready',
+  'src/main/providers/local-pty/local-pty-shell-ready',
   'src/main/pty/',
   'src/main/shell-templates',
   'src/main/shell-startup-',

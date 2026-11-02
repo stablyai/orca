@@ -535,7 +535,6 @@
     },
     "bottomBar": {
       "connectFirst": "Connect a desktop to start new work.",
-      "tasks": "Tasks",
       "newWorkspace": "New workspace"
     },
     "desktops": {
@@ -545,6 +544,10 @@
       "heading": "Jump back in",
       "lastOpened": "Last opened",
       "connectToOpen": "Connect {{desktop}} to open"
+    },
+    "sections": {
+      "tasks": "Tasks",
+      "tasksSubtitle": "Browse your issues and reviews"
     }
   },
   "hooks": {
@@ -1413,21 +1416,6 @@
       "resolvedCommentSingle": "Resolved comment by {{author}}",
       "resolvedCommentCount": "Resolved comment by {{author}} ({{count}})",
       "commentsLoadFailedRetry": "Could not load comments."
-    },
-    "conflictingFilesSection": {
-      "detailsUnavailable": "Conflict file details are unavailable",
-      "refreshing": "Refreshing conflict details…",
-      "localMergeClean": "GitHub reports conflicts, but local Git did not reproduce them. Refresh the PR or push the branch to recalculate mergeability.",
-      "copyFailed": "Failed to copy text",
-      "copyCommands": "Copy commands",
-      "commitsBehind_one": "{{count}} commit behind (base commit: {{baseCommit}})",
-      "commitsBehind_other": "{{count}} commits behind (base commit: {{baseCommit}})",
-      "title": "Conflicts",
-      "mustResolve": "This branch has conflicts that must be resolved",
-      "runFromWorktree": "Run from this worktree",
-      "copyRefreshCommands": "Copy mergeability refresh commands",
-      "filesHeading": "Conflicting files",
-      "resolveWithAi": "Resolve conflicts with AI"
     },
     "reviewersSection": {
       "requested": "Requested",
@@ -3219,7 +3207,6 @@
       "createPr": "Create PR",
       "pushAndCreatePr": "Push & Create PR",
       "switchBranch": "Switch branch",
-      "commits": "Commits",
       "committing": "Commit in progress.",
       "forcePushing": "Force push in progress.",
       "remoteOperationInProgress": "Remote operation in progress.",
@@ -3241,7 +3228,8 @@
       "pullCommits_other": "Pull {{count}} commits.",
       "pushCommits_one": "Push {{count}} commit.",
       "pushCommits_other": "Push {{count}} commits.",
-      "upToDate": "Nothing to commit. Branch is up to date."
+      "upToDate": "Nothing to commit. Branch is up to date.",
+      "openCommits": "Open commits"
     },
     "dropdownCounts": {
       "pushCount_one": "Push {{count}} commit",
@@ -3299,20 +3287,11 @@
       "loading": "Loading commits…"
     },
     "branchCard": {
-      "mergeState": "merge",
-      "rebaseState": "rebase",
-      "cherryPickState": "cherry-pick",
-      "changedCount": "{{count}} changed",
-      "stagedCount": "{{count}} staged",
-      "branchCount": "{{count}} on branch",
       "completingMerge": "Completing…",
       "completeMerge": "Complete merge"
     },
     "content": {
       "reconnecting": "Reconnecting to desktop...",
-      "stageAll": "Stage All",
-      "unstageAll": "Unstage All",
-      "openActions": "Open source control actions",
       "emptyTitle": "No local changes",
       "emptyMessage": "Working tree is clean.",
       "commitMessageDisabled": "Commit message disabled. No staged files.",
@@ -3320,9 +3299,6 @@
       "regenerateHint": "Clear the message to regenerate.",
       "cancelGeneration": "Cancel commit message generation",
       "generateMessage": "Generate commit message with AI"
-    },
-    "fileList": {
-      "committedSection": "Committed on Branch"
     },
     "fileRows": {
       "bothModified": "Both modified",
@@ -3338,10 +3314,10 @@
       "unstageFile": "Unstage {{path}}",
       "stageFile": "Stage {{path}}",
       "discardFile": "Discard {{path}}",
-      "committedSection": "Committed on Branch",
       "loadingCommitted": "Loading committed changes...",
       "committedUnavailable": "Committed changes unavailable.",
-      "openCommittedChange": "Open committed change {{path}}"
+      "openCommittedChange": "Open committed change {{path}}",
+      "discard": "Discard"
     },
     "header": {
       "close": "Close source control",
@@ -3353,7 +3329,6 @@
       "moreActions": "More source control actions"
     },
     "modals": {
-      "actionsTitle": "Source Control",
       "discardTitle": "Discard Change",
       "discardConfirmMessage": "Discard changes to \"{{path}}\"? This cannot be undone.",
       "discardButton": "Discard",
@@ -3366,15 +3341,6 @@
     "panel": {
       "unavailableTitle": "Source Control Unavailable",
       "loading": "Loading changes…"
-    },
-    "prChip": {
-      "loading": "Loading pull request…",
-      "createPr": "Create pull request",
-      "loadingLabel": "Loading pull request",
-      "unavailableLabel": "Pull request unavailable: {{message}}",
-      "openWithComments_one": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} unresolved comments. Open pull request.",
-      "openWithComments_other": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} unresolved comments. Open pull request.",
-      "openLabel": "Pull request #{{number}}, {{state}}, {{checks}}. Open pull request."
     },
     "hostedReviewCopy": {
       "updatingBranch": "Updating branch...",
@@ -3394,13 +3360,7 @@
       "loadFailed": "Unable to load committed changes"
     },
     "branchCompare": {
-      "sectionTitle": "Committed on Branch",
-      "summary": "{{files}} - vs {{baseRef}}",
-      "summaryWithCommits": "{{files}} - {{commits}} - vs {{baseRef}}",
-      "files_one": "{{count}} file",
-      "files_other": "{{count}} files",
-      "commits_one": "{{count}} commit",
-      "commits_other": "{{count}} commits"
+      "sectionTitle": "Committed on Branch"
     },
     "commitMessageAi": {
       "generateFailed": "Failed to generate commit message"
@@ -3422,8 +3382,8 @@
     },
     "gitStatus": {
       "conflicts": "Conflicts",
-      "changes": "Changes",
-      "stagedChanges": "Staged Changes"
+      "uncommitted": "Uncommitted",
+      "staged": "Staged"
     },
     "hostedReviewCreateIntent": {
       "resolveConflicts": "Resolve conflicts before creating a pull request.",
@@ -3498,8 +3458,7 @@
       "actionFailed": "Source control action failed"
     },
     "state": {
-      "syncStatus": "{{ahead}} ahead, {{behind}} behind",
-      "noUpstream": "No upstream"
+      "syncStatus": "{{ahead}} ahead, {{behind}} behind"
     },
     "textGenerationFailure": {
       "openCodeInvalidEvents": "OpenCode returned invalid JSON events.",
@@ -3641,6 +3600,33 @@
     },
     "prCreateDraft": {
       "generateFailed": "Failed to write a description"
+    },
+    "changesHeader": {
+      "merging": "Merging",
+      "rebasing": "Rebasing",
+      "cherryPicking": "Cherry-picking",
+      "notPublished": "Not published",
+      "notPushed": "{{count}} not pushed",
+      "behind": "{{count}} behind",
+      "upToDate": "Up to date",
+      "switchBranch": "Switch branch from {{branch}}",
+      "mergeInProgress": "Merge in progress",
+      "rebaseInProgress": "Rebase in progress",
+      "cherryPickInProgress": "Cherry-pick in progress",
+      "filesNeedDecision_one": "{{count}} file needs a decision before you can finish.",
+      "filesNeedDecision_other": "{{count}} files need a decision before you can finish.",
+      "conflictsResolved": "Every conflict is resolved. Finish from the bar below.",
+      "continueOnComputer": "Every conflict is resolved. Continue on your computer to finish.",
+      "commits_one": "{{count}} commit",
+      "commits_other": "{{count}} commits",
+      "conflictsMayRemain": "Not every file is listed, so conflicts may remain. Check on your computer."
+    },
+    "fileList": {
+      "stageAll": "Stage all",
+      "mergedCleanly": "Merged cleanly",
+      "unstageAll": "Unstage all",
+      "onThisBranch": "On this branch {{count}}",
+      "versusBase": "vs {{base}}"
     }
   },
   "newWorkspace": {

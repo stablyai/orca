@@ -5,6 +5,7 @@ import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { FilePathCursorTooltip } from '@/components/file-path-cursor-tooltip'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import { observeOffscreenAnimation } from '@/lib/offscreen-animation-pause'
 import { ReviewChecksIndicator, reviewStateLabel } from './WorktreeCardMetadataStatusBadges'
 import { getReviewLabel, ReviewIcon } from './worktree-review-helpers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
@@ -117,15 +118,27 @@ export function WorktreeCardReferenceRow({
             <span>{title}</span>
           </button>
         )}
-        <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
+        <div
+          ref={stale ? observeOffscreenAnimation : undefined}
+          className="mt-0.5 flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground"
+        >
           {provider === 'GitHub' ? (
             <span className="inline-flex shrink-0" role="img" aria-label={provider}>
               <GitHubIcon className="size-3" />
             </span>
           ) : null}
-          <span className={cn('shrink-0', stale && 'shimmer shimmer-duration-2400')}>{label}</span>
+          <span
+            className={cn('shrink-0', stale && 'shimmer shimmer-duration-2400 shimmer-steps-30')}
+          >
+            {label}
+          </span>
           {review?.status ? <ReviewChecksIndicator status={review.status} /> : null}
-          <span className={cn('min-w-0 flex-1 truncate', stale && 'shimmer shimmer-duration-2400')}>
+          <span
+            className={cn(
+              'min-w-0 flex-1 truncate',
+              stale && 'shimmer shimmer-duration-2400 shimmer-steps-30'
+            )}
+          >
             {provider === 'GitHub' ? null : `· ${provider}`}
             {source ? ` · ${source}` : ''}
           </span>

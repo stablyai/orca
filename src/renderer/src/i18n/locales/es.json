@@ -4098,7 +4098,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "Ninguna otra cuenta",
-            "9332ba8684": "Cambiar a",
             "d450654fa2": "Cuenta de Claude",
             "11e2354daf": "Uso de Claude",
             "3dd7ddfae1": "Abrir detalles de Claude y cambiar de cuenta",
@@ -6984,6 +6983,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "No se pudo guardar la ubicación de las cuentas. Inténtalo de nuevo.",
           "c2d2751587": "Eliminar cuenta",
           "dbb9626ed1": "Cancelar",
           "63843e37e2": "¿Eliminar la cuenta de Claude?",

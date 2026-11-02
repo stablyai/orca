@@ -35,7 +35,7 @@ export function installAgentSessionAttachments(deps: {
   journalSweeper = new JournalOutcomeSweeper({
     database: () => deps.journalDatabase,
     onError: (error) =>
-      deps.logger.warn('retired chat records could not be deleted', {
+      deps.logger.warn('chat journal maintenance failed', {
         scope: 'journal-outcome-sweep',
         error
       })

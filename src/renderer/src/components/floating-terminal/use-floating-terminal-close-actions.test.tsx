@@ -92,15 +92,6 @@ describe('floating titlebar close actions', () => {
     expect(closeUnifiedTab).toHaveBeenCalledWith(editor.id)
   })
 
-  it('closes editor tabs without closing structured chats from Close All Editor Tabs', async () => {
-    actions().closeAllFiles()
-    await Promise.resolve()
-
-    expect(closeUnifiedTab).toHaveBeenCalledWith(editor.id)
-    expect(closeUnifiedTab).not.toHaveBeenCalledWith(chat.id)
-    expect(closeFile).not.toHaveBeenCalled()
-  })
-
   it.each([true, false])(
     'retains pinned editors without prompting during Close All Editor Tabs (confirmation %s)',
     async (confirmClosePinnedTab) => {

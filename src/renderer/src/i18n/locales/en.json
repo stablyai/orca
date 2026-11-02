@@ -4655,7 +4655,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "No other accounts",
-            "9332ba8684": "Switch to",
             "d450654fa2": "Claude Account",
             "11e2354daf": "Claude usage runtime",
             "3dd7ddfae1": "Open Claude details and account switcher",
@@ -7468,6 +7467,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "Account location could not be saved. Try again.",
           "c2d2751587": "Remove Account",
           "dbb9626ed1": "Cancel",
           "63843e37e2": "Remove Claude Account?",
@@ -13142,7 +13142,11 @@
         "AppearanceThemeControl": {
           "useTerminalTheme": "Use its terminal colors",
           "matchTerminal": "Match Terminal",
-          "dynamic": "dynamic"
+          "dynamic": "dynamic",
+          "browseThemes": "Browse themes",
+          "moreThemes": "More themes",
+          "moreThemesLoading": "Loading themes…",
+          "installingTheme": "Installing {{value0}}…"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
@@ -15492,16 +15496,15 @@
             "dc1f3f5535": "Jump back in",
             "c2a0215163": "Waiting for input",
             "0c14dac908": "2m",
-            "77c0dae863": "Done",
-            "3166f865af": "14m",
             "609517273b": "Working",
             "005afbad3d": "now",
-            "e986b282af": "Last opened",
-            "8a3ebdbdac": "1h",
             "04a94cadee": "40 worktrees · 5 active",
             "b5308d5e2c": "M1 Mini",
             "aefd110ea5": "Pair a desktop",
-            "d08ee9c466": "New workspace"
+            "d08ee9c466": "New workspace",
+            "aa44b4a6b2": "Browse your issues and reviews",
+            "eda5c8d01b": "Automations",
+            "cd2ad5b641": "Schedule agent work and view runs"
           },
           "TerminalSlide": {
             "0bb39f8fe6": "Send",
@@ -20984,8 +20987,18 @@
       "onTerminal": "The terminal stays fully supported too. Switch any agent back anytime.",
       "changeInSettings": "Change anytime in <link>Settings → Agents</link>.",
       "stayInTerminal": "Stay in terminal",
+      "switchToTerminal": "Switch to terminal",
       "cta": "Use Chat UI",
       "saveFailed": "Could not turn on Chat UI. Choose Chat in Settings → Agents.",
+      "terminalSaveFailed": "Could not switch to terminal. Choose Terminal in Settings → Agents.",
+      "dismiss": "Dismiss",
+      "liveSwitching": "Live switching available",
+      "liveSwitchingTitle": "Live switching 101",
+      "liveSwitchingDescription": "Right-click an agent tab to switch between Chat UI and the terminal.",
+      "liveSwitchingGotIt": "Got it",
+      "liveSwitchingTerminalTab": "Claude Code",
+      "liveSwitchingPolishTab": "Polish Bottom…",
+      "liveSwitchingCouncilTab": "Council Review",
       "demoTabTitle": "Explain login",
       "demoPrompt": "Map out how login works",
       "demoReply": "Login starts in {{file}}: the browser posts to /login, the server checks the password and creates a session, then redirects you to the app. Here’s the flow:",

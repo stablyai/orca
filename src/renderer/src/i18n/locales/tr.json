@@ -4521,7 +4521,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "Başka hesap yok",
-            "9332ba8684": "Şuna geç",
             "d450654fa2": "Claude Hesabı",
             "11e2354daf": "Claude kullanım çalışma zamanı",
             "3dd7ddfae1": "Claude ayrıntılarını ve hesap değiştiriciyi aç",
@@ -7320,6 +7319,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "Hesap konumu kaydedilemedi. Tekrar deneyin.",
           "c2d2751587": "Hesabı Kaldır",
           "dbb9626ed1": "İptal",
           "63843e37e2": "Claude Hesabı Kaldırılsın mı?",
