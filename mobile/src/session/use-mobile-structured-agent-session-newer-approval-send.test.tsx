@@ -47,6 +47,7 @@ const client: RpcClient = {
 function Harness(): null {
   hook = useMobileStructuredAgentSession({
     client,
+    pairedHostClient: client,
     sessionId: SESSION_ID,
     sourceIdentity: 'host-a\0workspace-a',
     enabled: true,

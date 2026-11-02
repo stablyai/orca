@@ -113,7 +113,8 @@ describe('plugins.open on the desktop', () => {
       kind: 'open-editor',
       pluginKey: KEY,
       editorId: 'notes',
-      filePath: '/w/a.notes'
+      filePath: '/w/a.notes',
+      fallbackFolder: '/w'
     })
   })
 
@@ -172,10 +173,11 @@ describe('plugins.shot on the desktop', () => {
           guestRevision: 'sha256-012345678',
           width: 300,
           colorScheme: 'light',
+          captureId: expect.any(String),
           timeoutMs: 15_000
         }
       },
-      { kind: 'end-capture' }
+      { kind: 'end-capture', captureId: expect.any(String) }
     ])
   })
 
@@ -187,7 +189,8 @@ describe('plugins.shot on the desktop', () => {
       'stopped responding'
     )
     expect(relay.requestPluginViewFromRenderer.mock.calls.at(-1)?.[1]).toEqual({
-      kind: 'end-capture'
+      kind: 'end-capture',
+      captureId: expect.any(String)
     })
   })
 

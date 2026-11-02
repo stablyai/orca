@@ -4,7 +4,7 @@ import {
   type StructuredAgentSessionStartReadiness
 } from './structured-agent-session-start-readiness'
 export type { StructuredAgentSessionStartReadiness } from './structured-agent-session-start-readiness'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import { sameProviderChild } from './structured-agent-session-provider-child'
 import {

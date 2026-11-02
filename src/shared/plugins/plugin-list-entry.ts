@@ -87,6 +87,10 @@ export type PluginHostListEntry = {
     context: 'global' | 'workspace' | 'worktree'
     handler: { type: 'built-in'; action: string } | { type: 'worker' }
     keybindings: { key: string; when: 'global' | 'workspace' | 'worktree' }[]
+    /** The built-in action it runs in place of; absent on older hosts. */
+    replaces?: string
+    /** Another plugin, installed earlier, replaces the same action, so this one does not. */
+    replacedBy?: string
   }[]
   /** The manifest's status bar items; a worker's changes arrive separately. Absent on older hosts. */
   statusBarItems?: PluginStatusBarItemContribution[]

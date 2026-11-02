@@ -179,6 +179,8 @@ export type PluginsApi = {
     pluginKey: string
     commandId: string
     args?: unknown
+    /** Refused unless the worker can start it within this many ms; older hosts ignore it. */
+    timeoutMs?: number
   }) => Promise<unknown>
   /** One frame host call; main enforces consented capabilities and the frame's surface. */
   panelAction: (args: {

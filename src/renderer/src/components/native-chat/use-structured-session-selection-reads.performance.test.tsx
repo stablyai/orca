@@ -1,12 +1,12 @@
 // @vitest-environment happy-dom
 
 import { useSyncExternalStore } from 'react'
-import { createStructuredAgentSessionOptionsReadOwner } from '../../../../shared/structured-agent-session-options-read-owner'
+import { createStructuredAgentSessionOptionsReadOwner } from '../../../../shared/agent-session/options/structured-agent-session-options-read-owner'
 import { createStructuredAgentSessionOptionState } from '../../../../shared/agent-session/options/structured-agent-session-options'
 import { getAgentSessionOptionCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { createStructuredSessionSelectionController } from '../../../../shared/structured-agent-session-selection-operations'
+import { createStructuredSessionSelectionController } from '../../../../shared/agent-session/options/structured-agent-session-selection-operations'
 import { useStructuredSessionSelectionReads } from './use-structured-session-selection-reads'
 import { useStructuredAgentSessionOptionStamp } from './structured-agent-session-status-hooks'
 import { useAppStore } from '@/store'

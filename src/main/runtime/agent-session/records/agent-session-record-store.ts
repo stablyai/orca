@@ -29,7 +29,7 @@ import {
   type AgentSessionExecutionLocation,
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session-options-replacement'
+import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/agent-session-options-replacement'
 import {
   commitAgentSessionProcessIdentity,
   evictAgentSessionOwner,

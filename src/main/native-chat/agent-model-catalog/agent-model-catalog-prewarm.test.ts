@@ -1,6 +1,6 @@
 import { resolveAgentModelCatalogReadRecords } from './agent-model-catalog-running-account'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'

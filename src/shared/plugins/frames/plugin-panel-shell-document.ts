@@ -28,13 +28,20 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
       return result
     })
   }
+  // Once: the editor asked for its document, so plugin shot knows it is wired.
+  var documentSubscribed = false
+  function markDocumentSubscribed() {
+    if (!documentSubscribed) { documentSubscribed = true; post({ kind: 'evt', event: E.editorSubscribed }) }
+  }
   if (C.surface === 'editor') {
     orca.document = Object.freeze({
       get: function () {
+        markDocumentSubscribed()
         return latest ? Promise.resolve(latest) : new Promise(function (resolve) { waiting.push(resolve) })
       },
       // Why replay: editors often subscribe after their bundle loads, when the first document is in.
       onDidChange: function (fn) {
+        markDocumentSubscribed()
         var subscription = on(E.editorDocument, fn)
         var current = latest
         var live = true
@@ -66,6 +73,7 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
     var merge = typeof o.merge === 'function' ? o.merge : null
     // Why 250: the host takes 60 edits per 10 s, and typing must stay under that.
     var debounceMs = typeof o.debounceMs === 'number' && o.debounceMs >= 0 ? o.debounceMs : 250
+    markDocumentSubscribed()
     return whenStarted().then(function (first) {
       var doc = first
       var base = decode(first.content)

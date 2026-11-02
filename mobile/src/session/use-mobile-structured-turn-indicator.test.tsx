@@ -67,13 +67,15 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
   function Harness(): null {
     hook = useMobileStructuredAgentSession({
       client,
+      pairedHostClient: client,
       sessionId: 'session-1',
       sourceIdentity: 'host-a\0workspace-a',
       enabled: true,
       connected: true,
+      hostSupport: null,
       agent: 'codex',
       onSendError
-    } as never)
+    })
     return null
   }
 
@@ -246,6 +248,7 @@ describe("useMobileStructuredAgentSession and the host's Stopping", () => {
   function Harness({ statusFeed }: { statusFeed: boolean }): null {
     hook = useMobileStructuredAgentSession({
       client,
+      pairedHostClient: client,
       sessionId: 'session-1',
       sourceIdentity: 'host-a\0workspace-a',
       enabled: true,
