@@ -20,6 +20,10 @@ import { editorShortcutMatches } from './editor-shortcuts'
 import { registerEditorFrameFlush } from './editor-pending-flush'
 import { useCustomEditorReloadFlush } from './use-custom-editor-reload-flush'
 import { PluginEditorNeedsDesktopNotice } from './PluginEditorNeedsDesktopNotice'
+import {
+  usePluginEditorCaptureReport,
+  usePluginEditorCaptureView
+} from './plugin-editor-capture-status'
 import { createCustomEditorHost } from './plugin-custom-editor-host'
 import type {
   CustomEditorBinaryDocument,
@@ -99,6 +103,7 @@ export default function PluginCustomEditorFrame({
     markUnresponsive,
     remountGone
   } = usePluginFrameEntry('editor', editor.pluginKey, editor.id)
+  const progressRef = useRef<(step: 'delivered' | 'subscribed') => void>(() => {})
 
   const host = useMemo(() => {
     const created = createCustomEditorHost({
@@ -124,6 +129,7 @@ export default function PluginCustomEditorFrame({
           latestRef.current.onDirtyHint?.(true)
         }
       },
+      onFrameProgress: (step) => progressRef.current(step),
       onKeyChord: (chord, context) => {
         const event = new KeyboardEvent('keydown', chord)
         // Why: chords are posted by frame code, so only one riding real user input may save.
@@ -142,7 +148,9 @@ export default function PluginCustomEditorFrame({
   }, [isBinary])
 
   const entry = useCustomEditorReloadFlush(liveEntry, host.flush)
-  const frameKey = entry.status === 'ready' ? `${editor.key}:${entry.revision}` : null
+  const { captureLoad, captureSize } = usePluginEditorCaptureView(fileId)
+  const frameKey =
+    entry.status === 'ready' ? `${editor.key}:${entry.revision}:${captureLoad}` : null
   const guest = usablePluginFrameGuest(entry.status === 'ready' ? entry.guest : undefined)
   const entryHtml = entry.status === 'ready' && !guest ? entry.html : null
   // Why memoized: a new srcdoc reloads the frame; theme changes arrive as messages instead.
@@ -150,6 +158,16 @@ export default function PluginCustomEditorFrame({
     () => (entryHtml === null ? null : fillPluginPanelShell(entryHtml)),
     [entryHtml]
   )
+
+  const reportProgress = usePluginEditorCaptureReport(
+    fileId,
+    entry.status,
+    guest?.url ?? null,
+    frameKey
+  )
+  useLayoutEffect(() => {
+    progressRef.current = reportProgress
+  })
 
   const { onFrameLoad } = usePluginFrameHost({
     surface: 'editor',
@@ -230,7 +248,11 @@ export default function PluginCustomEditorFrame({
     )
   }
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div
+      className="flex h-full min-h-0 flex-col"
+      style={captureSize ?? undefined}
+      data-plugin-editor-surface={fileId}
+    >
       {saveBlocked ? (
         <div className="border-b border-border px-3 py-1.5 text-xs text-destructive">
           {translate(

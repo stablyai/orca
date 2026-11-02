@@ -6,6 +6,7 @@ import {
   pluginPanelCallerSchema
 } from '../plugins/workers/plugin-panel-bridge-protocol'
 import { pluginShotActsSchema } from '../plugins/view/plugin-shot-acts'
+import { pluginEditorShotActsSchema } from '../plugins/view/plugin-editor-shot-acts'
 import { PLUGIN_DECLARATIVE_RENDER_LANE } from '../plugins/declarative/plugin-declarative-limits'
 
 // Why optional: only `approval_required` hands it out; older hosts strip it and older callers omit it.
@@ -133,6 +134,21 @@ export const PluginShotParams = z.object({
   ifShown: z.boolean().optional(),
   /** Input to run on a components panel before the capture; older hosts strip it. */
   acts: pluginShotActsSchema.optional()
+})
+
+export const PLUGIN_SHOT_MIN_HEIGHT = 120
+export const PLUGIN_SHOT_MAX_HEIGHT = 4000
+
+/** `orca plugin shot --editor`: its own method, so an older host fails `method_not_found`
+ *  instead of quietly shooting the plugin's panel. */
+export const PluginShotEditorParams = z.object({
+  pluginKey: pluginKeyParam,
+  /** Absolute path on the host. */
+  filePath: devFolderPathParam,
+  colorScheme: z.enum(['light', 'dark']).optional(),
+  width: z.number().int().min(PLUGIN_SHOT_MIN_WIDTH).max(PLUGIN_SHOT_MAX_WIDTH).optional(),
+  height: z.number().int().min(PLUGIN_SHOT_MIN_HEIGHT).max(PLUGIN_SHOT_MAX_HEIGHT).optional(),
+  acts: pluginEditorShotActsSchema.optional()
 })
 
 // Why the render lane's cap: the same bytes a live panel may send Orca for one tree.

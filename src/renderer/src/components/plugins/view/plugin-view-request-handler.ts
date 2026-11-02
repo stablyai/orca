@@ -1,5 +1,4 @@
 import { pluginPanelTabKey } from '../../../../../shared/plugins/frames/plugin-tab-key'
-import { toWorktreeRelativePath } from '../../../../../shared/terminal-links'
 import {
   PLUGIN_VIEW_NO_WORKSPACE_CODE,
   PLUGIN_VIEW_NOT_SHOWN_CODE,
@@ -16,8 +15,6 @@ import {
   useCustomEditorViewStore
 } from '@/store/plugin-custom-editors'
 import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
-import { getIndexedWorktreeMap } from '@/store/worktree-repo-index'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import {
   measurePluginPanelGuest,
   measurePluginPanelSurface,
@@ -28,6 +25,8 @@ import {
 import { restoreActedPanel, settleAndActOnPanel } from './plugin-view-capture-acts'
 import { pluginPanelNotShownReason } from './plugin-view-shown'
 import { endPluginShotReplay, replayPluginPanel } from './plugin-view-replay'
+import { showWorkspaceForFile } from './plugin-view-editor-workspace'
+import { captureOpenEditor } from './plugin-view-editor-capture'
 
 type Failure = Extract<PluginViewReply, { ok: false }>
 
@@ -40,6 +39,8 @@ const fail = (requestId: string, code: string, message: string): Failure => ({
 
 const NO_WORKSPACE_MESSAGE =
   'Orca shows plugin panels and editors beside an open workspace, and none is showing.'
+const NO_EDITOR_WORKSPACE_MESSAGE =
+  'No workspace shows the file, and Orca could not open its folder as a folder workspace.'
 
 /** `open` may leave Settings for the workspace behind it; a capture never changes the view. */
 function showWorkspace(requestId: string, leaveSettings: boolean): Failure | null {
@@ -145,7 +146,7 @@ async function capturePanel(
 async function openEditor(
   request: Extract<PluginViewRequest, { kind: 'open-editor' }>
 ): Promise<PluginViewReply> {
-  const { requestId, pluginKey, editorId, filePath } = request
+  const { requestId, pluginKey, editorId, filePath, capture } = request
   await usePluginPanelsStore.getState().fetchPlugins()
   const editor = collectActivePluginCustomEditors(usePluginPanelsStore.getState().plugins).find(
     (entry) => entry.pluginKey === pluginKey && entry.id === editorId
@@ -157,26 +158,26 @@ async function openEditor(
       `This window does not list ${pluginKey}/${editorId} yet.`
     )
   }
-  const blocked = showWorkspace(requestId, true)
-  if (blocked) {
-    return blocked
+  if (useAppStore.getState().activeView === 'settings') {
+    useAppStore.getState().closeSettingsPage()
   }
-  const state = useAppStore.getState()
-  const worktreeId = state.activeWorktreeId ?? ''
-  const worktreePath = getIndexedWorktreeMap(selectWorktreesByRepo(state)).get(worktreeId)?.path
-  const fileId = state.openFile(
+  const paths = [filePath, ...(request.filePathAliases ?? [])]
+  const workspace = await showWorkspaceForFile(paths, request.fallbackFolder)
+  if (!workspace) {
+    return fail(requestId, PLUGIN_VIEW_NO_WORKSPACE_CODE, NO_EDITOR_WORKSPACE_MESSAGE)
+  }
+  const fileId = useAppStore.getState().openFile(
     {
-      filePath,
-      // A file outside the workspace keeps its absolute path, as other opens do.
-      relativePath: (worktreePath && toWorktreeRelativePath(filePath, worktreePath)) || filePath,
-      worktreeId,
-      language: detectLanguage(filePath),
+      filePath: workspace.filePath,
+      relativePath: workspace.relativePath,
+      worktreeId: workspace.worktreeId,
+      language: detectLanguage(workspace.filePath),
       mode: 'edit'
     },
     { preview: false }
   )
   useCustomEditorViewStore.getState().setChoice(fileId, editor.key)
-  return { requestId, ok: true }
+  return capture ? captureOpenEditor(requestId, fileId, capture) : { requestId, ok: true }
 }
 
 export async function handlePluginViewRequest(

@@ -480,6 +480,26 @@ it works only on this machine (no `--environment`), and it needs Orca's window h
 minimized because the preview is drawn inside it. It writes
 `.orca/shots/<plugin-key>-<panel>.<scenario>.png` in the plugin folder unless you pass `--out`.
 
+### See a custom editor
+
+`orca plugin shot <dir|plugin-key> --editor <file>` saves a PNG of the plugin's custom editor
+showing that file. It opens the file as `orca plugin open --editor` does: in the workspace that
+holds it (its real path counts, so `/tmp/a.sketch` matches a workspace at `/private/tmp`), or else
+it opens the file's folder as a folder workspace. It loads the editor afresh, waits until the
+editor has its document and has asked for it (`orca.document.get` or `orca.document.onDidChange`)
+and has painted, then captures exactly the editor, hidden window included. `--width` and
+`--height` size the editor for that capture only, and `--theme` works as for panels; both are put
+back afterwards. `--act '<json>'` sends real input to the editor first, in its own CSS pixels
+from its top-left: `[{"click":[200,150]},{"drag":[[200,150],[400,300]]},{"key":"r"}]` (a `key`
+takes a name such as `Enter` and optional `"modifiers":["shift"|"control"|"alt"|"meta"]`), each
+painted before the next, and only while Orca's window is hidden or minimized. Acts behave like
+your own input: edits the editor makes reach the file's buffer, saved by your autosave setting.
+The PNG is always written (`.orca/shots/<plugin-key>-<editor>.png` unless `--out`), but the
+command exits 1 and prints `errors` when the editor threw, was blocked by its content policy, or
+never asked for its document within 5 seconds. `--json` prints `{ path, editorId, filePath, width,
+height, theme, themeApplied, settled, subscribed, errors, acted? }`. The file stays open in its
+workspace afterwards.
+
 `orca plugin dev watch . --shot ./.orca/shots` opens one panel (the first, or
 `--shot-panel <id>`) in the right sidebar once, then after the load and after each reload that
 leaves the plugin running saves a fresh `<plugin-key>-<panel>.png` of it; with `--check`, the

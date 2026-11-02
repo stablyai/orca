@@ -22,7 +22,8 @@ const drawnPanelSchema = z.object({
   themeApplied: z.boolean(),
   settled: z.boolean(),
   pendingRequests: z.number().int().nonnegative().optional(),
-  actions: z.array(pluginShotActResultSchema).max(PLUGIN_SHOT_MAX_ACTS).optional()
+  actions: z.array(pluginShotActResultSchema).max(PLUGIN_SHOT_MAX_ACTS).optional(),
+  subscribed: z.boolean().optional()
 })
 
 /** The renderer's reply, checked before main captures a rect it names. */

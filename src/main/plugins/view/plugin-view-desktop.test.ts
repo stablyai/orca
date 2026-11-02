@@ -113,7 +113,8 @@ describe('plugins.open on the desktop', () => {
       kind: 'open-editor',
       pluginKey: KEY,
       editorId: 'notes',
-      filePath: '/w/a.notes'
+      filePath: '/w/a.notes',
+      fallbackFolder: '/w'
     })
   })
 

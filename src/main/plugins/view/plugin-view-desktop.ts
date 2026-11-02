@@ -23,6 +23,12 @@ import type {
   PluginShotActResult
 } from '../../../shared/plugins/view/plugin-shot-acts'
 import {
+  pluginEditorFileTarget,
+  shootPluginEditor,
+  type PluginEditorShotResult
+} from './plugin-view-editor-shot'
+import type { PluginEditorShotAct } from '../../../shared/plugins/view/plugin-editor-shot-acts'
+import {
   resolvePluginViewEditor,
   resolvePluginViewPanel,
   type PluginViewSource
@@ -81,6 +87,15 @@ export type PluginViewDesktop = {
   }): Promise<PluginShotResult | PluginShotNotShown>
   /** `shot --scenario`: captures a CLI-rendered tree without opening the plugin's panel. */
   shotReplay(params: z.infer<typeof PluginShotReplayParams>): Promise<PluginShotReplayResult>
+  /** `shot --editor`: opens the file in the plugin's editor and captures that editor. */
+  shotEditor(params: {
+    pluginKey: string
+    filePath: string
+    colorScheme?: PluginViewColorScheme
+    width?: number
+    height?: number
+    acts?: PluginEditorShotAct[]
+  }): Promise<PluginEditorShotResult>
 }
 
 export type PluginViewDesktopDeps = {
@@ -135,7 +150,13 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
         const editor = await resolvePluginViewEditor(deps.source, pluginKey, filePath)
         const reply = await requestPluginViewFromRenderer(
           requireContents(),
-          { kind: 'open-editor', pluginKey, editorId: editor.editorId, filePath },
+          {
+            kind: 'open-editor',
+            pluginKey,
+            editorId: editor.editorId,
+            filePath,
+            ...(await pluginEditorFileTarget(filePath))
+          },
           OPEN_TIMEOUT_MS
         )
         const error = failed(reply)
@@ -162,6 +183,8 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
       }
       return { pluginKey, kind: 'panel', panelId: panel.panelId, title: panel.title }
     },
+
+    shotEditor: (params) => shootPluginEditor(deps, requireContents(), params),
 
     shotReplay: (params) =>
       shootPluginReplay({ contents: requireContents(), windowShown: deps.windowShown() }, params),

@@ -1,0 +1,129 @@
+import {
+  PLUGIN_EDITOR_SUBSCRIBE_TIMEOUT_MS,
+  type PluginViewEditorCapture,
+  type PluginViewReply
+} from '../../../../../shared/plugins/view/plugin-view-protocol'
+import {
+  pluginEditorCaptureStatus,
+  subscribePluginEditorCapture,
+  type PluginEditorCaptureStatus
+} from '@/components/editor/plugin-editor-capture-status'
+import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
+import { nextPaintedFrames, waitForColorScheme } from './plugin-view-panel-settle'
+
+type Rect = { x: number; y: number; width: number; height: number }
+
+/** Resolves with the file's editor status once `done` holds, or at the deadline with what it is. */
+export function waitForPluginEditor(
+  fileId: string,
+  done: (status: PluginEditorCaptureStatus) => boolean,
+  timeoutMs: number
+): Promise<{ met: boolean; status: PluginEditorCaptureStatus | null }> {
+  return new Promise((resolve) => {
+    let unsubscribe = (): void => {}
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const check = (final: boolean): void => {
+      const status = pluginEditorCaptureStatus(fileId)
+      const met = status !== null && done(status)
+      if (met || final) {
+        clearTimeout(timer)
+        unsubscribe()
+        resolve({ met, status })
+      }
+    }
+    unsubscribe = subscribePluginEditorCapture(() => check(false))
+    timer = setTimeout(() => check(true), timeoutMs)
+    check(false)
+  })
+}
+
+function measureEditorFrame(fileId: string): Rect | null {
+  const surface = document.querySelector(`[data-plugin-editor-surface="${CSS.escape(fileId)}"]`)
+  const frame = surface?.querySelector('webview, iframe')
+  if (!frame) {
+    return null
+  }
+  const { x, y, width, height } = frame.getBoundingClientRect()
+  return width > 0 && height > 0 ? { x, y, width, height } : null
+}
+
+const loaded = (status: PluginEditorCaptureStatus): boolean =>
+  status.frame === 'ready' && status.delivered
+
+/** Waits for the open file's editor frame to get its document and ask for it, then measures it. */
+export async function captureOpenEditor(
+  requestId: string,
+  fileId: string,
+  capture: PluginViewEditorCapture
+): Promise<PluginViewReply> {
+  const wantDark = capture.colorScheme === undefined ? null : capture.colorScheme === 'dark'
+  const size =
+    capture.width !== undefined || capture.height !== undefined
+      ? { width: capture.width ?? 0, height: capture.height ?? 0 }
+      : null
+  usePluginViewCaptureStore.getState().begin({
+    panelWidth: null,
+    dark: wantDark,
+    editorFileId: fileId,
+    // A missing side keeps the editor's own size along it.
+    editorSize: size && {
+      width: size.width || (measureEditorFrame(fileId)?.width ?? 800),
+      height: size.height || (measureEditorFrame(fileId)?.height ?? 600)
+    }
+  })
+  const loadNumber = usePluginViewCaptureStore.getState().editorLoads[fileId] ?? 0
+  const load = await waitForPluginEditor(
+    fileId,
+    (status) =>
+      status.frame === 'error' ||
+      status.frame === 'unresponsive' ||
+      (status.frameKey?.endsWith(`:${loadNumber}`) === true && loaded(status)),
+    capture.timeoutMs
+  )
+  const frame = load.status?.frame
+  if (frame === 'error' || frame === 'unresponsive') {
+    return {
+      requestId,
+      ok: false,
+      code: 'editor_failed',
+      message:
+        frame === 'error'
+          ? 'The editor could not be loaded.'
+          : 'The editor stopped responding to Orca.'
+    }
+  }
+  const subscription = load.met
+    ? await waitForPluginEditor(
+        fileId,
+        (status) => status.subscribed,
+        PLUGIN_EDITOR_SUBSCRIBE_TIMEOUT_MS
+      )
+    : { met: false }
+  await waitForColorScheme(wantDark)
+  await nextPaintedFrames()
+  const rect = measureEditorFrame(fileId)
+  if (!rect) {
+    return { requestId, ok: false, code: 'editor_hidden', message: 'The editor is not on screen.' }
+  }
+  const dark = document.documentElement.classList.contains('dark')
+  const guestUrl = load.status?.guestUrl ?? null
+  return {
+    requestId,
+    ok: true,
+    panel: {
+      rect,
+      ui: 'html',
+      guestUrl,
+      ...(guestUrl ? { guestRect: rect } : {}),
+      issue: !load.met
+        ? 'The editor did not load its document in time.'
+        : subscription.met
+          ? null
+          : `The editor never asked for its document (orca.document.get or onDidChange) within ${PLUGIN_EDITOR_SUBSCRIBE_TIMEOUT_MS / 1000}s.`,
+      colorScheme: dark ? 'dark' : 'light',
+      themeApplied: wantDark !== null && dark === wantDark,
+      settled: load.met,
+      subscribed: subscription.met
+    }
+  }
+}

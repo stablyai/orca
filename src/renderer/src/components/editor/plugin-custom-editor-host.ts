@@ -86,6 +86,7 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
 
   const postDocument = (document: CustomEditorDocument, transfer: Transferable[] = []): void => {
     post(pluginEvent(FRAME_EVENTS.editorDocument, document), transfer)
+    options.onFrameProgress?.('delivered')
   }
 
   const pushBinaryDocument = (force: boolean, binary: CustomEditorBinaryDocument | null): void => {
@@ -245,6 +246,10 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
         pushDocument(true)
       },
       onEvent(event, context) {
+        if (event.event === FRAME_EVENTS.editorSubscribed) {
+          options.onFrameProgress?.('subscribed')
+          return
+        }
         const chord =
           event.event === FRAME_EVENTS.editorKeydown
             ? readCustomEditorKeyChord(event.payload)

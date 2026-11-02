@@ -255,28 +255,65 @@ describe('open-panel with ifShown', () => {
   })
 })
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: open-editor reads only these store members, so partial rows stand in for whole workspaces.
+const setStore = (patch: Record<string, unknown>) => useAppStore.setState(patch as never)
+
 describe('open-editor', () => {
-  it('opens the file in the active workspace with the plugin editor chosen', async () => {
+  it('opens the file in the workspace that holds its real path, with the plugin editor chosen', async () => {
     const openFile = vi.fn().mockReturnValue('file-1')
-    useAppStore.setState({ openFile })
+    setStore({
+      openFile,
+      worktreesByRepo: { r1: [{ id: 'wt-1', path: '/private/tmp/w', isArchived: false }] }
+    })
     await expect(
       handlePluginViewRequest({
         requestId: 'r',
         kind: 'open-editor',
         pluginKey: KEY,
         editorId: 'notes',
-        filePath: '/elsewhere/plan.notes'
+        filePath: '/tmp/w/plan.notes',
+        filePathAliases: ['/private/tmp/w/plan.notes'],
+        fallbackFolder: '/private/tmp/w'
       })
     ).resolves.toEqual({ requestId: 'r', ok: true })
     expect(openFile).toHaveBeenCalledWith(
       expect.objectContaining({
-        filePath: '/elsewhere/plan.notes',
-        relativePath: '/elsewhere/plan.notes',
+        filePath: '/private/tmp/w/plan.notes',
+        relativePath: 'plan.notes',
         worktreeId: 'wt-1',
         mode: 'edit'
       }),
       { preview: false }
     )
     expect(useCustomEditorViewStore.getState().choices['file-1']).toBe(`${KEY}/notes`)
+  })
+
+  it("opens the file's folder as a folder workspace when no workspace holds it", async () => {
+    const openFile = vi.fn().mockReturnValue('file-2')
+    const addRepoPath = vi.fn(async () => {
+      setStore({
+        worktreesByRepo: { folder: [{ id: 'wt-folder', path: '/elsewhere', isArchived: false }] }
+      })
+      return { id: 'folder' }
+    })
+    setStore({
+      openFile,
+      addRepoPath,
+      fetchWorktrees: vi.fn(async () => undefined),
+      worktreesByRepo: {}
+    })
+    await handlePluginViewRequest({
+      requestId: 'r',
+      kind: 'open-editor',
+      pluginKey: KEY,
+      editorId: 'notes',
+      filePath: '/elsewhere/plan.notes',
+      fallbackFolder: '/elsewhere'
+    })
+    expect(addRepoPath).toHaveBeenCalledWith('/elsewhere', 'folder', { runtimeEnvironmentId: null })
+    expect(openFile).toHaveBeenCalledWith(
+      expect.objectContaining({ relativePath: 'plan.notes', worktreeId: 'wt-folder' }),
+      { preview: false }
+    )
   })
 })

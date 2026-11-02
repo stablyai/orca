@@ -26,9 +26,28 @@ export type PluginViewCapture = {
   timeoutMs: number
 }
 
+/** `shot --editor`: what to change for the capture, and how long to wait for the editor. */
+export type PluginViewEditorCapture = {
+  colorScheme?: PluginViewColorScheme
+  /** The editor's size in CSS pixels for this capture only. */
+  width?: number
+  height?: number
+  timeoutMs: number
+}
+
 export type PluginViewRequestBody =
   | { kind: 'open-panel'; pluginKey: string; panelId: string; capture?: PluginViewCapture }
-  | { kind: 'open-editor'; pluginKey: string; editorId: string; filePath: string }
+  | {
+      kind: 'open-editor'
+      pluginKey: string
+      editorId: string
+      filePath: string
+      /** Other spellings of `filePath` on the host (its real path), to find a workspace showing it. */
+      filePathAliases?: string[]
+      /** Opened as a folder workspace when no workspace shows the file. */
+      fallbackFolder: string
+      capture?: PluginViewEditorCapture
+    }
   /** `shot --scenario`: draws a validated tree in a detached preview; no plugin panel or guest. */
   | { kind: 'replay-panel'; replay: PluginViewReplay }
   /** Puts back the width and theme a capture changed. */
@@ -61,6 +80,8 @@ export type PluginViewDrawnPanel = {
   pendingRequests?: number
   /** One result per requested act. */
   actions?: PluginShotActResult[]
+  /** An editor capture: the frame asked for its document (`orca.document.get` or `onDidChange`). */
+  subscribed?: boolean
 }
 
 export type PluginViewReply =
@@ -70,6 +91,9 @@ export type PluginViewReply =
 
 /** The renderer could not show the view; `code` is a stable reason callers may branch on. */
 export const PLUGIN_VIEW_NO_WORKSPACE_CODE = 'no_workspace'
+
+/** How long an editor frame has, once loaded, to ask for its document before a shot fails. */
+export const PLUGIN_EDITOR_SUBSCRIBE_TIMEOUT_MS = 5_000
 
 /** An `ifShown` capture found another tab, a closed sidebar or another view on screen. */
 export const PLUGIN_VIEW_NOT_SHOWN_CODE = 'not_shown'

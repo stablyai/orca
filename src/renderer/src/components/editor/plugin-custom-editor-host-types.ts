@@ -28,6 +28,8 @@ export type CustomEditorHostOptions = {
   onUnappliedEdit?: (state: CustomEditorUnappliedEdit) => void
   /** `context.userActivation`: the chord rode real input in the frame. */
   onKeyChord?: (chord: CustomEditorKeyChord, context: PluginFrameMessageContext) => void
+  /** The frame got a document, or asked for one; `orca plugin shot --editor` waits on both. */
+  onFrameProgress?: (step: 'delivered' | 'subscribed') => void
   /** The edit lane; every other message spends the frame's shared budget. */
   budget?: PanelMessageBudget
   now?: () => number
