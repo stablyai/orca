@@ -338,6 +338,48 @@ it('captures projected identity once for real typed-goal dispatch and Goal mode'
   expect(setObjective).toHaveBeenLastCalledWith(expected)
 })
 
+it('keeps routing notes in Goal mode on a host without goals, where /goal goes out as a message', async () => {
+  const pane = editor('native-goal', 'Inspect ')
+  act(() => {
+    pane.input.setSelectionRange(pane.input.value.length, pane.input.value.length)
+    pane.input.insertAgentReferences!([first])
+  })
+  const snapshot = readNativeChatComposerDraft('native-goal')
+  const sendStructured = vi.fn(async () => true)
+  const mode = renderHook(() =>
+    useNativeChatComposerSubmit({
+      structuredTransport: transport(),
+      draftScopeKey: 'native-goal',
+      draft: snapshot.text,
+      caret: 0,
+      imageAttachments: [],
+      disabled: false,
+      sendPty: vi.fn(),
+      sendStructured,
+      setDraft: vi.fn(),
+      setCaret: vi.fn()
+    })
+  )
+  act(() =>
+    mode.result.current.goalMode.interceptPick(vi.fn())({
+      kind: 'command',
+      id: 'goal',
+      name: 'goal',
+      token: '/goal',
+      builtin: true,
+      skillCollision: false
+    })
+  )
+  await act(async () => mode.result.current.send())
+  const objective = serializeNativeChatAgentReferences(
+    snapshot.text,
+    snapshot.document,
+    snapshot.pastedTextFiles
+  ).trim()
+  expect(objective).toContain('message it with orca orchestration send --to')
+  expect(sendStructured).toHaveBeenCalledExactlyOnceWith(`/goal ${objective}`, [], undefined)
+})
+
 it('applies structured UTF-8 admission to the expanded final body before any send slot is taken', async () => {
   const pane = editor('size', '')
   act(() => pane.input.insertAgentReferences!([{ ...first, label: 'é'.repeat(70000) }]))

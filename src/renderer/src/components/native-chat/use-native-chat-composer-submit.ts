@@ -1,4 +1,5 @@
 import { serializeNativeChatAgentReferences } from './native-chat-agent-reference-send'
+import { mayHoldAgentReferences } from '../../../../shared/orchestration-agent-reference'
 import { useCallback, useMemo, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import { applyPickerSuggestion } from '../../../../shared/native-chat/input/native-chat-picker-triggers'
@@ -90,13 +91,14 @@ export function useNativeChatComposerSubmit(args: {
   const setGoal = useCallback(
     (intent?: NativeChatComposerSendIntent) => {
       const submitted = readNativeChatComposerDraft(draftScopeKey)
+      // A host goal is one line; a provider /goal is sent as a message, so its notes keep their own lines.
       const objective = structuredAgentSessionGoalObjective(
-        threadGoal
+        threadGoal || mayHoldAgentReferences(draft)
           ? serializeNativeChatAgentReferences(
               draft,
               submitted.document,
               submitted.pastedTextFiles,
-              'goal'
+              threadGoal ? 'goal' : 'message'
             )
           : draft
       )
