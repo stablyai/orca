@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, type Mock } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import HostedReviewActions from './HostedReviewActions'
@@ -8,11 +8,17 @@ import type { HostedReviewActionInfo } from './use-hosted-review-actions'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import { gitHubPRToChecksPanelReview } from './checks-panel-review'
 
-const actionMocks = vi.hoisted(() => ({
-  actionError: null as string | null,
-  handleMarkReadyForReview: vi.fn(),
-  handleCloseReview: vi.fn()
-}))
+const actionMocks = vi.hoisted(
+  (): {
+    actionError: string | null
+    handleMarkReadyForReview: Mock
+    handleCloseReview: Mock
+  } => ({
+    actionError: null,
+    handleMarkReadyForReview: vi.fn(),
+    handleCloseReview: vi.fn()
+  })
+)
 
 vi.mock('@/store', () => ({ useAppStore: () => false }))
 vi.mock('./use-hosted-review-actions', () => ({

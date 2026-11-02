@@ -6,6 +6,19 @@ const toastMocks = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }))
 
 vi.mock('sonner', () => ({ toast: toastMocks }))
 
+const item: GitHubWorkItem = {
+  id: 'pr:7',
+  type: 'pr',
+  number: 7,
+  repoId: 'repo-1',
+  title: 'PR 7',
+  state: 'open',
+  url: 'https://github.com/acme/widgets/pull/7',
+  labels: [],
+  updatedAt: '2026-11-01T00:00:00Z',
+  author: null
+}
+
 describe('GitHub dialog reviewer actions', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -26,7 +39,7 @@ describe('GitHub dialog reviewer actions', () => {
       localReviewRequests: [],
       ownerTarget: { kind: 'local' },
       repoPath: '/repo',
-      item: { id: 'pr:7', type: 'pr', number: 7, repoId: 'repo-1' } as GitHubWorkItem,
+      item,
       reviewRepo: null,
       reviewerPanelMountedRef: { current: true },
       reviewerCandidates: [],

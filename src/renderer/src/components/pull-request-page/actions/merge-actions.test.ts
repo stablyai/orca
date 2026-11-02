@@ -16,13 +16,18 @@ vi.mock('@/components/github/github-work-item-edit-mutations', () => ({
   runPullRequestStateUpdate: mocks.runPullRequestStateUpdate
 }))
 
-const item = {
+const item: GitHubWorkItem = {
   id: 'pr:7',
   type: 'pr',
   number: 7,
   repoId: 'repo-1',
-  state: 'open'
-} as GitHubWorkItem
+  title: 'PR 7',
+  state: 'open',
+  url: 'https://github.com/acme/widgets/pull/7',
+  labels: [],
+  updatedAt: '2026-11-01T00:00:00Z',
+  author: null
+}
 
 function recordEvents(): {
   events: string[]

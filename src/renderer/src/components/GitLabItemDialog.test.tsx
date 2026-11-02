@@ -34,8 +34,8 @@ function detailsFor(item: GitLabWorkItem, reviewer: string): GitLabWorkItemDetai
     item,
     body: '',
     comments: [],
-    reviewers: [{ id: 1, username: reviewer, name: reviewer, avatarUrl: null }]
-  } as unknown as GitLabWorkItemDetails
+    reviewers: [{ id: 1, username: reviewer, name: reviewer, avatarUrl: '' }]
+  }
 }
 
 function renderDialog(item: GitLabWorkItem) {
@@ -87,13 +87,13 @@ describe('GitLabItemDialog reconciliation', () => {
   })
 
   it('drops the previous source details when only the task source changes', async () => {
-    const source = {
+    const source: TaskSourceContext = {
       kind: 'task-source',
       provider: 'gitlab',
       projectId: 'p',
       hostId: 'runtime:server',
       repoId: 'a'
-    } as unknown as TaskSourceContext
+    }
     api.workItemDetails.mockResolvedValueOnce(detailsFor(mr(7, 'merged'), 'alice'))
     const view = render(
       <GitLabItemDialog

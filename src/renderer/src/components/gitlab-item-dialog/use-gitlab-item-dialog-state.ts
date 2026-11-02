@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { GitLabAssignableUser, GitLabWorkItemDetails } from '../../../../shared/gitlab-types'
 import type { JobTraceState } from '../gitlab-item-dialog-parts'
@@ -11,8 +11,11 @@ export function useGitLabItemDialogState(itemId: string | null, detailsOwner: st
     setShownOwner(detailsOwner)
     setDetails(null)
   }
+  // The committed owner: a render React discards must not let a late result claim a target never shown.
   const detailsOwnerRef = useRef(detailsOwner)
-  detailsOwnerRef.current = detailsOwner
+  useLayoutEffect(() => {
+    detailsOwnerRef.current = detailsOwner
+  })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [refreshNonce, setRefreshNonce] = useState(0)

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ConnectionState } from '../transport/types'
 import type { GitHubPRFileViewedState, PRInfo } from '../../../src/shared/github/pull-request-types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -64,9 +64,11 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
   // Detached HEAD still needs repo eligibility; branching the probe would strand its spinner.
   const probeReady = client !== null && connState === 'connected'
   const identity = buildMobilePrSidebarIdentity({ worktreeId, branch })
-  // Live identity, so a load closure captured for an earlier branch cannot claim the current one.
+  // Committed identity, so a load closure captured for an earlier branch cannot claim the current one.
   const identityRef = useRef(identity)
-  identityRef.current = identity
+  useLayoutEffect(() => {
+    identityRef.current = identity
+  })
 
   const buildDeps = useCallback(() => (client ? buildPrSidebarLoadDeps(client) : null), [client])
 

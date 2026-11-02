@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { githubRepoIdentityKey } from '../../../src/shared/github/repository-identity-key'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -62,7 +62,9 @@ export function useMobilePrTextAction(input: PrTextActionInput) {
   // A write that settles after the view moved to another PR must not show its error there or reread for it.
   const identity = `${prNumber}:${prRepo ? githubRepoIdentityKey(prRepo) : ''}`
   const identityRef = useRef(identity)
-  identityRef.current = identity
+  useLayoutEffect(() => {
+    identityRef.current = identity
+  })
 
   const mutations = useMemo(
     () => input.mutations ?? (client ? realMutations(client, worktreeId) : null),

@@ -17,10 +17,24 @@ vi.mock('@/runtime/gitlab-owner-api', () => ({
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, success: vi.fn() } }))
 
+const item: GitLabWorkItem = {
+  id: 'mr:7',
+  type: 'mr',
+  number: 7,
+  title: 'MR 7',
+  state: 'opened',
+  url: 'https://gitlab.example.test/g/p/-/merge_requests/7',
+  labels: [],
+  updatedAt: '2026-11-01T00:00:00Z',
+  author: null,
+  repoId: 'repo-1'
+}
+
 describe('useGitLabPrimaryActions', () => {
   it('rereads after a returned merge failure and keeps the error toast', async () => {
     mocks.mergeMR.mockResolvedValue({ ok: false, error: 'Connection lost' })
     const events: string[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: handleMerge reads only these dialog-state fields; the rest of the dialog state is unused here.
     const state = {
       commentDraft: '',
       mountedRef: { current: true },
@@ -29,12 +43,8 @@ describe('useGitLabPrimaryActions', () => {
       setCommentSubmitting: vi.fn()
     } as unknown as GitLabItemDialogState
     const { result } = renderHook(() =>
-      useGitLabPrimaryActions(
-        { id: 'mr:7', type: 'mr', number: 7 } as GitLabWorkItem,
-        'mr:7',
-        { repoPath: '/repo' },
-        state,
-        () => events.push('reread')
+      useGitLabPrimaryActions(item, 'mr:7', { repoPath: '/repo' }, state, () =>
+        events.push('reread')
       )
     )
 

@@ -114,11 +114,32 @@ describe('useMobilePrSidebarController repo probe', () => {
 
 describe('useMobilePrSidebarController write reconciliation', () => {
   const client = { sendRequest: vi.fn() } as unknown as RpcClient
-  const pr = (number: number, extra: Partial<PRInfo> = {}) =>
-    ({ number, title: 'Feat', state: 'open', ...extra }) as unknown as PRInfo
-  const details = (body: string) =>
-    ({ item: { number: 7 }, body, comments: [] }) as unknown as GitHubWorkItemDetails
-  const CHECK = { name: 'ci', status: 'completed' } as unknown as PRCheckDetail
+  const pr = (number: number, extra: Partial<PRInfo> = {}): PRInfo => ({
+    number,
+    title: 'Feat',
+    state: 'open',
+    url: `https://github.com/acme/widgets/pull/${number}`,
+    checksStatus: 'success',
+    updatedAt: '2026-11-01T00:00:00Z',
+    mergeable: 'MERGEABLE',
+    ...extra
+  })
+  const details = (body: string): GitHubWorkItemDetails => ({
+    item: {
+      id: 'pr:7',
+      type: 'pr',
+      number: 7,
+      title: 'Feat',
+      state: 'open',
+      url: 'https://github.com/acme/widgets/pull/7',
+      labels: [],
+      updatedAt: '2026-11-01T00:00:00Z',
+      author: null
+    },
+    body,
+    comments: []
+  })
+  const CHECK: PRCheckDetail = { name: 'ci', status: 'completed', conclusion: 'success', url: null }
   let renderer: ReactTestRenderer | null = null
   let sidebar: {
     controller: MobilePrSidebarController
