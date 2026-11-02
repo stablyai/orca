@@ -17,7 +17,7 @@ const git = vi.hoisted(
   (): {
     checkout: ReturnType<typeof vi.fn>
     version: string
-    publisher: string
+    publisher: string | undefined
     id: string
     commit: string
     payload: string
@@ -319,12 +319,39 @@ describe('PluginMarketplaceInstaller', () => {
     ])
   })
 
-  it('rejects a source whose manifest identity differs from its listing', async () => {
-    const { installer, sourceId } = await setup()
+  it('installs under the listing publisher, ignoring the manifest publisher', async () => {
+    const { installer, sourceId, root } = await setup()
     git.publisher = 'attacker'
 
+    const preview = await installer.preview(sourceId, 'community.notes')
+    expect(preview.manifest.publisher).toBe('community')
+    await expect(installer.install(preview)).resolves.toMatchObject({
+      ok: true,
+      pluginKey: 'community.notes'
+    })
+    expect(Object.keys((await readPluginLockfile(join(root, 'plugins'))).plugins)).toEqual([
+      'community.notes'
+    ])
+  })
+
+  it('installs a format 2 manifest that leaves the publisher out', async () => {
+    git.v2 = true
+    git.publisher = undefined
+    const { installer, sourceId } = await setup()
+
+    const preview = await installer.preview(sourceId, 'community.notes')
+    await expect(installer.install(preview)).resolves.toMatchObject({
+      ok: true,
+      pluginKey: 'community.notes'
+    })
+  })
+
+  it('rejects a source whose manifest id differs from its listing', async () => {
+    const { installer, sourceId } = await setup()
+    git.id = 'other'
+
     await expect(installer.preview(sourceId, 'community.notes')).rejects.toThrow(
-      'attacker.notes does not match marketplace listing community.notes'
+      'plugin manifest id other does not match marketplace listing community.notes'
     )
   })
 

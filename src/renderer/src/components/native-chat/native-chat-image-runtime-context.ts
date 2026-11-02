@@ -16,6 +16,7 @@ import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectat
 import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { resolveNativeChatTabDirectory } from './native-chat-tab-directory'
+import { resolveOwner } from '@/lib/resolve-owner'
 import { useMemo } from 'react'
 import { shallow } from 'zustand/shallow'
 import {
@@ -149,7 +150,19 @@ export function resolveNativeChatImageRuntimeContextForOwner(
   if (!worktreePath) {
     return null
   }
-  const host = parseExecutionHostId(executionHostId)
+  const match = resolveOwner(
+    { ...state, activeWorktreeId: null, activeWorkspaceExecutionHostId: null },
+    { workspaceId: linkContext.worktreeId, hostId: executionHostId }
+  )
+  const authority = match.kind === 'resolved' ? match.owner : undefined
+  if (
+    authority &&
+    (authority.endpoint.kind === 'environment' ? authority.endpoint.environmentId : null) !==
+      route.runtimeEnvironmentId
+  ) {
+    return null
+  }
+  const host = parseExecutionHostId(authority?.at ?? executionHostId)
   // Why: an `ssh:` host is served only through its paired server; without one there is no route.
   if (!host || (host.kind === 'ssh' && !route.runtimeEnvironmentId)) {
     return null

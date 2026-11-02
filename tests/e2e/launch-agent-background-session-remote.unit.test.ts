@@ -1,10 +1,11 @@
+import { projectAgentLaunchSettings } from '../../src/shared/agent-launch-settings'
 import {
   independentActionEffortPlan,
   consumePreparedBackgroundCommand
 } from './prepared-action-launch.test-fixture'
 import { createRuntimeAgentBackgroundTerminal } from '../../src/renderer/src/lib/runtime-agent-background-create'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
-import { AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY } from '../../src/shared/protocol-version'
+import { AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_BACKGROUND_SESSION_UUID_RE as UUID_RE,
@@ -102,6 +103,78 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
     })
   })
 
+  it('prepares capability before compiling a cold desktop effort fallback and settles one background launch', async () => {
+    vi.useFakeTimers()
+    try {
+      useRemoteAgentBackgroundRuntime(state)
+      Object.assign(state.settings, {
+        agentLaunchChoices: { claude: { options: { effort: 'low' } } },
+        agentDefaultArgs: { claude: '--verbose' },
+        agentDefaultEnv: { claude: { KEEP: 'caller' } }
+      })
+      const status = Promise.withResolvers<unknown>()
+      mockRuntimeEnvironmentTransportCall.mockImplementation((request) =>
+        request.method === 'status.get' ? status.promise : mockRuntimeEnvironmentCall(request)
+      )
+      const settings = Promise.withResolvers<void>()
+      mockRuntimeEnvironmentSubscribe.mockImplementation(async (request, callbacks) => {
+        const answer = () =>
+          callbacks.onResponse({
+            ok: true,
+            result:
+              request.method === 'settings.getAgentLaunch'
+                ? {
+                    settings: projectAgentLaunchSettings({
+                      agentLaunchChoices: { claude: { model: 'opus', options: { effort: 'high' } } }
+                    })
+                  }
+                : { type: 'ready' }
+          })
+        if (request.method === 'settings.getAgentLaunch') {
+          void settings.promise.then(answer)
+        } else {
+          queueMicrotask(answer)
+        }
+        return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+      })
+      const { launchAgentBackgroundSession } =
+        await import('../../src/renderer/src/lib/launch-agent-background-session')
+      const attempt = launchAgentBackgroundSession({ agent: 'claude', worktreeId: 'wt-1' })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(mockRegisterAgentLaunchConfig).not.toHaveBeenCalled()
+      const request = mockRuntimeEnvironmentTransportCall.mock.calls[0][0]
+      status.resolve(createCompatibleRuntimeStatusResponseIfNeeded(request))
+      await vi.advanceTimersByTimeAsync(3_000)
+      const result = await attempt
+      expect(result?.startupPlan.launchCommand).toContain("'--verbose'")
+      expect(result?.startupPlan.launchCommand).not.toContain("'low'")
+      expect(result?.startupPlan.sessionOptions?.effort).toBeUndefined()
+      expect(
+        mockRuntimeEnvironmentCall.mock.calls.filter(
+          ([request]) => request.method === 'terminal.createAgentSession'
+        )
+      ).toHaveLength(1)
+      expect(
+        mockRuntimeEnvironmentCall.mock.calls.filter(
+          ([request]) => request.method === 'terminal.create'
+        )
+      ).toHaveLength(0)
+      expect(
+        mockRuntimeEnvironmentTransportCall.mock.calls.filter(
+          ([request]) => request.method === 'status.get'
+        )
+      ).toHaveLength(1)
+      expect(result?.ptyId).toBe('remote:env-1@@terminal-1')
+      expect(mockCreateTab).toHaveBeenCalledTimes(1)
+      settings.resolve()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(mockCreateTab).toHaveBeenCalledTimes(1)
+      result?.releaseRuntimeObservers?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it.each(['claude', 'codex'] as const)(
     'delivers independent %s effort through the real prepared background callback',
     async (agent) => {
@@ -157,6 +230,8 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
         tabId: 'reserved-tab',
         leafId: 'reserved-leaf',
         launchToken: 'reserved-token',
+        // A paired window's create can't be told from its pane remounts, so it never stamps Recent.
+        reopensPane: true,
         preAllocatedHandle: 'reserved-handle'
       })
       expect(mockSpawn).not.toHaveBeenCalled()
@@ -220,7 +295,11 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
     )
     expect(mockCreateTab).not.toHaveBeenCalled()
     expect(mockUpdateTabPtyId).not.toHaveBeenCalled()
-    expect(mockRuntimeEnvironmentSubscribe).not.toHaveBeenCalled()
+    expect(
+      mockRuntimeEnvironmentSubscribe.mock.calls.filter(
+        ([request]) => request.method !== 'settings.getAgentLaunch'
+      )
+    ).toHaveLength(0)
     expect(mockDispatchEvent).not.toHaveBeenCalled()
   })
 
@@ -493,7 +572,13 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
   it('closes a created runtime terminal when its data subscription fails', async () => {
     useRemoteAgentBackgroundRuntime(state)
-    mockRuntimeEnvironmentSubscribe.mockRejectedValueOnce(new Error('subscription failed'))
+    const subscribe = mockRuntimeEnvironmentSubscribe.getMockImplementation()
+    mockRuntimeEnvironmentSubscribe.mockImplementation((request, callbacks) => {
+      if (request.method === 'terminal.multiplex') {
+        return Promise.reject(new Error('subscription failed'))
+      }
+      return subscribe?.(request, callbacks)
+    })
     const { launchAgentBackgroundSession } =
       await import('../../src/renderer/src/lib/launch-agent-background-session')
 

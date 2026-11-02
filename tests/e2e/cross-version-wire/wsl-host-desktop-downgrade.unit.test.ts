@@ -4,7 +4,7 @@
 // Remove the capability from the released list so rolling releases cannot erase the downgrade case.
 
 import { beforeAll, describe, expect, it } from 'vitest'
-import { AGENT_SESSION_ACCOUNT_ENV_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-create-capabilities'
+import { AGENT_SESSION_ACCOUNT_ENV_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-create-capabilities'
 import { RUNTIME_CAPABILITIES } from '../../../src/shared/protocol-version'
 import {
   readWslHostWindowsDriveRefusal,

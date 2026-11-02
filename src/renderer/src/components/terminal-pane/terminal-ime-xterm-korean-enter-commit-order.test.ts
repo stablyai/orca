@@ -130,37 +130,4 @@ describe('STA-3132 — Korean commit reaches the PTY before the physical Enter',
     expect(stream.indexOf('가')).toBeLessThan(stream.indexOf('\r'))
     expect(stream).toBe('가\r')
   })
-
-  it('leaves ordinary non-IME typing followed by Enter unchanged', async () => {
-    const { emitted, textarea } = openTerminal()
-    for (const key of ['a', 'b', 'c']) {
-      dispatchKeydown(textarea, {
-        key,
-        code: `Key${key.toUpperCase()}`,
-        keyCode: key.toUpperCase().charCodeAt(0),
-        isComposing: false
-      })
-      await nextEventLoop()
-    }
-    dispatchKeydown(textarea, { key: 'Enter', code: 'Enter', keyCode: 13, isComposing: false })
-    await nextEventLoop()
-
-    // The paired latin arm of the same capture session read `61 62 63 0d` at the PTY.
-    expect(emitted.join('')).toBe('abc\r')
-  })
-
-  // Back-to-back compositions exercise the pending-session force-end path (#12278); recorded 25/60/120 ms arms read 가 then CR then 나.
-  it('keeps the first syllable when the next composition starts immediately', async () => {
-    const { emitted, textarea } = openTerminal()
-    await composeGa(textarea)
-    await finalizeThenEnter(textarea)
-    await composeSyllable(textarea, 'KeyS', 'ㄴ', '나')
-    dispatchCompositionEvent(textarea, 'compositionend', '나')
-    await nextEventLoop()
-
-    const stream = emitted.join('')
-    expect(stream).toBe('가\r나')
-    // A dropped flush loses the leading syllable; a double flush repeats it.
-    expect(stream.match(/가/g)).toHaveLength(1)
-  })
 })

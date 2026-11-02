@@ -1,7 +1,7 @@
 import type {
   CatalogAgentInteractionDetection,
   CatalogCommandDelivery
-} from './agent-session-option-catalog'
+} from './agent-session/options/agent-session-option-catalog-types'
 
 export type ClaudeModelSwitchOutcome = 'applied' | 'rejected' | 'unknown'
 

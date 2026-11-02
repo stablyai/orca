@@ -1,21 +1,21 @@
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { structuredAgentTurnAnchors } from '../../../shared/native-chat-turn-membership'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { structuredAgentTurnAnchors } from '../../../shared/native-chat/transcript/native-chat-turn-membership'
 import {
   latestStructuredAgentSessionRequest,
   latestStructuredAgentSessionUserItem
-} from '../../../shared/structured-agent-session-latest-request'
+} from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
 import { codexTransientTurnError } from '../../codex/codex-transient-turn-error'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import { StructuredAgentSessionTransientRecovery } from './structured-agent-session-transient-recovery'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
-import { structuredAgentSessionMutationDelegates } from './structured-agent-session-host-mutations'
+import { structuredAgentSessionMutationDelegates } from './structured-agent-session-host-mutation-wiring'
 import type { StructuredConversationCommandController } from './structured-conversation-command-controller'
-import type { AgentSessionRewindParams } from '../../../shared/agent-session-rewind'
+import type { AgentSessionRewindParams } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
 import { rewindStructuredAgentSession } from './structured-agent-session-rewind'
 
 export const TRANSIENT_RECOVERY_CALLER = 'trusted-local:transient-error-continuation'
@@ -116,7 +116,7 @@ export function createTransientRecoveryMutationDelegates(
   attachContext: () => StructuredAgentSessionAttachContext,
   commands: StructuredConversationCommandController
 ) {
-  const mutations = structuredAgentSessionMutationDelegates(context)
+  const mutations = structuredAgentSessionMutationDelegates(context, attachContext)
   return {
     ...mutations,
     send: (...args: Parameters<StructuredConversationCommandController['send']>) => {

@@ -4,8 +4,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { CLAUDE_STRUCTURED_BASE_OPTIONS } from '../claude/claude-structured-launch-resolution'
-import { fakeClaude } from '../claude/claude-structured-session-test-support'
+import { CLAUDE_STRUCTURED_BASE_OPTIONS } from '../claude/structured/launch/claude-structured-launch-resolution'
+import { fakeClaude } from '../claude/structured/claude-structured-session-test-support'
 import {
   CLAUDE_THINKING_DISPLAY_FLAG,
   createClaudeCliFlagSupport

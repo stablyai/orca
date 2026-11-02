@@ -51,7 +51,6 @@ describe('temporary provider error recovery setting', () => {
         isMac: false,
         isWindows: false,
         isWebClient: false,
-        nativeChatEnabled: true,
         repos: []
       }).find((section) => section.id === 'chat')
       expect(chat?.searchEntries).toContainEqual(entry)

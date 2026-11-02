@@ -150,12 +150,16 @@ export default function ProjectPicker({
       setViewPickFor(selection)
       setViewLoading(true)
       try {
-        const result = await listProjectViewsForRuntime(sourceTarget, {
-          owner: choice.owner,
-          ownerType: choice.ownerType,
-          projectNumber: choice.number,
-          host: githubProjectHost(choice.host)
-        })
+        const result = await listProjectViewsForRuntime(
+          sourceTarget,
+          {
+            owner: choice.owner,
+            ownerType: choice.ownerType,
+            projectNumber: choice.number,
+            host: githubProjectHost(choice.host)
+          },
+          { wake: true }
+        )
         if (!mountedRef.current) {
           return
         }
@@ -213,7 +217,9 @@ export default function ProjectPicker({
     setPasteError(null)
     setPasteBusy(true)
     try {
-      const result = await resolveProjectRefForRuntime(sourceTarget, input, parsed.host)
+      const result = await resolveProjectRefForRuntime(sourceTarget, input, parsed.host, {
+        wake: true
+      })
       if (!mountedRef.current) {
         return
       }

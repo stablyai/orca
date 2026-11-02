@@ -83,8 +83,8 @@ function rejectProfileStateRemoteSelection(flags: ReadonlyMap<string, string | b
 }
 
 async function requireStoppedRuntime(client: RuntimeClient): Promise<void> {
-  const status = await client.getCliStatus()
-  if (status.result.runtime.reachable || status.result.app.running) {
+  const status = await client.getOfflineRuntimeAdmission()
+  if (status.reachable || status.legacyPidRunning) {
     throw new RuntimeClientError(
       'runtime_error',
       'Stop Orca before profile-state rollback so no process can write the SQLite database.'

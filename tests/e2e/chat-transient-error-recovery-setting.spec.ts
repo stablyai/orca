@@ -9,7 +9,6 @@ test('temporary error recovery can be found and enabled in Chat settings', async
   await waitForSessionReady(orcaPage)
   await orcaPage.evaluate(async () => {
     const settings = await window.api.settings.set({
-      experimentalNativeChat: true,
       nativeChatAutoContinueOnTransientError: false
     })
     window.__store!.setState({ settings })

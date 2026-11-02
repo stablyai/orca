@@ -2,9 +2,9 @@ import {
   agentSessionFailureFact,
   providerDiagnostic,
   withProviderDiagnostic
-} from '../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
-import { ClaudeDispatchContentError } from '../claude/claude-structured-dispatch-content'
+} from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
+import { ClaudeDispatchContentError } from '../claude/structured/claude-structured-dispatch-content'
 import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
 import type {
   AgentSessionDispatchOutcome,

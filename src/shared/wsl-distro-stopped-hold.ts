@@ -46,3 +46,37 @@ export function wslDistroHoldRpcFailure(message: string): {
   const hold = parseWslDistroHold(message)
   return hold ? { message: wslDistroHoldUserMessage(hold), data: { wslDistroHold: hold } } : null
 }
+
+/** Text with any hold code inside made readable: hosts that build warnings from errors keep the cause. */
+export function readableWslDistroHoldText(text: string): string {
+  const found = findWslDistroHoldInText(text)
+  return found?.form === 'code'
+    ? text.split(found.matched).join(wslDistroHoldUserMessage(found.hold))
+    : text
+}
+
+/**
+ * A hold named in text, as its code or its readable sentence (which RPC failures and warnings
+ * carry), with the exact substring, so a client can swap in its own language.
+ */
+export function findWslDistroHoldInText(text: string): {
+  hold: { distro: string; state: WslDistroHoldState }
+  matched: string
+  form: 'code' | 'sentence'
+} | null {
+  const hold = parseWslDistroHold(text)
+  if (hold) {
+    return { hold, matched: wslDistroHoldMessage(hold.distro, hold.state), form: 'code' }
+  }
+  for (const state of ['stopped', 'unverifiable'] as const) {
+    // The sentence is built here, so its fixed parts locate the distro between them.
+    const [before, after] = wslDistroHoldUserMessage({ distro: '\0', state }).split('\0')
+    const start = text.indexOf(before)
+    const end = start === -1 ? -1 : text.indexOf(after, start + before.length)
+    const distro = end === -1 ? '' : text.slice(start + before.length, end)
+    if (distro && !/\s/.test(distro)) {
+      return { hold: { distro, state }, matched: `${before}${distro}${after}`, form: 'sentence' }
+    }
+  }
+  return null
+}

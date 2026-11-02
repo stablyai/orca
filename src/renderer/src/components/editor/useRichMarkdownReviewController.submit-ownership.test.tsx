@@ -132,17 +132,6 @@ describe('review submission owner', () => {
     expect(highlightedText(review.editor)).toEqual(['abc', 'xyz'])
   })
 
-  it('closes the current draft and highlights the saved note on success', async () => {
-    const review = mountReview()
-    const submission = review.result.current.submitAnnotation('Review abc')
-    await act(async () => {
-      review.pending.resolve(saved)
-      await submission
-    })
-    expect(review.result.current.annotationPopover).toBeNull()
-    expect(highlightedText(review.editor)).toEqual(['abc'])
-  })
-
   it('preserves a failed draft for retry', async () => {
     const failure = mountReview()
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})

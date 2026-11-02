@@ -1,5 +1,8 @@
 import { settleCodexRequestEndWaiters } from './codex-request-end-wait'
-import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
+import {
+  agentSessionFailureFact,
+  providerDiagnosticOf
+} from '../../shared/agent-session/failures/agent-session-failure'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { closeProcessRegistry } from '@orca/process-host/close-process-registry'
 import {
@@ -35,7 +38,8 @@ export function handleCodexSessionExit(input: {
     sessionId: input.sessionId,
     // Preserve the initiating close reason when its exit arrives.
     reason: ((input.closedByOrca && session.orcaClose?.reason) || input.error).message,
-    // Orca-initiated closes are host faults, regardless of the exit report.
+    // Orca-initiated closes are host faults, regardless of the exit report. No spawn ENOENT reaches
+    // here: a session registers only after the CLI answered thread/start, so the acquire path owns it.
     failure: input.closedByOrca
       ? agentSessionFailureFact('hostFault')
       : agentSessionFailureFact('providerExited', { detail: providerDiagnosticOf(input.error) }),

@@ -1,4 +1,4 @@
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   agentSessionProviderHandleChainHead,
   agentSessionProviderHandlesEqual,
@@ -6,12 +6,12 @@ import {
   isAgentSessionProviderHandleChain,
   type AgentSessionProviderHandle,
   type AgentSessionProviderHandleLink
-} from '../../../../shared/agent-session-provider-handle'
+} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   agentSessionProviderHandleBelongsTo,
   agentSessionProviderHandleRoot
-} from '../../../../shared/agent-session-provider-handle-encoding'
-import type { AgentSessionRecord } from '../../../../shared/agent-session-record'
+} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 
 export function recordAgentSessionProviderHandle(args: {
   record: AgentSessionRecord

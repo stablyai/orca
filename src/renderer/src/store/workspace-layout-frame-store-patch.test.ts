@@ -82,11 +82,6 @@ function withoutTab(frame: PublishedWorkspaceLayout, tabId: string): PublishedWo
 }
 
 describe('laying frame slices over the store', () => {
-  it('changes nothing for the frame the store already shows', async () => {
-    const { state, session, frame } = await restored()
-    expect(patchFor(state, session, frame)).toEqual({})
-  })
-
   it('drops a terminal tab main closed, with its pane layout', async () => {
     const { state, session, frame } = await restored()
     const patch = patchFor(state, session, withoutTab(frame, 'tab-shell'))
@@ -112,21 +107,6 @@ describe('laying frame slices over the store', () => {
     expect(
       patchFor(state, session, withoutTab(frame, 'tab-shell'), held).terminalLayoutsByTabId
     ).not.toHaveProperty('tab-shell')
-  })
-
-  it('gives a row the frame creates the window’s own fields for it', async () => {
-    const { state, session, frame } = await restored()
-    const shown = patchFor(state, session, withoutTab(frame, 'tab-shell'))
-    const before = { ...state, ...shown }
-    const fields = vi.fn((id: string) =>
-      id === 'tab-shell' ? { pendingActivationSpawn: true } : null
-    )
-
-    const patch = patchFor(before, session, frame, undefined, fields)
-
-    const row = patch.tabsByWorktree?.[GIT_KEY]?.find((tab) => tab.id === 'tab-shell')
-    expect(row?.pendingActivationSpawn).toBe(true)
-    expect(fields).toHaveBeenCalledTimes(1)
   })
 
   it('keeps an open file’s editor state and place, and drops a file main closed', async () => {

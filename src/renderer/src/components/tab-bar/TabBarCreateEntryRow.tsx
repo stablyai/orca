@@ -18,6 +18,8 @@ import { SEARCH_ENGINE_LABELS } from '../../../../shared/browser-url'
 import { formatBrowserHistoryUrl } from '@/lib/browser-history-match'
 import type { ActiveOption } from './tab-create-entry-active-option'
 import { BrowserFavicon } from '@/components/browser-favicon'
+import { AgentLaunchSetupButton } from '../agent/AgentLaunchSetupButton'
+import type { AgentPickerDraft } from '../../../../shared/agent-launch-picker'
 
 export const RESULT_LISTBOX_ID = 'tab-create-entry-results'
 
@@ -47,6 +49,7 @@ export function EntryActionRow({
   labelOverride,
   loading = false,
   onClick,
+  onUseAgent,
   option,
   selected
 }: {
@@ -54,6 +57,7 @@ export function EntryActionRow({
   id: string
   labelOverride?: string
   loading?: boolean
+  onUseAgent?: (draft: AgentPickerDraft) => void
   onClick: () => void
   option: ActiveOption
   selected: boolean
@@ -61,43 +65,54 @@ export function EntryActionRow({
   const presentation = getActionPresentation(option, labelOverride)
 
   const row = (
-    <button
-      type="button"
-      id={id}
-      role="option"
-      aria-selected={selected}
-      disabled={disabled}
-      className={cn(
-        'flex h-6 w-full items-center gap-1.5 rounded-[7px] px-1 text-left text-[11px] leading-5 outline-none disabled:cursor-not-allowed disabled:opacity-50',
-        selected
-          ? 'bg-black/8 text-accent-foreground dark:bg-white/14'
-          : // Why: CSS :hover still matches a disabled button, so a pending row would
-            // light up under the pointer despite being unactivatable.
-            'text-muted-foreground hover:bg-black/8 hover:text-accent-foreground disabled:hover:bg-transparent disabled:hover:text-muted-foreground dark:hover:bg-white/14 dark:disabled:hover:bg-transparent'
-      )}
-      onClick={onClick}
-    >
-      {loading ? (
-        <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />
-      ) : (
-        presentation.icon
-      )}
-      <span className={cn('min-w-0 truncate font-medium', presentation.showDetail && 'shrink-0')}>
-        {presentation.label}
-      </span>
-      {presentation.showDetail ? (
-        <>
-          <span className="shrink-0 text-muted-foreground/70" aria-hidden="true">
-            ·
-          </span>
-          {presentation.prioritizeFilename ? (
-            <FilenameFirstPath path={presentation.detail} />
-          ) : (
-            <span className="min-w-0 flex-1 truncate">{presentation.detail}</span>
-          )}
-        </>
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        id={id}
+        role="option"
+        aria-selected={selected}
+        disabled={disabled}
+        className={cn(
+          // Why min-w-0: a long agent setup must truncate so the row's › stays inside the menu.
+          'flex h-6 w-full min-w-0 items-center gap-1.5 rounded-[7px] px-1 text-left text-[11px] leading-5 outline-none disabled:cursor-not-allowed disabled:opacity-50',
+          selected
+            ? 'bg-black/8 text-accent-foreground dark:bg-white/14'
+            : // Why: CSS :hover still matches a disabled button, so a pending row would
+              // light up under the pointer despite being unactivatable.
+              'text-muted-foreground hover:bg-black/8 hover:text-accent-foreground disabled:hover:bg-transparent disabled:hover:text-muted-foreground dark:hover:bg-white/14 dark:disabled:hover:bg-transparent'
+        )}
+        onClick={onClick}
+      >
+        {loading ? (
+          <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />
+        ) : (
+          presentation.icon
+        )}
+        <span className={cn('min-w-0 truncate font-medium', presentation.showDetail && 'shrink-0')}>
+          {presentation.label}
+        </span>
+        {presentation.showDetail ? (
+          <>
+            <span className="shrink-0 text-muted-foreground/70" aria-hidden="true">
+              ·
+            </span>
+            {presentation.prioritizeFilename ? (
+              <FilenameFirstPath path={presentation.detail} />
+            ) : (
+              <span className="min-w-0 flex-1 truncate">{presentation.detail}</span>
+            )}
+          </>
+        ) : null}
+      </button>
+      {onUseAgent && option.kind === 'agent' && option.option.pickerEntry ? (
+        <AgentLaunchSetupButton
+          entry={option.option.pickerEntry}
+          initial={option.option.setup}
+          disabled={disabled}
+          onUse={onUseAgent}
+        />
       ) : null}
-    </button>
+    </div>
   )
 
   // Only the filename-first rows hide information. Every other row already shows

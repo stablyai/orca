@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { AgentSessionPreDispatchError } from './structured-agent-session-operation-settlement'
 

@@ -4,12 +4,12 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
+import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 
 const installed = vi.hoisted(() =>
   vi.fn<(deps: StructuredAgentSessionRuntimeDeps) => Promise<void>>(async () => {})
 )
-vi.mock('./structured-agent-session-runtime', () => ({
+vi.mock('./agent-session/structured-agent-session-runtime', () => ({
   ensureStructuredAgentSessionHost: installed
 }))
 vi.mock('electron', () => ({

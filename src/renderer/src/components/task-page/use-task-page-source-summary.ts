@@ -11,10 +11,7 @@ import {
   getTaskPageRepoSourceContext
 } from './task-page-source-context'
 import { getRepoBackedProviderAvailability } from '@/components/task-source-provider-availability'
-import {
-  getTaskSourceAvailabilityNotice,
-  getTaskSourceContextSummary
-} from '../task-source-context-summary'
+import { getTaskSourceAvailabilityNotice } from '../task-source-context-summary'
 import { getRepoBackedTaskEmptyState } from './task-page-empty-state'
 export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPreludeModel) {
   const {
@@ -23,8 +20,6 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     preflightStatusCurrent,
     preflightDescribesDesktop,
     selectedRepos,
-    selectedLinearWorkspace,
-    selectedJiraSite,
     sourceOptions,
     taskSource,
     runtimePreflightStatusByHostId,
@@ -116,36 +111,6 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     selectedRepos,
     sourceOptions
   ])
-  const taskSourceContextSummary = useMemo(() => {
-    const providerLabel =
-      sourceOptions.find((source) => source.id === taskSource)?.label ?? taskSource
-    return getTaskSourceContextSummary({
-      provider: taskSource,
-      providerLabel,
-      repoContexts: taskSourceRepoContexts,
-      hostAvailability:
-        taskSource === 'linear' || taskSource === 'jira'
-          ? accountBackedTaskSourceHostAvailability
-          : taskSourceHostAvailability,
-      accountHostId: accountBackedTaskSourceHostId,
-      hostLabelById,
-      selectedRepoCount: selectedRepos.length,
-      linearWorkspaceName:
-        selectedLinearWorkspace?.organizationName ?? selectedLinearWorkspace?.id ?? null,
-      jiraSiteName: selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null
-    })
-  }, [
-    selectedJiraSite,
-    selectedLinearWorkspace,
-    selectedRepos.length,
-    sourceOptions,
-    taskSource,
-    accountBackedTaskSourceHostAvailability,
-    accountBackedTaskSourceHostId,
-    hostLabelById,
-    taskSourceHostAvailability,
-    taskSourceRepoContexts
-  ])
   const taskSourceAvailabilityNotice = useMemo(() => {
     const providerLabel =
       sourceOptions.find((source) => source.id === taskSource)?.label ?? taskSource
@@ -179,12 +144,10 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
   )
   const nextModel = model as typeof model & {
     taskSourceAvailabilityNoticeByProvider: typeof taskSourceAvailabilityNoticeByProvider
-    taskSourceContextSummary: typeof taskSourceContextSummary
     taskSourceAvailabilityNotice: typeof taskSourceAvailabilityNotice
     githubEmptyState: typeof githubEmptyState
   }
   nextModel.taskSourceAvailabilityNoticeByProvider = taskSourceAvailabilityNoticeByProvider
-  nextModel.taskSourceContextSummary = taskSourceContextSummary
   nextModel.taskSourceAvailabilityNotice = taskSourceAvailabilityNotice
   nextModel.githubEmptyState = githubEmptyState
   return nextModel

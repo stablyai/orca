@@ -43,7 +43,8 @@ describe('mobile pairing userData path stability', () => {
 
   it('keeps returning the path captured before app.setName changes resolution', async () => {
     appState.userData = canonicalDir
-    const { initDataPath, getCanonicalUserDataPath } = await import('../persistence')
+    const { initDataPath, getCanonicalUserDataPath } =
+      await import('../persistence/loading-store/user-data-path')
     initDataPath()
 
     appState.userData = lateDir
@@ -55,7 +56,8 @@ describe('mobile pairing userData path stability', () => {
 
   it('writes DeviceRegistry + E2EE keypair under the canonical path, not the late one', async () => {
     appState.userData = canonicalDir
-    const { initDataPath, getCanonicalUserDataPath } = await import('../persistence')
+    const { initDataPath, getCanonicalUserDataPath } =
+      await import('../persistence/loading-store/user-data-path')
     initDataPath()
 
     appState.userData = lateDir
@@ -80,7 +82,7 @@ describe('mobile pairing userData path stability', () => {
       initDataPath,
       getCanonicalUserDataPath,
       migrateMobilePairingDataToCanonicalUserDataPath
-    } = await import('../persistence')
+    } = await import('../persistence/loading-store/user-data-path')
     initDataPath()
 
     appState.userData = lateDir
@@ -119,7 +121,7 @@ describe('mobile pairing userData path stability', () => {
   it('skips legacy migration when only part of the canonical credential pair exists', async () => {
     appState.userData = canonicalDir
     const { initDataPath, migrateMobilePairingDataToCanonicalUserDataPath } =
-      await import('../persistence')
+      await import('../persistence/loading-store/user-data-path')
     initDataPath()
 
     appState.userData = lateDir
@@ -174,7 +176,7 @@ describe('mobile pairing userData path stability', () => {
     try {
       appState.userData = canonicalDir
       const { initDataPath, migrateMobilePairingDataToCanonicalUserDataPath } =
-        await import('../persistence')
+        await import('../persistence/loading-store/user-data-path')
       initDataPath()
 
       appState.userData = lateDir
@@ -196,7 +198,7 @@ describe('mobile pairing userData path stability', () => {
     // Case-insensitive filesystems can resolve both paths identically; never copy a file onto itself.
     appState.userData = canonicalDir
     const { initDataPath, migrateMobilePairingDataToCanonicalUserDataPath } =
-      await import('../persistence')
+      await import('../persistence/loading-store/user-data-path')
     initDataPath()
 
     const devices = JSON.stringify([
@@ -211,7 +213,7 @@ describe('mobile pairing userData path stability', () => {
   it('no-ops on a fresh install with no legacy pairing files to migrate', async () => {
     appState.userData = canonicalDir
     const { initDataPath, migrateMobilePairingDataToCanonicalUserDataPath } =
-      await import('../persistence')
+      await import('../persistence/loading-store/user-data-path')
     initDataPath()
 
     appState.userData = lateDir
@@ -223,7 +225,8 @@ describe('mobile pairing userData path stability', () => {
   it('a previously paired device is still found after a restart on the canonical path', async () => {
     appState.userData = canonicalDir
     {
-      const { initDataPath, getCanonicalUserDataPath } = await import('../persistence')
+      const { initDataPath, getCanonicalUserDataPath } =
+        await import('../persistence/loading-store/user-data-path')
       initDataPath()
       appState.userData = lateDir
       const { DeviceRegistry } = await import('./device-registry')
@@ -232,7 +235,8 @@ describe('mobile pairing userData path stability', () => {
 
     vi.resetModules()
     appState.userData = canonicalDir
-    const { initDataPath, getCanonicalUserDataPath } = await import('../persistence')
+    const { initDataPath, getCanonicalUserDataPath } =
+      await import('../persistence/loading-store/user-data-path')
     initDataPath()
     appState.userData = lateDir
     const { DeviceRegistry } = await import('./device-registry')

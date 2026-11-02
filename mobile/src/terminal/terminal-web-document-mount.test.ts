@@ -87,7 +87,8 @@ describe('a stopped document takes its engines with it', () => {
     const terminal = mountTerminalWebDocument(plantHost(), () => {})
     const style = document.getElementById('orca-terminal-document-style')?.textContent ?? ''
     expect(style).toContain(`src:url('${terminalNerdFontUrl}') format('woff2')`)
-    expect(style).not.toContain('data:font/')
+    // Only the sub-KiB symbols subset is inlined; the Nerd font stays a hashed asset.
+    expect(style.match(/data:font\//g)).toHaveLength(1)
     expect(style).toContain('unicode-range:U+E000-F8FF,U+F0000-FFFFD,U+100000-10FFFD')
     terminal.dispose()
   })
@@ -207,6 +208,7 @@ describe('terminal panes start when first selected', () => {
           onHaptic: noop,
           onTerminalInput: noop,
           onTerminalQueryReply: noop,
+          onTerminalInteraction: noop,
           onTerminalTap: noop,
           onFileTap: noop,
           onOpenUrl: noop

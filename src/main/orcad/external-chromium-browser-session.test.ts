@@ -15,7 +15,7 @@ import {
   ExternalChromiumBrowserSession,
   externalChromiumAgentBrowserEnvironment
 } from './external-chromium-browser-session'
-import { agentBrowserCommandOf } from '../browser/agent-browser-bridge-test-harness'
+import { agentBrowserCommandOf } from '../browser/agent-browser/agent-browser-bridge-test-harness'
 
 const BASE = {
   executablePath: '/opt/orca/chromium',
@@ -165,6 +165,32 @@ describe('orcad external-chromium agent-browser environment', () => {
     const issued = commands().map(([name]) => name)
     expect(issued).not.toContain('close')
     expect(issued).not.toContain('open')
+  })
+
+  it('selects a tab only when it is not already active, keeping the snapshot refs', async () => {
+    runProcessMock.mockImplementation(() => {
+      const tabs = [
+        { active: true, tabId: 't1', title: 'a', url: 'about:blank' },
+        { active: false, tabId: 't2', title: 'b', url: 'about:blank' }
+      ]
+      return Promise.resolve({
+        code: 0,
+        signal: null,
+        stdout: JSON.stringify({ success: true, data: { tabs } }),
+        stderr: '',
+        timedOut: false
+      })
+    })
+    const session = new ExternalChromiumBrowserSession(
+      '/opt/orca/agent-browser',
+      { executablePath: BASE.executablePath, provider: 'chromium' },
+      '/state'
+    )
+
+    await session.selectPage('t1')
+    expect(commands()).toEqual([['tab']])
+    await session.selectPage('t2')
+    expect(commands()).toEqual([['tab'], ['tab'], ['tab', 't2']])
   })
 
   it('reclaims a session that answers nothing, then opens', async () => {

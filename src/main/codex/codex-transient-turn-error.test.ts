@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { codexTransientTurnError } from './codex-transient-turn-error'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 
 function rows(
   info: unknown = 'serverOverloaded',

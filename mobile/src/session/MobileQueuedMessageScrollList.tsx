@@ -1,14 +1,13 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Platform, StyleSheet, View, type LayoutRectangle } from 'react-native'
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 import Animated, {
   useAnimatedRef,
   useSharedValue,
   type AnimatedRef,
   type SharedValue
 } from 'react-native-reanimated'
-import { colors, spacing } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing } from '../theme/mobile-theme'
+import { MobileEdgeFade } from '../components/MobileEdgeFade'
 
 /** Desktop's `max-h-40`: three one-line cards and part of a fourth, whose cut-off edge is the
  *  sign that the list scrolls. */
@@ -111,36 +110,13 @@ export function MobileQueuedMessageScrollList({
           onDragActiveChange: setDragging
         })}
       </Animated.ScrollView>
-      {cues.above ? <ListEdgeFade edge="top" /> : null}
-      {cues.below ? <ListEdgeFade edge="bottom" /> : null}
-    </View>
-  )
-}
-
-/** Fades the cards into the box's fill at an edge more content lies past. */
-function ListEdgeFade({ edge }: { edge: 'top' | 'bottom' }): React.JSX.Element {
-  useMobileColorScheme()
-  const id = `queued-list-fade-${edge}`
-  const top = edge === 'top'
-  return (
-    <View pointerEvents="none" style={[styles.fade, top ? styles.fadeTop : styles.fadeBottom]}>
-      <Svg width="100%" height="100%">
-        <Defs>
-          <LinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={colors.bgPanel} stopOpacity={top ? 1 : 0} />
-            <Stop offset="1" stopColor={colors.bgPanel} stopOpacity={top ? 0 : 1} />
-          </LinearGradient>
-        </Defs>
-        <Rect width="100%" height="100%" fill={`url(#${id})`} />
-      </Svg>
+      {cues.above ? <MobileEdgeFade edge="top" /> : null}
+      {cues.below ? <MobileEdgeFade edge="bottom" /> : null}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   scroll: { maxHeight: QUEUE_LIST_MAX_HEIGHT },
-  inline: { flexShrink: 1, minHeight: 0 },
-  fade: { position: 'absolute', left: 0, right: 0, height: spacing.lg },
-  fadeTop: { top: 0 },
-  fadeBottom: { bottom: 0 }
+  inline: { flexShrink: 1, minHeight: 0 }
 })

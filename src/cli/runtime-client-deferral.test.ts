@@ -8,14 +8,14 @@ const {
   constructorArgsMock,
   moduleEvaluationMock,
   callMock,
-  getCliStatusMock,
+  getOfflineRuntimeAdmissionMock,
   testUserDataPathRef
 } = vi.hoisted(() => ({
   applyAgentStatusHooksEnabledMock: vi.fn(async () => []),
   constructorArgsMock: vi.fn(),
   moduleEvaluationMock: vi.fn(),
   callMock: vi.fn(),
-  getCliStatusMock: vi.fn(),
+  getOfflineRuntimeAdmissionMock: vi.fn(),
   testUserDataPathRef: { current: '' }
 }))
 
@@ -38,7 +38,7 @@ vi.mock('./runtime-client', () => {
   moduleEvaluationMock()
   class RuntimeClient {
     call = callMock
-    getCliStatus = getCliStatusMock
+    getOfflineRuntimeAdmission = getOfflineRuntimeAdmissionMock
     openOrca = vi.fn()
 
     constructor(...args: unknown[]) {
@@ -62,7 +62,7 @@ describe('RuntimeClient module-graph deferral', () => {
     applyAgentStatusHooksEnabledMock.mockClear()
     constructorArgsMock.mockClear()
     callMock.mockReset()
-    getCliStatusMock.mockReset()
+    getOfflineRuntimeAdmissionMock.mockReset()
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
   })
@@ -104,8 +104,10 @@ describe('RuntimeClient module-graph deferral', () => {
     async (_name, argv, constructs) => {
       vi.stubEnv('ORCA_PAIRING_CODE', 'pairing-code')
       vi.stubEnv('ORCA_ENVIRONMENT', 'some-environment')
-      getCliStatusMock.mockResolvedValue({
-        result: { runtime: { reachable: false }, app: { running: false } }
+      getOfflineRuntimeAdmissionMock.mockResolvedValue({
+        reachable: false,
+        legacyPidRunning: false,
+        pid: null
       })
 
       await main(argv, '/tmp/repo')

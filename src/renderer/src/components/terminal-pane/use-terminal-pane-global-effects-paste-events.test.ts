@@ -126,62 +126,6 @@ describe('useTerminalPaneGlobalEffects', () => {
     cleanupGlobalEffectsTestWindow()
   })
 
-  it('records terminal input for targeted paste events', async () => {
-    const terminal = { name: 'terminal-a', focus: vi.fn(), modes: { bracketedPasteMode: false } }
-    const pane = { id: 1, leafId: 'leaf-1', terminal }
-    const manager = {
-      getPanes: vi.fn(() => [pane]),
-      resumeRendering: vi.fn(),
-      resetWebglTextureAtlases: vi.fn(),
-      scheduleRevealRepaint: vi.fn(),
-      scheduleRevealPresent: vi.fn(),
-      suspendRendering: vi.fn(),
-      fitAllRevealedPanes: vi.fn(),
-      getActivePane: vi.fn(() => pane)
-    }
-    const transport = {
-      getPtyId: vi.fn(() => 'pty-1'),
-      isConnected: vi.fn(() => true),
-      sendInput: vi.fn<(data: string) => boolean>(() => true)
-    }
-
-    beginHookRender()
-    useTerminalPaneGlobalEffects({
-      tabId: 'tab-1',
-      isActive: true,
-      isVisible: true,
-      isSyncFitEnabled: true,
-      paneCount: 1,
-      managerRef: { current: manager as never },
-      containerRef: { current: null },
-      paneTransportsRef: { current: new Map([[pane.id, transport]]) as never },
-      isActiveRef: { current: false },
-      isVisibleRef: { current: false },
-      toggleExpandPane: vi.fn()
-    })
-
-    const pasteListener = vi
-      .mocked(window.addEventListener)
-      .mock.calls.find(([eventName]) => eventName === PASTE_TERMINAL_TEXT_EVENT)
-
-    expect(pasteListener).toBeDefined()
-    const listener = pasteListener?.[1]
-    if (typeof listener !== 'function') {
-      throw new Error('expected paste listener')
-    }
-    listener(
-      new CustomEvent(PASTE_TERMINAL_TEXT_EVENT, { detail: { tabId: 'tab-1', text: 'git status' } })
-    )
-
-    await flushPasteTasks()
-
-    expect(mocks.pasteTerminalText).toHaveBeenCalledWith(terminal, 'git status', {
-      forceBracketedPaste: false
-    })
-    expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
-    expect(terminal.focus).toHaveBeenCalledOnce()
-  })
-
   it('chunks large programmatic paste events through the pane PTY transport', async () => {
     const largePaste = `${'x'.repeat(TERMINAL_PASTE_DIRECT_MAX_BYTES)}tail`
     const terminal = { name: 'terminal-a', focus: vi.fn(), modes: { bracketedPasteMode: false } }

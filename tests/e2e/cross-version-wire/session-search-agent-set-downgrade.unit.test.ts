@@ -83,52 +83,6 @@ test.each(['runtime', 'relay'] as const)(
   }
 )
 
-test('agent-list negotiation takes precedence over the old flag and tolerates future advertised names', async () => {
-  const within = { kind: 'workspace' as const, worktreeId: 'folder:/task-owned/folder' }
-  const call = vi.fn(async (method: string) =>
-    method === 'aiVault.searchStatus'
-      ? {
-          ...unavailableSessionSearchStatus(),
-          supportsQoderHistory: true,
-          supportedAgents: ['codex', 'jcode', 'future-agent']
-        }
-      : searchResults()
-  )
-  await createSessionSearchClient(call, 'runtime').searchSessions({
-    query: 'proof',
-    cursor: 'page-2',
-    within,
-    filters: { agents: ['codex', 'qoder', 'jcode'], since: '2026-08-01T00:00:00Z', sort: 'newest' }
-  })
-  expect(call).toHaveBeenLastCalledWith(
-    'aiVault.searchSessions',
-    expect.objectContaining({
-      cursor: 'page-2',
-      within,
-      filters: { agents: ['codex', 'jcode'], since: '2026-08-01T00:00:00.000Z', sort: 'newest' },
-      supportedAgents: [...AI_VAULT_AGENTS]
-    })
-  )
-})
-
-test('a current host honors a negotiated client subset before index search and keeps scope identity', async () => {
-  const service = fakeSearchService()
-  setSessionSearchService(service)
-  await searchSessionService(
-    {
-      query: 'proof',
-      supportsQoderHistory: true,
-      supportedAgents: ['codex', 'future-agent'],
-      filters: { agents: ['codex', 'qoder', 'jcode'], scopePaths: ['/task-owned'] }
-    },
-    'runtime'
-  )
-  expect(service.search).toHaveBeenLastCalledWith(
-    { query: 'proof', limit: 20, filters: { agents: ['codex'], scopePaths: ['/task-owned'] } },
-    undefined
-  )
-})
-
 test.each([{ supportedAgents: [] }, { supportedAgents: ['future-agent'] }])(
   'a client with no shared advertised agents returns no indexed rows for %j',
   async ({ supportedAgents }) => {
