@@ -85,7 +85,7 @@ export function boundRunWorkerNext(
     (dispatch) => dispatch.run_id !== boundRunId
   )
   return worked
-    ? `You work Dispatch ${worked.id} in Run ${worked.run_id}. ${WORKER_MAIL_ROUTE} Only if you no longer coordinate Run ${boundRunId}: read your mail first, because unread mail moves with that Run, then have another terminal or agent run \`orca orchestration run-use --id ${boundRunId}\`. Its history stays.`
+    ? `You work Dispatch ${worked.id} in Run ${worked.run_id}. ${WORKER_MAIL_ROUTE} Only if you no longer coordinate Run ${boundRunId}: read your mail first, because unread mail moves with that Run, then have a terminal that coordinates no other Run run \`orca orchestration run-use --id ${boundRunId}\`, since run-use unbinds any others it holds. Its history stays.`
     : undefined
 }
 
