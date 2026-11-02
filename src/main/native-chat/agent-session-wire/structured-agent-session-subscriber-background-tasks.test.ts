@@ -4,10 +4,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import type {
-  AgentSessionBackgroundTaskState,
-  AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,

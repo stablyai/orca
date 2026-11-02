@@ -32,6 +32,9 @@ export const AGENT_SESSION_MODEL_CATALOG_SAVED_ONLY_RUNTIME_CAPABILITY =
 /** Strict create source identity is sent only after host negotiation. */
 export const STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY =
   'agent-session.structured.cli-source.v1' as const
+// Only these hosts admit the conversation after its source terminal closes.
+export const STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY =
+  'agent-session.structured.close-terminal-for-chat.v1' as const
 // Gate the availability stream because old decoders silently drop its opcode; fall back to client facts/createSupport on click.
 export const STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY =
   'agent-session.structured.availability.v1' as const
@@ -53,6 +56,7 @@ export const STRUCTURED_AGENT_SESSION_SURFACE_RUNTIME_CAPABILITIES = [
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY,
   AGENT_SESSION_MODEL_CATALOG_SAVED_ONLY_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY,

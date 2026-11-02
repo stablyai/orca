@@ -3,7 +3,8 @@ import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
-import { computeDiffEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
+import { monacoTypographyOptions } from '@/lib/editor-typography'
+import { useEditorTypography } from '@/hooks/use-editor-typography'
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
@@ -59,7 +60,7 @@ export default function DiffViewer({
 }: DiffViewerProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const monacoTheme = useMonacoTheme()
-  const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
+  const diffTypography = useEditorTypography('diff')
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const language = usePluginSyntaxLanguage(filePath, coreLanguage)
@@ -74,8 +75,6 @@ export default function DiffViewer({
     () => (allDiffComments ?? []).filter((c) => c.filePath === relativePath && isDiffComment(c)),
     [allDiffComments, relativePath]
   )
-  const terminalFontSize = settings?.terminalFontSize ?? 13,
-    diffEditorFontSize = computeDiffEditorFontSize(terminalFontSize, editorFontZoomLevel)
   const diffWordWrap = settings?.diffWordWrap
 
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
@@ -355,8 +354,7 @@ export default function DiffViewer({
               minimap: { enabled: false },
               scrollBeyondLastLine: false,
               ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
-              fontSize: diffEditorFontSize,
-              fontFamily: resolveEditorFontFamily(settings),
+              ...monacoTypographyOptions(diffTypography),
               lineNumbers: 'on',
               ...buildDiffEditorWordWrapOptions(settings?.diffWordWrap),
               ...buildDiffEditorWhitespaceOptions(settings?.diffShowWhitespace),

@@ -104,8 +104,12 @@ describe('NativeChatToolRun', () => {
     )
     openToolRunMembers()
 
-    expect(screen.getByText('after').closest('div')).toHaveClass('bg-[var(--diff-added-ground)]')
-    expect(screen.getByText('before').closest('div')).toHaveClass('bg-[var(--diff-removed-ground)]')
+    expect(screen.getByText('after').closest('div')).toHaveClass(
+      'bg-[var(--diff-added-background)]'
+    )
+    expect(screen.getByText('before').closest('div')).toHaveClass(
+      'bg-[var(--diff-removed-background)]'
+    )
     expect(container).not.toHaveTextContent('"changes"')
     expect(container.querySelector('pre')).toBeNull()
   })

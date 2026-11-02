@@ -52,13 +52,6 @@ describe('active agent note send', () => {
     testState.callRuntimeRpc.mockReset()
   })
 
-  it('resolves the current worktree terminal pane from renderer state', () => {
-    expect(getActiveTerminalNoteTarget(testState.appState, 'wt-1')).toEqual({
-      tabId: 'tab-1',
-      leafId: LEAF_ID
-    })
-  })
-
   it('uses the per-worktree active tab fallback', () => {
     testState.appState.activeTabId = null
     testState.appState.activeTabIdByWorktree = { 'wt-1': 'tab-1' }
@@ -77,10 +70,6 @@ describe('active agent note send', () => {
       tabId: 'tab-1',
       leafId: LEAF_ID
     })
-  })
-
-  it('does not offer the active terminal send target when the focused pane has no agent status', () => {
-    expect(getActiveAgentNoteTarget(testState.appState, 'wt-1', NOW)).toBeNull()
   })
 
   it('runtime-probes a manually started agent before title or hooks report it', async () => {

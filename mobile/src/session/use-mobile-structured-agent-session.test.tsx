@@ -289,10 +289,8 @@ describe('useMobileStructuredAgentSession', () => {
     )
   })
 
-  it('keeps creation facts out of the current phone conversation', async () => {
-    await act(async () => {
-      renderer = create(createElement(Harness))
-    })
+  it('projects worker creation facts for phone cards alongside conversation messages', async () => {
+    await act(async () => void (renderer = create(createElement(Harness))))
     await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
     const items: AgentJournalRenderItem[] = [
       {
@@ -328,8 +326,10 @@ describe('useMobileStructuredAgentSession', () => {
     await act(async () => listener?.(snapshotEvent(3, items)))
     expect(hook?.session.messages.map(({ blocks }) => blocks)).toEqual([
       [{ type: 'text', text: 'Coordinate' }],
+      [{ type: 'text', text: 'Worker assignment' }],
       [{ type: 'text', text: 'Answer' }]
     ])
+    expect(hook?.session.messages[1]).toMatchObject({ role: 'system', agentStart: true })
   })
 
   it('re-holds before resubscribing after a reconnect', async () => {

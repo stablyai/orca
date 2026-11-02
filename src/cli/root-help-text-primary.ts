@@ -54,6 +54,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   "  plugin logs               Print a plugin's recent log lines",
   '  plugin enable             Enable a plugin (code needs --approve)',
   '  plugin disable            Disable a plugin',
+  '  plugin system on|off      Turn plugins on or off for the Orca host',
   '  plugin dev load           Load a plugin folder for development',
   '  plugin dev reload         Reload development plugins',
   '  plugin dev unload         Remove a development folder',

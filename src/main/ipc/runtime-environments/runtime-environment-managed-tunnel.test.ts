@@ -201,7 +201,7 @@ describe('resolving a runtime for a call, by host kind', () => {
     )
     mocks.hasWslService = false
     await expect(resolveManagedRuntimeEnvironment('/u', 'wsl:ubuntu', noStart)).rejects.toThrow(
-      'The WSL host Ubuntu isn’t available from your phone right now. Open one of its projects on your computer to connect it.'
+      'The WSL host Ubuntu isn’t available from your phone right now. On your computer, click Start if it’s stopped; otherwise open one of its projects to connect it.'
     )
     expect(mocks.ensureForRuntimeCall).not.toHaveBeenCalled()
   })

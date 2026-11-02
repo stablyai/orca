@@ -17,7 +17,6 @@ import type {
   AgentJournalSubmission
 } from './agent-session-journal-types'
 import type {
-  AgentSessionBackgroundTaskState,
   AgentSessionSlashCommand,
   AgentSessionHistoryPage,
   AgentSessionLatestTurn,
@@ -26,9 +25,10 @@ import type {
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
 } from './agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from './agent-session/agent-session-background-task-wire'
 import type { AgentSessionRefusalReference } from './agent-session-wire-refusals'
-import { backgroundTaskStatesEqual } from './agent-session-background-task-state-equality'
-import { admitAgentSessionBackgroundTaskState } from './agent-session-background-task-state-admission'
+import { backgroundTaskStatesEqual } from './agent-session/agent-session-background-task-state-equality'
+import { admitAgentSessionBackgroundTaskState } from './agent-session/agent-session-background-task-state-admission'
 import {
   MAX_RETAINED_ITEMS,
   MAX_RETAINED_OWN_ITEMS,

@@ -116,6 +116,16 @@ describe('host-owned hook presence', () => {
     expect(server.persistedWriterState()).not.toContain('pane-owned')
   })
 
+  it('reads an agent that reported its own end as exited, whatever its process probe says', async () => {
+    const server = await createServer()
+    await hook(server, 'SessionStart')
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    const row = server.getStatusSnapshot().find((entry) => entry.paneKey === PANE)
+    expect(row).toBeDefined()
+    probe.mockResolvedValue('live')
+    expect(await server.readCliWriterObservation(row!)?.presence()).toBe('exited')
+  })
+
   it('clears the status on SessionEnd while the terminal survives, without a renderer', async () => {
     const server = await createServer()
     await hook(server, 'SessionStart')

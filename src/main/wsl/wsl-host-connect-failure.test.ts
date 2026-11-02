@@ -9,7 +9,9 @@ import {
 import { OrcadManagedPairingRepairFailedError } from '../managed-server/lifecycle/orcad-managed-pairing-repair-failure'
 import { retryableConnectFailure, settlingConnectFailure } from './wsl-host-connect-failure'
 import {
+  requireConfirmedRunning,
   WslDistroNotRunningError,
+  WslDistroUnverifiableConnectError,
   WslOrcadLaunchDeferredError
 } from './wsl-orcad-connection-errors'
 
@@ -45,9 +47,32 @@ describe('retryableConnectFailure', () => {
     expect(retryableConnectFailure('Ubuntu', refusal)).toBe(refusal)
   })
 
+  it('retries, never dead-ends on "not running", when the running list could not be read', () => {
+    const failure = retryableConnectFailure(
+      'Ubuntu',
+      new WslDistroUnverifiableConnectError('Ubuntu')
+    )
+    expect(failure).toMatchObject({ code: 'remote_runtime_unavailable' })
+    expect(String(failure)).not.toMatch(/isn.t running/)
+  })
+
   it('reports a host still settling after an exit as retryable', () => {
     const failure = settlingConnectFailure('Ubuntu')
     expect(failure).toMatchObject({ code: 'remote_runtime_unavailable' })
     expect(isRecoverableRemoteRuntimeConnectionError({ message: String(failure) })).toBe(true)
+  })
+})
+
+describe('requireConfirmedRunning', () => {
+  it('answers only a confirmed read; an unreadable list throws unverifiable, never "not running"', () => {
+    expect(requireConfirmedRunning({ status: 'confirmed', distros: ['ubuntu'] }, 'Ubuntu')).toBe(
+      true
+    )
+    expect(requireConfirmedRunning({ status: 'confirmed', distros: ['Debian'] }, 'Ubuntu')).toBe(
+      false
+    )
+    expect(() => requireConfirmedRunning({ status: 'unavailable' }, 'Ubuntu')).toThrow(
+      WslDistroUnverifiableConnectError
+    )
   })
 })

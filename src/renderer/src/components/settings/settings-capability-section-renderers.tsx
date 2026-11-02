@@ -1,4 +1,5 @@
 import { AccountsPane } from './AccountsPane'
+import { getProviderAccountsOwnerKey } from '@/runtime/runtime-provider-accounts-client'
 import { AgentsPane } from './AgentsPane'
 import { AgentDefaultSurfaceSection } from './AgentDefaultSurfaceSection'
 import { ComputerUsePane } from './ComputerUsePane'
@@ -66,6 +67,9 @@ export function renderAccountsSettingsSection(context: SettingsRenderContext): R
       ) : wslHostDistro ? (
         // A WSL host's orcad has no account services; this desktop owns its distro's accounts.
         <AccountsPane
+          key={wslHostDistro ?? getProviderAccountsOwnerKey(model.settingsHostScope.target)}
+          nativeAccounts={model.nativeAccounts}
+          onAccountLocationChange={model.releaseNativeAccounts}
           settings={model.settings}
           updateSettings={model.updateSettings}
           hostScope={LOCAL_SETTINGS_HOST_SCOPE}
@@ -77,6 +81,9 @@ export function renderAccountsSettingsSection(context: SettingsRenderContext): R
         />
       ) : (
         <AccountsPane
+          key={wslHostDistro ?? getProviderAccountsOwnerKey(model.settingsHostScope.target)}
+          nativeAccounts={model.nativeAccounts}
+          onAccountLocationChange={model.releaseNativeAccounts}
           settings={model.settings}
           updateSettings={model.updateSettings}
           hostScope={model.settingsHostScope}

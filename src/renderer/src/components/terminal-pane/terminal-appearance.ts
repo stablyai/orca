@@ -3,11 +3,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
-import {
-  getBuiltinTheme,
-  resolvePaneStyleOptions,
-  resolveEffectiveTerminalAppearance
-} from '@/lib/terminal-theme'
+import { resolvePaneStyleOptions, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { canApplyPaneMetricOptions } from '@/lib/pane-manager/pane-fit'
@@ -50,13 +46,11 @@ export function isHexColor(value: string): boolean {
   return HEX_COLOR_RE.test(value)
 }
 
-// Keep pure so settings preview can compose the same theme without PaneManager.
+// Keep pure so settings preview can compose the same theme without PaneManager. baseTheme is the resolved palette
+// (resolveEffectiveTerminalAppearance), which already carries the slot's color overrides.
 export function composeActiveTerminalTheme(
   baseTheme: ITheme | null,
-  settings: Pick<
-    GlobalSettings,
-    'terminalColorOverrides' | 'terminalBackgroundOpacity' | 'terminalCursorOpacity'
-  >
+  settings: Pick<GlobalSettings, 'terminalBackgroundOpacity' | 'terminalCursorOpacity'>
 ): ITheme | null {
   if (!baseTheme) {
     return null
@@ -69,9 +63,6 @@ export function composeActiveTerminalTheme(
     scrollbarSliderHoverBackground: 'rgba(180, 180, 185, 0.6)',
     scrollbarSliderActiveBackground: 'rgba(180, 180, 185, 0.8)',
     ...baseTheme
-  }
-  if (settings.terminalColorOverrides) {
-    theme = { ...theme, ...settings.terminalColorOverrides }
   }
   // Why: convert the hex background to rgba so xterm honors the opacity when allowTransparency is set.
   if (settings.terminalBackgroundOpacity !== undefined && theme.background) {
@@ -100,8 +91,7 @@ export function publishTerminalViewAttributesAtAppStart(
     return false
   }
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
-  const baseTheme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
-  const theme = composeActiveTerminalTheme(baseTheme, settings)
+  const theme = composeActiveTerminalTheme(appearance.theme, settings)
   return send !== undefined
     ? publishTerminalViewAttributes(theme, appearance.mode, settings, send)
     : publishTerminalViewAttributes(theme, appearance.mode, settings)
@@ -144,8 +134,7 @@ export function applyTerminalAppearance(
 ): void {
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const paneStyles = resolvePaneStyleOptions(settings)
-  const baseTheme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
-  const theme = composeActiveTerminalTheme(baseTheme, settings)
+  const theme = composeActiveTerminalTheme(appearance.theme, settings)
   publishTerminalViewAttributes(theme, appearance.mode, settings)
   const paneBackground = theme?.background ?? '#000000'
 

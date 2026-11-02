@@ -10,7 +10,7 @@ import {
 import {
   isStructuredAgentSessionCommandTurn,
   isStructuredAgentSessionCommandEntry
-} from '../../../shared/structured-agent-session-command-entry'
+} from '../../../shared/agent-session/structured-agent-session-command-entry'
 import { classifyDispatchRejection } from '../../../shared/structured-agent-session-dispatch-rejection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'

@@ -3,7 +3,7 @@ import type { DiffOnMount } from '@monaco-editor/react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { detectLanguage } from '@/lib/language-detect'
 import { useAppStore } from '@/store'
-import { computeDiffEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
+import { useEditorTypography } from '@/hooks/use-editor-typography'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
@@ -48,7 +48,7 @@ export function DiffSectionItem({
   modifiedEditorsRef,
   handleSectionSaveRef
 }: DiffSectionItemProps): React.JSX.Element {
-  const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
+  const diffTypography = useEditorTypography('diff')
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
@@ -68,10 +68,6 @@ export function DiffSectionItem({
     () =>
       `diff-section:${encodeURIComponent(worktreeId ?? 'review')}:${encodeURIComponent(section.key)}:${section.contentGeneration ?? 0}`,
     [section.contentGeneration, section.key, worktreeId]
-  )
-  const diffEditorFontSize = computeDiffEditorFontSize(
-    settings?.terminalFontSize ?? 13,
-    editorFontZoomLevel
   )
 
   const [modifiedEditor, setModifiedEditor] = useState<monacoEditor.ICodeEditor | null>(null)
@@ -324,10 +320,9 @@ export function DiffSectionItem({
           language={language}
           modelPathBase={modelPathBase}
           isEditable={isEditable}
-          diffEditorFontSize={diffEditorFontSize}
+          typography={diffTypography}
           diffWordWrap={settings?.diffWordWrap}
           diffShowWhitespace={settings?.diffShowWhitespace}
-          editorFontFamily={resolveEditorFontFamily(settings)}
           onRetrySection={retrySection}
           onLoadDeferredSection={loadDeferredSection ?? loadSection}
           onSaveLimitedDiff={() => void handleSectionSaveRef.current(index)}

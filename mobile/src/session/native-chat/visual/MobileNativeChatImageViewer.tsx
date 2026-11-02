@@ -1,18 +1,27 @@
-import { Image, Modal, Pressable, ScrollView, View } from 'react-native'
+import { Modal, Pressable, View } from 'react-native'
 import { X } from 'lucide-react-native'
 import { useWindowSafeAreaInsets } from '../../../layout/side-safe-area'
 import { colors, radii, spacing } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import type { PanZoomSize } from '../../../../../src/shared/pan-zoom-view'
+import { MobilePanZoomImage } from '../../../components/MobilePanZoomImage'
 
+/** Full-screen pinch, drag and double-tap zoom for chat and Markdown images, and Mermaid diagrams. */
 export function MobileNativeChatImageViewer({
   uri,
   label,
+  size,
+  upscale,
   onClose
 }: {
   uri: string
   label: string
+  /** A drawing's own size; raster images measure themselves. */
+  size?: PanZoomSize | null
+  /** Let fit enlarge a vector past its natural size. */
+  upscale?: boolean
   onClose: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
@@ -21,19 +30,9 @@ export function MobileNativeChatImageViewer({
   return (
     <Modal visible animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <ScrollView
-          contentContainerStyle={styles.stage}
-          maximumZoomScale={4}
-          minimumZoomScale={1}
-          centerContent
-        >
-          <Image
-            source={{ uri }}
-            style={styles.image}
-            resizeMode="contain"
-            accessibilityLabel={label}
-          />
-        </ScrollView>
+        <View style={styles.stage}>
+          <MobilePanZoomImage uri={uri} label={label} size={size} upscale={upscale} />
+        </View>
         <Pressable
           style={[styles.close, { top: insets.top + spacing.sm }]}
           onPress={onClose}
@@ -54,11 +53,7 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgBase
   },
   stage: {
-    flexGrow: 1
-  },
-  image: {
-    flex: 1,
-    width: '100%'
+    flex: 1
   },
   close: {
     position: 'absolute',

@@ -15,12 +15,13 @@ import type {
   CodexAppServerLaunch,
   openCodexAppServerConnection
 } from './codex-app-server-connection'
-import {
-  CodexStructuredSessionAdapter,
-  type CodexStructuredLaunch,
-  type CodexStructuredSessionEvent
-} from './codex-structured-session-adapter'
-import type { CodexStructuredSessionAdapterDeps } from './codex-structured-session-state'
+import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
+import type {
+  CodexStructuredLaunch,
+  CodexStructuredSessionEvent,
+  CodexStructuredSessionAdapterDeps
+} from './codex-structured-session-state'
+
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const startLinks = new WeakMap<

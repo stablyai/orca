@@ -10,8 +10,6 @@ export type DiffSectionItemProps = {
   sideBySide: boolean
   isDark: boolean
   settings: {
-    terminalFontSize?: number
-    terminalFontFamily?: string
     diffWordWrap?: boolean
     diffShowWhitespace?: boolean
   } | null

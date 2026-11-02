@@ -13,6 +13,7 @@ import {
 } from './lib/crash-diagnostics'
 import { applyDocumentTheme } from './lib/document-theme'
 import { buildAppFontFamily } from './lib/app-font-family'
+import { applyCodeFontSmoothing } from './lib/code-font-smoothing'
 import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
 import { useAppStore } from './store'
@@ -37,6 +38,7 @@ function applyPopoutAppearance(settings: GlobalSettings | null): void {
     '--app-font-family',
     buildAppFontFamily(settings?.appFontFamily)
   )
+  applyCodeFontSmoothing(settings?.codeFontSmoothing)
 }
 
 // Seed this separate store synchronously to prevent OS-theme flash before async appearance hydration.

@@ -2,7 +2,6 @@
 // tab, else that same pane through its host. Never whatever the card's saved address names now.
 
 import { toast } from 'sonner'
-import { agentSessionWriteNoticeText } from '@/components/native-chat/agent-session-write-notice-text'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
@@ -14,7 +13,10 @@ import {
   focusRuntimeTerminalHandle
 } from '@/components/terminal-pane/terminal-handle-links'
 import { showAgentPaneUnavailable } from '@/components/terminal-pane/stale-agent-row'
-import { activateAiVaultStructuredSession } from './activate-ai-vault-structured-session'
+import {
+  activateAiVaultStructuredSession,
+  structuredSessionOpenFeedback
+} from './activate-ai-vault-structured-session'
 import type { LocatedAgentSender } from '@/runtime/agent-sender-associations'
 import {
   agentMessageSenderUnavailableText,
@@ -47,7 +49,7 @@ export function openLocatedAgentMessageSender(
   click: Click
 ): Promise<void> {
   if (location.sessionId) {
-    return openLocatedChat(location, location.sessionId)
+    return openLocatedChat(location, location.sessionId, name)
   }
   const tabId = heldTabId(useAppStore.getState(), location)
   if (tabId) {
@@ -58,10 +60,14 @@ export function openLocatedAgentMessageSender(
 }
 
 /** The located chat itself, through the same activation its sidebar row uses. */
-async function openLocatedChat(location: LocatedAgentSender, sessionId: string): Promise<void> {
+async function openLocatedChat(
+  location: LocatedAgentSender,
+  sessionId: string,
+  name: string
+): Promise<void> {
   const host = structuredAgentSessionTargetForHost(location.host)
   if (!host) {
-    showLookupFailure('unreachable')
+    showLookupFailure('unreachable', name)
     return
   }
   const session = {
@@ -96,7 +102,7 @@ async function openUnheldTerminal(
 ): Promise<void> {
   const host = structuredAgentSessionTargetForHost(location.host)
   if (!host) {
-    showLookupFailure('unreachable')
+    showLookupFailure('unreachable', name)
     return
   }
   const environmentId = host.kind === 'environment' ? host.environmentId : null
@@ -119,7 +125,7 @@ async function openUnheldTerminal(
       if (provesTerminalGone(error)) {
         gone()
       } else {
-        showLookupFailure(isRuntimeCompatBlockError(error) ? 'update' : 'unreachable')
+        showLookupFailure(isRuntimeCompatBlockError(error) ? 'update' : 'unreachable', name)
       }
       return
     }
@@ -133,13 +139,14 @@ async function openUnheldTerminal(
       return click.reopen()
     }
   }
-  await focusTerminal(handle, environmentId, gone)
+  await focusTerminal(handle, environmentId, gone, name)
 }
 
 export async function focusTerminal(
   handle: string,
   environmentId: string | null,
-  gone: () => void = showAgentPaneUnavailable
+  gone: () => void = showAgentPaneUnavailable,
+  name = ''
 ): Promise<void> {
   if (focusRendererTerminalHandle(handle, environmentId)) {
     return
@@ -150,19 +157,15 @@ export async function focusTerminal(
     if (provesTerminalGone(error)) {
       gone()
     } else {
-      showLookupFailure(isRuntimeCompatBlockError(error) ? 'update' : 'unreachable')
+      showLookupFailure(isRuntimeCompatBlockError(error) ? 'update' : 'unreachable', name)
     }
   }
 }
 
-export function showLookupFailure(failure: LookupFailure): void {
-  toast.error(
-    agentSessionWriteNoticeText(
-      failure === 'older-host'
-        ? ['unsupported']
-        : failure === 'update'
-          ? ['updateOrcaToOpenChat']
-          : ['unreachable', 'tryAgain']
-    )
-  )
+export function showLookupFailure(failure: LookupFailure, name: string): void {
+  if (failure === 'unreachable') {
+    structuredSessionOpenFeedback.unavailable(name)
+  } else {
+    structuredSessionOpenFeedback.hostCannotOpen(name)
+  }
 }

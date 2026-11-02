@@ -85,6 +85,7 @@ export function buildDefaultSettings(args: {
     terminalThemeDark: 'Ghostty Default Style Dark',
     terminalDividerColorDark: '#3f3f46',
     terminalUseSeparateLightTheme: true,
+    terminalColorOverridesSplit: true,
     terminalThemeLight: 'Builtin Tango Light',
     terminalCustomThemes: [],
     terminalDividerColorLight: '#d4d4d8',

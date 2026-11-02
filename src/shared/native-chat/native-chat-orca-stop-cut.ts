@@ -9,7 +9,7 @@ import type { AgentJournalRenderItem, AgentJournalSubmission } from '../agent-se
 import { STALE_SESSION_ROW_PREFIX } from '../agent-session-stop-row-identity'
 import { readAgentJournalTurn, readAgentJournalTurnOutcome } from '../agent-session-turn-record'
 import { agentTurnVerdict, type AgentTurnOutcome } from '../agent-turn-outcome'
-import { structuredAgentSessionCommandTurnItemIds } from '../structured-agent-session-command-entry'
+import { structuredAgentSessionCommandTurnItemIds } from '../agent-session/structured-agent-session-command-entry'
 import {
   isStructuredAgentSessionNonRequestRow,
   type StructuredAgentSessionLatestRequest

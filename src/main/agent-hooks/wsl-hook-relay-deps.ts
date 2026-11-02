@@ -19,7 +19,7 @@ import {
   spawnWslRelayProcess
 } from './wsl-hook-relay-launch'
 import { waitForWslRelaySentinel } from './wsl-hook-relay-sentinel'
-import { listWslDistrosAsync } from '../wsl'
+import { resolveWslDefaultDistro as resolveSharedWslDefaultDistro } from '../wsl/wsl-default-distro'
 import { deferUntilWslDistroRunning, isWslDistroRunning } from '../wsl-background-distro-gate'
 import { isWslAgentHookRelayEnabled } from '../../shared/agent-hook-relay'
 import { wslBridgePtyPresence, type WslBridgePtyPresence } from './wsl-bridge-pty-presence'
@@ -106,7 +106,11 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
   daemonBridgeSessions: readDaemonBridgeSessions,
   resolveBundle: resolveWslHookRelayBundle,
   readBundle: (jsPath) => readFileSync(jsPath),
-  listDistros: () => listWslDistrosAsync(),
+  // The exec gate's resolver: inside a user act it returns the act's own default.
+  listDistros: async () => {
+    const distro = await resolveSharedWslDefaultDistro()
+    return typeof distro === 'string' ? [distro] : []
+  },
   isDistroRunning: isWslDistroRunning,
   deferUntilRunning: deferUntilWslDistroRunning,
   blockedForExec: blockedWslDistroForExec,

@@ -5,7 +5,7 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { Profiler, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
+import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session/agent-session-background-task-wire'
 import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 

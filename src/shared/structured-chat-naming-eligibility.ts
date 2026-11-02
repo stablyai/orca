@@ -2,7 +2,7 @@ import { agentSessionCurrentContextRows } from './agent-session-context-clear'
 import type { AgentJournalSnapshot } from './agent-session-journal-types'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
-import { isStructuredAgentSessionCommandEntry } from './structured-agent-session-command-entry'
+import { isStructuredAgentSessionCommandEntry } from './agent-session/structured-agent-session-command-entry'
 import { firstStructuredAgentSessionPrompt } from './structured-agent-session-first-prompt'
 
 export function firstStructuredChatNamingPrompt(

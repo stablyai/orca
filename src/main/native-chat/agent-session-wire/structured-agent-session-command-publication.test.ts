@@ -4,10 +4,10 @@ import { join } from 'node:path'
 import { expect, it } from 'vitest'
 
 import type {
-  AgentSessionBackgroundTaskState,
   AgentSessionSlashCommand,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import { createStructuredAgentSessionEventCoalescer } from '../../../shared/agent-session/structured-agent-session-coalescer'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,

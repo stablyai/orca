@@ -6,10 +6,8 @@ import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
 } from '../../../shared/agent-session-journal-types'
-import type {
-  AgentSessionBackgroundTaskState,
-  AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { mobileE2EETextPayloadAdmissionBytes } from '../../runtime/rpc/mobile-e2ee-outbound-admission'
 import {

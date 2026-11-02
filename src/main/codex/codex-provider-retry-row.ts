@@ -12,7 +12,7 @@ import {
   boundPayload,
   PROVIDER_FRAME_PAYLOAD_LIMITS
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
-import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 import {
   readCodexErrorAdditionalDetails,
   readCodexErrorInfo,

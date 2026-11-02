@@ -30,11 +30,12 @@ type CodexAccountSelectionDependencies = {
   configMirror: CodexConfigMirror
   lifecycle: CodexAccountServiceLifecycle
   resolveSystemDefault: () => CodexSystemDefaultIdentity
-  readIdentityFromHome: (
+  /** Host homes only: `list` reads them synchronously, and never a WSL home. */
+  readIdentityFromHostHome: (
     managedHomePath: string,
     expectedAccountId: string
   ) => ResolvedCodexIdentity
-  removeManagedHome: (candidatePath: string, expectedAccountId: string) => void
+  removeManagedHome: (candidatePath: string, expectedAccountId: string) => Promise<void>
   discardResetAttempts: (accountId: string) => Promise<void>
 }
 
@@ -90,7 +91,7 @@ export class CodexAccountSelection {
       this.dependencies.lifecycle.onHostSystemDefaultSelected?.()
     }
 
-    this.dependencies.removeManagedHome(account.managedHomePath, account.id)
+    await this.dependencies.removeManagedHome(account.managedHomePath, account.id)
     this.dependencies.rateLimits.evictInactiveCodexCache(accountId)
     try {
       await this.dependencies.discardResetAttempts(accountId)
@@ -139,7 +140,7 @@ export class CodexAccountSelection {
         effectiveTarget?.runtime === 'wsl' ? nextSelection.host : accountId,
       activeCodexManagedAccountIdsByRuntime: nextSelection
     })
-    this.dependencies.configMirror.safeSyncToManagedHomes()
+    await this.dependencies.configMirror.safeSyncToManagedHomes()
     this.dependencies.runtimeHome.syncForCurrentSelection(effectiveTarget)
     if (
       accountId === null &&
@@ -163,7 +164,7 @@ export class CodexAccountSelection {
       }
       let identity: ResolvedCodexIdentity
       try {
-        identity = this.dependencies.readIdentityFromHome(account.managedHomePath, account.id)
+        identity = this.dependencies.readIdentityFromHostHome(account.managedHomePath, account.id)
       } catch {
         return account
       }

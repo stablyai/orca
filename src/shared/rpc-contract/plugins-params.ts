@@ -10,6 +10,8 @@ export const PluginSetEnabledParams = z.object({
   approvalFingerprint: approvalFingerprintParam
 })
 
+export const PluginSetSystemEnabledParams = z.object({ enabled: z.boolean() })
+
 /** Over RPC, approval needs the explicit CLI fingerprint; the desktop review dialog uses IPC. */
 export const PluginRpcConsentParams = z
   .object({

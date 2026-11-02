@@ -14,7 +14,7 @@ import type {
   StructuredAgentSessionSinkAdmission
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
-import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 
 const SESSION = 'session-1'
 const THREAD = 'thread-1'

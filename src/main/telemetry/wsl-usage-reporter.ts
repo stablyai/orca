@@ -152,11 +152,18 @@ export async function gatherWslUsageSnapshotInput(
   const registrations = await readWslDistroRegistrations()
   const userDistros = await listWslHostDistros({
     readRegistrations: async () => registrations,
-    listRunning: () => listRunningDistrosForSnapshot(registrations)
+    readRunning: async () => ({
+      status: 'confirmed',
+      distros: await listRunningDistrosForSnapshot(registrations)
+    })
   })
   return {
     registeredDistroCount: registrations?.length ?? null,
-    userDistros,
+    // A confirmed read never yields 'unverifiable'; the snapshot's schema keeps its two states.
+    userDistros: userDistros.map(({ version, state }) => ({
+      version,
+      state: state === 'running' ? 'running' : 'stopped'
+    })),
     wslPackageVersion: readWslPackageVersion(),
     wslAvailableCached: getCachedWslAvailability(),
     projects: collectWslProjects(

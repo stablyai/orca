@@ -95,7 +95,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     reportedThreadGoal,
     contextUsage: usageSupport,
     rewind: rewindSupport,
-    acceptsImages
+    sessionSupport
   } = useStructuredAgentSessionOptions({
     agent,
     sessionId,
@@ -309,6 +309,6 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     threadGoal,
     contextUsage: usage,
     /** Whether this session takes images, by its options report; undefined until it answers. */
-    acceptsImages
+    ...sessionSupport
   }
 }

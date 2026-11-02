@@ -15,6 +15,7 @@ ORCA plugin list --json
 ORCA plugin logs <plugin-key> --json
 ORCA plugin enable <plugin-key> [--approve <fingerprint>] --json
 ORCA plugin disable <plugin-key> --json
+ORCA plugin system on|off --json
 ```
 
 Exit codes: `0` ok, `1` error, `2` `plugin_invalid`, `3` `approval_required` or `approval_stale`.
@@ -36,7 +37,9 @@ on that server. From an SSH or WSL shell that forwards `orca` to another machine
 and dev commands refuse; work on the Orca host instead.
 
 `plugin_system_disabled` means plugins are off on that host. Ask the user to click "Turn on
-plugins" in Settings → Plugins; there is no CLI way to turn them on.
+plugins" in Settings → Plugins, or on a host with no window (`orca serve`) to run
+`plugin system on` with the same `--environment`. It approves nothing; only plugins approved
+earlier start.
 
 ## Approval
 

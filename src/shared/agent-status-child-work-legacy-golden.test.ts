@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentSessionBackgroundTask } from './agent-session-background-task-wire'
+import type { AgentSessionBackgroundTask } from './agent-session/agent-session-background-task-wire'
 import {
   agentChildWorkProjectionCandidateFromBackgroundTask,
   projectAgentChildWorkLegacyBackgroundTasks,

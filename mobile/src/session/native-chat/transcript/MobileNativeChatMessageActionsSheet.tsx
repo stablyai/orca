@@ -11,7 +11,7 @@ import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { nativeChatMessageCopyText } from '../../../../../src/shared/native-chat-message-copy-text'
+import { mobileNativeChatDisplayCopyText } from './mobile-native-chat-display-copy'
 
 type Props = {
   message: NativeChatMessage
@@ -29,7 +29,7 @@ export function MobileNativeChatMessageActionsSheet({
   // Wait for the drawer to unmount before presenting another native modal.
   const selectRequested = useRef(false)
   // Streaming updates must not reset an active native text selection.
-  const [text] = useState(() => nativeChatMessageCopyText(message))
+  const [text] = useState(() => mobileNativeChatDisplayCopyText(message))
   const closeSheet = () => setSheetVisible(false)
 
   return (

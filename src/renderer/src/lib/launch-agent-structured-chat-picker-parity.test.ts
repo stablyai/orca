@@ -273,7 +273,8 @@ describe('structured chat adoption guard on the launch path', () => {
         rows,
         [agent],
         (selected) => agentPickerChoiceSeeds(selected, store.getState().settings),
-        (selected) => selected
+        (selected) => selected,
+        undefined
       )[0]
       expect(entry.defaultSurface).toBe('terminal')
       expect(entry.surfaces).toEqual(['chat', 'terminal'])

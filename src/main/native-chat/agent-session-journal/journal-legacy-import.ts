@@ -12,7 +12,7 @@ import type {
   AgentJournalItemIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { NativeChatBlock, NativeChatMessage } from '../../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat-agent-support'
+import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from '../session-file-resolver'
 import {
   decodeClaudeTranscriptLine,

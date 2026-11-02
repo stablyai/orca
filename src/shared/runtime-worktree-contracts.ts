@@ -204,9 +204,17 @@ export type RuntimeWorktreePsUnchangedResult = {
   snapshotId: string
 }
 
+/** Rows the caller already holds under `baseSnapshotId` arrive as their index in that catalog. */
+export type RuntimeWorktreePsRowDeltaResult = Omit<RuntimeWorktreePsResult, 'worktrees'> & {
+  snapshotId: string
+  baseSnapshotId: string
+  rowsFromBase: (number | RuntimeWorktreePsSummary)[]
+}
+
 export type RuntimeWorktreePsConditionalResult =
   | RuntimeWorktreePsSnapshotResult
   | RuntimeWorktreePsUnchangedResult
+  | RuntimeWorktreePsRowDeltaResult
 
 export type RuntimeRepoList = { repos: Repo[] }
 

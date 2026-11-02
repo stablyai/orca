@@ -42,19 +42,30 @@ export function RpcClientProvider({
       getClientId: () => BRIDGE_PAGE_CLIENT_ID,
       getReconnectAttempt: () => client.getReconnectAttempt(),
       getLastConnectedAt: () => client.getLastConnectedAt(),
-      // Use relay until init carries the negotiated native path; the page has no independent transport.
-      getActivePath: () => 'relay',
-      getPendingPath: () => null,
-      // Both are pairing verdicts, and pairing happened natively before this document existed.
+      // The shell's snapshots carry its paths; the page has no independent transport.
+      getActivePath: () => client.getActivePath(),
+      getPendingPath: () => client.getPendingPath(),
+      // A pairing verdict, and pairing happened natively before this document existed.
       isPairingRejected: () => false,
-      getRelayHostReachability: () => 'connecting',
-      subscribeHostState: (_hostId: string, listener: (next: ConnectionState) => void) =>
-        client.onStateChange(listener),
+      getRelayHostReachability: () => client.getRelayHostReachability(),
+      // Like native host state, path changes re-notify with the current state so labels re-read.
+      subscribeHostState: (_hostId: string, listener: (next: ConnectionState) => void) => {
+        const unsubscribeState = client.onStateChange(listener)
+        const unsubscribePath = client.onConnectionPathChange(() => listener(client.getState()))
+        return () => {
+          unsubscribeState()
+          unsubscribePath()
+        }
+      },
       getAllClients: () => [...acquiredRef.current].map((hostId) => ({ hostId, client })),
-      subscribeAllHosts: (listener: () => void) =>
-        client.onStateChange(() => {
-          listener()
-        }),
+      subscribeAllHosts: (listener: () => void) => {
+        const unsubscribeState = client.onStateChange(() => listener())
+        const unsubscribePath = client.onConnectionPathChange(listener)
+        return () => {
+          unsubscribeState()
+          unsubscribePath()
+        }
+      },
       primeHosts: (_hosts: HostProfile[]) => {}
     }
   }, [client])

@@ -1,5 +1,5 @@
 import type { AgentType, NativeChatMessage } from '../../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat-agent-support'
+import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat/native-chat-agent-support'
 import type { OrchestrationWorkerReadFallbackReason } from '../../../shared/orchestration-worker-output'
 import { resolveSessionFilePath } from '../../native-chat/session-file-resolver'
 import { nativeChatLineDecoderForAgent } from '../../native-chat/transcript-tail-reader'

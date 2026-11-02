@@ -47,11 +47,11 @@ import type {
   openCodexAppServerConnection
 } from './codex-app-server-connection'
 import { CodexAppServerUnsupportedError } from './codex-app-server-session'
-import {
-  CodexStructuredSessionAdapter,
-  type CodexStructuredSessionAdapterDeps,
-  type CodexStructuredSessionEvent
-} from './codex-structured-session-adapter'
+import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
+import type {
+  CodexStructuredSessionAdapterDeps,
+  CodexStructuredSessionEvent
+} from './codex-structured-session-state'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const THREAD_ID = 'thread-abc'

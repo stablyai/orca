@@ -32,7 +32,7 @@ import {
 import {
   isStructuredAgentSessionToolAction,
   structuredAgentSessionToolCallBlock
-} from './structured-agent-session-tool-call-block'
+} from './agent-session/structured-agent-session-tool-call-block'
 
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 import { sha256 } from './sha256'

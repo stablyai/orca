@@ -12,6 +12,7 @@ import {
   PluginReadPanelEntryParams,
   PluginRpcConsentParams,
   PluginSetEnabledParams,
+  PluginSetSystemEnabledParams,
   PluginsPanelActionParams
 } from '../../../../shared/rpc-contract/plugins-params'
 import {
@@ -30,6 +31,7 @@ let pluginServiceForRpc: PluginService | null = null
 let pluginConsentForRpc: ((request: PluginConsentRequest) => Promise<void>) | null = null
 let pluginEnablementForRpc: ((pluginKey: string, enabled: boolean) => Promise<void>) | null = null
 let pluginDevPathsForRpc: ((paths: string[]) => void) | null = null
+let pluginSystemEnabledForRpc: ((enabled: boolean) => void) | null = null
 
 export function setPluginServiceForRpc(
   service: PluginService | null,
@@ -37,12 +39,14 @@ export function setPluginServiceForRpc(
     applyConsent: (request: PluginConsentRequest) => Promise<void>
     applyEnablement: (pluginKey: string, enabled: boolean) => Promise<void>
     setDevPluginPaths?: (paths: string[]) => void
+    setPluginSystemEnabled?: (enabled: boolean) => void
   }
 ): void {
   pluginServiceForRpc = service
   pluginConsentForRpc = writes?.applyConsent ?? null
   pluginEnablementForRpc = writes?.applyEnablement ?? null
   pluginDevPathsForRpc = writes?.setDevPluginPaths ?? null
+  pluginSystemEnabledForRpc = writes?.setPluginSystemEnabled ?? null
 }
 
 function requirePluginService(): PluginService {
@@ -193,6 +197,23 @@ export const PLUGIN_METHODS = [
             ? { pluginKey: params.pluginKey }
             : { path: params.path ?? '' }
       })
+    }
+  }),
+  defineMethod({
+    // Settings → Plugins' switch for windowless hosts; it approves nothing, so only approved plugins run.
+    name: 'plugins.setSystemEnabled',
+    permission: 'host-admin',
+    params: PluginSetSystemEnabledParams,
+    handler: async (params) => {
+      const service = requirePluginService()
+      await service.whenReady()
+      if (!pluginSystemEnabledForRpc) {
+        throw new Error('Turning plugins on or off is not available on this runtime')
+      }
+      pluginSystemEnabledForRpc(params.enabled)
+      // The settings listener's refresh only logs failures; awaiting a chained one surfaces them.
+      await service.refresh()
+      return { enabled: params.enabled, plugins: await listForRpc() }
     }
   }),
   defineMethod({

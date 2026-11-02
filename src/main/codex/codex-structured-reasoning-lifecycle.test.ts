@@ -7,7 +7,7 @@ import {
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexJournalItems } from './codex-structured-journal-items'
 import { MAX_CODEX_ACTIVE_ITEMS } from './codex-structured-journal-limits'
-import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 
 const SESSION_ID = 'session-1'

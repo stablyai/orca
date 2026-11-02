@@ -64,15 +64,6 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     flex: 1,
     backgroundColor: colors.bgBase
   },
-  imageScrollContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.md
-  },
-  image: {
-    backgroundColor: colors.bgBase
-  },
   editContainer: {
     flex: 1,
     backgroundColor: colors.bgBase,
@@ -80,6 +71,12 @@ export const filePreviewStyles = themedStyleSheet(() => ({
   },
   saveErrorText: {
     marginBottom: spacing.sm,
+    color: colors.statusRed,
+    fontSize: typography.metaSize
+  },
+  previewSaveErrorText: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
     color: colors.statusRed,
     fontSize: typography.metaSize
   },
