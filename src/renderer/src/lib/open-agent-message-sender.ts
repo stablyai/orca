@@ -199,8 +199,13 @@ export async function openOrchestrationCrewAgent(
     if (target?.kind !== 'chat' && target?.kind !== 'dispatch') {
       unavailable(
         row.hostLabel
-          ? `Open this agent on ${row.hostLabel}.`
-          : 'This host cannot locate this agent. Try again.'
+          ? translate('components.orchestrationCrew.openOnHost', 'Open this agent on {{host}}.', {
+              host: row.hostLabel
+            })
+          : translate(
+              'components.orchestrationCrew.cannotLocate',
+              'This host cannot locate this agent. Try again.'
+            )
       )
       return
     }

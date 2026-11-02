@@ -20826,6 +20826,8 @@
       "openFailed": "{{name}}: {{detail}}",
       "chatUnavailable": "This host cannot open the chat. Try again.",
       "terminalExited": "This terminal has exited.",
+      "openOnHost": "Open this agent on {{host}}.",
+      "cannotLocate": "This host cannot locate this agent. Try again.",
       "latest": "Latest",
       "to": "To",
       "from": "From"
