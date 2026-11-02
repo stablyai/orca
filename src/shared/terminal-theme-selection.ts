@@ -9,6 +9,7 @@ import {
 } from './terminal-color-overrides'
 import {
   hasUsableTerminalThemeColors,
+  makeCustomTerminalThemeSelection,
   normalizeTerminalColorOverrides,
   normalizeTerminalCustomThemes,
   parseCustomTerminalThemeSelection,
@@ -115,6 +116,52 @@ export function resolveTerminalPalette(
   return {
     ...selection,
     theme: base && withTerminalColorOverrides(base, terminalColorOverridesForSlot(settings, slot))
+  }
+}
+
+export type TerminalCustomThemeRemoval = {
+  updates: Partial<GlobalSettings>
+  /** Puts the theme back into the then-current list and its slots back as they were. */
+  undo: (current: Pick<GlobalSettings, 'terminalCustomThemes'>) => Partial<GlobalSettings>
+}
+
+/** Deleting an imported theme moves each slot showing it to that slot's default, dropping the slot's overrides like any theme change. */
+export function terminalCustomThemeRemoval(
+  settings: Pick<
+    GlobalSettings,
+    'terminalCustomThemes' | 'terminalThemeDark' | 'terminalThemeLight'
+  > &
+    TerminalColorOverrideSettings,
+  themeId: string
+): TerminalCustomThemeRemoval {
+  const themes = normalizeTerminalCustomThemes(settings.terminalCustomThemes)
+  const removed = themes.find(({ id }) => id === themeId)
+  const selection = makeCustomTerminalThemeSelection(themeId)
+  const updates: Partial<GlobalSettings> = {
+    terminalCustomThemes: themes.filter(({ id }) => id !== themeId)
+  }
+  const restoredSlots: Partial<GlobalSettings> = {}
+  if (settings.terminalThemeDark === selection) {
+    updates.terminalThemeDark = DEFAULT_TERMINAL_THEME_DARK
+    updates.terminalColorOverrides = undefined
+    restoredSlots.terminalThemeDark = settings.terminalThemeDark
+    restoredSlots.terminalColorOverrides = settings.terminalColorOverrides
+  }
+  if (settings.terminalThemeLight === selection) {
+    updates.terminalThemeLight = DEFAULT_TERMINAL_THEME_LIGHT
+    updates.terminalColorOverridesLight = undefined
+    restoredSlots.terminalThemeLight = settings.terminalThemeLight
+    restoredSlots.terminalColorOverridesLight = settings.terminalColorOverridesLight
+  }
+  return {
+    updates,
+    undo: (current) => ({
+      ...restoredSlots,
+      terminalCustomThemes: normalizeTerminalCustomThemes([
+        ...normalizeTerminalCustomThemes(current.terminalCustomThemes),
+        ...(removed ? [removed] : [])
+      ])
+    })
   }
 }
 

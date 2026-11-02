@@ -1,7 +1,11 @@
 import { usePluginTerminalThemes } from '@/store/plugin-themes'
 import { withTerminalPluginPalettes } from '@/lib/terminal-plugin-palettes'
 import { useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
+import { toast } from 'sonner'
+import { useAppStore } from '@/store'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { parseCustomTerminalThemeSelection } from '../../../../shared/terminal-custom-themes'
+import { terminalCustomThemeRemoval } from '../../../../shared/terminal-theme-selection'
 import {
   hasTerminalColorOverrides,
   TERMINAL_COLOR_OVERRIDES_SETTING,
@@ -23,7 +27,8 @@ import {
   DEFAULT_TERMINAL_THEME_DARK,
   DEFAULT_TERMINAL_THEME_LIGHT,
   getAvailableTerminalThemeOptions,
-  resolveEffectiveTerminalAppearance
+  resolveEffectiveTerminalAppearance,
+  type TerminalThemeOption
 } from '@/lib/terminal-theme'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
@@ -109,6 +114,28 @@ export function TerminalThemeCatalogSection({
   // Light mode that matches dark paints the dark slot, so its overrides are the ones the preview shows.
   const advancedContent = renderAdvancedContent?.(lightModeMatchesDark ? 'dark' : target)
   const selectedTheme = isLightTarget ? settings.terminalThemeLight : settings.terminalThemeDark
+  const deleteImportedTheme = (theme: TerminalThemeOption): void => {
+    const themeId = parseCustomTerminalThemeSelection(theme.value)
+    if (!themeId) {
+      return
+    }
+    const { updates, undo } = terminalCustomThemeRemoval(settings, themeId)
+    updateSettings(updates)
+    toast(
+      translate(
+        'auto.components.settings.TerminalThemeSections.deleted_imported_theme',
+        'Deleted "{{value0}}"',
+        { value0: theme.label }
+      ),
+      {
+        action: {
+          label: translate('auto.components.settings.TerminalThemeSections.undo', 'Undo'),
+          onClick: () => updateSettings(undo(useAppStore.getState().settings ?? settings))
+        }
+      }
+    )
+  }
+
   const pickerTitle = isLightTarget
     ? translate('auto.components.settings.TerminalThemeSections.8273bc75d7', 'Light Theme')
     : translate('auto.components.settings.TerminalThemeSections.9499ad1dc4', 'Dark Theme')
@@ -273,6 +300,7 @@ export function TerminalThemeCatalogSection({
                       )
                     )
                   }}
+                  onDeleteImportedTheme={deleteImportedTheme}
                   importedHighlightSignal={importedHighlightSignal}
                 />
               </SearchableSetting>
