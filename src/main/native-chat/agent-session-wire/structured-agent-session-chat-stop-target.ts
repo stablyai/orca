@@ -35,6 +35,7 @@ export function captureChatStopTarget(
     endsSession: boolean
     stoppedPrePrompt?: boolean
     stoppedSend?: boolean
+    withdrawsContinue?: boolean
   }
 ): ChatStopTarget | null {
   const { child, turnId } = input
@@ -55,7 +56,7 @@ export function captureChatStopTarget(
     queued
   }
   if (child?.close) {
-    return { ...target, reach: 'close', marks: queued }
+    return { ...target, reach: 'close', marks: queued || input.withdrawsContinue === true }
   }
   if (child?.phase === 'starting') {
     return { ...target, reach: 'starting', marks: true }
@@ -67,7 +68,9 @@ export function captureChatStopTarget(
     !child ||
     (turnId === undefined && !input.stoppedSend && !isMainAgentWorking(ctx) && !canHaveGoal)
   ) {
-    return queued || input.stoppedPrePrompt ? { ...target, reach: 'withdraw', marks: true } : null
+    return queued || input.stoppedPrePrompt || input.withdrawsContinue
+      ? { ...target, reach: 'withdraw', marks: true }
+      : null
   }
   // Repeated Stop must not pause cards queued after the first press.
   return { ...target, reach: 'interrupt', marks: queued || reached === 'unrecorded' }

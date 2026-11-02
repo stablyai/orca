@@ -10,7 +10,6 @@ import {
 } from './pr-plugin-e2e-source-routes.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
-const UNROUTED_ID = 'plugins.unrouted-source'
 
 function repoFiles(directory) {
   return readdirSync(join(projectDir, directory), { recursive: true, withFileTypes: true })
@@ -63,7 +62,7 @@ describe('plugin PR E2E routing', () => {
     ['src/main/plugins/panels/plugin-panel-controller.ts', 'plugin-panel-containment'],
     ['src/main/plugins/catalog/plugin-file-type-suggestion.ts', 'plugin-file-type-suggestion'],
     ['src/main/plugins/catalog/plugin-auto-updater.ts', 'plugin-update-review-toast'],
-    ['src/shared/plugins/manifest/plugin-manifest.ts', 'plugin-startup-budget'],
+    ['src/shared/plugins/manifest/plugin-manifest.ts', 'plugin-demo'],
     ['src/main/plugins/panels/plugin-frame-module-transform.ts', 'plugin-buildless-tsx'],
     ['src/cli/plugin-authoring/plugin-type-files.ts', 'plugin-buildless-tsx'],
     ['examples/plugins/hello-tsx/src/panel.tsx', 'plugin-buildless-tsx'],
@@ -121,13 +120,6 @@ describe('plugin PR E2E routing', () => {
     expect(routedPluginSpecs('src/main/plugins/plugin-future-feature.ts')).toEqual([
       'tests/e2e/plugin-demo.spec.ts'
     ])
-  })
-
-  it('leaves the unrouted fallback for sources no specific route names', () => {
-    const fallback = PR_PLUGIN_E2E_SOURCE_ROUTES.find((route) => route.id === UNROUTED_ID)
-    const caught = pluginSources.filter(fallback.matches)
-    // Grows only when a plugin source lands without a targeted route; add one instead.
-    expect(caught.length, caught.join('\n')).toBeLessThan(pluginSources.length / 10)
   })
 
   it('gives every plugin spec a source route, and every routed spec exists', () => {

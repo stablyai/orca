@@ -1,9 +1,7 @@
 import type { StructuredLaunchSlotOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-slot'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import {
-  hasStructuredAgentSessionLaunchCancellationTombstone,
-  markStructuredAgentSessionLaunchCancelled
-} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { markStructuredAgentSessionLaunchCancelled } from '@/lib/agent-session/launch/structured-agent-session-launch-cancel'
 import { forgetUnlistedCreatedChat } from '@/lib/structured-agent-session-unlisted-created-chats'
 import { discardStructuredAgentSessionChatSends } from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
 import { stopStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-message-sender'

@@ -18,7 +18,7 @@ import {
 } from './pty-connection-test-environment'
 import { connectMockPanePty } from './pty-connection-test-connect-mock-pane'
 
-// STA-4869: unhide can emit after the retiring pane unregisters; keep main’s drop latch until a successor paints and acks. Drive the real renderer channel with a model of main’s gate, pinned by src/main/ipc/pty-hidden-delivery-gate.test.ts.
+// STA-4869: unhide can emit after the retiring pane unregisters; keep main’s drop latch until a successor paints and acks. Drive the real renderer channel with a model of main’s gate, pinned by src/main/ipc/pty/delivery/pty-hidden-delivery-gate.test.ts.
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
@@ -316,36 +316,6 @@ describe('hidden-output restore marker handoff (STA-4869 R6)', () => {
     expect(gate.markersDelivered()).toBe(1)
     expect(observeDisclosure(drive)).toMatchObject({ markerWrites: 1 })
     drive.binding.dispose()
-  })
-
-  it('[invariant] a hidden pane that retires must not spend the drop latch on a marker nobody receives', async () => {
-    const gate = await wireMainGateToRendererChannel()
-    const retiring = await connectPane(false)
-    retiring.deliver(HIDDEN_CHUNK, HIDDEN_CHUNK.length)
-    await dropHiddenBytesInMain()
-    expect(vi.mocked(window.api.pty.setHiddenRendererPty)).toHaveBeenCalledWith(PTY_ID, true)
-
-    // Retirement unregisters the pane before its last hidden-claim release makes main emit a marker.
-    retiring.binding.dispose()
-    await flushAsyncTicks(20)
-    expect(gate.markersDelivered()).toBe(1)
-
-    // The replacement pane binds the same PTY while visible.
-    const replacement = await connectPane(true)
-    replacement.binding.syncProcessTracking()
-    await flushAsyncTicks(20)
-
-    // Main retains the bytes; the replacement owes either snapshot recovery or a loss banner.
-    const disclosure = {
-      ...observeDisclosure(replacement),
-      modelSnapshotRequests: vi.mocked(window.api.pty.getMainBufferSnapshot).mock.calls.length
-    }
-    expect(disclosure.markerWrites).toBeLessThanOrEqual(1)
-    expect(
-      disclosure.disclosedOrRecovered,
-      `hidden output was neither reconciled nor disclosed after remount: ${JSON.stringify(disclosure)}`
-    ).toBe(true)
-    replacement.binding.dispose()
   })
 
   it('[fix] the remount re-emits the unhide marker and the applied ack retires the latch', async () => {

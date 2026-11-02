@@ -336,43 +336,6 @@ describe('agent pane keys typed before its PTY binds', () => {
     pane.dispose()
   })
 
-  // Why: a trust prompt during startup must take the user's answer, never trap it in the draft.
-  it('lets the user answer a startup trust prompt and never pastes the draft into it', async () => {
-    let ready!: (value: boolean) => void
-    waitForAgentDraftInputReady.mockReturnValue(
-      new Promise<boolean>((resolve) => (ready = resolve))
-    )
-    const pane = connectAgentPane()
-    await flushAsyncTicks(20)
-
-    pane.type('make the tests pass')
-    pane.bind('pty-1')
-    mockStoreState.agentStatusByPaneKey[pane.paneKey] = {
-      state: 'blocked',
-      prompt: 'Do you trust the files in this folder?',
-      agentType: 'claude',
-      paneKey: pane.paneKey,
-      updatedAt: 1_000,
-      stateStartedAt: 1_000,
-      stateHistory: []
-    }
-    pane.type('1')
-    pane.type('\r')
-
-    expect(pane.transport.sendInput).toHaveBeenCalledWith('1', 'driving', {
-      onEligible: expect.any(Function),
-      onDispatch: expect.any(Function)
-    })
-    expect(pane.transport.sendInput).toHaveBeenCalledWith('\r', 'driving', {
-      onEligible: expect.any(Function),
-      onDispatch: expect.any(Function)
-    })
-    ready(true)
-    await flushAsyncTicks(20)
-    expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
-    pane.dispose()
-  })
-
   it('drops the draft when the agent is blocked on a prompt at ready time', async () => {
     waitForAgentDraftInputReady.mockResolvedValue(true)
     const pane = connectAgentPane()

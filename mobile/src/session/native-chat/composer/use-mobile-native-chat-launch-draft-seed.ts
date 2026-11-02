@@ -4,7 +4,7 @@ import {
   launchDraftResolvedByTranscript,
   nativeChatLaunchDraftTurnBaseline,
   type NativeChatLaunchDraftTurnBaseline
-} from '../../../../../src/shared/native-chat-launch-draft-resolution'
+} from '../../../../../src/shared/native-chat/transcript/native-chat-launch-draft-resolution'
 import { normalizedUserText } from './mobile-native-chat-draft-reconcile'
 import { mobileNativeChatLaunchDraftSeeds } from './mobile-native-chat-draft-store'
 import { mobileNativeChatDraftDestination } from './mobile-native-chat-draft-inputs'
