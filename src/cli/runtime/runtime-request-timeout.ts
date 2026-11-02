@@ -25,17 +25,16 @@ export function getTimeoutMsParam(params: unknown): unknown {
   return (params as { timeoutMs?: unknown }).timeoutMs
 }
 
-// Give server-side waits time to finish before the client transport times out.
-export function resolveRuntimeMethodTimeoutMs(
+/** A launch that creates a workspace answers only after its required setup: the host's setup
+ *  deadline plus the workspace and agent start after it. Keepalives renew its idle timeout up to here. */
+const SETUP_LAUNCH_TOTAL_TIMEOUT_MS = DEFAULT_WAIT_TIMEOUT_SECONDS * 1000 + 10 * 60_000
+
+export function resolveRuntimeMethodKeepaliveTotalMs(
   method: string,
   params: unknown,
-  requestTimeoutMs: number,
-  remote = false
+  timeoutMs: number
 ): number {
-  // The local socket's host keepalives refresh the idle timeout through a required setup's wait;
-  // a paired runtime sends none, so its reply needs the whole setup deadline.
-  if (
-    remote &&
+  const createsWorkspace =
     (method === 'agent.launch' || method === 'agent.launchReplay') &&
     typeof params === 'object' &&
     params !== null &&
@@ -44,12 +43,15 @@ export function resolveRuntimeMethodTimeoutMs(
     params.target !== null &&
     'kind' in params.target &&
     params.target.kind === 'create-worktree'
-  ) {
-    return Math.max(
-      DEFAULT_WAIT_TIMEOUT_SECONDS * 1000 + LONG_POLL_CLIENT_GRACE_MS,
-      requestTimeoutMs
-    )
-  }
+  return createsWorkspace ? Math.max(SETUP_LAUNCH_TOTAL_TIMEOUT_MS, timeoutMs) : timeoutMs
+}
+
+// Give server-side waits time to finish before the client transport times out.
+export function resolveRuntimeMethodTimeoutMs(
+  method: string,
+  params: unknown,
+  requestTimeoutMs: number
+): number {
   if (method === 'orchestration.workerStart') {
     const requestedValue = getTimeoutMsParam(params)
     const requested = typeof requestedValue === 'number' ? requestedValue : Number(requestedValue)

@@ -42,10 +42,12 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
   validateStatus?: (response: RuntimeRpcResponse<RuntimeStatus>) => void,
   signal?: AbortSignal,
   clientCapabilities: readonly RuntimeCapability[] = [],
-  requestSelection?: RuntimeRequestSelection
+  requestSelection?: RuntimeRequestSelection,
+  /** How long this request's keepalives may renew its idle timeout; never past this in total. */
+  keepaliveTotalMs = timeoutMs
 ): Promise<RuntimeRpcResponse<TResult>> {
   throwIfSignalAborted(signal)
-  if (!isSafeTimerDelayMs(timeoutMs)) {
+  if (!isSafeTimerDelayMs(timeoutMs) || !isSafeTimerDelayMs(keepaliveTotalMs)) {
     throw new RemoteRuntimeClientError(
       'invalid_argument',
       `Runtime request timeout must be an integer between 0 and ${MAX_TIMER_DELAY_MS}ms.`
@@ -99,6 +101,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
     }
 
     let timeout = setTimeout(onTimeout, timeoutMs)
+    const totalTimeout = setTimeout(onTimeout, Math.max(timeoutMs, keepaliveTotalMs))
 
     function onTimeout(): void {
       finishError(
@@ -132,6 +135,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       }
       settled = true
       clearTimeout(timeout)
+      clearTimeout(totalTimeout)
       try {
         cleanupSocketListeners()
         ws?.close()

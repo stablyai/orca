@@ -8,6 +8,7 @@ import { describeSocketEvent, redactSocketEndpoint } from './socket-event-debug'
 import { reportSocketDeadline, type SocketDeadlineKind } from './socket-deadline-suspension'
 import { startSocketDeadlineClock } from './socket-deadline-clock'
 import type { ConnectionLogEmitter, ConnectionState, RpcRequest, RpcResponse } from './types'
+import { rpcRequestKeepaliveId } from './rpc-request-keepalive'
 
 const CONNECT_TIMEOUT_MS = 12_000
 const WEBSOCKET_CONNECTING_STATE = 0
@@ -27,6 +28,7 @@ type SocketSessionOptions = {
   onAuthenticated: (session: RpcClientSocketSession) => void
   onAuthRejected: (reason: string) => void
   onRpcResponse: (response: RpcResponse) => void
+  onRequestKeepalive: (session: RpcClientSocketSession, requestId: string) => void
   onBinary: (bytes: Uint8Array) => void
   onAnyInbound: (receivedAt: number) => void
   onAuthenticatedInbound: (session: RpcClientSocketSession) => void
@@ -228,7 +230,10 @@ export class RpcClientSocketSession {
     } catch {
       return
     }
-    if (isRpcResponse(response)) {
+    const keepaliveId = rpcRequestKeepaliveId(response)
+    if (keepaliveId !== null) {
+      this.options.onRequestKeepalive(this, keepaliveId)
+    } else if (isRpcResponse(response)) {
       this.options.onRpcResponse(response)
     }
   }

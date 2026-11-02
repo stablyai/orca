@@ -26,6 +26,7 @@ import { settleMobileRuntimeCapabilities } from './mobile-runtime-capability-neg
 import type { RelayHostCloseReason } from '../../../src/shared/relay-host-close-reason'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
+import { rpcRequestKeepaliveId, startRpcRequestDeadline } from './rpc-request-keepalive'
 
 const RELAY_PROBE_TIMEOUT_MS = 4_000
 const RELAY_MISSED_PROBE_LIMIT = 2
@@ -112,7 +113,7 @@ export function connectMobileRelayRpcSession(args: {
       const budget = openRpcRequestBudget(options)
       await waitForConnected(budget.timeoutMs)
       const timeoutMs = resolvePostConnectRequestTimeout(budget, requestTimeoutMs)
-      return sendRpc(method, params, timeoutMs, false, options?.envelope)
+      return sendRpc(method, params, timeoutMs, false, options?.envelope, options?.keepaliveTotalMs)
     },
 
     subscribe(method, params, listener, options) {
@@ -223,21 +224,22 @@ export function connectMobileRelayRpcSession(args: {
     params: unknown,
     timeoutMs = requestTimeoutMs,
     beforeConnected = false,
-    envelope?: RpcEnvelopeFields
+    envelope?: RpcEnvelopeFields,
+    keepaliveTotalMs?: number
   ): Promise<RpcResponse> {
     if (closed || (!beforeConnected && state !== 'connected')) {
       return Promise.reject(new Error('relay session not connected'))
     }
     const id = pending.nextId()
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
+      const deadline = startRpcRequestDeadline(timeoutMs, keepaliveTotalMs, () => {
         pending.drop(id)
         // Written requests may already have committed; timeout remains delivery-unknown.
         reject(markRpcDeliveryUnknown(new Error(`relay RPC timed out: ${method}`)))
-      }, timeoutMs)
-      pending.track(id, { resolve, reject, timer, written: false })
+      })
+      pending.track(id, { resolve, reject, deadline, written: false })
       if (!sendFrame({ id, method, params, envelope })) {
-        clearTimeout(timer)
+        deadline.clear()
         pending.drop(id)
         reject(new Error('relay E2EE channel not ready'))
         return
@@ -256,6 +258,11 @@ export function connectMobileRelayRpcSession(args: {
     try {
       value = JSON.parse(plaintext)
     } catch {
+      return
+    }
+    const keepaliveId = rpcRequestKeepaliveId(value)
+    if (keepaliveId !== null) {
+      pending.keepalive(keepaliveId)
       return
     }
     if (!isRpcResponse(value)) {

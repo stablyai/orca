@@ -5,7 +5,9 @@ import type { RpcResponse } from './types'
 // The request-port boundary inventory fences every remaining raw user and may only shrink.
 
 export type SendRequestOptions = {
+  /** Idle timeout; the host's keepalives for this request renew it up to keepaliveTotalMs. */
   timeoutMs?: number
+  keepaliveTotalMs?: number
   /** Include the connect wait in the caller's timeout budget. */
   budgetSpansConnect?: boolean
   /** Reject instead of replaying the request after reconnect. */

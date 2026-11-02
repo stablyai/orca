@@ -20,7 +20,8 @@ export async function sendWebSocketRequest<TResult>(
   method: string,
   params: unknown,
   timeoutMs: number,
-  envelope?: RuntimeOrchestrationEnvelope
+  envelope?: RuntimeOrchestrationEnvelope,
+  keepaliveTotalMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
   try {
     return await sendRemoteRuntimeRequest<TResult>(
@@ -30,7 +31,8 @@ export async function sendWebSocketRequest<TResult>(
       timeoutMs,
       envelope,
       undefined,
-      CLI_CLIENT_CAPABILITIES
+      CLI_CLIENT_CAPABILITIES,
+      keepaliveTotalMs
     )
   } catch (error) {
     if (error instanceof RemoteRuntimeClientError) {
@@ -47,7 +49,8 @@ export async function sendWebSocketRequestWithStatusPreflight<TResult>(
   timeoutMs: number,
   validateStatus: (response: RuntimeRpcResponse<RuntimeStatus>) => void,
   envelope?: RuntimeOrchestrationEnvelope,
-  requestSelection?: RuntimeRequestSelection
+  requestSelection?: RuntimeRequestSelection,
+  keepaliveTotalMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
   try {
     return await sendRemoteRuntimeRequestWithStatusPreflight<TResult>(
@@ -59,7 +62,8 @@ export async function sendWebSocketRequestWithStatusPreflight<TResult>(
       envelope,
       CLI_CLIENT_CAPABILITIES,
       undefined,
-      requestSelection
+      requestSelection,
+      keepaliveTotalMs
     )
   } catch (error) {
     if (error instanceof RemoteRuntimeClientError) {

@@ -99,6 +99,8 @@ export class DirectRpcClient implements RpcClient {
       onAuthenticated: (session) => this.handleAuthenticated(session),
       onAuthRejected: (reason) => this.authenticationRetry.reject(reason),
       onRpcResponse: (response) => this.handleRpcResponse(response),
+      // A keepalive from an earlier connection's socket renews nothing.
+      onRequestKeepalive: (s, id) => s === this.socketSession && this.requests.keepalive(id),
       onBinary: (bytes) => this.streams.handleBinary(bytes),
       onAuthenticatedInbound: (session) => this.liveness.noteAuthenticatedInbound(session),
       onClosed: (session, closeCode) => this.socketClose.handle(session, closeCode),

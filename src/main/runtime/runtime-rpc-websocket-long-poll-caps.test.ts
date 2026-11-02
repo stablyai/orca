@@ -292,4 +292,53 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(ws.listenerCount('close')).toBe(0)
     expect(ws.listenerCount('error')).toBe(0)
   })
+
+  it('keeps a WebSocket long poll observed by keepalives naming it, until its reply', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const db = new OrchestrationDb(':memory:')
+    runtime.setOrchestrationDb(db)
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      methods: [...ORCHESTRATION_CHECK_METHODS],
+      userDataPath,
+      enableWebSocket: false,
+      keepaliveIntervalMs: 20
+    })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const entry = server['deviceRegistry']!.addDevice('runtime-test', 'runtime')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the server reads only these wiring members in this test.
+    server['mobileSocketWiring'] = {
+      dispose: () => {},
+      getConnectionId: () => 'conn-test'
+    } as unknown as NonNullable<(typeof server)['mobileSocketWiring']>
+    const replies: Record<string, unknown>[] = []
+    try {
+      await server['handleWebSocketMessage'](
+        JSON.stringify(
+          withCurrentOrchestrationContract({
+            id: 'req_wait',
+            method: 'orchestration.check',
+            deviceToken: entry.token,
+            params: { terminal: 'term_wait', wait: true, timeoutMs: 150 }
+          })
+        ),
+        (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+        () => {},
+        undefined,
+        new FakeWebSocket() as unknown as WebSocket
+      )
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      const answered = replies.findIndex((reply) => reply.id === 'req_wait')
+      expect(answered).toBe(replies.length - 1)
+      expect(replies.slice(0, answered).length).toBeGreaterThanOrEqual(2)
+      expect(replies.slice(0, answered)).toEqual(
+        replies.slice(0, answered).map(() => ({ _keepalive: true, requestId: 'req_wait' }))
+      )
+    } finally {
+      db.close()
+      await server.stop()
+    }
+  })
 })

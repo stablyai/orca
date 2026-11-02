@@ -404,6 +404,33 @@ describe('mobile relay RPC session', () => {
     }
   })
 
+  it.each([
+    ['its own', true, 2500],
+    ['another request’s', false, 1000]
+  ] as const)(
+    'times a relay request by %s keepalives, never past its total allowance',
+    async (_case, own, expiresAt) => {
+      const { session } = await authenticateSession()
+      vi.useFakeTimers()
+      const start = Date.now()
+      let settledAt: number | null = null
+      void session
+        .sendRequest('agent.launch', {}, { timeoutMs: 1000, keepaliveTotalMs: 2500 })
+        .catch(() => (settledAt = Date.now() - start))
+      await vi.advanceTimersByTimeAsync(0)
+      const { id } = JSON.parse(fakes.sendText.mock.calls[0]![0]) as { id: string }
+      for (let beat = 0; beat < 2; beat += 1) {
+        await vi.advanceTimersByTimeAsync(900)
+        fakes.linkOptions!.onText(
+          JSON.stringify({ _keepalive: true, requestId: own ? id : 'relay-rpc-other' })
+        )
+      }
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(settledAt).toBe(expiresAt)
+      session.close()
+    }
+  )
+
   it('sends requests and streams with no envelope byte for byte as before', async () => {
     const { session } = await authenticateSession()
     void session.sendRequest('status.get', { a: 1 })

@@ -19,6 +19,7 @@ type SocketFactoryOptions = {
   onAuthenticated: (session: RpcClientSocketSession) => void
   onAuthRejected: (reason: string) => void
   onRpcResponse: (response: RpcResponse) => void
+  onRequestKeepalive: (session: RpcClientSocketSession, requestId: string) => void
   onBinary: (bytes: Uint8Array) => void
   onAuthenticatedInbound: (session: RpcClientSocketSession) => void
   onClosed: (session: RpcClientSocketSession, closeCode?: number) => void
@@ -72,6 +73,7 @@ export class RpcClientSocketFactory {
       onAuthenticated: this.options.onAuthenticated,
       onAuthRejected: this.options.onAuthRejected,
       onRpcResponse: this.options.onRpcResponse,
+      onRequestKeepalive: this.options.onRequestKeepalive,
       onBinary: this.options.onBinary,
       onAnyInbound: (receivedAt) => (this.lastInboundAt = receivedAt),
       onAuthenticatedInbound: this.options.onAuthenticatedInbound,

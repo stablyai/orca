@@ -301,7 +301,11 @@ describe('sendRemoteRuntimeRequest', () => {
       server.pairing,
       'terminal.wait',
       { terminal: 't1', for: 'tui-idle', timeoutMs: 550 },
-      300
+      300,
+      undefined,
+      undefined,
+      [],
+      1000
     )
 
     expect(response).toMatchObject({
@@ -309,6 +313,29 @@ describe('sendRemoteRuntimeRequest', () => {
       result: { satisfied: true }
     })
   })
+
+  it.each([
+    ['names another request', () => 'another-request', 1000],
+    ['outlasts its total allowance', (id: string) => id, 400]
+  ] as const)(
+    'times out a request whose keepalive %s',
+    async (_case, keepaliveRequestId, keepaliveTotalMs) => {
+      const server = await createOneShotServer({ keepaliveRequestId })
+
+      await expect(
+        sendRemoteRuntimeRequest(
+          server.pairing,
+          'terminal.wait',
+          { terminal: 't1', for: 'tui-idle', timeoutMs: 550 },
+          300,
+          undefined,
+          undefined,
+          [],
+          keepaliveTotalMs
+        )
+      ).rejects.toMatchObject({ code: 'runtime_timeout' })
+    }
+  )
 
   it.each(['refused', 'timeout'])(
     'observes a slow restart response finitely (%s)',
@@ -647,6 +674,7 @@ async function createOneShotServer(
     onRequest?: (request: Record<string, unknown>) => void
     sendUndecryptableResponse?: boolean
     keepalive?: boolean
+    keepaliveRequestId?: (requestId: string) => string
     responseDelayMs?: number | null
   } = {}
 ): Promise<{ pairing: PairedRuntimeConnection }> {
@@ -698,7 +726,10 @@ async function createOneShotServer(
         options.keepalive === false
           ? undefined
           : setInterval(() => {
-              sendEncrypted(ws, key, { _keepalive: true })
+              sendEncrypted(ws, key, {
+                _keepalive: true,
+                requestId: options.keepaliveRequestId?.(request.id) ?? request.id
+              })
             }, 100)
       ws.once('close', () => clearInterval(keepalive))
       setTimeout(() => {

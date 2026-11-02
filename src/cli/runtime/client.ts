@@ -41,7 +41,10 @@ import {
   createAgentLaunchCallerEvidence,
   createOrchestrationCompatibilityEnvelope
 } from './orchestration-compatibility-envelope'
-import { resolveRuntimeMethodTimeoutMs } from './runtime-request-timeout'
+import {
+  resolveRuntimeMethodKeepaliveTotalMs,
+  resolveRuntimeMethodTimeoutMs
+} from './runtime-request-timeout'
 import {
   buildOrchestrationRecoveryCommand,
   resolveOrchestrationCliExecutable
@@ -94,8 +97,7 @@ export class RuntimeClient {
     options?: RuntimeCallOptions
   ): Promise<RuntimeRpcSuccess<TResult>> {
     const effectiveTimeoutMs =
-      options?.timeoutMs ??
-      resolveRuntimeMethodTimeoutMs(method, params, this.requestTimeoutMs, this.remote !== null)
+      options?.timeoutMs ?? resolveRuntimeMethodTimeoutMs(method, params, this.requestTimeoutMs)
     const orchestrationMutation = isOrchestrationMutation(method, params)
     const terminalPromptMutation = isTerminalPromptMutation(method, params)
     const legacyTerminalPrompt = options?.legacyTerminalPrompt === true && terminalPromptMutation
@@ -153,6 +155,12 @@ export class RuntimeClient {
           method,
           params,
           timeoutMs: effectiveTimeoutMs,
+          // The paired host's keepalives renew a setup-bearing launch's idle timeout, never past this.
+          keepaliveTotalMs: resolveRuntimeMethodKeepaliveTotalMs(
+            method,
+            params,
+            effectiveTimeoutMs
+          ),
           envelope,
           requestSelection: options?.requestSelection
         })

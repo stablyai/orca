@@ -1,10 +1,11 @@
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import type { RpcResponse } from './types'
+import type { RpcRequestDeadline } from './rpc-request-keepalive'
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
   reject: (error: Error) => void
-  timer: ReturnType<typeof setTimeout>
+  deadline: RpcRequestDeadline
   written: boolean
 }
 
@@ -24,6 +25,11 @@ export class RelayPendingRequests {
     this.pending.delete(id)
   }
 
+  /** A retired or unknown request's keepalive renews nothing. */
+  keepalive(id: string): void {
+    this.pending.get(id)?.deadline.renew()
+  }
+
   markWritten(id: string): void {
     const request = this.pending.get(id)
     if (request) {
@@ -36,7 +42,7 @@ export class RelayPendingRequests {
     if (!request) {
       return false
     }
-    clearTimeout(request.timer)
+    request.deadline.clear()
     this.pending.delete(response.id)
     request.resolve(response)
     return true
@@ -47,7 +53,7 @@ export class RelayPendingRequests {
       return
     }
     for (const request of this.pending.values()) {
-      clearTimeout(request.timer)
+      request.deadline.clear()
       request.reject(request.written ? markRpcDeliveryUnknown(new Error(error.message)) : error)
     }
     this.pending.clear()

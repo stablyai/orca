@@ -42,7 +42,9 @@ const Failure = z
 
 const Keepalive = z
   .object({
-    _keepalive: z.literal(true)
+    _keepalive: z.literal(true),
+    /** The request a paired host's keepalive renews; a local socket's keepalive names none. */
+    requestId: z.string().optional()
   })
   .strip()
 

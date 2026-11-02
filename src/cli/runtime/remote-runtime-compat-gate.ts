@@ -35,6 +35,7 @@ export class RemoteRuntimeCompatGate {
     method: string
     params: unknown
     timeoutMs: number
+    keepaliveTotalMs?: number
     envelope?: RuntimeOrchestrationEnvelope
     requestSelection?: RuntimeRequestSelection
   }): Promise<RuntimeRpcResponse<TResult>> {
@@ -44,7 +45,8 @@ export class RemoteRuntimeCompatGate {
         args.method,
         args.params,
         args.timeoutMs,
-        args.envelope
+        args.envelope,
+        args.keepaliveTotalMs
       )
     }
     return args.transport.sendWebSocketRequestWithStatusPreflight<TResult>(
@@ -64,7 +66,8 @@ export class RemoteRuntimeCompatGate {
         }
       },
       args.envelope,
-      args.requestSelection
+      args.requestSelection,
+      args.keepaliveTotalMs
     )
   }
 

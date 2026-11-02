@@ -11,6 +11,7 @@ import type { WebSocketTransport } from '../rpc/ws-transport'
 import type { DeviceScope } from '../device-registry'
 import { RuntimeRpcMobileDevices } from './runtime-rpc-mobile-devices'
 import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
+import { startRequestKeepalive } from './runtime-rpc-request-keepalive'
 import type { RpcBinarySender } from '../rpc/rpc-binary-sender'
 import { limitRuntimeRpcReplySize } from './runtime-rpc-reply-size-limit'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-allowlist'
@@ -192,15 +193,30 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
     }
 
     const abortRegistration = ws ? this.registerWebSocketDispatchAbort(ws) : null
+    // A long poll stays observed until its reply, end or abort; socket close aborts it.
+    const stopKeepalive = longPoll
+      ? startRequestKeepalive(
+          request.id,
+          reply,
+          this.keepaliveIntervalMs,
+          abortRegistration?.signal
+        )
+      : () => {}
 
     // Older pairings lack scope metadata; stamp authenticated scope on status.get.
     const boundedReply = limitRuntimeRpcReplySize(request.id, reply, (id, code, message) =>
       this.buildError(id, code, message)
     )
-    const replyForRequest =
+    const scopedReply =
       request.method === 'status.get'
         ? (response: string): void => boundedReply(injectDeviceScope(response, device.scope))
         : boundedReply
+    const replyForRequest = longPoll
+      ? (response: string): void => {
+          stopKeepalive()
+          scopedReply(response)
+        }
+      : scopedReply
 
     const connectionId = ws ? this.mobileSocketWiring?.getConnectionId(ws) : undefined
     const pairingProvider = this.mobileRelayPairingProvider
@@ -284,6 +300,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
           this.registerBinaryMessageHandler(connectionId, handler)
       })
     } finally {
+      stopKeepalive()
       abortRegistration?.dispose()
       this.releaseLongPoll(longPoll, device.deviceId)
     }

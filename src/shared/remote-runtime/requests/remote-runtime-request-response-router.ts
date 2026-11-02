@@ -144,7 +144,10 @@ export class RemoteRuntimeRequestResponseRouter<TResult> {
       return
     }
     if (isKeepaliveFrame(raw)) {
-      this.options.refreshTimeout()
+      // Only this request's own keepalive renews it; a sibling's says nothing about this one.
+      if (raw.requestId === this.options.requestId) {
+        this.options.refreshTimeout()
+      }
       return
     }
     const parsed = RuntimeRpcEnvelopeSchema.safeParse(raw)

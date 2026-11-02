@@ -1,4 +1,7 @@
-import { resolveRuntimeMethodTimeoutMs } from './runtime-request-timeout'
+import {
+  resolveRuntimeMethodKeepaliveTotalMs,
+  resolveRuntimeMethodTimeoutMs
+} from './runtime-request-timeout'
 import { DEFAULT_WAIT_TIMEOUT_SECONDS } from '../../shared/setup-agent-sequencing'
 import { withCliAgentLaunchRecovery } from '../agent-launch-recovery'
 import { createServer, type Server } from 'node:net'
@@ -64,7 +67,6 @@ describe('RuntimeClient orchestration recovery identity', () => {
     const error = new RuntimeRpcFailureError({
       id: 'setup',
       ok: false,
-      runtimeId: 'host',
       error: {
         code: 'agent_launch_setup_not_completed',
         message:
@@ -76,11 +78,14 @@ describe('RuntimeClient orchestration recovery identity', () => {
     ).rejects.toBe(error)
   })
 
-  it('keeps the idle timeout for a local workspace launch, whose host keepalives refresh it', () => {
+  it("keeps the idle timeout for a workspace launch, letting keepalives renew it to setup's deadline", () => {
     const launch = { agent: 'codex', target: { kind: 'create-worktree', create: {} } }
     expect(resolveRuntimeMethodTimeoutMs('agent.launch', launch, 60_000)).toBe(60_000)
-    expect(resolveRuntimeMethodTimeoutMs('agent.launch', launch, 60_000, true)).toBe(
-      DEFAULT_WAIT_TIMEOUT_SECONDS * 1000 + 10_000
+    expect(resolveRuntimeMethodKeepaliveTotalMs('agent.launch', launch, 60_000)).toBe(
+      DEFAULT_WAIT_TIMEOUT_SECONDS * 1000 + 10 * 60_000
+    )
+    expect(resolveRuntimeMethodKeepaliveTotalMs('agent.launch', { agent: 'codex' }, 60_000)).toBe(
+      60_000
     )
   })
 

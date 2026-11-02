@@ -20,6 +20,10 @@ describe('isRpcResponse', () => {
     expect(isRpcResponse({ id: 'rpc-1', ok: false, error: { code: 'failed' } })).toBe(false)
   })
 
+  it("does not read a host keepalive naming a request as that request's response", () => {
+    expect(isRpcResponse({ _keepalive: true, requestId: 'rpc-1' })).toBe(false)
+  })
+
   it('accepts additive future fields without weakening known-field validation', () => {
     expect(
       isRpcResponse({
