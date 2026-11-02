@@ -63,6 +63,8 @@ function withoutKeys(env: Record<string, string>, keys: readonly string[]): Reco
 
 export type ClaudeStreamJsonConnectionHandlers = {
   onMessage?: (message: Record<string, unknown>) => void
+  /** Raw stdout before the SDK reads it, for state that must keep wire order with permission requests. */
+  onStdout?: (chunk: Buffer | string) => void
   /** The SDK handles request IDs, aborts and deduplication; cannot combine with permissionPromptToolName. */
   canUseTool?: CanUseTool
   /** `request_user_dialog` control; the CLI only emits kinds declared in `supportedDialogKinds`. */
@@ -103,8 +105,8 @@ export async function openClaudeStreamJsonConnection(
   queryImpl?: typeof ClaudeAgentSdk.query
 ): Promise<ClaudeStreamJsonConnection> {
   const { query } = await loadClaudeAgentSdk()
-  const startup = claudeStartupAnswerObservation()
-  const spawner = createClaudeCodeProcessSpawn(spawnImpl, process.platform, launch, startup.attach)
+  const startup = claudeStartupAnswerObservation(handlers.onStdout)
+  const spawner = createClaudeCodeProcessSpawn(spawnImpl, process.platform, launch, startup.feed)
   // Always supply scrubbed env to prevent ambient auth leaks; only launch.env may pin CLAUDE_CONFIG_DIR.
   const env = await withoutRejectedClaudeApiKey(
     withoutKeys(

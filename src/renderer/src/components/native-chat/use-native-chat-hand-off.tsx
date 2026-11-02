@@ -20,7 +20,7 @@ import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-s
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { NativeChatFileLinkContext } from './native-chat-file-link'
-import { nativeChatMessageCopyText } from '../../../../shared/native-chat-message-copy-text'
+import { buildAgentSessionHandoffContext } from '../../../../shared/agent-session-handoff-context'
 
 export type NativeChatHandOff = {
   /** This chat can seed another agent from its owning workspace. */
@@ -141,17 +141,7 @@ export function useNativeChatHandOff({
       sourceTitle: chatTab?.customLabel?.trim() || conversationName || chatTab?.label,
       sourceWorkingDirectory: directory.worktreePath,
       transcriptPath,
-      capturedText: saved
-        ? (context.capturedText ?? '')
-        : messages
-            .flatMap((message) => {
-              if (message.agentStart) {
-                return []
-              }
-              const text = nativeChatMessageCopyText(message).trim()
-              return text ? [`${message.role}: ${text}`] : []
-            })
-            .join('\n\n')
+      capturedText: saved ? (context.capturedText ?? '') : buildAgentSessionHandoffContext(messages)
     }
     if (buildAgentSessionContinuationPrompt(source, 'focused')) {
       const prepared: Attempt = {

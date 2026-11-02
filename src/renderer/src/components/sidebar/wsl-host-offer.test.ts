@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  existingWslHostOfferFor,
   readWslHostOfferGate,
   shouldOfferWslHost,
   wslHostOfferDistro,
@@ -7,6 +8,7 @@ import {
   type WslHostOfferGate
 } from './wsl-host-offer'
 import type { WslHostAddResult } from '../../../../shared/wsl-host-types'
+import { wslDistroWindowsPathAccess } from '../../../../shared/windows-path-access'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   acceptWslHostOffer,
@@ -57,6 +59,30 @@ describe('shouldOfferWslHost', () => {
     expect(wslHostOfferFor('\\\\wsl$\\Ubuntu\\repo', open)).toBe('Ubuntu')
     expect(wslHostOfferFor('C:\\repo', open)).toBeNull()
     expect(wslHostOfferFor('\\\\wsl$\\Ubuntu\\repo', { ...open, dismissed: true })).toBeNull()
+  })
+})
+
+describe('existingWslHostOfferFor', () => {
+  const hosts = [{ environmentId: 'wsl-ubuntu', access: wslDistroWindowsPathAccess('Ubuntu') }]
+
+  it('offers the saved host that runs the path distro, under its registered name', () => {
+    expect(existingWslHostOfferFor('\\\\wsl.localhost\\ubuntu\\home\\me\\repo', hosts)).toEqual({
+      hostId: 'runtime:wsl-ubuntu',
+      linuxPath: '/home/me/repo',
+      distro: 'Ubuntu'
+    })
+  })
+
+  it.each([
+    ['another distro', '\\\\wsl.localhost\\Debian\\home\\me\\repo'],
+    ['a Windows drive seen through the distro', '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\src\\repo'],
+    ['a Windows drive', 'C:\\src\\repo']
+  ])('offers nothing for %s', (_label, path) => {
+    expect(existingWslHostOfferFor(path, hosts)).toBeNull()
+  })
+
+  it('offers nothing without saved hosts', () => {
+    expect(existingWslHostOfferFor('\\\\wsl.localhost\\Ubuntu\\home\\me', [])).toBeNull()
   })
 })
 

@@ -1,5 +1,4 @@
 import { StringDecoder } from 'node:string_decoder'
-import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import { createIncrementalNdjsonFramer } from '../../shared/main-process-ndjson-framer'
 
 // Unescaped quotes occur only as JSON structure, so other records skip this second parse.
@@ -9,10 +8,15 @@ function mayBeFailedResult(text: string): boolean {
   return FAILED_RESULT_TOKENS.every((token) => token.test(text))
 }
 
-/** Observe before SDK cleanup can wait on transcript flushing. */
-export function claudeStartupAnswerObservation() {
+/** Observe before SDK cleanup can wait on transcript flushing; feed is the connection's one stdout tap. */
+export function claudeStartupAnswerObservation(next?: (chunk: Buffer | string) => void) {
   let failure: Error | undefined
-  let detach = (): void => {}
+  let done = false
+  const decoder = new StringDecoder('utf8')
+  const stop = (): void => {
+    done = true
+    framer.reset()
+  }
   const observe = (record: unknown): void => {
     if (
       typeof record === 'object' &&
@@ -26,26 +30,22 @@ export function claudeStartupAnswerObservation() {
       failure ??= Object.assign(new Error('claude reported a failed result during startup'), {
         errorClass: 'error_result'
       })
-      detach()
+      stop()
     }
   }
+  // The shared line budget bounds retention; a rejected prefix cannot prove a root record.
+  const framer = createIncrementalNdjsonFramer(observe, () => {}, {
+    acceptLine: mayBeFailedResult
+  })
   return {
     failure: () => failure,
-    finish: () => detach(),
-    attach: (child: PipedChildProcess): void => {
-      const decoder = new StringDecoder('utf8')
-      // The shared line budget bounds retention; a rejected prefix cannot prove a root record.
-      const framer = createIncrementalNdjsonFramer(observe, () => {}, {
-        acceptLine: mayBeFailedResult
-      })
-      const onData = (chunk: Buffer | string): void =>
+    finish: stop,
+    // Observes until capture, send or close; every chunk still reaches the next handler.
+    feed: (chunk: Buffer | string): void => {
+      if (!done) {
         framer.feed(typeof chunk === 'string' ? chunk : decoder.write(chunk))
-      detach = () => {
-        child.stdout.removeListener('data', onData)
-        framer.reset()
       }
-      child.stdout.on('data', onData)
-      child.stdout.once('close', () => detach())
+      next?.(chunk)
     }
   }
 }

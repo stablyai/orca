@@ -1,6 +1,5 @@
 import sdkExit from '../fixtures/startup-sdk-process-exit.json'
 import { afterEach, expect, it, vi } from 'vitest'
-import { createFakePipedChild } from '../../../shared/__fixtures__/fake-spawned-child'
 import { claudeStartupAnswerObservation } from '../claude-startup-answer-observation'
 import { runClaudeControl } from '../claude-agent-sdk-control-requests'
 import {
@@ -84,9 +83,7 @@ it('retains a failed result before a stalled SDK transcript flush and never wait
   const acquired = await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'flush' })
   const connection = claude.connections[0]
   connection.close = () => new Promise(() => {})
-  const raw = createFakePipedChild()
   const observation = claudeStartupAnswerObservation()
-  observation.attach(raw)
   connection.startupFailure = observation.failure
   const result = adapter
     .open({
@@ -96,7 +93,7 @@ it('retains a failed result before a stalled SDK transcript flush and never wait
       signal: new AbortController().signal
     })
     .catch((error) => error)
-  raw.stdout.write(
+  observation.feed(
     `${JSON.stringify({
       type: 'result',
       is_error: true,
@@ -257,39 +254,34 @@ it('parses only failed root results at startup, bounded by candidates rather tha
     `${JSON.stringify({ type: 'result', subtype, is_error: true })}\n`
   // Counts the real observer's work for one child at a given startup record population.
   const observeStartup = async (records: number) => {
-    const child = createFakePipedChild()
     const observation = claudeStartupAnswerObservation()
-    observation.attach(child)
-    const listenersWhileAttached = child.stdout.listenerCount('data')
     const parse = vi.spyOn(JSON, 'parse')
     try {
       const oversized = hook('x'.repeat(NDJSON_MAX_LINE_BYTES + 1))
-      child.stdout.write(oversized.slice(0, NDJSON_MAX_LINE_BYTES / 2))
-      child.stdout.write(oversized.slice(NDJSON_MAX_LINE_BYTES / 2))
+      observation.feed(oversized.slice(0, NDJSON_MAX_LINE_BYTES / 2))
+      observation.feed(oversized.slice(NDJSON_MAX_LINE_BYTES / 2))
       for (let index = 0; index < records; index += 1) {
-        child.stdout.write(
+        observation.feed(
           index % 2 === 0
             ? hook(JSON.stringify({ type: 'result', is_error: true, index }))
             : assistant(`working ${index}`)
         )
       }
-      child.stdout.write(failedResult('error_during_execution'))
+      observation.feed(failedResult('error_during_execution'))
       await flush()
       const parsed = parse.mock.calls.map(([text]) => String(text))
       const failure = observation.failure()
       parse.mockClear()
-      child.stdout.write(failedResult('error_after_capture'))
-      child.stdout.write(hook('after capture'))
+      observation.feed(failedResult('error_after_capture'))
+      observation.feed(hook('after capture'))
       observation.finish()
-      child.stdout.write(failedResult('error_after_finish'))
+      observation.feed(failedResult('error_after_finish'))
       await flush()
       return {
-        listenersWhileAttached,
         irrelevantParses: parsed.filter((text) => !text.includes('error_during_execution')).length,
         candidateParses: parsed.filter((text) => text.includes('error_during_execution')).length,
         failure,
-        parsesAfterCapture: parse.mock.calls.length,
-        listenersAfterCapture: child.stdout.listenerCount('data')
+        parsesAfterCapture: parse.mock.calls.length
       }
     } finally {
       parse.mockRestore()
@@ -298,20 +290,16 @@ it('parses only failed root results at startup, bounded by candidates rather tha
   const n = await observeStartup(100)
   const tenN = await observeStartup(1000)
   expect(n).toMatchObject({
-    listenersWhileAttached: 1,
     irrelevantParses: 0,
     candidateParses: 1,
     failure: expect.objectContaining({ errorClass: 'error_result' }),
-    parsesAfterCapture: 0,
-    listenersAfterCapture: 0
+    parsesAfterCapture: 0
   })
   expect(tenN).toEqual(n)
 })
 
 it('takes no startup answer from a line over the budget', async () => {
-  const child = createFakePipedChild()
   const observation = claudeStartupAnswerObservation()
-  observation.attach(child)
   const flush = () => new Promise((resolve) => setImmediate(resolve))
   const large = 'x'.repeat(NDJSON_MAX_LINE_BYTES + 1)
   // Tool input is arbitrary JSON; a result-shaped object inside it is not the provider's answer.
@@ -330,22 +318,28 @@ it('takes no startup answer from a line over the budget', async () => {
       ]
     }
   })}\n`
-  child.stdout.write(assistant.slice(0, NDJSON_MAX_LINE_BYTES))
-  child.stdout.write(assistant.slice(NDJSON_MAX_LINE_BYTES))
+  observation.feed(assistant.slice(0, NDJSON_MAX_LINE_BYTES))
+  observation.feed(assistant.slice(NDJSON_MAX_LINE_BYTES))
   await flush()
   expect(observation.failure()).toBeUndefined()
   // The parent that marks a subagent result can sit past the retained prefix.
-  child.stdout.write(
+  observation.feed(
     `${JSON.stringify({ type: 'result', is_error: true, errors: [large], parent_tool_use_id: 'task-1' })}\n`
   )
   // Intended limit: an oversized failed root result is left to the SDK answer or the unanswered exit.
-  child.stdout.write(`${JSON.stringify({ type: 'result', is_error: true, errors: [large] })}\n`)
+  observation.feed(`${JSON.stringify({ type: 'result', is_error: true, errors: [large] })}\n`)
   await flush()
   expect(observation.failure()).toBeUndefined()
-  child.stdout.write(
+  observation.feed(
     `${JSON.stringify({ type: 'result', subtype: 'error_during_execution', is_error: true })}\n`
   )
   await flush()
   expect(observation.failure()).toMatchObject({ errorClass: 'error_result' })
-  expect(child.stdout.listenerCount('data')).toBe(0)
+  const parse = vi.spyOn(JSON, 'parse')
+  try {
+    observation.feed(`${JSON.stringify({ type: 'result', subtype: 'later', is_error: true })}\n`)
+    expect(parse).not.toHaveBeenCalled()
+  } finally {
+    parse.mockRestore()
+  }
 })

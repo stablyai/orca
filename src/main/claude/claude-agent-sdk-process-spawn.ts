@@ -28,13 +28,29 @@ function definedEnv(env: Record<string, string | undefined>): Record<string, str
   return next
 }
 
+/** Subscribes alongside the SDK's reader: an earlier listener would drain output it never sees. */
+function observeStdoutWithReader(
+  stdout: PipedChildProcess['stdout'],
+  onStdout: (chunk: Buffer | string) => void
+): void {
+  const onSubscribe = (event: string | symbol): void => {
+    if (event !== 'data' && event !== 'readable') {
+      return
+    }
+    stdout.removeListener('newListener', onSubscribe)
+    // Same tick as the reader, so no chunk can be emitted to one and not the other.
+    stdout.on('data', onStdout)
+  }
+  stdout.on('newListener', onSubscribe)
+}
+
 // Orca owns the child for PID-based exit proof and Windows .cmd quoting.
 // POSIX supervisors stop Claude if Orca dies; Windows spawns Claude directly.
 export function createClaudeCodeProcessSpawn(
   spawnImpl: PipedProcessSpawner = spawnProcess,
   platform: NodeJS.Platform = process.platform,
   launch?: { pathToClaudeCodeExecutable: string; prefixArgs?: readonly string[] },
-  observeChild?: (child: PipedChildProcess) => void
+  onStdout?: (chunk: Buffer | string) => void
 ): ClaudeCodeProcessSpawn {
   let managed: ManagedProviderProcess | null = null
   return {
@@ -59,8 +75,10 @@ export function createClaudeCodeProcessSpawn(
           acceptClose: claudeChildCloseProven
         }
       )
+      if (onStdout) {
+        observeStdoutWithReader(managed.child.stdout, onStdout)
+      }
       // The SDK drains stderr only for its own local spawn; the managed process drains it here.
-      observeChild?.(managed.child)
       return managed.child
     },
     get child() {

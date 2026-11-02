@@ -21,6 +21,10 @@ import {
   isWslMoveSourceHost
 } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { listWslMovedProjects } from '../../persistence/moving-wsl-projects/wsl-moved-projects'
+import { listHostRepoCatalogSnapshots } from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-recorder'
+import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/runtime-environment-registry-root'
+import { isGatedOffWslHost } from '../../wsl/wsl-host-gate'
 
 export function registerRepoCatalogHandlers(
   mainWindow: BrowserWindow,
@@ -40,6 +44,16 @@ export function registerRepoCatalogHandlers(
   // The local rows `repos:list` hides once their WSL host owns them; read-only, for their chats.
   ipcMain.handle('repos:listWslMoved', () =>
     listWslMovedProjects(store.getRepos(), store.getFolderWorkspaces())
+  )
+
+  // Desktop-only reads (environment registry and saved state): never wakes a stopped distro.
+  ipcMain.handle('repos:listHostCatalogSnapshots', () =>
+    listHostRepoCatalogSnapshots(
+      store,
+      listEnvironments(getRuntimeEnvironmentRegistryRoot()).filter(
+        (environment) => !isGatedOffWslHost(environment)
+      )
+    )
   )
 
   ipcMain.handle('projects:list', () => {

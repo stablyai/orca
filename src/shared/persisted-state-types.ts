@@ -18,6 +18,7 @@ import type { OnboardingState } from './onboarding-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
 import type { ProjectGroup } from './project-group-types'
 import type { RemoteLayoutSnapshot } from './remote-layout-snapshot'
+import type { HostRepoCatalogSnapshot } from './host-repo-catalog-snapshot'
 import type { Project, ProjectHostSetup } from './project-types'
 import type { Repo } from './repo-types'
 import type { SparsePreset } from './worktree/create-types'
@@ -95,6 +96,8 @@ export type PersistedState = {
   /** Paired server’s last display layout, keyed by environment and written only by the snapshot recorder;
    * separate from runtime:<env> partitions that older builds overwrite. */
   remoteLayoutSnapshots?: Record<string, RemoteLayoutSnapshot>
+  /** WSL host's last project list, keyed by environment; display-only until the host answers again. */
+  hostRepoCatalogSnapshots?: Record<string, HostRepoCatalogSnapshot>
   sshTargets: SshTarget[]
   /** Highest SSH target registration generation issued; prevents identity reuse after rollback. */
   sshTargetGenerationCounter?: number

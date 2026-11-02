@@ -1,6 +1,6 @@
 import type { AgentSessionAcquisition } from '../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { openClaudeStreamJsonConnection } from '../claude-stream-json-connection'
-import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
+import { claudeLaunchPermissions } from './claude-structured-inbound-control'
 import { resolveClaudeReplayTurn } from '../claude-replay-turn-resolution'
 import { claudeStartedUnechoedSend } from '../claude-command-lifecycle'
 import { claudeSessionStateEndsTurn } from '../claude-session-state-turn-over'
@@ -179,7 +179,6 @@ export async function acquireClaudeSession({
   }
   const emit = (event: Parameters<typeof callbacks.emit>[2]): void =>
     callbacks.deliver(attempt, sessionId, () => callbacks.emit(liveSession, input.events, event))
-  const { canUseTool, onUserDialog } = buildClaudePermissionCallbacks({ sessionId, prompts, emit })
 
   try {
     const launch = await resolveClaudeAcquisitionLaunch({
@@ -193,6 +192,8 @@ export async function acquireClaudeSession({
       attempt
     })
     expectedProviderSessionId = launch.providerSessionId
+    // Granted from this final launch before the connection can deliver a request.
+    const permissions = claudeLaunchPermissions({ sessionId, prompts, emit }, launch)
     naming?.launch(launch)
     attempt.account = launch.account
     observedLeafUuid = launch.resumeLeafUuid
@@ -213,10 +214,9 @@ export async function acquireClaudeSession({
         },
         {
           onMessage,
-          canUseTool,
-          onUserDialog,
+          ...permissions.handlers,
           onFault: childFailed,
-          onExit: (error, exit) => {
+          onExit: permissions.closeThen((error, exit) => {
             if (exit?.expected) {
               naming?.failed()
               callbacks.finishClose(sessionId, attempt)
@@ -224,7 +224,7 @@ export async function acquireClaudeSession({
             }
             childFailed(...claudeStartupExit(error, attempt.connection))
             callbacks.handleExit(sessionId, attempt, error)
-          }
+          })
         }
       )
     )
@@ -276,6 +276,7 @@ export async function acquireClaudeSession({
     session.reportedOptions = observedOptions
     liveSession = session
     session.firstRootInit = firstRootInit
+    session.orderedPermissionMode = permissions.orderedMode
     adoptClaudeStructuredSpawnOptions(session, {
       ...launch.savedOptions,
       sdkOptions: launch.options
