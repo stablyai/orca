@@ -12,6 +12,7 @@ import {
 import { useAppStore } from '@/store'
 import { runConversationSwitch } from './conversation-surface-switch'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { pendingNativeChatCliSwitches } from './pending-conversation-surface-switches'
 import { makeTabSessionHistoryRow } from '@/components/tab-bar/tab-session-history-test-fixture'
 const mocks = vi.hoisted(() => {
@@ -142,11 +143,35 @@ it('sends one switch, shows pending only while the host runs it, and settles wit
   expect(mocks.info).not.toHaveBeenCalled()
 })
 
-// A paired client's tab holding a host chat is named after the host's tab (`mirroredTabContainers`):
-// the host is sent its own id, so it reads exactly the tab being switched.
-it('names the chat\u2019s tab by the host\u2019s own id', async () => {
-  await runConversationSwitch({ ...subject, chatTabId: toWebTerminalSurfaceTabId('host-tab-4') })
-  expect(mocks.call.mock.calls[0]![2].execution.sourceTabId).toBe('host-tab-4')
+// A paired client's tab saves the host tab it mirrors, whatever its own id: the host is sent its
+// own id, so it reads exactly the tab being switched.
+it('names the chat\u2019s tab by the host tab it mirrors', async () => {
+  const chatTab = toWebTerminalSurfaceTabId('host-tab-4')
+  useAppStore.setState({
+    unifiedTabsByWorktree: {
+      [subject.workspaceId]: [
+        {
+          id: chatTab,
+          entityId: subject.sessionId!,
+          groupId: 'group',
+          worktreeId: subject.workspaceId,
+          contentType: 'agent-session',
+          label: 'Codex',
+          customLabel: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 0,
+          mirroredHostTab: {
+            hostId: subject.executionHostId as ExecutionHostId,
+            workspaceId: subject.workspaceId,
+            tabId: 'host-layout-tab'
+          }
+        }
+      ]
+    }
+  })
+  await runConversationSwitch({ ...subject, chatTabId: chatTab })
+  expect(mocks.call.mock.calls[0]![2].execution.sourceTabId).toBe('host-layout-tab')
 })
 
 it('reports a refused switch once and leaves nothing pending', async () => {

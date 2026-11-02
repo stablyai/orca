@@ -1,6 +1,6 @@
 import { adoptingAgentOnHost } from '@/components/right-sidebar/ai-vault-session-resume-in-chat-launch'
 import { adoptsCliConversations } from '../../../shared/structured-agent-cli-conversation-adoption'
-import { toHostSessionPaneKey, toHostSessionTabId } from '../../../shared/terminal-surface-id'
+import { toHostSessionPaneKey } from '../../../shared/terminal-surface-id'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -237,9 +237,9 @@ async function switchRequest(
       sessionId: args.sessionId,
       execution: {
         invocationId,
-        // The host's own id for the chat's tab: a paired client's tab holding it is named after
-        // that id (`mirroredTabContainers`), so the host reads exactly the tab being switched.
-        sourceTabId: args.chatTabId ? toHostSessionTabId(args.chatTabId) : undefined,
+        // The host's own id for the chat's tab: a paired client's tab saves the host tab it
+        // mirrors (`mirroredHostTab`), so the host reads exactly the tab being switched.
+        sourceTabId: args.chatTabId ? hostTabIdOf(args.workspaceId, args.chatTabId) : undefined,
         commandOverride: useAppStore.getState().settings?.agentCmdOverrides?.[args.agent]
       }
     }
@@ -254,6 +254,15 @@ async function switchRequest(
     )
   }
   return { sessionId: args.sessionId, execution: { invocationId } }
+}
+
+/** A tab's id as its host names it: a paired client's tab by the host tab it mirrors, the host's
+ *  own window's tab by its own id. */
+function hostTabIdOf(workspaceId: string, tabId: string): string {
+  return (
+    useAppStore.getState().unifiedTabsByWorktree[workspaceId]?.find((tab) => tab.id === tabId)
+      ?.mirroredHostTab?.tabId ?? tabId
+  )
 }
 
 export {

@@ -1,24 +1,72 @@
-import type { Tab } from '../../../../shared/tab-types'
+import type { MirroredHostTab, Tab } from '../../../../shared/tab-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 
+export type MirroredTabContainers = {
+  /** The association a tab built for this host tab saves. */
+  origin: (hostTabId: string) => MirroredHostTab
+  /** This client's tab for a host tab, whatever it held: the tab saved as mirroring it, else (once,
+   *  for a tab saved before the association existed) the tab its id form or what it holds names. */
+  containerOf: (hostTabId: string, contentHolder?: Tab) => Tab | undefined
+  /** A new tab's id: the preferred one unless another tab here holds it. */
+  allocate: (preferred: string) => string
+}
+
 /**
- * A paired client's tab for a host tab is keyed by the host's layout tab id (`logicalTabId`), which
- * a switch keeps; what it holds (`contentType`, `entityId`) is separate, so a host switch changes
- * the content under the same local tab and its place, pin and selection stay where they were, on
- * every load. The id takes the form that row's tab has always had here (a terminal tab's
- * `web-terminal-<id>`, a chat tab's own id), so a tab that never switched keeps today's id. A row
- * from an older host names no layout id: its content keys the tab, as before.
+ * A paired client's tab for a host tab is found by the host tab it mirrors (`mirroredHostTab`:
+ * host, workspace and the host's layout id, which a switch keeps), saved with the tab. What it
+ * holds is separate, so a host switch changes the content under the same local tab, and its place,
+ * pin and selection stay, on every load and whichever content it first showed. The local id is the
+ * client's own and never decoded. A tab saved before the association existed is adopted once by
+ * the id form it has always had (a terminal tab's `web-terminal-<id>`, a chat tab's own id) or by
+ * what it holds, keeping its id. Another host's tabs, and a tab mirroring another host tab, are
+ * never matched.
  */
 export function mirroredTabContainers(
   unifiedTabs: readonly Tab[],
-  executionHostId: string
-): (logicalTabId: string | undefined) => Tab | undefined {
-  // This host's tabs only: another host's layout ids are never this one's.
-  const byId = new Map(
-    unifiedTabs.flatMap((tab) => (tab.executionHostId === executionHostId ? [[tab.id, tab]] : []))
-  )
-  return (logicalTabId) =>
-    logicalTabId === undefined
-      ? undefined
-      : (byId.get(toWebTerminalSurfaceTabId(logicalTabId)) ?? byId.get(logicalTabId))
+  hostId: ExecutionHostId,
+  workspaceId: string
+): MirroredTabContainers {
+  const byHostTab = new Map<string, Tab>()
+  const unassociated = new Map<string, Tab>()
+  const occupied = new Set<string>()
+  for (const tab of unifiedTabs) {
+    occupied.add(tab.id)
+    const origin = tab.mirroredHostTab
+    if (!origin) {
+      // Tabs saved before host stamping name no host; another host's never match.
+      if (tab.executionHostId === undefined || tab.executionHostId === hostId) {
+        unassociated.set(tab.id, tab)
+      }
+    } else if (origin.hostId === hostId && origin.workspaceId === workspaceId) {
+      byHostTab.set(origin.tabId, tab)
+    }
+  }
+  const claimed = new Set<string>()
+  const claim = (tab: Tab | undefined): Tab | undefined => {
+    if (tab) {
+      claimed.add(tab.id)
+    }
+    return tab
+  }
+  const adoptable = (tab: Tab | undefined): Tab | undefined =>
+    tab && unassociated.has(tab.id) && !claimed.has(tab.id) ? tab : undefined
+  return {
+    origin: (tabId) => ({ hostId, workspaceId, tabId }),
+    containerOf: (hostTabId, contentHolder) =>
+      claim(
+        byHostTab.get(hostTabId) ??
+          adoptable(unassociated.get(toWebTerminalSurfaceTabId(hostTabId))) ??
+          adoptable(unassociated.get(hostTabId)) ??
+          adoptable(contentHolder)
+      ),
+    allocate: (preferred) => {
+      let id = preferred
+      for (let suffix = 2; occupied.has(id); suffix++) {
+        id = `${preferred}-${suffix}`
+      }
+      occupied.add(id)
+      return id
+    }
+  }
 }

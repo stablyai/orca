@@ -29,7 +29,8 @@ function layoutTab(tab: PublishedTab): LayoutTab {
       'isPinned',
       'viewMode',
       'isPreview',
-      'agentSessionAgent'
+      'agentSessionAgent',
+      'mirroredHostTab'
     ])
   }
   if (tab.kind !== 'terminal') {

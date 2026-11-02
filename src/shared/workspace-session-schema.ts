@@ -108,7 +108,12 @@ const tabSchema = z.object({
   isPreview: z.boolean().optional(),
   isPinned: z.boolean().optional(),
   // Preserve chat mode on restore; unknown future values degrade to terminal and missing legacy values remain absent.
-  viewMode: z.enum(['terminal', 'chat']).catch('terminal').optional()
+  viewMode: z.enum(['terminal', 'chat']).catch('terminal').optional(),
+  // A malformed association drops itself, never the tab: the tab is adopted again by what it holds.
+  mirroredHostTab: z
+    .object({ hostId: executionHostIdSchema, workspaceId: z.string(), tabId: z.string() })
+    .optional()
+    .catch(undefined)
 })
 
 const tabGroupSchema = z.object({

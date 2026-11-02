@@ -46,6 +46,11 @@ export function toVisibleTabType(contentType: TabContentType): WorkspaceVisibleT
   return 'editor'
 }
 
+/** The paired host tab a client's tab mirrors: the host, its workspace and the host's own layout
+ *  tab id, which a switch keeps. Saved with the tab and gone with it; the client's tab id is its
+ *  own and never names the host tab. */
+export type MirroredHostTab = { hostId: ExecutionHostId; workspaceId: string; tabId: string }
+
 export type Tab = {
   id: string // UUID for terminals, filePath for editors (preserves current convention)
   entityId: string // ID of the backing content (terminal tab ID, file path, browser workspace ID)
@@ -71,6 +76,8 @@ export type Tab = {
   viewMode?: 'terminal' | 'chat'
   /** Timestamp when the tab was last focused / activated by the user. */
   lastFocusedAt?: number
+  /** A paired client's tab: the host tab it mirrors, whatever that tab holds now. */
+  mirroredHostTab?: MirroredHostTab
 }
 
 /** Whether this tab shows the terminal. Ids from main, a paired client or a pane key name the

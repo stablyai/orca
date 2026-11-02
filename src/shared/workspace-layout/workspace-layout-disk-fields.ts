@@ -147,6 +147,7 @@ const ENTRY_FIELDS = {
   sortOrder: TAB_ORDER,
   isPreview: tab('isPreview'),
   agentSessionAgent: tab('agentSessionAgent'),
+  mirroredHostTab: tab('mirroredHostTab'),
   lastFocusedAt: own('view', 'lastFocusedAt')
 } as const
 

@@ -30,6 +30,8 @@ import {
   isMirroredTerminalOfAnotherEnvironment,
   type MirrorRowOwnershipState
 } from './mirror-row-ownership'
+import type { MirroredTabContainers } from './mirrored-tab-containers'
+import { logicalTabIdOf } from '../../../../shared/runtime-mobile-session-tab-contracts'
 
 export function isReadyTerminalTab(
   tab: RuntimeMobileSessionTabsResult['tabs'][number]
@@ -70,9 +72,9 @@ export function buildMirroredAgentTabs(
   sortOffset: number,
   currentUnifiedTabs: readonly Tab[],
   now: number,
-  /** A paired host's tab already shown here (see `mirroredTabContainers`); the window's own
-   *  chats are found by what they hold. */
-  containerOf: (logicalTabId: string | undefined) => Tab | undefined = () => undefined
+  /** A paired host's tabs here (`mirroredTabContainers`); the window's own chats are found by what
+   *  they hold. */
+  hostTabs?: MirroredTabContainers
 ): MirroredAgentTab[] {
   const agentTabs = snapshot.tabs
     .filter(isAgentSessionTab)
@@ -82,6 +84,16 @@ export function buildMirroredAgentTabs(
     )
   const occupiedIds = new Set(currentUnifiedTabs.map((tab) => tab.id))
   const assignedIds = new Set<string>()
+  const allocate =
+    hostTabs?.allocate ??
+    ((preferred: string) => {
+      let id = preferred
+      for (let suffix = 2; occupiedIds.has(id); suffix++) {
+        id = `${preferred}-${suffix}`
+      }
+      occupiedIds.add(id)
+      return id
+    })
   const replacementTabs = new Map<string, Tab>()
   const replacementIds = new Set<string>()
   const currentAgentTabs = new Map<string, { tabs: Tab[]; nextAvailable: number }>()
@@ -120,8 +132,8 @@ export function buildMirroredAgentTabs(
   return agentTabs.map((tab, index) => {
     const existing = replacementTabs.get(tab.sessionId) ?? firstUnreplaced(tab.sessionId)
     // The host tab's own tab here, whatever it held: the chat takes its place, pin and color.
-    const container = containerOf(tab.logicalTabId)
-    const own = container ?? existing
+    const hostTabId = logicalTabIdOf(tab)
+    const own = hostTabs ? hostTabs.containerOf(hostTabId, existing) : existing
     const launch = readStructuredAgentLaunchRecord(tab.sessionId)
     const address =
       executionHostId === 'local' &&
@@ -130,19 +142,16 @@ export function buildMirroredAgentTabs(
         ? launch.surfaceAddress
         : undefined
     const baseId = structuredAgentSessionTabId(tab.sessionId)
-    let localId = own?.id ?? baseId
-    if (!own || assignedIds.has(localId)) {
-      let suffix = 0
-      while (occupiedIds.has(localId)) {
-        localId = `${baseId}:history-${++suffix}`
-      }
+    let localId = own?.id
+    if (localId === undefined || assignedIds.has(localId)) {
+      localId = allocate(baseId)
     }
-    occupiedIds.add(localId)
     assignedIds.add(localId)
     return {
       hostTabId: tab.id,
       unifiedTab: {
         id: localId,
+        ...(hostTabs ? { mirroredHostTab: hostTabs.origin(hostTabId) } : {}),
         entityId: tab.sessionId,
         // Preserve provisional groups on promotion; lagging host placement must not move mounted panes after user splits.
         groupId:

@@ -7,7 +7,7 @@ import type { PersistedClientHostedBrowserPage } from '../client-hosted-browser-
 import type { ClosedTerminalPanesByPaneKey } from '../closed-terminal-panes'
 import type { ClosedTerminalTabTombstone } from '../closed-terminal-tab-tombstones'
 import type { ExecutionHostId } from '../execution-host'
-import type { TabContentType, TabGroupLayoutNode } from '../tab-types'
+import type { MirroredHostTab, TabContentType, TabGroupLayoutNode } from '../tab-types'
 import type { TerminalGrid, TerminalPaneLayoutNode, TerminalTab } from '../terminal-tab-types'
 import type { PersistedOpenFile } from '../workspace-session-state-types'
 import type { BrowserWorkspace } from '../browser-workspace-types'
@@ -32,6 +32,7 @@ type LayoutTabFields = {
   viewMode?: 'terminal' | 'chat'
   isPreview?: boolean
   agentSessionAgent?: AgentType
+  mirroredHostTab?: MirroredHostTab
 }
 
 export type LayoutTerminalCreation = Pick<

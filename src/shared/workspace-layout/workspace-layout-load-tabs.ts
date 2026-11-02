@@ -29,7 +29,8 @@ function contentFields(entry: Tab) {
       'isPinned',
       'viewMode',
       'isPreview',
-      'agentSessionAgent'
+      'agentSessionAgent',
+      'mirroredHostTab'
     ]),
     ...(entry.generatedLabel !== undefined ? { generatedTitle: entry.generatedLabel } : {})
   }

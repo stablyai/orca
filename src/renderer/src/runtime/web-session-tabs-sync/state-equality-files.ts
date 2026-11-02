@@ -93,7 +93,10 @@ export function tabEqual(a: Tab, b: Tab): boolean {
     a.sortOrder === b.sortOrder &&
     a.createdAt === b.createdAt &&
     a.isPreview === b.isPreview &&
-    a.isPinned === b.isPinned
+    a.isPinned === b.isPinned &&
+    a.mirroredHostTab?.hostId === b.mirroredHostTab?.hostId &&
+    a.mirroredHostTab?.workspaceId === b.mirroredHostTab?.workspaceId &&
+    a.mirroredHostTab?.tabId === b.mirroredHostTab?.tabId
   )
 }
 

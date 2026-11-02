@@ -3,7 +3,7 @@
 import type { AgentType } from '../agent-status-types'
 import type { AiVaultSessionTitle } from '../ai-vault-session-title'
 import type { ExecutionHostId } from '../execution-host'
-import type { TabContentType, TabGroupLayoutNode } from '../tab-types'
+import type { MirroredHostTab, TabContentType, TabGroupLayoutNode } from '../tab-types'
 import type { TerminalPaneLayoutNode } from '../terminal-tab-types'
 import { pickStoredFields } from './stored-record-fields'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
@@ -70,6 +70,7 @@ export type PublishedTab = {
   viewMode?: 'terminal' | 'chat'
   isPreview?: boolean
   agentSessionAgent?: AgentType
+  mirroredHostTab?: MirroredHostTab
   terminal?: PublishedTerminal
   /** What a non-plain editor tab shows, so a window lacking its open file can rebuild it. */
   editorView?: LayoutEditorView
@@ -148,7 +149,8 @@ function publishTab(
       'isPinned',
       'viewMode',
       'isPreview',
-      'agentSessionAgent'
+      'agentSessionAgent',
+      'mirroredHostTab'
     ])
   }
   const editorView = workspace.editorViews?.[tab.id]

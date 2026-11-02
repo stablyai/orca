@@ -15,7 +15,7 @@ import type {
   BrowserPage,
   BrowserWorkspace
 } from '../../../../shared/browser-workspace-types'
-import type { Tab } from '../../../../shared/tab-types'
+import type { MirroredHostTab, Tab } from '../../../../shared/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { OpenFile } from '../../store/slices/editor'
 import type { RuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
@@ -185,6 +185,8 @@ export type MirroredTerminalTab = {
   hostTabId: string
   /** The local tab holding it (`mirroredTabContainers`): the TerminalTab keeps its own id. */
   containerId: string
+  /** The host tab that local tab mirrors (a paired host's terminal only). */
+  origin?: MirroredHostTab
   ptyIds: string[]
   layout: TerminalLayoutSnapshot
   retainedSurfaceByPrunedLeafId?: ReadonlyMap<string, TerminalSurface>

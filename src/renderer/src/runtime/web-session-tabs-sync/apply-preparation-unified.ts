@@ -41,7 +41,8 @@ export function prepareWebSessionTabsSnapshotUnified(
       entry.containerId,
       hostGroupIdByTabId.get(entry.hostTabId) ?? targetGroupId,
       environmentId,
-      entry.tab.viewMode ?? existingViewModeByTabId.get(entry.containerId)
+      entry.tab.viewMode ?? existingViewModeByTabId.get(entry.containerId),
+      entry.origin
     )
   )
   const mirroredBrowserUnifiedTabs = mirroredBrowserTabs.map((entry) => entry.unifiedTab)

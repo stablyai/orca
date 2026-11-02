@@ -8,7 +8,7 @@ import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-r
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import type { MirroredTerminalTab, TerminalSurface, ReadyTerminalSurface } from './state'
 import { chooseRemoteTerminalLayout, isTerminalSurfaceTab } from './terminal-surfaces'
-import type { Tab } from '../../../../shared/tab-types'
+import type { MirroredHostTab, Tab } from '../../../../shared/tab-types'
 
 function pendingBindingBelongsToEnvironment(
   ptyId: string,
@@ -64,11 +64,14 @@ export function buildMirroredTerminalTabs(
   now: number,
   focusTarget?: { parentTabId: string; leafId: string },
   terminalPtyMode: 'local' | 'remote' = 'remote',
-  /** The local tab holding a host tab's terminal (see `mirroredTabContainers`), by its first row. */
-  containerFor: (surface: TerminalSurface, localTabId: string) => { id: string; tab?: Tab } = (
-    _surface,
-    localTabId
-  ) => ({ id: localTabId })
+  /** The local tab holding a host tab's terminal (see `mirroredTabContainers`), by its first row,
+   *  and the host tab it mirrors. */
+  containerFor: (
+    surface: TerminalSurface,
+    localTabId: string
+  ) => { id: string; tab?: Tab; origin?: MirroredHostTab } = (_surface, localTabId) => ({
+    id: localTabId
+  })
 ): MirroredTerminalTab[] {
   const groups = new Map<string, TerminalSurface[]>()
   for (const tab of snapshot.tabs.filter(isTerminalSurfaceTab)) {
@@ -204,6 +207,7 @@ export function buildMirroredTerminalTabs(
       },
       hostTabId: parentTabId,
       containerId: container.id,
+      ...(container.origin ? { origin: container.origin } : {}),
       ptyIds,
       layout,
       ...(retainedSurfaceByPrunedLeafId ? { retainedSurfaceByPrunedLeafId } : {})

@@ -20,10 +20,12 @@ export function buildTerminalUnifiedTab(
   groupId: string,
   environmentId: string,
   // Why: viewMode is host-tracked but the client's optimistic toggle must win during the echo window; callers pass the reconciled value.
-  viewMode?: Tab['viewMode']
+  viewMode?: Tab['viewMode'],
+  mirroredHostTab?: Tab['mirroredHostTab']
 ): Tab {
   return {
     id: containerId,
+    ...(mirroredHostTab ? { mirroredHostTab } : {}),
     entityId: tab.id,
     groupId,
     worktreeId: tab.worktreeId,

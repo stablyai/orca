@@ -136,7 +136,7 @@ export function prepareWebSessionTabsSnapshotBrowser(
     mirroredTerminalTabEntries.length + mirroredBrowserTabs.length + mirroredEditorTabs.length,
     currentUnifiedTabs,
     now,
-    base.containerOf
+    base.hostTabs
   )
   const mirroredEditorFileIds = new Set(mirroredEditorTabs.map((entry) => entry.file.id))
   const mirroredEditorHostTabIds = new Set(mirroredEditorTabs.map((entry) => entry.hostTabId))

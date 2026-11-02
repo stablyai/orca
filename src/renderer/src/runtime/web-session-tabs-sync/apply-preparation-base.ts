@@ -36,6 +36,7 @@ import {
 import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
 import { mirroredTabContainers } from './mirrored-tab-containers'
 import { executionHostIdForSessionTabsOwner } from '../local-structured-session-owner'
+import { logicalTabIdOf } from '../../../../shared/runtime-mobile-session-tab-contracts'
 
 export function prepareWebSessionTabsSnapshotBase(
   state: WebSessionTabsSyncState,
@@ -70,11 +71,16 @@ export function prepareWebSessionTabsSnapshotBase(
       }
     : rawSnapshot
   const unifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
-  // A paired host's tabs are keyed by its layout ids; the window's own chats by what they hold.
-  const containerOf =
+  // A paired host's tabs are found by the host tab each mirrors; the window's own chats by what
+  // they hold.
+  const hostTabs =
     options?.contentScope === 'agent-session'
-      ? () => undefined
-      : mirroredTabContainers(unifiedTabs, executionHostIdForSessionTabsOwner(environmentId))
+      ? undefined
+      : mirroredTabContainers(
+          unifiedTabs,
+          executionHostIdForSessionTabsOwner(environmentId),
+          snapshot.worktree
+        )
   const terminalContainers = new Map(
     unifiedTabs.flatMap((tab) => (tab.contentType === 'terminal' ? [[tab.entityId, tab]] : []))
   )
@@ -206,10 +212,14 @@ export function prepareWebSessionTabsSnapshotBase(
       : undefined,
     options?.terminalPtyMode,
     (surface, localTabId) => {
-      const tab = containerOf(surface.logicalTabId) ?? terminalContainers.get(localTabId)
+      const hostTabId = logicalTabIdOf(surface)
+      const holder = terminalContainers.get(localTabId)
+      const tab = hostTabs ? hostTabs.containerOf(hostTabId, holder) : holder
+      const preferred = toWebTerminalSurfaceTabId(hostTabId)
       return {
-        id: tab?.id ?? toWebTerminalSurfaceTabId(surface.logicalTabId ?? surface.parentTabId),
-        tab
+        id: tab?.id ?? hostTabs?.allocate(preferred) ?? preferred,
+        tab,
+        ...(hostTabs ? { origin: hostTabs.origin(hostTabId) } : {})
       }
     }
   )
@@ -276,6 +286,6 @@ export function prepareWebSessionTabsSnapshotBase(
     mirroredTerminalIds,
     removedTerminalIds,
     removedTerminalResourceIds,
-    containerOf
+    hostTabs
   }
 }
