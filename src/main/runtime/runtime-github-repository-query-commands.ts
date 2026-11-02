@@ -1,5 +1,6 @@
 import type { ListWorkItemsResult } from '../../shared/github/work-item-types'
 import type { Repo } from '../../shared/repo-types'
+import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { LocalProjectGhExecOptions } from '../project-runtime-git-options'
 import {
   countWorkItems,
@@ -103,7 +104,8 @@ export class RuntimeGitHubRepositoryQueryCommands {
   async getRepoWorkItemDetails(
     repoSelector: string,
     number: number,
-    type?: 'issue' | 'pr'
+    type?: 'issue' | 'pr',
+    ownerRepo?: GitHubOwnerRepo
   ): Promise<Awaited<ReturnType<typeof getWorkItemDetails>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return getWorkItemDetails(
@@ -112,7 +114,10 @@ export class RuntimeGitHubRepositoryQueryCommands {
       type,
       getRepoRoutingConnectionId(repo),
       this.deps.getLocalGitArgs(repo)[0] ?? {},
-      repo.issueSourcePreference
+      repo.issueSourcePreference,
+      ownerRepo,
+      // Ordinary remote loads never send ownerRepo; the optional field marks a capability-gated Refresh.
+      !!ownerRepo
     )
   }
 

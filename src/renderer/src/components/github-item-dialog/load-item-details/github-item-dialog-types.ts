@@ -37,7 +37,9 @@ export type GitHubItemDialogEditSectionProps = {
   onLabelsChange: (labels: string[]) => void
   /** Invalidate the parent’s detail cache after mutation so reopening cannot show stale data during FRESH_MS. */
   onMutated: () => void
-  assignees: string[]
+  acceptedRefresh?: number
+  /** Undefined while the item's assignees are still unknown. */
+  assignees?: string[]
   onUse: (item: GitHubWorkItem) => void
   onOpenOrUse?: (item: GitHubWorkItem) => void
   attachedWorkspaceLabel?: string | null

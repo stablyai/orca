@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useAllWorktrees } from '@/store/selectors'
 import { useAppStore } from '@/store'
@@ -80,6 +80,12 @@ export default function GitHubItemDialog({
   )
 
   const {
+    refreshTask,
+    refreshing,
+    acceptedRefresh,
+    canRefreshTask,
+    refreshUnsupported,
+    showRefreshTask,
     tab,
     setTab,
     canUseDetailsRepoContext,
@@ -89,6 +95,7 @@ export default function GitHubItemDialog({
     error,
     detailsLoaded,
     displayWorkItem,
+    addressedWorkItem,
     appendOptimisticComment,
     invalidateCurrentDetailsCache,
     handlePRFileViewedChange,
@@ -101,6 +108,7 @@ export default function GitHubItemDialog({
     sourceContext,
     initialTab,
     projectOrigin,
+    onRefreshAccepted: (item: GitHubWorkItem) => setLocalLabels(item.labels),
     onReviewRequestsChange
   })
   const { linkCopied, setLinkCopyButtonRef, handleCopyWorkItemLink } =
@@ -112,10 +120,16 @@ export default function GitHubItemDialog({
     if (resolvedWorkItemState) {
       setLocalState(resolvedWorkItemState)
     }
-    if (workItemLabels) {
-      setLocalLabels(workItemLabels)
+  }, [workItemId, resolvedWorkItemState])
+  // Chips follow the displayed item (its pending edits included), and only when its labels change.
+  const displayedLabels = displayWorkItem?.labels ?? workItemLabels
+  const syncLabels = useEffectEvent(() => {
+    if (displayedLabels) {
+      setLocalLabels(displayedLabels)
     }
-  }, [workItemId, resolvedWorkItemState, workItemLabels])
+  })
+  const displayedLabelsKey = displayedLabels?.join('\0')
+  useEffect(() => syncLabels(), [workItemId, displayedLabelsKey])
 
   // Why: a just-closed Radix overlay can leave `pointer-events: none` on <body>, killing header button clicks; poll a few frames to clear it.
   useEffect(() => {
@@ -150,7 +164,11 @@ export default function GitHubItemDialog({
     <div className="flex h-full min-h-0 flex-col">
       {isIssuePage ? (
         <GitHubItemDialogIssueHeader
-          workItem={workItem}
+          workItem={addressedWorkItem ?? workItem}
+          refreshTask={showRefreshTask ? refreshTask : undefined}
+          refreshing={refreshing}
+          canRefreshTask={canRefreshTask}
+          refreshUnsupported={refreshUnsupported}
           backLabel={backLabel}
           onClose={onClose}
           linkCopied={linkCopied}
@@ -204,7 +222,8 @@ export default function GitHubItemDialog({
           <div className="px-4 py-6 text-[12px] text-destructive">{error}</div>
         ) : isIssuePage ? (
           <GitHubItemDialogIssueBody
-            workItem={workItem}
+            workItem={addressedWorkItem ?? workItem}
+            acceptedRefresh={acceptedRefresh}
             displayWorkItem={displayWorkItem}
             repoPath={repoPath}
             effectiveRepoId={effectiveRepoId}

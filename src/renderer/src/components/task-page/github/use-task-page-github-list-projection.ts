@@ -1,3 +1,4 @@
+import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 import type { TaskPageJiraCreationMetadataModel } from '../jira/use-task-page-jira-creation-metadata'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
 import { useCallback, useMemo, useEffect } from 'react'
@@ -39,7 +40,8 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
     },
     [activeGithubTaskKind]
   )
-  const currentPageItems = useMemo(() => pages[currentPage] ?? [], [pages, currentPage])
+  const rawCurrentPageItems = useMemo(() => pages[currentPage] ?? [], [pages, currentPage])
+  const currentPageItems = useGitHubTaskItems(rawCurrentPageItems)
   const typeFilteredCurrentPageItems = useMemo(
     () => applyTypeFilter(currentPageItems),
     [applyTypeFilter, currentPageItems]
