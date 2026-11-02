@@ -16,7 +16,10 @@ export type SidebarProjectCatalogStore = Pick<
   'getRepos' | 'getProjectGroups' | 'getFolderWorkspaces' | 'getSshTargets' | 'getProjectHostSetups'
 > &
   Partial<Pick<RuntimeStore, 'getProjects'>> & {
-    getUI?: () => Pick<PersistedUIState, 'manualRepoOrder' | 'projectOrderBy'>
+    getUI?: () => Pick<
+      PersistedUIState,
+      'manualRepoOrder' | 'projectOrderBy' | 'personalProjectOrder'
+    >
   }
 
 /** This host's store as clients may list it, with its paired servers' catalogs. */

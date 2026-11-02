@@ -1,3 +1,4 @@
+import { newerPersonalProjectOrder } from '../../../../../shared/personal-project-order'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import type { AppState } from '../../types'
 import { normalizeRightSidebarRoute } from '../../right-sidebar-route'
@@ -127,6 +128,10 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           sortBy,
           // Why: main-process getUI() already normalized this (defaulting to 'manual'); read it through without migrating.
           projectOrderBy: ui.projectOrderBy,
+          personalProjectOrder: newerPersonalProjectOrder(
+            s.personalProjectOrder,
+            ui.personalProjectOrder
+          ),
           // Why: Active-only was retired; force the old flag off so an old profile can't invisibly narrow the workspace list.
           showActiveOnly: false,
           // Why: ignore older positive-form keys so old profiles start from the new default (sleeping workspaces visible).

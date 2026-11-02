@@ -128,7 +128,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     isPinned: (worktree) => worktree.isPinned === true,
     duplicatePinned: pinnedDisplayPolicy === 'duplicate-in-groups',
     owningSectionOf: (worktree) =>
-      getProjectGroupingForRepo(worktree.repoId, repoMap, projectIndex),
+      getProjectGroupingForRepo(worktree.repoId, repoMap, projectIndex, repoOf(worktree)),
     projectIdOf: (worktree) => worktree.repoId,
     sectionsOf: ({ pinned, natural, displayRootByIdentity }) => {
       const groups: OrderedGroupEntry[] =
@@ -137,6 +137,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
           : buildOrderedGroups({
               groupBy,
               naturalWorktrees: natural,
+              repoOfWorktree: repoOf,
               repoMap,
               prGroupOf,
               workspaceStatuses,

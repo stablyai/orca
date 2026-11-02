@@ -110,13 +110,9 @@ export function renderWorktreeSectionHeaderRow(args: {
       ? getProjectGroupHostId(row.projectGroup)
       : undefined
   const repoHeaderIndex =
-    projectIdForHeader !== undefined
-      ? headerDrag.repoHeaderIndexByRepoId.get(projectIdForHeader)
-      : undefined
+    projectIdForHeader !== undefined ? headerDrag.repoHeaderIndexByRowKey.get(row.key) : undefined
   const repoHeaderBucketKey =
-    projectIdForHeader !== undefined
-      ? headerDrag.repoHeaderBucketByRepoId.get(projectIdForHeader)
-      : undefined
+    projectIdForHeader !== undefined ? headerDrag.repoHeaderBucketByRowKey.get(row.key) : undefined
   const projectGroupHeaderIndex =
     projectGroupDragIdForHeader !== undefined
       ? headerDrag.projectGroupHeaderIndexByGroupId.get(projectGroupDragIdForHeader)
@@ -217,9 +213,7 @@ export function renderWorktreeSectionHeaderRow(args: {
           data-repo-header-index={repoHeaderIndex}
           data-repo-header-bucket={repoHeaderBucketKey}
           data-repo-header-section-end={
-            projectIdForHeader
-              ? headerDrag.repoHeaderSectionEndByRepoId.get(projectIdForHeader)
-              : undefined
+            projectIdForHeader ? headerDrag.repoHeaderSectionEndByRowKey.get(row.key) : undefined
           }
           // Padding remains a drag handle; only the title shows grab so action buttons never inherit it.
           data-repo-header-drag-handle={isDraggableRepoHeader ? '' : undefined}

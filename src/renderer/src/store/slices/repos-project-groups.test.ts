@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
+import { folderWorkspaceRemovalSessionState } from './folder-workspace-removal-session.test-fixture'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { NestedRepoScanResult, ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -11,6 +12,11 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
+
+const recoveryNotice = vi.hoisted(() => vi.fn())
+vi.mock('@/components/editor/closed-unsaved-files-toast', () => ({
+  showClosedUnsavedFilesToast: recoveryNotice
+}))
 
 const LOCAL_OWNER = { runtimeEnvironmentId: null }
 
@@ -64,6 +70,7 @@ function makeSshConnectionState(status: SshConnectionState['status']): SshConnec
 }
 
 beforeEach(() => {
+  recoveryNotice.mockReset()
   clearRuntimeCompatibilityCacheForTests()
   reposList.mockReset()
   reposRemove.mockReset()
@@ -582,85 +589,7 @@ describe('project group store routing', () => {
     const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
     folderWorkspacesDelete.mockResolvedValue(true)
     const store = createTestStore()
-    store.setState({
-      folderWorkspaces: [folderWorkspace],
-      activeWorktreeId: workspaceKey,
-      activeWorkspaceKey: workspaceKey,
-      activeTabId: 'terminal-tab-1',
-      activeBrowserTabId: 'browser-tab-1',
-      activeTabType: 'browser',
-      tabsByWorktree: {
-        [workspaceKey]: [
-          {
-            id: 'terminal-tab-1',
-            worktreeId: workspaceKey,
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: 'pty-1'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        'terminal-tab-1': {
-          root: { type: 'leaf', leafId: 'leaf-1' },
-          activeLeafId: 'leaf-1',
-          expandedLeafId: null
-        }
-      },
-      browserTabsByWorktree: {
-        [workspaceKey]: [
-          {
-            id: 'browser-tab-1',
-            worktreeId: workspaceKey,
-            url: 'https://example.com',
-            title: 'Example',
-            loading: false,
-            faviconUrl: null,
-            canGoBack: false,
-            canGoForward: false,
-            loadError: null,
-            createdAt: 1
-          }
-        ]
-      },
-      browserPagesByWorkspace: {
-        'browser-tab-1': [
-          {
-            id: 'page-1',
-            workspaceId: 'browser-tab-1',
-            worktreeId: workspaceKey,
-            url: 'https://example.com',
-            title: 'Example',
-            loading: false,
-            faviconUrl: null,
-            canGoBack: false,
-            canGoForward: false,
-            loadError: null,
-            createdAt: 1
-          }
-        ]
-      },
-      openFiles: [
-        {
-          id: 'file-1',
-          worktreeId: workspaceKey,
-          filePath: '/workspace/platform/notes.md',
-          relativePath: 'notes.md',
-          language: 'markdown',
-          isDirty: true,
-          isPreview: false,
-          mode: 'edit'
-        }
-      ],
-      editorDrafts: { 'file-1': 'draft' },
-      activeFileIdByWorktree: { [workspaceKey]: 'file-1' },
-      activeTabTypeByWorktree: { [workspaceKey]: 'browser' },
-      activeBrowserTabIdByWorktree: { [workspaceKey]: 'browser-tab-1' },
-      lastVisitedAtByWorktreeId: { [workspaceKey]: 10 }
-    })
+    store.setState(folderWorkspaceRemovalSessionState(folderWorkspace))
 
     await expect(store.getState().deleteFolderWorkspace(folderWorkspace.id)).resolves.toBe(true)
 
@@ -677,6 +606,18 @@ describe('project group store routing', () => {
     expect(state.activeFileIdByWorktree[workspaceKey]).toBeUndefined()
     expect(state.activeBrowserTabIdByWorktree[workspaceKey]).toBeUndefined()
     expect(state.lastVisitedAtByWorktreeId[workspaceKey]).toBeUndefined()
+    await vi.waitFor(() => expect(recoveryNotice).toHaveBeenCalledTimes(1))
+    expect(recoveryNotice).toHaveBeenCalledWith(
+      [
+        {
+          fileId: 'file-1',
+          filePath: '/workspace/platform/notes.md',
+          content: 'draft'
+        }
+      ],
+      workspaceKey,
+      expect.any(Number)
+    )
   })
 
   it('refreshes local repos and groups after importing nested repos', async () => {

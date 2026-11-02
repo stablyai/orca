@@ -19,7 +19,8 @@ const initialAppStoreState = useAppStore.getState()
 
 registerWorktreeActivationReset()
 
-afterEach(() => {
+afterEach(async () => {
+  await vi.dynamicImportSettled()
   vi.restoreAllMocks()
   useAppStore.setState(initialAppStoreState, true)
 })

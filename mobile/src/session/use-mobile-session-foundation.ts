@@ -1,3 +1,4 @@
+import { useRpcClientContext } from '../transport/client-context'
 import { useState, useEffect } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams } from 'expo-router'
@@ -24,12 +25,14 @@ export function useMobileSessionFoundation() {
     worktreeId,
     name: routeWorktreeName,
     created,
+    projectOpen,
     warning: createdWarning
   } = useLocalSearchParams<{
     hostId: string
     worktreeId: string
     name?: string
     created?: string
+    projectOpen?: string
     warning?: string
   }>()
   const isFolderWorkspaceRoute = worktreeId.startsWith('folder:')
@@ -38,6 +41,10 @@ export function useMobileSessionFoundation() {
   const insets = useSafeAreaInsets()
   const { client, clientId, state: connState } = useWorkspaceClient(hostId)
   const { hostCapabilities } = useHostProtocolGates()
+  const uiViewClient =
+    useRpcClientContext()
+      .getAllClients()
+      .find((entry) => entry.hostId === hostId)?.client ?? null
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const forceReconnectHost = useForceReconnect()
@@ -95,6 +102,8 @@ export function useMobileSessionFoundation() {
     routeWorktreeName,
     created,
     createdWarning,
+    projectOpen,
+    uiViewClient,
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
     router,
