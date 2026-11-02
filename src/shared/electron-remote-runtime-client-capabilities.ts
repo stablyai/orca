@@ -1,5 +1,5 @@
 import { TERMINAL_SIDE_EFFECT_STATE_CAPABILITY } from './terminal-transient-observation'
-import { STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES } from './structured-agent-session-renderer-client-capabilities'
+import { STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES } from './agent-session/structured-agent-session-renderer-client-capabilities'
 import { TERMINAL_IMAGE_VIEWER_CAPABILITY } from './terminal-image-viewer-capability'
 import {
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,

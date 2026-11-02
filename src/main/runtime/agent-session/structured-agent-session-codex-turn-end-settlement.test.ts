@@ -19,7 +19,7 @@ import type { AgentJournalSubmission } from '../../../shared/agent-session/journ
 import { classifyDispatchRejection } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { owesStructuredAgentSessionWork } from '../../../shared/agent-session/view/structured-agent-session-owed-work'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../../shared/agent-session-goal-control-copy'
+import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../../shared/agent-session/view/agent-session-goal-control-copy'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,

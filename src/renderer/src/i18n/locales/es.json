@@ -13689,6 +13689,7 @@
                 "failingChecks_one": "{{count}} comprobación fallida",
                 "failingChecks_other": "{{count}} comprobaciones fallidas",
                 "failingChecks_many": "{{count}} comprobaciones fallidas",
+                "pipelineFailed": "{{name}} falló",
                 "pendingChecks_one": "{{count}} comprobación pendiente",
                 "pendingChecks_other": "{{count}} comprobaciones pendientes",
                 "pendingChecks_many": "{{count}} comprobaciones pendientes",
@@ -18854,6 +18855,7 @@
       "failureWords": {
         "theAgent": "El agente",
         "providerStartFailed": "{{agent}} se detuvo antes de terminar de iniciarse.",
+        "savedConversationMissing": "{{agent}} no pudo encontrar la conversación guardada de este chat.",
         "runCommandAgain": "Vuelva a ejecutar /{{command}}.",
         "sendToTryAgain": "Envíe su mensaje para volver a intentarlo.",
         "sendAgainToTryOnceMore": "Vuelva a enviar su mensaje para intentarlo de nuevo.",

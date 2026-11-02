@@ -4,7 +4,7 @@ import {
 } from './structured-agent-session-actionable-prompts'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
-import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { isHistoricalProviderTimelineItem } from '../agent-session-timeline/provider-timeline-history'
 import { currentRequestsProjection } from './agent-session-current-requests'
 // Derive operational work from lease, first-hand exit, replaced-runtime and journal evidence.
@@ -15,7 +15,7 @@ import {
   type AgentJournalRenderItem,
   type AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionLatestTurn } from '../../../shared/agent-session/agent-session-wire'

@@ -13,7 +13,7 @@ import { CrewChanges } from './crew-changes'
 import { subscribeCrew } from './crew-stream'
 import type { OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 
 import { fixture } from './crew-read-model.test-fixture'
 import { crewQueryPlans, meterCrewSql, sqlTotals } from './crew-recipient-sql.test-fixture'

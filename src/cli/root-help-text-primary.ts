@@ -67,6 +67,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  plugin dev reload         Reload development plugins',
   "  plugin dev inspect        Open DevTools for a plugin's open frames",
   "  plugin dev emit           Fire a test event at a dev plugin's worker",
+  "  plugin dev hook           Run a hook through a dev plugin's worker",
   "  plugin dev request        Call a dev plugin's worker handler like a panel",
   '  plugin dev unload         Remove a development folder',
   '',

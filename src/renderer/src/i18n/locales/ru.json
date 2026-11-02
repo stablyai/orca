@@ -14388,6 +14388,7 @@
                 "failingChecks_many": "{{count}} проверок с ошибками",
                 "failingChecks_one": "{{count}} проверка с ошибками",
                 "failingChecks_other": "{{count}} проверки с ошибками",
+                "pipelineFailed": "{{name}} завершился с ошибкой",
                 "pendingChecks_few": "{{count}} проверки в ожидании результата",
                 "pendingChecks_many": "{{count}} проверок в ожидании результата",
                 "pendingChecks_one": "{{count}} проверка в ожидании результата",
@@ -19645,6 +19646,7 @@
       "failureWords": {
         "theAgent": "Агент",
         "providerStartFailed": "{{agent}} остановился до завершения запуска.",
+        "savedConversationMissing": "{{agent}} не удалось найти сохранённую беседу этого чата.",
         "runCommandAgain": "Выполните /{{command}} снова.",
         "sendToTryAgain": "Отправьте сообщение, чтобы повторить попытку.",
         "sendAgainToTryOnceMore": "Отправьте сообщение снова, чтобы повторить попытку.",

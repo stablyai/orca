@@ -37,6 +37,41 @@ function isAlive(pid: number): boolean {
 const NODE_ENV = { ELECTRON_RUN_AS_NODE: '1' }
 
 describe('the shared catalog probe runner', () => {
+  it('returns required replies and stops the child when an optional response stalls', async () => {
+    const file = pidFile()
+    const stdout = await runAgentModelCatalogListing(
+      {
+        ...node(
+          `require('fs').writeFileSync(${JSON.stringify(file)}, String(process.pid));process.stdout.write('models\\nsettings\\n');setInterval(()=>{},1000)`
+        ),
+        env: NODE_ENV
+      },
+      {
+        site: 'test-partial-listing',
+        timeoutMs: 5_000,
+        partialOutput: { ready: (output) => output.includes('settings\n'), timeoutMs: 50 }
+      }
+    )
+    expect(stdout).toBe('models\nsettings\n')
+    const pid = Number(readFileSync(file, 'utf8'))
+    await vi.waitFor(() => expect(isAlive(pid)).toBe(false), { timeout: 5_000 })
+  })
+
+  it('keeps required replies when the listing deadline lands inside the optional grace', async () => {
+    const stdout = await runAgentModelCatalogListing(
+      {
+        ...node(`process.stdout.write('models\\nsettings\\n');setInterval(()=>{},1000)`),
+        env: NODE_ENV
+      },
+      {
+        site: 'test-partial-deadline',
+        timeoutMs: 3_000,
+        partialOutput: { ready: (output) => output.includes('settings\n'), timeoutMs: 60_000 }
+      }
+    )
+    expect(stdout).toBe('models\nsettings\n')
+  })
+
   it('answers a listing’s stdout once it exits 0, with its request on stdin', async () => {
     const stdout = await runAgentModelCatalogListing(
       {

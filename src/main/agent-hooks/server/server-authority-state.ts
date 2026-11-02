@@ -46,4 +46,11 @@ export abstract class AgentHookServerAuthorityState {
       ) => boolean | (() => boolean))
     | null = null
   protected unsubscribeLaunchAuthority: (() => void) | null = null
+
+  protected clearLaunchAuthority(): void {
+    this.pendingLaunchAuthority.clear()
+    this.unsubscribeLaunchAuthority?.()
+    this.unsubscribeLaunchAuthority = null
+    this.launchAuthorityVerifier = null
+  }
 }

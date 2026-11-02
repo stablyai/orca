@@ -160,6 +160,16 @@ capability kinds the user approved (such as `['storage:own']`), fixed when the w
 host still checks each call. In `agent.status.changed`, `state` and `mainAgent.state` are one of `working`, `blocked`, `waiting`
 and `done`. Every event's payload is in the [host API reference](plugin-host-api.md#events).
 
+A worker command can take over one of Orca's own actions with `"replaces": "<action>"` in
+`contributes.commands` (the same actions a declarative `action` may name; `engines.orca`
+`>=1.4.248`). When that action fires from its shortcut, the palette or a menu, Orca runs the
+command instead; if the worker fails or has not answered within 2 seconds, Orca runs its own. To
+wrap Orca's own, the command calls `orca.host.call('commands.run', { action })`, which always
+runs the built-in, never a replacement. The
+person sees each replacement before approving the plugin and can switch it back on the plugin's
+page. When two plugins replace the same action, the one installed first does, and the other's log
+says so.
+
 To test a handler without reproducing the real trigger, fire the event at a development plugin:
 
 ```sh
@@ -330,7 +340,12 @@ accepts an edit, and never hands your own accepted edits back through `onReplace
 keeps your draft and rejects `flush()`. On `conflict` it calls `merge(base, outside, mine)` once,
 where `base` is the last accepted value, and sends the result. Without `merge` the outside
 document wins, since an agent may have written the file: the draft is dropped, `onReplace` gets
-the outside value, and `flush()` rejects with `conflict`. Pass `merge` to keep both sides. It answers Orca's `editor.flush`
+the outside value, and `flush()` rejects with `conflict`. Pass `merge` to keep both sides. With
+`merge`, a write to the file on disk while the tab has unsaved edits also reaches the editor:
+Orca calls `merge(base, outside, mine)` with `base` the disk content those edits started from,
+the tab keeps the merged result unsaved, and its Reload/Overwrite banner is not shown. This
+applies to a local file open in one editor view; elsewhere, without `merge`, or when the editor
+does not answer within a second, that banner decides. It answers Orca's `editor.flush`
 itself before a save. Bytes editors pass both `decode` and `encode`. Check `'session' in
 orca.document` to support older Orca.
 
@@ -372,6 +387,31 @@ inside the frame, never on a call alone.
 Theme changes do not reload the frame: the shell updates the `--orca-*` variables and the
 `light`/`dark` class on `<html>` in place and emits `theme`. Restyle from the variables, or
 listen with `orca.on('theme', …)`, to follow it.
+
+`orca plugin check` (and `dev watch --check`) checks each custom editor without running it or
+Orca: from the `entry` it follows local `<script src>` files, inline module scripts and relative
+imports, and fails at `file:line:column` on a syntax error (`editor_syntax`), a missing file
+(`editor_missing_file`), an import Orca refuses (`editor_import`) and a file over its limit
+(`editor_too_large`). String `eval` or `Function`, which the frame refuses, is a warning
+(`editor_eval`): the scan can misread rare code. `--json` lists them under `editors`.
+
+To test an editor's sync logic in Node, `mockEditorHost` from `orca/testing` installs
+`globalThis.orca` with the real document API and `session()` over an in-memory file:
+
+```ts
+import { assert, mockEditorHost, test } from 'orca/testing'
+
+test('keeps an agent write', async () => {
+  const host = mockEditorHost({ text: '{"elements":[]}' }) // or { bytes }, plus { readOnly, colorScheme }
+  await import('./sync.ts') // your code calls orca.document.session()
+  host.replace('{"elements":[1]}') // an outside change
+  host.conflictNext() // the next edit is refused with `conflict`
+  await host.flush() // as a save does
+  assert.equal(host.edits.length, 1) // every applyEdit, refused ones with `refused: code`
+  host.setTheme('light')
+  host.dispose()
+})
+```
 
 ## 2. Load it while you work
 
@@ -454,6 +494,43 @@ value Orca owns start from the tree's props, images show their placeholder, it t
 it works only on this machine (no `--environment`), and it needs Orca's window hidden or
 minimized because the preview is drawn inside it. It writes
 `.orca/shots/<plugin-key>-<panel>.<scenario>.png` in the plugin folder unless you pass `--out`.
+
+### See a custom editor
+
+`orca plugin shot <dir|plugin-key> --editor <file>` saves a PNG of the plugin's custom editor
+showing that file. It opens the file as `orca plugin open --editor` does: in the workspace that
+holds it (its real path counts, so `/tmp/a.sketch` matches a workspace at `/private/tmp`), or else
+it opens the file's folder as a folder workspace. It loads the editor afresh, waits until the
+editor has its document and has asked for it (`orca.document.get` or `orca.document.onDidChange`)
+and has painted, then captures exactly the editor, hidden window included. `--width` and
+`--height` size the editor for that capture only, and `--theme` works as for panels; both are put
+back afterwards. `--act '<json>'` sends real input to the editor first, in its own CSS pixels
+from its top-left: `[{"click":[200,150]},{"drag":[[200,150],[400,300]]},{"key":"r"}]` (a `key`
+takes a name such as `Enter` and optional `"modifiers":["shift"|"control"|"alt"|"meta"]`), each
+painted before the next, and only while Orca's window is hidden or minimized. A shot never
+changes your file: with `--act` it copies the file into a temporary folder, shoots the copy in a
+temporary folder workspace and removes both afterwards (`copy: true` in the result); pass
+`--in-place` to act on the file itself, where edits reach its buffer like your own typing and its
+tab stays open with them. Before each `key`, Orca moves focus into the editor (what was focused,
+or what the last click or drag hit), so a canvas that keeps focus to itself still gets the key.
+Without `--act` it opens the file itself, leaves its buffer alone, and closes the tab if the shot
+opened it.
+The PNG is always written (`.orca/shots/<plugin-key>-<editor>.png` unless `--out`), but the
+command exits 1 and prints `errors` when the editor threw, was blocked by its content policy, or
+never asked for its document within 5 seconds. `--json` prints `{ path, editorId, filePath, width,
+height, theme, themeApplied, settled, subscribed, errors, acted?, copy? }`. Afterwards Orca shows
+the workspace it showed before.
+
+### See what your plugin adds to Orca's chrome
+
+`orca plugin shot <dir|plugin-key> --status-bar` saves a PNG of Orca's status bar, where your
+status bar items draw; `--window` saves the whole window. Both capture the hidden window like a
+panel shot, without showing or focusing it, and take `--theme` (put back afterwards) and `--out`.
+They write `.orca/shots/<plugin-key>-status-bar.png` or `-window.png`. On Linux an html panel's
+guest can come out blank in a `--window` shot; shoot the panel itself for it.
+
+When no workspace is showing, a panel shot selects one of this machine's workspaces in the hidden
+window first; it fails only when Orca has none.
 
 `orca plugin dev watch . --shot ./.orca/shots` opens one panel (the first, or
 `--shot-panel <id>`) in the right sidebar once, then after the load and after each reload that
