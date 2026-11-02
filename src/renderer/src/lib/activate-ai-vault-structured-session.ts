@@ -59,7 +59,7 @@ export const structuredSessionOpenFeedback: Pick<
 /** Read only structuredSession so history clicks and drag payloads follow the same reveal path. */
 export async function activateAiVaultStructuredSession(
   session: Pick<AiVaultSession, 'structuredSession'> &
-    Partial<Pick<AiVaultSession, 'executionHostId' | 'agent'>>,
+    Partial<Pick<AiVaultSession, 'executionHostId'>> & { agent?: string },
   deps?: StructuredSessionActivationDeps,
   target?: RuntimeClientTarget
 ): Promise<boolean> {

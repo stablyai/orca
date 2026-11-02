@@ -1,7 +1,8 @@
 import { prepareStructuredWorkspaceAuthority } from './structured-workspace-authority'
 import {
   discoverStructuredSessionDestination,
-  isRetiredStructuredSessionSource
+  isRetiredStructuredSessionSource,
+  type StructuredLocationRouting
 } from './structured-session-destination-discovery'
 import type { Repo } from '../../../shared/repo-types'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
@@ -13,7 +14,10 @@ import {
   getRepoExecutionHostId,
   getRepoRoutingConnectionId
 } from '../../../shared/execution-host'
-import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
+import {
+  getLocalProjectWorktreeGitOptions,
+  getLocalProjectWorktreeGitOptionsForRuntime
+} from '../../project-runtime-git-options'
 import {
   isFloatingWorkspaceId,
   isFloatingWorkspaceSelector
@@ -68,7 +72,7 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
         store,
         scan,
         listing: (repo, runtimes) => this.currentRepoWorktreeListing(repo, runtimes),
-        locate: (target) => this.structuredAgentSessionLocationForTarget(target),
+        locate: (target, routing) => this.structuredAgentSessionLocationForTarget(target, routing),
         folderTarget: (folder) => this.folderWorkspaceToResolvedWorktree(folder)
       },
       location
@@ -83,16 +87,24 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
     return this.structuredAgentSessionLocationForTarget(target)
   }
 
-  protected structuredAgentSessionLocationForTarget(target: {
-    worktree: Pick<
-      Awaited<
-        ReturnType<OrcaRuntimeWithPersistHeadlessTerminalTitle['resolveRuntimeFileTarget']>
-      >['worktree'],
-      'id' | 'path' | 'repoId' | 'hostId'
-    >
-    executionHostId: AgentSessionExecutionLocation['executionHostId']
-  }) {
-    const routing = resolveWorktreeHostRouting(this.store?.getRepos() ?? [], target.worktree)
+  /** `pass` carries one catalog read's routing index and runtimes when many targets are located. */
+  protected structuredAgentSessionLocationForTarget(
+    target: {
+      worktree: Pick<
+        Awaited<
+          ReturnType<OrcaRuntimeWithPersistHeadlessTerminalTitle['resolveRuntimeFileTarget']>
+        >['worktree'],
+        'id' | 'path' | 'repoId' | 'hostId'
+      >
+      executionHostId: AgentSessionExecutionLocation['executionHostId']
+    },
+    pass?: StructuredLocationRouting
+  ) {
+    const routing = resolveWorktreeHostRouting(
+      pass?.repos ?? this.store?.getRepos() ?? [],
+      target.worktree,
+      pass?.lookup
+    )
     if (routing.kind === 'ambiguous') {
       throw new Error('worktree_execution_host_unresolved')
     }
@@ -108,7 +120,10 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
     const isLocalHost = target.executionHostId === LOCAL_EXECUTION_HOST_ID
     const configuredWslDistro =
       repo && isLocalHost
-        ? (getLocalProjectWorktreeGitOptions(this.requireStore(), repo).wslDistro ?? null)
+        ? ((pass
+            ? getLocalProjectWorktreeGitOptionsForRuntime(repo, pass.runtimes.get(repo.id))
+            : getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
+          ).wslDistro ?? null)
         : null
     // Folder workspaces have no repo Git options, so a WSL UNC path is the only
     // durable signal that native Windows structured Codex cannot safely use it.

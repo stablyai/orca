@@ -1,10 +1,11 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { withChatTabChanges, type ChatTabChange } from '../agent-session/agent-session-tab-layout'
+import { filterWorkspaceSessionTabs } from '../../../shared/workspace-session-tab-filter'
 import { savedSessionId } from '../saved-structured-agent-session-restoration'
 import { structuredSessionPlacementAllowed } from './structured-session-placement'
 
-/** This machine's saved layout without the chat tabs its records place elsewhere. */
+/** This machine's saved layout without the chat tabs its records place elsewhere. One pass over
+ *  the saved rows themselves: a layout round trip would restamp other hosts' tabs as local. */
 export function withPlacedSavedChatTabs(
   session: WorkspaceSessionState,
   hostId: string | null | undefined
@@ -12,24 +13,11 @@ export function withPlacedSavedChatTabs(
   if (hostId && hostId !== LOCAL_EXECUTION_HOST_ID) {
     return session
   }
-  let next = session
-  for (const [worktreeId, tabs] of Object.entries(session.unifiedTabs ?? {})) {
-    const closes: ChatTabChange[] = []
-    for (const tab of tabs) {
-      const sessionId = savedSessionId(tab)
-      if (
-        sessionId &&
-        (!tab.executionHostId || tab.executionHostId === LOCAL_EXECUTION_HOST_ID) &&
-        !structuredSessionPlacementAllowed(worktreeId, sessionId)
-      ) {
-        closes.push({ close: sessionId, tabId: tab.id })
-      }
-    }
-    if (closes.length) {
-      next = withChatTabChanges(LOCAL_EXECUTION_HOST_ID, next, worktreeId, closes) ?? next
-    }
-  }
-  return next
+  return filterWorkspaceSessionTabs(session, (worktreeId, tab) => {
+    // Null for anything but this machine's chats, which only their own host places.
+    const sessionId = savedSessionId(tab)
+    return !sessionId || structuredSessionPlacementAllowed(worktreeId, sessionId)
+  })
 }
 
 /** A window's partial save plus whatever placing chat tabs changes in the layout it produces. */

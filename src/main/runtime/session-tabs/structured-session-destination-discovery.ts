@@ -9,14 +9,9 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from '../../../shared/execution-host'
-import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspace-execution-host'
+import { createFolderWorkspaceHostIndex } from '../../../shared/folder-workspace-host-index'
+import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
-import type { ProjectGroup } from '../../../shared/project-group-types'
-import {
-  buildProjectGroupChildIndex,
-  collectProjectGroupSubtreeIds
-} from '../../../shared/project-groups'
-import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/repo-types'
@@ -42,13 +37,20 @@ type Target = {
 
 type Runtimes = ReturnType<typeof resolveLocalProjectRuntimesForRepos>
 
+/** One nomination pass's catalog facts for deriving each candidate's location. */
+export type StructuredLocationRouting = {
+  repos: readonly Repo[]
+  lookup: ReturnType<typeof createRepoRowExecutionHostLookup<Repo>>
+  runtimes: Runtimes
+}
+
 type DiscoveryDeps = {
   store: RuntimeStore
   /** The shared catalog's listing, scanning only when its entry is missing or stale. */
   scan: (repo: Repo, runtimes?: Runtimes) => Promise<RuntimeWorktreeScanResult>
   /** The shared catalog's current fresh entry, without scanning; null when it has none. */
   listing: (repo: Repo, runtimes?: Runtimes) => RuntimeWorktreeScanResult | null
-  locate: (target: Target) => AgentSessionExecutionLocation
+  locate: (target: Target, routing: StructuredLocationRouting) => AgentSessionExecutionLocation
   folderTarget: (folder: FolderWorkspace) => Target['worktree']
 }
 
@@ -69,15 +71,6 @@ export function isRetiredStructuredSessionSource(
   )
 }
 
-function bucket<K, V>(map: Map<K, V[]>, key: K, value: V): void {
-  const rows = map.get(key)
-  if (rows) {
-    rows.push(value)
-  } else {
-    map.set(key, [value])
-  }
-}
-
 // One indexed pass over the current catalog: roots and scoped folders at the directory, and every
 // Git owner in the record's own namespace that could list it.
 function catalog(store: RuntimeStore, location: AgentSessionExecutionLocation) {
@@ -92,7 +85,8 @@ function catalog(store: RuntimeStore, location: AgentSessionExecutionLocation) {
       !(local && moved.has(`repo\0${repo.id}`))
   )
   const gitOwners = available.filter((repo) => !isFolderRepo(repo))
-  const runtimes = resolveLocalProjectRuntimesForRepos(store, gitOwners)
+  // Every local registration's runtime, since a candidate's distro comes from its own.
+  const runtimes = resolveLocalProjectRuntimesForRepos(store, repos)
   // An owner proven to run Git in another distro (or natively) lists only checkouts of that
   // namespace; one whose runtime is unresolved could list this one, so it still counts.
   const owners = gitOwners.filter((owner) => {
@@ -104,60 +98,20 @@ function catalog(store: RuntimeStore, location: AgentSessionExecutionLocation) {
         location.wslDistro
     )
   })
-  const foldersById = new Map<string, FolderWorkspace[]>()
-  for (const folder of folders) {
-    bucket(foldersById, folder.id, folder)
-  }
-  const groupsById = new Map<string, ProjectGroup[]>()
-  for (const group of projectGroups) {
-    bucket(groupsById, group.id, group)
-  }
-  const reposByGroup = new Map<string, Repo[]>()
-  for (const repo of repos) {
-    if (typeof repo.projectGroupId === 'string') {
-      bucket(reposByGroup, repo.projectGroupId, repo)
-    }
-  }
-  const children = buildProjectGroupChildIndex(projectGroups)
-  const reposInside = new Map<string, Repo[]>()
-  const qualified = new Map<string, ReturnType<typeof resolveQualifiedFolderWorkspaceResult>>()
-  // The shared resolver reads only a folder's own groups, their subtree, and repos in that subtree
-  // or under its path; handing it just those keeps its semantics without a whole-catalog pass per folder.
-  const qualify = (id: string) => {
-    let result = qualified.get(id)
-    if (!result) {
-      const rows = foldersById.get(id) ?? []
-      const groupIds = new Set(
-        rows.flatMap((row) => [...collectProjectGroupSubtreeIds(children, row.projectGroupId)])
-      )
-      const scoped = new Set([...groupIds].flatMap((groupId) => reposByGroup.get(groupId) ?? []))
-      for (const row of rows) {
-        let inside = reposInside.get(row.folderPath)
-        if (!inside) {
-          inside = repos.filter((repo) => isPathInsideOrEqual(row.folderPath, repo.path))
-          reposInside.set(row.folderPath, inside)
-        }
-        inside.forEach((repo) => scoped.add(repo))
-      }
-      result = resolveQualifiedFolderWorkspaceResult(
-        {
-          repos: [...scoped],
-          folderWorkspaces: rows,
-          projectGroups: [...groupIds].flatMap((groupId) => groupsById.get(groupId) ?? [])
-        },
-        id,
-        location.executionHostId
-      )
-      qualified.set(id, result)
-    }
-    return result
-  }
+  let hostIndex: ReturnType<typeof createFolderWorkspaceHostIndex<FolderWorkspace>> | undefined
   return {
     available,
     owners,
     runtimes,
+    // One routing index for every candidate's location, not one per candidate.
+    routing: { repos, lookup: createRepoRowExecutionHostLookup(repos), runtimes },
     folders: folders.filter((folder) => !(local && moved.has(`folder\0${folder.id}`))),
-    qualify
+    qualify: (id: string) =>
+      (hostIndex ??= createFolderWorkspaceHostIndex({
+        folderWorkspaces: folders,
+        projectGroups,
+        repos
+      }))(id, location.executionHostId)
   }
 }
 
@@ -178,12 +132,19 @@ export async function discoverStructuredSessionDestination(
     const current = catalog(deps.store, location)
     const candidates = new Map<string, AgentSessionExecutionLocation>()
     const add = (registration: string, worktree: Target['worktree']) => {
-      const candidate = deps.locate({ worktree, executionHostId: location.executionHostId })
+      const candidate = deps.locate(
+        { worktree, executionHostId: location.executionHostId },
+        current.routing
+      )
       if (candidate.wslDistro === location.wslDistro) {
         candidates.set(
           `${registration}\0${canonicalWorktreePath(worktree.path, platform)}`,
           candidate
         )
+      }
+      // Candidates are never withdrawn, so two distinct ones already settle the answer.
+      if (candidates.size > 1) {
+        throw new StructuredWorkspaceUnavailable('unknown')
       }
     }
     for (const repo of current.available) {
@@ -227,7 +188,6 @@ export async function discoverStructuredSessionDestination(
             ? toRuntimeExecutionHostId(explicit.environmentId)
             : explicit?.id
       if (
-        candidates.size > 1 ||
         !samePath(folder.folderPath) ||
         (explicitHost && explicitHost !== location.executionHostId)
       ) {

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { Tab } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import * as sleepingResume from './resume-sleeping-agent-session'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 import {
@@ -117,7 +118,7 @@ afterEach(() => {
   useAppStore.setState(initialAppStoreState, true)
 })
 
-const open = (workspaceId = destination.id, executionHostId?: string) =>
+const open = (workspaceId = destination.id, executionHostId?: ExecutionHostId) =>
   activateAiVaultStructuredSession({
     structuredSession: { workspaceId, sessionId: 'chat-a' },
     ...(executionHostId ? { executionHostId } : {})

@@ -175,21 +175,21 @@ const folderRow = (id: string, extra: Partial<FolderWorkspace>): FolderWorkspace
   ...extra
 })
 
-it('keeps destination discovery linear in repos, folders, groups and metadata rows', async () => {
-  const rig = await retired(`${root}/topic`)
-  rig.profile.addRepo(storeRepo({ id: 'current', path: `${root}/main` }))
-  rig.runtime.listings.set('current', {
-    ok: true,
-    worktrees: [checkout(`${root}/main`, true), checkout(`${root}/topic`)]
-  })
-  // Every read of a catalog row counts, including the reads inside the shared host resolver.
-  let reads = 0
+/** Every read of a catalog row counts, including reads inside the shared host resolver. The
+ *  extra rows reach discovery only through the store's catalog reads. */
+function countCatalogReads(rig: Awaited<ReturnType<typeof retired>>) {
+  const counter = {
+    reads: 0,
+    repos: [] as Repo[],
+    folders: [] as FolderWorkspace[],
+    groups: [] as ProjectGroup[]
+  }
   const counted = <T extends object>(rows: readonly T[]) =>
     rows.map(
       (row) =>
         new Proxy(row, {
           get: (target, key, receiver) => {
-            reads++
+            counter.reads++
             return Reflect.get(target, key, receiver)
           }
         })
@@ -198,15 +198,39 @@ it('keeps destination discovery linear in repos, folders, groups and metadata ro
   const repos = store.getRepos.bind(store)
   const folders = store.getFolderWorkspaces.bind(store)
   const groups = store.getProjectGroups.bind(store)
-  let foreign: FolderWorkspace[] = []
-  let foreignGroups: ProjectGroup[] = []
-  vi.spyOn(store, 'getRepos').mockImplementation(() => counted(repos()))
+  vi.spyOn(store, 'getRepos').mockImplementation(() => counted([...repos(), ...counter.repos]))
   vi.spyOn(store, 'getFolderWorkspaces').mockImplementation(() =>
-    counted([...folders(), ...foreign])
+    counted([...folders(), ...counter.folders])
   )
   vi.spyOn(store, 'getProjectGroups').mockImplementation(() =>
-    counted([...groups(), ...foreignGroups])
+    counted([...groups(), ...counter.groups])
   )
+  return counter
+}
+
+const groupRow = (id: string, extra: Partial<ProjectGroup> = {}): ProjectGroup => ({
+  id,
+  name: id,
+  parentPath: root,
+  parentGroupId: null,
+  createdFrom: 'manual',
+  tabOrder: 0,
+  isCollapsed: false,
+  color: null,
+  createdAt: 0,
+  updatedAt: 0,
+  ...extra
+})
+
+it('keeps destination discovery linear in repos, folders, groups and metadata rows', async () => {
+  const rig = await retired(`${root}/topic`)
+  rig.profile.addRepo(storeRepo({ id: 'current', path: `${root}/main` }))
+  rig.runtime.listings.set('current', {
+    ok: true,
+    worktrees: [checkout(`${root}/main`, true), checkout(`${root}/topic`)]
+  })
+  const counter = countCatalogReads(rig)
+  const store = rig.profile
   const counts: { reads: number; scans: number }[] = []
   let added = 0
   for (const population of [20, 200]) {
@@ -219,34 +243,106 @@ it('keeps destination discovery linear in repos, folders, groups and metadata ro
     }
     // Same-directory folders on other hosts, pinned on the row or through their group, are
     // supported and must each be rejected without a catalog-wide lookup.
-    foreign = Array.from({ length: population }, (_, i) => [
+    counter.folders = Array.from({ length: population }, (_, i) => [
       folderRow(`pinned-${i}`, { executionHostId: `ssh:elsewhere-${i}` }),
       folderRow(`grouped-${i}`, {})
     ]).flat()
-    foreignGroups = Array.from({ length: population }, (_, i): ProjectGroup => ({
-      id: `group-grouped-${i}`,
-      name: `Group ${i}`,
-      parentPath: `${root}/elsewhere-${i}`,
-      parentGroupId: null,
-      executionHostId: `ssh:elsewhere-${i}`,
-      createdFrom: 'manual',
-      tabOrder: i,
-      isCollapsed: false,
-      color: null,
-      createdAt: 0,
-      updatedAt: 0
-    }))
-    reads = 0
+    counter.groups = Array.from({ length: population }, (_, i) =>
+      groupRow(`group-grouped-${i}`, {
+        parentPath: `${root}/elsewhere-${i}`,
+        executionHostId: `ssh:elsewhere-${i}`
+      })
+    )
+    counter.reads = 0
     rig.runtime.scans = []
     const prepared = await rig.runtime.prepareStructuredAgentSessionRevealWorkspace(rig.location)
     prepared.admit()
     prepared.release()
     expect(prepared.location.workspaceId).toBe(`current::${root}/topic`)
-    counts.push({ reads, scans: rig.runtime.scans.length })
+    counts.push({ reads: counter.reads, scans: rig.runtime.scans.length })
   }
   // Fresh listings are reused across opens; only owners new since the first open are scanned.
   expect(counts.map((count) => count.scans)).toEqual([21, 180])
   expect(counts[1].reads).toBeLessThanOrEqual(12 * counts[0].reads)
+})
+
+// Same-directory scopes whose host takes reading more than the row: N folders each in its own group.
+const sameDirectoryScopes: [
+  string,
+  (n: number) => Partial<ReturnType<typeof countCatalogReads>>
+][] = [
+  [
+    'a chain of nested groups pinned to another host',
+    (n) => ({
+      folders: Array.from({ length: n }, (_, i) =>
+        folderRow(`nested-${i}`, { projectGroupId: `chain-${i}`, folderPath: root })
+      ),
+      groups: Array.from({ length: n }, (_, i) =>
+        groupRow(`chain-${i}`, {
+          parentGroupId: i ? `chain-${i - 1}` : null,
+          executionHostId: 'ssh:foreign'
+        })
+      )
+    })
+  ],
+  [
+    'unpinned groups whose own repos are on another host',
+    (n) => ({
+      folders: Array.from({ length: n }, (_, i) =>
+        folderRow(`legacy-${i}`, { projectGroupId: `legacy-${i}`, folderPath: root })
+      ),
+      groups: Array.from({ length: n }, (_, i) => groupRow(`legacy-${i}`)),
+      repos: Array.from({ length: n }, (_, i) =>
+        storeRepo({
+          id: `legacy-repo-${i}`,
+          path: `${root}/sub-${i}`,
+          projectGroupId: `legacy-${i}`,
+          executionHostId: 'ssh:foreign'
+        })
+      )
+    })
+  ]
+]
+
+it.each(sameDirectoryScopes)(
+  'resolves %s once per pass, at preparation and at commit, at N and 10N',
+  async (_label, scopes) => {
+    const rig = await retired(root, 'folder')
+    rig.profile.addRepo(storeRepo({ id: 'current', path: root, kind: 'folder' }))
+    const counter = countCatalogReads(rig)
+    const counts: { prepare: number; admit: number }[] = []
+    for (const n of [20, 200]) {
+      Object.assign(counter, { repos: [], folders: [], groups: [] }, scopes(n))
+      counter.reads = 0
+      const prepared = await rig.runtime.prepareStructuredAgentSessionRevealWorkspace(rig.location)
+      const prepare = counter.reads
+      counter.reads = 0
+      prepared.admit()
+      prepared.release()
+      // Every scope is on another host, so the one registration remains the destination.
+      expect(prepared.location.workspaceId).toBe(`current::${root}`)
+      counts.push({ prepare, admit: counter.reads })
+    }
+    expect(counts[1].prepare).toBeLessThanOrEqual(12 * counts[0].prepare)
+    expect(counts[1].admit).toBeLessThanOrEqual(12 * counts[0].admit)
+  }
+)
+
+it('refuses many rival registrations at the directory without locating each one, at N and 10N', async () => {
+  const rig = await retired(root, 'folder')
+  const counter = countCatalogReads(rig)
+  const counts: number[] = []
+  for (const n of [40, 400]) {
+    counter.repos = Array.from({ length: n }, (_, i) =>
+      storeRepo({ id: `rival-${i}`, path: root, kind: 'folder' })
+    )
+    counter.reads = 0
+    await expect(
+      rig.runtime.prepareStructuredAgentSessionRevealWorkspace(rig.location)
+    ).rejects.toMatchObject({ reason: 'unknown' })
+    counts.push(counter.reads)
+  }
+  expect(counts[1]).toBeLessThanOrEqual(12 * counts[0])
 })
 
 function withWindowsProjects(rig: Awaited<ReturnType<typeof retired>>, projects: Project[]) {

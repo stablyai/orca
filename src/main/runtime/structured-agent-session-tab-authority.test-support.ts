@@ -280,16 +280,20 @@ export async function reveal(rig: Awaited<ReturnType<typeof openAuthorityRuntime
 export async function inWorkspace(
   workspace: string,
   kind: 'folder' | 'git-worktree' = 'git-worktree',
-  executionHostId: 'local' | 'ssh:offline' = 'local'
+  executionHostId: 'local' | 'ssh:offline' = 'local',
+  visible: string[] = []
 ) {
-  const input = await authorityProfile([], { records: [B], visible: [] })
+  const input = await authorityProfile([], { records: [B, ...visible], visible })
   const prior = await readPersistedTestAgentSessionStore(root)
   await seedTestAgentSessionRecordStore(root, {
     records: Object.values(prior.records).map((record) => ({
       ...record,
       location: { ...record.location, workspaceId: workspace, workspaceKind: kind, executionHostId }
     })),
-    sessionTabs: []
+    sessionTabs: visible.map((sessionId) => ({
+      tabId: structuredAgentSessionTabId(sessionId),
+      sessionId
+    }))
   })
   return { ...input, workspace }
 }

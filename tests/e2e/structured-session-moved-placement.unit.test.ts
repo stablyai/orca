@@ -3,6 +3,7 @@ import { expect, it, vi } from 'vitest'
 import {
   root,
   B,
+  C,
   authorityProfile,
   openAuthorityRuntime,
   reveal,
@@ -21,9 +22,10 @@ import {
 } from '../../src/main/runtime/session-tabs/saved-chat-tab-placement'
 import { restoredChatTabChanges } from '../../src/main/runtime/session-tabs/restored-chat-tab-changes'
 import { structuredSessionPlacementAllowed } from '../../src/main/runtime/session-tabs/structured-session-placement'
-import type {
-  RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionTabsSnapshot
+import {
+  UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH,
+  type RuntimeMobileSessionTabsResult,
+  type RuntimeMobileSessionTabsSnapshot
 } from '../../src/shared/runtime-types'
 
 vi.mock('../../src/main/claude/claude-cli-flag-prewarm', () => ({
@@ -32,14 +34,20 @@ vi.mock('../../src/main/claude/claude-cli-flag-prewarm', () => ({
 // The shipped layout owner: a window saves its own layout whole.
 vi.mock('../../src/shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 
-async function retired() {
+/** B, and any `kept` chats, live in a workspace whose registration is gone. */
+async function retired(kept: string[] = []) {
   const old = `retired-project::${root}`
-  const input = await inWorkspace(old, 'folder')
+  const input = await inWorkspace(old, 'folder', 'local', kept)
   input.profile.removeFolderWorkspace(input.folderId)
   input.profile.setWorkspaceSession(
-    withChatTabChanges('local', getDefaultWorkspaceSession(), old, [
-      { open: { sessionId: B, agent: 'codex', tabId: `agent-session:${B}` } }
-    ])!
+    withChatTabChanges(
+      'local',
+      getDefaultWorkspaceSession(),
+      old,
+      [B, ...kept].map((sessionId) => ({
+        open: { sessionId, agent: 'codex' as const, tabId: `agent-session:${sessionId}` }
+      }))
+    )!
   )
   const rig = await openAuthorityRuntime(input)
   const repo = storeRepo({ id: 'current-project', path: root, kind: 'folder' })
@@ -62,11 +70,12 @@ const project = (rig: AuthorityRig, workspaceId: string) =>
     agent: rig.store.getConversation(B)!.provider,
     activate: false
   })
-const chatsIn = (tabs: RuntimeMobileSessionTabsResult['tabs'] | undefined) =>
-  (tabs ?? []).filter((tab) => tab.type === 'agent-session' && tab.sessionId === B)
-const listedAt = async (rig: AuthorityRig, workspace: string) =>
+const chatsIn = (tabs: RuntimeMobileSessionTabsResult['tabs'] | undefined, id = B) =>
+  (tabs ?? []).filter((tab) => tab.type === 'agent-session' && tab.sessionId === id)
+const listedAt = async (rig: AuthorityRig, workspace: string, id = B) =>
   chatsIn(
-    (await rig.runtime.listAllMobileSessionTabs()).find((row) => row.worktree === workspace)?.tabs
+    (await rig.runtime.listAllMobileSessionTabs()).find((row) => row.worktree === workspace)?.tabs,
+    id
   )
 const savedAt = (rig: AuthorityRig, workspace: string, derived = true) => {
   const saved = rig.profile.getWorkspaceSession('local')!
@@ -111,6 +120,166 @@ it('a phone move with an attached window republishes the old frame without the c
   expect(fresh.store.getRecord(B)?.location.workspaceId).toBe(rig.destination)
   expect(savedAt(fresh, rig.old, false)).toEqual([])
   expect(await listedAt(fresh, rig.old)).toEqual([])
+})
+
+it.each(['absent', 'accepted empty'] as const)(
+  'a phone move republishes an old workspace the host frames as %s, keeping the chat that stays there',
+  async (frame) => {
+    // The window shows B and C at the old workspace from its saved layout alone.
+    const rig = await retired([C])
+    attachWindow(rig)
+    rig.runtime.mobileSessionTabsByWorktree.delete(rig.old)
+    // A window's own frame lists no chats.
+    const graph = (snapshotVersion: number): RuntimeMobileSessionTabsSnapshot => ({
+      worktree: rig.old,
+      publicationEpoch: 'renderer',
+      snapshotVersion,
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null,
+      tabGroups: [],
+      tabs: []
+    })
+    if (frame === 'accepted empty') {
+      rig.runtime['syncMobileSessionTabs']([graph(7)])
+      expect(rig.runtime.mobileSessionTabsByWorktree.get(rig.old)?.tabs).toEqual([])
+    }
+    const before = rig.runtime.mobileSessionTabsByWorktree.get(rig.old)?.snapshotVersion ?? 0
+    const published: RuntimeMobileSessionTabsResult[] = []
+    const stop = rig.runtime.onMobileSessionTabsChanged((snapshot) => published.push(snapshot))
+    for (let attempt = 0; attempt < 2; attempt++) {
+      expect(await reveal(rig)).toMatchObject({
+        ok: true,
+        result: { ok: true, workspaceId: rig.destination }
+      })
+    }
+    stop()
+    // One affirmed newer slice, so the window replaces its old one: B goes, C stays.
+    const oldFrames = published.filter((snapshot) => snapshot.worktree === rig.old)
+    expect(oldFrames).toHaveLength(1)
+    expect(oldFrames[0].snapshotVersion).toBeGreaterThan(before)
+    expect(oldFrames[0].publicationEpoch).not.toBe(UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH)
+    expect(oldFrames[0].agentSessionsUnverifiable).toBeUndefined()
+    expect(chatsIn(oldFrames[0].tabs)).toEqual([])
+    expect(chatsIn(oldFrames[0].tabs, C)).toHaveLength(1)
+    // The window's next unchanged graph leaves the correction in place.
+    rig.runtime['syncMobileSessionTabs'](frame === 'accepted empty' ? [graph(7)] : [], [
+      rig.old,
+      rig.destination
+    ])
+    expect(await listedAt(rig, rig.old)).toEqual([])
+    expect(await listedAt(rig, rig.old, C)).toHaveLength(1)
+    expect(await listedAt(rig, rig.destination)).toHaveLength(1)
+  }
+)
+
+it("saved reads and saves drop moved chats in one pass that keeps other hosts' tabs and unrelated state, pass after pass", async () => {
+  const rig = await retired()
+  await reveal(rig)
+  const saved = rig.profile.getWorkspaceSession('local')!
+  const [moved] = saved.unifiedTabs![rig.old]
+  const groupId = saved.tabGroups![rig.old][0].id
+  // An unrelated tab beside it, and another host's tab with the same session and tab ID.
+  const terminal = { ...moved, id: 'terminal-1', entityId: 'terminal-1', contentType: 'terminal' }
+  const foreignWorkspace = 'foreign::/other'
+  const foreign = { ...moved, worktreeId: foreignWorkspace, executionHostId: 'runtime:other' }
+  const session = {
+    ...saved,
+    unifiedTabs: {
+      ...saved.unifiedTabs,
+      [rig.old]: [moved, { ...terminal, groupId }],
+      [foreignWorkspace]: [foreign]
+    },
+    tabGroups: {
+      ...saved.tabGroups,
+      [rig.old]: [
+        {
+          id: groupId,
+          worktreeId: rig.old,
+          activeTabId: moved.id,
+          tabOrder: [moved.id, 'terminal-1']
+        }
+      ],
+      [foreignWorkspace]: [
+        { id: 'g', worktreeId: foreignWorkspace, activeTabId: foreign.id, tabOrder: [foreign.id] }
+      ]
+    },
+    activeTabIdByWorktree: { [rig.old]: moved.id, [foreignWorkspace]: foreign.id }
+  } as typeof saved
+  const once = withPlacedSavedChatTabs(session, 'local')
+  expect(once.unifiedTabs![rig.old].map((tab) => tab.id)).toEqual(['terminal-1'])
+  expect(once.tabGroups![rig.old]).toMatchObject([
+    { tabOrder: ['terminal-1'], activeTabId: 'terminal-1' }
+  ])
+  expect(once.activeTabIdByWorktree?.[rig.old]).toBeUndefined()
+  // Untouched: the foreign tab keeps its owner and identity, and unrelated state is the same object.
+  expect(once.unifiedTabs![foreignWorkspace]).toBe(session.unifiedTabs![foreignWorkspace])
+  expect(once.tabGroups![foreignWorkspace]).toBe(session.tabGroups![foreignWorkspace])
+  expect(once.activeTabIdByWorktree?.[foreignWorkspace]).toBe(foreign.id)
+  expect(once.tabsByWorktree).toBe(session.tabsByWorktree)
+  expect(withPlacedSavedChatTabs(once, 'local')).toBe(once)
+  // Two partial saves in a row store the same.
+  let stored = session
+  for (let pass = 0; pass < 2; pass++) {
+    stored = {
+      ...stored,
+      ...withPlacedSavedChatTabPatch(stored, { unifiedTabs: stored.unifiedTabs }, 'local')
+    }
+  }
+  expect(stored.unifiedTabs).toEqual(once.unifiedTabs)
+  expect(stored.unifiedTabs![foreignWorkspace][0].executionHostId).toBe('runtime:other')
+})
+
+it('saved reads and saves of N workspaces holding moved chats visit each row a bounded number of times at N and 10N', async () => {
+  const rig = await retired()
+  await reveal(rig)
+  const [moved] = rig.profile.getWorkspaceSession('local')!.unifiedTabs![rig.old]
+  const counts: number[] = []
+  for (const width of [20, 200]) {
+    let count = 0
+    const counted = <T extends object>(row: T) =>
+      new Proxy(row, {
+        get: (target, key, receiver) => {
+          count++
+          return Reflect.get(target, key, receiver)
+        }
+      })
+    const workspaces = Array.from({ length: width }, (_, i) => `removed-${i}::/old/${i}`)
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      unifiedTabs: Object.fromEntries(
+        workspaces.map((workspace) => [
+          workspace,
+          [
+            counted({ ...moved, worktreeId: workspace, groupId: workspace }),
+            counted({ ...moved, id: 't', entityId: 't', contentType: 'terminal' as const })
+          ]
+        ])
+      ),
+      tabGroups: Object.fromEntries(
+        workspaces.map((workspace) => [
+          workspace,
+          [
+            counted({
+              id: workspace,
+              worktreeId: workspace,
+              activeTabId: moved.id,
+              tabOrder: [moved.id, 't']
+            })
+          ]
+        ])
+      )
+    }
+    const placed = withPlacedSavedChatTabs(session, 'local')
+    expect(
+      Object.values(placed.unifiedTabs!)
+        .flat()
+        .map((tab) => tab.id)
+    ).toEqual(workspaces.map(() => 't'))
+    withPlacedSavedChatTabPatch(session, { unifiedTabs: session.unifiedTabs }, 'local')
+    counts.push(count)
+  }
+  expect(counts[1]).toBeLessThanOrEqual(12 * counts[0])
 })
 
 it('a delayed old-workspace frame and the empty frame after it cannot bring the moved chat back', async () => {

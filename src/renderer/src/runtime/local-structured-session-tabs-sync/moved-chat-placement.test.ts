@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type { Tab } from '../../../../shared/tab-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 // The shipped layout owner: the window saves what it shows, so its tabs must converge.
@@ -21,7 +22,11 @@ const FOREIGN = 'foreign-retired::/elsewhere'
 const MOVED = structuredAgentSessionTabId('moved')
 const KEPT = structuredAgentSessionTabId('kept')
 
-function chat(sessionId: string, worktreeId: string, executionHostId = 'local'): Tab {
+function chat(
+  sessionId: string,
+  worktreeId: string,
+  executionHostId: ExecutionHostId = 'local'
+): Tab {
   return {
     id: structuredAgentSessionTabId(sessionId),
     entityId: sessionId,

@@ -171,13 +171,16 @@ export function projectStructuredSessionTab(
     isActive: input.activate ? false : candidate.isActive
   }))
   tabs.push(tab)
-  const priorGroups = existing?.tabGroups ?? [
-    {
-      id: getHeadlessMobileSessionGroupId(input.workspaceId),
-      activeTabId: existing?.activeTabId ?? null,
-      tabOrder: []
-    }
-  ]
+  // A frame can list no groups (a window's empty workspace); the chat then starts the default one.
+  const priorGroups = existing?.tabGroups?.length
+    ? existing.tabGroups
+    : [
+        {
+          id: getHeadlessMobileSessionGroupId(input.workspaceId),
+          activeTabId: existing?.activeTabId ?? null,
+          tabOrder: []
+        }
+      ]
   // Why: the window can list the chat before main restores its row; keep the place it gave it.
   const listingGroupId = priorGroups.find((group) => group.tabOrder.includes(id))?.id
   const groupId =

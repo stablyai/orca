@@ -91,7 +91,9 @@ function createStructuredSessionWorkspaceRebinder(context: () => WorkspaceRebind
         // Refuse only live work. Rewinds and commands run in this session lane, so a saved
         // in-doubt rewind or legacy command result is history; the open that follows settles it.
         if (record.lease.unreconciled || leaseHeld(record.lease) || working()) {
-          throw agentSessionRefusalError('agent_session_operation_unknown', {})
+          throw agentSessionRefusalError('agent_session_operation_unknown', {
+            reason: 'outcomeUnknown'
+          })
         }
       })
       if (session && !agentSessionExecutionLocationsEqual(session.params.location, location)) {
