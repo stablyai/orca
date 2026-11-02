@@ -95,8 +95,11 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   // Keep proven 422 limits separate so late counts replace speculation without resurrecting unreachable pages.
   const [provenPageLimit, setProvenPageLimit] = useState<number | null>(null)
   // Mirror committed counts synchronously so empty-page handling cannot use a stale click-time closure.
+  // Why every commit: the count also changes from store publications and collection switches, not only its setter.
   const countedTotalPagesRef = useRef<number | null>(null)
-  countedTotalPagesRef.current = countedTotalPages
+  useLayoutEffect(() => {
+    countedTotalPagesRef.current = countedTotalPages
+  })
   const hardRefreshEpochRef = useRef(0)
   const fetchWorkItemsNextPage = useAppStore((s) => s.fetchWorkItemsNextPage)
   const countWorkItemsAcrossRepos = useAppStore((s) => s.countWorkItemsAcrossRepos)
