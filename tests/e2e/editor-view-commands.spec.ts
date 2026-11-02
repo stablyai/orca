@@ -153,10 +153,12 @@ test.describe('configurable editor view commands', () => {
     expect((await state())?.draft).toContain(marker)
 
     await orcaPage.getByRole('radio', { name: 'Source', exact: true }).click()
-    const sourceEditor = orcaPage.locator('.monaco-editor').first()
-    await expect(sourceEditor).toBeVisible()
-    await expect(sourceEditor.locator('.view-lines')).toContainText(marker)
-    await sourceEditor.click()
+    const sourceRadio = orcaPage.getByRole('radio', { name: 'Source', exact: true })
+    const richRadio = orcaPage.getByRole('radio', { name: 'Rich Editor', exact: true })
+    const monacoEditor = orcaPage.locator('.monaco-editor').first()
+    await expect(monacoEditor).toBeVisible()
+    await expect(monacoEditor.locator('.view-lines')).toContainText(marker)
+    await monacoEditor.click()
     await orcaPage.keyboard.press('ControlOrMeta+End')
     await orcaPage.keyboard.type(' source-marker')
     await expect.poll(async () => (await state())?.draft).toContain('source-marker')
@@ -166,17 +168,25 @@ test.describe('configurable editor view commands', () => {
     await expect.poll(async () => (await state())?.markdownView).toBe('rich')
     await expect.poll(async () => (await state())?.editorView).not.toBe('changes')
     await expect(richEditor).toBeVisible()
+    await expect(richRadio).toHaveAttribute('aria-checked', 'true')
+    await expect(richEditor).toBeFocused()
     await orcaPage.keyboard.press(CYCLE_CHORD)
     await expect.poll(async () => (await state())?.editorView).toBe('changes')
-    await orcaPage.locator('.monaco-editor').first().click()
+    await expect(monacoEditor).toBeVisible()
+    await expect(changesButton).toHaveAttribute('aria-checked', 'true')
+    await monacoEditor.click()
     await orcaPage.keyboard.press(CYCLE_CHORD)
     await expect.poll(async () => (await state())?.editorView).not.toBe('changes')
     await expect.poll(async () => (await state())?.markdownView).toBe('source')
+    await expect(monacoEditor).toBeVisible()
+    await expect(sourceRadio).toHaveAttribute('aria-checked', 'true')
     await orcaPage.keyboard.press(CYCLE_CHORD)
     await expect.poll(async () => (await state())?.markdownView).toBe('rich')
     await expect.poll(async () => (await state())?.editorView).not.toBe('changes')
     expect((await state())?.draft).toContain(marker)
     expect((await state())?.draft).toContain('source-marker')
+    await expect(richEditor).toBeVisible()
+    await expect(richRadio).toHaveAttribute('aria-checked', 'true')
   })
 
   test('a focused parent editor command flushes a custom editor before switching modes', async ({
@@ -189,15 +199,15 @@ test.describe('configurable editor view commands', () => {
     const editorHtml = `<textarea id="doc" style="width:100%;height:90vh"></textarea>
 <script>
 const doc = document.getElementById('doc')
-let timer = null
 let version = 0
+let pending = false
 const flush = () => {
-  clearTimeout(timer); timer = null
-  return orca.document.applyEdit({ baseVersion: version, content: { kind: 'text', text: doc.value } })
+  if (!pending) return undefined
+  return orca.document.applyEdit({ baseVersion: version, content: { kind: 'text', text: doc.value } }).then(() => { pending = false })
 }
-doc.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(flush, 400) })
+doc.addEventListener('input', () => { pending = true })
 orca.document.onDidChange((next) => { version = next.version; doc.value = next.content.text })
-orca.on('editor.flush', () => (timer ? flush() : undefined))
+orca.on('editor.flush', () => (pending ? flush() : undefined))
 </script>`
 
     try {
@@ -241,16 +251,19 @@ orca.on('editor.flush', () => (timer ? flush() : undefined))
       await focusInGuest(guest, '#doc')
       await orcaPage.keyboard.press('ControlOrMeta+End')
       await orcaPage.keyboard.type('unsaved plugin frame marker')
-      await expect
-        .poll(() =>
-          orcaPage.evaluate(
-            (name) =>
-              window.__store?.getState().openFiles.find((file) => file.relativePath === name)
-                ?.isDirty,
-            fileName
-          )
-        )
-        .toBe(true)
+      await expect.poll(guestText).toContain('unsaved plugin frame marker')
+      const parentFileState = (): Promise<{
+        isDirty: boolean
+        draft: string | null
+      } | null> =>
+        orcaPage.evaluate((name) => {
+          const state = window.__store?.getState()
+          const file = state?.openFiles.find((entry) => entry.relativePath === name)
+          return file && state
+            ? { isDirty: file.isDirty, draft: state.editorDrafts[file.id] ?? null }
+            : null
+        }, fileName)
+      await expect.poll(parentFileState).toMatchObject({ isDirty: false })
 
       // The command is issued from Orca's parent toolbar, not delivered into the plugin iframe.
       await orcaPage.getByRole('radio', { name: 'Sketch Pad', exact: true }).focus()
@@ -266,6 +279,21 @@ orca.on('editor.flush', () => (timer ? flush() : undefined))
         .toBe('changes')
 
       const changesButton = orcaPage.getByRole('radio', { name: 'Changes', exact: true })
+      await expect(changesButton).toBeVisible()
+      await expect(changesButton).toHaveAttribute('aria-checked', 'true')
+      await expect.poll(parentFileState).toMatchObject({
+        isDirty: true,
+        draft: expect.stringContaining('unsaved plugin frame marker')
+      })
+      const activeEditorPanel = changesButton.locator(
+        "xpath=ancestor::div[.//div[contains(@class, 'monaco-diff-editor')]][1]"
+      )
+      await expect(
+        activeEditorPanel.locator(
+          '.monaco-diff-editor:visible .monaco-editor.modified-in-monaco-diff-editor'
+        )
+      ).toContainText('unsaved plugin frame marker')
+
       await changesButton.focus()
       await orcaPage.keyboard.press(TOGGLE_CHORD)
       await expect(guest).toBeVisible({ timeout: 15_000 })

@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import * as keyboardRouter from '@/lib/app-keyboard-router'
-import type { EditorToggleValue } from './EditorViewToggle'
+import type { EditorToggleValue } from './view-mode/EditorViewToggle'
 import { EditorViewCommands } from './EditorViewCommands'
 
 const initialState = useAppStore.getInitialState()
