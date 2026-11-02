@@ -121,12 +121,18 @@ it('puts the recorded chat in its restored tab on the first authoritative invent
 
 it.each([
   // Its terminal runs this run: a newer switch's CLI, never the stale half of a crashed one.
-  ['holds a running terminal', { T: ['pty-live'] }, false],
+  ['holds a running terminal', { T: ['pty-live'] }, undefined],
   // A live switch or close since the restore: never a candidate (the live misfire case).
-  ['changed content after the restore', {}, true]
-] as const)('leaves a restored tab that %s', (_name, live, changed) => {
+  ['changed content after the restore', {}, 'changed'],
+  // Its terminal ran this run, then exited: no process now does not prove none ran.
+  ['ran a terminal that since exited', {}, 'ran']
+] as const)('leaves a restored tab that %s', (_name, live, since) => {
   restore(['T'], live)
-  if (changed) {
+  if (since === 'ran') {
+    store.setState({ ptyIdsByTabId: { T: ['pty-this-run'] } })
+    store.setState({ ptyIdsByTabId: {} })
+  }
+  if (since === 'changed') {
     store.setState({
       unifiedTabsByWorktree: {
         [WORKTREE]: [{ ...tab('T')!, entityId: 'E' }]
@@ -184,6 +190,34 @@ it.each([
     store.setState({ unifiedTabsByWorktree: { [WORKTREE]: counted } })
     read = 0
     applyStructuredSessionTabSnapshots([inventory(ids)], undefined, { authoritative: true })
+    resetLocalStructuredSessionVersionForTests()
+    resetWebSessionTabsSnapshotFreshnessForTests()
+    return read
+  }
+  const small = reads(20)
+  expect(reads(200)).toBeLessThanOrEqual(12 * small)
+})
+
+// The whole recovery, retiring the recovered terminals' records too: one write, not one per tab.
+it('retires the recovered terminals in linear work', () => {
+  const reads = (count: number): number => {
+    const ids = Array.from({ length: count }, (_, index) => `tab-${index}`)
+    restore(ids)
+    let read = 0
+    const counted = (store.getState().tabsByWorktree[WORKTREE] ?? []).map((entry) => {
+      const copy = { ...entry }
+      Object.defineProperty(copy, 'id', {
+        enumerable: true,
+        get: () => {
+          read++
+          return entry.id
+        }
+      })
+      return copy
+    })
+    store.setState({ tabsByWorktree: { [WORKTREE]: counted } })
+    applyStructuredSessionTabSnapshots([inventory(ids)], undefined, { authoritative: true })
+    expect(store.getState().tabsByWorktree[WORKTREE] ?? []).toEqual([])
     resetLocalStructuredSessionVersionForTests()
     resetWebSessionTabsSnapshotFreshnessForTests()
     return read

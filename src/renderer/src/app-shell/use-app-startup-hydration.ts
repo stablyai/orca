@@ -4,6 +4,7 @@ import { restoreLocalStructuredChatsAtStartup } from '@/runtime/local-structured
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-pane/codex-detached-pane-restart-scheduler'
 import { useAppStore } from '../store'
+import { captureRestoredSwitchCandidates } from '@/lib/restored-switch-recovery'
 import { reconcileHydratedWorkspaceTabModels } from './reconcile-hydrated-workspace-tab-models'
 import { useStartupActions } from './use-app-startup-actions'
 import { waitForNativeChatDraftsAtStartup } from './native-chat-draft-startup'
@@ -195,6 +196,8 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
               ...sessionHydrationOptions
             })
             actions.hydrateTabsSession(sessionRead.session, sessionHydrationOptions)
+            // This load's restored terminal tabs: a crashed switch's source among them takes its chat.
+            captureRestoredSwitchCandidates(useAppStore.getState().unifiedTabsByWorktree)
             actions.hydrateEditorSession(sessionRead.session, sessionHydrationOptions)
             actions.hydrateBrowserSession(sessionRead.session, sessionHydrationOptions)
             reconcileHydratedWorkspaceTabModels(

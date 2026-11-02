@@ -40,7 +40,6 @@ import {
   type FrameStoppedSwitchSourceRow
 } from '@/components/terminal-pane/stopped-switch-sources'
 import { recoverRestoredSwitchedTabs } from '@/lib/restored-switch-recovery'
-import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { framesDrawWorkspace } from '../workspace-layout-frame-drawn-workspaces'
 import { drawnChatLabelChanges, type DrawnChatLabel } from './frame-drawn-chat-tabs'
 
@@ -111,12 +110,11 @@ export function applyStructuredSessionTabSnapshots(
   for (const [worktreeId, row] of stoppedSources) {
     noteFrameStoppedSwitchSource(worktreeId, row)
   }
-  // No tab holds these terminals now: only their records go, never into Reopen Closed Tab.
-  for (const terminalId of recoveredTerminals) {
-    closeTerminalTab(terminalId, {
+  // No tab holds these terminals now, nor did a process this run: only their records go, all in
+  // one write, never into Reopen Closed Tab.
+  if (recoveredTerminals.length > 0) {
+    useAppStore.getState().closeTab(recoveredTerminals, {
       reason: 'cleanup',
-      force: true,
-      skipRunningProcessConfirm: true,
       localPtyTeardownOwnedExternally: true
     })
   }

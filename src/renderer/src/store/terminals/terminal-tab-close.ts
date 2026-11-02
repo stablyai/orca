@@ -1,16 +1,10 @@
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Tab } from '../../../../shared/tab-types'
 import { sweepRetiredTerminalTabState } from '../slices/retired-terminal-tab-state-sweep'
-import {
-  getRecentlyClosedTabPosition,
-  pushClosedTerminalTabSnapshot,
-  pushRecentlyClosedTabKind
-} from '../slices/recently-closed-tabs'
+import { pushClosedTerminalTabs } from '../slices/recently-closed-tabs'
 // Use store-free registry to avoid reentering slice creation through terminal-parked-tab-watchers.
 import { retireParkedTerminalTab } from '@/components/terminal-pane/terminal-parked-watcher-registry'
-import {
-  buildTerminalTabRetirementPlan,
-  removeSleepingAgentSessionsForTab
-} from '../slices/terminal-tab-retirement'
+import { buildTerminalTabRetirementPlans } from '../slices/terminal-tab-retirement'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { startTerminalTabProviderRetirement } from './terminal-tab-close-providers'
 import { stopLegacyRelayBridgedShellsForTab } from './legacy-relay-bridged-tab-close'
@@ -18,7 +12,7 @@ import { commitTerminalSurfaceClose } from './terminal-surface-close-intent'
 import { recordTerminalTabCloseThroughLayoutOwner } from './terminal-tab-close-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
-import { removePaneKeysByTabPrefix } from '../slices/agent-status/agent-status-pane-keyed-records'
+import { removePaneKeys } from '../slices/agent-status/agent-status-pane-keyed-records'
 import { removeTabsAttention } from '../slices/workspace-attention/subject-attention-transitions'
 import { omitRecordKeys } from '../slices/worktrees/teardown/record-key-omission'
 import { deleteNativeChatComposerDraftsForTab } from '@/components/native-chat/native-chat-composer-draft-store'
@@ -33,93 +27,97 @@ export function createTerminalTabCloseActions(
   get: TerminalStoreGet
 ): Pick<TerminalSlice, 'closeTab'> {
   return {
-    closeTab: (tabId, opts) => {
+    // One tab or many in one write: closing many (a restart's recovered switches) indexes the
+    // live owners once and passes over the arrays and maps once, not once per tab.
+    closeTab: (tabIdOrIds, opts) => {
+      const tabIds = typeof tabIdOrIds === 'string' ? [tabIdOrIds] : [...new Set(tabIdOrIds)]
+      if (tabIds.length === 0) {
+        return
+      }
+      const closing = new Set(tabIds)
       const closeReason = opts?.reason ?? 'user'
       // Why narrowed separately: main alone records a close for a process exit.
       const intentReason = closeReason === 'pty-exit' ? null : closeReason
       const retiresSession = intentReason !== null
-      const retirementPlan =
-        opts?.precomputedRetirementPlan?.tabId === tabId
-          ? opts.precomputedRetirementPlan
-          : buildTerminalTabRetirementPlan(get(), tabId)
-      let closingWorktreeId: string | null = null
-      // Why: a parked tab has no mounted TerminalPane cleanup, so revoke its observer/candidate state before provider exit races.
-      retireParkedTerminalTab(tabId)
-      if (retiresSession) {
-        startTerminalTabProviderRetirement({
-          localPtyTeardownOwnedExternally: opts?.localPtyTeardownOwnedExternally === true,
-          remoteCloseOwnedByHost: opts?.remoteCloseOwnedByHost === true,
-          retirementPlan,
-          state: get(),
-          tabId
-        })
-        if (opts?.localPtyTeardownOwnedExternally !== true) {
-          // Why regardless of a host-owned close: the managed server never ran a relay-era shell.
-          void stopLegacyRelayBridgedShellsForTab(get(), tabId, retirementPlan)
+      const precomputed = opts?.precomputedRetirementPlan
+      const retirementPlans =
+        precomputed && tabIds.length === 1 && precomputed.tabId === tabIds[0]
+          ? new Map([[precomputed.tabId, precomputed]])
+          : buildTerminalTabRetirementPlans(get(), tabIds)
+      const closingWorktreeIds = new Map<string, string>()
+      for (const tabId of tabIds) {
+        const retirementPlan = retirementPlans.get(tabId)!
+        // Why: a parked tab has no mounted TerminalPane cleanup, so revoke its observer/candidate state before provider exit races.
+        retireParkedTerminalTab(tabId)
+        if (retiresSession) {
+          startTerminalTabProviderRetirement({
+            localPtyTeardownOwnedExternally: opts?.localPtyTeardownOwnedExternally === true,
+            remoteCloseOwnedByHost: opts?.remoteCloseOwnedByHost === true,
+            retirementPlan,
+            state: get(),
+            tabId
+          })
+          if (opts?.localPtyTeardownOwnedExternally !== true) {
+            // Why regardless of a host-owned close: the managed server never ran a relay-era shell.
+            void stopLegacyRelayBridgedShellsForTab(get(), tabId, retirementPlan)
+          }
         }
       }
+      const ofClosingTab = (paneKey: string, record?: { tabId?: string }): boolean =>
+        closing.has(paneKey.slice(0, paneKey.indexOf(':'))) ||
+        (record?.tabId !== undefined && closing.has(record.tabId))
+      const withoutClosingPaneKeys = <T>(record: Record<string, T>): Record<string, T> =>
+        removePaneKeys(record, new Set(Object.keys(record).filter((key) => ofClosingTab(key))))
       settleAttentionRemovedBy(set, get, () =>
         set((s) => {
           // Reuse one iterable for all per-tab omissions in this close.
-          const closingTabIds = [tabId]
+          const closingTabIds = tabIds
           const omitByTabId = <T>(record: Record<string, T>): Record<string, T> =>
             omitRecordKeys(record, closingTabIds)
           const next = { ...s.tabsByWorktree }
-          let closedTab: TerminalTab | null = null
-          let closedWorktreeId: string | null = null
+          const closedTabs = new Map<string, { tab: TerminalTab; worktreeId: string }>()
           for (const wId of Object.keys(next)) {
             const before = next[wId]
-            const closing = before.find((t) => t.id === tabId)
-            if (closing) {
-              closingWorktreeId = wId
+            const seen = new Set<string>()
+            for (const closingTab of before) {
+              if (!closing.has(closingTab.id) || seen.has(closingTab.id)) {
+                continue
+              }
+              seen.add(closingTab.id)
+              closingWorktreeIds.set(closingTab.id, wId)
               // User close cancels pending agent launch; every close settles its startup wait to prevent delivery into a vanished tab.
-              if (closing.agentLaunchPane && !closing.agentLaunchPane.outcome) {
+              if (closingTab.agentLaunchPane && !closingTab.agentLaunchPane.outcome) {
                 if (closeReason === 'user') {
-                  noteAgentLaunchPaneClosedByUser(tabId, closing.agentLaunchPane.leafId)
+                  noteAgentLaunchPaneClosedByUser(closingTab.id, closingTab.agentLaunchPane.leafId)
                 } else {
-                  settleAgentLaunchPaneStart(tabId, closing.agentLaunchPane.leafId, null)
+                  settleAgentLaunchPaneStart(closingTab.id, closingTab.agentLaunchPane.leafId, null)
                 }
               }
               // Why: capture the first-matched tab's snapshot for the Cmd+Shift+T reopen stack (see capturedSnapshot below).
-              if (!closedTab) {
-                closedTab = closing
-                closedWorktreeId = wId
+              if (!closedTabs.has(closingTab.id)) {
+                closedTabs.set(closingTab.id, { tab: closingTab, worktreeId: wId })
               }
             }
-            const after = before.filter((t) => t.id !== tabId)
-            if (after.length !== before.length) {
-              next[wId] = after
+            if (seen.size > 0) {
+              next[wId] = before.filter((t) => !closing.has(t.id))
             }
           }
           // Session-only tombstone fences synchronous SSH pulls before main acknowledges close; retire once merge moves to main.
-          const nextClosedTombstones =
-            intentReason && closedWorktreeId && opts?.remoteCloseOwnedByHost !== true
-              ? {
-                  ...s.closedTerminalTabTombstonesByTabId,
-                  [tabId]: {
-                    closedAt: Date.now(),
-                    worktreeId: closedWorktreeId,
-                    reason: intentReason
-                  }
-                }
-              : s.closedTerminalTabTombstonesByTabId
+          let nextClosedTombstones = s.closedTerminalTabTombstonesByTabId
+          if (intentReason && opts?.remoteCloseOwnedByHost !== true && closedTabs.size > 0) {
+            nextClosedTombstones = { ...nextClosedTombstones }
+            for (const [tabId, closed] of closedTabs) {
+              nextClosedTombstones[tabId] = {
+                closedAt: Date.now(),
+                worktreeId: closed.worktreeId,
+                reason: intentReason
+              }
+            }
+          }
           // Why: only explicit user closes feed the Cmd+Shift+T reopen stack; cleanup/PTY-exit closes must not pollute undo history.
-          const closedPosition =
-            closedWorktreeId && closedTab
-              ? getRecentlyClosedTabPosition(s, closedWorktreeId, closedTab.id)
-              : undefined
-          const capturedSnapshot =
-            closeReason === 'user' &&
-            opts?.captureRecentlyClosed !== false &&
-            closedTab &&
-            closedWorktreeId
-              ? {
-                  ...(closedTab.startupCwd ? { startupCwd: closedTab.startupCwd } : {}),
-                  ...(closedTab.shellOverride ? { shellOverride: closedTab.shellOverride } : {}),
-                  ...(closedTab.customTitle ? { customTitle: closedTab.customTitle } : {}),
-                  ...(closedTab.color ? { color: closedTab.color } : {}),
-                  ...(closedPosition ? { position: closedPosition } : {})
-                }
+          const recentlyClosed =
+            closeReason === 'user' && opts?.captureRecentlyClosed !== false
+              ? pushClosedTerminalTabs(s, closedTabs.values())
               : null
           const nextExpanded = omitByTabId(s.expandedPaneByTabId)
           const nextCanExpand = omitByTabId(s.canExpandPaneByTabId)
@@ -132,17 +130,24 @@ export function createTerminalTabCloseActions(
           const nextRuntimePaneTitlesByTabId = omitByTabId(s.runtimePaneTitlesByTabId)
           const nextUnverifiedPtyLossTabIds = omitUnverifiedPtyLossTabIds(
             s.unverifiedPtyLossTabIds,
-            [tabId]
+            closingTabIds
           )
           // Why: unchanged marker records keep their reference, so unrelated closes don't force full-state selector re-eval.
           const attentionPatch = removeTabsAttention(s, closingTabIds)
-          const nextLastTerminalInputAtByPaneKey = removePaneKeysByTabPrefix(
-            s.lastTerminalInputAtByPaneKey,
-            tabId
+          const nextLastTerminalInputAtByPaneKey = withoutClosingPaneKeys(
+            s.lastTerminalInputAtByPaneKey
           )
-          const nextSleepingAgentSessionsByPaneKey = retiresSession
-            ? removeSleepingAgentSessionsForTab(s.sleepingAgentSessionsByPaneKey, tabId)
-            : s.sleepingAgentSessionsByPaneKey
+          let nextSleepingAgentSessionsByPaneKey = s.sleepingAgentSessionsByPaneKey
+          if (retiresSession) {
+            for (const [paneKey, record] of Object.entries(s.sleepingAgentSessionsByPaneKey)) {
+              if (ofClosingTab(paneKey, record)) {
+                if (nextSleepingAgentSessionsByPaneKey === s.sleepingAgentSessionsByPaneKey) {
+                  nextSleepingAgentSessionsByPaneKey = { ...s.sleepingAgentSessionsByPaneKey }
+                }
+                delete nextSleepingAgentSessionsByPaneKey[paneKey]
+              }
+            }
+          }
           const nextPendingStartupByTabId = omitByTabId(s.pendingStartupByTabId)
           const nextAutomaticAgentResumeClaimsByTabId = omitByTabId(
             s.automaticAgentResumeClaimsByTabId
@@ -152,11 +157,12 @@ export function createTerminalTabCloseActions(
           const nextPendingInitialCwdByTabId = omitByTabId(s.pendingInitialCwdByTabId)
           const nextPendingIssueCommandSplitByTabId = omitByTabId(s.pendingIssueCommandSplitByTabId)
           // Why: cache timer keys are `${tabId}:${leafId}` composites; remove all entries for the closing tab.
-          const nextCacheTimer = removePaneKeysByTabPrefix(s.cacheTimerByKey, tabId)
+          const nextCacheTimer = withoutClosingPaneKeys(s.cacheTimerByKey)
           // Why: keep activeTabIdByWorktree in sync when closing a background-worktree tab, else the stale remembered tab falls back to tabs[0] on switch.
           let nextActiveTabIdByWorktree = s.activeTabIdByWorktree
           for (const [wId, tabs] of Object.entries(next)) {
-            if (nextActiveTabIdByWorktree[wId] !== tabId) {
+            const active = nextActiveTabIdByWorktree[wId]
+            if (!active || !closing.has(active)) {
               continue
             }
             if (nextActiveTabIdByWorktree === s.activeTabIdByWorktree) {
@@ -168,23 +174,25 @@ export function createTerminalTabCloseActions(
           let nextTabBarOrderByWorktree: Record<string, string[]> = s.tabBarOrderByWorktree
           for (const wId of Object.keys(s.tabBarOrderByWorktree)) {
             const order = s.tabBarOrderByWorktree[wId]
-            if (!order?.includes(tabId)) {
+            if (!order?.some((entryId) => closing.has(entryId))) {
               continue
             }
             if (nextTabBarOrderByWorktree === s.tabBarOrderByWorktree) {
               nextTabBarOrderByWorktree = { ...s.tabBarOrderByWorktree }
             }
-            nextTabBarOrderByWorktree[wId] = order.filter((entryId) => entryId !== tabId)
+            nextTabBarOrderByWorktree[wId] = order.filter((entryId) => !closing.has(entryId))
           }
           // Clear unconsumed snapshots/cold restores even if closed before pane mount to bound memory.
           let nextSnapshots = s.pendingSnapshotByPtyId
           let nextColdRestores = s.pendingColdRestoreByPtyId
-          const closingPtyIds = new Set([
-            ...retirementPlan.localOrSshPtyIds,
-            ...retirementPlan.runtimeTerminals.map((terminal) => terminal.ptyId),
-            ...retirementPlan.cleanupOnlyPtyIds,
-            ...retirementPlan.unroutablePtyIds
-          ])
+          const closingPtyIds = new Set(
+            [...retirementPlans.values()].flatMap((retirementPlan) => [
+              ...retirementPlan.localOrSshPtyIds,
+              ...retirementPlan.runtimeTerminals.map((terminal) => terminal.ptyId),
+              ...retirementPlan.cleanupOnlyPtyIds,
+              ...retirementPlan.unroutablePtyIds
+            ])
+          )
           for (const closingId of closingPtyIds) {
             if (closingId in nextSnapshots) {
               nextSnapshots = { ...nextSnapshots }
@@ -197,7 +205,7 @@ export function createTerminalTabCloseActions(
           }
           return {
             tabsByWorktree: next,
-            activeTabId: s.activeTabId === tabId ? null : s.activeTabId,
+            activeTabId: s.activeTabId && closing.has(s.activeTabId) ? null : s.activeTabId,
             activeTabIdByWorktree: nextActiveTabIdByWorktree,
             ptyIdsByTabId: nextPtyIdsByTabId,
             lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
@@ -229,45 +237,48 @@ export function createTerminalTabCloseActions(
             tabBarOrderByWorktree: nextTabBarOrderByWorktree,
             pendingSnapshotByPtyId: nextSnapshots,
             pendingColdRestoreByPtyId: nextColdRestores,
-            ...(capturedSnapshot && closedWorktreeId
-              ? {
-                  recentlyClosedTerminalTabsByWorktree: pushClosedTerminalTabSnapshot(
-                    s.recentlyClosedTerminalTabsByWorktree,
-                    closedWorktreeId,
-                    capturedSnapshot
-                  ),
-                  recentlyClosedTabKindsByWorktree: pushRecentlyClosedTabKind(
-                    s.recentlyClosedTabKindsByWorktree,
-                    closedWorktreeId,
-                    'terminal'
-                  )
-                }
-              : {})
+            ...recentlyClosed
           }
         })
       )
-      if (intentReason && closingWorktreeId && opts?.remoteCloseOwnedByHost !== true) {
-        // Switch point: main records the close through layout.apply.
-        if (
-          !ORCA_LAYOUT_OWNER_IS_MAIN ||
-          !recordTerminalTabCloseThroughLayoutOwner(get(), closingWorktreeId, tabId, intentReason)
-        ) {
-          commitTerminalSurfaceClose(closingWorktreeId, { kind: 'tab', tabId }, intentReason)
+      // Each workspace's tab showing a closing terminal, found in one pass.
+      const workspaceItems = new Map<string, Tab[]>()
+      for (const tabs of Object.values(get().unifiedTabsByWorktree)) {
+        const found = new Set<string>()
+        for (const entry of tabs) {
+          if (
+            entry.contentType === 'terminal' &&
+            closing.has(entry.entityId) &&
+            !found.has(entry.entityId)
+          ) {
+            found.add(entry.entityId)
+            workspaceItems.set(entry.entityId, [
+              ...(workspaceItems.get(entry.entityId) ?? []),
+              entry
+            ])
+          }
         }
       }
-      // Why only a user close: it is the explicit abandon. Other closes keep the drafts until their
-      // workspace is removed in Orca; drafts have no budget that retires them.
-      if (closeReason === 'user') {
-        deleteNativeChatComposerDraftsForTab(tabId)
-        dropNativeChatPendingAttachmentsForTab(tabId)
-      }
-      // Share snapshot/removal sweeps so one path cannot silently miss newly added cleanup.
-      sweepRetiredTerminalTabState(get(), tabId, closingWorktreeId)
-      for (const tabs of Object.values(get().unifiedTabsByWorktree)) {
-        const workspaceItem = tabs.find(
-          (entry) => entry.contentType === 'terminal' && entry.entityId === tabId
-        )
-        if (workspaceItem) {
+      for (const tabId of tabIds) {
+        const closingWorktreeId = closingWorktreeIds.get(tabId) ?? null
+        if (intentReason && closingWorktreeId && opts?.remoteCloseOwnedByHost !== true) {
+          // Switch point: main records the close through layout.apply.
+          if (
+            !ORCA_LAYOUT_OWNER_IS_MAIN ||
+            !recordTerminalTabCloseThroughLayoutOwner(get(), closingWorktreeId, tabId, intentReason)
+          ) {
+            commitTerminalSurfaceClose(closingWorktreeId, { kind: 'tab', tabId }, intentReason)
+          }
+        }
+        // Why only a user close: it is the explicit abandon. Other closes keep the drafts until their
+        // workspace is removed in Orca; drafts have no budget that retires them.
+        if (closeReason === 'user') {
+          deleteNativeChatComposerDraftsForTab(tabId)
+          dropNativeChatPendingAttachmentsForTab(tabId)
+        }
+        // Share snapshot/removal sweeps so one path cannot silently miss newly added cleanup.
+        sweepRetiredTerminalTabState(get(), tabId, closingWorktreeId)
+        for (const workspaceItem of workspaceItems.get(tabId) ?? []) {
           const closeUnifiedTab = (): void => {
             get().closeUnifiedTab(workspaceItem.id, {
               recordInteraction: opts?.recordInteraction,
