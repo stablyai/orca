@@ -11,6 +11,12 @@ export function useMobileTasksItemState() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
   const [detailRefreshSeq, setDetailRefreshSeq] = useState(0)
+  // Set only by the user's explicit Refresh and consumed by the load it starts; other reloads read ordinarily.
+  const detailRefreshRequested = useRef(false)
+  const requestDetailRefresh = useCallback(() => {
+    detailRefreshRequested.current = true
+    setDetailRefreshSeq((current) => current + 1)
+  }, [])
   const [itemTitleDraft, setItemTitleDraft] = useState('')
   const [itemBodyDraft, setItemBodyDraft] = useState('')
   const [itemCommentDraft, setItemCommentDraft] = useState('')
@@ -89,6 +95,8 @@ export function useMobileTasksItemState() {
     setDetailError,
     detailRefreshSeq,
     setDetailRefreshSeq,
+    detailRefreshRequested,
+    requestDetailRefresh,
     itemTitleDraft,
     setItemTitleDraft,
     itemBodyDraft,

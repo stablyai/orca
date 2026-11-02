@@ -136,7 +136,7 @@ function resolveGithubPrForBranchOutcome(outcome: GitHubPrForBranchOutcome | nul
 export async function fetchWorkItemDetails(
   client: RpcClient,
   worktreeId: string,
-  args: { prNumber: number; prRepo?: GitHubPrRepoSlug | null }
+  args: { prNumber: number; prRepo?: GitHubPrRepoSlug | null; refresh?: boolean }
 ): Promise<GitHubPrReadOutcome<GitHubWorkItemDetails | null>> {
   const params = githubPrRequestParams(githubPrWorkItemDetailsRead.operation.method, worktreeId, {
     number: args.prNumber,
@@ -149,6 +149,7 @@ export async function fetchWorkItemDetails(
           params: { repo: mobileRepoSelectorFromWorktreeId(worktreeId) },
           ownerRepo: args.prRepo,
           read: true,
+          canonical: args.refresh === true,
           send: (selected, exact, options) =>
             githubPrWorkItemDetailsRead.request(selected, { ...params, ...exact }, options)
         })

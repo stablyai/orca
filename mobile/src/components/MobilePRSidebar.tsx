@@ -317,7 +317,8 @@ export function MobilePRSidebar({ onRetry, bottomInset = 0, ...input }: SidebarP
     onCreateSettled,
     live: screen === 'comments' ? 'details' : 'checks'
   })
-  const refresh = () => refetch({ includeDetails: true })
+  // The user's explicit Refresh asks the server for the canonical details.
+  const refresh = () => refetch({ includeDetails: true, refresh: true })
   const prMenuGroups = usePrTabMenuGroups(tab, refresh)
   // Without a PR the dock still needs Refresh, e.g. after a PR is opened on the web.
   const menuGroups = prMenuGroups ?? [

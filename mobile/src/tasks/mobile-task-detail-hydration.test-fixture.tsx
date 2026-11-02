@@ -146,6 +146,7 @@ export async function mountDetail(
       actionItem,
       client,
       detailRefreshSeq,
+      detailRefreshRequested: { current: false },
       setActionItem,
       setItems,
       setDetailPayload,

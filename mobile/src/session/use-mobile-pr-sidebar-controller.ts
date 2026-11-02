@@ -10,7 +10,7 @@ import {
   type PrSidebarControllerInput,
   type PrSidebarSelection
 } from './mobile-pr-sidebar-observation'
-import { pollChecksReadFailed, useForegroundFirstLoad } from './pr-sidebar-load-result'
+import { settleLoadedPr, useForegroundFirstLoad } from './pr-sidebar-load-result'
 import { fetchGithubRepoSlug } from './github-pr-rpc'
 import {
   prSidebarResourceKey,
@@ -28,6 +28,8 @@ export type PrSidebarLoadOptions = {
   includeDetails?: boolean
   /** A poll the user did not ask for: a failed read leaves the shown PR in place. */
   background?: boolean
+  /** The user's explicit Refresh, sent as a canonical details read; never kept as reconnect demand. */
+  refresh?: boolean
 }
 
 export { buildMobilePrSidebarIdentity }
@@ -156,21 +158,9 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         }
         return 'failed'
       }
-      // A poll whose discovery succeeded but whose checks read failed for the same PR lands its discovery (clearing
-      // an older warning) and keeps the checks it had; it reports 'failed' once, for the backoff.
-      const checksOnlyFailure = options?.background === true && pollChecksReadFailed(accepted, next)
-      const settled: typeof next =
-        checksOnlyFailure && next.kind === 'ready' && accepted.kind === 'ready'
-          ? {
-              ...next,
-              data: {
-                ...next.data,
-                checks: accepted.data.checks,
-                checksError: accepted.data.checksError
-              }
-            }
-          : next
-      const result = checksOnlyFailure ? 'failed' : 'applied'
+      // A poll's checks-only failure for the same PR lands its discovery (clearing an older warning) with the prior
+      // checks, and reports 'failed' once for the backoff.
+      const { settled, result } = settleLoadedPr(accepted, next, options?.background === true)
 
       // Keep prior details across phase one so refresh cannot blank the comment tree.
       const priorDetails =
@@ -199,7 +189,12 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         seq: detailsSeq,
         resourceKey: prSidebarResourceKey(settled.data.pr)
       }
-      const fetchedDetails = await loadPrSidebarDetails(deps, worktreeId, settled.data.pr)
+      const fetchedDetails = await loadPrSidebarDetails(
+        deps,
+        worktreeId,
+        settled.data.pr,
+        options?.refresh
+      )
       // Release only this details claim; a newer load may already own it.
       if (owner.detailsInFlight?.seq === detailsSeq) {
         owner.detailsInFlight = null

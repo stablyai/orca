@@ -48,6 +48,7 @@ export type ItemDetailLoadingInput = Pick<
   | 'actionItem'
   | 'client'
   | 'detailRefreshSeq'
+  | 'detailRefreshRequested'
   | 'setActionItem'
   | 'setDetailError'
   | 'setDetailLoading'
@@ -63,6 +64,7 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
     actionItem,
     client,
     detailRefreshSeq,
+    detailRefreshRequested,
     setActionItem,
     setDetailError,
     setDetailLoading,
@@ -79,6 +81,8 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
     }
 
     let stale = false
+    const canonical = detailRefreshRequested.current
+    detailRefreshRequested.current = false
     setDetailPayload(null)
     setDetailError('')
     setDetailLoading(true)
@@ -96,6 +100,7 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
           params,
           ownerRepo: target.repository,
           read: true,
+          canonical,
           send: (selected, exact, options) =>
             githubItemDetailRead.request(selected, { ...params, ...exact }, options)
         })

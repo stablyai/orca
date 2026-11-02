@@ -15,6 +15,21 @@ export function pollChecksReadFailed(current: PrSidebarState, next: PrSidebarSta
   )
 }
 
+export function settleLoadedPr(
+  accepted: PrSidebarState,
+  next: PrSidebarState,
+  background: boolean
+): { settled: PrSidebarState; result: 'applied' | 'failed' } {
+  if (!background || !pollChecksReadFailed(accepted, next)) {
+    return { settled: next, result: 'applied' }
+  }
+  if (next.kind !== 'ready' || accepted.kind !== 'ready') {
+    return { settled: next, result: 'applied' }
+  }
+  const { checks, checksError } = accepted.data
+  return { settled: { ...next, data: { ...next.data, checks, checksError } }, result: 'failed' }
+}
+
 // A poll never supersedes a read the user started; it skips and tries again later.
 export function useForegroundFirstLoad<Options extends { background?: boolean }>(
   loadOnce: (options?: Options) => Promise<PrSidebarLoadResult>

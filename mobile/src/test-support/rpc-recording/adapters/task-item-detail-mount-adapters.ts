@@ -127,6 +127,7 @@ export function taskItemDetailMountAdapters(
         fixture: {
           actionItem: item,
           detailRefreshSeq: 0,
+          detailRefreshRequested: { current: false },
           tasksSupported: true,
           detailLoading: false,
           detailError: '',

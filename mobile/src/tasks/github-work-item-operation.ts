@@ -9,15 +9,21 @@ import {
   githubOperationResponse
 } from '../transport/github-target-invocation'
 import { openRpcRequestBudget } from '../transport/rpc-request-budget'
+import {
+  GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY,
+  GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY
+} from '../../../src/shared/task-source-runtime-capabilities'
 
 export async function withGitHubTargetOperation<T>(args: {
   client: RpcClient
   params: { repo: string }
   ownerRepo: GitHubOwnerRepo
   read?: boolean
+  /** An addressed details read's intent: false for an ordinary load, true for the user's explicit Refresh. */
+  canonical?: boolean
   send: (
     client: RpcClient,
-    exact: { ownerRepo?: GitHubOwnerRepo },
+    exact: { ownerRepo?: GitHubOwnerRepo; canonical?: boolean },
     options: SendRequestOptions
   ) => Promise<T>
 }): Promise<T> {
@@ -55,6 +61,18 @@ export async function withGitHubTargetOperation<T>(args: {
       status.runtimeId && status.hostDescriptor?.installationId
         ? { sourceId: status.hostDescriptor.installationId, runtimeId: status.runtimeId }
         : null
+    // Mixed versions: a host advertising explicit intent receives it; a canonical-only host reads ordinary loads
+    // without the owner and Refresh with the owner only; a host with neither cannot honor an explicit Refresh.
+    const capabilities = args.canonical === undefined ? [] : (status.capabilities ?? [])
+    const explicitIntent = capabilities.includes(
+      GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY
+    )
+    const legacyCanonical = capabilities.includes(GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY)
+    if (args.canonical === true && !explicitIntent && !legacyCanonical) {
+      throw new Error(GITHUB_EXACT_OPERATION_UNSUPPORTED)
+    }
+    const sendOwner =
+      supports && source !== null && (explicitIntent || !legacyCanonical || args.canonical === true)
     if ((!supports || !source) && !args.read) {
       // Name the build to update: the relaying desktop when only it lacks the check, else the executing server.
       throw new Error(
@@ -69,7 +87,10 @@ export async function withGitHubTargetOperation<T>(args: {
         sendRequest: async (method, params, requestOptions) =>
           githubOperationResponse(await client.sendRequest(method, params, requestOptions))
       },
-      supports && source ? { ownerRepo: args.ownerRepo } : {},
+      {
+        ...(sendOwner ? { ownerRepo: args.ownerRepo } : {}),
+        ...(explicitIntent ? { canonical: args.canonical } : {})
+      },
       {
         ...options(),
         ...(supports && source ? { envelope: { expectedRuntimeSource: source } } : {})

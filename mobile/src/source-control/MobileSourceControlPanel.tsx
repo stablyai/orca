@@ -225,7 +225,8 @@ export function MobileSourceControlPanel({
       return
     }
     if (activeTab === 'pr') {
-      void refetchPr({ includeDetails: true })
+      // The user's explicit Refresh asks the server for the canonical details.
+      void refetchPr({ includeDetails: true, refresh: true })
       return
     }
     void refetchPr({ includeDetails: false })

@@ -79,7 +79,7 @@ export type PrSidebarLoadDeps = {
   ) => Promise<GitHubPrReadOutcome<PRInfo | null>>
   fetchWorkItemDetails: (
     worktreeId: string,
-    args: { prNumber: number; prRepo?: GitHubPrRepoSlug | null }
+    args: { prNumber: number; prRepo?: GitHubPrRepoSlug | null; refresh?: boolean }
   ) => Promise<GitHubPrReadOutcome<GitHubWorkItemDetails | null>>
   fetchPRChecks: (
     worktreeId: string,
@@ -216,7 +216,9 @@ export async function loadPrSidebarData(
 export async function loadPrSidebarDetails(
   deps: PrSidebarLoadDeps,
   worktreeId: string,
-  pr: PRInfo
+  pr: PRInfo,
+  /** The user's explicit Refresh; every other load (recovery, polls, demand) is an ordinary read. */
+  refresh = false
 ): Promise<GitHubWorkItemDetails | null> {
   try {
     const target = resolveGitHubWorkItemTarget({ ...pr, type: 'pr' })
@@ -225,7 +227,8 @@ export async function loadPrSidebarDetails(
     }
     const outcome = await deps.fetchWorkItemDetails(worktreeId, {
       prNumber: pr.number,
-      prRepo: target.repository
+      prRepo: target.repository,
+      refresh
     })
     return outcome.ok && matchesGitHubWorkItemTarget(outcome.result?.item, target)
       ? outcome.result
