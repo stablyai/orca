@@ -220,6 +220,47 @@ describe('a permission pick on this device', () => {
     unmount()
   })
 
+  it('keeps a Codex permission pick through refresh while the agent reports the previous turn', async () => {
+    let selected = 'full-access'
+    mocks.call.mockImplementation((_target, method, params) => {
+      if (method === 'agentSession.setOption') {
+        return mocks.write(params)
+      }
+      if (method !== 'agentSession.options') {
+        return new Promise(() => {})
+      }
+      return Promise.resolve({
+        models: [{ id: 'model-a', label: 'Model A', isDefault: true, efforts: [] }],
+        current: {
+          model: 'model-a',
+          permissionMode: selected,
+          reportedPermissionMode: 'full-access'
+        }
+      })
+    })
+    const reply = Promise.withResolvers<AgentSessionMutationResult<AgentSessionOptionResult>>()
+    mocks.write.mockReturnValueOnce(reply.promise)
+    const { result, rerender, unmount } = renderReopened(1, 'codex')
+    await waitFor(() => expect(permission(result.current.optionSnapshot)).toBe('full-access'))
+    let picking!: Promise<boolean>
+    act(() => {
+      picking = result.current.setStructuredOption('permissionMode', 'ask')
+    })
+    expect(permission(result.current.optionSnapshot)).toBe('ask')
+    selected = 'ask'
+    await act(async () => {
+      reply.resolve(acceptedReply('permissionMode', selected))
+      await picking
+    })
+    rerender({ fence: 1, stamp: 'model-a|ask' })
+    await waitFor(() => expect(optionReads()).toBeGreaterThan(1))
+    expect(permission(result.current.optionSnapshot)).toBe('ask')
+    expect(result.current.optionSnapshot.find((row) => row.id === 'permissionMode')?.settable).toBe(
+      true
+    )
+    unmount()
+  })
+
   it('a PR2 client never sends own to a PR1 host', async () => {
     setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY])
     optionsAnswering('ask')

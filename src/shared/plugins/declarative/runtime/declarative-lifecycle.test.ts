@@ -174,7 +174,8 @@ describe('orca SDK facade', () => {
     expect(sdk.ui.has('Input', '$edit')).toBe(false)
     expect(sdk.ui.has('Carousel')).toBe(false)
     // Catalog 2 (Orca 1.4.247).
-    expect(sdk.ui.catalog).toBe(3)
+    expect(sdk.ui.catalog).toBe(4)
+    expect(sdk.ui.has('Box', 'scroll')).toBe(true)
     expect(sdk.ui.has('RelativeTime', 'format')).toBe(true)
     expect(sdk.ui.has('Table')).toBe(true)
     expect(sdk.ui.has('Table', 'onLoadMore')).toBe(true)

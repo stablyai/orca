@@ -1,6 +1,6 @@
 import { writeClaudeTerminalFailure } from './claude-terminal-failure'
 import type { ClaudeContextFacts } from './claude-context-facts'
-import { claudeCommandResultEnd } from './claude-command-turn'
+import { claudeCommandEnd } from './claude-command-turn'
 import type { ClaudeMessageJournalContext } from './claude-message-journaling'
 import type { ClaudeJournalPrompts } from './structured/journal/claude-structured-journal-prompts'
 import {
@@ -75,22 +75,41 @@ export function journalClaudeResult(
   if (settlesTurn) {
     prompts.retryPendingCancellations()
   }
-  const commandEnd = settlesTurn ? claudeCommandResultEnd(turn, sink, message, observedAt) : null
-  if (commandEnd === 'another-input') {
+  const command = settlesTurn ? turn.command : null
+  const commandResult = command ? claudeCommandEnd(command, message, observedAt) : null
+  if (command && !commandResult) {
     return
   }
   const failure = claudeResultFailure(message, leftToStop)
+  // A command's quota cause needs its own failed verdict, not only a failed envelope.
+  const compactionFailure =
+    command &&
+    commandResult?.end.outcome === 'failure' &&
+    !leftToStop &&
+    (command.failed !== null || failure !== null)
+      ? { ...command.failed, rejections: command.rejections }
+      : undefined
   const usageLimit = settlesTurn
-    ? usageLimits.result(message, failure !== null, usageEvidence)
+    ? usageLimits.result(message, !command && failure !== null, usageEvidence, compactionFailure)
     : null
-  if (usageLimit && endedTurnIdentity) {
-    writeClaudeTerminalFailure(sink, endedTurnIdentity, usageLimit)
+  // A sign-in notice from the hidden reply outranks quota, as on an ordinary send. Claude also
+  // labels a 403 access denial authentication_failed; its result, not sign-in guidance, says why.
+  const notice = compactionFailure && message.api_error_status !== 403 ? command?.notice : null
+  const terminalFailure = notice || usageLimit
+  if (command && commandResult?.row && !terminalFailure) {
+    sink.appendItem(command.resultIdentity, commandResult.row, { turnScope: endedTurnScope })
+  }
+  if (terminalFailure && endedTurnIdentity) {
+    writeClaudeTerminalFailure(sink, endedTurnIdentity, terminalFailure)
   }
   if (settlesTurn) {
     turn.suppressReopenOnFailure(message.is_error === true)
     corrections.abandon()
     streamedText.finish({ completedAt: observedAt })
-    context.settle(message, commandEnd ?? claudeTurnEndForResult(message, observedAt, leftToStop))
+    context.settle(
+      message,
+      commandResult?.end ?? claudeTurnEndForResult(message, observedAt, leftToStop)
+    )
     streamedBlocks.clear()
     streamedText.settle()
   }
@@ -108,7 +127,7 @@ export function journalClaudeResult(
     sink.publish()
   }
   const kind = claudeProviderFrameKind(message)
-  if (usageLimit && endedTurnIdentity) {
+  if (terminalFailure && endedTurnIdentity) {
     return
   }
   const alreadyShown = assistantFailures.resultAlreadyShown(message)

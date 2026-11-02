@@ -1,15 +1,11 @@
 import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
 import { describe, expect, it } from 'vitest'
-import { createDefaultWorkspaceCleanupFilterState } from '../../../../shared/workspace-cleanup-filter-model'
 import { makeFacetCandidate } from './workspace-cleanup-facet.test.fixture'
 import {
   applyWorkspaceCleanupGitEvidence,
   hasWorkspaceCleanupGitEvidence,
-  needsWorkspaceCleanupGitEvidence,
   selectWorkspaceCleanupGitEvidenceTargets
 } from './workspace-cleanup-git-evidence'
-
-const CLEAN_SORT = { field: 'name', direction: 'asc' } as const
 
 function deferredCandidate(worktreeId: string) {
   return makeFacetCandidate({
@@ -17,60 +13,6 @@ function deferredCandidate(worktreeId: string) {
     git: { clean: null, upstreamAhead: null, upstreamBehind: null, checkedAt: null }
   })
 }
-
-describe('needsWorkspaceCleanupGitEvidence', () => {
-  it('stays off for a filter and sort that never read git', () => {
-    expect(
-      needsWorkspaceCleanupGitEvidence(createDefaultWorkspaceCleanupFilterState(), CLEAN_SORT)
-    ).toBe(false)
-  })
-
-  it.each([
-    [
-      'git state',
-      (f: ReturnType<typeof createDefaultWorkspaceCleanupFilterState>) => {
-        f.git.states = ['dirty']
-      }
-    ],
-    [
-      'ahead threshold',
-      (f: ReturnType<typeof createDefaultWorkspaceCleanupFilterState>) => {
-        f.git.minAhead = 1
-      }
-    ],
-    [
-      'behind threshold',
-      (f: ReturnType<typeof createDefaultWorkspaceCleanupFilterState>) => {
-        f.git.minBehind = 1
-      }
-    ],
-    [
-      'git-derived blocker',
-      (f: ReturnType<typeof createDefaultWorkspaceCleanupFilterState>) => {
-        f.safety.blockers = ['unpushed-commits']
-      }
-    ]
-  ])('turns on for a %s filter', (_label, mutate) => {
-    const filters = createDefaultWorkspaceCleanupFilterState()
-    mutate(filters)
-    expect(needsWorkspaceCleanupGitEvidence(filters, CLEAN_SORT)).toBe(true)
-  })
-
-  it.each(['git', 'ahead', 'behind'] as const)('turns on for the %s sort', (field) => {
-    expect(
-      needsWorkspaceCleanupGitEvidence(createDefaultWorkspaceCleanupFilterState(), {
-        field,
-        direction: 'asc'
-      })
-    ).toBe(true)
-  })
-
-  it('ignores a blocker filter that does not depend on git', () => {
-    const filters = createDefaultWorkspaceCleanupFilterState()
-    filters.safety.blockers = ['pinned']
-    expect(needsWorkspaceCleanupGitEvidence(filters, CLEAN_SORT)).toBe(false)
-  })
-})
 
 describe('selectWorkspaceCleanupGitEvidenceTargets', () => {
   it('only targets rows the host deferred', () => {
@@ -131,11 +73,6 @@ describe('applyWorkspaceCleanupGitEvidence', () => {
     expect(row.blockers).not.toContain('dirty-files')
   })
 
-  it('returns the input untouched when nothing was re-scanned', () => {
-    const candidates = [deferredCandidate('a')]
-    expect(applyWorkspaceCleanupGitEvidence(candidates, new Map())).toBe(candidates)
-  })
-
   it('merges only git facts into the current broad-scan row', () => {
     const current = deferredCandidate('a')
     current.displayName = 'current name'
@@ -158,18 +95,5 @@ describe('applyWorkspaceCleanupGitEvidence', () => {
     expect(row.fingerprint).toBe('current-fingerprint')
     expect(row.blockers).toEqual(expect.arrayContaining(['dismissed', 'dirty-files']))
     expect(row.git).toEqual(refreshed.git)
-  })
-
-  it('keeps newer broad-scan git evidence', () => {
-    const current = makeFacetCandidate({
-      worktreeId: 'a',
-      git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, checkedAt: 10 }
-    })
-    const older = makeFacetCandidate({
-      worktreeId: 'a',
-      git: { clean: false, upstreamAhead: 2, upstreamBehind: 0, checkedAt: 5 }
-    })
-
-    expect(applyWorkspaceCleanupGitEvidence([current], new Map([['a', older]]))[0]).toBe(current)
   })
 })

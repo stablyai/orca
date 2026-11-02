@@ -10,6 +10,12 @@ import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-
 import { getDefaultSettings } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
 
+// Keep the dormant panel's interaction coverage independent of its release availability.
+vi.mock('../orchestration-crew/use-orchestration-panel-enabled', () => ({
+  useOrchestrationPanelEnabled: () =>
+    useAppStore((state) => state.settings?.experimentalOrchestrationPanel === true)
+}))
+
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
 )
@@ -192,7 +198,7 @@ it('ends only the native menu lifetime on hide, retaining disclosure and the sub
   const view = render(content(true))
   await user.click(screen.getByRole('button', { name: /^Show orchestration: 1 worker,/ }))
   const panel = screen.getByRole('complementary', { name: 'Orchestration' })
-  const disclosure = screen.getByRole('button', { name: /Check the result/ })
+  const disclosure = screen.getByRole('button', { name: "Show Worker's task and latest message" })
   await user.click(disclosure)
   const composer = screen.getByRole('textbox', { name: 'Message' })
   await user.type(composer, 'Keep this draft')

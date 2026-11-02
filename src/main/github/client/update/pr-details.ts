@@ -51,12 +51,12 @@ export async function updatePRTitle(
   await acquire()
   try {
     await patchPullRequest(ownerRepo, prNumber, [`title=${title}`], ghOptions)
-    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     return true
   } catch (err) {
     console.warn('updatePRTitle failed:', err)
     return false
   } finally {
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     release()
   }
 }
@@ -97,13 +97,13 @@ export async function updatePRDetails(
   await acquire()
   try {
     await patchPullRequest(ownerRepo, prNumber, fields, ghOptions)
-    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     return { ok: true }
   } catch (err) {
     const message =
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
     return classifiedFailure(classifyPullRequestUpdateError(message))
   } finally {
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     release()
   }
 }

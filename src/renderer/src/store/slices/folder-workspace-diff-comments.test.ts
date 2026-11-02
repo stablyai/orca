@@ -1,3 +1,4 @@
+import { selectDiffCommentView, type DiffCommentOwner } from '../diff-comment-owner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
@@ -5,6 +6,8 @@ import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import { SELF_LOCAL_AUTHORITY } from '../../../../shared/host-authority'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -78,7 +81,7 @@ function addNote(
   body: string,
   lineNumber = 1
 ): Promise<DiffComment | null> {
-  return store.getState().addDiffComment({
+  return store.getState().addDiffComment(capturedOwner(store, workspaceKey), {
     worktreeId: workspaceKey,
     filePath: 'README.md',
     source: 'markdown',
@@ -86,6 +89,31 @@ function addNote(
     body,
     side: 'modified'
   })
+}
+
+function folderNote(worktreeId: string, body: string): DiffComment {
+  return {
+    id: body,
+    worktreeId,
+    filePath: 'README.md',
+    lineNumber: 1,
+    body,
+    createdAt: 1,
+    side: 'modified'
+  }
+}
+
+function savedServer(id: string): PublicKnownRuntimeEnvironment {
+  return {
+    id,
+    name: id,
+    createdAt: 1,
+    updatedAt: 1,
+    lastUsedAt: null,
+    runtimeId: id,
+    endpoints: [{ id: 'ws', kind: 'websocket', label: 'WebSocket', endpoint: 'ws://server' }],
+    preferredEndpointId: 'ws'
+  }
 }
 
 function bodies(store: ReturnType<typeof createTestStore>, workspaceKey: string): string[] {
@@ -113,14 +141,16 @@ describe('folder workspace diff comments', () => {
       ...updates
     }))
 
-    const saved = await store.getState().addDiffComment({
-      worktreeId: folderWorkspaceKey(folderWorkspace.id),
-      filePath: 'README.md',
-      source: 'markdown',
-      lineNumber: 1,
-      body: 'folder note',
-      side: 'modified'
-    })
+    const saved = await store
+      .getState()
+      .addDiffComment(capturedOwner(store, folderWorkspaceKey(folderWorkspace.id)), {
+        worktreeId: folderWorkspaceKey(folderWorkspace.id),
+        filePath: 'README.md',
+        source: 'markdown',
+        lineNumber: 1,
+        body: 'folder note',
+        side: 'modified'
+      })
 
     expect(saved).toEqual(expect.objectContaining({ body: 'folder note' }))
     expect(store.getState().getDiffComments(folderWorkspaceKey(folderWorkspace.id))).toEqual([
@@ -146,23 +176,27 @@ describe('folder workspace diff comments', () => {
       return { ...folderWorkspace, ...updates }
     })
 
-    const addFirst = store.getState().addDiffComment({
-      worktreeId: folderWorkspaceKey(folderWorkspace.id),
-      filePath: 'README.md',
-      source: 'markdown',
-      lineNumber: 1,
-      body: 'first note',
-      side: 'modified'
-    })
+    const addFirst = store
+      .getState()
+      .addDiffComment(capturedOwner(store, folderWorkspaceKey(folderWorkspace.id)), {
+        worktreeId: folderWorkspaceKey(folderWorkspace.id),
+        filePath: 'README.md',
+        source: 'markdown',
+        lineNumber: 1,
+        body: 'first note',
+        side: 'modified'
+      })
     await vi.waitFor(() => expect(folderWorkspacesUpdate).toHaveBeenCalledTimes(1))
-    const addSecond = store.getState().addDiffComment({
-      worktreeId: folderWorkspaceKey(folderWorkspace.id),
-      filePath: 'README.md',
-      source: 'markdown',
-      lineNumber: 2,
-      body: 'second note',
-      side: 'modified'
-    })
+    const addSecond = store
+      .getState()
+      .addDiffComment(capturedOwner(store, folderWorkspaceKey(folderWorkspace.id)), {
+        worktreeId: folderWorkspaceKey(folderWorkspace.id),
+        filePath: 'README.md',
+        source: 'markdown',
+        lineNumber: 2,
+        body: 'second note',
+        side: 'modified'
+      })
     releaseFirstWrite?.()
 
     await Promise.all([addFirst, addSecond])
@@ -237,7 +271,7 @@ describe('folder workspace diff comments', () => {
           : [localWorkspace, runtimeWorkspace]
       })
 
-      const localAdd = store.getState().addDiffComment({
+      const localAdd = store.getState().addDiffComment(capturedOwner(store, workspaceKey), {
         worktreeId: workspaceKey,
         filePath: 'LOCAL.md',
         source: 'markdown',
@@ -248,7 +282,7 @@ describe('folder workspace diff comments', () => {
       await vi.waitFor(() => expect(folderWorkspacesUpdate).toHaveBeenCalledOnce())
 
       store.setState({ activeWorkspaceExecutionHostId: 'runtime:env-owner' })
-      const runtimeAdd = store.getState().addDiffComment({
+      const runtimeAdd = store.getState().addDiffComment(capturedOwner(store, workspaceKey), {
         worktreeId: workspaceKey,
         filePath: 'REMOTE.md',
         source: 'markdown',
@@ -649,6 +683,119 @@ describe('folder workspace diff comment rollback convergence', () => {
     expect(folderWorkspacesUpdate).not.toHaveBeenCalled()
   })
 
+  it("reads and saves a server folder's notes from its own source while the local twin is selected", async () => {
+    const store = createTestStore()
+    const key = folderWorkspaceKey('folder-1')
+    const runtimeWorkspace = makeFolderWorkspace({
+      projectGroupId: 'runtime-group',
+      executionHostId: 'runtime:env-owner',
+      diffComments: [folderNote(key, 'runtime A')]
+    })
+    store.setState({
+      activeWorktreeId: key,
+      activeWorkspaceExecutionHostId: 'local',
+      folderWorkspaces: [
+        makeFolderWorkspace({ diffComments: [folderNote(key, 'local B')] }),
+        runtimeWorkspace
+      ]
+    })
+    runtimeEnvironmentCall.mockImplementation(async () => ({
+      id: 'rpc-folder-update',
+      ok: true,
+      result: { folderWorkspace: runtimeWorkspace },
+      _meta: { runtimeId: 'remote-runtime' }
+    }))
+    const view = selectDiffCommentView(store.getState(), key, { runtimeEnvironmentId: 'env-owner' })
+
+    expect(view.comments?.map((comment) => comment.body)).toEqual(['runtime A'])
+    expect(view.owner).toEqual({
+      kind: 'folder',
+      worktreeId: key,
+      executionHostId: 'runtime:env-owner',
+      runtimeEnvironmentId: 'env-owner'
+    })
+    if (!view.owner) {
+      throw new Error('no owner')
+    }
+    await store.getState().addDiffComment(view.owner, {
+      worktreeId: key,
+      filePath: 'README.md',
+      source: 'markdown',
+      lineNumber: 2,
+      body: 'added',
+      side: 'modified'
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({ selector: 'env-owner', method: 'folderWorkspace.update' })
+    )
+    expect(folderWorkspacesUpdate).not.toHaveBeenCalled()
+    expect(bodies(store, key)).toEqual(['local B'])
+  })
+
+  it("keeps an app source on this app's folder: shown beside a server twin, never adopting a lone server folder", () => {
+    const store = createTestStore()
+    const key = folderWorkspaceKey('folder-1')
+    const runtimeWorkspace = makeFolderWorkspace({
+      projectGroupId: 'runtime-group',
+      executionHostId: 'runtime:env-owner',
+      diffComments: [folderNote(key, 'runtime B')]
+    })
+    store.setState({
+      activeWorktreeId: key,
+      activeWorkspaceExecutionHostId: 'runtime:env-owner',
+      folderWorkspaces: [
+        makeFolderWorkspace({ diffComments: [folderNote(key, 'local A')] }),
+        runtimeWorkspace
+      ]
+    })
+    const view = () => selectDiffCommentView(store.getState(), key, { runtimeEnvironmentId: null })
+
+    expect(view().comments?.map((comment) => comment.body)).toEqual(['local A'])
+    expect(view().owner).toMatchObject({ executionHostId: 'local', runtimeEnvironmentId: null })
+
+    store.setState({ folderWorkspaces: [runtimeWorkspace] })
+    expect(view()).toEqual({ owner: null, comments: undefined })
+  })
+
+  it('drops a queued folder save once its catalog endpoint is replaced, touching no other copy', async () => {
+    Object.assign(globalThis, { __ORCA_WEB_CLIENT__: true })
+    try {
+      const store = createTestStore()
+      const key = folderWorkspaceKey('folder-1')
+      const folder = makeFolderWorkspace({ diffComments: [folderNote(key, 'hub A')] })
+      store.setState({
+        activeWorktreeId: key,
+        activeWorkspaceExecutionHostId: 'local',
+        runtimeEnvironments: [savedServer('hub-a')],
+        folderWorkspaces: [folder]
+      })
+      const owner = capturedOwner(store, key)
+      expect(owner).toMatchObject({ runtimeEnvironmentId: 'hub-a' })
+
+      const pending = store.getState().addDiffComment(owner, {
+        worktreeId: key,
+        filePath: 'README.md',
+        lineNumber: 2,
+        body: 'added',
+        side: 'modified'
+      })
+      const replacement = { ...folder, diffComments: [folderNote(key, 'hub B')] }
+      store.setState({
+        runtimeEnvironments: [savedServer('hub-b')],
+        folderWorkspaces: [replacement]
+      })
+
+      expect(await pending).toBeNull()
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'folderWorkspace.update' })
+      )
+      expect(folderWorkspacesUpdate).not.toHaveBeenCalled()
+      expect(store.getState().folderWorkspaces).toEqual([replacement])
+    } finally {
+      Reflect.deleteProperty(globalThis, '__ORCA_WEB_CLIENT__')
+    }
+  })
+
   it('keeps a failing burst scoped to its own execution host', async () => {
     const store = createTestStore()
     const workspaceId = 'shared-folder-id'
@@ -690,3 +837,14 @@ describe('folder workspace diff comment rollback convergence', () => {
     expect(bodies(store, key)).toEqual(['runtime note'])
   })
 })
+
+function capturedOwner(store: { getState: () => AppState }, worktreeId: string): DiffCommentOwner {
+  return (
+    // An unlisted id stands for a copy that is gone, so actions on it are refused.
+    selectDiffCommentView(store.getState(), worktreeId, 'selection').owner ?? {
+      kind: 'worktree',
+      worktreeId,
+      authority: SELF_LOCAL_AUTHORITY
+    }
+  )
+}

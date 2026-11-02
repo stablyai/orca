@@ -15,6 +15,8 @@ import { isLocalHookConnectionId } from '../../../../../shared/wsl-hook-relay-co
 import type { DispatchContextRow } from '../../types'
 import type { WorkerTerminalResourceRow } from '../../worker-terminal-ownership'
 import type { OrchestrationDb } from '../orchestration-db'
+import { parseOrcaSessionAddress } from '../../../../../shared/orca-session-address'
+import { isStructuredWorkerHandle } from '../../../../../shared/structured-worker-handle'
 
 /** The conversation a closed terminal worker reopens in, as the resume path takes it. */
 export type WorkerResumeSession = {
@@ -132,25 +134,36 @@ export function markUnreadFollowUpMail(db: OrchestrationDb, dispatchId: string):
     .run(dispatchId)
 }
 
-/** In the follow-up's claim, so its first `check` finds the mail; its start prompt is that mail's wake. A pointer whose Enter is in flight keeps its stamps to settle. */
+/** In the follow-up's claim, so its first `check` finds the mail. A terminal's start prompt is that mail's
+ *  wake; a pointer whose Enter is in flight keeps its stamps to settle. A chat is handed each message whole
+ *  after its Task, so the mail stays undelivered for that. */
 export function takeFollowUpMail(
   db: OrchestrationDb,
   fromDispatchId: string,
   toDispatchId: string
 ): void {
+  const chat = receivesMailWhole(db.getDispatchContextById(fromDispatchId)?.assignee_handle)
   db.db
     .prepare(
       `UPDATE messages
           SET to_handle = ?,
-              delivered_at = CASE WHEN pointer_enter_pending = 0 THEN datetime('now') ELSE delivered_at END,
+              delivered_at = CASE WHEN ? THEN NULL
+                WHEN pointer_enter_pending = 0 THEN datetime('now') ELSE delivered_at END,
               pointer_pty_id = CASE WHEN pointer_enter_pending = 0 THEN NULL ELSE pointer_pty_id END,
               pointer_process_incarnation =
                 CASE WHEN pointer_enter_pending = 0 THEN NULL ELSE pointer_process_incarnation END
         WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'`
     )
-    .run(`dispatch:${toDispatchId}`, `dispatch:${fromDispatchId}`)
+    .run(`dispatch:${toDispatchId}`, chat ? 1 : 0, `dispatch:${fromDispatchId}`)
   // Until the follow-up is ready, a restart must find this mail on it.
   markUnreadFollowUpMail(db, toDispatchId)
+}
+
+/** A chat worker, assigned by session or started by Orca, gets mail whole rather than a pointer at `check`. */
+export function receivesMailWhole(assigneeHandle: string | null | undefined): boolean {
+  return (
+    parseOrcaSessionAddress(assigneeHandle) !== null || isStructuredWorkerHandle(assigneeHandle)
+  )
 }
 
 /** Mail a follow-up held from before it started is what its Task pointed at; only newer mail starts another. */

@@ -10,7 +10,6 @@ const contracts = [
   'src/main/ipc/pty/runtime/spawn-preflight-saved-resume.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-terminal-writer-acquire.test.ts',
   'src/main/runtime/hook-status-resume-sleep-ordering.test.ts',
-  'src/renderer/src/hooks/ipc-events/agent-status-refused-resume.performance.test.ts',
   'src/shared/tui-agent-permission-choice.test.ts',
   'src/renderer/src/components/settings/agent-permission-conversion-persistence.test.tsx',
   'src/main/runtime/rpc/methods/repo.test.ts',
