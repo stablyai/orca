@@ -132,7 +132,9 @@ describe('Claude completion banners through the real pane and hook lanes', () =>
     await installTerminalTestGlobals()
     vi.useFakeTimers()
     vi.mocked(window.api.pty.getForegroundProcess).mockImplementation(async () => foreground)
-    vi.mocked(window.api.pty.hasChildProcesses).mockImplementation(async () => foreground !== null)
+    vi.mocked(window.api.pty.hasChildProcesses).mockImplementation(
+      async () => foreground !== null && foreground !== 'zsh'
+    )
     // Main's desktop cooldown, keyed as main's delivery service keys it, decides what the user sees.
     banners = []
     const recentDesktop = new Map<string, number>()
@@ -260,7 +262,8 @@ describe('Claude completion banners through the real pane and hook lanes', () =>
     // Claude is replaced in the pane by goose (no hooks), which later exits.
     foreground = 'goose'
     await vi.advanceTimersByTimeAsync(15_000)
-    foreground = null
+    // An unreadable foreground is not exit proof; goose exits back to the shell.
+    foreground = 'zsh'
     await vi.advanceTimersByTimeAsync(15_000)
 
     expect(banners).toEqual([

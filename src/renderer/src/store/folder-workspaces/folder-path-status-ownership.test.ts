@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspacePathStatus } from '../../../../shared/folder-workspace-path-status'
+import type { Repo } from '../../../../shared/repo-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
-import { makeFolderWorkspace } from '@/components/worktree-jump-palette-test-fixtures'
+import {
+  getFolderWorkspaceStatusRequestDependencies,
+  getFolderWorkspaceStatusRequestSnapshot
+} from './folder-path-status'
+import { createProjectGroup } from '../../../../shared/project-groups'
+import { makeRepo, makeFolderWorkspace } from '@/components/worktree-jump-palette-test-fixtures'
 import { createTestStore } from '../slices/store-test-helpers'
 
 const mocks = vi.hoisted(() => ({ getPathStatus: vi.fn(), callRuntimeRpc: vi.fn() }))
@@ -145,4 +151,146 @@ describe('folder path status ownership', () => {
       )
     }
   )
+})
+
+describe('shared folder snapshot candidate extraction', () => {
+  it('preserves exact owner, descendant, contained-path and explicit-target snapshot bytes', () => {
+    const store = createTestStore()
+    const group = {
+      ...createProjectGroup({
+        name: 'Root',
+        parentPath: '/root',
+        createdFrom: 'folder-scan',
+        tabOrder: 0,
+        now: 1
+      }),
+      id: 'root',
+      executionHostId: 'local',
+      connectionId: 'C'
+    }
+    const child = {
+      ...group,
+      id: 'child',
+      parentGroupId: 'root',
+      parentPath: '/elsewhere',
+      connectionId: null
+    }
+    const repos: Repo[] = [
+      {
+        ...makeRepo(),
+        id: 'nested',
+        path: '/outside/repo',
+        projectGroupId: 'child',
+        connectionId: 'A',
+        executionHostId: 'local'
+      },
+      {
+        ...makeRepo(),
+        id: 'contained',
+        path: '/root/repo',
+        connectionId: 'B',
+        executionHostId: 'local'
+      },
+      {
+        ...makeRepo(),
+        id: 'foreign',
+        path: '/root/repo',
+        connectionId: 'Z',
+        executionHostId: 'runtime:builder'
+      }
+    ]
+    const folder = makeFolderWorkspace({
+      id: 'folder',
+      projectGroupId: 'root',
+      folderPath: '/root',
+      executionHostId: 'local'
+    })
+    store.setState({
+      projectGroups: [
+        group,
+        child,
+        { ...group, executionHostId: 'runtime:builder', parentPath: '/remote' }
+      ],
+      folderWorkspaces: [
+        folder,
+        { ...folder, executionHostId: 'runtime:builder', folderPath: '/remote' }
+      ],
+      repos,
+      sshConnectionStates: new Map([
+        ['A', { targetId: 'A', status: 'connected', error: null, reconnectAttempt: 0 }]
+      ])
+    })
+    const options = { runtimeEnvironmentId: null }
+    const groupRequest = { scope: 'project-group', projectGroupId: 'root' } as const
+    const folderRequest = { scope: 'folder-workspace', folderWorkspaceId: 'folder' } as const
+    const expected = [
+      '/root',
+      'root',
+      'C',
+      'local',
+      'A:connected|B:missing|C:missing',
+      'contained:/root/repo::B:local|nested:/outside/repo:child:A:local'
+    ].join('\0')
+    for (const request of [groupRequest, folderRequest]) {
+      const dependencies = getFolderWorkspaceStatusRequestDependencies(
+        store.getState(),
+        request,
+        options
+      )
+      expect(dependencies?.relevantConnectionIds).toEqual(new Set(['C', 'A', 'B']))
+      expect(getFolderWorkspaceStatusRequestSnapshot(store.getState(), request, options)).toBe(
+        expected
+      )
+    }
+    expect(
+      getFolderWorkspaceStatusRequestSnapshot(store.getState(), groupRequest, {
+        runtimeEnvironmentId: 'builder'
+      })
+    ).toBe(['/remote', 'root', 'C', 'runtime:builder', 'C:missing', ''].join('\0'))
+    const pathRequest = { scope: 'path', path: '/root', connectionId: 'C' } as const
+    expect(getFolderWorkspaceStatusRequestSnapshot(store.getState(), pathRequest, options)).toBe(
+      ['/root', '', 'C', 'local', 'B:missing|C:missing', 'contained:/root/repo::B:local'].join('\0')
+    )
+    // Reordering cannot change the sorted token or request ownership.
+    store.setState((state) => ({
+      repos: state.repos.toReversed(),
+      projectGroups: state.projectGroups.toReversed(),
+      folderWorkspaces: state.folderWorkspaces.toReversed()
+    }))
+    expect(getFolderWorkspaceStatusRequestSnapshot(store.getState(), folderRequest, options)).toBe(
+      expected
+    )
+    store.setState({ projectGroups: [group, { ...child, parentGroupId: null }] })
+    expect(getFolderWorkspaceStatusRequestSnapshot(store.getState(), groupRequest, options)).toBe(
+      ['/root', 'root', 'C', 'local', 'B:missing|C:missing', 'contained:/root/repo::B:local'].join(
+        '\0'
+      )
+    )
+    store.setState({
+      repos: repos.map((repo) => ({ ...repo, path: '/moved', projectGroupId: null }))
+    })
+    expect(getFolderWorkspaceStatusRequestSnapshot(store.getState(), groupRequest, options)).toBe(
+      ['/root', 'root', 'C', 'local', 'C:missing', ''].join('\0')
+    )
+    store.setState({ folderWorkspaces: [] })
+    expect(
+      getFolderWorkspaceStatusRequestDependencies(store.getState(), folderRequest, options)
+    ).toBeNull()
+    expect(
+      getFolderWorkspaceStatusRequestSnapshot(store.getState(), folderRequest, options)
+    ).toBeNull()
+    store.setState({ projectGroups: [group, group] })
+    expect(
+      getFolderWorkspaceStatusRequestSnapshot(store.getState(), groupRequest, options)
+    ).toBeNull()
+    store.setState({ projectGroups: [] })
+    expect(
+      getFolderWorkspaceStatusRequestSnapshot(store.getState(), groupRequest, options)
+    ).toBeNull()
+    store.setState({ projectGroups: [group] })
+    expect(
+      getFolderWorkspaceStatusRequestDependencies(store.getState(), groupRequest, options)
+        ?.relevantConnectionIds
+    ).toEqual(new Set(['C']))
+  })
 })

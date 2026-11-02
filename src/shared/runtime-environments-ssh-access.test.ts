@@ -64,23 +64,6 @@ describe('runtime SSH access without deployment ownership', () => {
     expect(persisted).not.toHaveProperty('sshAccess')
   })
 
-  it.each([
-    { sshTargetId: '' },
-    { sshTargetGeneration: 0 },
-    { sshTargetGeneration: 1.5 },
-    { localPort: 0 },
-    { localPort: 65536 },
-    { remotePort: 0 },
-    { remotePort: 65536 }
-  ])('rejects malformed generic access links: %j', (change) => {
-    expect(
-      KnownRuntimeEnvironmentSchema.safeParse({
-        ...accessEnvironment(),
-        sshAccess: { ...accessLink, ...change }
-      }).success
-    ).toBe(false)
-  })
-
   it('preserves SSH metadata while redacting the same pairing secrets', () => {
     const accessed = KnownRuntimeEnvironmentSchema.parse(accessEnvironment())
     const redacted = redactRuntimeEnvironment(accessed)

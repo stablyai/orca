@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import type * as ChildProcess from 'node:child_process'
+import type * as CliCommandResolution from '../../shared/node-cli-command-resolution'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { discoverCommitMessageModelsLocal } from './commit-message-text-generation'
 import { PROVIDER_SPAWN_FAILURE_MARKER } from '../provider-process/provider-spawn-failure-report'
@@ -16,6 +17,12 @@ const { terminateWindowsProcessTreeMock } = vi.hoisted(() => ({
 
 vi.mock('../windows-process-tree-kill', () => ({
   terminateWindowsProcessTree: terminateWindowsProcessTreeMock
+}))
+
+// These protocol fixtures use fake processes; installed host CLIs belong to the CLI-path suite.
+vi.mock('../../shared/node-cli-command-resolution', async (importOriginal) => ({
+  ...(await importOriginal<typeof CliCommandResolution>()),
+  resolveCliCommand: (command: string) => command
 }))
 
 vi.mock('child_process', async (importOriginal) => {

@@ -1,6 +1,8 @@
 export const PATH_EXISTENCE_BATCH_MAX = 128
 export const PATH_EXISTENCE_BATCH_CAPABILITY = 'files.pathsExist'
 export type PathExistenceResult = { exists: boolean } | { error: string }
+/** The desktop shell batch: a boolean per answered path, an error for one it refused. */
+export type ShellPathExistence = boolean | { error: string }
 
 export function validatePathExistenceBatch(paths: unknown): asserts paths is string[] {
   if (

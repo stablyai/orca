@@ -190,7 +190,8 @@ const CASES: Case[] = [
     mainShows: { [`${GIT_KEY} terminal term-agent phone and CLI title`]: 'Terminal 2' }
   },
   {
-    name: 'rename a chat',
+    // A chat's name lives on its host; only a host too old to save it keeps the name on the tab.
+    name: 'rename a chat whose host cannot save names',
     command: {
       type: 'renameTab',
       workspace: GIT_KEY,
@@ -198,7 +199,7 @@ const CASES: Case[] = [
       kind: 'custom',
       title: 'Review'
     },
-    windowAction: (state) => state.setTabCustomTitle('agent-session-1', 'Review')
+    windowAction: (state) => state.setTabCustomLabel('agent-session-1', 'Review')
   },
   {
     name: 'color a terminal',

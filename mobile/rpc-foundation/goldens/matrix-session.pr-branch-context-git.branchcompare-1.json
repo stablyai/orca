@@ -4,6 +4,61 @@
   "family": "session.pr-branch-context",
   "namedDeltas": [],
   "values": {
+    "064ec5d09de8": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "branch": "feature",
+        "headSha": "head-sha-1",
+        "status": {
+          "branch": "feature",
+          "conflictOperation": "unknown",
+          "entries": [
+            {
+              "added": 3,
+              "area": "unstaged",
+              "conflictKind": {
+                "$rpc": "undefined"
+              },
+              "conflictStatus": {
+                "$rpc": "undefined"
+              },
+              "conflictStatusSource": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "path": "src/app.ts",
+              "removed": 1,
+              "status": "modified",
+              "submodule": {
+                "$rpc": "undefined"
+              },
+              "submoduleRoot": {
+                "$rpc": "undefined"
+              }
+            }
+          ],
+          "head": "head-sha-1",
+          "upstreamStatus": {
+            "ahead": 1,
+            "behind": 0,
+            "behindCommitsArePatchEquivalent": {
+              "$rpc": "undefined"
+            },
+            "hasConfiguredPushTarget": {
+              "$rpc": "undefined"
+            },
+            "hasUpstream": true,
+            "upstreamName": {
+              "$rpc": "undefined"
+            }
+          }
+        }
+      }
+    },
     "0fc11d9bf2a5": {
       "name": "worktree.show#1",
       "ordinal": 2,
@@ -565,6 +620,59 @@
       "ordinal": 5,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
     },
+    "eddcdff704c3": {
+      "identity": {
+        "branch": "feature",
+        "headSha": "head-sha-1",
+        "status": {
+          "branch": "feature",
+          "conflictOperation": "unknown",
+          "entries": [
+            {
+              "added": 3,
+              "area": "unstaged",
+              "conflictKind": {
+                "$rpc": "undefined"
+              },
+              "conflictStatus": {
+                "$rpc": "undefined"
+              },
+              "conflictStatusSource": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "path": "src/app.ts",
+              "removed": 1,
+              "status": "modified",
+              "submodule": {
+                "$rpc": "undefined"
+              },
+              "submoduleRoot": {
+                "$rpc": "undefined"
+              }
+            }
+          ],
+          "head": "head-sha-1",
+          "upstreamStatus": {
+            "ahead": 1,
+            "behind": 0,
+            "behindCommitsArePatchEquivalent": {
+              "$rpc": "undefined"
+            },
+            "hasConfiguredPushTarget": {
+              "$rpc": "undefined"
+            },
+            "hasUpstream": true,
+            "upstreamName": {
+              "$rpc": "undefined"
+            }
+          }
+        }
+      },
+      "repoContext": "unread"
+    },
     "ede3857249b1": {
       "name": "git.branchCompare#1",
       "ordinal": 7,
@@ -599,53 +707,6 @@
           }
         }
       }
-    },
-    "f0e28a4b20aa": {
-      "identity": {
-        "branch": "feature",
-        "headSha": "head-sha-1",
-        "status": {
-          "branch": "feature",
-          "conflictOperation": "unknown",
-          "entries": [
-            {
-              "added": 3,
-              "area": "unstaged",
-              "conflictKind": {
-                "$rpc": "undefined"
-              },
-              "conflictStatus": {
-                "$rpc": "undefined"
-              },
-              "conflictStatusSource": {
-                "$rpc": "undefined"
-              },
-              "oldPath": {
-                "$rpc": "undefined"
-              },
-              "path": "src/app.ts",
-              "removed": 1,
-              "status": "modified"
-            }
-          ],
-          "head": "head-sha-1",
-          "upstreamStatus": {
-            "ahead": 1,
-            "behind": 0,
-            "behindCommitsArePatchEquivalent": {
-              "$rpc": "undefined"
-            },
-            "hasConfiguredPushTarget": {
-              "$rpc": "undefined"
-            },
-            "hasUpstream": true,
-            "upstreamName": {
-              "$rpc": "undefined"
-            }
-          }
-        }
-      },
-      "repoContext": "unread"
     },
     "f9f0c7d74e69": {
       "name": "git.branchCompare#1",
@@ -682,55 +743,6 @@
           "ok": false
         }
       }
-    },
-    "ffc37850babd": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "branch": "feature",
-        "headSha": "head-sha-1",
-        "status": {
-          "branch": "feature",
-          "conflictOperation": "unknown",
-          "entries": [
-            {
-              "added": 3,
-              "area": "unstaged",
-              "conflictKind": {
-                "$rpc": "undefined"
-              },
-              "conflictStatus": {
-                "$rpc": "undefined"
-              },
-              "conflictStatusSource": {
-                "$rpc": "undefined"
-              },
-              "oldPath": {
-                "$rpc": "undefined"
-              },
-              "path": "src/app.ts",
-              "removed": 1,
-              "status": "modified"
-            }
-          ],
-          "head": "head-sha-1",
-          "upstreamStatus": {
-            "ahead": 1,
-            "behind": 0,
-            "behindCommitsArePatchEquivalent": {
-              "$rpc": "undefined"
-            },
-            "hasConfiguredPushTarget": {
-              "$rpc": "undefined"
-            },
-            "hasUpstream": true,
-            "upstreamName": {
-              "$rpc": "undefined"
-            }
-          }
-        }
-      }
     }
   },
   "recording": {
@@ -754,9 +766,9 @@
           "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "189a62313626", "c0f7fd87f4a5"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
-            "identity": "ffc37850babd"
+            "identity": "064ec5d09de8"
           },
-          "state": "f0e28a4b20aa",
+          "state": "eddcdff704c3",
           "effects": []
         }
       },
@@ -766,9 +778,9 @@
           "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "189a62313626", "6d725a548285"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
-            "identity": "ffc37850babd"
+            "identity": "064ec5d09de8"
           },
-          "state": "f0e28a4b20aa",
+          "state": "eddcdff704c3",
           "effects": []
         }
       },
@@ -778,9 +790,9 @@
           "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "189a62313626", "ede3857249b1"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
-            "identity": "ffc37850babd"
+            "identity": "064ec5d09de8"
           },
-          "state": "f0e28a4b20aa",
+          "state": "eddcdff704c3",
           "effects": []
         }
       },
@@ -790,9 +802,9 @@
           "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "189a62313626", "1daf48d588fb"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
-            "identity": "ffc37850babd"
+            "identity": "064ec5d09de8"
           },
-          "state": "f0e28a4b20aa",
+          "state": "eddcdff704c3",
           "effects": []
         }
       },
@@ -802,9 +814,9 @@
           "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "189a62313626", "95cef28060d8"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
-            "identity": "ffc37850babd"
+            "identity": "064ec5d09de8"
           },
-          "state": "f0e28a4b20aa",
+          "state": "eddcdff704c3",
           "effects": []
         }
       },
@@ -814,9 +826,9 @@
           "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "189a62313626", "2aed715108d9"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
-            "identity": "ffc37850babd"
+            "identity": "064ec5d09de8"
           },
-          "state": "f0e28a4b20aa",
+          "state": "eddcdff704c3",
           "effects": []
         }
       },
@@ -826,9 +838,9 @@
           "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "189a62313626", "f9f0c7d74e69"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
-            "identity": "ffc37850babd"
+            "identity": "064ec5d09de8"
           },
-          "state": "f0e28a4b20aa",
+          "state": "eddcdff704c3",
           "effects": []
         }
       },
@@ -838,9 +850,9 @@
           "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "189a62313626", "78a71705cc83"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
-            "identity": "ffc37850babd"
+            "identity": "064ec5d09de8"
           },
-          "state": "f0e28a4b20aa",
+          "state": "eddcdff704c3",
           "effects": []
         }
       },
@@ -850,9 +862,9 @@
           "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "189a62313626", "2d056d166720"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
-            "identity": "ffc37850babd"
+            "identity": "064ec5d09de8"
           },
-          "state": "f0e28a4b20aa",
+          "state": "eddcdff704c3",
           "effects": []
         }
       },
@@ -862,9 +874,9 @@
           "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "189a62313626", "bd12ddcc2b4f"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
-            "identity": "ffc37850babd"
+            "identity": "064ec5d09de8"
           },
-          "state": "f0e28a4b20aa",
+          "state": "eddcdff704c3",
           "effects": []
         }
       },
@@ -874,9 +886,9 @@
           "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "189a62313626", "2e043987d998"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
-            "identity": "ffc37850babd"
+            "identity": "064ec5d09de8"
           },
-          "state": "f0e28a4b20aa",
+          "state": "eddcdff704c3",
           "effects": []
         }
       }

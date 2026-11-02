@@ -8,7 +8,7 @@ import type { Repo } from '../../shared/repo-types'
 import { parsePairingCode } from '../../shared/pairing'
 import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime/requests/remote-runtime-request-connection'
 import { RemoteRuntimeSharedControlConnection } from '../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
-import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
+import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
 import type {
   RuntimeClientEvent,
   RuntimeClientEventStreamMessage
@@ -49,7 +49,6 @@ describe('remote runtime request connection integration', () => {
         getRuntimeId: () => 'fetch-runtime-test',
         getStartedAt: () => 1,
         cleanupSubscriptionsForConnection: () => {},
-        cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
         listVisibleRepos: () => repos
       } as unknown as OrcaRuntimeService
@@ -118,6 +117,7 @@ describe('remote runtime request connection integration', () => {
       ]
       const clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
       const subscriptionCleanups = new Map<string, () => void>()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this socket fixture implements every runtime method used by client-events subscribe and repo.list.
       const runtime = {
         configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'events-runtime-test',
@@ -137,7 +137,6 @@ describe('remote runtime request connection integration', () => {
           subscriptionCleanups.get(id)?.()
           subscriptionCleanups.delete(id)
         },
-        cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
         showRepo: (selector: string) => {
           if (selector !== repo.id && selector !== `id:${repo.id}`) {
@@ -145,6 +144,7 @@ describe('remote runtime request connection integration', () => {
           }
           return repo
         },
+        getClientSettings: () => ({ nativeChatQueueFollowUps: false }),
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
@@ -286,6 +286,7 @@ describe('remote runtime request connection integration', () => {
           listener(event)
         }
       }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this sleep socket fixture implements every runtime method reached by its subscriptions and list requests.
       const runtime = {
         configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'remote-sleep-runtime-test',
@@ -305,8 +306,8 @@ describe('remote runtime request connection integration', () => {
           subscriptionCleanups.get(id)?.()
           subscriptionCleanups.delete(id)
         },
-        cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
+        getClientSettings: () => ({ nativeChatQueueFollowUps: false }),
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
@@ -553,13 +554,14 @@ describe('remote runtime request connection integration', () => {
             }
           }
         },
-        cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
+        getClientSettings: () => ({ nativeChatQueueFollowUps: false }),
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
         },
         getAccountsSnapshot: () => ({ claude: null, codex: null }),
+        getAccountsStreamSnapshot: () => ({ claude: null, codex: null }),
         refreshAccountsForMobile: async () => {
           for (const listener of accountsListeners) {
             listener({ claude: null, codex: null })

@@ -7,6 +7,7 @@ import type {
   AutomationWorkspaceProvenance,
   AutomationWorkspaceProvenanceRequest
 } from '../../shared/worktree/types'
+import { ClientAutomationWorkspaceProvenance } from '../../shared/rpc-contract/worktree-params'
 import {
   beginAutomationDispatchTokenUse,
   finishAutomationDispatchTokenUse,
@@ -28,6 +29,14 @@ export function invalidAutomationProvenanceRequest(): never {
   ])
 }
 
+/** This host does not hold the automation, or keeps no automations at all. */
+function isUnownedAutomationError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.message.startsWith('Automation not found') || error.message === 'runtime_unavailable')
+  )
+}
+
 function repoSelectorMatchesAutomation(selector: string, repoId: string): boolean {
   return selector === repoId || selector === `id:${repoId}`
 }
@@ -37,6 +46,8 @@ export function resolveAutomationWorkspaceProvenance(args: {
   repoSelector: string
   repo: Repo
   request: AutomationWorkspaceProvenanceRequest | undefined
+  /** A runtime host only verifies its own automations; another owner's token is unverifiable here. */
+  ignoreUnknownAutomation?: boolean
 }): AutomationWorkspaceProvenance | undefined {
   const { authority, repoSelector, repo, request } = args
   if (!request) {
@@ -46,7 +57,14 @@ export function resolveAutomationWorkspaceProvenance(args: {
   let automation: Automation
   try {
     automation = authority.showAutomation(request.automationId)
-  } catch {
+  } catch (error) {
+    // Why: an older desktop sends its own unverifiable token (#34433); store failures still surface.
+    if (args.ignoreUnknownAutomation) {
+      if (isUnownedAutomationError(error)) {
+        return undefined
+      }
+      throw error
+    }
     invalidAutomationProvenanceRequest()
   }
   const run = authority
@@ -76,6 +94,43 @@ export function resolveAutomationWorkspaceProvenance(args: {
   }
 
   return buildAutomationWorkspaceProvenance(automation, run, repo)
+}
+
+/** Label a workspace with another owner's run, never one this host holds; a label grants nothing here. */
+export function resolveClientAutomationWorkspaceProvenance(args: {
+  authority: Pick<AutomationWorkspaceProvenanceAuthority, 'showAutomation'>
+  provenance: unknown
+}): AutomationWorkspaceProvenance | undefined {
+  if (args.provenance === undefined) {
+    return undefined
+  }
+  const parsed = ClientAutomationWorkspaceProvenance.safeParse(args.provenance)
+  if (!parsed.success) {
+    warnDroppedClientAutomationLabel()
+    return undefined
+  }
+  const provenance = parsed.data
+  try {
+    args.authority.showAutomation(provenance.automationId)
+    // Why: a host-held automation is proven only by its own dispatch token.
+    return undefined
+  } catch (error) {
+    if (!isUnownedAutomationError(error)) {
+      throw error
+    }
+  }
+  return { ...provenance, kind: 'created-by-automation', createdAt: Date.now(), origin: 'client' }
+}
+
+let droppedClientAutomationLabelWarned = false
+
+function warnDroppedClientAutomationLabel(): void {
+  if (!droppedClientAutomationLabelWarned) {
+    droppedClientAutomationLabelWarned = true
+    console.warn(
+      '[automations] dropped a malformed client automation label; creating a plain workspace'
+    )
+  }
 }
 
 export function releaseAutomationWorkspaceProvenanceRequest(

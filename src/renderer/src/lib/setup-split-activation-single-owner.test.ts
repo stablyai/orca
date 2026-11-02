@@ -145,6 +145,7 @@ function stubHost(
           listener = next
           return () => {}
         },
+        onLaunchRecipe: () => () => {},
         onRequestTerminalTabMount: () => () => {},
         replyTerminalCreate: vi.fn()
       }

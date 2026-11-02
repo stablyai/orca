@@ -8,10 +8,16 @@ import {
 /** Address by the /clear root to preserve Runs and mail; without records, retain the supplied id. */
 export function canonicalOrcaSessionId(
   orcaSessionId: OrcaSessionId,
-  store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
+  store: Pick<AgentSessionRecordReader, 'listRecords'> | null = readAgentSessionRecordStore()
 ): OrcaSessionId {
+  return createCanonicalOrcaSessionResolver(store)(orcaSessionId)
+}
+
+export function createCanonicalOrcaSessionResolver(
+  store: Pick<AgentSessionRecordReader, 'listRecords'> | null
+): (id: OrcaSessionId) => OrcaSessionId {
   if (!store) {
-    return orcaSessionId
+    return (id) => id
   }
   const clearedFrom = new Map<string, string>()
   for (const record of store.listRecords()) {
@@ -20,6 +26,13 @@ export function canonicalOrcaSessionId(
       clearedFrom.set(next, record.sessionId)
     }
   }
+  return (id) => canonicalOrcaSessionFromEdges(id, clearedFrom)
+}
+
+export function canonicalOrcaSessionFromEdges(
+  orcaSessionId: OrcaSessionId,
+  clearedFrom: ReadonlyMap<string, string>
+): OrcaSessionId {
   // The visited set bounds corrupt chains; valid clear lineage is acyclic.
   let root: string = orcaSessionId
   const earlier = new Set([root])

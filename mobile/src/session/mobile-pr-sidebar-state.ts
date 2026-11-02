@@ -1,8 +1,18 @@
 import type { PRCheckDetail } from '../../../src/shared/github/check-types'
 import type { PRInfo } from '../../../src/shared/github/pull-request-types'
+import type { GitPushTarget } from '../../../src/shared/worktree/types'
 import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
 import type { GitHubPrReadOutcome, GitHubPrRepoSlug } from './github-pr-rpc'
-import { resolveLinkedPrNumber } from './mobile-pr-sidebar-resolve'
+import { isGitHubPRSuppressed } from '../../../src/shared/worktree/github-pr-suppression'
+import {
+  shouldApplyBranchMismatchedLinkedPRClear,
+  shouldApplyDivergedLinkedPRClear,
+  shouldClearBranchMismatchedLinkedOpenPR,
+  shouldClearDivergedLinkedMergedPR
+} from '../../../src/shared/github/linked-pr-staleness'
+import type { MobileWorktreeSummary } from '../source-control/mobile-worktree-metadata-operations'
+import type { WorktreeGitHubPRLink } from '../source-control/mobile-pr-link'
+import { translate } from '../i18n/mobile-i18n'
 
 export type PrSidebarData = {
   pr: PRInfo
@@ -10,6 +20,8 @@ export type PrSidebarData = {
   checks: PRCheckDetail[]
   // Contain check failures so the remaining PR controls still render.
   checksError: string | null
+  // Source Control gates pushes on the review's own push target, as desktop does.
+  pushTarget: GitPushTarget | null
 }
 
 // Separate permanent auth/permission failures from transient errors to avoid endless revert/retry loops.
@@ -45,10 +57,19 @@ export type PrSidebarLoadDeps = {
     GitHubPrReadOutcome<import('../../../src/shared/hosted-review').HostedReviewInfo | null>
   >
   // Resolve persisted links in parallel so closed/merged PRs add no serial read.
-  fetchWorktreeLinkedPR: (worktreeId: string) => Promise<number | null>
+  fetchWorktreeGitHubPRLink: (worktreeId: string) => Promise<WorktreeGitHubPRLink>
+  clearWorktreeReviewLink: (
+    worktreeId: string,
+    shouldApply: (worktree: MobileWorktreeSummary) => boolean
+  ) => Promise<void>
   fetchPRForBranch: (
     worktreeId: string,
-    args: { branch: string; linkedPRNumber?: number | null }
+    args: {
+      branch: string
+      linkedPRNumber?: number | null
+      fallbackPRNumber?: number | null
+      currentHeadOid?: string | null
+    }
   ) => Promise<GitHubPrReadOutcome<PRInfo | null>>
   fetchWorkItemDetails: (
     worktreeId: string,
@@ -58,6 +79,37 @@ export type PrSidebarLoadDeps = {
     worktreeId: string,
     args: { prNumber: number; headSha?: string | null; prRepo?: GitHubPrRepoSlug | null }
   ) => Promise<GitHubPrReadOutcome<PRCheckDetail[]>>
+}
+
+// The guard desktop applies before persisting the clear, or null when the link still holds.
+function resolveStaleLink(
+  pr: PRInfo | null,
+  link: WorktreeGitHubPRLink,
+  branch: string,
+  requestHeadOid: string | null
+): ((worktree: MobileWorktreeSummary) => boolean) | null {
+  const linkedPRNumber = link.linkedPR
+  if (linkedPRNumber === null) {
+    return null
+  }
+  if (shouldClearDivergedLinkedMergedPR({ pr, linkedPRNumber, requestHeadOid })) {
+    return (worktree) =>
+      shouldApplyDivergedLinkedPRClear({ worktree, linkedPRNumber, branch, requestHeadOid })
+  }
+  const pushTargetBranch = link.pushTarget?.branchName ?? null
+  if (
+    shouldClearBranchMismatchedLinkedOpenPR({
+      pr,
+      linkedPRNumber,
+      branch,
+      requestHeadOid,
+      pushTargetBranch
+    })
+  ) {
+    return (worktree) =>
+      shouldApplyBranchMismatchedLinkedPRClear({ worktree, linkedPRNumber, branch, requestHeadOid })
+  }
+  return null
 }
 
 // Show PR/checks before heavy body/comments; parallel link resolution also retains closed/merged reviews.
@@ -71,22 +123,46 @@ export async function loadPrSidebarData(
   }
 ): Promise<PrSidebarState> {
   try {
-    const [hintOutcome, linkedPR] = await Promise.all([
+    const [hintOutcome, link] = await Promise.all([
       deps.fetchForBranch(args.worktreeId, { branch: args.branch }),
-      deps.fetchWorktreeLinkedPR(args.worktreeId)
+      deps.fetchWorktreeGitHubPRLink(args.worktreeId)
     ])
     const branchHint =
       hintOutcome.ok && hintOutcome.result?.provider === 'github' ? hintOutcome.result.number : null
-    const linkedPRNumber = resolveLinkedPrNumber(branchHint, linkedPR)
 
-    const prOutcome = await deps.fetchPRForBranch(args.worktreeId, {
-      branch: args.branch,
-      linkedPRNumber
-    })
+    const requestHeadOid = args.headSha ?? null
+    // Same as desktop: the explicit link wins; the branch's review is only a fallback.
+    const fetchPR = (linkedPRNumber: number | null) =>
+      deps.fetchPRForBranch(args.worktreeId, {
+        branch: args.branch,
+        linkedPRNumber,
+        fallbackPRNumber: linkedPRNumber === null ? branchHint : null,
+        currentHeadOid: requestHeadOid
+      })
+    let linkedPR = link.linkedPR
+    let prOutcome = await fetchPR(linkedPR)
+    const staleLink = prOutcome.ok
+      ? resolveStaleLink(prOutcome.result, link, args.branch, requestHeadOid)
+      : null
+    // Desktop drops a link the branch has moved past, then resolves by branch.
+    if (staleLink) {
+      linkedPR = null
+      // The refetch sends no link, so it need not wait for the clear to land.
+      ;[, prOutcome] = await Promise.all([
+        deps.clearWorktreeReviewLink(args.worktreeId, staleLink),
+        fetchPR(null)
+      ])
+    }
     if (!prOutcome.ok) {
       return failureState(prOutcome.error)
     }
-    if (!prOutcome.result) {
+    if (
+      !prOutcome.result ||
+      isGitHubPRSuppressed(
+        { linkedPR, suppressedGitHubPR: link.suppressedGitHubPR },
+        prOutcome.result.number
+      )
+    ) {
       return { kind: 'none' }
     }
     const pr = prOutcome.result
@@ -101,16 +177,33 @@ export async function loadPrSidebarData(
     if (!checksOutcome.ok) {
       return {
         kind: 'ready',
-        data: { pr, details: null, checks: [], checksError: checksOutcome.error }
+        data: {
+          pr,
+          details: null,
+          checks: [],
+          checksError: checksOutcome.error,
+          pushTarget: link.pushTarget
+        }
       }
     }
     return {
       kind: 'ready',
-      data: { pr, details: null, checks: checksOutcome.result, checksError: null }
+      data: {
+        pr,
+        details: null,
+        checks: checksOutcome.result,
+        checksError: null,
+        pushTarget: link.pushTarget
+      }
     }
   } catch (err) {
     // Rejected dependencies must settle as UI errors rather than unhandled rejections.
-    return failureState(err instanceof Error ? err.message : 'Unable to load pull request')
+    return err instanceof Error
+      ? failureState(err.message)
+      : {
+          kind: 'error',
+          message: translate('session.prSidebarState.loadFailed', 'Unable to load pull request')
+        }
   }
 }
 

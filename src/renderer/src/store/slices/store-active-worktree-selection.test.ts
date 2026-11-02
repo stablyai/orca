@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { installAttentionScreen } from './workspace-attention/workspace-unread-characterization-fixture'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { buildWorktreeComparator } from '../../../../shared/sidebar-list/smart-sort'
+import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   createTestStore,
   makeOpenFile,
@@ -230,6 +231,7 @@ describe('setActiveWorktree', () => {
         repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       activeWorktreeId: wt,
+      activeWorkspaceKey: worktreeWorkspaceKey(wt),
       activeTabId: tabId,
       activeTabType: 'terminal',
       activeTabTypeByWorktree: { [wt]: 'terminal' },

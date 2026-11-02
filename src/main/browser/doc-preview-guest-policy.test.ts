@@ -245,23 +245,48 @@ describe('doc preview guest policy', () => {
     })
 
     it('routes a reported click on an external link exactly once', () => {
-      const { guest } = boundGuest()
+      const { grant, guest } = boundGuest()
 
       reportClick(guest, 'https://example.com/docs')
 
       expect(guest.send).toHaveBeenCalledExactlyOnceWith('docPreview:externalLink', {
-        url: 'https://example.com/docs'
+        url: 'https://example.com/docs',
+        grantId: grant.id,
+        modifiers: { metaKey: false, ctrlKey: false, shiftKey: false }
       })
     })
 
     it("does not mistake Electron's false webview focus flag for an untrusted click", () => {
-      const { guest } = boundGuest()
+      const { grant, guest } = boundGuest()
       guest.isFocused.mockReturnValue(false)
 
       reportClick(guest, 'https://example.com/docs')
 
       expect(guest.send).toHaveBeenCalledExactlyOnceWith('docPreview:externalLink', {
-        url: 'https://example.com/docs'
+        url: 'https://example.com/docs',
+        grantId: grant.id,
+        modifiers: { metaKey: false, ctrlKey: false, shiftKey: false }
+      })
+    })
+
+    it('copies only boolean modifiers and derives grant identity from the sender', () => {
+      const { grant, guest } = boundGuest()
+      const contents = getWorkspaceDocPageGuest(grant.browserPageId, guest.hostId)
+      if (!contents) {
+        throw new Error('Expected a registered preview guest')
+      }
+
+      reportDocPreviewLinkClick(contents, 'https://example.com/docs', {
+        metaKey: true,
+        ctrlKey: 'true',
+        shiftKey: 1,
+        grantId: 'forged-grant'
+      })
+
+      expect(guest.send).toHaveBeenCalledExactlyOnceWith('docPreview:externalLink', {
+        url: 'https://example.com/docs',
+        grantId: grant.id,
+        modifiers: { metaKey: true, ctrlKey: false, shiftKey: false }
       })
     })
 

@@ -1,5 +1,4 @@
-import { getRepoIdFromMobileWorktreeId } from '../session/mobile-session-route-helpers'
-
+import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 export const LAST_VISITED_WORKTREE_STORAGE_KEY = 'orca:last-visited-worktree'
 
 export type LastVisitedWorktreeRecord = {
@@ -41,6 +40,6 @@ export function readLastVisitedWorktreeRepoId(raw: string | null, hostId: string
   if (!record || record.hostId !== hostId) {
     return null
   }
-  const repoId = getRepoIdFromMobileWorktreeId(record.worktreeId).trim()
+  const repoId = getRepoIdFromWorktreeId(record.worktreeId).trim()
   return repoId || null
 }

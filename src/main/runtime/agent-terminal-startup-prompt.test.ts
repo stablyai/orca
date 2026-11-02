@@ -2,7 +2,10 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
-import { CODEX_REMOTE_VIEWER_SSH_CONNECTION } from '../ipc/pty/host-env/codex-terminal-clipboard'
+import {
+  CODEX_REMOTE_VIEWER_SSH_CONNECTION,
+  PI_CLIPBOARD_OSC52_ENV
+} from '../ipc/pty/host-env/remote-viewer-clipboard-env'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -82,9 +85,10 @@ describe('a terminal create that is handed a launch prompt', () => {
     { supported: undefined, marker: undefined },
     { supported: true, marker: CODEX_REMOTE_VIEWER_SSH_CONNECTION },
     { supported: false, marker: CODEX_REMOTE_VIEWER_SSH_CONNECTION }
-  ])('routes Codex copy to a remote launcher (%s)', async ({ supported, marker }) => {
+  ])('routes Codex and pi copy to a remote launcher (%s)', async ({ supported, marker }) => {
     vi.stubEnv('SSH_CONNECTION', undefined)
     vi.stubEnv('SSH_TTY', undefined)
+    vi.stubEnv(PI_CLIPBOARD_OSC52_ENV, undefined)
     try {
       const { runtime, spawn } = runtimeWithAgentLaunch()
       await runtime.createTerminal('id:wt-1', {
@@ -93,6 +97,8 @@ describe('a terminal create that is handed a launch prompt', () => {
       })
       expect(spawn.mock.calls[0]?.[0]?.launchAgent).toBe('codex')
       expect(spawn.mock.calls[0]?.[0]?.env.SSH_CONNECTION).toBe(marker)
+      // #33937: pi copies only reach a remote viewer through its own OSC 52 opt-in.
+      expect(spawn.mock.calls[0]?.[0]?.env[PI_CLIPBOARD_OSC52_ENV]).toBe(marker ? '1' : undefined)
     } finally {
       vi.unstubAllEnvs()
     }

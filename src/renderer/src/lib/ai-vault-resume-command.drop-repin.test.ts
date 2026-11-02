@@ -1,5 +1,7 @@
+import type { AiVaultResumePlatformState } from './ai-vault-resume-platform'
+import { getDefaultSettings } from '../../../shared/constants'
+import { TEST_REPO, makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 import { describe, expect, it, vi } from 'vitest'
-import type { AppState } from '@/store/types'
 import { buildAiVaultDropRepinStartup } from './ai-vault-resume-command'
 
 vi.mock('@/lib/new-workspace', () => ({
@@ -9,34 +11,40 @@ vi.mock('@/lib/new-workspace', () => ({
 const RECORDED_HOME = '/tmp/orca/codex-accounts/aaaa/home'
 const SELECTED_HOME = '/tmp/orca/codex-accounts/bbbb/home'
 
-type DropRepinState = Pick<
-  AppState,
-  | 'activeRepoId'
-  | 'activeWorktreeId'
-  | 'folderWorkspaces'
-  | 'projectGroups'
-  | 'projects'
-  | 'repos'
-  | 'settings'
-  | 'worktreesByRepo'
->
+type DropRepinState = AiVaultResumePlatformState
 
 function makeState(): DropRepinState {
   return {
     activeRepoId: 'repo-1',
     activeWorktreeId: 'repo-1::worktree-1',
+    detectedWorktreesByRepo: {},
+    sshConnectionStates: new Map(),
+    sshStateByEnvironment: new Map(),
+    runtimeStatusByEnvironmentId: new Map(),
     folderWorkspaces: [],
     projectGroups: [],
-    repos: [{ id: 'repo-1', path: '/Users/ada/repo' }],
-    projects: [{ id: 'repo-1', sourceRepoIds: ['repo-1'] }],
+    repos: [{ ...TEST_REPO, id: 'repo-1', path: '/Users/ada/repo' }],
+    projects: [
+      {
+        displayName: 'repo',
+        badgeColor: '',
+        createdAt: 0,
+        updatedAt: 0,
+        id: 'repo-1',
+        sourceRepoIds: ['repo-1']
+      }
+    ],
     settings: {
+      ...getDefaultSettings('/tmp'),
       agentDefaultArgs: { claude: '', codex: '' },
       agentDefaultEnv: { claude: {}, codex: {} }
     },
     worktreesByRepo: {
-      'repo-1': [{ id: 'repo-1::worktree-1', repoId: 'repo-1', path: '/Users/ada/repo' }]
+      'repo-1': [
+        makeWorktree({ id: 'repo-1::worktree-1', repoId: 'repo-1', path: '/Users/ada/repo' })
+      ]
     }
-  } as unknown as DropRepinState
+  }
 }
 
 function payload(overrides: {

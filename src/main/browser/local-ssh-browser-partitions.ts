@@ -36,7 +36,14 @@ type PreparedLocalSshPartition = {
   proxyEndpoint: BrowserRouteProxyEndpoint
 }
 
-const preparedByIdentityKey = new Map<string, Promise<PreparedLocalSshPartition>>()
+type PendingLocalSshPartition = {
+  targetId: string
+  browserProfileId: string
+  storage: { partition: string | null }
+  promise: Promise<PreparedLocalSshPartition>
+}
+
+const preparedByIdentityKey = new Map<string, PendingLocalSshPartition>()
 const preparedByPartition = new Map<string, PreparedLocalSshPartition>()
 const partitionBySession = new WeakMap<Session, string>()
 
@@ -50,7 +57,16 @@ export function localSshBrowserAuthorityConnectionIdentity(orcaProfileId: string
 }
 
 export function isLocalSshBrowserPartition(partition: string): boolean {
-  return preparedByPartition.has(partition)
+  const prepared = preparedByPartition.get(partition)
+  if (!prepared) {
+    return false
+  }
+  try {
+    browserSessionRegistry.requireRouteBrowserProfile(prepared.browserProfileId)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function localSshBrowserPartitionForSession(webSession: Session): string | null {
@@ -69,6 +85,7 @@ export async function prepareLocalSshBrowserPartition(input: {
   /** The error card's "Try anyway" bypasses the forwarding probe. */
   skipProbe?: boolean
 }): Promise<{ partition: string }> {
+  browserSessionRegistry.requireRouteBrowserProfile(input.browserProfileId)
   // Keep skipped probes separate so "Check again" cannot reuse a bypassed success.
   const identityKey = JSON.stringify([
     input.targetId,
@@ -77,23 +94,30 @@ export async function prepareLocalSshBrowserPartition(input: {
   ])
   let pending = preparedByIdentityKey.get(identityKey)
   if (!pending) {
-    pending = prepareFresh(input)
+    const storage: PendingLocalSshPartition['storage'] = { partition: null }
+    const promise = prepareFresh(input, storage)
+    pending = {
+      targetId: input.targetId,
+      browserProfileId: input.browserProfileId,
+      storage,
+      promise
+    }
     preparedByIdentityKey.set(identityKey, pending)
-    pending.catch(() => {
+    promise.catch(() => {
       if (preparedByIdentityKey.get(identityKey) === pending) {
         preparedByIdentityKey.delete(identityKey)
       }
     })
   }
-  const prepared = await pending
+  const prepared = await pending.promise
+  browserSessionRegistry.requireRouteBrowserProfile(input.browserProfileId)
   return { partition: prepared.partition }
 }
 
-async function prepareFresh(input: {
-  targetId: string
-  browserProfileId: string
-  skipProbe?: boolean
-}): Promise<PreparedLocalSshPartition> {
+async function prepareFresh(
+  input: { targetId: string; browserProfileId: string; skipProbe?: boolean },
+  storage: PendingLocalSshPartition['storage']
+): Promise<PreparedLocalSshPartition> {
   const orcaProfileId = activeBrowserRoutePartitionOrcaProfileId()
   if (!orcaProfileId) {
     throw new Error('browser_local_route_profile_unavailable')
@@ -137,6 +161,7 @@ async function prepareFresh(input: {
   } else {
     bindings.touch(derived.partition)
   }
+  storage.partition = derived.partition
   await prepareBrowserRouteSessionPolicy({
     partition: derived.partition,
     browserProfileId: input.browserProfileId,
@@ -184,21 +209,74 @@ function ensureLocalSshWebRtcGuard(): void {
 /** Stops guests and releases route records; the caller clears storage afterward. */
 export async function releaseLocalSshBrowserPartitionsForTarget(targetId: string): Promise<void> {
   await closeLocalSshBrowserRouteForTarget(targetId)
-  for (const [identityKey, pending] of preparedByIdentityKey) {
-    const prepared = await pending.catch(() => null)
-    if (prepared?.targetId === targetId) {
-      preparedByIdentityKey.delete(identityKey)
-      preparedByPartition.delete(prepared.partition)
-      // Close guests before clearing storage so they cannot recreate cookies after bindings are removed.
-      const partitionSession = session.fromPartition(prepared.partition)
-      for (const contents of webContents.getAllWebContents()) {
-        if (!contents.isDestroyed() && contents.session === partitionSession) {
-          closeRouteGuest(contents)
+  await releasePreparedPartitions((pending) => pending.targetId === targetId)
+}
+
+async function releasePreparedPartitions(
+  owns: (pending: PendingLocalSshPartition) => boolean,
+  released = new Set<string>()
+): Promise<void> {
+  let failure: unknown
+  let contentsBySession: Map<Session, WebContents[]> | null = null
+  const invalidateContents = (): void => {
+    contentsBySession = null
+  }
+  app.on('web-contents-created', invalidateContents)
+  try {
+    for (const [identityKey, pending] of preparedByIdentityKey) {
+      if (!owns(pending)) {
+        continue
+      }
+      const prepared = await pending.promise.catch(() => null)
+      if (pending.storage.partition) {
+        released.add(pending.storage.partition)
+      }
+      if (prepared) {
+        preparedByIdentityKey.delete(identityKey)
+        preparedByPartition.delete(prepared.partition)
+        // Close guests before clearing storage so they cannot recreate cookies after bindings are removed.
+        const partitionSession = session.fromPartition(prepared.partition)
+        if (!contentsBySession) {
+          contentsBySession = new Map()
+          for (const contents of webContents.getAllWebContents()) {
+            if (!contents.isDestroyed()) {
+              const peers = contentsBySession.get(contents.session) ?? []
+              peers.push(contents)
+              contentsBySession.set(contents.session, peers)
+            }
+          }
+        }
+        for (const contents of contentsBySession.get(partitionSession) ?? []) {
+          if (!contents.isDestroyed()) {
+            closeRouteGuest(contents)
+          }
+        }
+        try {
+          browserSessionRegistry.clearRoutePartitionPolicies(prepared.partition)
+        } catch (error) {
+          failure ??= error
         }
       }
-      browserSessionRegistry.clearRoutePartitionPolicies(prepared.partition)
     }
+  } finally {
+    app.removeListener('web-contents-created', invalidateContents)
+  }
+  if (failure) {
+    throw failure
   }
 }
 
 registerBrowserRoutePartitionRetentionProbe((partition) => preparedByPartition.has(partition))
+
+// Registry stays routing-agnostic; this module installs its own profile-deletion hook.
+browserSessionRegistry.onProfileDeleted = async (profileId) => {
+  const partitions = new Set<string>()
+  try {
+    await releasePreparedPartitions((pending) => pending.browserProfileId === profileId, partitions)
+  } finally {
+    await releaseEvictedBrowserRoutePartitionStorage(
+      [...partitions],
+      isBrowserRoutePartitionRetainedByAnyOwner
+    )
+  }
+}

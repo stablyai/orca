@@ -546,6 +546,21 @@ describe('browserManager grab operations', () => {
 
       expect(browserManager.hasActiveGrabOp('tab-1')).toBe(true)
     })
+
+    it('does not cancel grab when the page rewrites its URL in place', async () => {
+      guestExecuteJavaScriptMock.mockImplementation(() => new Promise(() => {}))
+
+      void browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
+
+      const navHandler = guestOnMock.mock.calls.findLast(
+        ([event]) => event === 'did-start-navigation'
+      )?.[1] as ((...args: unknown[]) => void) | undefined
+
+      expect(navHandler).toBeTypeOf('function')
+      navHandler?.(null, 'https://example.com/#section-2', true, true)
+
+      expect(browserManager.hasActiveGrabOp('tab-1')).toBe(true)
+    })
   })
 
   describe('destruction auto-cancel', () => {

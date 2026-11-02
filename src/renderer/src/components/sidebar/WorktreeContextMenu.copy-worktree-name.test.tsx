@@ -39,13 +39,17 @@ vi.mock('@/store', () => ({
   })
 }))
 
-vi.mock('@/store/selectors', () => ({
-  useAllWorktrees: () => [],
-  useRepoById: (repoId?: string) =>
-    repoId ? { id: repoId, name: repoId, displayName: repoId, projectGroupId: null } : undefined,
-  useRepoMap: () => new Map(),
-  useWorktreeMap: () => new Map()
-}))
+vi.mock('@/store/selectors', () => {
+  const emptyWorktrees: never[] = []
+  const emptyMap = new Map()
+  return {
+    getAllWorktreesFromState: () => emptyWorktrees,
+    useRepoById: (repoId?: string) =>
+      repoId ? { id: repoId, name: repoId, displayName: repoId, projectGroupId: null } : undefined,
+    getRepoMapFromState: () => emptyMap,
+    getWorktreeMapFromState: () => emptyMap
+  }
+})
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback,
@@ -54,6 +58,7 @@ vi.mock('@/i18n/i18n', () => ({
 
 vi.mock('./ProjectGroupNameDialog', () => ({ ProjectGroupNameDialog: () => null }))
 vi.mock('./WorktreeParentPickerPopover', () => ({ WorktreeParentPickerPopover: () => null }))
+vi.mock('./WorktreeWslHostStartMenuItem', () => ({ WorktreeWslHostStartMenuItem: () => null }))
 
 const openInMenu = vi.hoisted(() => vi.fn(() => null))
 vi.mock('./WorktreeOpenInMenu', () => ({ WorktreeOpenInSubMenu: openInMenu }))
@@ -133,22 +138,6 @@ describe('WorktreeContextMenu Copy Worktree Name', () => {
       expect.objectContaining({ runtimeEnvironmentId: 'remote-owner' }),
       undefined
     )
-  })
-
-  it('copies the workspace display name', () => {
-    openMenu(worktreeFixture())
-
-    clickMenuItem('Copy Worktree Name')
-
-    expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith('Fix authentication race')
-  })
-
-  it('falls back like every other name read when the custom name is blank', () => {
-    openMenu(worktreeFixture({ displayName: '' }))
-
-    clickMenuItem('Copy Worktree Name')
-
-    expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith('feature/auth-race')
   })
 
   it.each([

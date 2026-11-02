@@ -2,8 +2,10 @@ import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
 } from '../../shared/runtime-file-contracts'
+import type { ClaudeAccountSelectionChange } from '../../shared/managed-account-types'
 import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
-import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
+import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
+import type { PaneLaunchRecipe } from '../../shared/terminal-attachment-launch-result'
 import type {
   AgentLaunchTabPublished,
   AgentLaunchTabViewerRule,
@@ -102,6 +104,8 @@ export type RuntimeNotifier = {
   ): Promise<AgentLaunchTabPublished>
   /** A launch pane's fate, for the window to keep on its tab or act on. */
   agentLaunchPaneVerdict?(event: AgentLaunchPaneVerdictEvent): void
+  /** A launch's recipe when no reveal carried it, so resume can replay it. */
+  rememberLaunchRecipe?(recipe: PaneLaunchRecipe): void
   resolveLegacyWorkerTerminalRecovery?(
     paneKey: string,
     resolution: 'adopted' | 'exited' | 'rolled_back',
@@ -147,7 +151,8 @@ export type RuntimeNotifier = {
     relativePath: string,
     staged: boolean,
     runtimeEnvironmentId?: string | null,
-    navigation?: RuntimeNavigationTarget
+    navigation?: RuntimeNavigationTarget,
+    oldPath?: string
   ): void
   /** Closes the whole tab. */
   closeTerminal(tabId: string): void
@@ -176,4 +181,5 @@ export type RuntimeNotifier = {
   browserDriverChanged?(browserPageId: string, driver: RuntimeBrowserDriverState): void
   browserRemoteViewersChanged?(browserPageId: string, hasRemoteViewers: boolean): void
   clientHostedBrowserRowsChanged?(event: ClientHostedBrowserRowsEvent): void
+  claudeAccountSelected?(change: ClaudeAccountSelectionChange): void
 }

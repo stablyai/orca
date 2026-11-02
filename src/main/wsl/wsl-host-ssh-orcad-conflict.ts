@@ -9,6 +9,7 @@ import {
 } from '../../shared/runtime-environments'
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
 import { execCommand } from '../ssh/remote-exec/remote-exec-command'
+import { wslHostAddRefusal } from './wsl-host-add-admission'
 
 // Prints only the public half; the private key never leaves the distro.
 const READ_PUBLIC_KEY = `sed -n 's/.*"publicKeyB64"[[:space:]]*:[[:space:]]*"\\([A-Za-z0-9+/=]*\\)".*/\\1/p' "$HOME/.orca/${E2EE_KEYPAIR_FILENAME}" 2>/dev/null | head -n 1`
@@ -46,15 +47,12 @@ export async function wslHostSshManagedRefusal(
 ): Promise<Extract<WslHostAddResult, { ok: false }> | null> {
   try {
     const sharing = findServerSharingWslOrcad(
-      listEnvironments(userDataPath),
+      // A conflict check before an add: a crash-zeroed list (#18766) must read as empty here.
+      listEnvironments(userDataPath, { recoverBlankStore: true }),
       await readPublicKey(distro)
     )
     return sharing
-      ? {
-          ok: false,
-          kind: 'ssh-managed',
-          message: `${distro} already runs the Orca server for “${sharing.name}”, which this computer reaches over SSH. Remove that server first; moving it to a WSL host isn’t supported yet.`
-        }
+      ? wslHostAddRefusal('ssh-managed', 'sshManaged', { distro, server: sharing.name })
       : null
   } catch (error) {
     return {

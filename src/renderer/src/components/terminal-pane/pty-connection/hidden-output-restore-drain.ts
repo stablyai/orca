@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'
 import { redactPtyIdForDiagnostics } from '../../../../../shared/pty-delivery-diagnostics'
 import { cancelScheduledHiddenOutputRestore } from '../hidden-output-restore-scheduler'
@@ -37,6 +37,7 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
           discardPendingLiveChunksSalvagingQueries()
           return 'refetch'
         }
+        session.answerSnapshotCoveredPrimaryDeviceAttributes(chunk, snapshotSeq)
         // Why: advance the continuity point so reconciliation neither re-drops drained chunks as duplicates nor misreads the next live chunk as a gap.
         if (typeof chunk.seq === 'number' && session.restoredSnapshotExpectedStartSeq !== null) {
           session.restoredSnapshotExpectedStartSeq = Math.max(
@@ -131,9 +132,10 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
       }
       // A painted snapshot awaiting fit proves recovery answered, regardless of live queue size.
       const replayed = session.hiddenOutputRestoreReplayingSnapshot
+      let preserveReplayState = false
       if (replayed) {
         session.setRestoredSnapshotBaseline(ptyId, replayed, replayed.paintsContent === true)
-        if (
+        const needsRepaint =
           session.hiddenOutputRestorePendingOverflow ||
           session.hiddenOutputRestoreFreshSnapshotNeeded ||
           (session.hiddenOutputRestoreUnhideSeq !== null &&
@@ -142,12 +144,14 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
             (chunk: PendingHiddenOutputRestoreChunk) =>
               session.getChunkDataAfterSnapshot(chunk, replayed.seq) === null
           )
-        ) {
+        preserveReplayState = !needsRepaint
+        if (needsRepaint) {
           session.noteHiddenOutputRestoreFloodBackpressure()
         }
       }
       session.abandonHiddenOutputRestoreAndDrainPendingForeground(ptyId, {
-        quiet: replayed !== null
+        quiet: replayed !== null,
+        preserveReplayState
       })
     }, HIDDEN_OUTPUT_RESTORE_FOREGROUND_TIMEOUT_MS)
   }

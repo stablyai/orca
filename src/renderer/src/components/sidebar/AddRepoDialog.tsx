@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useRemoteRepo } from './AddRepoSteps'
 import { useCreateRepo } from './useCreateRepo'
@@ -16,28 +16,19 @@ import { AddRepoHostSelectorSlot } from './AddRepoHostSelectorSlot'
 import { useAddRepoNestedReviewController } from './useAddRepoNestedReviewController'
 import {
   useAddRepoHostedController,
-  type AddRepoDialogHostedController
+  type AddRepoDialogProps
 } from './use-add-repo-hosted-controller'
 import { routeAddRepoBrowse } from './add-repo-browse-authority'
-import { readDroppedHostPath } from './add-repo-wsl-host-folder-picker'
 import { useAddRepoWslHostPaths } from './use-add-repo-wsl-host-paths'
+import { useAddRepoDialogModalPaths } from './use-add-repo-dialog-modal-paths'
+import { useAddRepoWindowsDriveRefusal } from './use-add-repo-windows-drive-refusal'
+import { useAddRepoWslHostOffer } from './use-add-repo-wsl-host-offer'
 
-export default React.memo(function AddRepoDialog({
-  hosted
-}: {
-  hosted?: AddRepoDialogHostedController
-}) {
+export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps) {
   const isOpen = useAppStore((s) => (hosted ? hosted.open : s.activeModal === 'add-repo'))
-  // Dropped-path modal data belongs only to the store-modal instance, never hosted mode.
-  const droppedLocalPath = useAppStore((s) =>
-    !hosted && typeof s.modalData.droppedLocalPath === 'string' ? s.modalData.droppedLocalPath : ''
-  )
-  const droppedHostPathData = useAppStore((s) => (hosted ? undefined : s.modalData.droppedHostPath))
-  const droppedHostPath = useMemo(
-    () => readDroppedHostPath({ droppedHostPath: droppedHostPathData }),
-    [droppedHostPathData]
-  )
+  const modalPaths = useAddRepoDialogModalPaths(Boolean(hosted))
   const addRepoPath = useAppStore((s) => s.addRepoPath)
+  const openModal = useAppStore((s) => s.openModal)
   const scanNestedRepos = useAppStore((s) => s.scanNestedRepos)
   const cancelNestedRepoScan = useAppStore((s) => s.cancelNestedRepoScan)
   const importNestedRepos = useAppStore((s) => s.importNestedRepos)
@@ -57,7 +48,7 @@ export default React.memo(function AddRepoDialog({
   const hostSelection = useAddRepoHostSelection({
     isOpen,
     setStep,
-    preferredHostId: droppedHostPath?.hostId ?? null
+    preferredHostId: modalPaths.preferredHostId
   })
   const selectedRuntimeEnvironmentId =
     hostSelection.selectedParsedHost?.kind === 'runtime'
@@ -130,7 +121,8 @@ export default React.memo(function AddRepoDialog({
     (repoId, executionHostId) => completeGitRepoAdd(repoId, 'create_project', executionHostId),
     {
       hostId: hostSelection.selectedHostId,
-      runtimeEnvironmentId: selectedRuntimeEnvironmentId
+      runtimeEnvironmentId: selectedRuntimeEnvironmentId,
+      onWindowsDriveRefusal: (refusal) => windowsDrive.showRefusal(refusal, 'create')
     }
   )
 
@@ -170,12 +162,13 @@ export default React.memo(function AddRepoDialog({
   })
 
   const isRuntimeEnvironmentActive = Boolean(selectedRuntimeEnvironmentId)
-  const selectedHostKind = hostSelection.selectedParsedHost?.kind
-  const { handleBrowse, resetLocalFolderFlow } = useAddRepoLocalFolderFlow({
+  const wslHostOffer = useAddRepoWslHostOffer(isOpen, hostSelection.selectedHostId)
+  const { handleBrowse, resetLocalFolderFlow, handleAddLocalPath } = useAddRepoLocalFolderFlow({
     isOpen,
-    droppedLocalPath,
+    droppedLocalPath: modalPaths.droppedLocalPath,
     activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
     addRepoPath,
+    openModal,
     closeModal: closeForFolderHandoff,
     fetchWorktrees,
     scanNestedRepos,
@@ -184,7 +177,8 @@ export default React.memo(function AddRepoDialog({
     showNestedRepoReview,
     onGitRepoReady: completeGitRepoAdd,
     setIsAdding,
-    setAddProjectBusyLabel
+    setAddProjectBusyLabel,
+    offerWslHost: wslHostOffer.offer
   })
   const {
     serverPath,
@@ -203,7 +197,8 @@ export default React.memo(function AddRepoDialog({
     setNestedScanInProgress,
     showNestedRepoReview,
     onGitRepoReady: completeGitRepoAdd,
-    setAddProjectBusyLabel
+    setAddProjectBusyLabel,
+    onWindowsDriveRefusal: (refusal) => windowsDrive.showRefusal(refusal)
   })
 
   const resetState = useCallback(() => {
@@ -256,13 +251,21 @@ export default React.memo(function AddRepoDialog({
     onResetHostScopedState: resetHostScopedState
   })
 
+  const windowsDrive = useAddRepoWindowsDriveRefusal({
+    isOpen,
+    selectedHostId: hostSelection.selectedHostId,
+    selectHost: hostSelection.handleSelectAddProjectHost,
+    addLocalPath: handleAddLocalPath,
+    createStep: { setStep, setCreateParent }
+  })
   // Apply dropped paths after host reset so the switch cannot erase them.
   const { browseWslHost, prefilledServerPath, clearPrefilledServerPath } = useAddRepoWslHostPaths({
     isOpen,
-    droppedHostPath,
+    droppedHostPath: modalPaths.droppedHostPath,
     selectedHostId: hostSelection.selectedHostId,
     setServerPath,
-    setStep
+    setStep,
+    onWindowsDriveRefusal: windowsDrive.showRefusal
   })
 
   const handleBack = useCallback(() => {
@@ -314,10 +317,7 @@ export default React.memo(function AddRepoDialog({
         isCloning={isCloning}
         sshTargets={sshTargets}
         selectedTargetId={selectedTargetId}
-        selectedHostLabel={
-          hostSelection.hostOptions.find((host) => host.id === hostSelection.selectedHostId)
-            ?.label ?? null
-        }
+        selectedHostLabel={hostSelection.selectedHostLabel}
         remotePath={remotePath}
         remoteError={remoteError}
         isAddingRemote={isAddingRemote}
@@ -329,8 +329,9 @@ export default React.memo(function AddRepoDialog({
         createError={createError}
         isCreating={isCreating}
         hostSelector={<AddRepoHostSelectorSlot hostSelection={hostSelection} />}
+        windowsDriveNotice={windowsDrive.notice ?? wslHostOffer.notice(handleAddLocalPath)}
         actionsDisabled={!hostSelection.selectedHostId}
-        browseHostKind={selectedHostKind === 'local' ? 'local' : 'runtime'}
+        browseHostKind={hostSelection.selectedParsedHost?.kind === 'local' ? 'local' : 'runtime'}
         createDefaultParent={createDefaultParent}
         createGitAvailability={createGitAvailability}
         createRuntimeParentStatus={createRuntimeParentStatus}

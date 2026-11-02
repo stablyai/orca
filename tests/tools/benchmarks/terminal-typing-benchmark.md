@@ -29,6 +29,27 @@ to check host-load drift. Do not run builds or other tests during timing windows
 `SKIP_BUILD=1` is only appropriate after explicitly building that revision with
 `pnpm exec electron-vite build --mode e2e`; stale output is not a source comparison.
 
+## Workspace-update pressure
+
+```sh
+pnpm bench:multi-workspace-typing -- --worktrees 1618 --repositories 30 --terminal-tabs 2533 --unified-tabs 3600 --sleepers 1090 --keys 120 --cadence-ms 150 --order-churn-ms 100 --in-app-diagnostic 1 --label before --grep workspace-update
+```
+
+This types into one real PTY while the accumulated store receives rank-only order
+publications (one seeded repo every `--order-churn-ms`; `0` disables) and, with
+`--metadata-status 1`, status traffic. No load PTYs are spawned. It models store
+publication only, not main's worktree refetch IPC, and its mounted surfaces are far
+fewer than an accumulated real profile, so it does not reproduce long renderer tasks
+from hidden chat or sidebar surfaces by itself. Use `--cadence-ms 600` to make every
+key the first after a pause.
+
+`--in-app-diagnostic 1` runs the shipped `__orcaTypingDiagnostic` beside the sidecar
+and stores its report as `inAppDiagnostic`. Its exact samples split renderer input
+queueing (trusted DOM event → handler), handler → `onData`, `onData` → first PTY
+output handed to the output scheduler, scheduler queueing, xterm parse, and parse →
+render. Each sample also records overlap with long animation frames; overlap is
+inclusive per sample, so totals across samples are not additive.
+
 ## What the report measures
 
 JSON files are written to `tests/tools/benchmarks/results/`. Full-window screenshots

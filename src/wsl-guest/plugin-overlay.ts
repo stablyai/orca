@@ -1,3 +1,6 @@
+import type { PluginSources, MaterializePiResult } from './plugin-sources'
+export type { PluginSources, MaterializePiResult } from './plugin-sources'
+import { RelayClaudeAgentViewPlugin } from './claude-agent-view-plugin'
 import { mirrorOpenCodeConfig } from './opencode-overlay-mirror'
 import {
   writeOpenCodeStartupPromptPlugin,
@@ -62,26 +65,6 @@ function safeDirName(input: string): string {
 function isUsableId(id: string): boolean {
   return typeof id === 'string' && id.length > 0 && id.length <= 1024
 }
-export type PluginSources = {
-  opencodeStartupPromptSource?: string
-  /** Empty string revokes future installs; omission preserves the cached source. */
-  opencodePluginSource?: string
-  /** Source body of OpenCode 2's status plugin. */
-  opencode2PluginSource?: string
-  /** Source body of Pi's `orca-agent-status.ts` to drop into <overlay>/extensions/. */
-  piExtensionSource?: string
-  /** Source body of OMP's `orca-agent-status.ts` to drop into <overlay>/extensions/. */
-  ompExtensionSource?: string
-  /** Source body of Prime Agent's `orca-agent-status.ts` to install in its real agent dir. */
-  primeAgentExtensionSource?: string
-}
-/** Result of installing Pi-compatible status into a real agent home or OMP fallback path. */
-export type MaterializePiResult = {
-  /** Real agent dir when extensions were installed there. Absent for OMP status-only fallback. */
-  sourceAgentDir?: string
-  /** Absolute path to orca-agent-status.ts (real home or relay-managed fallback). */
-  statusExtensionPath?: string
-}
 // Check the plugin file, not its directory: a failed rebuild can leave an unusable empty overlay.
 export function getRelayOpenCodePluginPath(
   overlayDir: string,
@@ -94,6 +77,7 @@ export function getRelayOpenCodePluginPath(
   )
 }
 export class PluginOverlayManager {
+  readonly claudeAgentView: RelayClaudeAgentViewPlugin
   private opencodeStartupPromptSource: string | null = null
   private opencodePluginSource: string | null = null
   private opencode2PluginSource: string | null = null
@@ -109,6 +93,7 @@ export class PluginOverlayManager {
   constructor(opts?: { homeDir?: string }) {
     const home = opts?.homeDir ?? homedir()
     this.homeDir = home
+    this.claudeAgentView = new RelayClaudeAgentViewPlugin(home)
     this.opencodeRoot = join(home, RELAY_HOOKS_DIR, OPENCODE_OVERLAY_SUBDIR)
     this.opencode2Root = join(home, RELAY_HOOKS_DIR, OPENCODE2_OVERLAY_SUBDIR)
     this.piRoots = {
@@ -118,6 +103,7 @@ export class PluginOverlayManager {
   }
   // Refresh cached source for future PTYs; running agents retain the source they loaded at startup.
   setSources(sources: PluginSources): void {
+    this.claudeAgentView.setSource(sources.claudeAgentViewSource)
     if (typeof sources.opencodeStartupPromptSource === 'string') {
       this.opencodeStartupPromptSource = sources.opencodeStartupPromptSource
     }

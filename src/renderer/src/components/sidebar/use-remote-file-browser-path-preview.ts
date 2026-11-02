@@ -43,6 +43,8 @@ export type RemoteFileBrowserPathPreview = {
   resetPreviewForNavigation: () => void
   /** Detach: invalidate in-flight preview work and clear its timers. */
   cancelPreviewWork: () => void
+  /** False while a typed path's directory part still waits on the resolve debounce. */
+  previewMatchesInput: (raw: string) => boolean
 }
 
 export function useRemoteFileBrowserPathPreview({
@@ -195,12 +197,18 @@ export function useRemoteFileBrowserPathPreview({
     [resolvePathInput, pathFlavor, inputRef]
   )
 
+  const previewMatchesInput = useCallback(
+    (raw: string) => committedPrefix(raw) === lastCommittedPrefixRef.current,
+    []
+  )
+
   return {
     preview,
     handleInputChange,
     handleInputPaste,
     discardPreview,
     resetPreviewForNavigation,
-    cancelPreviewWork
+    cancelPreviewWork,
+    previewMatchesInput
   }
 }

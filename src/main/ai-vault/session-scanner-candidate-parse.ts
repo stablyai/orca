@@ -10,7 +10,7 @@ import {
   parseListedSessionFile,
   type SessionParseStats
 } from './session-scanner-parse-cache'
-import { recordSessionScanIssue } from './session-scan-issues'
+import { recordSessionScanIssue, scanIssueTextFromError } from './session-scan-issues'
 import {
   getSessionParseCacheEntry,
   noteSessionParseCacheListed,
@@ -19,7 +19,6 @@ import {
 import { describeSkippedTranscriptRecords } from './session-transcript-record-budget'
 import { canStopParsingSessions } from './session-scan-cutoff'
 import type { SessionFileCandidate, SessionParseResult } from './session-scanner-types'
-import { errorMessage } from './session-scanner-values'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { noteAiVaultScanWorkChanged } from './ai-vault-scan-progress'
 
@@ -156,7 +155,7 @@ export async function parseSessionCandidate(
         executionHostId,
         agent: candidate.agent,
         path: candidate.file.path,
-        message: errorMessage(err)
+        ...scanIssueTextFromError(err)
       }
     }
   }

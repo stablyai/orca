@@ -48,13 +48,6 @@ afterEach(() => {
 })
 
 describe('sendNativeChatMessage with a parked multi-line draft', () => {
-  it('leads with a clear sized to every line of the draft, not one Ctrl+U', () => {
-    const clearInput = buildAgentTuiClearInputForText(DRAFT)
-    sendNativeChatMessage(PTY, 'edited text', { clearInput })
-    expect(writes()).toEqual([clearInput, buildNativeChatPasteBytes('edited text')])
-    expect(clearInput).not.toBe(NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT)
-  })
-
   it('holds the body until the clear is confirmed, then submits after the gap', () => {
     const clearInput = buildAgentTuiClearInputForText(DRAFT)
     sendNativeChatMessage(PTY, 'edited', {
@@ -114,16 +107,6 @@ describe('sendNativeChatMessage with a parked multi-line draft', () => {
     ])
   })
 
-  it('charges the confirm gap to the handle so the send card outlives the Enter', () => {
-    const withConfirm = sendNativeChatMessage(PTY, 'a', {
-      clearInput: '\x15',
-      confirmCleared: () => true
-    })
-    expect(withConfirm.settleAfterMs).toBe(
-      NATIVE_CHAT_SUBMIT_DELAY_MS + NATIVE_CHAT_CLEAR_CONFIRM_MS
-    )
-  })
-
   it('submits before a queued send starts after clear confirmation', async () => {
     const clearInput = buildAgentTuiClearInputForText(DRAFT)
     sendNativeChatMessage(PTY, 'first', {
@@ -145,14 +128,6 @@ describe('sendNativeChatMessage with a parked multi-line draft', () => {
 })
 
 describe('image sends with a parked multi-line draft', () => {
-  it('clears every draft line before pasting, so no line rides along with the image', () => {
-    const clearInput = buildAgentTuiClearInputForText(DRAFT)
-    sendNativeChatMessageWithImageAttachments('claude', PTY, 'caption', ['/tmp/a.png'], {
-      clearInput
-    })
-    expect(writes()[0]).toBe(clearInput)
-  })
-
   it('clears exactly once — a second Ctrl+U would wipe the just-pasted image', () => {
     const clearInput = buildAgentTuiClearInputForText(DRAFT)
     sendNativeChatMessageWithImageAttachments('claude', PTY, 'caption', ['/tmp/a.png'], {

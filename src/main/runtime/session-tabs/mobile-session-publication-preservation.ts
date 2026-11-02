@@ -1,6 +1,7 @@
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileSessionTabsChangedMethods } from './session-tabs-change-publication'
 import { OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs } from './mobile-session-preservation'
 import type {
+  RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsSnapshot
@@ -84,10 +85,10 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
       if (!this.offscreenBrowserBackend) {
         return false
       }
-      // Renderer-based merges preserve only browsers the live offscreen bridge lists; pure renderer epochs preserve none.
+      // Merges keep the renderer epoch, so runtime-owned pages are those outside the accepted identity set.
       return (
         this.isHeadlessBuiltMobileSessionPublicationBase(snapshot.publicationEpoch) ||
-        (snapshot.publicationEpoch.includes(':headless-merge:') &&
+        (this.isHeadlessOwnedMobileBrowserTab(snapshot, tab) &&
           typeof tab.browserPageId === 'string' &&
           this.getListedBrowserTabsByPageId(snapshot.worktree).has(tab.browserPageId))
       )
@@ -117,6 +118,64 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
   // Headless-merge suffixes do not change the base publisher; renderer-based snapshots must retain renderer ownership.
   protected isHeadlessBuiltMobileSessionPublicationBase(publicationEpoch: string): boolean {
     return isHeadlessBuiltPublication(publicationEpoch)
+  }
+
+  protected getAcceptedRendererIdentityKeysForMobileSessionSnapshot(
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): ReadonlySet<string> | null {
+    const baseEpoch = snapshot.publicationEpoch.split(':headless-merge:')[0]
+    const accepted = this.acceptedRendererMobileSnapshotByWorktree.get(snapshot.worktree)
+    return accepted?.publicationEpoch === baseEpoch ? accepted.rendererTabIdentityKeys : null
+  }
+
+  protected isHeadlessOwnedMobileBrowserTab(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    tab: RuntimeMobileSessionBrowserTab
+  ): boolean {
+    if (this.isHeadlessBuiltMobileSessionPublicationBase(snapshot.publicationEpoch)) {
+      return true
+    }
+    const rendererTabIdentityKeys =
+      this.getAcceptedRendererIdentityKeysForMobileSessionSnapshot(snapshot)
+    if (rendererTabIdentityKeys) {
+      return !getMobileSessionSnapshotTabIdentityKeys(tab).some((id) =>
+        rendererTabIdentityKeys.has(id)
+      )
+    }
+    return false
+  }
+
+  protected isRendererOwnedMobileBrowserTab(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    tab: RuntimeMobileSessionBrowserTab
+  ): boolean {
+    // A closed window's webviews are gone, so its rows need live pages like any other.
+    if (tab.placement?.kind === 'client' || !this.getAvailableAuthoritativeWindow()) {
+      return false
+    }
+    return !this.isHeadlessOwnedMobileBrowserTab(snapshot, tab)
+  }
+
+  protected getRendererOwnedBrowserPageIds(worktreeId: string): Set<string> {
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    return new Set(
+      snapshot?.tabs.flatMap((tab) =>
+        tab.type === 'browser' &&
+        tab.browserPageId &&
+        this.isRendererOwnedMobileBrowserTab(snapshot, tab)
+          ? [tab.browserPageId]
+          : []
+      )
+    )
+  }
+
+  // Headless publications re-stamp on page retirement; renderer publications keep their publisher epoch.
+  protected getMobileSessionPublicationEpochAfterHeadlessBrowserClose(
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): string {
+    return this.isHeadlessBuiltMobileSessionPublicationBase(snapshot.publicationEpoch)
+      ? `headless:${Date.now().toString(36)}`
+      : this.getMergedMobileSessionPublicationEpoch(snapshot, [])
   }
 
   protected getMergedMobileSessionPublicationEpoch(

@@ -31,6 +31,8 @@ export type OrcadHostUnavailableReason =
   | 'libc_unidentified'
   | 'runtime_self_test'
   | 'runtime_noexec'
+  | 'windows_build_unsupported'
+  | 'windows_no_extractor'
   | 'security_software'
   | 'native_preflight'
   | typeof ORCAD_TUNNEL_UNAVAILABLE_REASON
@@ -42,6 +44,8 @@ const UNAVAILABLE_BY_ERROR_NAME: Record<string, OrcadHostUnavailableReason> = {
   UnidentifiedHostLibcError: 'libc_unidentified',
   RemoteNodeRuntimeSelfTestError: 'runtime_self_test',
   RemoteNodeRuntimeNoexecError: 'runtime_noexec',
+  RemoteWindowsBuildUnsupportedError: 'windows_build_unsupported',
+  RemoteNodeRuntimeNoExtractorError: 'windows_no_extractor',
   RemoteNodeRuntimeSecurityModifiedError: 'security_software',
   OrcadStdioBridgeUnavailableError: ORCAD_TUNNEL_UNAVAILABLE_REASON,
   OrcadWindowsLaunchRefusedError: 'unsupported_host',
@@ -56,8 +60,15 @@ const UNAVAILABLE_BY_DEFERRAL_CODE: Record<string, OrcadHostUnavailableReason> =
   [ORCAD_WINDOWS_COMMAND_LINE_UNSAFE_CODE]: 'unsupported_host'
 }
 
+// Reprobed on every connect, so fixing or upgrading the host needs no new Orca version.
+const FIXABLE_ON_HOST: ReadonlySet<string> = new Set<OrcadHostUnavailableReason>([
+  'runtime_noexec',
+  'windows_build_unsupported',
+  'windows_no_extractor'
+])
+
 export function isOrcadHostUnavailableFixableOnHost(reason: string): boolean {
-  return reason === 'runtime_noexec'
+  return FIXABLE_ON_HOST.has(reason)
 }
 
 export function orcadCandidateLaunchFailureCode(error: unknown): string {

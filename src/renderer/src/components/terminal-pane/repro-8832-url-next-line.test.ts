@@ -2,12 +2,12 @@
 import type { IBufferLine } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
-import { buildCandidateLogicalLinesForBufferPosition } from './terminal-file-link-hit-testing'
+import { buildCandidateLogicalLinesForBufferPosition } from '../../../../shared/terminal-link-buffer-hit-testing'
 import {
   extractTerminalHttpLinks,
   openHttpLinkAtBufferPosition
 } from './terminal-url-link-hit-testing'
-import { buildHardWrappedPathLogicalLineCandidates } from './wrapped-terminal-link-ranges'
+import { buildHardWrappedPathLogicalLineCandidates } from '../../../../shared/wrapped-terminal-link-ranges'
 
 const LINE_1 = 'Repo: https://github.com/stablyai/orca/'
 const LINE_2 = 'Description: 123'

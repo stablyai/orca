@@ -1,0 +1,27 @@
+{
+  "name": "@orca-cloud/cloud-database",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "pretest": "pnpm --filter @orca-cloud/postgres-schema build",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@orca-cloud/postgres-schema": "workspace:*",
+    "pg": "^8.23.1",
+    "pg-connection-string": "2.14.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@types/pg": "^8.23.1",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}

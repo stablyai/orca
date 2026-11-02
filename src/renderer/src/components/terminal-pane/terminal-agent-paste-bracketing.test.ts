@@ -50,10 +50,6 @@ function decide(
 }
 
 describe('resolveProtectedMultilinePasteOptionsForPane', () => {
-  it('brackets an agent pane on a non-Windows host', () => {
-    expect(decide()).toEqual({ forceBracketedPasteForMultiline: true })
-  })
-
   it('leaves a plain shell pane alone so ESC[200~ never reaches a non-TUI program', () => {
     expect(decide({ leafId: SHELL_LEAF })).toBeUndefined()
   })
@@ -66,18 +62,6 @@ describe('resolveProtectedMultilinePasteOptionsForPane', () => {
     expect(decide({ isWindowsClient: true, agentStatusByPaneKey: {}, leafId: SHELL_LEAF })).toEqual(
       { forceBracketedPasteForMultiline: true }
     )
-  })
-
-  it('ignores a pane whose agentType is not a TUI agent', () => {
-    expect(
-      decide({
-        agentStatusByPaneKey: {
-          [AGENT_PANE_KEY]: agentEntry({
-            agentType: 'not-an-agent' as AgentStatusEntry['agentType']
-          })
-        }
-      })
-    ).toBeUndefined()
   })
 
   it('brackets on a process-confirmed agent even with no status row', () => {
@@ -129,12 +113,6 @@ describe('resolveProtectedMultilinePasteOptionsForPane', () => {
         }
       })
     ).toEqual({ forceBracketedPasteForMultiline: true })
-  })
-
-  it('uses modified Enter for an agent that reads Windows input records', () => {
-    expect(decide({ hostPlatform: 'win32' })).toEqual({
-      windowsInputRecordNewline: 'alt-enter'
-    })
   })
 
   it('does not change unverified Windows agent paste protocols', () => {

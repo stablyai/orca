@@ -33,7 +33,11 @@ vi.mock('./popup-origin-bar-window', () => ({
 vi.mock('./browser-process-user-agent', () => ({
   getBrowserProcessUserAgentIdentity: () => ({
     mode: mocks.processUserAgentMode,
-    userAgent: mocks.processUserAgent
+    userAgent: mocks.processUserAgent,
+    electronUserAgent:
+      mocks.processUserAgentMode === 'native'
+        ? mocks.processUserAgent
+        : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) orca/1.0.0 Chrome/134.0.0.0 Electron/30.0.0 Safari/537.36'
   })
 }))
 

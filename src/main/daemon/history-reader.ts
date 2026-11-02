@@ -5,6 +5,7 @@ import type { TerminalCheckpointFile } from './types'
 import { getHistorySessionDirName } from './history-paths'
 import { decodeTerminalHistoryLog, LOG_HEADER_BYTES } from './terminal-history-log'
 import { DAEMON_RESTORE_SCROLLBACK_ROWS } from './daemon-restore-scrollback-depth'
+import { historyReplayWindowsPty } from './daemon-history-replay-pty'
 import { HeadlessEmulator } from './headless-emulator'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
 import { ColdRestoreReplayWriter } from './cold-restore-replay-writer'
@@ -256,7 +257,8 @@ export class HistoryReader {
         cols: checkpoint?.cols ?? meta.cols,
         rows: checkpoint?.rows ?? meta.rows,
         scrollback: DAEMON_RESTORE_SCROLLBACK_ROWS,
-        wslDistro
+        wslDistro,
+        windowsPty: historyReplayWindowsPty(meta.resizeModel)
       })
       const replay = new ColdRestoreReplayWriter(emulator)
       try {

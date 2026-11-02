@@ -41,14 +41,14 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     reason: 'orcad installs browser automation through the runtime factory when Chromium exists.'
   },
   {
-    wiring: 'runtime.setEmulatorBridge',
-    missingOn: 'orcad',
-    reason: 'Device emulators are desktop-only.'
-  },
-  {
     wiring: 'runtime.setOffscreenBrowserBackend',
     missingOn: 'orcad',
     reason: 'Offscreen WebContents need Electron.'
+  },
+  {
+    wiring: 'ctor:getSetupTerminalTitle',
+    missingOn: 'orcad',
+    reason: 'orcad has no UI language and serves clients in any locale, so Setup tabs stay English.'
   },
   {
     wiring: 'ctor:prepareClaudeAuth',
@@ -98,6 +98,12 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
       'Sleep reaches paired servers and suspends VMs from the desktop only; orcad refuses those parts.'
   },
   {
+    wiring: 'ctor:headlessTerminalScrollbackRows',
+    missingOn: 'electron',
+    reason:
+      "Desktop reveals hidden panes from its model at desktop depth; renderer-less orcad needs only the daemon's live window."
+  },
+  {
     wiring: 'rpc-option:exposeNetworkByDefault',
     missingOn: 'orcad',
     reason: 'orcad pins its bind host instead, so exposure never widens itself.'
@@ -111,11 +117,6 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     wiring: 'rpc.setOnUnpairedDeviceAuthFailure',
     missingOn: 'orcad',
     reason: 'It notifies a desktop window.'
-  },
-  {
-    wiring: 'rpc-option:pinnedBindHost',
-    missingOn: 'electron',
-    reason: 'The desktop binds loopback until a device pairs (STA-2370).'
   },
   {
     wiring: 'host:setMainHttpClient',
@@ -175,12 +176,17 @@ const ROOT_SOURCES: Record<Root, readonly string[]> = {
     'src/main/startup/main-process-runtime-launch.ts',
     'src/main/window/attach-main-window-services.ts'
   ],
-  orcad: ['src/main/orcad/orcad-entry.ts', 'src/main/orcad/orcad-account-services.ts']
+  orcad: [
+    'src/main/orcad/orcad-entry.ts',
+    'src/main/orcad/orcad-account-services.ts',
+    'src/main/orcad/orcad-emulator-bridge.ts'
+  ]
 }
 
 const HOST_PORT_SOURCES: Record<Root, readonly string[]> = {
   electron: [
     'src/main/startup/main-process-preflight.ts',
+    'src/main/startup/agent-hooks-uninstall-preflight.ts',
     'src/main/host/electron-browser-commands.ts'
   ],
   orcad: [
@@ -428,7 +434,9 @@ describe('runtime composition parity (Electron vs orcad)', () => {
       'host:setSecretStore',
       'host:setRuntimeBrowserCommandsFactory',
       // #31174: without it every speech call refuses with speech_unavailable.
-      'host:setSpeechServiceFactories'
+      'host:setSpeechServiceFactories',
+      // #33650: Android emulators run on headless Linux hosts too.
+      'runtime.setEmulatorBridge'
     ]) {
       expect(electron, shared).toContain(shared)
       expect(orcad, shared).toContain(shared)

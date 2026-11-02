@@ -37,6 +37,7 @@ vi.mock('./PRCommentComposer', () => ({ PRCommentComposer: 'PRCommentComposer' }
 vi.mock('./pr-comments-styles', () => ({ prCommentsStyles: {} }))
 vi.mock('./mobile-pr-sidebar-styles', () => ({ mobilePrSidebarStyles: {} }))
 vi.mock('../../theme/mobile-theme', () => ({ colors: { textSecondary: '#999' } }))
+vi.mock('../../theme/use-mobile-color-scheme', () => ({ useMobileColorScheme: () => 'dark' }))
 
 function comment(id: number): PRComment {
   return {

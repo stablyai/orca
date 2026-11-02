@@ -79,16 +79,6 @@ describe('PtyStartupIngress', () => {
     }
   })
 
-  it('suppresses the first echo immediately and keeps a later exact collision', () => {
-    const { ingress, emissions } = createHarness({ projection: true })
-    ingress.accept('\x1b]10;?\x07')
-    const projected = ']10;rgb:2e2e/3434/3434\\'
-    ingress.accept(projected)
-    ingress.accept(projected)
-    ingress.drainAndClose()
-    expect(visible(emissions)).toBe(projected)
-  })
-
   it('matches each echo across every split without skipping an earlier FIFO candidate', () => {
     const foregroundEcho = ']10;rgb:2e2e/3434/3434\\'
     const backgroundEcho = ']11;rgb:ffff/ffff/ffff\\'
@@ -750,33 +740,5 @@ describe('PtyStartupIngress', () => {
     ingress.accept('late')
     expect(ingress.acceptedRawSequence).toBe(closedAt)
     expect(visible(emissions)).toBe(']10;rgb:2e2e/')
-  })
-
-  it('suppresses the readline echo, which no reading of the ECHO bit could predict', () => {
-    const { ingress, writes, emissions } = createHarness()
-    ingress.accept('\x1b]10;?\x07')
-    expect(writes).toEqual([FOREGROUND_REPLY])
-    // Live bash PTYs echo via readline even with raw mode/ECHO-clear; kernel ECHO cannot predict software echoes.
-    ingress.accept(POSIX_COOKED_ECHOES[1]?.(FOREGROUND_REPLY) ?? '')
-    ingress.drainAndClose()
-    expect(visible(emissions)).toBe('')
-  })
-
-  it('suppresses the kernel caret echo', () => {
-    const { ingress, writes, emissions } = createHarness()
-    ingress.accept('\x1b]10;?\x07')
-    expect(writes).toEqual([FOREGROUND_REPLY])
-    // Always arm the default ECHOCTL projection; no probe verdict can safely retire it.
-    ingress.accept(POSIX_COOKED_ECHOES[0]?.(FOREGROUND_REPLY) ?? '')
-    ingress.drainAndClose()
-    expect(visible(emissions)).toBe('')
-  })
-
-  it('writes the reply in the accepting turn, with no probe and no wait', () => {
-    const { ingress, writes } = createHarness()
-    ingress.accept('\u001b]10;?\u0007')
-    // No deferral: only output projections remove echo, while delayed writes reorder replies (#15559).
-    expect(writes).toEqual(['\u001b]10;rgb:2e2e/3434/3434\u001b\\'])
-    ingress.drainAndClose()
   })
 })

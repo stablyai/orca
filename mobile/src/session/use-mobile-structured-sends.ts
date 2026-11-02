@@ -1,23 +1,21 @@
 // Project each local send until the host records its id; lost replies stay hidden unless their deadline expires first.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type {
-  AgentJournalCursor,
-  AgentJournalSubmission
-} from '../../../src/shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
-import type { StructuredAgentSessionOptimisticMessage } from '../../../src/shared/structured-agent-session-message-projection'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-identity'
+import type { AgentJournalSubmission } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
+import type { StructuredAgentSessionOptimisticMessage } from '../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import {
   structuredAgentSessionReadCoversSend,
   structuredAgentSessionSettledSends
-} from '../../../src/shared/structured-agent-session-send-settlement'
-import { mergeSentImagePreviews } from './mobile-native-chat-draft-reconcile'
-import type { MobileQueuedMessageFeed } from './mobile-structured-queued-message-feed'
-import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
+} from '../../../src/shared/agent-session/requests/structured-agent-session-send-settlement'
+import { mergeSentImagePreviews } from './native-chat/composer/mobile-native-chat-draft-reconcile'
+import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
+import type { MobileNativeChatSendErrorReporter } from './native-chat/use-mobile-native-chat-send-error'
 import {
   UNCONFIRMED_SEND_DEADLINE_MS,
   UNCONFIRMED_SEND_MESSAGE
-} from './use-mobile-native-chat-unconfirmed-sends'
+} from './native-chat/use-mobile-native-chat-unconfirmed-sends'
 
 type MobileStructuredSend = StructuredAgentSessionOptimisticMessage & { unconfirmed?: true }
 
@@ -35,7 +33,7 @@ export function useMobileStructuredSends(args: {
   sessionKey: string
   cursor?: AgentJournalCursor | null
   submissions: readonly AgentJournalSubmission[]
-  queuedMessages: MobileQueuedMessageFeed
+  queuedMessages: readonly AgentSessionQueuedMessage[] | null
   onSendError: MobileNativeChatSendErrorReporter
 }): MobileStructuredSends {
   const { cursor, onSendError, queuedMessages, sessionKey, submissions } = args

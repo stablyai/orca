@@ -14,6 +14,11 @@ import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-s
 import { withoutRedundantGlobalFields } from '../../../shared/workspace-session-host-field-ownership'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { readTerminalScrollbackSnapshotSync } from '../../terminal-scrollback-snapshots'
+import {
+  hasTerminalScrollbackSnapshotSync,
+  readTerminalScrollbackSnapshot,
+  statTerminalScrollbackSnapshotSize
+} from '../../terminal-scrollback-snapshot-nonblocking-reads'
 import { preserveRuntimeAuthoredWorkspaceSessionFields } from '../runtime-authored-workspace-session-fields'
 import { dropClosedTerminalTabs } from '../closed-terminal-tab-write-fence'
 import { findWorktreeIdForTab } from '../restoring-sessions/pane-identity-migration'
@@ -32,6 +37,11 @@ import {
   sshTargetIdForWorkspaceSessionHost
 } from './workspace-session-terminal-binding-replay'
 import type { TerminalBindingRecoveryOperations } from './terminal-binding-recovery'
+import {
+  keepRuntimePartitionRevisions,
+  noteRuntimeTopologyChange,
+  runtimePartitionFencePrior
+} from './runtime-partition-topology-fence'
 
 type SessionHostPartitionOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -53,7 +63,11 @@ export class SessionHostPartitionOperations {
     scheduling: WriteSchedulingOperations,
     bindingRecovery: TerminalBindingRecoveryOperations
   ) {
-    this[sessionHostPartitionOperationsContext] = { runtime, scheduling, bindingRecovery }
+    this[sessionHostPartitionOperationsContext] = {
+      runtime,
+      scheduling,
+      bindingRecovery
+    }
   }
 
   getWorkspaceSession(hostId?: string | null): PersistedState['workspaceSession'] {
@@ -107,6 +121,27 @@ export class SessionHostPartitionOperations {
     )
   }
 
+  hasTerminalScrollbackSnapshot(ref: string): boolean {
+    return hasTerminalScrollbackSnapshotSync(
+      ref,
+      this[sessionHostPartitionOperationsContext].runtime.terminalScrollbackSnapshotStorage
+    )
+  }
+
+  readTerminalScrollbackSnapshotAsync(ref: string): Promise<string | null> {
+    return readTerminalScrollbackSnapshot(
+      ref,
+      this[sessionHostPartitionOperationsContext].runtime.terminalScrollbackSnapshotStorage
+    )
+  }
+
+  statTerminalScrollbackSnapshotSize(ref: string): Promise<number | null> {
+    return statTerminalScrollbackSnapshotSize(
+      ref,
+      this[sessionHostPartitionOperationsContext].runtime.terminalScrollbackSnapshotStorage
+    )
+  }
+
   getWorktreeIdForTab(tabId: string): string | undefined {
     return findWorktreeIdForTab(this.getWorkspaceSession(), tabId)
   }
@@ -151,9 +186,17 @@ export function removeWorkspaceSessionOwnerInPartition(
     return
   }
   const current = owner.getWorkspaceSession(resolved)
+  const advanceTerminalTopologyRevision = options.advanceTerminalTopologyRevision ?? true
   const session = removeWorkspaceSessionOwner(current, worktreeId, {
-    advanceTerminalTopologyRevision: options.advanceTerminalTopologyRevision ?? true
+    advanceTerminalTopologyRevision
   })
+  if (advanceTerminalTopologyRevision) {
+    noteRuntimeTopologyChange(
+      owner[sessionHostPartitionOperationsContext].runtime,
+      resolved,
+      worktreeId
+    )
+  }
   if (!session) {
     return
   }
@@ -207,8 +250,16 @@ export function setHostWorkspaceSession(
   session = withRequiredWorkspaceSessionMaps(session)
   // Enforce at this shared boundary: quit staging bypasses per-caller normalization.
   session = dropClosedTerminalTabs(preserveRuntimeAuthoredWorkspaceSessionFields(session, prior))
+  const { runtime } = owner[sessionHostPartitionOperationsContext]
   // Each host owns its topology fence; stale renderer snapshots rebase against that host only.
-  session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
+  session = keepRuntimePartitionRevisions(
+    hostId,
+    sanitizeWorkspaceSessionTerminalRetirements(
+      session,
+      runtimePartitionFencePrior(runtime, hostId, session, prior)
+    ),
+    prior
+  )
   session = preserveMissingWorkspaceSessionTerminalBindings(
     session,
     prior,

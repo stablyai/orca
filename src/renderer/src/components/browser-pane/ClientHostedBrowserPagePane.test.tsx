@@ -112,7 +112,7 @@ describe('ClientHostedBrowserPagePane', () => {
     expect(detach).toHaveBeenCalledTimes(1)
   })
 
-  it('updates local chrome from guest navigation without remote stream work', () => {
+  it('updates local chrome from the retained guest navigation', () => {
     const { webview, setUrl, setTitle } = createWebview()
     mocks.attach.mockReturnValue(retainedAttachment(webview))
     const onUpdatePageState = vi.fn()
@@ -277,6 +277,10 @@ describe('ClientHostedBrowserPagePane', () => {
     )
 
     expect(mocks.attach).toHaveBeenCalledTimes(1)
+    expect(mocks.attach).toHaveBeenCalledWith(
+      { browserPageId: 'page-a', pageHostGeneration: 8 },
+      expect.any(HTMLElement)
+    )
     expect(screen.getByText('Client-hosted browser unavailable')).not.toBeNull()
     expect(document.querySelector('webview')).toBeNull()
   })
@@ -314,6 +318,7 @@ describe('ClientHostedBrowserPagePane', () => {
   })
 
   it('requests the one-time intro tour on the first active client-hosted page', async () => {
+    vi.useFakeTimers()
     const { useAppStore } = await import('@/store')
     const prior = {
       persistedUIReady: useAppStore.getState().persistedUIReady,
@@ -348,15 +353,17 @@ describe('ClientHostedBrowserPagePane', () => {
       expect(target).not.toBeNull()
       target!.getBoundingClientRect = () => new DOMRect(0, 0, 400, 32)
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
+        await vi.advanceTimersByTimeAsync(0)
       })
       expect(useAppStore.getState().activeContextualTourId).toBe('client-hosted-browser')
     } finally {
       useAppStore.setState(prior)
+      vi.useRealTimers()
     }
   })
 
   it('never re-requests the intro tour once it has been seen', async () => {
+    vi.useFakeTimers()
     const { useAppStore } = await import('@/store')
     const prior = {
       persistedUIReady: useAppStore.getState().persistedUIReady,
@@ -391,11 +398,12 @@ describe('ClientHostedBrowserPagePane', () => {
       expect(target).not.toBeNull()
       target!.getBoundingClientRect = () => new DOMRect(0, 0, 400, 32)
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
+        await vi.advanceTimersByTimeAsync(0)
       })
       expect(useAppStore.getState().activeContextualTourId).toBeNull()
     } finally {
       useAppStore.setState(prior)
+      vi.useRealTimers()
     }
   })
 
@@ -504,6 +512,8 @@ describe('ClientHostedBrowserPagePane address bar parity', () => {
 
   it('still hands focus to the guest when the tab opens on a real page', () => {
     const { webview, focus, setUrl } = createWebview()
+    // Why: the attach is mocked, so place the guest where the real attach would put it.
+    document.body.appendChild(webview)
     setUrl('https://remote.internal/path')
     mocks.attach.mockReturnValue(retainedAttachment(webview))
 
@@ -528,6 +538,8 @@ describe('ClientHostedBrowserPagePane address bar parity', () => {
 
   it('gives the guest focus back after the palette hands the address bar a turn', () => {
     const { webview, focus, setUrl } = createWebview()
+    // Why: the attach is mocked, so place the guest where the real attach would put it.
+    document.body.appendChild(webview)
     setUrl('https://remote.internal/path')
     mocks.attach.mockReturnValue(retainedAttachment(webview))
     const renderPane = (isActive: boolean): React.JSX.Element => (
@@ -649,9 +661,13 @@ function createWebview(): {
   const webview = document.createElement('webview') as Electron.WebviewTag
   let url = 'about:blank'
   let title = 'New Tab'
-  const focus = vi.fn()
-  const blur = vi.fn()
+  // Why: a real <webview> becomes activeElement when focused; focus code checks for that.
+  webview.tabIndex = -1
+  const focus = vi.fn(() => HTMLElement.prototype.focus.call(webview))
+  const blur = vi.fn(() => HTMLElement.prototype.blur.call(webview))
   Object.assign(webview, {
+    // An attached guest has a WebContents id; focus waits for one.
+    getWebContentsId: vi.fn(() => 7),
     getURL: vi.fn(() => url),
     getTitle: vi.fn(() => title),
     isLoading: vi.fn(() => false),

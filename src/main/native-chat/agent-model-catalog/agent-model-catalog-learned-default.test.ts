@@ -1,11 +1,11 @@
+import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type {
-  AgentSessionAccountHome,
-  AgentSessionRecord
-} from '../../../shared/agent-session-record'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { AcpStructuredOptions } from '../../acp/acp-structured-options'
 import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
@@ -45,8 +45,7 @@ function workspace(name: string, files: Record<string, string> = {}): string {
 }
 
 function record(agent: string, workspacePath: string): AgentSessionRecord {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the catalog service reads only these fields.
-  return {
+  return agentSessionRecordFixture({
     sessionId: `${agent}-1`,
     provider: agent,
     accountHome: HOMES[agent]!,
@@ -57,10 +56,15 @@ function record(agent: string, workspacePath: string): AgentSessionRecord {
       workspaceId: 'ws-1',
       workspaceKind: 'git-worktree'
     }
-  } as AgentSessionRecord
+  })
 }
 
-async function afterNoPickChat(agent: string, workspacePath: string, picked = false) {
+async function afterNoPickChat(
+  agent: string,
+  workspacePath: string,
+  picked = false,
+  inspectWorkspace = workspaceMayOverrideDefaultModel
+) {
   const chat = record(agent, workspacePath)
   const store = new AgentModelCatalogStore()
   store.recordSuccess(
@@ -79,12 +83,16 @@ async function afterNoPickChat(agent: string, workspacePath: string, picked = fa
   )
   const catalog = createAgentModelCatalogService({
     store,
+    getConversation: (sessionId) => {
+      const saved = sessionId === chat.sessionId ? chat : undefined
+      return saved ? agentSessionConversationView(saved) : undefined
+    },
     getRecord: (sessionId) => (sessionId === chat.sessionId ? chat : undefined),
     drivesRecord: () => true,
     resolveAccountHome: async () => HOMES[agent]!,
     recordWorkspacePath: async (row) => row.launchDirectory ?? null,
     agentReadsProjectModelConfig,
-    workspaceMayOverrideDefaultModel
+    workspaceMayOverrideDefaultModel: inspectWorkspace
   })
   const options = new AcpStructuredOptions()
   options.adoptSession(
@@ -125,14 +133,37 @@ describe('a default learned from a chat with no pick', () => {
     '%s: the next new chat in that workspace names the model the first one ran',
     async (agent) => {
       const clean = workspace('clean')
-      const catalog = await afterNoPickChat(agent, clean)
-      const answer = await catalog.read({ agent, workspacePath: clean })
-      expect(named(answer)).toBe('github-copilot/claude-fable-5')
+      const learningStarted = Promise.withResolvers<void>()
+      const releaseLearning = Promise.withResolvers<void>()
+      let firstInspection = true
+      const catalog = await afterNoPickChat(agent, clean, false, async (input) => {
+        if (firstInspection) {
+          firstInspection = false
+          learningStarted.resolve()
+          await releaseLearning.promise
+        }
+        return workspaceMayOverrideDefaultModel(input)
+      })
+      await learningStarted.promise
+      try {
+        const pending = await catalog.read({ agent, workspacePath: clean, waitForListing: true })
+        expect(named(pending)).toBeNull()
+      } finally {
+        releaseLearning.resolve()
+      }
+      await vi.waitFor(() => {
+        expect(named(catalog.snapshot({ agent, workspacePath: clean }))).toBe(
+          'github-copilot/claude-fable-5'
+        )
+      })
+      const answer = catalog.snapshot({ agent, workspacePath: clean })
       // Project config can override this default; do not promote it to every workspace.
       expect(answer).not.toHaveProperty('defaultHoldsInEveryWorkspace')
-      expect(named(await catalog.read({ agent, workspacePath: workspace('other') }))).toBe(
-        'github-copilot/claude-fable-5'
-      )
+      expect(
+        named(
+          await catalog.read({ agent, workspacePath: workspace('other'), waitForListing: true })
+        )
+      ).toBe('github-copilot/claude-fable-5')
     }
   )
 

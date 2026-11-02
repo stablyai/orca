@@ -1,4 +1,4 @@
-import type { MatchRange } from './palette-match/normalized-text'
+import type { MatchRange } from '../../../shared/palette-match/normalized-text'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 
 export type PathHeadElisionSplit = {

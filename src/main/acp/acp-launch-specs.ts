@@ -1,3 +1,4 @@
+import type { AcpHistoryTurnIdentity } from './history/acp-history-replay'
 import { join } from 'node:path'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
@@ -8,7 +9,7 @@ import { directoryAccountBinding, type AcpAccountBinding } from './acp-account-b
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
 import { scrubOpenCodeAcpEnvironment } from '../opencode/opencode-acp-environment'
 import type { TuiAgent } from '../../shared/tui-agent'
-import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
+import type { AgentSessionModelOption } from '../../shared/agent-session/agent-session-wire'
 import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
 import type { InitializeResponse } from './generated/acp-protocol.generated'
 import { compareAppVersions } from '../../shared/app-version'
@@ -18,7 +19,7 @@ import {
   OPENCODE_MODEL_LISTING_ARGS,
   parseOpenCodeModelListing
 } from '../opencode/opencode-model-catalog-listing'
-import { agentSessionSignInFor } from '../../shared/agent-session-sign-in'
+import { agentSessionSignInFor } from '../../shared/agent-session/lifecycle/agent-session-sign-in'
 import {
   loadGrokVisualsSkill,
   loadOmpVisualsSkill,
@@ -124,7 +125,10 @@ export type AcpLaunchSpec = {
   /** Enables /compact as a prompt command. */
   compaction?: true
   /** Rejects copy arguments that route the CLI away from the copy's store. */
-  assertCopyLaunchArgs?: (args: readonly string[]) => void
+  assertCopyLaunchArgs?: (args: readonly string[], prefixArgs?: readonly string[]) => void
+  /** How the agent names each turn its reopen replays, when a reopened chat catches up on the
+   *  turns made outside it; absent, the replay is only dropped. */
+  historyCatchUp?: AcpHistoryTurnIdentity
   modelDiscovery: AcpModelDiscovery
   visualsSkill?: AcpVisualsSkillLoader
   transcriptImport: StructuredAgentTranscriptImport | null
@@ -147,6 +151,7 @@ const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
   ],
   env: {},
   dialect: GROK_ACP_DIALECT,
+  historyCatchUp: 'prompt-id',
   loginCommand: agentSessionSignInFor('grok')?.loginCommand ?? [],
   // Prefer the launch environment's API key, then cached sign-in; never prompt interactively.
   authMethod: ({ advertised, env }) =>
@@ -184,6 +189,7 @@ function openCodeLaunchSpec(
     env: { OPENCODE_CLIENT: 'acp', OPENCODE_ENABLE_QUESTION_TOOL: 'false' },
     scrubEnvironment: scrubOpenCodeAcpEnvironment,
     dialect: OPENCODE_ACP_DIALECT,
+    historyCatchUp: 'user-message-id',
     loginCommand: agentSessionSignInFor(row.agent)?.loginCommand ?? [],
     account: openCodeAcpAccountBinding(),
     installDirectories: ({ homePath }) => [join(homePath, '.opencode', 'bin')],

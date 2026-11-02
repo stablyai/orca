@@ -1,4 +1,5 @@
 import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
+import { answerUndeliveredYieldedQueries } from './terminal-multiplex-yielded-queries'
 
 export function installMultiplexCleanup(state: TerminalMultiplexConnection): void {
   const { runtime, streams, pendingPtyWaitControllers, emit, signal } = state
@@ -17,6 +18,7 @@ export function installMultiplexCleanup(state: TerminalMultiplexConnection): voi
     stream.ackRecoverySnapshotInFlight = false
     stream.ackRecoveryHistoryOwed = false
     stream.unsubscribeData()
+    answerUndeliveredYieldedQueries(runtime, stream)
     stream.unsubscribeResize()
     stream.unsubscribeFit()
     stream.unsubscribeDriver()

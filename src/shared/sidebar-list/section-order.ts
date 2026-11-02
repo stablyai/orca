@@ -53,7 +53,9 @@ export function getRenderedNaturalAnchorRepoIds({
   return renderedRepoIds
 }
 
-export function orderMainWorktreeFirst(worktrees: Worktree[]): Worktree[] {
+export function orderMainWorktreeFirst<T extends { isMainWorktree?: boolean }>(
+  worktrees: T[]
+): T[] {
   const mainWorktrees = worktrees.filter((worktree) => worktree.isMainWorktree)
   if (mainWorktrees.length === 0) {
     return worktrees

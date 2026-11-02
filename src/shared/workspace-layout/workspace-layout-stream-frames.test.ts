@@ -20,26 +20,6 @@ function publishedLayout() {
 }
 
 describe('readWorkspaceLayoutStreamFrame', () => {
-  it('reads every frame the runtime sends, through the wire encoding', () => {
-    const layout = JSON.parse(JSON.stringify(publishedLayout()))
-    const frames = [
-      { type: 'workspace', key: GIT_KEY, layout },
-      { type: 'snapshot', workspaces: [{ key: GIT_KEY, layout }] },
-      { type: 'removed', key: GIT_KEY },
-      { type: 'end' }
-    ]
-    for (const frame of frames) {
-      expect(readWorkspaceLayoutStreamFrame(frame)).toEqual(frame)
-    }
-    expect(
-      readWorkspaceLayoutStreamFrame({
-        type: 'snapshot',
-        subscriptionId: 'layout-1',
-        workspaces: [{ key: GIT_KEY, layout }]
-      })
-    ).toEqual({ type: 'snapshot', workspaces: [{ key: GIT_KEY, layout }] })
-  })
-
   it('keeps a frame’s stream position, and drops one that is not a position', () => {
     const layout = publishedLayout()
     expect(

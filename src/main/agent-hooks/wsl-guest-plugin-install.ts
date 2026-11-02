@@ -13,7 +13,15 @@ type GuestPluginInstallDeps = {
 
 /** Only none invalidates cached overlay paths; unavailable preserves them across old guests and teardown. */
 export type GuestOverlayResult =
-  | { kind: 'dir'; dir?: string; dir2?: string; piDir?: string; ompDir?: string }
+  | {
+      kind: 'dir'
+      dir?: string
+      dir2?: string
+      piDir?: string
+      ompDir?: string
+      claudeDir?: string
+      claudeConfig?: string
+    }
   | { kind: 'none' }
   | { kind: 'unavailable' }
 
@@ -38,9 +46,18 @@ export async function requestGuestOpenCodeOverlayDir(
     const opencode2Dir = typeof dir2 === 'string' && dir2.length > 0 ? dir2 : undefined
     const guestPiDir = typeof piDir === 'string' && piDir.length > 0 ? piDir : undefined
     const guestOmpDir = typeof ompDir === 'string' && ompDir.length > 0 ? ompDir : undefined
-    return opencodeDir || opencode2Dir || guestPiDir || guestOmpDir
+    const claudeDir =
+      typeof overlayDirs.claudeAgentView === 'string' && overlayDirs.claudeAgentView.startsWith('/')
+        ? overlayDirs.claudeAgentView
+        : undefined
+    const claudeConfig =
+      typeof overlayDirs.claudeConfig === 'string' && overlayDirs.claudeConfig.startsWith('/')
+        ? overlayDirs.claudeConfig
+        : undefined
+    return opencodeDir || opencode2Dir || guestPiDir || guestOmpDir || claudeDir
       ? {
           kind: 'dir',
+          ...(claudeDir && claudeConfig ? { claudeDir, claudeConfig } : {}),
           ...(opencodeDir ? { dir: opencodeDir } : {}),
           ...(opencode2Dir ? { dir2: opencode2Dir } : {}),
           ...(guestPiDir ? { piDir: guestPiDir } : {}),

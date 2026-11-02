@@ -9,7 +9,11 @@ import { MOBILE_RPC_METHOD_ALLOWLIST } from '../../runtime-rpc/runtime-rpc-mobil
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../core'
 import { LAYOUT_APPLY_METHODS } from './workspace-layout'
+import { ALL_RPC_METHODS } from './index'
 import { partialRuntimeStore, type PartialRuntimeStore } from '../../runtime-store-partial-fixture'
+
+// Pin a window-owned build even under `ORCA_LAYOUT_OWNER=main`, so the default registry omits layout commands.
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 
 const frozen = vi.hoisted(() => ({ workspaces: new Set<string>() }))
 vi.mock(
@@ -28,15 +32,6 @@ const SPLIT = {
   leafId: 'leaf-1',
   direction: 'vertical'
 } as const
-
-async function registeredMethods(layoutOwnerIsMain: boolean) {
-  vi.resetModules()
-  vi.doMock('../../../../shared/layout-owner-switch', () => ({
-    ORCA_LAYOUT_OWNER_IS_MAIN: layoutOwnerIsMain
-  }))
-  const { ALL_RPC_METHODS } = await import('./index')
-  return eraseRpcMethods(ALL_RPC_METHODS)
-}
 
 function sessionListing(tabId: string): WorkspaceSessionState {
   return {
@@ -84,21 +79,22 @@ function runtimeHolding(hostId: ExecutionHostId) {
 
 afterEach(() => {
   frozen.workspaces.clear()
-  vi.doUnmock('../../../../shared/layout-owner-switch')
-  vi.resetModules()
 })
 
 describe('layout.apply', () => {
-  it('is not registered in a window-owned build, and never advertised or open to phones', async () => {
-    const methods = await registeredMethods(false)
-
-    expect(methods.some((method) => method.name === 'layout.apply')).toBe(false)
+  it('is not registered in a window-owned build, and never advertised or open to phones', () => {
+    const names = ALL_RPC_METHODS.map((method) => method.name)
+    for (const name of ['layout.apply', 'layout.reopenHeldPanes', 'layout.reportView']) {
+      expect(names, name).not.toContain(name)
+    }
     expect(RUNTIME_CAPABILITIES.some((capability) => capability.startsWith('layout'))).toBe(false)
     expect(MOBILE_RPC_METHOD_ALLOWLIST.has('layout.apply')).toBe(false)
   })
 
-  it('is registered in a layout-owner build; a split keeps only a valid window pane id', async () => {
-    const apply = (await registeredMethods(true)).find((method) => method.name === 'layout.apply')
+  it('keeps only a valid window pane id on a split', async () => {
+    const apply = eraseRpcMethods(LAYOUT_APPLY_METHODS).find(
+      (method) => method.name === 'layout.apply'
+    )
     if (!apply || isStreamingMethod(apply)) {
       throw new Error('layout.apply is not a request method')
     }
@@ -360,7 +356,7 @@ describe('layout.apply', () => {
 
     await runtime.applyLayoutCommand(page)
 
-    expect(applyLayoutCommand).toHaveBeenCalledWith(page, ['local'])
+    expect(applyLayoutCommand).toHaveBeenCalledWith(page, ['local'], {})
   })
 
   it('accepts an editor open under the window’s tab id, its promote, and an unrecorded close', async () => {
@@ -450,7 +446,9 @@ describe('layout.apply', () => {
   })
 
   it('takes an open into a new split under the window’s group id, on every open kind', async () => {
-    const apply = (await registeredMethods(true)).find((method) => method.name === 'layout.apply')
+    const apply = eraseRpcMethods(LAYOUT_APPLY_METHODS).find(
+      (method) => method.name === 'layout.apply'
+    )
     const parse = (command: Record<string, unknown>) => apply?.params?.safeParse({ command })
     const split = { besideGroupId: 'g1', direction: 'right' }
     const opens = [
@@ -497,7 +495,7 @@ describe('layout.apply', () => {
 
     await runtime.applyLayoutCommand(open)
 
-    expect(applyLayoutCommand).toHaveBeenCalledWith(open, ['local'])
+    expect(applyLayoutCommand).toHaveBeenCalledWith(open, ['local'], {})
   })
 
   it('accepts a sleep of one tab’s panes and a wake of exactly one pane', async () => {
@@ -576,7 +574,7 @@ describe('layout.apply', () => {
 
     await runtime.applyLayoutCommand(ratios)
 
-    expect(applyLayoutCommand).toHaveBeenCalledWith(ratios, ['local'])
+    expect(applyLayoutCommand).toHaveBeenCalledWith(ratios, ['local'], {})
   })
 
   it('takes a terminal tab create under valid window ids, and only an activation initial', async () => {
@@ -615,7 +613,7 @@ describe('layout.apply', () => {
 
     await runtime.applyLayoutCommand(create)
 
-    expect(applyLayoutCommand).toHaveBeenCalledWith(create, ['local'])
+    expect(applyLayoutCommand).toHaveBeenCalledWith(create, ['local'], {})
   })
 
   it('takes a tab’s titles, color, pin, view and ended launch agent, and no other property', async () => {
@@ -768,7 +766,7 @@ describe('layout.apply', () => {
       result: { leafId: 'minted' },
       frameSeq: 0
     })
-    expect(applyLayoutCommand).toHaveBeenCalledWith(SPLIT, ['ssh:target-1'])
+    expect(applyLayoutCommand).toHaveBeenCalledWith(SPLIT, ['ssh:target-1'], {})
   })
 
   it('names the stream position of the frame its write produced, sent before the reply', async () => {

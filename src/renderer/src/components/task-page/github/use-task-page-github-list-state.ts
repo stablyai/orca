@@ -1,4 +1,4 @@
-import type { TaskPageProviderStateModel } from '../../use-task-page-provider-state'
+import type { TaskPageProviderStateModel } from '../use-task-page-provider-state'
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import type { TaskViewPresetId } from '../../../../../shared/ui-chrome-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
@@ -14,7 +14,7 @@ import {
 } from '@/components/task-page/github/task-page-github-resume-cache'
 import { useAppStore } from '@/store/index'
 import type { GitHubListRestoreWrite } from './task-page-github-list-scroll-restore'
-import { getTaskPageRepoSourceContext } from '../../task-page-source-context'
+import { getTaskPageRepoSourceContext } from '../task-page-source-context'
 export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   const {
     pageData,

@@ -117,8 +117,12 @@ describe('shared jcode-session-files', () => {
     expect(afterAppend?.interactionKey).toBe(firstRead?.interactionKey)
   })
 
-  it('rejects unsafe session ids before touching the filesystem', () => {
-    expect(readLastJcodeUserPromptFromHookPayload({ session_id: '../../etc/passwd' })).toBeNull()
+  it('rejects traversal to a file containing a user prompt', () => {
+    writeFileSync(
+      join(homeDir, 'escaped.json'),
+      JSON.stringify({ messages: [{ role: 'user', content: 'outside the sessions directory' }] })
+    )
+    expect(readLastJcodeUserPromptFromHookPayload({ session_id: '../../escaped' })).toBeNull()
     expect(readLastJcodeUserPromptFromHookPayload({})).toBeNull()
   })
 })

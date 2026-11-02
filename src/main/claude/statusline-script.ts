@@ -1,9 +1,9 @@
-import { posixCurlCommand } from '../agent-hooks/hook-post-command'
 import {
-  buildWindowsHookStdinDrainEpilogue,
-  WINDOWS_HOOK_STDIN_DRAIN_LABEL,
-  WINDOWS_HOOK_STDIN_READER
-} from '../agent-hooks/hook-stdin-contract'
+  WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
+  buildPosixClaudeBackgroundJobGuardLines
+} from '../agent-hooks/claude-background-job-guard'
+import { posixCurlCommand } from '../agent-hooks/hook-post-command'
+import { WINDOWS_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
 import {
   CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS,
   CLAUDE_STATUSLINE_PATHNAME
@@ -28,10 +28,9 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
     return [
       '@echo off',
       'setlocal',
-      // Daemon workers inherit stale pane keys; exit before reading their potentially abandoned stdin.
-      'if not "%CLAUDE_JOB_DIR%"=="" exit /b 0',
+      WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
       // Endpoint refresh never sets the pane key, so this guard can precede stdin capture.
-      `if "%ORCA_PANE_KEY%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`,
+      'if "%ORCA_PANE_KEY%"=="" exit /b 0',
       // UUID suffixes and sanitized legacy delimiters keep filenames safe.
       'set "ORCA_STATUSLINE_PANE_ID=%ORCA_PANE_KEY:~-36%"',
       'set "ORCA_STATUSLINE_PANE_ID=%ORCA_STATUSLINE_PANE_ID::=_%"',
@@ -80,7 +79,6 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
       `:${STATUSLINE_CLEANUP_LABEL}`,
       'del "%ORCA_STATUSLINE_PAYLOAD_FILE%" >nul 2>nul',
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
@@ -96,10 +94,7 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
     'if [ -z "$payload" ]; then',
     '  exit 0',
     'fi',
-    // Daemon workers inherit stale pane keys; POSIX must capture stdin first to avoid agent EPIPE.
-    'if [ -n "$CLAUDE_JOB_DIR" ]; then',
-    '  exit 0',
-    'fi',
+    ...buildPosixClaudeBackgroundJobGuardLines(),
     // Non-subscriber payloads lack rate_limits; avoid spawning curl for them.
     'case "$payload" in',
     '  *\'"rate_limits"\'*) ;;',

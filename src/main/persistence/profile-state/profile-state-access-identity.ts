@@ -1,6 +1,9 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 import { runProcessSync } from '@orca/process-host'
-import { parseLinuxProcStartTicks } from '../../daemon/daemon-process-start-time'
+import {
+  parseLinuxBootTimeSeconds,
+  parseLinuxProcStartTicks
+} from '../../daemon/daemon-process-start-time'
 import { getPsProcessIdentity } from '../../daemon/daemon-process-identity-query'
 import { loadWindowsNativeRegistry, WINDOWS_REG_SZ } from '../../windows-native-registry'
 import { readWindowsProcessCreationTime } from '../../windows/windows-process-table'
@@ -113,4 +116,24 @@ function readProcessIdentity(pid: number): string | null {
   const startedAtMs = getPsProcessIdentity(pid, { utc: true })?.startedAtMs
   // Local wall times are ambiguous during daylight-saving transitions.
   return startedAtMs == null ? null : `darwin-utc-start-ms:${startedAtMs}`
+}
+
+/** Null where boot start is unknown, which keeps every record judged as before. */
+export function currentLinuxBootStartedAtMs(): number | null {
+  try {
+    const seconds = parseLinuxBootTimeSeconds(readFileSync('/proc/stat', 'utf8'))
+    return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : null
+  } catch {
+    return null
+  }
+}
+
+/** A record changed after this boot began cannot be this machine's from an earlier boot. */
+export function profileStateAccessWrittenThisBoot(path: string): boolean {
+  const bootStartedAtMs = currentLinuxBootStartedAtMs()
+  try {
+    return bootStartedAtMs !== null && statSync(path).mtimeMs > bootStartedAtMs
+  } catch {
+    return false
+  }
 }

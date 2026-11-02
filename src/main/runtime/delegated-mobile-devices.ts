@@ -14,6 +14,10 @@ export function planDelegatedMobileDevices(
   phones: readonly DelegatedPhone[],
   now = Date.now()
 ): { nextDevices: DeviceEntry[]; entries: DelegatedMobileDeviceEntry[] } {
+  // A parent removed meanwhile (e.g. on disk) must not mint children nobody can revoke with it.
+  if (!devices.some((device) => device.deviceId === parent.deviceId)) {
+    return { nextDevices: devices, entries: [] }
+  }
   let nextDevices = devices
   const entries = phones.map((phone) => {
     const existing = nextDevices.find(

@@ -14,7 +14,7 @@ import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stab
 import {
   applyAgentPaneActivityFlags,
   type AgentPaneActivityFlags
-} from '@/lib/agent-pane-activity-flags'
+} from '../../../../shared/worktree-status-rollup'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 
 // Share sidebar pane-state resolution, excluding worktree-only retained-done promotion.

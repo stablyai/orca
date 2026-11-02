@@ -14,6 +14,7 @@ export function useSettingsNavigationActions(
     | 'setPendingNavRequestTick'
     | 'setSettingsSearchQuery'
     | 'settingsSearchQuery'
+    | 'releaseNativeAccounts'
   >,
   interactions: SettingsInteractionController
 ) {
@@ -22,7 +23,8 @@ export function useSettingsNavigationActions(
     setActiveSectionId,
     setPendingNavRequestTick,
     setSettingsSearchQuery,
-    settingsSearchQuery
+    settingsSearchQuery,
+    releaseNativeAccounts
   } = model
   const {
     confirmDiscardSourceControlAiPromptChanges,
@@ -43,10 +45,12 @@ export function useSettingsNavigationActions(
         // Clear stale filtering when selecting a result’s pane.
         setSettingsSearchQuery('')
       }
+      releaseNativeAccounts()
       setActiveSectionId(sectionId)
     },
     [
       activeSectionId,
+      releaseNativeAccounts,
       confirmDiscardSourceControlAiPromptChanges,
       contentScrollRef,
       setActiveSectionId,
@@ -117,13 +121,16 @@ export function buildSettingsViewModel(
     model.activeSectionId === 'shortcuts' && model.settingsSearchQuery.trim() === ''
   const isFocusedSetupGuidePane =
     model.activeSectionId === 'setup-guide' && model.settingsSearchQuery.trim() === ''
+  // Why no query check: search still shows only the active section.
+  const isWidePluginsPane = model.activeSectionId === 'plugins'
 
   return {
     generalNavGroups,
     repoNavSections,
     isSectionMounted,
     isFocusedShortcutsPane,
-    isFocusedSetupGuidePane
+    isFocusedSetupGuidePane,
+    isWidePluginsPane
   }
 }
 

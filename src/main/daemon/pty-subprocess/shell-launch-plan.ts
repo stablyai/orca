@@ -1,4 +1,3 @@
-import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startup-delivery'
 import { win32 as pathWin32 } from 'node:path'
 import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../../git-bash'
 import { isPwshAvailable } from '../../pwsh'
@@ -25,7 +24,7 @@ import {
   ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
   resolveWindowsShellLaunchArgs
 } from '../../providers/windows-shell-args'
-import { resolveUnixShellPath } from '../../providers/local-pty-utils'
+import { resolveUnixShellPath } from '../../providers/local-pty/local-pty-executable-spawn'
 import { selectShellStartupFeatures } from '../../shell-startup-features'
 import { parseWslPath } from '../../wsl'
 import { addWslEnvKeys } from '../../wsl-env'
@@ -196,14 +195,7 @@ export function createPtyShellLaunchPlan(
         `[daemon/pty] Preferred shell "${preferredShellPath}" is unavailable, fell back to "${shellPath}"`
       )
     }
-    const waitsForShellReady =
-      Boolean(opts.command) &&
-      (startupAgentRecognition?.agent !== 'codex' ||
-        shouldUseShellReadyStartupDelivery({
-          command: opts.command,
-          startupCommandDelivery: opts.startupCommandDelivery,
-          shellPath
-        }))
+    const waitsForShellReady = Boolean(opts.command)
     delete env.ORCA_SHELL_FEATURES
     const userShellArgs = !opts.command && !opts.launchAgent ? opts.terminalShellArgs : undefined
     const shellLaunch = getShellLaunchConfig(

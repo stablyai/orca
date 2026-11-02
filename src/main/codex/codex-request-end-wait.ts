@@ -14,7 +14,7 @@ export function codexStoppedRequestEndWait(
 ): (sessionId: string, stoppedAt: number) => Promise<void> {
   return async (sessionId, stoppedAt) => {
     const session = sessions.get(sessionId)
-    if (!session || !requestInFlight(session)) {
+    if (!session || !requestInFlight(session) || stoppedAt + CODEX_STOP_GRACE_MS <= Date.now()) {
       return
     }
     let elapsed = false

@@ -1,9 +1,10 @@
+import { agentEntrySessionStartedAt } from '../../../../shared/agent-session-start-time'
 import { useEffect, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import type { DashboardAgentRow } from './useDashboardData'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -94,7 +95,7 @@ function buildLiveTabIndex(args: {
 }
 
 function agentStartedAt(entry: AgentStatusEntry): number {
-  return entry.stateHistory[0]?.startedAt ?? entry.stateStartedAt
+  return agentEntrySessionStartedAt(entry)
 }
 
 export function buildRetainedAgentsSyncSnapshot(args: RetainedAgentsSyncSnapshotInputs): {

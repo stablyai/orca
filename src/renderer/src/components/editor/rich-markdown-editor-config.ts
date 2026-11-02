@@ -1,7 +1,9 @@
+import { handleRichMarkdownViewportReveal } from './rich-markdown-viewport'
 import type { Editor, UseEditorOptions } from '@tiptap/react'
 import type { EditorView } from '@tiptap/pm/view'
 import { handleRichMarkdownCut } from './rich-markdown-cut-handler'
 import { handleRichMarkdownPaste } from './rich-markdown-paste-handler'
+import { handleRichMarkdownPasteAdmission } from './rich-markdown-paste-admission'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import { normalizeEmptyListItems } from './rich-markdown-normalize'
 import { autoFocusRichEditor } from './rich-markdown-auto-focus'
@@ -159,12 +161,22 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     content: encodeRawMarkdownHtmlForRichEditor(content, codec, { htmlSuperscriptLinks: true }),
     contentType: 'markdown' as const,
     editorProps: {
+      handleScrollToSelection: handleRichMarkdownViewportReveal,
       attributes: {
         class: 'rich-markdown-editor',
         spellcheck: getRichMarkdownSpellcheckAttribute(richMarkdownSpellcheckEnabled)
       },
       handleDOMEvents: {
         cut: handleRichMarkdownCut,
+        paste: (view, event) =>
+          handleRichMarkdownPasteAdmission({
+            editor: editorRef.current,
+            event,
+            filePath,
+            worktreeId,
+            runtimeEnvironmentId,
+            view
+          }),
         // ProseMirror skips handleClick for Shift gestures to extend the selection.
         click: (view, event) => {
           if (

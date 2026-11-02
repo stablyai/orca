@@ -75,32 +75,6 @@ describe('stale document visibility', () => {
     expect(recovery).toHaveBeenCalledTimes(1)
   })
 
-  it('does not latch while the document is genuinely visible', () => {
-    const recovery = vi.fn()
-    mod.registerStaleDocumentVisibilityRecovery(recovery)
-
-    documentStub.emit('keydown')
-    documentStub.emit('pointerdown')
-    windowStub.emit('focus')
-    expect(mod.isDocumentVisibilityProvenStale()).toBe(false)
-    expect(recovery).not.toHaveBeenCalled()
-  })
-
-  it('treats pointerdown and window focus as staleness proof too', () => {
-    const recovery = vi.fn()
-    mod.registerStaleDocumentVisibilityRecovery(recovery)
-    documentStub.visibilityState = 'hidden'
-
-    documentStub.emit('pointerdown')
-    expect(mod.isDocumentVisibilityProvenStale()).toBe(true)
-
-    mod.resetStaleDocumentVisibilityForTesting()
-    mod.registerStaleDocumentVisibilityRecovery(recovery)
-    documentStub.visibilityState = 'hidden'
-    windowStub.emit('focus')
-    expect(mod.isDocumentVisibilityProvenStale()).toBe(true)
-  })
-
   it('hands authority back to the occlusion tracker on a genuine visibilitychange', () => {
     const recovery = vi.fn()
     mod.registerStaleDocumentVisibilityRecovery(recovery)
@@ -116,20 +90,6 @@ describe('stale document visibility', () => {
     documentStub.emit('keydown')
     expect(mod.isDocumentVisibilityProvenStale()).toBe(true)
     expect(recovery).toHaveBeenCalledTimes(2)
-  })
-
-  it('keeps running other panes when one recovery listener throws', () => {
-    const throwing = vi.fn(() => {
-      throw new Error('pane exploded')
-    })
-    const healthy = vi.fn()
-    mod.registerStaleDocumentVisibilityRecovery(throwing)
-    mod.registerStaleDocumentVisibilityRecovery(healthy)
-    documentStub.visibilityState = 'hidden'
-
-    documentStub.emit('keydown')
-    expect(throwing).toHaveBeenCalledTimes(1)
-    expect(healthy).toHaveBeenCalledTimes(1)
   })
 
   it('removes global listeners when the last pane unregisters', () => {

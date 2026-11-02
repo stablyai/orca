@@ -1,7 +1,7 @@
 import { sendNativeChatObservedWrites } from './native-chat-observed-send'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
-import type { AskAnswerKeyGroup } from './native-chat-interactive-prompt'
+import type { AskAnswerKeyGroup } from '../../../../shared/native-chat-ask-answer'
 import {
   clearConfirmDurationMs,
   clearThenWrite,
@@ -12,7 +12,7 @@ import {
   NATIVE_CHAT_ADVANCE_BUFFER_MS,
   NATIVE_CHAT_QUESTION_STEP_MS,
   NATIVE_CHAT_SUBMIT_DELAY_MS
-} from '../../../../shared/native-chat-answer-stepping'
+} from '../../../../shared/native-chat/input/native-chat-answer-stepping'
 import {
   buildNativeChatPasteBytes,
   NATIVE_CHAT_SUBMIT

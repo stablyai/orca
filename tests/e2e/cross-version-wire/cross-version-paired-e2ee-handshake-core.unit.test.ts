@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { E2EEChannel as CurrentChannel } from '../../../src/main/runtime/rpc/e2ee-channel'
 import { createPairedE2EEClientHandshake } from '../../../src/shared/paired-e2ee-client-handshake'
 import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../src/shared/paired-e2ee-node-primitives'
-import { remoteRuntimeClientCapabilities } from '../../../src/shared/remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../../../src/shared/remote-runtime/remote-runtime-client-capabilities'
 import type { MOBILE_E2EE_LEGACY_FIXTURE } from '../../../src/shared/mobile-e2ee-legacy-fixtures'
 import {
   importReleaseCheckoutModule,

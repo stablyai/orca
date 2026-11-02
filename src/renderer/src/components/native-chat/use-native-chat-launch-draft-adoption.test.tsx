@@ -3,7 +3,7 @@
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import {
   useNativeChatLaunchDraftAdoption,
   useNativeChatLaunchDraftSignal

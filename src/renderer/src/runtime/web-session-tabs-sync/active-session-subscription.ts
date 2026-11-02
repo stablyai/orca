@@ -28,7 +28,7 @@ import {
   acceptSessionTabsRuntimeId,
   getSessionTabsRuntimeIdFromResponse
 } from './publisher-identity-fences'
-import { applyWebSessionTabsSnapshot } from './snapshot-api'
+import { createWebSessionTabsSnapshotPatch } from './snapshot-api'
 import { applyWebSessionTabsStorePatch } from './store-patch'
 import {
   hostSessionMirrorSettleForPatchlessFrame,
@@ -166,7 +166,7 @@ export function installActiveSessionTabsSubscription({
       hostAffirmedWorktree ||= hostSnapshotAffirmsWorktreeContents(recovered)
       const replayed = isRuntimeSubscriptionReplayResponse(response)
       settle = applyWebSessionTabsStorePatch(
-        (state) => applyWebSessionTabsSnapshot(state, recovered, environmentId),
+        createWebSessionTabsSnapshotPatch(recovered, environmentId),
         {
           frames: [
             {

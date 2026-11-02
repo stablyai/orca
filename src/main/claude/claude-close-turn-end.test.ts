@@ -4,17 +4,17 @@ import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalItemBody,
   AgentJournalTurnLifecycle
-} from '../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   PROVIDER_SESSION_ID,
   adapterFor,
   fakeClaude,
   identityFor,
   tick
-} from './claude-structured-session-test-support'
+} from './structured/claude-structured-session-test-support'
 
 function turnSink() {
   const turns: AgentJournalTurnLifecycle[] = []

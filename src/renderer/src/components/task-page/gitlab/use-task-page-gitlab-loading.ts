@@ -1,5 +1,7 @@
-import type { TaskPageProviderMetadataModel } from '../../use-task-page-provider-metadata'
+import type { TaskPageProviderMetadataModel } from '../use-task-page-provider-metadata'
 import { useEffect } from 'react'
+import { translate } from '@/i18n/i18n'
+import { readIpcErrorDetail } from '@/lib/ipc-error'
 import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import { mapSettledWithConcurrency } from '../../../../../shared/map-with-concurrency'
 import type { Repo } from '../../../../../shared/repo-types'
@@ -10,7 +12,7 @@ import {
   getTaskPageRepoSourceContext,
   isGitLabIssueFilter,
   isGitLabMRFilter
-} from '../../task-page-source-context'
+} from '../task-page-source-context'
 
 // Leave headroom below the runtime RPC foreground concurrency of eight for sidebar and other callers.
 export const GITLAB_TASK_FETCH_CONCURRENCY = 6
@@ -150,7 +152,13 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
         const errs: string[] = []
         for (const r of results) {
           if (r.status !== 'fulfilled') {
-            errs.push(r.reason instanceof Error ? r.reason.message : String(r.reason))
+            errs.push(
+              readIpcErrorDetail(r.reason) ??
+                translate(
+                  'auto.components.TaskPage.gitlabLoadFailed',
+                  'Could not load GitLab work items. Refresh to try again.'
+                )
+            )
             continue
           }
           // Why the host: a twin's two rows share the id, so only the stamp names the row that answered.

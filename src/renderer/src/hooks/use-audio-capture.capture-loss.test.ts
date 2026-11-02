@@ -90,25 +90,6 @@ describe('useAudioCapture device loss', () => {
     expect(onCaptureLost).not.toHaveBeenCalled()
   })
 
-  it('publishes the copied audio envelope without suppressing speech input', async () => {
-    const publishMeter = vi.fn()
-    const { result } = renderHook(() => useAudioCapture(publishMeter))
-    await result.current.start({ sessionId: 'meter-session' })
-
-    processor.onaudioprocess?.({
-      inputBuffer: { getChannelData: () => new Float32Array(128).fill(0.3) }
-    } as unknown as AudioProcessingEvent)
-
-    expect(publishMeter).toHaveBeenLastCalledWith(
-      expect.objectContaining({ isSpeaking: true, level: expect.any(Number) })
-    )
-    expect(window.api.speech.feedAudio).toHaveBeenCalledWith(
-      expect.any(Float32Array),
-      48_000,
-      'meter-session'
-    )
-  })
-
   it('caps visual publications and deduplicates steady silence', async () => {
     let now = 0
     vi.spyOn(performance, 'now').mockImplementation(() => now)

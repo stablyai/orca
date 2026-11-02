@@ -24,6 +24,7 @@ import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
 import type { GitLabPipelineActions } from './use-gitlab-pipeline-actions'
 import type { GitLabPrimaryActions } from './use-gitlab-primary-actions'
 import type { GitLabReviewActions } from './use-gitlab-review-actions'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 type Props = {
   item: GitLabWorkItem | null
@@ -237,7 +238,7 @@ export function GitLabItemDialogView({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => void window.api.shell.openUrl(item.url)}
+                  onClick={(event) => openAppHttpLink(item.url, { event })}
                   className="gap-1.5"
                 >
                   <ExternalLink className="size-3.5" />

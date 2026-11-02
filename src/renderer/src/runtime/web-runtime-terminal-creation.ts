@@ -6,16 +6,25 @@ import {
 import { createWebRuntimeSessionTerminalResult } from './web-runtime-terminal-create-operation'
 import { notifyWebRuntimeTerminalCreateFailure } from './web-runtime-terminal-create-failure-notice'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { startStoppedWslHostForUserAct, stoppedWslHostMessage } from '../lib/wsl-host-user-start'
 import type {
   CreateWebRuntimeSessionTerminalArgs,
   WebRuntimeTerminalCreateOutcome
 } from './web-runtime-session-types'
 
-/** Toast host failure here because no mirrored pane can show it; callers reporting themselves use notifyFailure:false. */
+/**
+ * Toast host failure here because no mirrored pane can show it; callers reporting themselves use
+ * notifyFailure:false. `userAct` marks a New Terminal the user asked for: it may start a stopped WSL
+ * host, which nothing automatic does (E9).
+ */
 export async function createWebRuntimeSessionTerminal(
   args: CreateWebRuntimeSessionTerminalArgs,
-  options: { notifyFailure?: boolean } = {}
+  options: { notifyFailure?: boolean; userAct?: boolean } = {}
 ): Promise<WebRuntimeTerminalCreateOutcome> {
+  if (options.userAct && !(await startStoppedWslHostForUserAct(args.environmentId))) {
+    // The start already told the user why; the host is still stopped.
+    return { status: 'failed', message: stoppedWslHostMessage(args.environmentId) }
+  }
   const created = await createWebRuntimeSessionTerminalResult(args)
   if (
     created.hostFailed &&
@@ -52,7 +61,7 @@ export async function createWebRuntimeAgentSessionTerminal(
     agent: args.agent,
     submit: args.submitPrompt,
     forcePaste: args.forcePromptPaste
-  })
+  }).catch(() => false)
   return { outcome: created.outcome, promptDelivered }
 }
 
@@ -62,7 +71,7 @@ export async function createWebRuntimeAgentSessionTerminalWithLaunchDraft(
     agent: TuiAgent
     launchDraft: string
   }
-): Promise<WebRuntimeTerminalCreateOutcome> {
+): Promise<{ outcome: WebRuntimeTerminalCreateOutcome; promptDelivered: boolean }> {
   const created = await createWebRuntimeSessionTerminalResult(args)
   if (created.outcome.status !== 'failed' && created.hostTabId) {
     seedNativeChatLaunchDraftForAgentTab({
@@ -71,5 +80,8 @@ export async function createWebRuntimeAgentSessionTerminalWithLaunchDraft(
       text: args.launchDraft
     })
   }
-  return created.outcome
+  return {
+    outcome: created.outcome,
+    promptDelivered: created.outcome.status === 'created'
+  }
 }

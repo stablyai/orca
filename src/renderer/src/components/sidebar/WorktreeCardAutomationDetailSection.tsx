@@ -45,8 +45,13 @@ export function WorktreeCardAutomationDetailSection({
         const automation = automations.find((entry) => entry.id === provenance.automationId)
         if (!automation) {
           if (!cancelled) {
-            // Without recorded host provenance, a desktop miss is unverifiable rather than proof of removal.
-            setAvailability({ status: provenance.hostId ? 'automation-missing' : 'unavailable' })
+            // Why: a miss proves removal only for a host-recorded owner; a client's label may name another desktop.
+            setAvailability({
+              status:
+                provenance.hostId && provenance.origin !== 'client'
+                  ? 'automation-missing'
+                  : 'unavailable'
+            })
           }
           return
         }
@@ -68,7 +73,7 @@ export function WorktreeCardAutomationDetailSection({
     return () => {
       cancelled = true
     }
-  }, [provenance.automationId, provenance.automationRunId, provenance.hostId])
+  }, [provenance.automationId, provenance.automationRunId, provenance.hostId, provenance.origin])
 
   const canOpenAutomation = availability.status === 'available'
   const canOpenAutomationRun = availability.status === 'available' && availability.runAvailable

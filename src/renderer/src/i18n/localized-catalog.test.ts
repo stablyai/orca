@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { pluginLanguageResourceId } from '../../../shared/plugins/plugin-language-pack-artifact'
+import { pluginLanguageResourceId } from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import {
   getExperimentalPaneSearchEntries,
   getExperimentalSearchEntry
 } from '../components/settings/experimental-search'
-import { i18n, setRendererPluginLanguagePacks, setRendererUiLanguage, translate } from './i18n'
+import { i18n, loadRendererUiLanguage, setRendererPluginLanguagePacks, translate } from './i18n'
 import { createLocalizedCatalog } from './localized-catalog'
 
 const PACK_ID = 'plugin:orca-test.traditional-chinese/zh-TW' as const
@@ -13,6 +13,7 @@ const PACK = {
   resourceLanguage: pluginLanguageResourceId(PACK_ID),
   pluginKey: 'orca-test.traditional-chinese',
   locale: 'zh-TW',
+  coverage: 100,
   catalog: {}
 }
 
@@ -56,7 +57,7 @@ describe('localized catalog caching', () => {
 
   it('refreshes a cached fallback when resources are added to the active language', async () => {
     setRendererPluginLanguagePacks([PACK])
-    await setRendererUiLanguage(PACK_ID)
+    await i18n.changeLanguage(await loadRendererUiLanguage(PACK_ID))
     const getCatalog = createLocalizedCatalog(() => ({ title: translate('menu.file', 'File') }))
     expect(getCatalog().title).toBe('File')
 
@@ -69,7 +70,7 @@ describe('localized catalog caching', () => {
 
   it('refreshes to the fallback when the active plugin resources are removed', async () => {
     setRendererPluginLanguagePacks([{ ...PACK, catalog: { menu: { file: '檔案' } } }])
-    await setRendererUiLanguage(PACK_ID)
+    await i18n.changeLanguage(await loadRendererUiLanguage(PACK_ID))
     const getCatalog = createLocalizedCatalog(() => ({ title: translate('menu.file', 'File') }))
     expect(getCatalog().title).toBe('檔案')
 
@@ -98,7 +99,7 @@ describe('localized catalog caching', () => {
       }
     })
     setRendererPluginLanguagePacks([packWithTitles('終端關注', '舊卡片樣式')])
-    await setRendererUiLanguage(PACK_ID)
+    await i18n.changeLanguage(await loadRendererUiLanguage(PACK_ID))
     const original = getExperimentalPaneSearchEntries()
     expect(getExperimentalSearchEntry().terminalAttention.title).toBe('終端關注')
     expect(getExperimentalSearchEntry().newWorktreeCardStyle.title).toBe('舊卡片樣式')

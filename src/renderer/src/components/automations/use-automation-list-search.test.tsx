@@ -81,7 +81,7 @@ afterEach(() => {
 })
 
 describe('useAutomationListSearch index shape', () => {
-  it('indexes the row set once and never again per keystroke', () => {
+  it('reuses search indexes across query changes and equivalent row arrays', () => {
     render('', makeRows(20))
     const buildsAfterMount = buildRowsSpy.mock.calls.length
 

@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from './remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from './remote-runtime/remote-runtime-pty-id'
 import { parseAppSshPtyId } from './ssh-pty-id'
 
 /** Malformed/unknown remote: IDs remain foreign; inability to parse ownership means unverifiable, never local

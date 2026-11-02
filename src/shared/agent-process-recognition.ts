@@ -148,6 +148,25 @@ function recognizePythonEntrypoint(
   return recognizeAgentProcess(entrypoint) ?? recognizePythonScriptEntrypoint(entrypoint)
 }
 
+// Hermes' installed launcher execs `python -I -c '<bootstrap>'` (hermes_cli/_launchers.py), so argv names no hermes entrypoint.
+function isHermesInlineBootstrap(tokens: readonly string[], firstNormalized: string): boolean {
+  if (!PYTHON_PROCESS_RE.test(firstNormalized)) {
+    return false
+  }
+  let index = 1
+  while (index < tokens.length && tokens[index] !== '-c') {
+    if (tokens[index] === '-X' || tokens[index] === '-W') {
+      index += 2
+    } else if (/^-[bBdEiIOqRsSuvx]+$/.test(tokens[index])) {
+      index += 1
+    } else {
+      return false
+    }
+  }
+  // ps flattens argv, so the -c program runs to the end of the line there.
+  return /\bimport hermes_bootstrap\b/.test(tokens.slice(index + 1).join(' '))
+}
+
 // Muse's versioned binary needs a scoped prefix match; generic suffix matching would misclassify names such as ante-obsidian.
 export function isExpectedAgentProcess(
   processName: string | null | undefined,
@@ -211,6 +230,9 @@ export function recognizeAgentProcessFromCommandLine(
   if (directRecognition) {
     return directRecognition
   }
+  if (isHermesInlineBootstrap(tokens, firstNormalized)) {
+    return recognizedAgentForProcess('hermes')
+  }
   const entrypoint = findInterpreterEntrypointToken(tokens, firstNormalized)
   if (!entrypoint) {
     return null
@@ -230,6 +252,18 @@ export function isAgentForegroundWrapperProcess(processName: string | null | und
   const normalized = normalizeProcessName(processName)
   return (
     FOREGROUND_AGENT_WRAPPER_PROCESS_NAMES.has(normalized) || PYTHON_PROCESS_RE.test(normalized)
+  )
+}
+
+/** True when `processName` is the Node interpreter of an npm-installed agent (npm Codex's `node codex.js` wrapper). */
+export function isNodeInterpreterOfAgent(
+  processName: string | null | undefined,
+  agent: TerminalAgent
+): boolean {
+  return (
+    normalizeProcessName(processName) === 'node' &&
+    (agent in NODE_PACKAGE_SCRIPT_ENTRYPOINTS ||
+      EXACT_NODE_ENTRYPOINT_IDENTITIES.some((identity) => identity.agent === agent))
   )
 }
 

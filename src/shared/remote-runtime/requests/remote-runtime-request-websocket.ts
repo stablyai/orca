@@ -1,13 +1,13 @@
 import WebSocket from 'ws'
 import type { PairedRuntimeConnection } from '../../paired-runtime-connection'
 import type { PairedE2EEClientHandshake } from '../../paired-e2ee-client-handshake'
-import { createRemoteRuntimeClientHandshake } from '../../remote-runtime-client-handshake'
-import { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import { createRemoteRuntimeClientHandshake } from '../remote-runtime-client-handshake'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import {
   remoteRuntimeConnectFailureMessage,
   remoteRuntimeConnectOptions
 } from '../remote-runtime-connect-bound'
-import { REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES } from '../../remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES } from '../remote-runtime-memory-limits'
 import {
   invalidRemoteRuntimeResponseError,
   remoteRuntimeUnavailableError

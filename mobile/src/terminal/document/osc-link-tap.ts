@@ -6,11 +6,12 @@ import type {
   TerminalInitialOscLink,
   TerminalOscLinkService
 } from './document-scope'
-import { parsePathLineCol, type TerminalPathCandidate } from './path-tap'
+import type { ParsedFileLinkLocation } from '../../../../src/shared/file-link-location'
+import { classifyTerminalOscLinkTarget } from '../../../../src/shared/terminal-osc-link-target'
 
 export type TerminalOscLinkTarget =
   | { kind: 'url'; url: string }
-  | { kind: 'file'; fileTap: TerminalPathCandidate }
+  | { kind: 'file'; fileTap: ParsedFileLinkLocation }
 
 // OSC 8 labels may hide the URL; probe guarded xterm internals and fall through when unavailable.
 export function oscLinkService(scope: TerminalDocumentScope): TerminalOscLinkService | null {
@@ -83,103 +84,18 @@ export function terminalOscLinkTarget(uri: unknown): TerminalOscLinkTarget | nul
   if (typeof uri !== 'string') {
     return null
   }
-  if (/^https?:/i.test(uri)) {
-    return { kind: 'url', url: uri }
+  // The phone can't tell the host's platform; the host's resolver decides Windows and UNC paths.
+  const target = classifyTerminalOscLinkTarget(uri, { windowsPathsFirst: true, allowUncHost: true })
+  if (target?.kind === 'url') {
+    return target
   }
-  const fileTap = resolveTerminalOscFileTap(uri)
-  return fileTap ? { kind: 'file', fileTap: fileTap } : null
-}
-
-export function resolveTerminalOscFileTap(uri: string) {
-  return resolveTerminalFileUrlTap(uri) || parseOscPathLikeTarget(uri)
-}
-
-export function resolveTerminalFileUrlTap(uri: string): TerminalPathCandidate | null {
-  let parsed: URL
-  try {
-    parsed = new URL(uri)
-  } catch {
-    return null
-  }
-  if (parsed.protocol !== 'file:') {
-    return null
-  }
-  let filePath: string
-  try {
-    filePath = decodeURIComponent(parsed.pathname || '')
-  } catch {
-    return null
-  }
-  if (parsed.hostname && !isLocalFileUriHostname(parsed.hostname)) {
-    filePath = '//' + parsed.hostname + filePath
-  } else if (/^\/[A-Za-z]:\//.test(filePath)) {
-    filePath = filePath.slice(1)
-  }
-  if (!filePath) {
-    return null
-  }
-  const hashTarget = parseFileUrlLineHash(parsed.hash || '')
-  if (hashTarget) {
-    return { pathText: filePath, line: hashTarget.line, column: hashTarget.column }
-  }
-  if (/%3a/i.test(parsed.pathname || '')) {
-    return { pathText: filePath, line: null, column: null }
-  }
-  return (
-    parseFilePathTrailingLineTarget(filePath) || { pathText: filePath, line: null, column: null }
-  )
-}
-
-export function isLocalFileUriHostname(hostname: string) {
-  const normalized = String(hostname).toLowerCase()
-  return (
-    normalized === 'localhost' ||
-    normalized === '127.0.0.1' ||
-    normalized === '::1' ||
-    normalized === '[::1]'
-  )
-}
-
-export function parseOscPathLikeTarget(value: string) {
-  if (
-    !/^(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/]|(?=[A-Za-z0-9._-]*\.[A-Za-z0-9]))/.test(
-      value
-    )
-  ) {
-    return null
-  }
-  return parsePathLineCol(value)
-}
-
-export function parseFileUrlLineHash(hash: string) {
-  const match = /^#?L(\d+)(?:C(\d+))?$/i.exec(hash)
-  if (!match) {
-    return null
-  }
-  const line = Number.parseInt(match[1], 10)
-  const column = match[2] ? Number.parseInt(match[2], 10) : null
-  if (line < 1 || (column !== null && column < 1)) {
-    return null
-  }
-  return { line: line, column: column }
-}
-
-export function parseFilePathTrailingLineTarget(filePath: string) {
-  const match = /^(.*?)(?::(\d+))(?::(\d+))?$/.exec(filePath)
-  if (
-    !match ||
-    !match[1] ||
-    match[1].charAt(match[1].length - 1) === '/' ||
-    match[1].charAt(match[1].length - 1) === '\\'
-  ) {
-    return null
-  }
-  const line = Number.parseInt(match[2], 10)
-  const column = match[3] ? Number.parseInt(match[3], 10) : null
-  if (line < 1 || (column !== null && column < 1)) {
-    return null
-  }
-  return { pathText: match[1], line: line, column: column }
+  const fileTap =
+    target?.kind === 'file-url'
+      ? { pathText: target.target.filePath, line: target.target.line, column: target.target.column }
+      : target?.kind === 'path'
+        ? { pathText: target.link.pathText, line: target.link.line, column: target.link.column }
+        : null
+  return fileTap ? { kind: 'file', fileTap } : null
 }
 
 export function captureInitialOscLinkTexts(scope: TerminalDocumentScope) {

@@ -5,6 +5,7 @@ import { getProjectIdentityKey } from './project-host-setup-projection'
 
 function folder(remoteUrl: string | null) {
   return {
+    id: 'imported-repo',
     gitRemoteIdentity: remoteUrl
       ? deriveGitRemoteIdentity(`origin\t${remoteUrl} (fetch)\norigin\t${remoteUrl} (push)\n`)
       : null
@@ -13,7 +14,7 @@ function folder(remoteUrl: string | null) {
 
 /** The project a source host derives for a repo with this remote. */
 function projectIdFor(remoteUrl: string): string {
-  return getProjectIdentityKey({ id: 'source-repo', ...folder(remoteUrl) })
+  return getProjectIdentityKey(folder(remoteUrl))
 }
 
 describe('resolveImportedFolderProjectLink', () => {
@@ -55,7 +56,21 @@ describe('resolveImportedFolderProjectLink', () => {
         projectIdFor('https://gitlab.com/group/app.git'),
         undefined
       )
-    ).toThrow('Imported folder does not match the selected project identity.')
+    ).toThrow(
+      'Imported folder resolves to project "git:gitlab.com/group/other", not the selected project "git:gitlab.com/group/app".'
+    )
+  })
+
+  it('names the GitHub project a folder resolves to when given a free-form project id', () => {
+    expect(() =>
+      resolveImportedFolderProjectLink(
+        folder('https://github.com/owner/repo.git'),
+        'my-project',
+        undefined
+      )
+    ).toThrow(
+      'Imported folder resolves to project "github:owner/repo", not the selected project "my-project".'
+    )
   })
 
   it('refuses a folder with no remote for a Git-remote project', () => {

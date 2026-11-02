@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { createAccumulator, finalizeSession } from './session-scanner-accumulator'
+import {
+  cloneSessionAccumulator,
+  createAccumulator,
+  finalizeSession
+} from './session-scanner-accumulator'
 import { addPreviewMessage } from './session-scanner-messages'
 import type { SessionAccumulator } from './session-scanner-types'
 
@@ -36,6 +40,8 @@ describe('AI Vault preview-window truncation signal', () => {
   it('carries the flag onto snapshots taken from a cloned accumulator', () => {
     const accumulator = accumulatorWithUserTurns(PREVIEW_LIMIT + 1)
 
-    expect(finalizeSession({ ...accumulator }, 'darwin')?.previewMessagesTruncated).toBe(true)
+    expect(
+      finalizeSession(cloneSessionAccumulator(accumulator), 'darwin')?.previewMessagesTruncated
+    ).toBe(true)
   })
 })

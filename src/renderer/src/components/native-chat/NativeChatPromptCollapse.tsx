@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
-import type { InteractivePromptCard } from './native-chat-interactive-prompt'
+import type { InteractivePromptCard } from '../../../../shared/native-chat-interactive-prompt'
 
 /** A prompt card's one collapse affordance; folding or unfolding writes nothing to the agent. */
 export function NativeChatPromptCollapseToggle({
@@ -52,7 +52,7 @@ export function NativeChatPromptStrip({
   const title =
     card.kind === 'approval' ? card.approval.title : (card.prompt.questions[0]?.question ?? '')
   return (
-    <div className="shrink-0 bg-chat-canvas">
+    <div className="shrink-0 bg-chat-pane">
       <div className="mx-auto w-full max-w-(--chat-content-max-width) px-3 pt-2 sm:px-4">
         <div
           data-native-chat-prompt-strip="true"

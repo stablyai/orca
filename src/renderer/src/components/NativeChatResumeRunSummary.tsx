@@ -1,6 +1,6 @@
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 import { translate } from '@/i18n/i18n'
-import { formatNativeChatDuration } from '../../../shared/native-chat-turn-status'
+import { formatNativeChatDuration } from '../../../shared/native-chat/transcript/native-chat-turn-status'
 import type { ResumeRunFilter, ResumeRunView } from './native-chat-resume-run-view'
 import type { ResumeRunStartPhase } from './NativeChatResumeRunStatusIcon'
 

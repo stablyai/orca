@@ -43,6 +43,7 @@ export function WorkspaceDocPagePane({
         isActive={isActive}
         holdsGuestFocus={isActive && isReaderSurface}
         previewId={page.id}
+        browserWorkspaceId={page.workspaceId}
         filePath={filePath}
         relativePath={relativePath}
         worktreeId={worktreeId}

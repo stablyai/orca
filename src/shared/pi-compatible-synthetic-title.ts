@@ -9,8 +9,11 @@ const PI_COMPATIBLE_SYNTHETIC_TITLE_RE =
 const LEGACY_PI_COMPATIBLE_TITLE_RE = /^\s*(?:[\u2800-\u28ff]\s+)?\u03C0(?:\s*[-:]|\s)\s*.*$/u
 // State follows the brand (π ! label, OMP > label); accept owner-rewritten brands only in exact profile casing.
 // Require a delimited separator so ordinary pi prose and omp-harness do not become state titles.
-const PI_COMPATIBLE_SEPARATOR_RE = /^\s*(?:\u03C0|Pi|OMP)(?::|\s+([!>-]))(?=\s|$)/u
-const PI_COMPATIBLE_PERMISSION_TAIL_RE = /\baction required\b/i
+// A leading spinner needs Orca's ` - ` working frame, so Claude tasks like `⠂ OMP: fix` stay Claude's.
+const PI_COMPATIBLE_SEPARATOR_RE =
+  /^\s*(?:[\u2800-\u28ff]\s+(?=\S+\s+-(?:\s|$)))?(\u03C0|Pi|OMP)(?::|\s+([!>:\-\u2800-\u28ff]))(?=\s|$)/u
+
+const PI_COMPATIBLE_LEADING_BRAND_RE = /^(\s*(?:[\u2800-\u28ff]\s+)?)(?:\u03C0|Pi|OMP)/u
 
 function containsBrailleSpinner(title: string): boolean {
   for (const char of title) {
@@ -73,9 +76,26 @@ export function getPiCompatibleTitleSeparatorStatus(
   if (!match) {
     return null
   }
-  // Synthetic action-required labels also use hyphens; guard the exported parser independently of caller ordering.
-  if (PI_COMPATIBLE_PERMISSION_TAIL_RE.test(title)) {
+  // The synthetic `OMP - action required` label also uses a hyphen; match only that label, never session text.
+  if (getPiCompatibleSyntheticAgentStatus(title) === 'permission') {
     return 'permission'
   }
-  return match[1] === '!' ? 'permission' : 'idle'
+  return match[2] === '!' ? 'permission' : 'idle'
+}
+
+/** Brand a π/Pi/OMP title leads with, so owner-rebranded frames (`⠋ OMP - session - cwd`) keep their identity. */
+export function getPiCompatibleTitleBrand(title: string): PiCompatibleSyntheticAgentLabel | null {
+  const brand = PI_COMPATIBLE_SEPARATOR_RE.exec(title)?.[1]
+  if (!brand) {
+    return null
+  }
+  return brand === 'OMP' ? 'OMP' : 'Pi'
+}
+
+/** Replace the leading brand of a π/Pi/OMP title in place, or null when the title has none. */
+export function rebrandPiCompatibleTitle(title: string, brand: string): string | null {
+  if (!isLegacyPiCompatibleTitle(title) && !getPiCompatibleTitleBrand(title)) {
+    return null
+  }
+  return title.replace(PI_COMPATIBLE_LEADING_BRAND_RE, (_, lead: string) => lead + brand)
 }

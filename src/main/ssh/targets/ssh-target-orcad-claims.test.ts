@@ -159,6 +159,19 @@ describe('managed orcad SSH target claims', () => {
     ])
   })
 
+  it('lifts a Stop and remove hold once the user sets a server up again', () => {
+    const { claims, current } = setup()
+    claims.claim('ssh-1', 'environment-1', { deployName: 'Managed', ownerRecorded: false })
+    claims.releaseForUserRemoval('ssh-1', 'environment-1')
+    expect(current().managedServerRemoved).toBeDefined()
+
+    claims.claim('ssh-1', 'environment-2', { deployName: 'Managed', ownerRecorded: false })
+    expect(current().managedServerRemoved).toBeUndefined()
+    // A later release that is not a user removal must not bring the overridden hold back.
+    claims.release('ssh-1', 'environment-2')
+    expect(current().managedServerRemoved).toBeUndefined()
+  })
+
   it('releases only its own claim and clears the provisioning intent', () => {
     const { claims, current } = setup()
     claims.claim('ssh-1', 'environment-1', { deployName: 'Managed', ownerRecorded: false })

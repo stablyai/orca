@@ -28,8 +28,7 @@ export {
   addClaudeTeammateModeInProcess
 } from '../../shared/claude-agent-teams-tmux-compat'
 export { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../shared/setup-agent-sequencing'
-export { getTerminalViewerColors, setPairedViewerColors } from './terminal-view-attribute-store'
-export { normalizeColorQueryReplyColors } from '../../shared/pty-owner-color-query-colors'
+export { admitPairedCreateColors, getTerminalViewerColors } from './terminal-view-attribute-store'
 export type { RuntimePtyController } from './runtime-pty-controller-contract'
 export { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 export { newTabIn } from './runtime-terminal-spawn-placement'
@@ -52,14 +51,20 @@ export const spawnShellInputs = ({
   ...(launchRuntime ? { launchRuntime } : {})
 })
 
-/** Abort disconnected callers, refuse sleeping workspaces, and pass fork intent for host validation. */
+/** Abort disconnected callers, refuse sleeping workspaces, and pass fork intent and the user's act for host validation. */
 export function callerSpawnScope(
-  opts: Pick<TerminalCreateOptions, 'signal' | 'refuseSleptWorktree' | 'spawnIntent'>
-): { signal?: AbortSignal; refuseSleptWorktree?: true; spawnIntent?: SpawnIntent } {
+  opts: Pick<TerminalCreateOptions, 'signal' | 'refuseSleptWorktree' | 'spawnIntent' | 'wslUserAct'>
+): {
+  signal?: AbortSignal
+  refuseSleptWorktree?: true
+  spawnIntent?: SpawnIntent
+  wslUserAct?: true
+} {
   return {
     ...(opts.signal ? { signal: opts.signal } : {}),
     ...(opts.refuseSleptWorktree ? { refuseSleptWorktree: true } : {}),
-    ...(opts.spawnIntent ? { spawnIntent: opts.spawnIntent } : {})
+    ...(opts.spawnIntent ? { spawnIntent: opts.spawnIntent } : {}),
+    ...(opts.wslUserAct ? { wslUserAct: true } : {})
   }
 }
 

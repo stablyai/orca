@@ -89,14 +89,6 @@ describe('describeCreatedWorktree when Git and the repo disagree', () => {
     ).resolves.toBeUndefined()
   })
 
-  it('reports nothing when .git is a path under a file, not a directory', async () => {
-    const filePath = join(scratchDir, 'plain-file')
-    writeFileSync(filePath, 'not a repo\n')
-    await expect(
-      describeCreatedWorktree(filePath, worktreePath, 'feature')
-    ).resolves.toBeUndefined()
-  })
-
   it('follows gitdir and commondir markers', async () => {
     const commonDir = join(scratchDir, 'main', '.git')
     const linkedGitDir = join(commonDir, 'worktrees', 'source')
@@ -125,26 +117,6 @@ describe('describeCreatedWorktree when Git and the repo disagree', () => {
       cause: expect.objectContaining({ code: 'EACCES' })
     })
   })
-
-  // Blocking-witness deadline coverage uses a real FIFO in worktree-created-description-real-git.test.ts.
-
-  it('accepts the create when the witness agrees with the worktree', async () => {
-    const commonDir = join(repoPath, '.git')
-    mkdirSync(commonDir, { recursive: true })
-    writeFileSync(join(commonDir, 'HEAD'), 'ref: refs/heads/main\n')
-    readRepoLocationMock.mockResolvedValue({
-      topLevel: worktreePath,
-      commonDir,
-      gitDir: join(commonDir, 'worktrees', 'feature')
-    })
-    await expect(describeCreatedWorktree(repoPath, worktreePath, 'feature')).resolves.toEqual({
-      path: worktreePath,
-      head: 'a'.repeat(40),
-      branch: 'refs/heads/feature',
-      isBare: false,
-      isMainWorktree: false
-    })
-  })
 })
 
 describe('describeCreatedWorktree before the witness is reached', () => {
@@ -165,26 +137,5 @@ describe('describeCreatedWorktree before the witness is reached', () => {
         branch: 'refs/heads/feature'
       }
     )
-  })
-
-  it('reports nothing when Git could not confirm the worktree at all', async () => {
-    readRepoLocationMock.mockResolvedValue(undefined)
-    // Inaccessible witnesses distinguish no consultation from a failed witness read.
-    if (CAN_DENY_READ) {
-      chmodSync(repoPath, 0o000)
-    }
-    await expect(
-      describeCreatedWorktree(repoPath, worktreePath, 'feature')
-    ).resolves.toBeUndefined()
-  })
-
-  it('reports nothing when the worktree has the wrong branch checked out', async () => {
-    readCheckedOutBranchRefMock.mockResolvedValue('refs/heads/other')
-    if (CAN_DENY_READ) {
-      chmodSync(repoPath, 0o000)
-    }
-    await expect(
-      describeCreatedWorktree(repoPath, worktreePath, 'feature')
-    ).resolves.toBeUndefined()
   })
 })

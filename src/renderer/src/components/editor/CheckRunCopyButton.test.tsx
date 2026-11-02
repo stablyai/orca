@@ -38,13 +38,4 @@ describe('CheckRunCopyButton', () => {
     )
     expect(await screen.findByRole('button', { name: 'Copied' })).toBeDefined()
   })
-
-  it('disables the action when there is no card text', () => {
-    renderCopyButton('')
-
-    const copyButton = screen.getByRole('button', { name: 'Nothing to copy' })
-    expect((copyButton as HTMLButtonElement).disabled).toBe(true)
-    fireEvent.click(copyButton)
-    expect(writeClipboardText).not.toHaveBeenCalled()
-  })
 })

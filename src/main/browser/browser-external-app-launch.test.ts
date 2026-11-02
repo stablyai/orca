@@ -116,6 +116,8 @@ describe('browser external app launch', () => {
     'blob:https://example.com/id',
     'about:blank',
     'orca-preview://doc/index.html',
+    'chrome-extension://nngceckbapebfimnlniiiahkandclblb/popup/index.html',
+    'orca-extension-api://api/call',
     'shell:startup',
     'vbscript:msgbox(1)',
     'hcp://system/sysinfo',
@@ -125,11 +127,6 @@ describe('browser external app launch', () => {
   ])('refuses %s without asking', (rawUrl) => {
     expect(ask(rawUrl)).toBe(false)
     expect(renderer.send).not.toHaveBeenCalled()
-  })
-
-  it('names no site when the asking frame is unknown', () => {
-    ask(OKTA_URL, null)
-    expect(sentRequests(renderer)[0].details).toMatchObject({ origin: null })
   })
 
   it('refuses a page with no window on this computer', () => {

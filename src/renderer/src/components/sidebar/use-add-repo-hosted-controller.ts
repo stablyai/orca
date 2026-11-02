@@ -14,6 +14,10 @@ export type AddRepoDialogHostedController = {
   onCloseAutoFocus?: (event: Event) => void
 }
 
+export type AddRepoDialogProps = {
+  hosted?: AddRepoDialogHostedController
+}
+
 export function useAddRepoHostedController(hosted: AddRepoDialogHostedController | undefined): {
   closeModal: () => void
   /** Close the composer too when folder/non-Git outcomes navigate outside project selection. */

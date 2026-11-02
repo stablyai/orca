@@ -101,7 +101,8 @@ export function attachDividerDrag(
     window.addEventListener('pointermove', onPointerMove, true)
     window.addEventListener('pointerup', onPointerUp, true)
     window.addEventListener('pointercancel', onPointerCancel, true)
-    window.addEventListener('blur', onWindowBlur, true)
+    // Not capture: a capturing window listener also hears element blurs inside the window.
+    window.addEventListener('blur', onWindowBlur)
   }
 
   const removeWindowListeners = (): void => {
@@ -112,7 +113,7 @@ export function attachDividerDrag(
     window.removeEventListener('pointermove', onPointerMove, true)
     window.removeEventListener('pointerup', onPointerUp, true)
     window.removeEventListener('pointercancel', onPointerCancel, true)
-    window.removeEventListener('blur', onWindowBlur, true)
+    window.removeEventListener('blur', onWindowBlur)
   }
 
   const releasePointerCaptureIfHeld = (pointerId: number | null): void => {

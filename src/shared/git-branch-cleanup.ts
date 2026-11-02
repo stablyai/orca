@@ -147,7 +147,7 @@ async function branchOnlyCommitsArePatchEquivalent(
   targetOid: string,
   branchRef: string
 ): Promise<boolean> {
-  const stdout = await readOptionalGitStdout(runGit, ['cherry', '-v', targetOid, branchRef])
+  const stdout = await readOptionalGitStdout(runGit, ['cherry', targetOid, branchRef])
   if (stdout === null) {
     return false
   }

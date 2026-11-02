@@ -2,24 +2,21 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
 import type {
   AgentSessionHistoryRequest,
   AgentSessionHistoryResult,
   AgentSessionStatusSummary,
   AgentSessionSubscribeEvent
-} from '../../src/shared/agent-session-wire'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalCursor
-} from '../../src/shared/agent-session-journal-types'
+} from '../../src/shared/agent-session/agent-session-wire'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../src/shared/agent-session-journal-identity'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
-} from '../../src/shared/structured-agent-session-reducer'
-import {
-  hasUnansweredStructuredAgentSessionDispatch,
-  projectStructuredAgentSessionStatus
-} from '../../src/shared/structured-agent-session-projection'
+} from '../../src/shared/agent-session/structured-agent-session-reducer'
+import { hasUnansweredStructuredAgentSessionDispatch } from '../../src/shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
+import { projectStructuredAgentSessionStatus } from '../../src/shared/agent-session/view/structured-agent-session-projection'
 import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { readAgentSessionHistory } from '../../src/main/native-chat/agent-session-wire/agent-session-history-page'
 import { AgentSessionSubscribers } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-subscribers'
@@ -36,10 +33,11 @@ import {
   resetStructuredAgentSessionReadOwnersForTests
 } from '../../src/renderer/src/components/native-chat/structured-agent-session-read-owner'
 import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
-import { codexProviderHandle } from '../../src/shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION = 'cursor-body-regression'
 const target = { kind: 'local' } as const
+const effects = { getState: useAppStore.getState, subscribeRetryNow: () => () => {} }
 const journals = createTrackedJournalOpener()
 let root: string
 
@@ -148,7 +146,7 @@ describe('structured session cursor/body regression', () => {
             }
           ]
         ]),
-        getRecord: () => null,
+        getConversation: () => null,
         now: () => 1_000,
         onStatusChanged: (summary) => {
           hostSummary = summary
@@ -195,7 +193,7 @@ describe('structured session cursor/body regression', () => {
       )
       const owner = getStructuredAgentSessionReadOwner(SESSION, target)
       const unlisten = owner.subscribe(() => {})
-      const deactivate = owner.activate()
+      const deactivate = owner.activate(effects)
       await vi.waitFor(() => expect(mocks.subscribe).toHaveBeenCalledTimes(1))
       expect(owner.getSnapshot().state.cursor?.sequence).toBe(100)
       expect(owner.getSnapshot().state.items.at(-1)?.body).toMatchObject({ role: 'user' })
@@ -220,7 +218,7 @@ describe('structured session cursor/body regression', () => {
       // IPC/RPC copies values; the journal mutates its own submission records in place.
       expect(owner.getSnapshot().state.submissions[0]?.dispatchState).toBe('pending')
       warm = true
-      const stop = owner.activate()
+      const stop = owner.activate(effects)
 
       await vi.waitFor(() => expect(owner.getSnapshot().state.cursor).toEqual(journal.cursor()))
       const caughtUp = owner.getSnapshot().state

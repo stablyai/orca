@@ -18,7 +18,7 @@ import type { Repo } from '../../shared/repo-types'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import { getOrcadSshDeployment } from '../../shared/runtime-environments'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { collectOrcadMigrationSourceCatalog } from '../persistence/migrating-orcad-catalog/orcad-source-catalog'
 import {
   orcadSourceFolderWorkspaceIds,
@@ -36,7 +36,7 @@ import {
   withoutWslMovedRepos
 } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
-const appUserDataPath = (): string => getAppEnvironment().getPath('userData')
+export const appUserDataPath = (): string => getAppEnvironment().getPath('userData')
 
 type CatalogStore = Pick<Store, 'getFolderWorkspaces' | 'getProjectGroups' | 'getRepos'>
 type TargetStore = Pick<Store, 'getSshTargets' | 'updateSshTarget'>
@@ -64,7 +64,7 @@ function isHiddenRetainedSourceTarget(
 }
 
 /** Delay journal reads until a host is fenced. */
-function hiddenRetainedSourceTargetIds(
+export function hiddenRetainedSourceTargetIds(
   getUserDataPath: () => string,
   targets: readonly SshTarget[]
 ): string[] {

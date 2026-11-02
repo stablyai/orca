@@ -8,6 +8,19 @@ const mocks = vi.hoisted(() => {
   > = {
     repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/remote/repo', hostId: 'runtime:env-1' }]
   }
+  const projects: {
+    id: string
+    localWindowsRuntimePreference:
+      | { kind: 'inherit-global' }
+      | { kind: 'windows-host' }
+      | { kind: 'wsl'; distro: string | null }
+  }[] = [
+    {
+      id: 'repo1',
+      localWindowsRuntimePreference: { kind: 'inherit-global' as const }
+    }
+  ]
+
   return {
     toastLoading: vi.fn(() => 'toast-1'),
     toastDismiss: vi.fn(),
@@ -19,18 +32,7 @@ const mocks = vi.hoisted(() => {
       activeRepoId: 'repo1',
       activeWorktreeId: 'wt-1',
       settings: { activeRuntimeEnvironmentId: 'env-1' as string | null },
-      projects: [
-        {
-          id: 'repo1',
-          localWindowsRuntimePreference: { kind: 'inherit-global' as const }
-        }
-      ] as {
-        id: string
-        localWindowsRuntimePreference:
-          | { kind: 'inherit-global' }
-          | { kind: 'windows-host' }
-          | { kind: 'wsl'; distro: string | null }
-      }[],
+      projects,
       repos: [
         {
           id: 'repo1',

@@ -28,6 +28,7 @@ export type SourceControlAiControllerParams = {
   commitError: string | null
   pushRecoveryPrompt: string | null
   updateSettings: AppState['updateSettings']
+  updateSettingsOrThrow: AppState['updateSettingsOrThrow']
   updateRepo: AppState['updateRepo']
   openSettingsTarget: AppState['openSettingsTarget']
   openSettingsPage: AppState['openSettingsPage']

@@ -3,7 +3,7 @@ import { app as electronApp, type BrowserWindow } from 'electron'
 /** Automation must not steal OS foreground. Background/sidecar requests override E2E_FOREGROUND; the hosted-Xvfb benchmark may present explicitly after startup (tests/AGENTS.md), while automatic reveals stay suppressed. */
 
 type ActivationPolicyApp = {
-  dock?: { hide: () => void }
+  dock?: { hide: () => void; show?: () => Promise<void> }
   setActivationPolicy: (policy: 'accessory' | 'prohibited' | 'regular') => void
 }
 
@@ -37,17 +37,22 @@ export function isWindowlessLaunch(env: PolicyEnv = process.env): boolean {
   )
 }
 
+type ActivationPolicyOptions = {
+  app?: ActivationPolicyApp
+  env?: PolicyEnv
+  platform?: NodeJS.Platform
+  /** `orca serve` with no desktop window open: a server, not an app to switch to or quit (#16061). */
+  serveWithoutDesktopWindow?: boolean
+  warn?: (message: string, error: unknown) => void
+}
+
 /** macOS accessory policy hides Dock/menu-bar claims during windowless launch/exit while retaining programmatic activation. */
-export function applyBackgroundActivationPolicy(
-  options: {
-    app?: ActivationPolicyApp
-    env?: PolicyEnv
-    platform?: NodeJS.Platform
-    warn?: (message: string, error: unknown) => void
-  } = {}
-): boolean {
+export function applyBackgroundActivationPolicy(options: ActivationPolicyOptions = {}): boolean {
   const platform = options.platform ?? process.platform
-  if (platform !== 'darwin' || !isWindowlessLaunch(options.env ?? process.env)) {
+  if (
+    platform !== 'darwin' ||
+    !(options.serveWithoutDesktopWindow || isWindowlessLaunch(options.env ?? process.env))
+  ) {
     return false
   }
   try {
@@ -57,6 +62,28 @@ export function applyBackgroundActivationPolicy(
     return true
   } catch (error) {
     options.warn?.('[window] Failed to apply background activation policy', error)
+    return false
+  }
+}
+
+/** Gives a serve process its Dock tile and menu bar back while it hosts a desktop window. */
+export function applyServeDesktopWindowActivationPolicy(
+  options: Omit<ActivationPolicyOptions, 'serveWithoutDesktopWindow'> = {}
+): boolean {
+  const platform = options.platform ?? process.platform
+  // dock.show() activates the app, so automated launches keep the accessory policy.
+  if (platform !== 'darwin' || isBackgroundLaunch(options.env ?? process.env)) {
+    return false
+  }
+  try {
+    const app = options.app ?? electronApp
+    app.setActivationPolicy('regular')
+    void app.dock?.show?.().catch((error: unknown) => {
+      options.warn?.('[window] Failed to show the Dock icon', error)
+    })
+    return true
+  } catch (error) {
+    options.warn?.('[window] Failed to apply foreground activation policy', error)
     return false
   }
 }

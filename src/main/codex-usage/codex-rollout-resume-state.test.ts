@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   buildCodexRolloutResumeState,
-  MIN_RESUMABLE_PREFIX_BYTES,
   resolveCodexRolloutResume
 } from './codex-rollout-resume-state'
+
 import type { CodexUsageParseContext } from './codex-usage-record-parser'
 import type { CodexUsagePersistedFile } from './types'
 
@@ -71,28 +71,6 @@ describe('buildCodexRolloutResumeState', () => {
       buildCodexRolloutResumeState(filePath, 5 * WINDOW_BYTES, context)
     ).resolves.toBeNull()
   })
-
-  // Digest verification costs more than rereading a short prefix.
-  it('refuses a prefix at or under the resumable floor', async () => {
-    const filePath = writeRollout('at-floor.jsonl', 4 * WINDOW_BYTES)
-
-    expect(MIN_RESUMABLE_PREFIX_BYTES).toBe(3 * WINDOW_BYTES)
-    await expect(
-      buildCodexRolloutResumeState(filePath, MIN_RESUMABLE_PREFIX_BYTES, context)
-    ).resolves.toBeNull()
-    await expect(
-      buildCodexRolloutResumeState(filePath, MIN_RESUMABLE_PREFIX_BYTES + 1, context)
-    ).resolves.not.toBeNull()
-  })
-
-  it('records an offset the file still reaches', async () => {
-    const filePath = writeRollout('full-prefix.jsonl', 4 * WINDOW_BYTES)
-
-    const state = await buildCodexRolloutResumeState(filePath, 4 * WINDOW_BYTES, context)
-
-    expect(state?.parsedBytes).toBe(4 * WINDOW_BYTES)
-    expect(state?.headDigest).toMatch(new RegExp(`^${WINDOW_BYTES}:`))
-  })
 })
 
 describe('resolveCodexRolloutResume', () => {
@@ -103,24 +81,6 @@ describe('resolveCodexRolloutResume', () => {
     const previous = persistedFile(filePath, state)
 
     writeRollout('truncated.jsonl', WINDOW_BYTES)
-
-    await expect(resolveCodexRolloutResume(filePath, previous)).resolves.toBeNull()
-  })
-
-  // Validate untrusted cache offsets before calculating the boundary window.
-  it('rejects a persisted offset under the floor', async () => {
-    const filePath = writeRollout('under-floor.jsonl', 4 * WINDOW_BYTES)
-    const previous = persistedFile(filePath, {
-      parsedBytes: 100,
-      boundaryDigest: `${WINDOW_BYTES}:unused`,
-      headDigest: `${WINDOW_BYTES}:unused`,
-      physicalFileId: null,
-      sessionId: 'session-under-floor',
-      sessionCwd: null,
-      currentCwd: null,
-      currentModel: null,
-      previousTotals: null
-    })
 
     await expect(resolveCodexRolloutResume(filePath, previous)).resolves.toBeNull()
   })

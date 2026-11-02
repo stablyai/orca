@@ -1,8 +1,5 @@
 import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installer-utils'
-import {
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
-} from '../agent-hooks/hook-stdin-contract'
+import { buildWindowsHookEnvironmentGuardLines } from '../agent-hooks/hook-stdin-contract'
 
 /** Matches the envelope length cap used by the POSIX grok-hook branch. */
 export const GROK_HOME_ENVELOPE_MAX_LENGTH = 4096
@@ -31,7 +28,6 @@ export function buildWindowsGrokHookScript(): string {
     ':orca_grok_home_ready',
     WINDOWS_GROK_HOOK_POST_COMMAND,
     'exit /b 0',
-    ...buildWindowsHookStdinDrainEpilogue(),
     ''
   ].join('\r\n')
 }

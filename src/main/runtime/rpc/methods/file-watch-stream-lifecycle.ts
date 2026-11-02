@@ -1,6 +1,7 @@
 import { isWatcherProcessFailure } from '../../../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { createFileWatchEventBatcher } from './file-watch-event-batcher'
+import { dirListingPageCache } from './files-read-dir-page'
 import type { FileWatchBatchCadence } from '../../../../shared/rpc-contract/files-target-params'
 
 export async function runFileWatchStream(args: {
@@ -113,7 +114,11 @@ export async function runFileWatchStream(args: {
     args.emit({ type: 'starting', subscriptionId: args.subscriptionId })
     setupPromise = args.runtime.watchFileExplorer(
       args.worktree,
-      (events) => eventBatcher.push(events),
+      (events) => {
+        // Why: a later page must not serve a file this change deleted from a cached listing.
+        dirListingPageCache.forgetWorkspace(args.worktree)
+        eventBatcher.push(events)
+      },
       handleTerminalError,
       setupAbortController.signal
     )

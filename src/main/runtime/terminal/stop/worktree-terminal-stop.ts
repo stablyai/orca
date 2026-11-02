@@ -50,7 +50,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     worktreeSelector: string
   ): Promise<RuntimeWorktreeTerminalCloseResult> {
     const graphEpoch = this.captureReadyGraphEpoch()
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
     this.assertStableReadyGraph(graphEpoch)
     const hostFence = this.getWorktreeHostFence(worktree)
 
@@ -175,7 +175,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     const graphEpoch = this.captureReadyGraphEpoch()
     const worktree = options.resolvedWorktreeId
       ? { id: options.resolvedWorktreeId }
-      : await this.resolveWorktreeSelector(worktreeSelector)
+      : await this.resolveWorkspaceSelector(worktreeSelector)
     this.assertStableReadyGraph(graphEpoch)
     const pastDeadline = (): boolean =>
       options.deadline !== undefined && Date.now() >= options.deadline
@@ -255,7 +255,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     worktreeSelector: string,
     options: { soleLivePtyId?: string } = {}
   ): Promise<RuntimeWorktreeTerminalSleepResult> {
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
     const scope = resolveSleepScope(this.store?.getRepos() ?? [], worktree)
     const existing = this.terminalSleepByHostWorktree.get(scope.key)
     if (existing) {

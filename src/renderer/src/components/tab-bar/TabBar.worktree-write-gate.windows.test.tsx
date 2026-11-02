@@ -22,7 +22,7 @@ vi.mock('@/hooks/useDetectedAgents', () => tabBarRuntimeModelStubs().detectedAge
 vi.mock('@/hooks/useAgentDetectionTarget', () => tabBarRuntimeModelStubs().detectionTarget())
 vi.mock('@/lib/connection-context', () => tabBarRuntimeModelStubs().connectionContext())
 vi.mock('@/lib/worktree-runtime-owner', () => tabBarRuntimeModelStubs().runtimeOwner())
-vi.mock('@/lib/native-chat-transcript-readability', () =>
+vi.mock('../../../../shared/native-chat/transcript/native-chat-transcript-readability', () =>
   tabBarRuntimeModelStubs().nativeChatReadability()
 )
 vi.mock('@/lib/client-creation-action-policy', () => tabBarRuntimeModelStubs().creationPolicy())

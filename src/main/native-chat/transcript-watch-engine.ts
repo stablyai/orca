@@ -1,7 +1,11 @@
-import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
+import type {
+  NativeChatMessage,
+  NativeChatTurnLifecycle
+} from '../../shared/native-chat/native-chat-types'
 import {
   boundaryFingerprint,
   readTranscriptFileVersion,
+  transcriptFileReplacement,
   transcriptFileVersionChanged,
   type TranscriptFileVersion
 } from './transcript-file-version'
@@ -77,7 +81,8 @@ export async function installTranscriptWatcher(
       (nextLifecycle) => {
         lifecycle = nextLifecycle
       },
-      gateAbort.signal
+      gateAbort.signal,
+      args.sourceOrder
     )
     if (!closed && (remaining.length > 0 || lifecycle)) {
       onAppend(remaining, lifecycle)
@@ -95,7 +100,8 @@ export async function installTranscriptWatcher(
       gateAbort.signal,
       (boundary) => {
         state.boundary = boundary
-      }
+      },
+      args.sourceOrder
     )
   }
 
@@ -127,17 +133,12 @@ export async function installTranscriptWatcher(
     if (closed) {
       return
     }
-    const identityChanged = watchedVersion !== null && current.identity !== watchedVersion.identity
-    const sameSizeVersionChanged =
-      watchedVersion !== null &&
-      current.identity === watchedVersion.identity &&
-      current.size === watchedVersion.size &&
-      transcriptFileVersionChanged(current, watchedVersion)
-    const contentReplaced =
-      identityChanged ||
-      sameSizeVersionChanged ||
-      current.size < state.offset ||
-      (state.offset > 0 && state.boundary.toString('base64') !== currentBoundary)
+    const { identityChanged, contentReplaced } = transcriptFileReplacement(
+      current,
+      watchedVersion,
+      state,
+      currentBoundary
+    )
     if (identityChanged) {
       nativeWatcher.invalidate()
     }
@@ -199,7 +200,8 @@ export async function installTranscriptWatcher(
           (nextLifecycle) => {
             lifecycle = nextLifecycle
           },
-          gateAbort.signal
+          gateAbort.signal,
+          args.sourceOrder
         )
         if (closed) {
           return

@@ -6,8 +6,10 @@ import { useAppStore } from '@/store'
 import { resolveNativeChatDraftOwner } from '@/lib/native-chat-draft-owner'
 import type { Tab } from '../../../../shared/tab-types'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import {
+  nativeChatFanoutFixture,
+  nativeChatFanoutWorkspace as workspace
+} from './native-chat-workspace-test-fixtures'
 import { useAgentMessageSenderLabel } from './native-chat-agent-message-sender-label'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import { useRestoredNativeChatComposerDraftImageCheck } from './native-chat-composer-draft-image-check'
@@ -19,7 +21,6 @@ const initial = useAppStore.getInitialState()
 const originalApi = window.api
 const reads = { terminal: 0, unified: 0 }
 let renders = 0
-const workspace = (index: number) => `folder:workspace-${index}`
 const scope = (index: number) => `agent-session:session-${index}`
 function counted<T extends object>(map: T, kind: keyof typeof reads): T {
   return new Proxy(map, { ownKeys: (target) => (reads[kind]++, Reflect.ownKeys(target)) })
@@ -40,42 +41,11 @@ function tab(index: number, workspaces: number): Tab {
   }
 }
 function seed(chats: number, workspaces: number, terminalsPerWorkspace: number) {
-  const tabsByWorktree: Record<string, TerminalTab[]> = {}
-  const unifiedTabsByWorktree: Record<string, Tab[]> = {}
-  const folderWorkspaces: FolderWorkspace[] = []
-  for (let index = 0; index < workspaces; index++) {
-    const id = workspace(index)
-    tabsByWorktree[id] = Array.from({ length: terminalsPerWorkspace }, (_, slot) => ({
-      id: `terminal-${index}-${slot}`,
-      worktreeId: id,
-      ptyId: null,
-      title: 'Terminal',
-      customTitle: null,
-      color: null,
-      sortOrder: slot,
-      createdAt: 0
-    }))
-    unifiedTabsByWorktree[id] = []
-    folderWorkspaces.push({
-      id: `workspace-${index}`,
-      projectGroupId: 'group',
-      name: id,
-      folderPath: `/repo/${index}`,
-      executionHostId: 'local',
-      linkedTask: null,
-      comment: '',
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: index,
-      lastActivityAt: 0,
-      createdAt: 0,
-      updatedAt: 0
-    })
-  }
-  for (let index = 0; index < chats; index++) {
-    unifiedTabsByWorktree[workspace(index % workspaces)].push(tab(index, workspaces))
-  }
+  const { tabsByWorktree, unifiedTabsByWorktree, folderWorkspaces } = nativeChatFanoutFixture(
+    chats,
+    workspaces,
+    terminalsPerWorkspace
+  )
   useAppStore.setState(
     {
       ...initial,

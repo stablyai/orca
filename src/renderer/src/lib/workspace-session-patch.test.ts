@@ -407,14 +407,14 @@ describe('buildWorkspaceSessionPatch', () => {
     expect(patch.defaultTerminalTabsAppliedByWorktreeId).toBeUndefined()
   })
 
-  it('keeps sleeping agent session clearing keys in patches', () => {
+  it('clears the last sleeping agent session with an empty map the host split keeps', () => {
     const patch = buildWorkspaceSessionPatch(
       createSnapshot({ sleepingAgentSessionsByPaneKey: {} }),
       ['sleepingAgentSessionsByPaneKey']
     )
 
-    expect(Object.hasOwn(patch, 'sleepingAgentSessionsByPaneKey')).toBe(true)
-    expect(patch.sleepingAgentSessionsByPaneKey).toBeUndefined()
+    // undefined would be dropped before the write, leaving the record on disk until quit.
+    expect(patch.sleepingAgentSessionsByPaneKey).toEqual({})
   })
 
   it('keeps a staged browser tab out of incremental patches too', () => {

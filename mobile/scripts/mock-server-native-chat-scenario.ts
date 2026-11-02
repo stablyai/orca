@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { WebSocket } from 'ws'
 import type { AgentStatusEntry } from '../../src/shared/agent-status-types'
-import type { NativeChatMessage } from '../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../src/shared/native-chat/native-chat-types'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTerminalClientTab

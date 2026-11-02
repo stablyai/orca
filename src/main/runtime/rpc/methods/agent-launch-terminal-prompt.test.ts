@@ -23,6 +23,8 @@ function runtimeStub(overrides: {
   foreground?: 'agent' | 'shell' | 'unknown'
   /** False on a host that cannot find the agent in front (Windows); default: it can. */
   hostProvesAgent?: boolean
+  /** True on a local non-WSL Windows pane, whose lone shell is provable; default: not. */
+  hostProvesShellAlone?: boolean
 }) {
   const queued = [...(overrides.waits ?? [])]
   const waitForTerminal = vi.fn(
@@ -38,6 +40,7 @@ function runtimeStub(overrides: {
   const readLaunchedAgentForeground = vi.fn(async () => overrides.foreground ?? 'agent')
   const subscribeToTerminalData = vi.fn(() => () => {})
   const launchedAgentHostProvesAgent = vi.fn(() => overrides.hostProvesAgent ?? true)
+  const launchedAgentHostProvesShellAlone = vi.fn(() => overrides.hostProvesShellAlone ?? false)
   const sendTerminalAgentPrompt = vi.fn<SendFn>(
     overrides.send ?? (async () => ({ handle: 'term_1', accepted: true, bytesWritten: 12 }))
   )
@@ -53,7 +56,8 @@ function runtimeStub(overrides: {
       sendTerminalAgentPrompt,
       readLaunchedAgentForeground,
       subscribeToTerminalData,
-      launchedAgentHostProvesAgent
+      launchedAgentHostProvesAgent,
+      launchedAgentHostProvesShellAlone
     } as unknown as Parameters<typeof deliverTerminalAgentLaunchPrompt>[0]['runtime']
   }
 }
@@ -419,6 +423,40 @@ describe('writing a launch prompt into a terminal agent', () => {
 
     await expect(deliver('write-unless-shell')).resolves.toBe(expected)
     await expect(deliver()).resolves.toBe(false)
+  })
+})
+
+// WSL's wsl.exe and SSH-to-Windows read as unknown even when a shell is alone, so only local Windows may write on unknown.
+describe('write-if-shell-provable', () => {
+  it.each([
+    ['writes on a local Windows pane whose lone shell is provable', 'unknown', true, true],
+    ['refuses a shell proven alone', 'shell', true, false],
+    ['refuses an unknown WSL or SSH-to-Windows pane', 'unknown', false, false]
+  ] as const)('%s', async (_label, foreground, hostProvesShellAlone, expected) => {
+    const stub = runtimeStub({
+      composerSignal: true,
+      foreground,
+      hostProvesAgent: false,
+      hostProvesShellAlone
+    })
+    stub.sendTerminalAgentPrompt.mockImplementation(async (handle, _text, options) => {
+      const { beforeWrite } = options
+      if (typeof beforeWrite === 'function') {
+        await beforeWrite('pty-1')
+      }
+      return { handle, accepted: true, bytesWritten: 12 }
+    })
+
+    await expect(
+      deliverTerminalAgentLaunchPrompt({
+        runtime: stub.runtime,
+        handle: 'term_1',
+        agent: 'kimi',
+        freshLaunch: true,
+        text: 'fix the flaky test',
+        unprovableHost: 'write-if-shell-provable'
+      })
+    ).resolves.toBe(expected)
   })
 })
 

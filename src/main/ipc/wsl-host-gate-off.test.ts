@@ -53,7 +53,7 @@ vi.mock('../wsl/wsl-host-e2e-fake-connector', async (importOriginal) => ({
   createFakeWslHostConnector: mocks.createFakeConnector
 }))
 
-vi.mock('../../shared/remote-runtime-client', () => ({
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequest: vi.fn(async () => ({ id: 'status', ok: false, error: {} })),
   subscribeRemoteRuntimeRequest: vi.fn()
 }))

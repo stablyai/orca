@@ -320,7 +320,13 @@ describe('TerminalWebView engine errors', () => {
     expect(postedCommands().map((command) => command.type)).toEqual(['ping'])
 
     postWebViewMessage(renderer, { type: 'pong', pingId: ping?.id, terminalAvailable: true })
-    expect(postedCommands().map((command) => command.type)).toEqual(['ping', 'set-theme', 'write'])
+    expect(postedCommands().map((command) => command.type)).toEqual([
+      'ping',
+      'set-interaction-active',
+      'set-theme',
+      'write'
+    ])
+    expect(postedCommands()[1]).toMatchObject({ type: 'set-interaction-active', active: true })
     expect(onWebReady).toHaveBeenCalledTimes(1)
   })
 
@@ -360,13 +366,18 @@ describe('TerminalWebView engine errors', () => {
 
     postWebViewMessage(renderer, { type: 'web-ready' })
     expect(onWebReady).toHaveBeenCalledTimes(2)
-    expect(postedCommands().map((command) => command.type)).toEqual(['set-theme', 'write'])
+    expect(postedCommands().map((command) => command.type)).toEqual([
+      'set-interaction-active',
+      'set-theme',
+      'write'
+    ])
   })
 
   it('reloads a terminated iOS content process and restores theme on readiness', () => {
     const terminalRef = createRef<TerminalWebViewHandle>()
     const { onEngineError, renderer } = createTerminalWebViewRenderer(vi.fn(), {
       ref: terminalRef,
+      interactionActive: false,
       terminalTheme: {
         mode: 'light',
         theme: { background: '#ffffff', foreground: '#111111' }
@@ -386,6 +397,11 @@ describe('TerminalWebView engine errors', () => {
     expect(onEngineError).not.toHaveBeenCalled()
 
     postWebViewMessage(renderer, { type: 'web-ready' })
-    expect(postedCommands().map((command) => command.type)).toEqual(['set-theme', 'write'])
+    expect(postedCommands().map((command) => command.type)).toEqual([
+      'set-interaction-active',
+      'set-theme',
+      'write'
+    ])
+    expect(postedCommands()[0]).toMatchObject({ type: 'set-interaction-active', active: false })
   })
 })

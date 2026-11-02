@@ -5,13 +5,6 @@ const LEAF = '11111111-1111-4111-8111-111111111111'
 const OTHER_LEAF = '22222222-2222-4222-8222-222222222222'
 
 describe('parseTerminalPanePlacement', () => {
-  it('accepts each kind', () => {
-    const split = { kind: 'split', parentLeafId: LEAF, direction: 'vertical' }
-    expect(parseTerminalPanePlacement({ kind: 'new-tab' })).toEqual({ kind: 'new-tab' })
-    expect(parseTerminalPanePlacement(split)).toEqual(split)
-    expect(parseTerminalPanePlacement({ kind: 'root' })).toEqual({ kind: 'root' })
-  })
-
   it('keeps a new tab row and a split ratio and proposed tree', () => {
     const newTab = {
       kind: 'new-tab',

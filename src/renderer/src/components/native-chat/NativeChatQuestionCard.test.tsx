@@ -4,8 +4,9 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
-import type { AskAnswerSelection, AskPrompt } from './native-chat-interactive-prompt'
-import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../../shared/native-chat-question-auto-advance'
+import type { AskAnswerSelection } from '../../../../shared/native-chat-ask-answer'
+import type { AskPrompt } from '../../../../shared/native-chat/input/native-chat-ask-types'
+import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../../shared/native-chat/input/native-chat-question-auto-advance'
 
 // Answers must use option indices; labels can be duplicated and a non-first choice must retain its position.
 

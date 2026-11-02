@@ -25,15 +25,18 @@ it.each(['anchor', 'source'] as const)(
     heading.id = 'destination'
     heading.dataset.sourceLine = '1'
     heading.dataset.sourceEndLine = '1'
-    block.append(heading)
+    const details = document.createElement('details')
+    details.innerHTML = '<summary>More</summary>'
+    details.append(heading)
+    block.append(details)
     root.append(block)
     Object.defineProperties(root, {
       scrollHeight: { value: 1000 },
       clientHeight: { value: 100 }
     })
     vi.spyOn(root, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 100, 100))
-    vi.spyOn(heading, 'getBoundingClientRect').mockImplementation(
-      () => new DOMRect(0, 400 - root.scrollTop, 100, 40)
+    vi.spyOn(heading, 'getBoundingClientRect').mockImplementation(() =>
+      details.open ? new DOMRect(0, 400 - root.scrollTop, 100, 40) : new DOMRect()
     )
     const scroll = vi
       .spyOn(root, 'scrollTo')
@@ -91,6 +94,7 @@ it.each(['anchor', 'source'] as const)(
     expect(scroll).not.toHaveBeenCalled()
     virtualizer.isScrolling = false
     rerender({ anchor, viewportReady: true })
+    expect(details.open).toBe(true)
     expect(scroll).toHaveBeenCalledExactlyOnceWith({ top: kind === 'anchor' ? 388 : 370 })
     expect(record).not.toHaveBeenCalled()
     virtualizer.isScrolling = true

@@ -1,4 +1,4 @@
-import { isSettledBackgroundTaskState } from '../../shared/native-chat-background-task-row'
+import { isSettledBackgroundTaskState } from '../../shared/native-chat/input/native-chat-background-task-row'
 import type { ClaudeBackgroundTaskRow } from './claude-background-task-row-lifecycle'
 
 const MAX_GENERATION_ENTRIES = 512

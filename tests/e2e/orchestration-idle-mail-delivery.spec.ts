@@ -24,10 +24,12 @@ import {
   CODEX_WORKING_TITLE,
   CURSOR_IDLE_TITLE,
   createMailPaneAgent,
+  type MailPaneAgentOptions,
   type MailPaneAgent
 } from './helpers/orchestration-mail-pane-agent'
 import {
   insertDirectRunMail,
+  insertUnackedRunDelivery,
   mailDisposition,
   readMailbox,
   readMailRow
@@ -52,19 +54,13 @@ type MailFixture = {
   client: RuntimeClient
   userDataDir: string
   worktreeId: string
-  openAgentPane: (options?: {
-    titleOnStdin?: { needle: string; title: string }
-  }) => Promise<AgentPane>
+  openAgentPane: (options?: MailPaneAgentOptions) => Promise<AgentPane>
 }
 
 type WaitingCheck = RuntimeRpcSuccess<{
   deliveryId: string | null
   messages: { subject: string }[]
 }>
-
-type WaitingCheckOutcome =
-  | { response: WaitingCheck; error?: never }
-  | { response?: never; error: unknown }
 
 // Retry startup context replacement, matching installTerminalPtyWriteSpy.
 async function readUserDataDir(electronApp: ElectronApplication): Promise<string> {
@@ -105,9 +101,7 @@ async function setUpMailFixture(
     )
     .toBe(true)
 
-  const openAgentPane = async (options?: {
-    titleOnStdin?: { needle: string; title: string }
-  }): Promise<AgentPane> => {
+  const openAgentPane: MailFixture['openAgentPane'] = async (options) => {
     // Reuse the mounted leaf that push delivery resolves its target through.
     const ptyId = await waitForActivePanePtyId(orcaPage)
     const { paneKey } = await waitForActivePaneHookDescriptor(orcaPage)
@@ -202,11 +196,6 @@ async function expectSubmitted(pane: AgentPane): Promise<void> {
     .toBe(true)
 }
 
-/** Inverse of expectSubmitted, for the panes whose submit stays user-owned. */
-function expectNotSubmitted(pane: AgentPane): void {
-  expect(pane.agent.readStdin()).not.toContain('\r')
-}
-
 function countOccurrences(value: string, needle: string): number {
   return value.split(needle).length - 1
 }
@@ -262,13 +251,14 @@ test.describe('orchestration push-on-idle mail delivery', () => {
       .toBe('pushed')
   })
 
-  test('holds mail while the agent is working and releases it on the idle frame', async ({
+  test('holds mail while an unrecognized program is working and releases it on the idle frame', async ({
     orcaPage,
     electronApp
   }) => {
     test.setTimeout(180_000)
     const { client, userDataDir, openAgentPane } = await setUpMailFixture(orcaPage, electronApp)
-    const pane = await openAgentPane()
+    // A recognized agent takes mid-turn mail (orchestration-follows-terminal-across-remount.spec.ts).
+    const pane = await openAgentPane({ executable: null })
     pane.agent.setTitle(CODEX_WORKING_TITLE)
     await waitForObservedTitle(client, pane.handle, CODEX_WORKING_TITLE)
     const mailbox = await createRunMailbox(client, pane, 'Held while working')
@@ -347,42 +337,29 @@ test.describe('orchestration push-on-idle mail delivery', () => {
     const mailbox = await createRunMailbox(client, pane, 'Live waiter')
 
     // A supervised waiter consumes read while push stamps delivered_at; either alone leaves duplicate delivery possible.
-    const waitForMail = (): Promise<WaitingCheckOutcome> =>
-      client
-        .call<WaitingCheck['result']>('orchestration.check', {
-          terminal: pane.handle,
-          wait: true,
-          timeoutMs: 30_000
-        })
-        .then(
-          (response) => ({ response }),
-          (error: unknown) => ({ error })
-        )
+    // Two waits model a forgotten listener plus its replacement.
+    const waitForMail = (): Promise<WaitingCheck> =>
+      client.call<WaitingCheck['result']>('orchestration.check', {
+        terminal: pane.handle,
+        wait: true,
+        timeoutMs: 30_000
+      })
     const waiters = [waitForMail(), waitForMail()]
-    const registrationBarrier = await Promise.race(waiters)
-    expect(registrationBarrier).toEqual({
-      error: expect.objectContaining({ code: 'waiter_exists' })
-    })
+    // ast-grep-ignore: test-no-real-time-wait -- the runtime exposes no signal that a wait registered
+    await orcaPage.waitForTimeout(NO_DELIVERY_SETTLE_MS)
 
     const subject = 'Waiter claims it'
     const messageId = await sendMail(client, mailbox, { subject })
 
-    const outcomes = await Promise.all(waiters)
-    const pulled = outcomes.find((outcome) => outcome.response)?.response
-    expect(outcomes.filter((outcome) => outcome.error)).toHaveLength(1)
-    expect(pulled).toBeDefined()
-    if (!pulled) {
-      throw new Error('registered waiter did not receive the message')
-    }
-    expect(pulled.result.messages.map((message) => message.subject)).toContain(subject)
-    expect(pulled.result.deliveryId).toEqual(expect.any(String))
-    expect(pane.agent.readStdin()).not.toContain(POINTER_COMMAND)
-    expect(mailDisposition(readMailRow(userDataDir, messageId))).toBe('pending')
-    await client.call('orchestration.check', {
-      terminal: pane.handle,
-      ack: pulled.result.deliveryId
-    })
+    const [first, second] = await Promise.all(waiters)
+    expect(first.result.messages.map((message) => message.subject)).toContain(subject)
+    expect(first.result.deliveryId).toEqual(expect.any(String))
+    expect(second.result.deliveryId).toBe(first.result.deliveryId)
+    // A consuming check marks the batch it returns handled, so no later push may point at it.
     expect(mailDisposition(readMailRow(userDataDir, messageId))).toBe('pulled')
+    // ast-grep-ignore: test-no-real-time-wait -- absence of a pointer needs the delivery chain's window
+    await orcaPage.waitForTimeout(NO_DELIVERY_SETTLE_MS)
+    expect(pane.agent.readStdin()).not.toContain(POINTER_COMMAND)
   })
 
   test('pushes to the pane when the only waiter filters this message type out', async ({
@@ -501,7 +478,66 @@ test.describe('orchestration push-on-idle mail delivery', () => {
     ])
   })
 
-  test('never points direct Run A mail after the pane binds Run B', async ({
+  // STA-11980: an unacked batch (left by an older Orca) defers the nudge for newer mail instead of dropping it.
+  // e0cb9a68d2b: agents queue mid-turn input, so a turn starting in the Enter delay no longer withholds Enter.
+  test('points newer mail once behind an unacked Delivery, and submits it when a turn starts in the Enter delay', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    // Agent launch, two idle edges and two settle windows.
+    test.setTimeout(180_000)
+    const { client, userDataDir, openAgentPane } = await setUpMailFixture(orcaPage, electronApp)
+    const reminder = 'which you have not acknowledged'
+    const pane = await openAgentPane({
+      titleOnStdin: { needle: reminder, title: CODEX_WORKING_TITLE }
+    })
+    pane.agent.setTitle(CODEX_WORKING_TITLE)
+    await waitForObservedTitle(client, pane.handle, CODEX_WORKING_TITLE)
+    const mailbox = await createRunMailbox(client, pane, 'Unacked Delivery')
+    const heldId = insertUnackedRunDelivery(userDataDir, {
+      runId: mailbox.slice('run:'.length),
+      subject: 'Held batch'
+    })
+    // Mail is typed mid-turn too, so settle idle first or the idle title can land after the reaction.
+    pane.agent.setTitle(CODEX_IDLE_TITLE)
+    await waitForObservedTitle(client, pane.handle, CODEX_IDLE_TITLE)
+    // The fake starts working as the reminder lands, inside the Enter delay.
+    const newerId = await sendMail(client, mailbox, { subject: 'Newer mail' })
+    await expect
+      .poll(() => countOccurrences(pane.agent.readStdin(), reminder), {
+        timeout: DELIVERY_TIMEOUT_MS,
+        message: 'held-batch reminder never reached the agent'
+      })
+      .toBe(1)
+    expect(pane.agent.readStdin()).toContain(`--ack ${heldId}`)
+    await waitForObservedTitle(client, pane.handle, CODEX_WORKING_TITLE)
+    await expectSubmitted(pane)
+    await expect
+      .poll(() => mailDisposition(readMailRow(userDataDir, newerId)), {
+        timeout: DELIVERY_TIMEOUT_MS
+      })
+      .toBe('pushed')
+
+    // A later idle edge with nothing newer stays quiet.
+    await driveToLiveIdle(client, pane)
+    // ast-grep-ignore: test-no-real-time-wait -- absence of a second pointer needs the delivery chain's window
+    await orcaPage.waitForTimeout(NO_DELIVERY_SETTLE_MS)
+    expect(countOccurrences(pane.agent.readStdin(), reminder)).toBe(1)
+    expect(countOccurrences(pane.agent.readStdin(), '\r')).toBe(1)
+
+    const acked = await client.call<WaitingCheck['result']>('orchestration.check', {
+      terminal: pane.handle,
+      ack: heldId
+    })
+    expect(acked.result.messages).toEqual([])
+    const next = await client.call<WaitingCheck['result']>('orchestration.check', {
+      terminal: pane.handle
+    })
+    expect(next.result.messages.map((message) => message.subject)).toEqual(['Newer mail'])
+  })
+
+  // #35274: binding Run B keeps Run A, so its direct mail is pointed with its own --run, never Run B's check.
+  test('points direct Run A mail at Run A after the pane binds Run B', async ({
     orcaPage,
     electronApp
   }) => {
@@ -533,33 +569,30 @@ test.describe('orchestration push-on-idle mail delivery', () => {
     })
 
     pane.agent.setTitle(CODEX_IDLE_TITLE)
-    await waitForObservedTitle(client, pane.handle, CODEX_IDLE_TITLE)
-    await expect
-      .poll(() => readMailRow(userDataDir, messageId)?.to_handle, {
-        timeout: DELIVERY_TIMEOUT_MS,
-        message: 'stale direct mail never reached its authoritative Run mailbox'
-      })
-      .toBe(`run:${runA.result.run.id}`)
+    await expectPointed(pane)
+    await expectSubmitted(pane)
+    expect(pane.agent.readStdin()).toContain(`${POINTER_COMMAND} --run ${runA.result.run.id}`)
+    expect(pane.agent.readStdin()).not.toContain(`--run ${runB.result.run.id}`)
 
-    const checked = await client.call<{
+    const checkedB = await client.call<{
       runId: string
       deliveryId: string | null
       messages: unknown[]
       count: number
     }>('orchestration.check', { terminal: pane.handle })
-    expect(checked.result).toMatchObject({
+    expect(checkedB.result).toMatchObject({
       runId: runB.result.run.id,
       deliveryId: null,
       messages: [],
       count: 0
     })
-    expect(pane.agent.readStdin()).not.toContain(POINTER_COMMAND)
-    expectNotSubmitted(pane)
-    expect(readMailRow(userDataDir, messageId)).toMatchObject({
-      to_handle: `run:${runA.result.run.id}`,
-      read: 0,
-      delivered_at: null
+    expect(mailDisposition(readMailRow(userDataDir, messageId))).toBe('pushed')
+
+    const checkedA = await client.call<{ messages: { id: string }[] }>('orchestration.check', {
+      terminal: pane.handle,
+      run: runA.result.run.id
     })
+    expect(checkedA.result.messages).toEqual([expect.objectContaining({ id: messageId })])
   })
 
   test('writes and submits the pointer for the active coordinator pane', async ({
@@ -585,7 +618,7 @@ test.describe('orchestration push-on-idle mail delivery', () => {
   }) => {
     test.setTimeout(180_000)
     const { client, openAgentPane } = await setUpMailFixture(orcaPage, electronApp)
-    const pane = await openAgentPane()
+    const pane = await openAgentPane({ executable: 'cursor-agent' })
     pane.agent.setTitle(CURSOR_IDLE_TITLE)
     await waitForObservedTitle(client, pane.handle, CURSOR_IDLE_TITLE)
     const mailbox = await createRunMailbox(client, pane, 'Cursor pointer submit')

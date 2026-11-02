@@ -1,6 +1,6 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
-import { resolveGitOperationTarget } from './git-operation-target'
+import { gitOperationExecutionHostId, resolveGitOperationTarget } from './git-operation-target'
 import { toast } from 'sonner'
 import {
   fetchRuntimeGit,
@@ -28,8 +28,9 @@ export function createGitRemotePushPull(
     ) => {
       const runtimeTarget = resolveGitOperationTarget(get(), worktreeId, options)
       // Refresh upstream without awaiting so compound flows stay fast while button labels update before the 3s poll.
-      get().beginRemoteOperation(
-        publish ? 'publish' : options.forceWithLease === true ? 'force_push' : 'push'
+      const endRemoteOperation = get().beginRemoteOperation(
+        publish ? 'publish' : options.forceWithLease === true ? 'force_push' : 'push',
+        worktreeId
       )
       let shouldRefreshAfterRejectedPush = false
       try {
@@ -48,7 +49,7 @@ export function createGitRemotePushPull(
         )
         throw error
       } finally {
-        get().endRemoteOperation()
+        endRemoteOperation()
         if (shouldRefreshAfterRejectedPush) {
           const context = { target: runtimeTarget, worktreeId, worktreePath, connectionId }
           // Why: the rejected push proved the branch moved; fetch first so legacy base-tracking worktrees discover origin/<branch>, then refresh ahead/behind.
@@ -66,12 +67,15 @@ export function createGitRemotePushPull(
       })
       const refreshGitHubForWorktree = get().refreshGitHubForWorktree
       if (typeof refreshGitHubForWorktree === 'function') {
-        refreshGitHubForWorktree(worktreeId)
+        refreshGitHubForWorktree(
+          worktreeId,
+          gitOperationExecutionHostId(runtimeTarget, connectionId)
+        )
       }
     },
     pullBranch: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
       const runtimeTarget = resolveGitOperationTarget(get(), worktreeId, options)
-      get().beginRemoteOperation('pull')
+      const endRemoteOperation = get().beginRemoteOperation('pull', worktreeId)
       try {
         await pullRuntimeGit(
           { target: runtimeTarget, worktreeId, worktreePath, connectionId },
@@ -81,19 +85,22 @@ export function createGitRemotePushPull(
         toast.error(resolveRemoteOperationErrorMessage(error))
         throw error
       } finally {
-        get().endRemoteOperation()
+        endRemoteOperation()
       }
       void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
         runtimeTarget
       })
       const refreshGitHubForWorktree = get().refreshGitHubForWorktree
       if (typeof refreshGitHubForWorktree === 'function') {
-        refreshGitHubForWorktree(worktreeId)
+        refreshGitHubForWorktree(
+          worktreeId,
+          gitOperationExecutionHostId(runtimeTarget, connectionId)
+        )
       }
     },
     fastForwardBranch: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
       const runtimeTarget = resolveGitOperationTarget(get(), worktreeId, options)
-      get().beginRemoteOperation('fast_forward')
+      const endRemoteOperation = get().beginRemoteOperation('fast_forward', worktreeId)
       try {
         await fastForwardRuntimeGit(
           { target: runtimeTarget, worktreeId, worktreePath, connectionId },
@@ -103,14 +110,17 @@ export function createGitRemotePushPull(
         toast.error(resolveRemoteOperationErrorMessage(error, { isFastForward: true }))
         throw error
       } finally {
-        get().endRemoteOperation()
+        endRemoteOperation()
       }
       void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
         runtimeTarget
       })
       const refreshGitHubForWorktree = get().refreshGitHubForWorktree
       if (typeof refreshGitHubForWorktree === 'function') {
-        refreshGitHubForWorktree(worktreeId)
+        refreshGitHubForWorktree(
+          worktreeId,
+          gitOperationExecutionHostId(runtimeTarget, connectionId)
+        )
       }
     }
   }

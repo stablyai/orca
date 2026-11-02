@@ -13,6 +13,8 @@ import type { AgentHookResultRetryScheduler } from './agent-hook-result-retry-sc
 import { hookBodyEnv, hookBodyVersion } from './agent-hook-envelope-build'
 import { bindOpenCodeTuiSession } from '../shared/agent-hook-listener/opencode-session-registry'
 import type { RelayProviderHookNormalization } from './agent-hook-provider-normalization'
+import type { RelayHookAdmissionOptions } from './agent-hook-event-admission'
+import { CLAUDE_AGENT_VIEW_PATH } from '../shared/claude-agent-view'
 
 export async function handleRelayHookRequest(
   req: IncomingMessage,
@@ -20,6 +22,7 @@ export async function handleRelayHookRequest(
   options: {
     isCurrent: () => boolean
     token: string
+    forwardClaudeAgentView?: (body: unknown) => Promise<unknown>
     env: string
     state: HookListenerState
     checkAgentPresence: (paneKey: string) => Promise<void>
@@ -30,7 +33,8 @@ export async function handleRelayHookRequest(
       event: AgentHookEventPayload,
       source: AgentHookSource,
       env?: string,
-      version?: string
+      version?: string,
+      admission?: RelayHookAdmissionOptions
     ) => AgentHookEventPayload | undefined
     ingestTmuxHook?: (source: AgentHookSource, body: unknown) => Promise<boolean>
     retryScheduler: AgentHookResultRetryScheduler
@@ -55,6 +59,13 @@ export async function handleRelayHookRequest(
   })
   try {
     const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
+    if (pathname === CLAUDE_AGENT_VIEW_PATH) {
+      const body = await readRequestBody(req)
+      const reply = options.isCurrent() ? await options.forwardClaudeAgentView?.(body) : {}
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify(reply ?? {}))
+      return
+    }
     const source = resolveHookSource(pathname)
     if (!source) {
       res.writeHead(404)
@@ -104,7 +115,9 @@ export async function handleRelayHookRequest(
       // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.
       const env = hookBodyEnv(hookBody)
       const version = hookBodyVersion(hookBody)
-      const stored = options.applyEvent(event, source, env, version)
+      const stored = options.applyEvent(event, source, env, version, {
+        onAccepted: (row) => options.retryScheduler.observeClaudeHook(row)
+      })
       if (stored) {
         if (admittedOpenCodeTuiOwner) {
           bindOpenCodeTuiSession(options.state, source, hookBody, event.providerSession?.id)

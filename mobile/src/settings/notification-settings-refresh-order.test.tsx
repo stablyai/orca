@@ -3,15 +3,23 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import NotificationsScreen from './notification-settings-screen'
 
+vi.mock(
+  './settings-screen-frame',
+  async () => (await import('../test-support/settings-chrome-test-double')).settingsFrameDouble
+)
+vi.mock(
+  '../components/list/ListGroup',
+  async () => (await import('../test-support/settings-chrome-test-double')).listGroupDouble
+)
 vi.mock('react-native', () => ({
   View: 'View',
   Text: 'Text',
   Pressable: 'Pressable',
-  Switch: 'Switch',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (value: unknown) => value },
   AppState: { addEventListener: () => ({ remove() {} }) }
 }))
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
 }))

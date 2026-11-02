@@ -1,17 +1,17 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
   leafIdForPane,
   createMockTransport,
   createPane,
-  createManager
+  createManager,
+  type MockTransport
 } from './pty-connection-test-pane-fixtures'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
-import type { MockTransport } from './pty-connection-test-pane-fixtures'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals

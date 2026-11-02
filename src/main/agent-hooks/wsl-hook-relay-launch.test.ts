@@ -1,18 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import type * as ChildProcess from 'node:child_process'
+import type * as ProcessHost from '@orca/process-host'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { resetWslInteropSpawnDirectoryCache } from '../wsl-interop-spawn-directory'
 
-const { spawnMock } = vi.hoisted(() => ({
-  spawnMock: vi.fn((..._args: unknown[]) => ({ pid: 1 }))
+const { spawnProcessMock } = vi.hoisted(() => ({
+  spawnProcessMock: vi.fn((..._args: unknown[]) => ({ pid: 1 }))
 }))
 
-vi.mock('node:child_process', async (importOriginal) => ({
-  ...(await importOriginal<typeof ChildProcess>()),
-  spawn: spawnMock
+vi.mock('@orca/process-host', async (importOriginal) => ({
+  ...(await importOriginal<typeof ProcessHost>()),
+  spawnProcess: spawnProcessMock
+}))
+vi.mock('../wsl/wsl-executable-path', () => ({
+  resolveWslExecutablePath: () => 'C:\\Windows\\System32\\wsl.exe'
 }))
 
 import {
@@ -31,9 +34,9 @@ describe('spawnWslRelayProcess', () => {
     try {
       spawnWslRelayProcess('Ubuntu', env, '1.2.3')
 
-      expect(spawnMock).toHaveBeenCalledExactlyOnceWith(
-        'wsl.exe',
-        [
+      expect(spawnProcessMock).toHaveBeenCalledExactlyOnceWith({
+        program: 'C:\\Windows\\System32\\wsl.exe',
+        args: [
           '-d',
           'Ubuntu',
           '--exec',
@@ -41,8 +44,10 @@ describe('spawnWslRelayProcess', () => {
           '-c',
           'exec sh "$HOME/.orca-wsl/hook-relay/1.2.3/launch.sh"'
         ],
-        { env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, cwd: systemRoot }
-      )
+        env,
+        stdio: 'pipe',
+        cwd: systemRoot
+      })
     } finally {
       vi.unstubAllEnvs()
       resetWslInteropSpawnDirectoryCache()

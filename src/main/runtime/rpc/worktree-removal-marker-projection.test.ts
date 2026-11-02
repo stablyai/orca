@@ -4,7 +4,7 @@ import {
   WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import { remoteRuntimeClientCapabilities } from '../../../shared/remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult

@@ -124,15 +124,11 @@ describe("Claude's trust dialog under a shell auto-title", () => {
       data: ''
     })
     vi.useFakeTimers()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both resolvers are protected methods on the runtime; the spies only count calls.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver is a protected method on the runtime; the spy only counts calls.
     const internals = pane.runtime as unknown as {
-      resolveTuiIdleWaiters: (...args: unknown[]) => void
       resolvePtyTuiIdleWaiters: (...args: unknown[]) => void
     }
-    const titleResolves = [
-      vi.spyOn(internals, 'resolveTuiIdleWaiters'),
-      vi.spyOn(internals, 'resolvePtyTuiIdleWaiters')
-    ]
+    const titleResolves = [vi.spyOn(internals, 'resolvePtyTuiIdleWaiters')]
     const write = (chunk: string) =>
       pane.runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, chunk, Date.now())
     const paint = (bytes = data) => {
@@ -170,17 +166,16 @@ describe("Claude's trust dialog under a shell auto-title", () => {
     })
   })
 
-  // Command-line titles classify as permission, whose idle transition reaches waiters only on poll.
   it.each([
-    ['oh-my-zsh', OH_MY_ZSH_TITLES, false],
-    ['fish', [FISH_TITLE], true]
+    ['oh-my-zsh', OH_MY_ZSH_TITLES],
+    ['fish', [FISH_TITLE]]
   ])(
     'does not settle ready when the %s title arrives before the dialog paints',
-    async (_, titles, offered) => {
+    async (_, titles) => {
       const pane = await createPane()
       const { promise, settled } = pane.wait()
       titles.forEach(pane.write)
-      expect(pane.titleResolveCount() > 0).toBe(offered)
+      expect(pane.titleResolveCount()).toBeGreaterThan(0)
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       expect(settled).not.toHaveBeenCalled()
 

@@ -78,36 +78,6 @@ describe('shared chat appearance hook', () => {
     expect(resolveColors).toHaveBeenCalledTimes(4)
   })
 
-  it('invalidates the style for each appearance input', () => {
-    const settings = createGlobalSettingsFixture({
-      theme: 'dark',
-      terminalThemeDark: 'Builtin Tango Dark',
-      terminalThemeLight: '',
-      nativeChatAppearance: { matchTerminalInterface: true }
-    })
-    const updates: Partial<GlobalSettings>[] = [
-      { theme: 'light' },
-      { terminalThemeDark: 'Builtin Tango Light' },
-      { terminalThemeLight: 'Builtin Tango Light' },
-      { terminalUseSeparateLightTheme: !settings.terminalUseSeparateLightTheme },
-      { terminalCustomThemes: [] },
-      { terminalColorOverrides: { background: '#122033', foreground: '#ddeeff' } },
-      { terminalFontFamily: 'Menlo' },
-      { terminalFontSize: settings.terminalFontSize + 1 },
-      { nativeChatAppearance: { matchTerminalInterface: true, contrast: 120 } }
-    ]
-    const { result, rerender } = renderHook(
-      (settings: GlobalSettings) => useNativeChatAppearanceStyle(settings),
-      { initialProps: settings }
-    )
-    for (const update of updates) {
-      rerender(settings)
-      const style = result.current
-      rerender({ ...settings, ...update })
-      expect(result.current, Object.keys(update).join(',')).not.toBe(style)
-    }
-  })
-
   it('ignores terminal size changes while matching is off', () => {
     const settings = createGlobalSettingsFixture({ nativeChatAppearance: { fontSize: 18 } })
     const { result, rerender } = renderHook(

@@ -1,13 +1,13 @@
 // Command turns must not replace user-request summaries, resume markers or legacy labels.
 
 import { describe, expect, it } from 'vitest'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
-import { latestStructuredAgentSessionRequest } from '../../../shared/structured-agent-session-latest-request'
-import { projectStructuredAgentSessionStatusSummary } from '../../../shared/structured-agent-session-projection'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { latestStructuredAgentSessionRequest } from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
+import { projectStructuredAgentSessionStatusSummary } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { projectTurnItemHistory } from '../../runtime/rpc/methods/structured-agent-session-turn-item-capability'
 import { structuredAgentSessionWorkingAtStop } from './structured-agent-session-working-at-teardown'
 import {

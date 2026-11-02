@@ -50,7 +50,12 @@ export default function CombinedDiffViewer({
   viewStateKey: string
   viewStateScopeId?: string
 }): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
+  const combinedDiffFileTreeVisibleByDefault = useAppStore(
+    (s) => s.settings?.combinedDiffFileTreeVisibleByDefault
+  )
+  const diffDefaultView = useAppStore((s) => s.settings?.diffDefaultView)
+  const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace)
+  const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap)
   const gitStatusEntries = useAppStore(
     (s) => s.gitStatusByWorktree[file.worktreeId] ?? EMPTY_GIT_STATUS_ENTRIES
   )
@@ -91,16 +96,17 @@ export default function CombinedDiffViewer({
     worktreeId: file.worktreeId
   })
   const preferences = useCombinedDiffViewPreferences({
-    combinedDiffFileTreeVisibleByDefault: settings?.combinedDiffFileTreeVisibleByDefault,
-    diffDefaultView: settings?.diffDefaultView,
-    diffShowWhitespace: settings?.diffShowWhitespace,
-    diffWordWrap: settings?.diffWordWrap,
+    combinedDiffFileTreeVisibleByDefault,
+    diffDefaultView,
+    diffShowWhitespace,
+    diffWordWrap,
     registry,
     setSections,
     updateSettings
   })
   const restore = useCombinedDiffViewRestore({
     entrySet,
+    file,
     gitStatusEntries,
     registry,
     setGeneration,
@@ -108,12 +114,12 @@ export default function CombinedDiffViewer({
     setSections,
     setSideBySide: preferences.setSideBySide,
     succession: buildCombinedDiffViewTabSuccession(file.id, viewStateScopeId),
-    viewStateKey,
-    worktreeId: file.worktreeId
+    viewStateKey
   })
   const { loadSection, loadDeferredSection } = useCombinedDiffSectionLoader({
     entrySet,
     file,
+    generation,
     registry,
     sectionCount: sections.length,
     setSectionHeights,
@@ -167,7 +173,13 @@ export default function CombinedDiffViewer({
 
   const toggleSection = useCallback(
     (index: number) => {
-      const shouldLoadAfterExpand = registry.sectionsRef.current[index]?.collapsed ?? false
+      const section = registry.sectionsRef.current[index]
+      const shouldLoadAfterExpand = section?.collapsed ?? false
+      const anchor = restore.scrollAnchorRef.current
+      if (section && !section.collapsed && anchor?.key === section.key) {
+        // The offset points into the body being removed; restore would land on later sections.
+        anchor.offset = 0
+      }
       setSections((prev) =>
         prev.map((s, i) => (i === index ? { ...s, collapsed: !s.collapsed } : s))
       )
@@ -175,7 +187,7 @@ export default function CombinedDiffViewer({
         registry.loadSchedulerRef.current.request(index)
       }
     },
-    [registry.loadSchedulerRef, registry.sectionsRef]
+    [registry.loadSchedulerRef, registry.sectionsRef, restore.scrollAnchorRef]
   )
 
   const treeNavigation = useCombinedDiffTreeNavigation({
@@ -327,8 +339,8 @@ export default function CombinedDiffViewer({
           commitCompare={entrySet.commitCompare}
           diffCommentCount={notes.diffCommentCount}
           diffCommentsForWorktree={diffCommentsForWorktree}
-          diffShowWhitespace={settings?.diffShowWhitespace}
-          diffWordWrap={settings?.diffWordWrap}
+          diffShowWhitespace={diffShowWhitespace}
+          diffWordWrap={diffWordWrap}
           file={file}
           fileTreeCollapsed={preferences.fileTreeCollapsed}
           isAllMode={entrySet.isAllMode}
@@ -386,7 +398,6 @@ export default function CombinedDiffViewer({
             setScrollContainerRef={setScrollContainerRef}
             setSectionHeights={setSectionHeights}
             setSections={setSections}
-            settings={settings}
             sideBySide={preferences.sideBySide}
             skippedConflictNotice={skippedConflictNotice}
             toggleSection={toggleSection}

@@ -90,6 +90,25 @@ describe('ForeignSqliteReaderClient worker lifecycle', () => {
         client.readOpenCodeBinderSessions('/synthetic/opencode.db', { ms: 0, id: '' }),
       failure: [],
       answer: [{ id: 'ses_a', directory: '/w', createdAtMs: 1, parentId: null }]
+    },
+    {
+      reader: 'openCodePromptFailure',
+      read: (client: ForeignSqliteReaderClient) =>
+        client.readOpenCodePromptFailure({
+          dbPath: '/synthetic/opencode.db',
+          sessionId: 'ses-a',
+          startedAt: 100,
+          failedAt: 200
+        }),
+      failure: { failure: null },
+      answer: {
+        failure: {
+          inputId: 'input',
+          type: 'provider.quota',
+          message: 'Quota exhausted',
+          status: 429
+        }
+      }
     }
   ])(
     '$reader refuses new native workers until the retired worker positively terminates',

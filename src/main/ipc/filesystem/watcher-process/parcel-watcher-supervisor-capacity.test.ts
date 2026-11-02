@@ -130,9 +130,11 @@ describe('WatcherProcessSupervisor capacity wait', () => {
     )
     await Promise.resolve()
     expect(forkMock).toHaveBeenCalledTimes(MAX_PHYSICAL_WATCHER_CHILDREN + 1)
+    const secondBlockedSettled = trackPromiseSettlement(secondBlocked)
     firstController.abort()
     await expect(firstBlocked).rejects.toMatchObject({ code: 'subscribe_aborted' })
-    expect(trackPromiseSettlement(secondBlocked)()).toBe(false)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(secondBlockedSettled()).toBe(false)
     secondController.abort()
     await expect(secondBlocked).rejects.toMatchObject({ code: 'subscribe_aborted' })
 

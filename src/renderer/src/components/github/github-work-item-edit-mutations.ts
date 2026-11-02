@@ -15,6 +15,7 @@ import { githubProjectHost } from '../../../../shared/github/project-identity'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 // Route Project edits to the row’s repository; callers throw on failed IPC results for optimistic rollback.
 export function getGitHubMutationTarget(
@@ -67,7 +68,7 @@ export async function runIssueUpdate(args: {
               timeoutMs: 30_000
             }
           )
-        : await window.api.gh.updateIssueBySlug(updateArgs)
+        : await window.api.gh.updateIssueBySlug({ ...updateArgs, wakeWslDistro: true })
     if (!res.ok) {
       throw new Error(res.error.message)
     }
@@ -107,7 +108,7 @@ export async function runIssueUpdate(args: {
         ...(args.issueRepo ? { ownerRepo: args.issueRepo } : {})
       })
   if (!res.ok) {
-    throw new Error(res.error)
+    throw new Error(codeHostErrorText(res))
   }
   if (runtimeHost) {
     notifyWorkItemDetailsMutation(
@@ -163,7 +164,7 @@ export async function runWorkItemBodyUpdate(args: {
               timeoutMs: 30_000
             }
           )
-        : await window.api.gh.updatePullRequestBySlug(updateArgs)
+        : await window.api.gh.updatePullRequestBySlug({ ...updateArgs, wakeWslDistro: true })
     if (!res.ok) {
       throw new Error(res.error.message)
     }
@@ -224,7 +225,7 @@ export async function runPullRequestStateUpdate(args: {
               timeoutMs: 30_000
             }
           )
-        : await window.api.gh.updatePullRequestBySlug(updateArgs)
+        : await window.api.gh.updatePullRequestBySlug({ ...updateArgs, wakeWslDistro: true })
     if (!res.ok) {
       throw new Error(res.error.message)
     }
@@ -269,7 +270,7 @@ export async function runPullRequestStateUpdate(args: {
           updates: args.updates
         })
   if (!res.ok) {
-    throw new Error(res.error)
+    throw new Error(codeHostErrorText(res))
   }
   if (target.kind === 'environment') {
     notifyWorkItemDetailsMutation(

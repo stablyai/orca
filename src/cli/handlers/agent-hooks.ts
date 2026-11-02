@@ -114,9 +114,9 @@ async function updateAdmittedEnabledOnDisk(enabled: boolean): Promise<{
 }
 
 async function updateRunningRuntime(client: RuntimeClient, enabled: boolean): Promise<boolean> {
-  const status = await client.getCliStatus()
-  if (!status.result.runtime.reachable) {
-    if (status.result.app.running) {
+  const status = await client.getOfflineRuntimeAdmission()
+  if (!status.reachable) {
+    if (status.legacyPidRunning) {
       throw new RuntimeClientError(
         'runtime_error',
         'Orca is running but unavailable. Retry when it responds, or stop Orca before changing agent hooks offline.'

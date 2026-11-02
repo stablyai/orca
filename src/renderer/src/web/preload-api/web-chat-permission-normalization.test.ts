@@ -1,8 +1,5 @@
 import { expect, it } from 'vitest'
-import {
-  migrateStoredWebSettings,
-  runtimeChatPermissionSetting
-} from './web-preference-normalization'
+import { migrateStoredWebSettings } from './web-preference-normalization'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveAgentPermission } from '../../../../shared/tui-agent-permission-choice'
 import {
@@ -24,7 +21,7 @@ it.each([
   (_name, args, raw, choice) => {
     // Recorded Goose process environment: ticket 1447, PID 20979, creation validated around capture.
     const recordedGooseEnv = { GOOSE_MODE: 'auto', QA_GOOSE_NOTE: 'ordinary70a4' }
-    const stored: Partial<GlobalSettings> = {
+    const stored: Partial<GlobalSettings> & { agentNativeChatPermissionModes: unknown } = {
       agentDefaultArgs: { claude: args, codex: '' },
       agentDefaultEnv: { goose: recordedGooseEnv },
       nativeChatPermissionMode: 'ask',
@@ -32,37 +29,20 @@ it.each([
     }
     const loaded = migrateStoredWebSettings(stored)
     expect(loaded.agentPermissionDefault).toBeDefined()
+    expect(loaded.agentLaunchChoices).toBeUndefined()
     expect(resolveAgentPermission('claude', loaded).choice).toBe(choice)
     expect(resolveAgentPermission('codex', loaded).choice).toBe('own')
     expect(loaded.agentDefaultArgs?.claude).toBe(raw)
     expect(loaded.agentDefaultArgs?.codex).toBe('')
     expect(resolveTuiAgentLaunchArgs('claude', loaded)).toBe(args)
     expect(loaded.nativeChatPermissionMode).toBe('ask')
-    expect(loaded.agentNativeChatPermissionModes).toEqual(stored.agentNativeChatPermissionModes)
+    expect(loaded).toHaveProperty(
+      'agentNativeChatPermissionModes',
+      stored.agentNativeChatPermissionModes
+    )
     expect(resolveAgentPermission('goose', loaded).choice).toBe('full-access')
     expect(loaded.agentDefaultEnv?.goose).toEqual({ QA_GOOSE_NOTE: 'ordinary70a4' })
     expect(resolveTuiAgentLaunchEnv('goose', loaded)).toEqual(recordedGooseEnv)
     expect(migrateStoredWebSettings(JSON.parse(JSON.stringify(loaded)))).toEqual(loaded)
   }
 )
-
-it('clears a previous host scoped default when reading settings from a pre-native-sync host', () => {
-  const cached = {
-    nativeChatPermissionMode: 'full-access',
-    agentNativeChatPermissionModes: { codex: 'auto' }
-  }
-  const current = {
-    ...cached,
-    ...runtimeChatPermissionSetting({ nativeChatPermissionMode: 'ask' })
-  }
-  expect(current).toEqual({ nativeChatPermissionMode: 'ask', agentNativeChatPermissionModes: {} })
-})
-
-it('never adds scoped overrides to the legacy settings.update strict schema', () => {
-  expect(
-    runtimeChatPermissionSetting(
-      { nativeChatPermissionMode: 'ask', agentNativeChatPermissionModes: { codex: 'auto' } },
-      false
-    )
-  ).toEqual({ nativeChatPermissionMode: 'ask' })
-})

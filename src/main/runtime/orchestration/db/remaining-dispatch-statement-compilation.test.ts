@@ -8,7 +8,7 @@ import { OrchestrationDb } from './orchestration-db'
 import { createRootDispatch } from './root-dispatch-test-fixture'
 import { LEGACY_CONTRACT_VERSION } from './contract-constants'
 import { DISPATCH_CONTEXT_COLUMNS } from './row-column-lists'
-import { warnStaleDispatches } from '../coordinator-task-dispatch'
+import { DROP_REMOVED_WORK_TRIGGERS_SQL } from './reset/removed-orchestration-work-store'
 
 const databases: OrchestrationDb[] = []
 const directories: string[] = []
@@ -58,8 +58,10 @@ function fixture(count = 1, version: 'fresh' | 'v41' = 'fresh') {
   })
   if (version === 'v41') {
     writer.db.exec(`
+      ${DROP_REMOVED_WORK_TRIGGERS_SQL}
       DROP INDEX idx_runs_coordinator_orca_session_id;
       DROP INDEX idx_dispatch_assignee_orca_session_id;
+      DROP INDEX idx_dispatch_session_presentation;
       DROP TRIGGER trg_runs_remember_coordinator_insert;
       DROP TRIGGER trg_runs_remember_coordinator_update;
       DROP TRIGGER trg_messages_route_coordinator_mail;
@@ -90,7 +92,19 @@ function fixture(count = 1, version: 'fresh' | 'v41' = 'fresh') {
       .map((row) => row.name)
       .toSorted()
   ).toEqual(DISPATCH_CONTEXT_COLUMNS.toSorted())
+  const priorVersion = writer.db.pragma('user_version', { simple: true })
+  expect(
+    writer.db
+      .prepare("SELECT name FROM sqlite_master WHERE name = 'idx_dispatch_session_presentation'")
+      .get()
+  ).toBeDefined()
   const reader = new OrchestrationDb(path)
+  expect(reader.db.pragma('user_version', { simple: true })).toBe(priorVersion)
+  expect(
+    reader.db
+      .prepare("SELECT name FROM sqlite_master WHERE name = 'idx_dispatch_session_presentation'")
+      .get()
+  ).toBeDefined()
   databases.push(reader)
   return { writer, reader, run, entries }
 }
@@ -107,7 +121,7 @@ function fullDispatchReads(calls: [string, ...unknown[]][]): string[] {
 
 describe('remaining dispatch metadata statement compilation', () => {
   it.each(['fresh', 'v41'] as const)(
-    'reuses stale and direct-owner reads with exact rows, rebinding, plans and cross-connection freshness (%s)',
+    'reuses direct-owner reads with exact rows, rebinding and cross-connection freshness (%s)',
     (version) => {
       const {
         writer,
@@ -119,8 +133,6 @@ describe('remaining dispatch metadata statement compilation', () => {
       vi.setSystemTime(new Date(NOW))
       const compile = vi.spyOn(DatabaseSync.prototype, 'prepare')
       for (let call = 0; call < 10; call += 1) {
-        expect(reader.getStaleDispatches('2026-10-02T11:00:00Z')).toEqual([expected])
-        expect(reader.getStaleDispatches('2026-10-02T09:00:00Z')).toEqual([])
         expect(reader.findActiveDispatchForDirectMessageOwner(run.id, 'worker_0')).toEqual(expected)
         expect(reader.findActiveDispatchForDirectMessageOwner(run.id, 'missing', PANE)).toEqual(
           expected
@@ -136,17 +148,11 @@ describe('remaining dispatch metadata statement compilation', () => {
           reader.findActiveDispatchForDirectMessageOwner(run.id, 'missing', 'bad:legacy')
         ).toBeUndefined()
       }
-      const warnings: string[] = []
-      warnStaleDispatches(reader, (warning) => warnings.push(warning))
-      expect(warnings).toEqual([
-        `Warning: worker worker_0 on task ${dispatch.task_id} has not sent a heartbeat in ~10 min (dispatch ${dispatch.id})`
-      ])
       writer.db
         .prepare(
           'UPDATE dispatch_contexts SET last_heartbeat_at = ?, assignee_handle = ? WHERE id = ?'
         )
         .run(NOW, 'updated', dispatch.id)
-      expect(reader.getStaleDispatches('2026-10-02T11:00:00Z')).toEqual([])
       expect(reader.findActiveDispatchForDirectMessageOwner(run.id, 'worker_0')).toBeUndefined()
       expect(reader.findActiveDispatchForDirectMessageOwner(run.id, 'updated')).toEqual({
         ...expected,
@@ -154,16 +160,8 @@ describe('remaining dispatch metadata statement compilation', () => {
         assignee_handle: 'updated'
       })
       const reads = fullDispatchReads(compile.mock.calls)
-      const staleSql = reads.find((sql) => sql.includes('julianday'))
       compile.mockRestore()
-      if (!staleSql) {
-        throw new Error('Missing stale query')
-      }
-      const wildcardSql = staleSql.replace(/SELECT .*? FROM/, 'SELECT * FROM')
-      expect(writer.db.prepare(`EXPLAIN QUERY PLAN ${staleSql}`).all(NOW, NOW)).toEqual(
-        writer.db.prepare(`EXPLAIN QUERY PLAN ${wildcardSql}`).all(NOW, NOW)
-      )
-      expect(reads).toHaveLength(3)
+      expect(reads).toHaveLength(2)
     }
   )
 

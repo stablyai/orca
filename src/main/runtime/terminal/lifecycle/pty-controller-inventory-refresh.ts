@@ -172,6 +172,7 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
           connected: true,
           ...(session.incarnationId ? { incarnationId: session.incarnationId } : {}),
           agentSessionOwners: session.incarnationId ? (session.agentSessionOwners ?? []) : [],
+          spawnPaneKey: session.paneKey ?? null,
           ...(session.wslDistro !== undefined
             ? { isWsl: Boolean(session.wslDistro), wslDistro: session.wslDistro }
             : {}),
@@ -189,7 +190,7 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
           this.restoredOrchestrationAuthorityByPtyId.delete(session.id)
         }
         pty.controllerTitle = session.title?.trim() || null
-        this.reconcileSubscriberDrivenProviderAttach(session.id)
+        this.mainDaemonAttachments.reconcile(session.id)
       }
       // Do not serialize relay probes or let one throw abort inventory cleanup.
       if (inventoryOptions?.refreshForegroundAgents !== false) {
@@ -260,6 +261,7 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
       connectionId
     })
     this.pruneDisconnectedPtyRecords()
+    this.followExportedPaneKeys()
     return {
       livePtyIds: targetWorktreeId ? selectedLivePtyIds : allLivePtyIds,
       allLivePtyIds,

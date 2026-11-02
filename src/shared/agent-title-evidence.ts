@@ -1,28 +1,48 @@
 import {
-  AGY_AGENT_NAME_RE,
   CLAUDE_IDLE,
-  DROID_AGENT_NAME_RE,
   GEMINI_IDLE,
   GEMINI_PERMISSION,
   GEMINI_SILENT_WORKING,
   GEMINI_WORKING,
-  HERMES_AGENT_NAME_RE,
   containsAgentSpinnerGlyph,
   isClaudeIdentityFrameSegment,
   isClaudeManagementTitle,
   isCursorNativeAgentTitle,
-  titleHasAgentName
+  isGrokRotatingWorkingTitle
 } from './agent-title-core'
-import { isOpenCodeNativeTitle } from './opencode-terminal-title'
-import { isDeepSeekBuildTerminalTitle } from './dsb-terminal-title'
+import {
+  isOpenCodeNativeTitle,
+  isOpenCodeNativeTitleHeader,
+  isDirectOpenCodeNativeTitle
+} from './opencode-terminal-title'
+import {
+  hasDeepSeekBuildWorkingTitlePrefix,
+  isDeepSeekBuildWorkingTitle,
+  isDeepSeekBuildTerminalTitle
+} from './dsb-terminal-title'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
-import { getPiCompatibleSyntheticAgentLabel } from './pi-compatible-synthetic-title'
+import {
+  getPiCompatibleSyntheticAgentLabel,
+  getPiCompatibleTitleBrand,
+  isLegacyPiCompatibleTitle
+} from './pi-compatible-synthetic-title'
+import { isDshTerminalTitle } from './dsh-terminal-title'
+import { hasQoderTitleLabelPayload, isQoderTerminalTitle } from './qoder-terminal-title'
 import {
   SYNTHETIC_AGENT_TITLE_AGENTS,
   SYNTHETIC_AGENT_TITLE_PROFILES
 } from './synthetic-agent-title'
 import type { TerminalAgent } from './terminal-agent'
-import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
+import {
+  agentForNativeFrame,
+  agentForNamedTitlePrefix,
+  isNeutralAgentTitleWrapper,
+  agentForOwnerSuffix,
+  agentForShellCommand,
+  agentForWholeTitle,
+  namesConsumedByAnchoredLabels,
+  namesIn
+} from './agent-title-name-anchoring'
 
 /** Collect before ranking: anchored identity names outrank vendor glyphs, which outrank free-text mentions. Free text alone never identifies a pane; prefer no icon to a wrong one. Activity parsing handles generic busy signals separately. */
 export type AgentTitleEvidenceReason =
@@ -42,62 +62,13 @@ export type AgentTitleEvidence = {
   readonly reason: AgentTitleEvidenceReason
 }
 
-/** Names matched as whole tokens, paired with the agent each identifies. */
-const NAME_TOKENS: readonly (readonly [string, TerminalAgent])[] = [
-  ['claude', 'claude'],
-  ['openclaude', 'openclaude'],
-  ['codex', 'codex'],
-  ['copilot', 'copilot'],
-  ['cursor', 'cursor'],
-  ['gemini', 'gemini'],
-  ['antigravity', 'antigravity'],
-  ['opencode', 'opencode'],
-  ['mimo', 'mimo-code'],
-  ['openclaw', 'openclaw'],
-  ['aider', 'aider'],
-  ['grok', 'grok'],
-  ['devin', 'devin']
-]
-
-/** Agents whose name is matched by a dedicated pattern rather than a plain token. */
-const PATTERN_NAMES: readonly (readonly [RegExp, TerminalAgent])[] = [
-  [AGY_AGENT_NAME_RE, 'antigravity'],
-  [DROID_AGENT_NAME_RE, 'droid'],
-  [HERMES_AGENT_NAME_RE, 'hermes']
-]
-
-/** Catalog labels known to be emitted as terminal titles, not merely presented in Orca's UI. */
-const EMITTED_DISPLAY_LABEL_AGENTS = [
-  'claude-agent-teams',
-  'mimo-code',
-  'prime-agent',
-  'command-code',
-  'copilot'
-] as const satisfies readonly TerminalAgent[]
-
-const DISPLAY_LABELS = [
-  ...EMITTED_DISPLAY_LABEL_AGENTS.map(
-    (agent) => [TUI_AGENT_DISPLAY_NAMES[agent].toLowerCase(), agent] as const
-  ),
-  ['claude code', 'claude'],
-  ['gemini cli', 'gemini'],
-  ['agent teams', 'claude-agent-teams']
-] satisfies readonly (readonly [string, TerminalAgent])[]
-
 const GEMINI_GLYPHS = [GEMINI_WORKING, GEMINI_SILENT_WORKING, GEMINI_IDLE, GEMINI_PERMISSION]
 const ANTIGRAVITY_MODEL_TITLE_RE = /^(?:agy|antigravity)(?:\s*[\u00B7\u2014:-]\s*|\s+)gemini\s+\d/i
 
 /** Orca owns the final - <agent> suffix. Require leading whitespace to avoid treating hyphenated cwd names as ownership. */
 const OWNER_SUFFIX_RE = /\s-\s+([A-Za-z][\w-]*)\s*$/
-const WINDOWS_LAUNCHER_SUFFIX_RE = /\.(?:exe|cmd|bat|ps1)$/i
 const WRAPPER_SEPARATOR = ' | '
 const MAX_WRAPPER_EVIDENCE_SEGMENTS = 8
-const RESERVED_OWNER_IDS: ReadonlyMap<string, TerminalAgent> = new Map([
-  ['pi', 'pi'],
-  ['omp', 'omp'],
-  ['claude-agent-teams', 'claude-agent-teams'],
-  ['qwen-code', 'qwen-code']
-])
 
 function getEvidenceTitleSegments(title: string): string[] {
   const segments = [title]
@@ -114,68 +85,6 @@ function getEvidenceTitleSegments(title: string): string[] {
     }
   }
   return segments
-}
-
-function namesIn(text: string): TerminalAgent[] {
-  const found = new Set<TerminalAgent>()
-  for (const [token, agent] of NAME_TOKENS) {
-    if (titleHasAgentName(text, token)) {
-      found.add(agent)
-    }
-  }
-  for (const [pattern, agent] of PATTERN_NAMES) {
-    if (pattern.test(text)) {
-      found.add(agent)
-    }
-  }
-  return [...found]
-}
-
-function stripBareNameDecoration(text: string): string {
-  return text
-    .trim()
-    .replace(/^[^\p{L}\p{N}]+/u, '')
-    .replace(/[^\p{L}\p{N}]+$/u, '')
-}
-
-function agentForBareName(text: string): TerminalAgent | null {
-  const trimmed = text.trim()
-  if (!trimmed || /[\\/]/.test(trimmed)) {
-    return null
-  }
-  const stripped = stripBareNameDecoration(trimmed)
-  // The entire vendor display label makes the same identity claim as a bare agent token.
-  const normalized = stripped.toLowerCase()
-  const label = DISPLAY_LABELS.find(([text]) => text === normalized)
-  if (label) {
-    return label[1]
-  }
-  const bareToken = stripped.replace(WINDOWS_LAUNCHER_SUFFIX_RE, '')
-  const names = namesIn(bareToken)
-  // Require the whole remainder to be the name; task phrases and hyphenated directories cannot anchor identity.
-  return names.length === 1 && /^[\p{L}\p{N}]+$/u.test(bareToken) ? names[0] : null
-}
-
-function agentForWholeTitle(text: string): TerminalAgent | null {
-  const trimmed = text.trim()
-  if (!trimmed || /[\\/]/.test(trimmed)) {
-    return null
-  }
-  const stripped = stripBareNameDecoration(trimmed)
-  const normalized = stripped.toLowerCase()
-  const label = DISPLAY_LABELS.find(([text]) => text === normalized)
-  if (label) {
-    return label[1]
-  }
-  if (!WINDOWS_LAUNCHER_SUFFIX_RE.test(stripped)) {
-    return null
-  }
-  return agentForBareName(stripped)
-}
-
-function agentForOwnerSuffix(text: string): TerminalAgent | null {
-  const normalized = text.trim().toLowerCase()
-  return RESERVED_OWNER_IDS.get(normalized) ?? agentForBareName(text)
 }
 
 function agentForSyntheticTitle(text: string): TerminalAgent | null {
@@ -229,30 +138,14 @@ function collectVendorMarkers(segments: readonly string[]): TerminalAgent[] {
   return [...markers]
 }
 
-function namesConsumedByAnchoredLabels(
-  segments: readonly string[],
-  anchoredNames: ReadonlySet<TerminalAgent>
-): Set<TerminalAgent> {
-  const consumed = new Set<TerminalAgent>()
-  for (const segment of segments) {
-    const normalized = stripBareNameDecoration(segment).toLowerCase()
-    const label = DISPLAY_LABELS.find(([text]) => text === normalized)
-    if (label && anchoredNames.has(label[1])) {
-      for (const name of namesIn(label[0])) {
-        consumed.add(name)
-      }
-    }
-  }
-  return consumed
-}
-
 function collectAnchoredNames(
   segments: readonly string[],
   vendorMarkers: readonly TerminalAgent[]
 ): TerminalAgent[] {
   const anchored = new Set<TerminalAgent>()
   // Why: a native owner's task text can end with DSB's product-name suffix, including inside wrappers.
-  const allowDsbTitle = vendorMarkers.length === 0 && !segments.some(isOpenCodeNativeTitle)
+  const nativeOpenCode = segments.some(isOpenCodeNativeTitle)
+  const allowDsbTitle = vendorMarkers.length === 0 && !nativeOpenCode
 
   for (const segment of segments) {
     // Native wrapped titles own their envelope even when session text names other agents.
@@ -304,8 +197,90 @@ function collectAnchoredNames(
   return [...anchored]
 }
 
+/** Only neutral headers advance; payload pipes never become candidates. */
+function observerFrameStart(title: string): number {
+  let start = 0
+  let boundary = title.indexOf(WRAPPER_SEPARATOR)
+  while (boundary >= 0) {
+    // Retain the separator's first space for whitespace-delimited native brands.
+    const header = title.slice(start, boundary + 1)
+    const undecorated = stripLeadingAgentTitleDecorationOrEmpty(header).trim()
+    const neutralWrapper = isNeutralAgentTitleWrapper(header)
+    if (
+      isOpenCodeNativeTitleHeader(header) ||
+      hasQoderTitleLabelPayload(header) ||
+      undecorated.startsWith('🐋') ||
+      getPiCompatibleTitleBrand(header) ||
+      isLegacyPiCompatibleTitle(header) ||
+      hasDeepSeekBuildWorkingTitlePrefix(header) ||
+      agentForNamedTitlePrefix(header) ||
+      ANTIGRAVITY_MODEL_TITLE_RE.test(undecorated) ||
+      !neutralWrapper
+    ) {
+      break
+    }
+    start = boundary + WRAPPER_SEPARATOR.length
+    boundary = title.indexOf(WRAPPER_SEPARATOR, start)
+  }
+  return start
+}
+
+/** Evaluate the sole unconsumed remainder, keeping the independent final owner suffix. */
+function collectObserverAnchors(title: string): TerminalAgent[] {
+  const anchored = new Set<TerminalAgent>()
+  const suffix = OWNER_SUFFIX_RE.exec(title)
+  const suffixAgent = suffix ? agentForOwnerSuffix(suffix[1]) : null
+  if (suffixAgent) {
+    anchored.add(suffixAgent)
+  }
+  const segment = title.slice(observerFrameStart(title)).trim()
+  const undecorated = stripLeadingAgentTitleDecorationOrEmpty(segment).trim()
+  const nativeOpenCode = isOpenCodeNativeTitle(segment)
+  const piBrand = getPiCompatibleTitleBrand(segment)
+  const genericClaude =
+    segment === CLAUDE_IDLE ||
+    segment.startsWith(`${CLAUDE_IDLE} `) ||
+    segment.startsWith('. ') ||
+    segment.startsWith('* ')
+  let agent: TerminalAgent | null
+  if (!genericClaude && nativeOpenCode && isDirectOpenCodeNativeTitle(segment)) {
+    agent = 'opencode'
+  } else if (isDshTerminalTitle(segment) && undecorated.startsWith('🐋')) {
+    agent = 'dsh'
+  } else if (isQoderTerminalTitle(segment)) {
+    agent = segment.includes('Qoder CLI CN') ? 'qoder-cn' : 'qoder'
+  } else if (piBrand || isLegacyPiCompatibleTitle(segment)) {
+    agent = piBrand === 'OMP' ? 'omp' : 'pi'
+  } else if (GEMINI_GLYPHS.some((glyph) => segment.startsWith(glyph))) {
+    agent = 'gemini'
+  } else if (genericClaude) {
+    agent = agentForNativeFrame(segment) === 'claude' ? 'claude' : null
+  } else {
+    agent =
+      (isGrokRotatingWorkingTitle(segment) ? 'grok' : null) ??
+      (isDeepSeekBuildWorkingTitle(segment) ||
+      (!segment.includes('|') && isDeepSeekBuildTerminalTitle(segment))
+        ? 'dsb'
+        : null) ??
+      agentForNativeFrame(segment) ??
+      agentForWholeTitle(segment) ??
+      agentForSyntheticTitle(segment) ??
+      (ANTIGRAVITY_MODEL_TITLE_RE.test(undecorated) ? 'antigravity' : null) ??
+      (getPiCompatibleSyntheticAgentLabel(segment) === 'OMP'
+        ? 'omp'
+        : getPiCompatibleSyntheticAgentLabel(segment) === 'Pi'
+          ? 'pi'
+          : null) ??
+      (!suffixAgent ? agentForShellCommand(segment) : null)
+  }
+  if (agent) {
+    anchored.add(agent)
+  }
+  return [...anchored]
+}
+
 /** Collects every identity signal in `title` and ranks them by class, never by declaration order. */
-export function collectAgentTitleEvidence(title: string): AgentTitleEvidence {
+function collectTitleEvidence(title: string, nativeFrames: boolean): AgentTitleEvidence {
   const empty = { vendorMarkers: [], anchoredNames: [], freeTextNames: [] } as const
   if (!title.trim() || isClaudeManagementTitle(title)) {
     // Why: a `claude agents` management screen is Claude's own UI, not an agent session.
@@ -314,7 +289,9 @@ export function collectAgentTitleEvidence(title: string): AgentTitleEvidence {
 
   const segments = getEvidenceTitleSegments(title)
   const vendorMarkers = collectVendorMarkers(segments)
-  const anchoredNames = collectAnchoredNames(segments, vendorMarkers)
+  const anchoredNames = nativeFrames
+    ? collectObserverAnchors(title)
+    : collectAnchoredNames(segments, vendorMarkers)
   const anchoredSet = new Set(anchoredNames)
   const anchoredLabelNames = namesConsumedByAnchoredLabels(segments, anchoredSet)
   const freeTextNames = namesIn(title).filter(
@@ -329,10 +306,10 @@ export function collectAgentTitleEvidence(title: string): AgentTitleEvidence {
   if (anchoredNames.length > 1) {
     return { ...evidence, agent: null, reason: 'conflicting-anchored-names' }
   }
-  if (vendorMarkers.length > 1) {
+  if (!nativeFrames && vendorMarkers.length > 1) {
     return { ...evidence, agent: null, reason: 'conflicting-vendor-markers' }
   }
-  if (vendorMarkers.length === 1) {
+  if (!nativeFrames && vendorMarkers.length === 1) {
     // Free-text names cannot veto a vendor glyph (✳ Fix Codex… is Claude); a conflicting anchored name already outranks it.
     return { ...evidence, agent: vendorMarkers[0], reason: 'vendor-marker' }
   }
@@ -341,4 +318,14 @@ export function collectAgentTitleEvidence(title: string): AgentTitleEvidence {
     agent: null,
     reason: freeTextNames.length > 0 ? 'free-text-only' : 'no-evidence'
   }
+}
+
+/** Canonical host evidence retains its existing conservative title vocabulary. */
+export function collectAgentTitleEvidence(title: string): AgentTitleEvidence {
+  return collectTitleEvidence(title, false)
+}
+
+/** Hookless terminal readers also admit native named frames, but generic Claude activity cannot claim identity. */
+export function collectExplicitAgentTitleEvidence(title: string): AgentTitleEvidence {
+  return collectTitleEvidence(title, true)
 }

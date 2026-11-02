@@ -1,7 +1,9 @@
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
-import { refuse } from '../../../shared/agent-session-wire-refusals'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime-memory-limits'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  type AgentSessionWireRefusal,
+  refuse
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { MAX_PROMPT_BYTES } from '../../../shared/rpc-contract/structured-agent-session-params'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from './agent-session-history-page-bounds'

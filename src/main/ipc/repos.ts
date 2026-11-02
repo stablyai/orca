@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { registerRepoCatalogHandlers } from './repos/repo-catalog-handlers'
 import { registerProjectHostSetupHandlers } from './repos/project-host-setup-handlers'
 import { registerRepoCreationHandlers } from './repos/repo-creation-handlers'
@@ -21,6 +21,7 @@ export function registerRepoHandlers(
 ): void {
   // macOS window recreation re-registers these handlers.
   ipcMain.removeHandler('repos:list')
+  ipcMain.removeHandler('repos:listWslMoved')
   ipcMain.removeHandler('repos:add')
   ipcMain.removeHandler('repos:removeForHost')
   ipcMain.removeHandler('repos:reorder')

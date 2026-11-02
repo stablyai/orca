@@ -26,8 +26,8 @@ permissions:
 
 jobs:
   ios-build:
-    # Use macos-26/Xcode 26 for Expo SDK 55’s Swift 6 syntax/isolation; Xcode 16 runners cannot parse it.
-    runs-on: macos-26
+    # Xcode 27.1's iOS SDK enables iPhone Duo resizing; Expo SDK 55 requires Swift 6 syntax.
+    runs-on: xcode-27
     # Archive + upload is ~30–40m when healthy; 90m leaves margin for setup.
     timeout-minutes: 90
 
@@ -50,8 +50,8 @@ jobs:
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          # Xcode 26.x ships the Swift 6.x toolchain Expo SDK 55 requires.
-          xcode-version: '26.5'
+          # iOS 27.1 SDK: iPhone Duo resizing and reserved (fold/camera) regions.
+          xcode-version: '27.1'
 
       - name: Setup Node.js
         uses: actions/setup-node@v6

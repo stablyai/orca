@@ -1,13 +1,15 @@
+import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { describe, expect, it } from 'vitest'
-import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
-import { structuredAgentSessionSeedCatalog } from '../../shared/structured-agent-session-seed-catalog'
+import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionModelOption } from '../../shared/agent-session/agent-session-wire'
+import { structuredAgentSessionSeedCatalog } from '../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionModelCatalog,
-  createStructuredAgentSessionOptionState,
-  structuredAgentSessionOptionSnapshot
-} from '../../shared/structured-agent-session-options'
+  createStructuredAgentSessionOptionState
+} from '../../shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionOptionSnapshot } from '../../shared/agent-session/options/structured-agent-session-option-snapshot'
 import { AcpStructuredOptions } from '../acp/acp-structured-options'
 import { GROK_ACP_DIALECT } from '../acp/acp-dialects/grok-dialect'
 import { grokModelCatalogFromState } from '../acp/acp-dialects/grok-model-catalog'
@@ -19,8 +21,10 @@ import {
   withLiveCatalogListing,
   type AgentModelCatalogProbe
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
-import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from './structured-agent-runtime-registrations'
-import type { StructuredAgentModelCatalogContext } from './structured-agent-runtime-registrations'
+import {
+  STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
+  type StructuredAgentModelCatalogContext
+} from './structured-agent-runtime-registrations'
 import { registeredModelCatalogDiscovery } from './structured-agent-model-catalog-wiring'
 
 // Exercise registration, host catalog and shared picker together; never hand-feed the names-its-default answer.
@@ -35,7 +39,8 @@ function context(): StructuredAgentModelCatalogContext {
     environment: {
       resolveBaseEnvironment: unused,
       resolveAgentEnvironment: unused,
-      refreshAfterMissingProgram: unused
+      refreshAfterMissingProgram: unused,
+      bindCatalogSources: () => () => {}
     }
   }
 }
@@ -64,8 +69,7 @@ const GROK_LISTING = grokModelCatalogFromState({
 })
 
 function grokRecord(): AgentSessionRecord {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the catalog service reads only provider, accountHome and location.
-  return {
+  return agentSessionRecordFixture({
     sessionId: 'grok-session',
     provider: 'grok',
     accountHome: HOMES.grok,
@@ -75,7 +79,7 @@ function grokRecord(): AgentSessionRecord {
       workspaceId: 'ws-1',
       workspaceKind: 'git-worktree'
     }
-  } as AgentSessionRecord
+  })
 }
 
 function service(
@@ -93,6 +97,10 @@ function service(
   }
   return createAgentModelCatalogService({
     store,
+    getConversation: (sessionId) => {
+      const saved = records.find((record) => record.sessionId === sessionId)
+      return saved ? agentSessionConversationView(saved) : undefined
+    },
     getRecord: (sessionId) => records.find((record) => record.sessionId === sessionId),
     drivesRecord: () => true,
     resolveAccountHome: async (agent) => HOMES[agent]!,

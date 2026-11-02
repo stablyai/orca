@@ -6,6 +6,7 @@ import type { Repo } from '../../../shared/repo-types'
 import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
 import { isRuntimeScopeForbiddenError } from '@/runtime/runtime-rpc-result'
 import { hasEffectiveSetupCommand } from './setup-script-status'
+import { translate } from '@/i18n/i18n'
 
 const SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX = 'generation-v1:'
 
@@ -26,6 +27,19 @@ export type SetupScriptPromptInspection =
       status: 'forbidden'
       repoId: string
     }
+  // The repo's WSL distro is stopped: nothing to say until it runs, and a Retry could not succeed.
+  | {
+      status: 'distro-stopped'
+      repoId: string
+    }
+
+/**
+ * States the card shows nothing for: mobile-scope forbiddance (the global banner explains it) and a
+ * stopped WSL distro (focus re-inspects, so the card returns once it runs; a Retry could not succeed).
+ */
+export function isSilentSetupScriptPromptState(state: { status: string }): boolean {
+  return state.status === 'forbidden' || state.status === 'distro-stopped'
+}
 
 export async function inspectSetupScriptPromptState({
   repo,
@@ -39,7 +53,9 @@ export async function inspectSetupScriptPromptState({
   try {
     const hooksResult = await checkHooks()
     if (hooksResult.status === 'error') {
-      return { status: 'error', repoId: repo.id }
+      return hooksResult.unavailable === 'wsl-distro-stopped'
+        ? { status: 'distro-stopped', repoId: repo.id }
+        : { status: 'error', repoId: repo.id }
     }
     const hasEffectiveSetup = hasEffectiveSetupCommand(repo, hooksResult)
     if (hasEffectiveSetup) {
@@ -80,6 +96,12 @@ export function ignoresSharedSetupScripts(repo: Pick<Repo, 'hookSettings'>): boo
 
 export function getSetupScriptPromptDismissalKey(repoHostIdentity: string): string {
   return `${SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX}${repoHostIdentity}`
+}
+
+/** The repo of a dismissal key, host-qualified (`<host>\0<repoId>`) or legacy bare. */
+export function getSetupScriptPromptDismissalRepoId(entry: string): string {
+  const identity = entry.slice(SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX.length)
+  return identity.slice(identity.indexOf('\0') + 1)
 }
 
 export function isSetupScriptPromptDismissed(
@@ -178,14 +200,26 @@ export function buildImportedHookSettings(
   }
 }
 
+// Product names stay as detected; descriptive labels translate by provider.
+function candidateLabel(candidate: SetupScriptImportCandidate): string {
+  if (candidate.provider === 'codex') {
+    return translate('setupScriptPrompt.candidateLabels.codexEnvironment', 'Codex environment')
+  }
+  if (candidate.provider === 'package-manager') {
+    return translate('setupScriptPrompt.candidateLabels.packageManager', 'package manager')
+  }
+  return candidate.label
+}
+
 export function formatCandidateSource(candidate: SetupScriptImportCandidate): string {
+  const label = candidateLabel(candidate)
   const [primaryFile, ...remainingFiles] = candidate.files
   if (!primaryFile) {
-    return candidate.label
+    return label
   }
   return remainingFiles.length > 0
-    ? `${candidate.label} (${primaryFile} +${remainingFiles.length})`
-    : `${candidate.label} (${primaryFile})`
+    ? `${label} (${primaryFile} +${remainingFiles.length})`
+    : `${label} (${primaryFile})`
 }
 
 // Show matched filenames as provenance: one name, two with and, or first +N more; never substitute provider labels.

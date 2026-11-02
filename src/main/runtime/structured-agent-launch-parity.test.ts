@@ -1,3 +1,4 @@
+import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 // Capture native-chat children at the spawn boundary with production wiring; launch-path refactors must preserve these snapshots.
 
 import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
@@ -8,13 +9,13 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import type * as ProcessHostModule from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import type * as AcpAdapterModule from '../acp/acp-structured-session-adapter'
-import type * as ClaudeAdapterModule from '../claude/claude-structured-session-adapter'
+import type * as ClaudeAdapterModule from '../claude/structured/claude-structured-session-adapter'
 import type * as CodexAdapterModule from '../codex/codex-structured-session-adapter'
 import type * as PiAdapterModule from '../pi/rpc-session-adapter'
 import type * as ManagedProviderProcessModule from '../provider-process/managed-provider-process'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
-import type * as StructuredAgentSessionRuntimeModule from './structured-agent-session-runtime'
-import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
+import type * as StructuredAgentSessionRuntimeModule from './agent-session/structured-agent-session-runtime'
+import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 
 const capture = vi.hoisted(() => {
   const pendingEnvToDelete: readonly string[] = []
@@ -56,7 +57,7 @@ vi.mock('../provider-process/managed-provider-process', async (importOriginal) =
     }
   }
 })
-vi.mock('./structured-agent-session-runtime', async (importOriginal) => {
+vi.mock('./agent-session/structured-agent-session-runtime', async (importOriginal) => {
   const actual = await importOriginal<typeof StructuredAgentSessionRuntimeModule>()
   return {
     ...actual,
@@ -75,7 +76,7 @@ vi.mock('../codex/codex-structured-session-adapter', async (importOriginal) => {
   }
   return { ...actual, CodexStructuredSessionAdapter: RecordingAdapter }
 })
-vi.mock('../claude/claude-structured-session-adapter', async (importOriginal) => {
+vi.mock('../claude/structured/claude-structured-session-adapter', async (importOriginal) => {
   const actual = await importOriginal<typeof ClaudeAdapterModule>()
   class RecordingAdapter extends actual.ClaudeStructuredSessionAdapter {
     constructor(deps: ConstructorParameters<typeof actual.ClaudeStructuredSessionAdapter>[0]) {
@@ -110,13 +111,16 @@ vi.mock('electron', () => ({
 }))
 
 import { setAppEnvironment } from '../../shared/app-environment'
-import { AGENT_SESSION_RECORD_SCHEMA_VERSION } from '../../shared/agent-session-record'
-import type { AgentSessionAccountHome, AgentSessionRecord } from '../../shared/agent-session-record'
-import type { AgentSessionProviderHandle } from '../../shared/agent-session-provider-handle'
+import {
+  AGENT_SESSION_RECORD_SCHEMA_VERSION,
+  type AgentSessionRecord
+} from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../shared/agent-session-provider-handle-encoding'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import {
   ORCA_SCRUB_SAFE_LAUNCH_ENV,
@@ -137,7 +141,7 @@ import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-se
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import { createClaudeCliFlagSupport } from '../claude/claude-cli-flag-support'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
   STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
@@ -145,7 +149,7 @@ import {
   type StructuredAgentRuntimeAdapter
 } from './structured-agent-runtime-registrations'
 import { createStructuredAgentEnvironmentResolvers } from './structured-agent-shell-environment'
-import { createStructuredAgentSessionDispatchFollowUps } from './structured-agent-session-dispatch-followups'
+import { createStructuredAgentSessionDispatchFollowUps } from './agent-session/structured-agent-session-dispatch-followups'
 import {
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,
@@ -464,6 +468,19 @@ function eventSink(): StructuredAgentSessionEventSink {
 function adapterContext(): StructuredAgentAdapterContext {
   const store = {
     getRecord: (sessionId: string) => records.get(sessionId) ?? null,
+    selectWritableRecord: (sessionId: string) => {
+      const record = records.get(sessionId)
+      return record ? { kind: 'writable' as const, record } : { kind: 'missing' as const }
+    },
+    requireWritableRecord: (sessionId: string) => {
+      const record = records.get(sessionId)
+      if (!record) {
+        throw agentSessionRefusalError('agent_session_identity_required', {
+          reason: 'recordMissing'
+        })
+      }
+      return record
+    },
     pinLaunchDirectory: async (sessionId: string, directory: string) => {
       pins.push({ sessionId, directory })
       const record = records.get(sessionId)
@@ -627,6 +644,45 @@ afterAll(async () => {
 })
 
 describe.skipIf(process.platform === 'win32')('native-chat launch parity', () => {
+  it('wires only OMP at-rest discovery through configured host launch inputs without a conversation spawn', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const launch = {
+      agent: 'omp',
+      workspace: 'worktree',
+      start: 'fresh',
+      worker: false,
+      configured: true
+    } as const
+    const { record } = await recordFor(launch, 'omp-first-open')
+    settings = settingsFor(launch)
+    const context = adapterContext()
+    const adapter = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.find(
+      ({ definition }) => definition.agent === 'omp'
+    )!.createAdapter(context)
+    capture.spawns.length = 0
+    try {
+      expect(await adapter.atRestCommands!.settled!(record, 1_000)).toBeUndefined()
+      expect(capture.spawns).toHaveLength(1)
+      const child = childOf(capture.spawns[0]!)
+      expect(child.command).toBe('<root>/custom-bin/omp-custom')
+      expect(child.cwd).toBe('<root>/worktree')
+      expect(child.args).toEqual(expect.arrayContaining(['acp', '--session-dir']))
+      expect(child.env).toMatchObject({ PARITY_OVERLAY: 'omp-configured' })
+      expect(child.env).not.toHaveProperty('ORCA_AGENT_SESSION_ID')
+      expect(pins).toEqual([])
+      for (const agent of ['grok', 'opencode', 'opencode2', 'antigravity']) {
+        expect(
+          STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.find(
+            ({ definition }) => definition.agent === agent
+          )!.createAdapter(context).atRestCommands
+        ).toBeUndefined()
+      }
+    } finally {
+      await adapter.closeAll()
+      vi.mocked(console.warn).mockRestore()
+    }
+  })
+
   it.each(CASES.map((launch, index) => [caseName(launch), launch, index] as const))(
     '%s',
     async (_name, launch, index) => {

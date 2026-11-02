@@ -6,13 +6,10 @@ import {
 } from './agent-completion-coordinator'
 import { resetAgentProcessInspectionQueueForTests } from './agent-process-inspection-queue'
 import { isAgentProcessInspectionCostly } from './agent-process-inspection-cost'
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
-
-const MAC_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
-const WINDOWS_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
 
 function processResult(
   foregroundProcess: string | null,
@@ -232,27 +229,10 @@ describe('agent completion no-evidence inspection cadence', () => {
 })
 
 describe('isAgentProcessInspectionCostly', () => {
-  it('treats remote-execution-host ptys as costly on every client platform', () => {
-    for (const userAgent of [MAC_UA, WINDOWS_UA]) {
-      expect(isAgentProcessInspectionCostly(userAgent, toAppSshPtyId('target-1', 'pty-1'))).toBe(
-        true
-      )
-      expect(
-        isAgentProcessInspectionCostly(userAgent, toRemoteRuntimePtyId('term_1', 'env-a'))
-      ).toBe(true)
-      expect(isAgentProcessInspectionCostly(userAgent, toRemoteRuntimePtyId('term_1'))).toBe(true)
-    }
-  })
-
-  it('leaves the local branch unchanged: Windows costly, POSIX cheap', () => {
-    expect(isAgentProcessInspectionCostly(WINDOWS_UA, 'worktree-1|pane-1')).toBe(true)
-    expect(isAgentProcessInspectionCostly(WINDOWS_UA, null)).toBe(false)
-    expect(isAgentProcessInspectionCostly(MAC_UA, 'worktree-1|pane-1')).toBe(false)
-    expect(isAgentProcessInspectionCostly(MAC_UA, null)).toBe(false)
-  })
-
-  // A bare ssh: prefix proves no host round trip because it names no relay PTY.
-  it('does not relax a POSIX pane for an ssh-prefixed id carrying no relay pty id', () => {
-    expect(isAgentProcessInspectionCostly(MAC_UA, 'ssh:target-1')).toBe(false)
+  it('relaxes every live pane, local or remote, on every client platform', () => {
+    expect(isAgentProcessInspectionCostly('worktree-1|pane-1')).toBe(true)
+    expect(isAgentProcessInspectionCostly(toAppSshPtyId('target-1', 'pty-1'))).toBe(true)
+    expect(isAgentProcessInspectionCostly(toRemoteRuntimePtyId('term_1', 'env-a'))).toBe(true)
+    expect(isAgentProcessInspectionCostly(null)).toBe(false)
   })
 })

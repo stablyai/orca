@@ -194,6 +194,50 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     expect(screen.getByPlaceholderText('Find in page...')).not.toBeNull()
   })
 
+  it('closes Find on a full navigation', () => {
+    const { webview } = renderPane()
+    vi.mocked(webview.findInPage).mockReturnValueOnce(1)
+
+    act(() => findRequests.emit(undefined))
+    fireEvent.change(screen.getByPlaceholderText('Find in page...'), {
+      target: { value: 'needle' }
+    })
+    fireEvent.keyDown(screen.getByPlaceholderText('Find in page...'), { key: 'Enter' })
+    act(() =>
+      webview.dispatchEvent(
+        Object.assign(new Event('found-in-page'), {
+          result: { requestId: 1, activeMatchOrdinal: 1, matches: 3, finalUpdate: true }
+        })
+      )
+    )
+    expect(screen.getByText('1 of 3')).not.toBeNull()
+
+    act(() =>
+      webview.dispatchEvent(
+        Object.assign(new Event('did-navigate'), { url: 'https://example.internal/next' })
+      )
+    )
+
+    expect(screen.queryByPlaceholderText('Find in page...')).toBeNull()
+    expect(screen.queryByText('1 of 3')).toBeNull()
+  })
+
+  it('keeps Find open for an in-page navigation', () => {
+    const { webview } = renderPane()
+    act(() => findRequests.emit(undefined))
+
+    act(() =>
+      webview.dispatchEvent(
+        Object.assign(new Event('did-navigate-in-page'), {
+          url: 'https://example.internal/app#section',
+          isMainFrame: true
+        })
+      )
+    )
+
+    expect(screen.getByPlaceholderText('Find in page...')).not.toBeNull()
+  })
+
   it('reloads and hard-reloads the retained guest from the forwarded chords', () => {
     const { webview } = renderPane()
 

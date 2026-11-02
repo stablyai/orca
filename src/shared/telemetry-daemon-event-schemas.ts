@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { AGENT_HOOK_TARGETS } from './agent-hook-types'
+import { ERRNO_CODE_PATTERN } from './errno-code'
 import {
   DAEMON_LIFECYCLE_SESSION_BUCKETS,
   DAEMON_LIFECYCLE_TRANSITIONS,
@@ -69,6 +70,24 @@ export const daemonAdoptedSchema = z
     live_session_count_bucket: z.enum(DAEMON_LIFECYCLE_SESSION_BUCKETS)
   })
   .strict()
+
+export const DAEMON_ASYNC_IO_STALL_DURATION_BUCKETS = ['<1m', '1-5m', '5-30m', '30m+'] as const
+
+// Why: measures how often daemon worker-pool stalls start and how long they last before clearing.
+const daemonAsyncIoHealthBase = {
+  protocol_generation: z.number().int().positive().max(1_000),
+  app_version_match: z.enum(DAEMON_ADOPTED_APP_VERSION_MATCH)
+}
+export const daemonAsyncIoHealthSchema = z.discriminatedUnion('transition', [
+  z.object({ transition: z.literal('stalled'), ...daemonAsyncIoHealthBase }).strict(),
+  z
+    .object({
+      transition: z.literal('recovered'),
+      ...daemonAsyncIoHealthBase,
+      stalled_for_bucket: z.enum(DAEMON_ASYNC_IO_STALL_DURATION_BUCKETS)
+    })
+    .strict()
+])
 
 // Denied means proven app/daemon cwd-access divergence; readable is the TCC-folder-only control (#17696).
 export const daemonPtyCwdVerdictSchema = z
@@ -203,11 +222,11 @@ export const profileStateAuthoritySelectedSchema = z
 export const hookInstallAgentSchema = z.enum(AGENT_HOOK_TARGETS)
 export type HookInstallAgent = z.infer<typeof hookInstallAgentSchema>
 
-// Callers truncate config-shape errors before track; max(200) rejects overlength strings rather than truncating.
+// Why (#21492): field name kept for dashboards, but it holds an errno code or 'unknown', never the raw message (home-dir paths).
 export const agentHookInstallFailedSchema = z
   .object({
     agent: hookInstallAgentSchema,
-    error_message: z.string().max(200)
+    error_message: z.union([z.literal('unknown'), z.string().regex(ERRNO_CODE_PATTERN)])
   })
   .strict()
 

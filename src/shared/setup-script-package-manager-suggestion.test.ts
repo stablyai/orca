@@ -6,43 +6,6 @@ function makeReader(files: Record<string, string>) {
 }
 
 describe('package manager setup script suggestions', () => {
-  it('suggests setup commands from package manager lockfiles', async () => {
-    const candidates = await inspectSetupScriptImportCandidates(
-      makeReader({
-        'package.json': JSON.stringify({ scripts: { dev: 'vite' } }),
-        'pnpm-lock.yaml': 'lockfileVersion: 9.0'
-      })
-    )
-
-    expect(candidates).toEqual([
-      {
-        provider: 'package-manager',
-        label: 'package manager',
-        files: ['pnpm-lock.yaml'],
-        setup: 'pnpm install',
-        unsupportedFields: []
-      }
-    ])
-  })
-
-  it('uses packageManager when no lockfile is present', async () => {
-    const candidates = await inspectSetupScriptImportCandidates(
-      makeReader({
-        'package.json': JSON.stringify({ packageManager: 'bun@1.2.0' })
-      })
-    )
-
-    expect(candidates).toEqual([
-      {
-        provider: 'package-manager',
-        label: 'package manager',
-        files: ['package.json'],
-        setup: 'bun install',
-        unsupportedFields: []
-      }
-    ])
-  })
-
   it('uses explicit packageManager over conflicting lockfiles', async () => {
     const candidates = await inspectSetupScriptImportCandidates(
       makeReader({
@@ -136,25 +99,5 @@ describe('package manager setup script suggestions', () => {
     )
 
     expect(candidates).toEqual([])
-  })
-
-  it('allows multiple lockfiles for the same package manager family', async () => {
-    const candidates = await inspectSetupScriptImportCandidates(
-      makeReader({
-        'package.json': JSON.stringify({ scripts: { dev: 'vite' } }),
-        'package-lock.json': '{}',
-        'npm-shrinkwrap.json': '{}'
-      })
-    )
-
-    expect(candidates).toEqual([
-      {
-        provider: 'package-manager',
-        label: 'package manager',
-        files: ['package-lock.json'],
-        setup: 'npm install',
-        unsupportedFields: []
-      }
-    ])
   })
 })

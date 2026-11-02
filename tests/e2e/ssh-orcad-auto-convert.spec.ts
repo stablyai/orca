@@ -440,15 +440,15 @@ test('reconnect restores the managed host name after its conversion catalog fail
         ipcMain.handle('runtimeEnvironments:list', original)
       }
     })
-    const failure = page.waitForEvent('console', {
-      predicate: (message) =>
-        message.text().includes('Could not refresh the managed server list') ||
-        message.text().includes('Could not load the managed server catalogs')
+    // Collect rather than waitForEvent: its 30 s clock would start before the conversion below.
+    let catalogFailed = false
+    page.on('console', (message) => {
+      catalogFailed ||= message.text().includes('Could not load the managed server catalogs')
     })
     cpSync(TEMPLATE_SOURCE!, templateDir, { recursive: true })
     await reconnect(page, seeded.targetId)
     await expect.poll(() => managedServer(page, seeded.targetId)).toMatchObject({ kind: 'managed' })
-    await failure
+    await expect.poll(() => catalogFailed).toBe(true)
     await page.screenshot({ path: testInfo.outputPath('catalog-failure.png') })
 
     await app.evaluate(() => {

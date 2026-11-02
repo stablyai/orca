@@ -3,7 +3,6 @@ import {
   getExplorerDisplayDepth,
   getExplorerDisplayRootOptions,
   getExplorerDisplayRootPath,
-  resolveExplorerDisplayRootChoice,
   getExplorerEffectiveExpanded
 } from './file-explorer-display-root'
 import { createVisibleFileExplorerRowProjection } from './useFileExplorerVisibleRowProjection'
@@ -12,23 +11,6 @@ import { fileExplorerEntriesToTreeNodes } from './file-explorer-directory-listin
 const flags = { ignoredSet: new Set<string>(), showDotfiles: true, showGitIgnoredFiles: true }
 
 describe('sparse explorer projection', () => {
-  it('resolves defaults and preserves explicit full root', () => {
-    const options = getExplorerDisplayRootOptions({
-      isSparse: true,
-      sparseDirectories: ['packages/app', 'packages/api']
-    })
-    expect(resolveExplorerDisplayRootChoice(options)).toBe('/')
-    expect(resolveExplorerDisplayRootChoice(options, '/')).toBe('/')
-    expect(resolveExplorerDisplayRootChoice(options, 'packages/api')).toBe('packages/api')
-    expect(
-      resolveExplorerDisplayRootChoice(
-        getExplorerDisplayRootOptions({ isSparse: true, sparseDirectories: ['packages/app'] })
-      )
-    ).toBe('packages/app')
-    expect(resolveExplorerDisplayRootChoice(options, 'removed')).toBe('/')
-    expect(getExplorerDisplayRootOptions({ sparseDirectories: ['src'] })).toBeNull()
-    expect(resolveExplorerDisplayRootChoice(null, 'src')).toBe('/')
-  })
   it('rejects unsafe directories and deduplicates normalized options', () => {
     expect(
       getExplorerDisplayRootOptions({

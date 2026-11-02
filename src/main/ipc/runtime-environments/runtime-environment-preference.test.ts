@@ -11,7 +11,7 @@ import {
   removeEnvironment
 } from '../../../shared/runtime-environment-store'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import {
   readSettingsWithRuntimeEnvironmentPreference,
   watchRuntimeEnvironmentPreference
@@ -110,6 +110,22 @@ describe('Active Server after a saved host is removed', () => {
         timeout: 5_000
       })
       expect(listEnvironments(userDataPath).map(({ id }) => id)).toContain(kept.id)
+    } finally {
+      stopWatching()
+    }
+  })
+
+  it('tells renderers when the CLI saves a new server (#25251)', async () => {
+    saveEnvironment('existing')
+    const onRegistryChanged = vi.fn()
+    const stopWatching = watchRuntimeEnvironmentPreference(
+      preferenceStore(null),
+      userDataPath,
+      onRegistryChanged
+    )
+    try {
+      saveEnvironment('cli-added')
+      await vi.waitFor(() => expect(onRegistryChanged).toHaveBeenCalled(), { timeout: 5_000 })
     } finally {
       stopWatching()
     }

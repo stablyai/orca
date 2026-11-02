@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import { waitForTerminalReplayWritesParsed } from '../replay-guard'
@@ -82,6 +82,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
     pendingEscapeTailAnsi?: string
     kittyKeyboardFlags?: number
     terminalOwner?: 'shell'
+    lastTitle?: string
   }): Promise<void> {
     const restorePtyId = session.transport.getPtyId()
     const restoreGeneration = session.hiddenOutputRestoreGeneration
@@ -165,7 +166,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
               session.writeReplayData(replayChunk)
             }
           }
-          const hasLiveAgent = session.hasLiveAgentReattachStatusOrTitleSignal()
+          const hasLiveAgent = session.hasLiveAgentReattachStatusOrTitleSignal(snapshot.lastTitle)
           // Match reattach’s live-pane fallback when alternateScreen is absent; even same-buffer ?1049l runs cursor restore.
           const postReplayReset =
             snapshot.terminalOwner === 'shell'

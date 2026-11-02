@@ -7,6 +7,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { RunRow, TaskRow } from '../../../../orchestration/types'
 import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
 import { deliverWorkerDispatchPreamble } from './deliver-worker-dispatch-preamble'
+import { reportedWorkerOutcome } from './worker-start-receipt'
 import { chatAssigneeSessionId } from '../../../../orchestration/chat-assignee'
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
 import {
@@ -103,7 +104,11 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   // A worker report can settle the dispatch while turn observation is outstanding.
   const currentWorker = db.getWorkerDispatch(args.dispatchId)
   const alreadySettled = currentWorker && currentWorker.state !== 'starting'
-  if (turnStart.verdict === 'unobserved' && !alreadySettled) {
+  // Only Orca's own worker chat queues behind its own turn, so its card is sure to run; a user's chat may drop it.
+  const queuedOnOwnWorker =
+    turnStart.queued === true &&
+    db.getWorkerTerminalResourceByOwner(args.dispatchId)?.ownership_state === 'owned'
+  if (turnStart.verdict === 'unobserved' && !queuedOnOwnWorker && !alreadySettled) {
     // Keep authority and terminal for recovery reports, but never claim ready for an unobserved turn.
     effects.push({
       kind: 'dispatch_input',
@@ -147,11 +152,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   const worker = alreadySettled
     ? currentWorker
     : db.markWorkerDispatchReady(args.dispatchId, effects)
-  // A completed task proves start succeeded; older callers use only 'ready' as start success.
-  const reportedOutcome =
-    worker.stage === 'settled' && (worker.state === 'succeeded' || worker.state === 'failed')
-      ? worker.state
-      : undefined
+  const reportedOutcome = reportedWorkerOutcome(worker)
   return {
     runId: run.id,
     taskId: task.id,
@@ -159,7 +160,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     state: reportedOutcome ? 'ready' : worker.state,
     stage: worker.stage,
     ...(reportedOutcome ? { workerOutcome: reportedOutcome } : {}),
-    turnStart: turnStart.verdict,
+    turnStart: queuedOnOwnWorker ? 'queued' : turnStart.verdict,
     setup: args.setupReceipt,
     launch: args.launchReceipt,
     mode: args.mode,

@@ -1,10 +1,8 @@
-import { agentProviderSessionsEqual } from '../../../shared/agent-session-resume'
-import {
-  agentSessionBackgroundTasksEqual,
-  type AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
+import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
+import { agentSessionBackgroundTasksEqual } from '../../../shared/agent-session/agent-session-background-task-wire'
 import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-lead-status-fold'
-import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
+import { structuredAgentSessionAgentStatus } from '../../../shared/agent-session/view/structured-agent-session-agent-status'
 import { structuredStatusChildrenEqual } from './structured-agent-session-status-child-work'
 
 export function structuredStatusSummariesEqual(
@@ -27,6 +25,12 @@ export function structuredStatusSummariesEqual(
     a.latestPrompt === b.latestPrompt &&
     a.model === b.model &&
     a.permissionMode === b.permissionMode &&
+    a.runtimePermission?.fence === b.runtimePermission?.fence &&
+    a.runtimePermission?.mode === b.runtimePermission?.mode &&
+    (a.runtimePermission === undefined) === (b.runtimePermission === undefined) &&
+    a.effort === b.effort &&
+    a.fastMode === b.fastMode &&
+    a.serviceTier === b.serviceTier &&
     a.toolName === b.toolName &&
     a.toolInput === b.toolInput &&
     a.lastAssistantMessage === b.lastAssistantMessage &&
@@ -52,6 +56,19 @@ function isIdleHeldOpenByChildWork(summary: AgentSessionStatusSummary): boolean 
         childWork: summary.children ?? summary.backgroundTasks,
         turnOutcome: summary.turnOutcome
       })
+    )
+  )
+}
+
+export function permissionReportOnly(
+  previous: AgentSessionStatusSummary | undefined,
+  summary: AgentSessionStatusSummary
+): boolean {
+  return Boolean(
+    previous &&
+    structuredStatusSummariesEqual(
+      { ...previous, runtimePermission: summary.runtimePermission },
+      summary
     )
   )
 }

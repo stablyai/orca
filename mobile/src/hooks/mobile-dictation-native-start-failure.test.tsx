@@ -124,7 +124,7 @@ describe('a native start the desktop refuses', () => {
       await started
     })
     expect(device.calls).toContain('initialize')
-    expect(device.calls).toContain('toggleRecording(false)')
+    expect(device.calls).toContain('tearDown')
     // The open capture owns a wake tag; no outer start catch releases it.
     expect(device.screen).toEqual(['+', '-'])
     expect(dictation().status).toBe('idle')

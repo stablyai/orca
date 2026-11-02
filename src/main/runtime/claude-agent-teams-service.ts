@@ -72,6 +72,10 @@ export class ClaudeAgentTeamsService {
     return { teamId, token, leaderPane, env }
   }
 
+  releaseTeam(teamId: string): void {
+    this.teams.delete(teamId)
+  }
+
   removeTeamForLeaderHandle(handle: string): void {
     for (const [teamId, team] of this.teams) {
       if (team.leaderHandle === handle) {

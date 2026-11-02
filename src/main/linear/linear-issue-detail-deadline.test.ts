@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { LinearIssue } from '../../shared/linear/issue-types'
 import { getIssue } from './linear-issue-lookups'
 import { acquire, release } from './linear-request-concurrency'
-import { loadLinearSdk } from './linear-sdk'
+import { createLinearClient } from './linear-sdk'
 
 const mocks = vi.hoisted(() => ({ getClients: vi.fn(), signing: vi.fn(), map: vi.fn() }))
 vi.mock('./client', () => ({
@@ -62,7 +62,9 @@ beforeEach(async () => {
       }
     })
   })
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  await new Promise<void>((resolve) =>
+    server.listen(Number(process.env.ORCA_E2E_LINEAR_HTTP_PORT ?? 0), '127.0.0.1', resolve)
+  )
   const address = server.address()
   if (!address || typeof address === 'string') {
     throw new Error('Missing test server address')
@@ -73,12 +75,11 @@ beforeEach(async () => {
     {
       workspace: { id: 'workspace' },
       apiKey: 'probe-only',
-      client: new (loadLinearSdk().LinearClient)({ apiKey: 'probe-only', signal })
+      client: createLinearClient({ apiKey: 'probe-only', signal })
     }
   ])
-  mocks.signing.mockImplementation(
-    (_entry: unknown, signal: AbortSignal) =>
-      new (loadLinearSdk().LinearClient)({ apiKey: 'probe-only', signal })
+  mocks.signing.mockImplementation((_entry: unknown, signal: AbortSignal) =>
+    createLinearClient({ apiKey: 'probe-only', signal })
   )
   mocks.map.mockResolvedValue(issue)
   vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback, delay, ...args) => {

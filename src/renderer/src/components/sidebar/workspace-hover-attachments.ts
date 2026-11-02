@@ -125,24 +125,27 @@ export function getWorkspaceLinkedItemRows(
     details
   )
   const review = details.review
-  return items.map((item, index) => {
-    const key = getWorkspaceAttachmentKey(item)
-    const detail = referenceDetails?.[referenceKeys[index]]
-    const live =
-      detail?.review ??
-      (key === activeKey &&
-      review?.provider === item.provider &&
-      review.number === item.number &&
-      (!item.url || review.url === item.url)
-        ? review
-        : null)
-    const liveTask = !liveMatched[index]
-      ? null
-      : item.provider === 'github' && item.type === 'issue'
-        ? (details.issue ?? null)
-        : item.provider === 'linear'
-          ? (details.linearIssue ?? null)
-          : null
-    return { item, key, url: item.url || detail?.url, detail, live, liveTask }
-  })
+  // Why: references are stored in link order; surfaces list the newest first.
+  return items
+    .map((item, index) => {
+      const key = getWorkspaceAttachmentKey(item)
+      const detail = referenceDetails?.[referenceKeys[index]]
+      const live =
+        detail?.review ??
+        (key === activeKey &&
+        review?.provider === item.provider &&
+        review.number === item.number &&
+        (!item.url || review.url === item.url)
+          ? review
+          : null)
+      const liveTask = !liveMatched[index]
+        ? null
+        : item.provider === 'github' && item.type === 'issue'
+          ? (details.issue ?? null)
+          : item.provider === 'linear'
+            ? (details.linearIssue ?? null)
+            : null
+      return { item, key, url: item.url || detail?.url, detail, live, liveTask }
+    })
+    .toReversed()
 }

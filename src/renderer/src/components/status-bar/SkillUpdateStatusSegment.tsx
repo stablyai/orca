@@ -33,9 +33,9 @@ export function SkillUpdateStatusSegment({
                 { value0: run.names[0] }
               )
             : translate(
-                'auto.components.status.bar.SkillUpdateStatusSegment.runningMany',
-                'Updating {{value0}} skills…',
-                { value0: run.names.length }
+                'auto.components.status.bar.SkillUpdateStatusSegment.runningSkills',
+                'Updating {{count}} skills…',
+                { count: run.names.length, defaultValue_one: 'Updating {{count}} skill…' }
               ),
         ariaLabel: translate(
           'auto.components.status.bar.SkillUpdateStatusSegment.runningAria',

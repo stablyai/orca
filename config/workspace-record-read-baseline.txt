@@ -11,9 +11,7 @@
 1 src/renderer/src/components/dashboard/dashboard-worktree-launch-options.ts # P5b-2 must clear: optional state field defaults to empty
 4 src/renderer/src/components/dashboard/useDashboardPopoutBridge.ts # P5b-2 must clear: change detection on optional fields never fires when absent
 2 src/renderer/src/components/dashboard/useRetainedAgents.ts # reads a passed-in copy
-6 src/renderer/src/components/editor/closed-editor-tab-controller.ts # P5b-2 must clear: identity compare of store slices passes when absent
 1 src/renderer/src/components/editor/markdown-document-worktree-path-selector.ts # P5b-2 must clear: optional state field
-1 src/renderer/src/components/feature-wall/feature-wall-setup-progress.ts # reads a passed-in copy
 3 src/renderer/src/components/quick-open-file-list.ts # P5b-2 must clear: store read; file at the max-lines limit
 2 src/renderer/src/components/right-sidebar/useFileExplorerWatch.ts # P5b-2 must clear: optional state fields default to empty
 1 src/renderer/src/components/sidebar/add-repo-skip-finalization.ts # P5b-2 must clear: loosely typed state param
@@ -22,11 +20,10 @@
 3 src/renderer/src/components/sidebar/worktree-list/listing/use-main-list-model.ts # reads a passed-in copy
 2 src/renderer/src/components/sidebar/worktree-list/listing/use-window-list-model.ts # reads a passed-in copy
 1 src/renderer/src/components/sidebar/worktree-list/navigation/pending-reveal-inputs.ts # reads a passed-in copy
-2 src/renderer/src/components/sidebar/worktree-list/navigation/use-pending-reveal.ts # reads a passed-in copy
+1 src/renderer/src/components/sidebar/worktree-list/navigation/use-pending-reveal.ts # reads a passed-in copy
 2 src/renderer/src/components/sidebar/worktree-list/viewport/VirtualizedWorktreeViewport.tsx # reads a passed-in copy
 1 src/renderer/src/components/sidebar/worktree-manual-order-catalog.ts # reads a passed-in copy
 2 src/renderer/src/components/skills/skill-install-workspace-choices.ts # reads a passed-in copy
-1 src/renderer/src/components/terminal-pane/pty-connection/agent-idle-working-handlers.ts # P5b-2 must clear: session store snapshot
 1 src/renderer/src/components/terminal-pane/terminal-worktree-path-link.ts # P5b-2 must clear: loosely typed state param
 1 src/renderer/src/components/workspace-space/space-window-state.ts # reads a passed-in copy
 1 src/renderer/src/hooks/composer-state/composer-source-state.ts # P5b-2 must clear: composer store snapshot
@@ -37,9 +34,8 @@
 3 src/renderer/src/lib/duplicate-paired-servers.ts # P5b-2 must clear: optional state fields default to empty
 1 src/renderer/src/lib/folder-workspace-runtime-owner.ts # P5b-2 must clear: loosely typed state param
 1 src/renderer/src/lib/http-link-localhost-route.ts # P5b-2 must clear: optional state field defaults to empty; extracted from http-link-routing.ts
-2 src/renderer/src/lib/local-project-runtime-workspace.ts # P5b-2 must clear: optional state field defaults to empty
-3 src/renderer/src/lib/resolve-owner.ts # P5b-2 must clear: optional state fields; a missing copy reads as no match
-3 src/renderer/src/lib/resolved-worktree-execution-host.ts # P5b-2 must clear: loosely typed state param
+1 src/renderer/src/lib/local-project-runtime-workspace.ts # P5b-2 must clear: optional state field defaults to empty
+1 src/renderer/src/lib/resolved-worktree-execution-host.ts # P5b-2 must clear: loosely typed state param
 2 src/renderer/src/lib/runtime-session-mirror-owners.ts # P5b-2 must clear: optional state fields default to empty
 3 src/renderer/src/lib/sleeping-record-execution-host-scope.ts # P5b-2 must clear: loosely typed state param
 2 src/renderer/src/lib/terminal-worktree-route.ts # P5b-2 must clear: the unattributed-twin check reads both catalogs directly
@@ -70,9 +66,7 @@
 3 src/renderer/src/store/slices/worktrees/listing/fetch-detected-worktrees.ts # store writer
 13 src/renderer/src/store/slices/worktrees/listing/fetched-worktree-merge.ts # store writer
 6 src/renderer/src/store/slices/worktrees/listing/known-ssh-worktree-fetch.ts # store writer
-3 src/renderer/src/store/slices/worktrees/listing/worktree-sort-order-patch.ts # store writer
 4 src/renderer/src/store/slices/worktrees/metadata/hosted-review-link-mutation.ts # store writer
-6 src/renderer/src/store/slices/worktrees/metadata/update-worktree-meta.ts # store writer
 8 src/renderer/src/store/slices/worktrees/metadata/update-worktrees-meta.ts # store writer
 2 src/renderer/src/store/slices/worktrees/metadata/worktree-git-identity-update.ts # store writer
 1 src/renderer/src/store/slices/worktrees/metadata/worktree-lineage-refresh.ts # store writer

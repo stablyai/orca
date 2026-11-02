@@ -39,9 +39,16 @@ type OrcadActivationRecoveryOptions = OrcadIncumbentRecoveryOptions
 
 export const ORCAD_RECOVERY_UNVERIFIABLE_CODE = 'orcad_recovery_unverifiable'
 
+/** Both pre-fence answers, read moments ago on this connect; they only skip the same two reads. */
+export type OrcadActivationIdlePreRead = { transactionAbsent: boolean; fenceOpen: boolean }
+
 export async function recoverInterruptedOrcadActivation(
-  options: OrcadActivationRecoveryOptions
+  options: OrcadActivationRecoveryOptions,
+  preRead?: OrcadActivationIdlePreRead
 ): Promise<OrcadActivationRecoveryResult> {
+  if (preRead?.transactionAbsent && preRead.fenceOpen) {
+    return { outcome: 'none' }
+  }
   try {
     if (
       !(await readOrcadActivationTransaction(options)) &&

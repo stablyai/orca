@@ -19,7 +19,7 @@ import type {
   NotificationSoundResult,
   StructuredNotificationRead
 } from '../../shared/notification-settings-types'
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 
 export type NotificationsApi = {
   getDesktopAwayState: () => Promise<boolean | undefined>

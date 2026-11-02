@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type { AgentStatusCacheIdentity } from '../../../../shared/agent-status-types'
 import { activityThreadStatusId } from './activity-thread-presentation'
 import type { AgentPaneThread } from './activity-thread-types'
@@ -166,13 +166,11 @@ export function clearCompletedActivity(threads: readonly AgentPaneThread[]): boo
   }
   fallbackTimer = setTimeout(dropRetainedFromDiskCache, CLEAR_COMPLETED_EVICTION_FALLBACK_MS)
   toast(
-    plan.clearedThreadCount === 1
-      ? translate('auto.components.activity.clearCompleted.clearedOne', 'Cleared 1 completed agent')
-      : translate(
-          'auto.components.activity.clearCompleted.clearedMany',
-          'Cleared {{count}} completed agents',
-          { count: plan.clearedThreadCount }
-        ),
+    translate(
+      'auto.components.activity.clearCompleted.cleared',
+      'Cleared {{count}} completed agents',
+      { count: plan.clearedThreadCount, defaultValue_one: 'Cleared {{count}} completed agent' }
+    ),
     {
       action: {
         label: translate('auto.components.activity.clearCompleted.undo', 'Undo'),

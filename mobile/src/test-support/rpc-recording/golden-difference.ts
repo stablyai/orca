@@ -21,6 +21,8 @@ export type RecordingDifference = {
   path: string
   expected: RecordedValue
   actual: RecordedValue
+  expectedPresent?: boolean
+  actualPresent?: boolean
 }
 
 export type GroupedDifference = Omit<RecordingDifference, 'checkpoint'> & { checkpoints: string[] }
@@ -100,7 +102,7 @@ export function excerpt(value: RecordedValue, limit = 600): string {
 }
 
 // Key repeated checkpoint ids by occurrence so later instances remain distinguishable.
-function checkpointKeys(recording: Recording): string[] {
+export function checkpointKeys(recording: Recording): string[] {
   const seen = new Map<string, number>()
   return recording.checkpoints.map((checkpoint) => {
     const occurrence = (seen.get(checkpoint.id) ?? 0) + 1
@@ -126,9 +128,54 @@ export function checkpointListDifference(
   }
 }
 
+// Preserve absent members and array lengths as separate difference evidence.
+export function valueDifferences(
+  expected: RecordedValue,
+  actual: RecordedValue,
+  path = ''
+): Omit<RecordingDifference, 'checkpoint' | 'field'>[] {
+  if (expected === actual) {
+    return []
+  }
+  if (
+    expected === null ||
+    actual === null ||
+    typeof expected !== 'object' ||
+    typeof actual !== 'object' ||
+    Array.isArray(expected) !== Array.isArray(actual)
+  ) {
+    return [{ path, expected, actual }]
+  }
+  const differences: Omit<RecordingDifference, 'checkpoint' | 'field'>[] = []
+  if (Array.isArray(expected) && Array.isArray(actual) && expected.length !== actual.length) {
+    differences.push({ path: `${path}.length`, expected: expected.length, actual: actual.length })
+  }
+  const left = new Map(Object.entries(expected))
+  const right = new Map(Object.entries(actual))
+  for (const key of [...new Set([...left.keys(), ...right.keys()])].sort()) {
+    const next = Array.isArray(expected) ? `${path}[${key}]` : `${path}.${key}`
+    const mine = left.get(key)
+    const theirs = right.get(key)
+    if (!left.has(key) || !right.has(key)) {
+      differences.push({
+        path: next,
+        expected: left.has(key) ? mine! : { $rpc: 'absent' },
+        actual: right.has(key) ? theirs! : { $rpc: 'absent' },
+        expectedPresent: left.has(key),
+        actualPresent: right.has(key)
+      })
+    } else {
+      differences.push(...valueDifferences(mine!, theirs!, next))
+    }
+  }
+  return differences
+}
+
+// Align shared checkpoints by identity and occurrence even when lists differ.
 export function recordingDifferences(
   expected: Recording,
-  actual: Recording
+  actual: Recording,
+  complete = false
 ): RecordingDifference[] {
   const actualKeys = checkpointKeys(actual)
   const actualByKey = new Map(
@@ -144,17 +191,12 @@ export function recordingDifferences(
     for (const field of OBSERVATION_FIELDS) {
       const left = checkpoint.observation[field]
       const right = found.observation[field]
-      if (canonicalJson(left) === canonicalJson(right)) {
+      if (!complete && canonicalJson(left) === canonicalJson(right)) {
         continue
       }
-      const at = firstDifference(left, right)
-      differences.push({
-        checkpoint: key,
-        field,
-        path: at.path,
-        expected: at.expected,
-        actual: at.actual
-      })
+      for (const at of complete ? valueDifferences(left, right) : [firstDifference(left, right)]) {
+        differences.push({ checkpoint: key, field, ...at })
+      }
     }
   }
   return differences
@@ -168,7 +210,9 @@ export function groupDifferences(differences: RecordingDifference[]): GroupedDif
       difference.field,
       difference.path,
       canonicalJson(difference.expected),
-      canonicalJson(difference.actual)
+      canonicalJson(difference.actual),
+      difference.expectedPresent,
+      difference.actualPresent
     ].join('\0')
     const group = groups.get(key)
     if (group) {

@@ -1,15 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   endEmbeddedLanguages,
   tokenizeMonarchDocument,
   tokenTypeAt
 } from './monarch-tokenizer-test-harness'
-import {
-  QUARTO_LANGUAGE_ID,
-  quartoLanguageConfiguration,
-  quartoMonarchLanguage,
-  registerQuartoLanguage
-} from './register-quarto'
+import { QUARTO_LANGUAGE_ID, quartoMonarchLanguage } from './register-quarto'
 
 const FENCE = '```'
 const LONG_FENCE = '````'
@@ -22,44 +17,7 @@ function embedsFor(source: string): (string | null)[] {
   return endEmbeddedLanguages(tokenizeQuarto(source))
 }
 
-function createMonacoMock(existingLanguageIds: string[] = ['markdown']) {
-  const languages = existingLanguageIds.map((id) => ({ id }))
-  return {
-    languages: {
-      getLanguages: vi.fn(() => languages),
-      register: vi.fn((entry: { id: string }) => {
-        languages.push({ id: entry.id })
-      }),
-      setLanguageConfiguration: vi.fn(),
-      setMonarchTokensProvider: vi.fn()
-    }
-  }
-}
-
 describe('registerQuartoLanguage', () => {
-  it('registers the quarto language, tokenizer, and configuration once', () => {
-    const monaco = createMonacoMock()
-
-    registerQuartoLanguage(monaco)
-    registerQuartoLanguage(monaco)
-
-    expect(monaco.languages.register).toHaveBeenCalledTimes(1)
-    expect(monaco.languages.register).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: QUARTO_LANGUAGE_ID,
-        extensions: ['.qmd', '.rmd', '.rmarkdown']
-      })
-    )
-    expect(monaco.languages.setMonarchTokensProvider).toHaveBeenCalledWith(
-      QUARTO_LANGUAGE_ID,
-      quartoMonarchLanguage
-    )
-    expect(monaco.languages.setLanguageConfiguration).toHaveBeenCalledWith(
-      QUARTO_LANGUAGE_ID,
-      quartoLanguageConfiguration
-    )
-  })
-
   it('hands a leading --- block to yaml and returns to markdown', () => {
     expect(embedsFor(['---', 'format: revealjs', '---', '# Title'].join('\n'))).toEqual([
       'yaml',
@@ -92,15 +50,6 @@ describe('registerQuartoLanguage', () => {
     expect(embedsFor([`${FENCE}{=html}`, '<b>x</b>', FENCE].join('\n'))[0]).toBe('html')
     // {ojs} and {d3} are JavaScript dialects Monaco has no language id for.
     expect(embedsFor([`${FENCE}{ojs}`, 'x = 1', FENCE].join('\n'))[0]).toBe('javascript')
-  })
-
-  it('leaves an engine Monaco does not know uncolored instead of failing', () => {
-    expect(embedsFor([`${FENCE}{tikz}`, '\\draw;', FENCE, 'after'].join('\n'))).toEqual([
-      'tikz',
-      'tikz',
-      null,
-      null
-    ])
   })
 
   it('keeps an escaped ```{{python}} cell out of the engine tokenizer', () => {

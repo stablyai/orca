@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { NativeChatTaskList } from './NativeChatTaskList'
-import type { NativeChatTaskList as TaskList } from '../../../../shared/native-chat-task-list'
+import type { NativeChatTaskList as TaskList } from '../../../../shared/native-chat/input/native-chat-task-list'
 
 afterEach(cleanup)
 const previous: TaskList = {

@@ -45,6 +45,16 @@ describe('nativeChatToolRunSentence in English', () => {
     expect(english([shell, shell])).toBe('Ran 2 commands')
   })
 
+  it('counts Orca browser CLI calls as browser use, settled and live', () => {
+    const browser = [
+      { name: 'Bash', input: { command: 'orca goto --url https://example.com' } },
+      { name: 'Bash', input: { command: 'orca snapshot --page p1' } },
+      { name: 'Bash', input: { command: 'cd app && orca click --element e3' } }
+    ]
+    expect(english(browser)).toBe('Used the browser 3 times')
+    expect(english(browser, true)).toBe('Using the browser 3 times')
+  })
+
   it('joins two clauses with "and" and no comma', () => {
     expect(english([shell, shell, read])).toBe('Ran 2 commands and read 1 file')
   })

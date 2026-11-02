@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest'
+import { i18n } from '@/i18n/i18n'
+import { PSEUDO_LOCALIZATION_LOCALE } from '@/i18n/pseudo-localization'
 import { resolveDropdownItems } from './source-control-dropdown-items'
-import type { DropdownActionInputs, DropdownItem } from './source-control-dropdown-item-types'
+import type {
+  DropdownActionInputs,
+  DropdownItem
+} from '../../../../shared/source-control-dropdown-item-types'
 import {
   hasUsableHostedReviewPushTarget,
   resolveHostedReviewActionUpstreamStatus
-} from './source-control/review/hosted-review-push-target'
+} from '../../../../shared/hosted-review-push-target'
 
 function inputs(overrides: Partial<DropdownActionInputs> = {}): DropdownActionInputs {
   return {
@@ -644,6 +649,79 @@ describe('resolveDropdownItems', () => {
     expect(divergedByKind.fast_forward.title).toBe(
       'Try a fast-forward pull; git may reject local commits'
     )
+  })
+
+  it('routes Commit & Sync, Rebase, and Create PR blocked copy through the active locale', async () => {
+    await i18n.changeLanguage(PSEUDO_LOCALIZATION_LOCALE)
+    try {
+      const loading = resolveDropdownItems(inputs({ rebaseBaseRef: 'origin/main' }))
+      const blocked = resolveDropdownItems(
+        inputs({
+          upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
+          hostedReviewCreation: {
+            provider: 'github',
+            review: null,
+            canCreate: false,
+            blockedReason: 'dirty',
+            nextAction: 'commit',
+            reviewLookupOutcome: 'not_found'
+          }
+        })
+      )
+      const loadingByKind = Object.fromEntries(
+        loading.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+      )
+      const blockedByKind = Object.fromEntries(
+        blocked.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+      )
+      expect(loadingByKind.commit_sync.title).toBe('[Checking branch status…]')
+      expect(loadingByKind.rebase_base.label).toBe('[Rebase from origin/main]')
+      expect(blockedByKind.create_pr.hint).toBe('[Commit changes first]')
+    } finally {
+      await i18n.changeLanguage('en')
+    }
+  })
+
+  it('routes every row label and tooltip through the active locale', async () => {
+    await i18n.changeLanguage(PSEUDO_LOCALIZATION_LOCALE)
+    try {
+      const idle = resolveDropdownItems(
+        inputs({
+          conflictOperation: 'merge',
+          upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0, upstreamName: 'origin/main' },
+          hostedReviewCreation: {
+            provider: 'github',
+            review: null,
+            canCreate: true,
+            blockedReason: null,
+            nextAction: null,
+            reviewLookupOutcome: 'not_found'
+          }
+        })
+      )
+      for (const entry of idle) {
+        if (entry.kind !== 'separator') {
+          expect(entry.label).toMatch(/^\[/)
+          expect(entry.title).toMatch(/^\[/)
+        }
+      }
+      const idleByKind = Object.fromEntries(
+        idle.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+      )
+      expect(idleByKind.commit.title).toBe('[Stage at least one file to commit]')
+      expect(idleByKind.push.title).toBe('[Nothing to push to origin/main]')
+      expect(idleByKind.abort_merge.title).toBe('[Abort the merge in progress]')
+
+      const loading = resolveDropdownItems(inputs())
+      const loadingByKind = Object.fromEntries(
+        loading.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+      )
+      for (const kind of ['commit_push', 'pull', 'fast_forward', 'sync', 'publish']) {
+        expect(loadingByKind[kind].title).toBe('[Checking branch status…]')
+      }
+    } finally {
+      await i18n.changeLanguage('en')
+    }
   })
 })
 

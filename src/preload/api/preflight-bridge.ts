@@ -5,6 +5,7 @@ import type { ZCodeInteractiveCapability } from '../../shared/zcode-missing-tui'
 export const preflightApi = {
   check: (args?: {
     force?: boolean
+    wakeWslDistro?: boolean
   }): Promise<{
     git: { installed: boolean }
     gh: { installed: boolean; authenticated: boolean }
@@ -26,12 +27,19 @@ export const preflightApi = {
     }
     linear: { connected: boolean }
   }> => ipcRenderer.invoke('preflight:check', args),
-  detectAgents: (args?: PreflightRuntimeContext): Promise<string[]> =>
-    ipcRenderer.invoke('preflight:detectAgents', args),
+  detectAgents: (
+    args?: PreflightRuntimeContext & { enabledOnly?: boolean; wakeWslDistro?: boolean }
+  ): Promise<string[]> => ipcRenderer.invoke('preflight:detectAgents', args),
+  onWslDistroRunning: (callback: (distro: string) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, distro: string): void => callback(distro)
+    ipcRenderer.on('preflight:wslDistroRunning', listener)
+    return () => ipcRenderer.removeListener('preflight:wslDistroRunning', listener)
+  },
   zcodeInteractiveCapability: (): Promise<ZCodeInteractiveCapability> =>
     ipcRenderer.invoke('preflight:zcodeInteractiveCapability'),
-  refreshAgents: (args?: PreflightRuntimeContext): Promise<RefreshAgentsResult> =>
-    ipcRenderer.invoke('preflight:refreshAgents', args),
+  refreshAgents: (
+    args?: PreflightRuntimeContext & { enabledOnly?: boolean; wakeWslDistro?: boolean }
+  ): Promise<RefreshAgentsResult> => ipcRenderer.invoke('preflight:refreshAgents', args),
   detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
     ipcRenderer.invoke('preflight:detectRemoteAgents', args),
   detectRemoteWindowsTerminalCapabilities: (args: {

@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId,
@@ -29,6 +30,7 @@ import {
 const NAME_TOKEN = '\u0000'
 
 const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
+  useUiLanguageRevision()
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
@@ -84,16 +86,14 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
   const openTerminalWarning =
     openTerminalCount === 0
       ? null
-      : openTerminalCount === 1
-        ? translate(
-            'auto.components.sidebar.RemoveFolderDialog.openTerminalWarningOne',
-            '1 open terminal in this project will be closed.'
-          )
-        : translate(
-            'auto.components.sidebar.RemoveFolderDialog.openTerminalWarningMany',
-            '{{count}} open terminals in this project will be closed.',
-            { count: openTerminalCount }
-          )
+      : translate(
+          'auto.components.sidebar.RemoveFolderDialog.openTerminalWarning',
+          '{{count}} open terminals in this project will be closed.',
+          {
+            count: openTerminalCount,
+            defaultValue_one: '{{count}} open terminal in this project will be closed.'
+          }
+        )
 
   // Translate the whole sentence for reorderable locales, then restore emphasis at the name sentinel.
   const description =

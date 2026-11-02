@@ -170,7 +170,10 @@ describe('browserManager grab operations', () => {
       )
 
       expect(preventDefault).toHaveBeenCalledTimes(1)
-      expect(rendererSendMock).toHaveBeenCalledWith('ui:newBrowserTab')
+      expect(rendererSendMock).toHaveBeenCalledWith(
+        'ui:browserPageTabShortcut',
+        expect.objectContaining({ code: 'KeyB', shift: true })
+      )
     })
 
     const annotateChord =

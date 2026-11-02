@@ -169,28 +169,45 @@ describe('browser workspace pane retention props', () => {
   it('threads all three retention terms to the page that owns them', () => {
     renderWorkspacePane()
     expect(mocks.pageProps.some((props) => props.id === 'page-b')).toBe(false)
-
     cleanup()
-    const token = acquireBrowserAutomationVisibility('page-b')
-    hydrateBrowserDrivers([
-      { browserPageId: 'page-b', driver: { kind: 'mobile', clientId: 'phone-1' } }
-    ])
-    hydrateBrowserRemoteViewerPages(['page-b'])
-    renderWorkspacePane()
 
+    const token = acquireBrowserAutomationVisibility('page-b')
+    renderWorkspacePane()
     expect(propsFor('page-b')).toEqual({
       id: 'page-b',
       isAutomationVisible: true,
+      isMobileDriven: false,
+      isRemotelyViewed: false
+    })
+    cleanup()
+    releaseBrowserAutomationVisibility(token)
+
+    hydrateBrowserDrivers([
+      { browserPageId: 'page-b', driver: { kind: 'mobile', clientId: 'phone-1' } }
+    ])
+    renderWorkspacePane()
+    expect(propsFor('page-b')).toEqual({
+      id: 'page-b',
+      isAutomationVisible: false,
       isMobileDriven: true,
+      isRemotelyViewed: false
+    })
+    cleanup()
+    hydrateBrowserDrivers([])
+
+    hydrateBrowserRemoteViewerPages(['page-b'])
+    renderWorkspacePane()
+    expect(propsFor('page-b')).toEqual({
+      id: 'page-b',
+      isAutomationVisible: false,
+      isMobileDriven: false,
       isRemotelyViewed: true
     })
-    // Why the sibling: each term must land on the page it belongs to, not on every page of the tab.
     expect(propsFor('page-a')).toEqual({
       id: 'page-a',
       isAutomationVisible: false,
       isMobileDriven: false,
       isRemotelyViewed: false
     })
-    releaseBrowserAutomationVisibility(token)
   })
 })

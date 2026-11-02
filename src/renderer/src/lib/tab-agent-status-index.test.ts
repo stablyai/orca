@@ -16,7 +16,7 @@ import type {
 } from '../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TerminalAgent } from '../../../shared/terminal-agent'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 
 // Keep pre-index scans as the randomized differential oracle for exact resolver behavior.
 

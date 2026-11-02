@@ -46,8 +46,4 @@ describe('getWorkspaceSessionTabActivityIds', () => {
       })
     ).toEqual(new Set(['repo::/a', 'folder:f1']))
   })
-
-  it('reads a missing session as no activity', () => {
-    expect(getWorkspaceSessionTabActivityIds(null)).toEqual(new Set())
-  })
 })

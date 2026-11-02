@@ -9,7 +9,8 @@ vi.mock('@/runtime/web-runtime-terminal-actions', () => ({
 
 const { createRemotePaneLayoutPusher } = await import('./remote-pane-layout-push')
 const { notePendingPaneTitleRename } = await import('@/runtime/pending-pane-title-renames')
-const { toRemoteRuntimePtyId } = await import('../../../../shared/remote-runtime-pty-id')
+const { toRemoteRuntimePtyId } =
+  await import('../../../../shared/remote-runtime/remote-runtime-pty-id')
 
 const PERSISTS = 100
 

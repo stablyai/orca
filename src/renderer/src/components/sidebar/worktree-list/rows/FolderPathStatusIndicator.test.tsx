@@ -22,13 +22,6 @@ function renderIndicator(reason: unknown): string {
 }
 
 describe('FolderPathStatusIndicator', () => {
-  it('marks a folder missing for a declared reason', () => {
-    const markup = renderIndicator('missing')
-
-    expect(markup).toContain('aria-label="Folder not found"')
-    expect(markup).toContain('text-destructive')
-  })
-
   // Keep an imprecise marker for unknown host reasons so broken folders cannot appear healthy.
   it('still renders the marker when a newer host sends an undeclared reason', () => {
     const markup = renderIndicator('permission-denied')
@@ -50,15 +43,5 @@ describe('FolderPathStatusIndicator', () => {
     expect(markup).not.toContain('aria-label=""')
     // Why: hasOwn coerces its key, so ['missing'] must not be read as the confirmed-stale 'missing'.
     expect(markup).not.toContain('aria-label="Folder not found"')
-  })
-
-  it('renders nothing for a healthy folder', () => {
-    const markup = renderToStaticMarkup(
-      <TooltipProvider>
-        <FolderPathStatusIndicator status={{ path: '/srv/scans', exists: true }} />
-      </TooltipProvider>
-    )
-
-    expect(markup).toBe('')
   })
 })

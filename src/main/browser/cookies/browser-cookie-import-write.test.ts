@@ -28,7 +28,7 @@ function recordingStore() {
   return { writeCookieIdentity }
 }
 
-const silentOptions = { stopOnFailure: false, log: () => undefined }
+const silentOptions = { log: () => undefined }
 
 describe('writeImportedCookies', () => {
   it('writes a partitioned cookie through the identity store with its partition key intact', async () => {
@@ -79,7 +79,7 @@ describe('writeImportedCookies', () => {
         sourceCookie({ name: 'chips', partition: { status: 'unreadable', reason: 'no ancestor' } }),
         sourceCookie({ name: 'plain', partition: { status: 'unpartitioned' } })
       ],
-      { stopOnFailure: false, log: (message) => logged.push(message) }
+      { log: (message) => logged.push(message) }
     )
 
     expect(store.writeCookieIdentity).toHaveBeenCalledTimes(1)
@@ -102,7 +102,7 @@ describe('writeImportedCookies', () => {
           partition: { status: 'unreadable', reason: 'no ancestor' }
         })
       ],
-      { stopOnFailure: false, log: (message) => logged.push(message) }
+      { log: (message) => logged.push(message) }
     )
 
     const line = logged.join('\n')
@@ -133,26 +133,7 @@ describe('writeImportedCookies', () => {
     })
   })
 
-  it('stops at the first rejection when the caller must roll back', async () => {
-    const store = recordingStore()
-    store.writeCookieIdentity.mockRejectedValueOnce(new Error('rejected'))
-
-    const phase = await writeImportedCookies(
-      store,
-      [
-        sourceCookie({ name: 'first', partition: { status: 'unpartitioned' } }),
-        sourceCookie({ name: 'second', partition: { status: 'unpartitioned' } })
-      ],
-      { stopOnFailure: true, log: () => undefined }
-    )
-
-    expect(store.writeCookieIdentity).toHaveBeenCalledTimes(1)
-    expect(phase.writeRejected).toBe(1)
-    expect(phase.importedCount).toBe(0)
-    expect(phase.failure).toBeInstanceOf(Error)
-  })
-
-  it('keeps going past a rejection when the caller has a restart fallback', async () => {
+  it('keeps going past a rejection and counts only successful writes', async () => {
     const store = recordingStore()
     store.writeCookieIdentity.mockRejectedValueOnce(new Error('rejected'))
 
@@ -170,20 +151,32 @@ describe('writeImportedCookies', () => {
     expect(phase.importedCount).toBe(1)
   })
 
-  it('reports the removal key at the identity path so a rollback can undo the write', async () => {
-    const phase = await writeImportedCookies(
-      recordingStore(),
+  it.each([
+    ['app.example', true],
+    ['.app.example', false]
+  ])('preserves the source scope for %s', async (domain, hostOnly) => {
+    const store = recordingStore()
+    await writeImportedCookies(
+      store,
+      [sourceCookie({ domain, name: 'sid', partition: { status: 'unpartitioned' } })],
+      silentOptions
+    )
+    expect(store.writeCookieIdentity.mock.calls[0][0].hostOnly).toBe(hostOnly)
+  })
+  it('never dispatches an expired cookie, which would delete the existing coordinate', async () => {
+    const store = recordingStore()
+    const result = await writeImportedCookies(
+      store,
       [
         sourceCookie({
-          name: 'scoped',
-          url: 'https://app.example/',
-          path: '/settings',
+          name: 'sid',
+          expirationDate: 1,
           partition: { status: 'unpartitioned' }
         })
       ],
       silentOptions
     )
-
-    expect(phase.attemptedKeys).toEqual([{ url: 'https://app.example/settings', name: 'scoped' }])
+    expect(result).toMatchObject({ importedCount: 0, expired: 1, writeRejected: 0 })
+    expect(store.writeCookieIdentity).not.toHaveBeenCalled()
   })
 })

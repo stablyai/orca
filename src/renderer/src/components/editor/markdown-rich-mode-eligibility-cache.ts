@@ -4,6 +4,7 @@ import {
   type MarkdownRichModeEligibility,
   type MarkdownRichModeEligibilityDecision
 } from './markdown-rich-mode'
+import { exceedsMarkdownRenderOverrideSizeLimit } from './markdown-rich-size-limit'
 
 type EligibilityCacheEntry = {
   content: string
@@ -46,6 +47,10 @@ function getCachedMarkdownRichModeEligibilityDecision(params: {
   }
 
   const decision = getMarkdownRichModeEligibilityDecision({ content, sizeOverridden })
+  // Don't retain hard-cap documents; checked after lookup so cache hits skip the UTF-8 probe.
+  if (decision.exceedsSizeLimit && exceedsMarkdownRenderOverrideSizeLimit(content)) {
+    return decision
+  }
   entries.unshift({ content, sizeOverridden, decision })
   if (entries.length > MAX_ENTRIES) {
     entries.length = MAX_ENTRIES

@@ -131,11 +131,11 @@ describe('updater', () => {
       )
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
     const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
+    const mainWindow = updaterMainWindow(sendMock)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdatesFromMenu()
 
     await vi.waitFor(() => {
@@ -186,11 +186,11 @@ describe('updater', () => {
       return new Promise(() => {})
     })
     const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
+    const mainWindow = updaterMainWindow(sendMock)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdatesFromMenu()
 
     await vi.waitFor(() => {
@@ -239,11 +239,11 @@ describe('updater', () => {
       return Promise.resolve(undefined)
     })
     const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
+    const mainWindow = updaterMainWindow(sendMock)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdatesFromMenu()
 
     await vi.waitFor(() => {
@@ -296,11 +296,11 @@ describe('updater', () => {
       return new Promise(() => {})
     })
     const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
+    const mainWindow = updaterMainWindow(sendMock)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdatesFromMenu()
 
     await vi.waitFor(() => {
@@ -338,11 +338,11 @@ describe('updater', () => {
       return new Promise(() => {})
     })
     const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
+    const mainWindow = updaterMainWindow(sendMock)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdatesFromMenu()
 
     await vi.waitFor(() => {
@@ -381,11 +381,11 @@ describe('updater', () => {
       )
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
     const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
+    const mainWindow = updaterMainWindow(sendMock)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdatesFromMenu()
 
     await vi.waitFor(() => {
@@ -424,11 +424,11 @@ describe('updater', () => {
     vi.useFakeTimers()
     fetchNewerReleaseTagsMock.mockImplementation(() => new Promise(() => {}))
     const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
+    const mainWindow = updaterMainWindow(sendMock)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdatesFromMenu()
 
     expect(sendMock).toHaveBeenCalledWith('updater:status', {
@@ -466,12 +466,12 @@ describe('updater', () => {
       )
       .mockResolvedValueOnce(undefined)
     const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
+    const mainWindow = updaterMainWindow(sendMock)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
     appMock.getVersion.mockReturnValue('1.4.35')
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => null })
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => null })
     checkForUpdatesFromMenu({ includePrerelease: true })
 
     expect(sendMock).toHaveBeenCalledWith('updater:status', {
@@ -523,11 +523,11 @@ describe('updater', () => {
       return Promise.reject(new Error('net::ERR_FAILED'))
     })
     const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
+    const mainWindow = updaterMainWindow(sendMock)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => null })
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => null })
     checkForUpdatesFromMenu()
     resolveTags({ tags: [], state: 'no-newer' })
 
@@ -572,11 +572,11 @@ describe('updater', () => {
         })
     )
     autoUpdaterMock.checkForUpdates.mockImplementation(() => new Promise(() => {}))
-    const mainWindow = { webContents: { send: vi.fn() } }
+    const mainWindow = updaterMainWindow(vi.fn())
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdatesFromMenu()
     checkForUpdatesFromMenu()
 

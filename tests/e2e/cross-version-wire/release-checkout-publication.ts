@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { lock } from 'proper-lockfile'
 import { scavengeReleaseCheckoutStaging } from './release-checkout-tree.ts'
 
-export const CHECKOUT_FORMAT = 8
+export const CHECKOUT_FORMAT = 9
 
 export type CheckoutLockOptions = {
   realpath: false

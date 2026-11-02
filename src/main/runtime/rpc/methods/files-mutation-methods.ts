@@ -1,6 +1,8 @@
 import { defineMethod } from '../core'
+import { FILE_REPLACE_WITH_UPLOAD_METHOD } from '../../../../shared/file-bytes-write'
 import {
   FileCommitUpload,
+  FileReplaceWithUpload,
   FileCopy,
   FileDelete,
   FileMutationOpen,
@@ -129,6 +131,19 @@ export const FILE_MUTATION_METHODS = [
         params.worktree,
         params.tempRelativePath,
         params.finalRelativePath,
+        ...sshMutationArguments(params)
+      )
+  }),
+  defineMethod({
+    name: FILE_REPLACE_WITH_UPLOAD_METHOD,
+    permission: 'workspace',
+    params: FileReplaceWithUpload,
+    handler: async (params, { runtime }) =>
+      runtime.replaceFileExplorerFileWithUpload(
+        params.worktree,
+        params.tempRelativePath,
+        params.finalRelativePath,
+        params.bytesPrecondition,
         ...sshMutationArguments(params)
       )
   }),

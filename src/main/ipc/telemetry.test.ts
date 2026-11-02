@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 const handlers = new Map<string, (_event: unknown, ...args: unknown[]) => unknown>()
 const {

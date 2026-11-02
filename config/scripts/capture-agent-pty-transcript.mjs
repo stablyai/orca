@@ -25,6 +25,9 @@ Options
   --cols <n> --rows <n>  Pin the PTY size (default: this terminal's size, else 120x40)
   --duration <seconds>   Stop unattended after N seconds
   --send "<ms>:<text>"   Type <text> into the PTY at <ms> (repeatable; \\r \\n \\t \\e escapes)
+  --resize-at <ms>:<cols>x<rows>
+                         Resize the PTY at <ms> (repeatable). The transcript gets an inline
+                         CSI 8;<rows>;<cols>t marker where it happened, and the sidecar lists it
   --note "<text>"        Recorded in the <name>.meta.json sidecar
   --scan <file...>       Scan existing transcripts for identifiers/credentials and exit
   --redact               With --scan: rewrite each finding as a same-length placeholder
@@ -33,7 +36,15 @@ Press Ctrl-] to end a capture. That key is consumed here, so the agent keeps wha
 dialog it is showing — which is the only way to capture a dialog that owns the screen.`
 
 function parseArgs(argv) {
-  const options = { cols: null, rows: null, duration: null, scan: [], sends: [], redact: false }
+  const options = {
+    cols: null,
+    rows: null,
+    duration: null,
+    scan: [],
+    sends: [],
+    resizes: [],
+    redact: false
+  }
   const command = []
   let cursor = 0
   let afterSeparator = false
@@ -58,6 +69,9 @@ function parseArgs(argv) {
     } else if (arg === '--send') {
       cursor += 1
       options.sends.push(parseSend(argv[cursor]))
+    } else if (arg === '--resize-at') {
+      cursor += 1
+      options.resizes.push(parseResizeAt(argv[cursor]))
     } else if (arg.startsWith('--')) {
       const key = arg.slice(2)
       cursor += 1
@@ -91,6 +105,20 @@ function parseSend(value) {
     .slice(separator + 1)
     .replace(/\\(.)/g, (whole, code) => SEND_ESCAPES[code] ?? whole)
   return { atMs, text }
+}
+
+/** `"<ms>:<cols>x<rows>"` — a PTY resize at a fixed offset, to capture the agent's repaint. */
+function parseResizeAt(value) {
+  const match = /^(\d+):(\d+)x(\d+)$/.exec(String(value ?? ''))
+  if (!match || Number(match[2]) < 1 || Number(match[3]) < 1) {
+    throw new Error(`--resize-at expects "<ms>:<cols>x<rows>", got ${String(value)}`)
+  }
+  return { atMs: Number(match[1]), cols: Number(match[2]), rows: Number(match[3]) }
+}
+
+// Why XTWINOPS "resize to rows;cols": a replay can apply it, and xterm ignores it by default.
+function resizeMarker(cols, rows) {
+  return `${ESC}[8;${rows};${cols}t`
 }
 
 function runScan(files, redact) {
@@ -154,11 +182,16 @@ ${String(error)}`
 
   const sink = createWriteStream(outPath)
   let recording = true
+  let recordedBytes = 0
+  const record = (bytes) => {
+    sink.write(bytes)
+    recordedBytes += bytes.length
+  }
   term.onData((chunk) => {
     const bytes = typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk
     // Stop recording before kill or shutdown repaint overwrites the dialog/mid-turn frame being captured.
     if (recording) {
-      sink.write(bytes)
+      record(bytes)
     }
     process.stdout.write(bytes)
   })
@@ -190,12 +223,24 @@ ${String(error)}`
   })
   // Scripted keystrokes use the real PTY when CI/agents have no interactive TTY.
   const sendTimers = options.sends.map((send) => setTimeout(() => term.write(send.text), send.atMs))
+  const resizes = []
+  const resizeTimers = options.resizes.map((resize) =>
+    setTimeout(() => {
+      if (!recording) {
+        return
+      }
+      // Marker first: the repaint the resize triggers arrives after it in the byte stream.
+      resizes.push({ ...resize, byteOffset: recordedBytes })
+      record(Buffer.from(resizeMarker(resize.cols, resize.rows), 'utf8'))
+      term.resize(resize.cols, resize.rows)
+    }, resize.atMs)
+  )
   const durationTimer = options.duration === null ? null : setTimeout(stop, options.duration * 1000)
 
   const exitCode = await new Promise((resolveExit) => {
     term.onExit(({ exitCode: code }) => resolveExit(code ?? 0))
   })
-  for (const timer of sendTimers) {
+  for (const timer of [...sendTimers, ...resizeTimers]) {
     clearTimeout(timer)
   }
   if (durationTimer !== null) {
@@ -207,7 +252,7 @@ ${String(error)}`
   process.stdin.pause()
   await new Promise((done) => sink.end(done))
 
-  writeMeta(outPath, { command, cols, rows, note: options.note ?? null, exitCode })
+  writeMeta(outPath, { command, cols, rows, resizes, note: options.note ?? null, exitCode })
   const findings = scanTranscriptForSecrets(readFileSync(outPath, 'utf8'))
   console.log(`\nTranscript: ${outPath}`)
   console.log(formatFindings('scrub check', findings))
@@ -231,6 +276,7 @@ function writeMeta(outPath, details) {
         command: details.command,
         cols: details.cols,
         rows: details.rows,
+        ...(details.resizes.length > 0 ? { resizes: details.resizes } : {}),
         note: details.note,
         exitCode: details.exitCode
       },
@@ -268,4 +314,4 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   )
 }
 
-export { parseArgs, resolveSpawn }
+export { parseArgs, resizeMarker, resolveSpawn }

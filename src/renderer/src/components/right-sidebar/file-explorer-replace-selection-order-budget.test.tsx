@@ -34,7 +34,7 @@ it.each([1, 12, 128, 1000])(
     })
     const focus = vi.fn()
     const scroll = vi.fn()
-    const view = renderHook(() => useFileExplorerSelection(projection, false))
+    const view = renderHook(() => useFileExplorerSelection(projection, false, 'local'))
     const keys = ['ArrowDown', 'ArrowDown', 'End', 'Home']
     const targets = [0, Math.min(1, count - 1), count - 1, 0]
     for (let turn = 0; turn < keys.length; turn++) {
@@ -88,7 +88,7 @@ it.each([false, true])(
     const replacement = createFileExplorerRowProjection(next)
     const order = vi.spyOn(projection, 'getOrderedPaths')
     const replacementOrder = vi.spyOn(replacement, 'getOrderedPaths')
-    const view = renderHook(({ current }) => useFileExplorerSelection(current, isMac), {
+    const view = renderHook(({ current }) => useFileExplorerSelection(current, isMac, 'local'), {
       initialProps: { current: projection }
     })
     const savedMove = view.result.current.moveSelection
@@ -133,7 +133,7 @@ it.each([false, true])(
 it('keeps empty/missing replacement and repeated-selection identity behavior', () => {
   const empty = createFileExplorerRowProjection([])
   const order = vi.spyOn(empty, 'getOrderedPaths')
-  const view = renderHook(() => useFileExplorerSelection(empty, false))
+  const view = renderHook(() => useFileExplorerSelection(empty, false, 'local'))
   act(() => view.result.current.moveSelection('missing', 'replace'))
   const previous = view.result.current.selectedPaths
   expect([...previous]).toEqual(['missing'])
@@ -155,7 +155,7 @@ it.each(['altKey', 'metaKey', 'ctrlKey'] as const)(
     const rows = nodes(12)
     const projection = createFileExplorerRowProjection(rows)
     const order = vi.spyOn(projection, 'getOrderedPaths')
-    const view = renderHook(() => useFileExplorerSelection(projection, false))
+    const view = renderHook(() => useFileExplorerSelection(projection, false, 'local'))
     const handlers = {
       moveSelection: view.result.current.moveSelection,
       toggleDir: vi.fn(),
@@ -197,7 +197,7 @@ it.each([false, true])(
     const rows = nodes(12)
     const projection = createFileExplorerRowProjection(rows)
     const order = vi.spyOn(projection, 'getOrderedPaths')
-    const view = renderHook(() => useFileExplorerSelection(projection, isMac))
+    const view = renderHook(() => useFileExplorerSelection(projection, isMac, 'local'))
     const replace = vi.fn((node: TreeNode) => view.result.current.setSingleSelectedPath(node.path))
     const buttons = render(
       <>

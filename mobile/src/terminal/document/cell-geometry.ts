@@ -25,7 +25,7 @@ export function getLineText(scope: TerminalDocumentScope, absRow: number) {
   return line.translateToString(false)
 }
 
-// Wide cells collapse in strings; convert cell columns to string offsets before matching tapped URLs or paths.
+// Wide cells collapse in strings; convert cell columns to string offsets before slicing row text.
 export function cellColToStringIndex(scope: TerminalDocumentScope, absRow: number, col: number) {
   if (!scope.term) {
     return col

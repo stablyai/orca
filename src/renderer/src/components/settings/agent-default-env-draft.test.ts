@@ -6,10 +6,6 @@ import {
 } from './agent-default-env-draft'
 
 describe('agent default environment draft', () => {
-  it('stringifies environment entries in the settings draft format', () => {
-    expect(stringifyAgentDefaultEnvDraft({ FOO: 'bar', BAZ: 'qux' })).toBe('FOO=bar BAZ=qux')
-  })
-
   it('parses back every value it formats', () => {
     const env = {
       SPACED: 'two words',

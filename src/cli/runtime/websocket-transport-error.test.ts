@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
 import { orchestrationMutationRecoveryError } from '../orchestration-mutation-recovery'
 
@@ -10,7 +10,7 @@ const { sendRemoteRuntimeRequest, sendRemoteRuntimeRequestWithStatusPreflight } 
   })
 )
 
-vi.mock('../../shared/remote-runtime-client', () => ({
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequest,
   sendRemoteRuntimeRequestWithStatusPreflight
 }))

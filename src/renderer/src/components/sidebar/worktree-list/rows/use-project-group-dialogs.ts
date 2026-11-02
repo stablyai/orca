@@ -19,7 +19,12 @@ import {
 export type ProjectGroupNameDialogState =
   | { type: 'create-from-repo'; repo: Repo }
   // hostId is the group row's owner host, so the mutation is not routed to whichever host has focus.
-  | { type: 'rename'; groupId: string; currentName: string; hostId?: ExecutionHostId }
+  | {
+      type: 'rename'
+      groupId: string
+      currentName: string
+      hostId?: ExecutionHostId
+    }
 
 export type ProjectGroupDeleteDialogState = {
   groupId: string
@@ -57,12 +62,13 @@ function reportProjectGroupDeleteFailures(result: {
       ),
       {
         description: translate(
-          'auto.components.sidebar.WorktreeList.f94466bc39',
-          '{{value0}} of {{value1}} contained project{{value2}} remained after deleting the group.',
+          'auto.components.sidebar.WorktreeList.groupProjectsRemained',
+          '{{remaining}} of {{count}} contained projects remained after deleting the group.',
           {
-            value0: result.failedProjectRemovals.length,
-            value1: requestedCount,
-            value2: requestedCount === 1 ? '' : 's'
+            remaining: result.failedProjectRemovals.length,
+            count: requestedCount,
+            defaultValue_one:
+              '{{remaining}} of {{count}} contained project remained after deleting the group.'
           }
         )
       }

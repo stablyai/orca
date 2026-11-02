@@ -7,8 +7,10 @@ export type AiVaultDeleteSessionArgs = {
   // Mixed-version optional field; delete validates path/host/agent only, never session identity/liveness.
   sessionId?: string
   filePath: string
-  // The session's host; only a local session may be deleted.
+  // The session's host; a runtime-hosted session is deleted by that host.
   executionHostId?: ExecutionHostId
+  // The pairing the user confirmed against; a same-id re-pair to another machine must not receive it.
+  expectedEnvironmentPairingRevision?: number
 }
 
 export type AiVaultDeleteSessionResult =
@@ -46,19 +48,25 @@ export function isAiVaultSyntheticSessionPath(filePath: string): boolean {
   return filePath.includes('#')
 }
 
-export type AiVaultSessionDeleteRejectionCode =
-  | 'invalid-path'
-  | 'unsupported-agent'
-  | 'non-local-host'
-  | 'synthetic-path'
-  | 'path-outside-known-roots'
+export const AI_VAULT_SESSION_DELETE_REJECTION_CODES = [
+  'invalid-path',
+  'unsupported-agent',
+  'non-local-host',
+  // The owning host predates aiVault.deleteSession.
+  'host-update-required',
+  'synthetic-path',
+  'path-outside-known-roots',
   // Reject paths the scanner would not surface (wrong extensions or pruned subagents).
-  | 'undiscoverable-path'
+  'undiscoverable-path',
   // A root-level file does not name a session directory; deleting its parent would erase every session.
-  | 'no-session-directory'
+  'no-session-directory',
   // fs-side guard: lstat disagrees with the removal's declared kind (a symlink,
   // or a file where the plan expects a directory).
-  | 'unexpected-target-kind'
+  'unexpected-target-kind'
+] as const
+
+export type AiVaultSessionDeleteRejectionCode =
+  (typeof AI_VAULT_SESSION_DELETE_REJECTION_CODES)[number]
 
 // Reject disk-kind mismatches; realpath must remain inside roots because symlinked parents can escape textual checks.
 export type AiVaultSessionDeleteRemoval = {

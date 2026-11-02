@@ -8,9 +8,9 @@ import {
 } from '../../../../shared/terminal-osc-color-reply'
 import { guardParserHandler } from './terminal-parser-handler-guard'
 import { installProgramStatusQueryResponder } from '../../../../shared/program-status/query-responder'
+import { terminalThemeColorSchemeReport } from './terminal-view-attributes-publisher'
 
 export const DEFAULT_DA1_RESPONSE = '\x1b[?1;2c'
-export const CONPTY_DA1_RESPONSE = '\x1b[?61;4c'
 
 // DEC DA1 "Sixel graphics" capability code; image tools feature-detect on it.
 const SIXEL_DA1_ATTRIBUTE = '4'
@@ -144,7 +144,11 @@ export function createTerminalPixelSizeQueryResponder(
 
 export function installTerminalCapabilityReplyHandlers(
   deps: TerminalCapabilityRepliesDeps
-): IDisposable {
+): IDisposable & { replyPrimaryDeviceAttributesQuery: () => boolean } {
+  const replyPrimaryDeviceAttributesQuery = (): boolean => {
+    const base = deps.da1Response ?? DEFAULT_DA1_RESPONSE
+    return deps.sendInput(deps.sixelSupported?.() ? withSixelDa1Attribute(base) : base) !== false
+  }
   const disposables = [
     registerTerminalDa1Owner(deps.terminal, () =>
       deps.parser.registerCsiHandler(
@@ -155,12 +159,24 @@ export function installTerminalCapabilityReplyHandlers(
           }
           // Never answer replayed queries into the fresh shell; that recreates stray input.
           if (!deps.isReplaying()) {
-            const base = deps.da1Response ?? DEFAULT_DA1_RESPONSE
-            deps.sendInput(deps.sixelSupported?.() ? withSixelDa1Attribute(base) : base)
+            replyPrimaryDeviceAttributesQuery()
           }
           return true
         })
       )
+    ),
+    // Panes disable xterm's colorSchemeQuery so mode 2031 has one owner; answer ?996n here instead.
+    deps.parser.registerCsiHandler(
+      { prefix: '?', final: 'n' },
+      guardParserHandler('csi-color-scheme-query', (params) => {
+        if (params[0] !== 996) {
+          return false
+        }
+        if (!deps.isReplaying()) {
+          deps.sendInput(terminalThemeColorSchemeReport(deps.terminal.options.theme))
+        }
+        return true
+      })
     ),
     deps.parser.registerOscHandler(
       10,
@@ -196,6 +212,7 @@ export function installTerminalCapabilityReplyHandlers(
   ]
 
   return {
-    dispose: () => disposeAll(disposables)
+    dispose: () => disposeAll(disposables),
+    replyPrimaryDeviceAttributesQuery
   }
 }

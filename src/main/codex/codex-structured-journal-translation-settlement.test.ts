@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { createJournalReducerState } from '../native-chat/agent-session-journal/journal-reducer'
 import { JournalLifecycleBatchAppender } from '../native-chat/agent-session-journal/journal-lifecycle-batch-appender'
 import type { JournalLifecycleMutationInput } from '../native-chat/agent-session-journal/journal-row-builders'
@@ -12,18 +10,13 @@ import {
   MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
   MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS
 } from '../native-chat/agent-session-journal/journal-row-schema'
-import {
-  createDeferredStructuredAgentSessionEventSink,
-  type StructuredAgentSessionEventSink
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import {
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_USER_INPUT_METHOD
 } from './codex-structured-prompt-replies'
-import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
-import { deferredTarget } from './codex-deferred-sink-target-test-support'
-import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 
 const SESSION_ID = 'session-1'
 const THREAD_ID = 'thread-abc'
@@ -96,20 +89,6 @@ function translatorWith(tap = recorder(), window = manualWindow()) {
   return { translator, tap, window }
 }
 
-function hardWatermarkDeferred() {
-  return createDeferredStructuredAgentSessionEventSink({
-    ...testEventSinkLogging(),
-    watermarks: {
-      pauseQueuedBytes: 1,
-      maxQueuedBytes: 1,
-      lowQueuedBytes: 0,
-      pauseQueuedOperations: 1,
-      maxQueuedOperations: 0,
-      lowQueuedOperations: 0
-    }
-  })
-}
-
 function terminalExitBatches(count: number, outputBytes: number): LifecycleBatch[] {
   const tap = recorder()
   const batches: LifecycleBatch[] = []
@@ -171,92 +150,6 @@ function expectLifecycleBatchBounds(batches: readonly LifecycleBatch[]): void {
 }
 
 describe('codex journal translation', () => {
-  it('admits turn start and turn settlement publications across the hard watermark', async () => {
-    const bodies: AgentJournalItemBody[] = []
-    const publishes: string[] = []
-    const deferred = hardWatermarkDeferred()
-    const translator = createCodexJournalTranslator({
-      sink: deferred.sink,
-      primaryThreadId: () => THREAD_ID
-    })
-
-    expect(translator.handle(TURN_STARTED)).toEqual({ accepted: true })
-    translator.handle(
-      notification('item/started', {
-        item: {
-          type: 'commandExecution',
-          id: 'exec-hard-settlement',
-          command: 'run',
-          status: 'inProgress'
-        }
-      })
-    )
-    expect(translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))).toEqual({
-      accepted: true
-    })
-    expect(deferred.state()).toMatchObject({ queuedOperations: 5, backpressured: true })
-
-    deferred.bind(deferredTarget(bodies, publishes))
-    await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
-
-    expect(bodies).toEqual([
-      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'running' }),
-      expect.objectContaining({ kind: 'tool-call', state: 'running' }),
-      expect.objectContaining({ kind: 'tool-call', state: 'failed' }),
-      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'completed' })
-    ])
-    expect(publishes).toHaveLength(2)
-  })
-
-  it('admits terminal session settlement publication across the hard watermark', async () => {
-    const bodies: AgentJournalItemBody[] = []
-    const publishes: string[] = []
-    const deferred = hardWatermarkDeferred()
-    const translator = createCodexJournalTranslator({
-      sink: deferred.sink,
-      primaryThreadId: () => THREAD_ID
-    })
-
-    translator.handle(TURN_STARTED)
-    translator.handle({
-      type: 'prompt',
-      sessionId: SESSION_ID,
-      threadId: THREAD_ID,
-      method: CODEX_COMMAND_APPROVAL_METHOD,
-      params: { availableDecisions: ['accept', 'decline'] },
-      codexItemId: 'exec-1',
-      promptKey: 'approval-before-exit'
-    })
-    expect(
-      translator.handle({
-        type: 'ended',
-        sessionId: SESSION_ID,
-        reason: 'lost child',
-        cause: 'unexpected-exit',
-        fence: 7,
-        acquisitionGeneration: 'generation-1'
-      })
-    ).toEqual({ accepted: true })
-    expect(deferred.state()).toMatchObject({ queuedOperations: 5, backpressured: true })
-
-    deferred.bind(deferredTarget(bodies, publishes))
-    await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
-
-    expect(bodies).toEqual([
-      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'running' }),
-      expect.objectContaining({
-        kind: 'approval',
-        resolution: expect.objectContaining({ state: 'pending' })
-      }),
-      expect.objectContaining({
-        kind: 'approval',
-        resolution: expect.objectContaining({ state: 'cancelled' })
-      }),
-      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'interrupted' })
-    ])
-    expect(publishes).toHaveLength(2)
-  })
-
   it('retries a rejected terminal admission without losing tool, prompt, turn, or session truth', () => {
     const batches: LifecycleBatch[] = []
     let rejected = false

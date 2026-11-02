@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   toRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
-} from '../../../shared/remote-runtime-pty-id'
+} from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { ownedEditorFileId } from '../../../shared/workspace-session-pane-ownership'
 import type {

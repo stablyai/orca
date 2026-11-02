@@ -40,13 +40,17 @@ function blurInput(): void {
   })
 }
 
-function render(props: {
-  repoId: string
-  storeValue: string
-  onTextChange: (text: string) => void
-}): void {
+function render(
+  props: {
+    repoId: string
+    storeValue: string
+    onTextChange: (text: string) => void
+  },
+  options?: { strict?: boolean }
+): void {
+  const element = React.createElement(RepoSettingsDraftInput, props)
   act(() => {
-    root.render(React.createElement(RepoSettingsDraftInput, props))
+    root.render(options?.strict ? React.createElement(React.StrictMode, null, element) : element)
   })
 }
 
@@ -118,6 +122,17 @@ describe('RepoSettingsDraftInput', () => {
 
     // Stale repos:changed echo of the first keystroke.
     render({ repoId: 'repo-1', storeValue: '가', onTextChange })
+
+    expect(getInput().value).toBe('가나')
+  })
+
+  it('keeps draft text on a stale echo when React runs state updaters twice', () => {
+    const onTextChange = vi.fn()
+    render({ repoId: 'repo-1', storeValue: '', onTextChange }, { strict: true })
+
+    typeText('가')
+    typeText('가나')
+    render({ repoId: 'repo-1', storeValue: '가', onTextChange }, { strict: true })
 
     expect(getInput().value).toBe('가나')
   })

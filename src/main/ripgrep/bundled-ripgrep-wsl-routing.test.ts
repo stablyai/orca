@@ -46,11 +46,4 @@ describe('resolveBundledRipgrepWslRouting', () => {
       wslDistroForOutput: 'Ubuntu'
     })
   })
-
-  it('runs the host rg when the project has no WSL runtime', () => {
-    expect(resolveBundledRipgrepWslRouting('/home/me/repo', undefined)).toEqual({
-      wslDistro: undefined,
-      wslDistroForOutput: undefined
-    })
-  })
 })

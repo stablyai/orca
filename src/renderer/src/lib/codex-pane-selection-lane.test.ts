@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
 import { getCodexSelectionLaneKey } from '../../../shared/codex-selection-lane'
-import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   getCodexAccountSwitchLaneMatcher,
   isForeignMachineCodexPtyId,

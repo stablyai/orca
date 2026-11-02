@@ -1,5 +1,6 @@
 import type { AgentStatusState, AgentType } from './agent-status-types'
 import type { TuiAgent } from './tui-agent'
+import { getPiCompatibleSyntheticAgentStatus } from './pi-compatible-synthetic-title'
 
 export type SyntheticAgentTitleProfile = {
   workingLabel: string
@@ -47,17 +48,16 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     permissionLabel: 'Pi - action required',
     idleLabel: 'Pi ready',
     titleIdentityGroup: 'pi-compatible',
-    // Pi animates working titles every 80ms with session labels; synthesis fights those frames.
-    // Synthesize terminal states because Pi is quiet at rest and pane identity still needs a title.
-    synthesizeWorkingTitle: false
+    // Pi and Orca's titlebar extension own session titles, including idle and permission states.
+    synthesizeTerminalTitle: false
   },
   omp: {
     workingLabel: 'OMP',
     permissionLabel: 'OMP - action required',
     idleLabel: 'OMP ready',
     titleIdentityGroup: 'pi-compatible',
-    // Orca’s injected titlebar extension owns OMP working titles (main/pi/titlebar-extension-source.ts).
-    synthesizeWorkingTitle: false
+    // OMP and Orca’s titlebar extension (main/pi/titlebar-extension-source.ts) title the session; synthesis would erase its name.
+    synthesizeTerminalTitle: false
   },
   droid: {
     workingLabel: 'Droid',
@@ -91,7 +91,11 @@ const SYNTHETIC_PERMISSION_TITLES: ReadonlySet<string> = new Set(
 )
 
 export function isSyntheticAgentPermissionTitle(title: string): boolean {
-  return SYNTHETIC_PERMISSION_TITLES.has(title.trim().toLowerCase())
+  // Older hosts still write `OMP - action required`, which OMP's own π titles never match.
+  return (
+    SYNTHETIC_PERMISSION_TITLES.has(title.trim().toLowerCase()) ||
+    getPiCompatibleSyntheticAgentStatus(title) === 'permission'
+  )
 }
 
 export function getSyntheticAgentTitleProfile(

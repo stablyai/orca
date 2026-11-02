@@ -1,6 +1,9 @@
 import type WebSocket from 'ws'
 import type { OrcaCloudAuthConfig } from '../../orca-profiles/profile-cloud-auth-config'
-import type { MobileRelayStatus } from '../../../shared/mobile-relay-status'
+import type {
+  MobileRelayStatus,
+  MobileRelayStatusPublisher
+} from '../../../shared/mobile-relay-status'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
 import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
@@ -33,7 +36,7 @@ export type RelaySessionBrokerOptions = {
   measureRegionDecision?: (window: RelayRegionWindow) => Promise<RelayRegionDecision>
   onAssignedCellActive?: (cellUrl: string) => void
   /** `cellUrl` is absent whenever the host holds no active assignment. */
-  onStatus: (status: RelayBrokerStatus, cellUrl?: string) => void
+  onStatus: MobileRelayStatusPublisher
   fetch?: typeof globalThis.fetch
   createControlSocket?: (url: string, relayJwt: string) => WebSocket
   createDataSocket?: (url: string) => WebSocket

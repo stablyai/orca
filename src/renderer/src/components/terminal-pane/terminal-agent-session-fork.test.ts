@@ -13,15 +13,19 @@ const mockToast = {
 const mockWriteClipboardText = vi.fn(async () => undefined)
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
+const projects: {
+  id: string
+  sourceRepoIds: string[]
+  localWindowsRuntimePreference?: { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
+}[] = []
+
+const repos: { id: string; kind?: 'git' | 'folder'; connectionId?: string | null }[] = []
+
 const store = {
   activeRepoId: 'repo-1',
   activeWorktreeId: 'wt-1',
-  projects: [] as {
-    id: string
-    sourceRepoIds: string[]
-    localWindowsRuntimePreference?: { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
-  }[],
-  repos: [] as { id: string; kind?: 'git' | 'folder'; connectionId?: string | null }[],
+  projects,
+  repos,
   settings: {} as {
     localWindowsRuntimeDefault?: { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
   },
@@ -203,15 +207,22 @@ describe('forkAgentSessionFromPane', () => {
     })
   })
 
-  it('announces the provisional chat without waiting for structured settlement', async () => {
+  it('waits for the destination and draft ownership before announcing the fork', async () => {
     store.agentStatusByPaneKey = {
       [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
     }
+    const destination = Promise.withResolvers<{ kind: 'structured'; sessionId: string }>()
+    const draft = Promise.withResolvers<{
+      delivered: boolean
+      inComposer: boolean
+      failureNotified: boolean
+    }>()
     const result = {
       surface: { kind: 'host-published' },
       startupPlan: {},
       pasteDraftAfterLaunch: false,
-      structuredSettlement: new Promise(() => {})
+      structuredSettlement: destination.promise,
+      promptDeliveryResult: draft.promise
     }
     mockLaunchAgentInNewTab.mockImplementationOnce(
       (args: { beforeSurfaceOpen?: (surface: { kind: 'host-published' }) => void }) => {
@@ -221,12 +232,19 @@ describe('forkAgentSessionFromPane', () => {
     )
     const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
 
-    await forkAgentSessionFromPane({
+    const forking = forkAgentSessionFromPane({
       pane: makePane('User: compare OAuth options'),
       tabId: 'tab-1',
       worktreeId: 'wt-1',
       groupId: 'group-1'
     })
+    await vi.waitFor(() => expect(mockLaunchAgentInNewTab).toHaveBeenCalledOnce())
+    expect(mockToast.success).not.toHaveBeenCalled()
+    destination.resolve({ kind: 'structured', sessionId: 'fork-session' })
+    await Promise.resolve()
+    expect(mockToast.success).not.toHaveBeenCalled()
+    draft.resolve({ delivered: false, inComposer: true, failureNotified: false })
+    await forking
     expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
       sidebarRevealBehavior: 'auto',
       providesInitialSurface: true
@@ -241,7 +259,7 @@ describe('forkAgentSessionFromPane', () => {
     ['cancelled', { kind: 'cancelled', sessionId: 'session-1' }, true],
     ['visibility-unknown', { kind: 'visibility-unknown', sessionId: 'session-1' }, false]
   ])(
-    'keeps the provisional chat open on a later %s structured settlement',
+    'retains the committed workspace and copies context after a %s destination',
     async (_kind, settlement, _keepsOpen) => {
       store.agentStatusByPaneKey = {
         [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
@@ -269,13 +287,12 @@ describe('forkAgentSessionFromPane', () => {
       })
       // Why: the worktree already exists; a false return would keep the dialog open for a second fork.
       await expect(startAgentSessionFork(prepared!)).resolves.toBe(true)
-      expect(mockToast.success).toHaveBeenCalledWith(
+      expect(mockToast.success).not.toHaveBeenCalledWith(
         'Top-level session fork opened in a new workspace'
       )
-      expect(mockWriteClipboardText).not.toHaveBeenCalled()
+      expect(mockWriteClipboardText).toHaveBeenCalledOnce()
       expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
-        sidebarRevealBehavior: 'auto',
-        providesInitialSurface: true
+        sidebarRevealBehavior: 'auto'
       })
     }
   )

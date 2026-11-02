@@ -2,6 +2,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { DaemonClient } from './client'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 
+vi.mock('./daemon-async-io-telemetry-event', () => ({ observeDaemonAsyncIoHealth: vi.fn() }))
+
 afterEach(() => vi.restoreAllMocks())
 
 it.each([

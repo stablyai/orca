@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
-import { subscribeRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import { subscribeRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
   addEnvironmentFromPairingCode,
@@ -163,18 +163,16 @@ describe('session.tabs tab delta across mixed client versions', () => {
     )
     cleanups.push(() => currentSubscription.close())
 
-    await vi.waitFor(() => {
-      expect(legacy.frames).toHaveLength(1)
-      expect(current.frames).toHaveLength(1)
-      expect(wire.frames).toHaveLength(1)
-    })
+    const expectFrames = (count: number): void => {
+      for (const [client, received] of Object.entries({ legacy, current, wire })) {
+        expect(received.frames, `${client} desktop frames`).toHaveLength(count)
+      }
+    }
+    // Three pairings and real sockets must deliver the first frame; a loaded host misses the 1 s default.
+    await vi.waitFor(() => expectFrames(1), { timeout: 10_000 })
     for (let version = 2; version <= 11; version += 1) {
       publish(runtime, version, version % 3)
-      await vi.waitFor(() => {
-        expect(legacy.frames).toHaveLength(version)
-        expect(current.frames).toHaveLength(version)
-        expect(wire.frames).toHaveLength(version)
-      })
+      await vi.waitFor(() => expectFrames(version))
     }
 
     expect(current.frames).toEqual(legacy.frames)

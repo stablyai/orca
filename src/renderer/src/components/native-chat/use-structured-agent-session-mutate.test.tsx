@@ -397,3 +397,29 @@ describe('a Stop pressed again, against a host that answers a repeat quietly', (
     expect(new Set(host.ids).size).toBe(2)
   })
 })
+
+it.each([
+  'Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.',
+  'Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.'
+])(
+  'preserves the pre-goal settings explanation on the existing control failure surface: %s',
+  async (message) => {
+    mocks.call.mockResolvedValue({
+      ok: false,
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        message,
+        details: { reason: 'providerRejected' }
+      }
+    })
+    const { current } = render()
+    await act(async () => {
+      expect(
+        await current.mutate('agentSession.threadGoal', 'agentSession.threadGoal', {
+          change: { kind: 'set', objective: 'ship it' }
+        })
+      ).toBeNull()
+    })
+    expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(message)
+  }
+)

@@ -52,11 +52,6 @@ export function cacheAiVaultSessionResult(args: {
         cachedSessionResults.delete(key)
       }
     }
-  } else {
-    const cached = cachedSessionResults.get(args.key)
-    if (cached && aiVaultCachedDepthServes(cached.limit, args.limit, args.scopePaths)) {
-      return
-    }
   }
   cachedSessionResults.delete(args.key)
   cachedSessionResults.set(args.key, {
@@ -75,4 +70,12 @@ export function cacheAiVaultSessionResult(args: {
 
 export function resetAiVaultSessionResultCacheForTest(): void {
   cachedSessionResults.clear()
+}
+
+export function invalidateAiVaultSessionResults(host: ExecutionHostScope): void {
+  for (const [key, entry] of cachedSessionResults) {
+    if (entry.executionHostScope === host || entry.executionHostScope === 'all') {
+      cachedSessionResults.delete(key)
+    }
+  }
 }

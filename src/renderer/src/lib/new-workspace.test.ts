@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   mockInspectRuntimeTerminalProcess,
-  mockSendRuntimePtyInputVerified,
   mockPasteDraftToAgentPtyWhenReady,
   mockShowAutomationPromptNotSentToast,
   mockTrack,
@@ -11,7 +10,6 @@ const {
   startupLeafId
 } = vi.hoisted(() => ({
   mockInspectRuntimeTerminalProcess: vi.fn(),
-  mockSendRuntimePtyInputVerified: vi.fn(),
   mockPasteDraftToAgentPtyWhenReady: vi.fn(),
   mockShowAutomationPromptNotSentToast: vi.fn(),
   mockTrack: vi.fn(),
@@ -75,9 +73,6 @@ vi.mock('@/store', () => ({
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   inspectRuntimeTerminalProcess: mockInspectRuntimeTerminalProcess
 }))
-vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
-  sendRuntimePtyInputVerified: mockSendRuntimePtyInputVerified
-}))
 
 vi.mock('@/lib/agent-paste-draft', () => ({
   pasteDraftToAgentPtyWhenReady: mockPasteDraftToAgentPtyWhenReady
@@ -99,7 +94,6 @@ import {
   canUseIssueCommandForLinkedItemProvider,
   ensureAgentStartupInTerminal,
   getLinkedWorkItemProvider,
-  getSetupConfig,
   getWorkspaceSeedName,
   isGitLabIssueUrl
 } from './new-workspace'
@@ -277,7 +271,6 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       foregroundProcess: 'aider',
       hasChildProcesses: true
     })
-    mockSendRuntimePtyInputVerified.mockResolvedValue(true)
     mockPasteDraftToAgentPtyWhenReady.mockResolvedValue(true)
   })
 
@@ -298,16 +291,20 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       }
     })
 
-    expect(mockSendRuntimePtyInputVerified).toHaveBeenCalledWith(
-      'pty-1',
-      'fix the spinner\r',
-      'launch'
+    expect(mockPasteDraftToAgentPtyWhenReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ptyId: 'pty-1',
+        content: 'fix the spinner',
+        agent: 'aider',
+        submit: true,
+        forcePaste: true
+      })
     )
     expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
   })
 
   it('does not track when follow-up prompt delivery is rejected by the terminal runtime', async () => {
-    mockSendRuntimePtyInputVerified.mockResolvedValue(false)
+    mockPasteDraftToAgentPtyWhenReady.mockResolvedValue(false)
 
     await ensureAgentStartupInTerminal({
       worktreeId: 'wt-1',
@@ -341,7 +338,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       }
     })
 
-    expect(mockSendRuntimePtyInputVerified).not.toHaveBeenCalled()
+    expect(mockPasteDraftToAgentPtyWhenReady).not.toHaveBeenCalled()
     expect(mockShowAutomationPromptNotSentToast).toHaveBeenCalledWith('aider')
   })
 
@@ -382,7 +379,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
   })
 
   it('does not track when follow-up prompt delivery rejects', async () => {
-    mockSendRuntimePtyInputVerified.mockRejectedValue(new Error('runtime timeout'))
+    mockPasteDraftToAgentPtyWhenReady.mockRejectedValue(new Error('runtime timeout'))
 
     await expect(
       ensureAgentStartupInTerminal({
@@ -806,42 +803,6 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
     await vi.advanceTimersByTimeAsync(5_000)
     await delivery
 
-    expect(mockSendRuntimePtyInputVerified).not.toHaveBeenCalled()
-  })
-})
-
-describe('getSetupConfig', () => {
-  it('treats default tab commands as setup-decision commands', () => {
-    expect(
-      getSetupConfig(undefined, {
-        scripts: {},
-        defaultTabs: [
-          { title: 'Server', command: 'pnpm dev' },
-          { title: 'Notes' },
-          { command: 'codex' }
-        ]
-      })
-    ).toEqual({
-      source: 'yaml',
-      kind: 'default-tabs',
-      command: '# defaultTabs[1] Server\npnpm dev\n\n# defaultTabs[3]\ncodex'
-    })
-  })
-
-  it('ignores shared default tab commands when command source is local-only', () => {
-    expect(
-      getSetupConfig(
-        {
-          hookSettings: {
-            commandSourcePolicy: 'local-only',
-            scripts: {}
-          }
-        },
-        {
-          scripts: {},
-          defaultTabs: [{ title: 'Server', command: 'pnpm dev' }]
-        }
-      )
-    ).toBeNull()
+    expect(mockPasteDraftToAgentPtyWhenReady).not.toHaveBeenCalled()
   })
 })

@@ -1,12 +1,20 @@
 /** Use the launch catalog for every caller's model/effort validation so CLI and orchestration refusals agree. */
 
-import type { AgentLaunchPreferences } from './agent-session-host-authority'
-import { findCatalogModel, findCatalogOption } from './agent-session-option-catalog'
+import type { AgentLaunchPreferences } from './agent-session/agent-session-host-authority'
 import {
-  getAgentSessionOptionLaunchCatalog,
-  resolveAgentSessionOptionLaunch
-} from './agent-session-option-launch'
+  findCatalogModel,
+  findCatalogOption,
+  getAgentSessionOptionLaunchCatalog
+} from './agent-session/options/agent-session-option-catalog'
+import { resolveAgentSessionOptionLaunch } from './agent-session/options/agent-session-option-launch'
 import type { TuiAgent } from './tui-agent'
+
+export const OPENCODE_MODEL_VERSION_REFUSAL =
+  'OpenCode cannot safely start with a chosen model on this version. Update OpenCode to a supported release, or omit the model choice.'
+export const OPENCODE_MODEL_TRANSPORT_REFUSAL =
+  'OpenCode cannot apply this model choice to this launch. Start a fresh local terminal with supported launch arguments, or omit the model choice.'
+export const OPENCODE_MODEL_CONFIG_REFUSAL =
+  'OpenCode could not apply this model choice to the launch configuration. Check the OpenCode launch configuration and try again, or omit the model choice.'
 
 export type AgentLaunchModelPreferenceRefusal = {
   code: 'invalid_argument' | 'capability_unsupported'
@@ -19,7 +27,7 @@ export type AgentLaunchModelPreferenceCheck =
 
 export function checkAgentLaunchModelPreferences(args: {
   agent: TuiAgent
-  /** OpenCode needs the execution host to verify its CLI before it can start on a chosen model. */
+  /** OpenCode model choices need a fresh terminal on a supported execution host. */
   openCodeModelLaunchSupported?: boolean
   createsWorktree?: boolean
   model?: string
@@ -40,7 +48,7 @@ export function checkAgentLaunchModelPreferences(args: {
   if (args.agent === 'opencode' && args.openCodeModelLaunchSupported !== true) {
     return refuse(
       'capability_unsupported',
-      'This OpenCode TUI cannot verify launch-time model selection. Omit --model or use a supported OpenCode CLI.'
+      'OpenCode cannot apply a model choice on this execution host. Use a fresh local terminal in an existing workspace, or omit --model.'
     )
   }
 

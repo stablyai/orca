@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeWorktreeTerminalSleepResult } from '../../../shared/runtime-types'
 import type { WorkspaceSleepNotice, WorkspaceSleepTarget } from '../../../shared/workspace-sleep'
-import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { WorkspaceLifecycleQueue } from './workspace-lifecycle-queue'
 import {
   sleepWorkspaces,
   type WorkspaceSleepDeps,
   type WorkspaceSleepQueue
 } from './workspace-sleep-execution'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 
 const SELF = { kind: 'self' } as const
 const local = (worktreeId: string): WorkspaceSleepTarget => ({

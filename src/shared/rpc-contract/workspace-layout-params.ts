@@ -144,7 +144,10 @@ const RenameTabCommand = z.discriminatedUnion('kind', [
     type: z.literal('renameTab'),
     ...OnTab,
     kind: z.enum(['custom', 'generated']),
-    title: z.union([z.string(), z.null()])
+    title: z.union([z.string(), z.null()]),
+    expected: z
+      .object({ entityId: z.string(), executionHostId: z.string(), customTitle: z.string() })
+      .optional()
   }),
   z.object({
     type: z.literal('renameTab'),

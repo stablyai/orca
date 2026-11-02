@@ -15,7 +15,8 @@ const {
   getCurrentDaemonMacTccAttributionHealthMock,
   getDaemonFolderAccessMismatchMock,
   refreshDaemonFolderAccessProbeMock,
-  resetFolderAccessForDaemonMock
+  resetFolderAccessForDaemonMock,
+  isHoldingForNewerProtocolDaemonMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
@@ -28,7 +29,8 @@ const {
   refreshDaemonFolderAccessProbeMock: vi.fn(async () => {}),
   resetFolderAccessForDaemonMock: vi.fn<() => Promise<FolderAccessResetResult>>(async () => ({
     outcome: 'unsupported'
-  }))
+  })),
+  isHoldingForNewerProtocolDaemonMock: vi.fn(() => false)
 }))
 
 vi.mock('electron', () => ({
@@ -42,6 +44,10 @@ vi.mock('../../daemon/daemon-folder-access-mismatch', () => ({
 
 vi.mock('../../daemon/daemon-folder-access-reset', () => ({
   resetFolderAccessForDaemon: resetFolderAccessForDaemonMock
+}))
+
+vi.mock('../../daemon/daemon-newer-protocol-hold', () => ({
+  isHoldingForNewerProtocolDaemon: isHoldingForNewerProtocolDaemonMock
 }))
 
 vi.mock('../../daemon/daemon-provider-restart', () => ({
@@ -185,6 +191,7 @@ describe('pty:management IPC handlers', () => {
     getDaemonFolderAccessMismatchMock.mockReset().mockReturnValue(null)
     refreshDaemonFolderAccessProbeMock.mockReset().mockResolvedValue(undefined)
     resetFolderAccessForDaemonMock.mockReset().mockResolvedValue({ outcome: 'unsupported' })
+    isHoldingForNewerProtocolDaemonMock.mockReset().mockReturnValue(false)
   })
 
   afterEach(() => {
@@ -426,6 +433,185 @@ describe('pty:management IPC handlers', () => {
         remainingCount: 1,
         killedSessionIds: ['b']
       })
+    })
+
+    it('keeps a session remaining, and stops polling after one timed-out listing, while its daemon stops answering', async () => {
+      const current = makeAdapter(5, [])
+      current.listSessions = vi
+        .fn()
+        .mockResolvedValueOnce([makeSession('a')].map(({ protocolVersion: _pv, ...rest }) => rest))
+        // 30 s: a wedged daemon fails a listing only at the client's request timeout.
+        .mockImplementation(
+          () =>
+            new Promise((_resolve, reject) =>
+              setTimeout(() => reject(new Error('request timed out')), 30_000)
+            )
+        )
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current))
+      registerDaemonManagementHandlers()
+
+      const result = buildHandlerMap()['pty:management:killAll']({})
+      await vi.advanceTimersByTimeAsync(40_000)
+
+      // The initial listing, then one poll that times out past the 6.5 s window.
+      expect(current.listSessions).toHaveBeenCalledTimes(2)
+      await expect(result).resolves.toEqual({
+        killedCount: 0,
+        remainingCount: 1,
+        killedSessionIds: []
+      })
+    })
+
+    it('counts a generation that answered while another keeps failing, and flags the sweep', async () => {
+      const currentSessions = [makeSession('a')]
+      const current = makeAdapter(5, [])
+      current.listSessions = vi.fn(async () =>
+        currentSessions.map(({ protocolVersion: _pv, ...rest }) => rest)
+      )
+      current.shutdown = vi.fn(async () => {
+        currentSessions.length = 0
+      })
+      const legacy = makeAdapter(3, [])
+      legacy.listSessions = vi.fn(async () => {
+        throw new Error('legacy daemon stopped answering')
+      })
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current, [legacy]))
+      registerDaemonManagementHandlers()
+
+      const handlers = buildHandlerMap()
+      const result = await runKillAllWithPolls(handlers['pty:management:killAll'])
+
+      expect(result).toEqual({
+        killedCount: 1,
+        remainingCount: 0,
+        killedSessionIds: ['a'],
+        listingIncomplete: true
+      })
+      // The answering generation ends the sweep at the first poll.
+      expect(current.listSessions).toHaveBeenCalledTimes(2)
+    })
+
+    it('keeps a stop its generation already confirmed when that generation fails a later poll', async () => {
+      const current = makeAdapter(5, [])
+      // 'a' exits only at the second poll, so the sweep outlives the legacy failure.
+      current.listSessions = vi
+        .fn()
+        .mockResolvedValueOnce([makeSession('a')].map(({ protocolVersion: _pv, ...rest }) => rest))
+        .mockResolvedValueOnce([makeSession('a')].map(({ protocolVersion: _pv, ...rest }) => rest))
+        .mockResolvedValue([])
+      const legacy = makeAdapter(3, [])
+      legacy.listSessions = vi
+        .fn()
+        .mockResolvedValueOnce(
+          [makeSession('old', { protocolVersion: 3 })].map(
+            ({ protocolVersion: _pv, ...rest }) => rest
+          )
+        )
+        .mockResolvedValueOnce([])
+        .mockRejectedValue(new Error('legacy daemon stopped answering'))
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current, [legacy]))
+      registerDaemonManagementHandlers()
+
+      const handlers = buildHandlerMap()
+      const result = await runKillAllWithPolls(handlers['pty:management:killAll'])
+
+      // The initial listing was complete, so a later failure does not flag the sweep.
+      expect(result).toEqual({
+        killedCount: 2,
+        remainingCount: 0,
+        killedSessionIds: ['a', 'old']
+      })
+      expect(legacy.listSessions).toHaveBeenCalledTimes(3)
+    })
+
+    it("flags a sweep while a newer build's daemon is held, since its sessions are never listed", async () => {
+      isHoldingForNewerProtocolDaemonMock.mockReturnValue(true)
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeRouter(makeAdapter(5, [])))
+      registerDaemonManagementHandlers()
+
+      const handlers = buildHandlerMap()
+      const result = await runKillAllWithPolls(handlers['pty:management:killAll'])
+
+      expect(result).toEqual({
+        killedCount: 0,
+        remainingCount: 0,
+        killedSessionIds: [],
+        listingIncomplete: true
+      })
+    })
+
+    it('flags a sweep that has no daemon provider to list', async () => {
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(null)
+      registerDaemonManagementHandlers()
+
+      const handlers = buildHandlerMap()
+      const result = await runKillAllWithPolls(handlers['pty:management:killAll'])
+
+      expect(result).toEqual({
+        killedCount: 0,
+        remainingCount: 0,
+        killedSessionIds: [],
+        listingIncomplete: true
+      })
+    })
+  })
+
+  describe('confirmNoDaemonSessionsRemain', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    function listsOnce(adapter: MockAdapter, sessions: DaemonSessionInfo[]): void {
+      adapter.listSessions = vi
+        .fn()
+        .mockResolvedValueOnce(sessions.map(({ protocolVersion: _pv, ...rest }) => rest))
+        .mockResolvedValue([])
+    }
+
+    it('waits while a session is still exiting, then confirms none remain', async () => {
+      const current = makeAdapter(5, [])
+      listsOnce(current, [makeSession('exiting')])
+      const { confirmNoDaemonSessionsRemain } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current))
+
+      const confirmation = confirmNoDaemonSessionsRemain()
+      await vi.runAllTimersAsync()
+
+      await expect(confirmation).resolves.toBe(true)
+      expect(current.listSessions).toHaveBeenCalledTimes(2)
+    })
+
+    it.each([
+      [
+        'a session started after Kill all is still listed',
+        () => makeAdapter(5, [makeSession('started-later')]),
+        () => []
+      ],
+      [
+        'a daemon generation cannot list its sessions',
+        () => makeAdapter(5, []),
+        () => {
+          const legacy = makeAdapter(3, [])
+          legacy.listSessions = vi.fn().mockRejectedValue(new Error('legacy daemon gone'))
+          return [legacy]
+        }
+      ]
+    ])('refuses when %s at the end of the poll window', async (_name, current, legacy) => {
+      const { confirmNoDaemonSessionsRemain } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current(), legacy()))
+
+      const confirmation = confirmNoDaemonSessionsRemain()
+      await vi.runAllTimersAsync()
+
+      await expect(confirmation).resolves.toBe(false)
     })
   })
 

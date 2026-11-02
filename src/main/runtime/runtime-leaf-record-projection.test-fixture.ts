@@ -132,7 +132,11 @@ export const PTY_FACTS: Record<'pty-a' | 'pty-b' | 'pty-c', RuntimeLeafPtyFacts>
 
 export const LIVENESS_VERDICTS: Record<string, PtyLivenessVerdict | null> = {
   'pty-a': null,
-  'pty-b': { status: 'exited' },
+  'pty-b': {
+    status: 'exited',
+    incarnationId: undefined,
+    cause: { kind: 'exited', exitCode: 1 }
+  },
   'pty-c': null
 }
 

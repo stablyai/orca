@@ -1,10 +1,14 @@
+import { TerminalLimitSetting } from './TerminalLimitSetting'
+import type { SettingsHostScope } from './settings-host-scope'
 import { useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { TERMINAL_DEFAULT_WORD_SEPARATOR } from '../../../../shared/terminal-word-separator'
 import {
   DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX,
   DESKTOP_TERMINAL_SCROLLBACK_ROWS_MIN,
   normalizeDesktopTerminalScrollbackRows
 } from '../../../../shared/terminal-scrollback-policy'
+import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group'
 import {
@@ -18,8 +22,10 @@ import { matchesSettingsSearch } from './settings-search'
 import { getTerminalWindowsPowershellImplementationSearchEntry } from './terminal-windows-search'
 import { TerminalMacKeyboardSection } from './TerminalMacKeyboardSection'
 import { translate } from '@/i18n/i18n'
+import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 
 type TerminalAdvancedSectionProps = {
+  hostScope?: SettingsHostScope
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
   scrollbackMode: 'preset' | 'custom'
@@ -34,7 +40,12 @@ function formatScrollbackRowsLabel(rows: number): string {
   return rows % 1_000 === 0 ? `${rows / 1_000}k` : String(rows)
 }
 
+function toWordSeparatorSetting(draft: string): string | undefined {
+  return draft && draft !== TERMINAL_DEFAULT_WORD_SEPARATOR ? draft : undefined
+}
+
 export function TerminalAdvancedSection({
+  hostScope,
   settings,
   updateSettings,
   scrollbackMode,
@@ -57,6 +68,22 @@ export function TerminalAdvancedSection({
   )
   const scrollbackToggleValue =
     scrollbackMode === 'custom' ? 'custom' : isPreset ? `${scrollbackRows}` : 'custom'
+  const wordSeparator = settings.terminalWordSeparator
+  const [wordSeparatorDraft, setWordSeparatorDraft] = useState(
+    wordSeparator ?? TERMINAL_DEFAULT_WORD_SEPARATOR
+  )
+  const [prevWordSeparator, setPrevWordSeparator] = useState(wordSeparator)
+  if (wordSeparator !== prevWordSeparator) {
+    setPrevWordSeparator(wordSeparator)
+    // Why: an emptied field stays empty while editing instead of snapping back to the default.
+    if (wordSeparator !== toWordSeparatorSetting(wordSeparatorDraft)) {
+      setWordSeparatorDraft(wordSeparator ?? TERMINAL_DEFAULT_WORD_SEPARATOR)
+    }
+  }
+  const commitWordSeparatorDraft = (draft: string): void => {
+    setWordSeparatorDraft(draft)
+    updateSettings({ terminalWordSeparator: toWordSeparatorSetting(draft) })
+  }
   const powerShellImplementation = settings.terminalWindowsPowerShellImplementation ?? 'auto'
   const commitScrollbackRowsDraft = (): void => {
     const trimmed = scrollbackRowsDraft.trim()
@@ -172,30 +199,52 @@ export function TerminalAdvancedSection({
           />
         </SearchableSetting>
 
+        {hostScope ? <TerminalLimitSetting scope={hostScope} /> : null}
+
         <SearchableSetting
           title={translate('auto.components.settings.TerminalPane.4bebcc2b2c', 'Word Separators')}
           description={translate(
-            'auto.components.settings.TerminalPane.8a956cc91e',
-            'Characters treated as word boundaries for double-click selection.'
+            'settings.terminal.wordSeparators.description',
+            'Characters treated as word boundaries for double-click selection, including space.'
           )}
           keywords={['word', 'separator', 'boundary', 'double-click', 'selection']}
         >
           <SettingsRow
             label={translate('auto.components.settings.TerminalPane.4bebcc2b2c', 'Word Separators')}
             description={translate(
-              'auto.components.settings.TerminalPane.8a956cc91e',
-              'Characters treated as word boundaries for double-click selection.'
+              'settings.terminal.wordSeparators.description',
+              'Characters treated as word boundaries for double-click selection, including space.'
             )}
             control={
-              <Input
-                value={settings.terminalWordSeparator ?? ''}
-                onChange={(e) => {
-                  const value = e.target.value
-                  updateSettings({ terminalWordSeparator: value || undefined })
-                }}
-                placeholder={` ()[]{},'"\``}
-                className="w-56 font-mono text-xs"
-              />
+              <div className="flex w-56 flex-col items-end gap-1">
+                <div className="flex w-full items-center gap-1">
+                  <Input
+                    value={wordSeparatorDraft}
+                    onChange={(e) => commitWordSeparatorDraft(e.target.value)}
+                    variant="code"
+                    spellCheck={false}
+                    className="min-w-0 flex-1"
+                  />
+                  {wordSeparatorDraft !== TERMINAL_DEFAULT_WORD_SEPARATOR ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => commitWordSeparatorDraft(TERMINAL_DEFAULT_WORD_SEPARATOR)}
+                    >
+                      {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
+                    </Button>
+                  ) : null}
+                </div>
+                {wordSeparatorDraft && !wordSeparatorDraft.includes(' ') ? (
+                  <p className="text-xs text-status-warning">
+                    {translate(
+                      'settings.terminal.wordSeparators.noSpaceHint',
+                      'No space included — double-click will select across spaces.'
+                    )}
+                  </p>
+                ) : null}
+              </div>
             }
           />
         </SearchableSetting>
@@ -246,6 +295,7 @@ export function TerminalAdvancedSection({
                     <a
                       href="https://github.com/PowerShell/PowerShell/releases/latest"
                       target="_blank"
+                      onClick={openAppHttpLinkFromAnchor}
                       rel="noopener noreferrer"
                       className="underline hover:text-foreground"
                     >

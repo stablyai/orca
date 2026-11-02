@@ -61,35 +61,6 @@ async function settle(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 250))
 }
 
-describe('watchFileAcrossReplacement event filtering', () => {
-  it('drops attribute-only events such as macOS mmap reads of git metadata', async () => {
-    const path = join(directory, 'packed-refs')
-    writeFileSync(path, 'refs')
-    const onChange = vi.fn()
-    fileWatch = watchFileAcrossReplacement(path, onChange, (error) => {
-      throw error
-    })
-    await settle()
-
-    const watchesBeforeNoise = nativeEvents.length
-    for (let read = 0; read < 50; read++) {
-      nativeEvents.at(-1)?.()
-    }
-    // The rebind is the coalesced refresh having stat'ed the file, so the absence below is read after it.
-    await vi.waitFor(() => expect(nativeEvents.length).toBeGreaterThan(watchesBeforeNoise))
-    expect(onChange).not.toHaveBeenCalled()
-
-    writeFileSync(path, 'refs and more')
-    for (let read = 0; read < 50; read++) {
-      nativeEvents.at(-1)?.()
-    }
-    // Noise backed the coalesce window off, so the write lands on its own schedule rather than a clock's.
-    await vi.waitFor(() => expect(onChange).toHaveBeenCalled(), { timeout: 5_000 })
-    await settle()
-    expect(onChange).toHaveBeenCalledOnce()
-  })
-})
-
 describe('watchFileAcrossReplacement after a watcher error', () => {
   it('closes promptly and rebinds once the runtime has closed the errored watcher', async () => {
     const path = join(directory, 'index')

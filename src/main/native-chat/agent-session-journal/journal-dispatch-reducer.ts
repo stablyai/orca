@@ -1,9 +1,9 @@
 import {
   readAgentSessionFailureFact,
   type UnreadAgentSessionFailureFact
-} from '../../../shared/agent-session-failure'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalAnsweredTurn } from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalAnsweredTurn } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
 import { boundInlineText, JOURNAL_DISPATCH_REASON_LIMITS } from './journal-payload-bounds'
 import type { JournalReducerState } from './journal-reducer'
@@ -75,6 +75,7 @@ export function applyJournalDispatchRow(
   })
 }
 
+/** A rebind replaces coverage, including an empty set, before the new child receives input. */
 function foldStoppedHistoryCarried(
   state: JournalReducerState,
   row: Extract<JournalRow, { kind: 'dispatch' }>
@@ -84,6 +85,8 @@ function foldStoppedHistoryCarried(
     : []
   if (carried.length > 0) {
     state.stoppedHistoryCarried.set(row.clientMessageId, carried)
+  } else {
+    state.stoppedHistoryCarried.delete(row.clientMessageId)
   }
 }
 

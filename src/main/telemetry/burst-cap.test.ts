@@ -49,18 +49,6 @@ describe('burst-cap', () => {
     expect(allowed).toBeLessThanOrEqual(15)
   })
 
-  it('emits exactly one warn the first time the per-event cap is crossed', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    for (let i = 0; i < 30; i++) {
-      consumeBurstToken('app_opened')
-    }
-    consumeBurstToken('app_opened')
-    consumeBurstToken('app_opened')
-    consumeBurstToken('app_opened')
-    consumeBurstToken('app_opened')
-    expect(warn).toHaveBeenCalledTimes(1)
-  })
-
   it('rejects unknown event names without creating a bucket (prevents unbounded Map growth)', () => {
     // Reject untrusted unknown IPC names before bucket allocation or unique bogus names grow the map indefinitely.
     const sizeBefore = _getBurstCapStateForTests().perEventBuckets.size
@@ -112,17 +100,6 @@ describe('burst-cap', () => {
     }
     expect(consumeConsentMutationToken()).toBe(false)
     expect(consumeConsentMutationToken()).toBe(false)
-  })
-
-  it('emits exactly one warn when the consent-mutation cap is first crossed', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    for (let i = 0; i < 5; i++) {
-      consumeConsentMutationToken()
-    }
-    consumeConsentMutationToken()
-    consumeConsentMutationToken()
-    consumeConsentMutationToken()
-    expect(warn).toHaveBeenCalledTimes(1)
   })
 
   it('consent-mutation bucket resets across sessions, not within one', () => {

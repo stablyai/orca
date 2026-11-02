@@ -2,6 +2,7 @@ import React from 'react'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { isWorkspaceBoardKeepOpenTarget } from './use-workspace-kanban-outside-dismiss'
 import { STATUS_BAR_RESERVE_HEIGHT, WORKSPACE_TOP_CHROME_HEIGHT } from './workspace-chrome-metrics'
+import { trackSidebarLiveWidth } from './sidebar-live-width'
 
 type WorkspaceKanbanSheetProps = {
   boardRef: React.RefObject<HTMLDivElement | null>
@@ -68,6 +69,7 @@ export default function WorkspaceKanbanSheet({
       <SheetContent
         side="left"
         showCloseButton={false}
+        ref={trackSidebarLiveWidth}
         className="workspace-kanban-sheet-content bg-worktree-sidebar p-0 sm:max-w-none"
         overlayStyle={{
           top: WORKSPACE_TOP_CHROME_HEIGHT,

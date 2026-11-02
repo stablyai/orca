@@ -7,3 +7,5 @@ import './AutomationsPage.refresh-selection.spec'
 import './AutomationsPage.run-visibility.spec'
 import './AutomationsPage.save-visibility.spec'
 import './AutomationsPage.strict-mode-save-visibility.spec'
+
+import './AutomationsPage.recorded-target.spec'

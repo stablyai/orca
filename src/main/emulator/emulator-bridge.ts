@@ -1,6 +1,6 @@
 import { platform } from 'node:os'
 import { EmulatorError } from './emulator-errors'
-import type { EmulatorSessionInfo } from './emulator-types'
+import type { EmulatorActiveSession, EmulatorSessionInfo } from './emulator-types'
 import type { SimulatorDevice } from './simctl-simulator-devices'
 import type { EmulatorBridgeOptions } from './emulator-bridge-types'
 import type { EmulatorGesturePoint } from './emulator-gesture-sender'
@@ -47,8 +47,8 @@ export class EmulatorBridge {
     return this.iosBackend.listSimulators()
   }
 
-  async listRunningHelpers(): Promise<unknown> {
-    return this.iosBackend.listRunningHelpers()
+  async listActiveSessions(worktreeId?: string): Promise<EmulatorActiveSession[]> {
+    return this.sessionRegistry.listLiveActive(worktreeId, (kind) => this.backendForKind(kind))
   }
 
   async checkServeSimAvailable(): Promise<void> {
@@ -254,6 +254,10 @@ export class EmulatorBridge {
     return udid
   }
 
+  hasLiveManagedSessions(): Promise<boolean> {
+    return this.sessionRegistry.pruneGoneManagedSessions((kind) => this.backendForKind(kind))
+  }
+
   async destroyAllSessions(): Promise<void> {
     const promises: Promise<unknown>[] = []
     for (const session of this.sessionRegistry.listSessions()) {
@@ -273,10 +277,6 @@ export class EmulatorBridge {
     }
     await Promise.allSettled(promises)
     this.sessionRegistry.clear()
-  }
-
-  async onAppQuit(): Promise<void> {
-    await this.destroyAllSessions()
   }
 
   private async resolveTarget(
@@ -325,8 +325,9 @@ export class EmulatorBridge {
   }
 
   private async backendForDevice(device: string): Promise<EmulatorBackend> {
+    const registered = this.sessionRegistry.getSession(device)
     for (const backend of this.backends) {
-      if (await backend.ownsDevice(device)) {
+      if (registered ? backend.kind === registered.backend : await backend.ownsDevice(device)) {
         return backend
       }
     }

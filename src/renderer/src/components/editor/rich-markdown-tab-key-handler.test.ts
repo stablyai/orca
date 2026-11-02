@@ -438,6 +438,108 @@ describe('rich markdown Tab key handler', () => {
     }
   })
 
+  it('keeps the line at the exclusive selection end untouched when outdenting code', () => {
+    const editor = createMarkdownEditor('```js\n  one\n  two\n  three\n```')
+
+    try {
+      editor.commands.setTextSelection({
+        from: codeBlockPosition(editor, 'one'),
+        to: codeBlockPosition(editor, 'three') - 2
+      })
+
+      expect(
+        createRichMarkdownKeyHandler(createContext(editor))(
+          null,
+          keyEvent('Tab', { shiftKey: true })
+        )
+      ).toBe(true)
+      expect(editor.getMarkdown()).toBe('```js\none\ntwo\n  three\n```')
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('indents a selected fragment of one code line without deleting it', () => {
+    const editor = createMarkdownEditor('```js\nconst value = 1\n```')
+
+    try {
+      const from = codeBlockPosition(editor, 'value')
+      editor.commands.setTextSelection({ from, to: from + 'value'.length })
+
+      expect(createRichMarkdownKeyHandler(createContext(editor))(null, keyEvent('Tab'))).toBe(true)
+      expect(editor.getMarkdown()).toBe('```js\n  const value = 1\n```')
+      expect(
+        editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to)
+      ).toBe('value')
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('outdents a selection spanning adjacent code blocks', () => {
+    const editor = createMarkdownEditor('```ts\n  first\n```\n\n```sh\n  second\n```')
+    try {
+      const from = codeBlockPosition(editor, '  first')
+      const to = codeBlockPosition(editor, '  second') + '  second'.length
+      editor.commands.setTextSelection({ from, to })
+      const handler = createRichMarkdownKeyHandler(createContext(editor))
+
+      expect(handler(null, keyEvent('Tab', { shiftKey: true }))).toBe(true)
+      const blocks: string[] = []
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === 'codeBlock') {
+          blocks.push(node.textContent)
+        }
+      })
+      expect(blocks).toEqual(['first', 'second'])
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('outdents list items on Shift-Tab even when they contain an indented code block', () => {
+    const markdown = '- Alpha\n  - Beta\n\n    ```js\n      nested\n    ```'
+    const editor = createMarkdownEditor(markdown)
+
+    try {
+      editor.commands.setTextSelection({
+        from: textPosition(editor, 'Beta'),
+        to: codeBlockPosition(editor, 'nested') + 'nested'.length
+      })
+
+      expect(
+        createRichMarkdownKeyHandler(createContext(editor))(
+          null,
+          keyEvent('Tab', { shiftKey: true })
+        )
+      ).toBe(true)
+      expect(editor.getMarkdown()).toBe('- Alpha\n- Beta\n  ```js\n    nested\n  ```')
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('outdents code lines when the selection starts in code and extends into a paragraph', () => {
+    const editor = createMarkdownEditor('```js\n  code\n```\n\nafter')
+
+    try {
+      editor.commands.setTextSelection({
+        from: codeBlockPosition(editor, 'code'),
+        to: textPosition(editor, 'after') + 2
+      })
+
+      expect(
+        createRichMarkdownKeyHandler(createContext(editor))(
+          null,
+          keyEvent('Tab', { shiftKey: true })
+        )
+      ).toBe(true)
+      expect(editor.getMarkdown()).toBe('```js\ncode\n```\n\nafter')
+    } finally {
+      editor.destroy()
+    }
+  })
+
   it('leaves an unindented code block untouched on Shift-Tab', () => {
     const editor = createMarkdownEditor('```js\nconst x = 1\n```')
 
@@ -450,24 +552,6 @@ describe('rich markdown Tab key handler', () => {
     } finally {
       editor.destroy()
     }
-  })
-
-  it('inserts spaces for Tab in code blocks', () => {
-    const insertContent = vi.fn()
-    const editor = {
-      view: { composing: false },
-      state: { selection: { $from: { depth: 0 } } },
-      commands: {
-        sinkListItem: vi.fn(),
-        liftListItem: vi.fn(),
-        insertContent
-      },
-      isActive: vi.fn((name) => name === 'codeBlock')
-    } as unknown as Editor
-    const event = keyEvent('Tab')
-
-    expect(createRichMarkdownKeyHandler(createContext(editor))(null, event)).toBe(true)
-    expect(insertContent).toHaveBeenCalledWith('  ')
   })
 
   it('outdents a nested bullet that arrived as a pasted list node tree', () => {

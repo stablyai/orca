@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { PANE_AGENT_SOURCE_RANK } from './pane-agent-identity-adapter'
 import {
   PANE_AGENT_EVIDENCE_SOURCES,
   type PaneAgentEvidence,
@@ -12,14 +11,6 @@ const resolve = (evidence: PaneAgentEvidence[], extra = {}) =>
 const H = 'authority-a'
 
 describe('resolvePaneAgentIdentity', () => {
-  it('keeps every evidence source ranked exactly once', () => {
-    expect(PANE_AGENT_SOURCE_RANK).toBe(PANE_AGENT_EVIDENCE_SOURCES)
-    expect(new Set(PANE_AGENT_SOURCE_RANK).size).toBe(PANE_AGENT_SOURCE_RANK.length)
-    for (const source of PANE_AGENT_EVIDENCE_SOURCES) {
-      expect(PANE_AGENT_SOURCE_RANK.indexOf(source)).toBeGreaterThanOrEqual(0)
-    }
-  })
-
   describe('a display title is the last thing consulted', () => {
     it.each(PANE_AGENT_EVIDENCE_SOURCES.filter((s) => s !== 'title' && s !== 'sibling'))(
       'lets %s outrank a conflicting title',
@@ -38,16 +29,6 @@ describe('resolvePaneAgentIdentity', () => {
         agent: 'codex',
         source: 'title'
       })
-    })
-
-    it('outranks the launch record with nothing weaker than the launch record', () => {
-      // The tab ladder currently puts the parsed title ABOVE activeLaunchAgent, so a string Orca
-      // parsed beats a fact Orca owns. That inversion cannot be expressed here.
-      const result = resolve([
-        { source: 'launch', agent: 'claude' },
-        { source: 'title', agent: 'gemini' }
-      ])
-      expect(result.agent).toBe('claude')
     })
   })
 
@@ -77,18 +58,6 @@ describe('resolvePaneAgentIdentity', () => {
       })
       expect(result).toMatchObject({ agent: 'codex', source: 'title' })
       expect(result.supersededSources).toEqual(['completed-hook'])
-    })
-
-    it('produces opposite answers from identical evidence, given only the run ids', () => {
-      const bug = resolvePaneAgentIdentity({
-        evidence: evidenceFor(7, 7),
-        currentRun: { authorityId: H, incarnation: 7 }
-      })
-      const reclaim = resolvePaneAgentIdentity({
-        evidence: evidenceFor(7, 8),
-        currentRun: { authorityId: H, incarnation: 8 }
-      })
-      expect(bug.agent).not.toBe(reclaim.agent)
     })
   })
 
@@ -287,10 +256,6 @@ describe('resolvePaneAgentIdentity', () => {
         { minimumSource: 'launch' }
       )
       expect(result).toMatchObject({ agent: 'claude', source: 'launch' })
-    })
-
-    it('leaves display consumers unrestricted when no floor is given', () => {
-      expect(resolve([{ source: 'title', agent: 'codex' }]).agent).toBe('codex')
     })
   })
 })

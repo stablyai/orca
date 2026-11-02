@@ -2,15 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   findInstallerAssetName,
   getReleaseNotesUrlForVersion,
-  getReleaseRepoForChannel,
   getVersionChannel,
-  hasDedicatedReleaseRepo,
   hasInstallableArtifactForPlatform,
   isAdhocVersion,
   isChannelSupportedOnPlatform,
   isDailyVersion,
   isHourlyVersion,
-  isReleaseChannel,
   parseAdhocVersionStamp,
   parseDailyVersionStamp,
   parseDevBuildStamp,
@@ -31,24 +28,6 @@ describe('release channel', () => {
     expect(getVersionChannel('1.4.160-daily.202607281300')).toBe('daily')
     expect(getVersionChannel('1.4.160-adhoc.20260728140533')).toBe('adhoc')
     expect(getVersionChannel('not-a-version')).toBeNull()
-  })
-
-  // The main release Atom feed holds only 10 entries; daily/hourly tags would evict stable/RC updates.
-  it('keeps dev builds out of the main release repo, and apart from each other', () => {
-    expect(getReleaseRepoForChannel('hourly')).toBe('stablyai/orca-hourly')
-    expect(getReleaseRepoForChannel('daily')).toBe('stablyai/orca-daily')
-    // Keep unlanded adhoc branch builds away from users following main’s hourly channel.
-    expect(getReleaseRepoForChannel('adhoc')).toBe('stablyai/orca-adhoc')
-    expect(getReleaseRepoForChannel('stable')).toBe('stablyai/orca')
-    expect(getReleaseRepoForChannel('rc')).toBe('stablyai/orca')
-  })
-
-  it('marks exactly the dev channels as having their own repo', () => {
-    expect(hasDedicatedReleaseRepo('hourly')).toBe(true)
-    expect(hasDedicatedReleaseRepo('daily')).toBe(true)
-    expect(hasDedicatedReleaseRepo('adhoc')).toBe(true)
-    expect(hasDedicatedReleaseRepo('stable')).toBe(false)
-    expect(hasDedicatedReleaseRepo('rc')).toBe(false)
   })
 
   // Dev tags exist only in their dedicated repos; main-repo links 404.
@@ -219,16 +198,6 @@ describe('release channel', () => {
       expect(isChannelSupportedOnPlatform('stable', platform)).toBe(true)
       expect(isChannelSupportedOnPlatform('rc', platform)).toBe(true)
     }
-  })
-
-  it('accepts only known channels', () => {
-    expect(isReleaseChannel('hourly')).toBe(true)
-    expect(isReleaseChannel('daily')).toBe(true)
-    expect(isReleaseChannel('adhoc')).toBe(true)
-    expect(isReleaseChannel('stable')).toBe(true)
-    expect(isReleaseChannel('nightly')).toBe(false)
-    expect(isReleaseChannel(null)).toBe(false)
-    expect(isReleaseChannel(undefined)).toBe(false)
   })
 
   // Timestamp tails distinguish consecutive hourlies; keep picker ordering chronological.

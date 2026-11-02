@@ -13,8 +13,11 @@ import {
   type FileExplorerDeletionEditor
 } from './file-explorer-deletion-editors'
 import {
+  confirmRemoteDelete,
+  fileDeleteFailedMessage,
   getFileDeleteErrorMessage,
   isLocalDeleteNode,
+  mixedBatchDeleteDescription,
   needsRemoteDeleteConfirmation
 } from './file-explorer-delete-classification'
 import {
@@ -27,6 +30,7 @@ import {
   assertFileWriteApplied,
   missingOrIdenticalPrecondition
 } from '../../../../shared/file-write-disk-precondition'
+import { deleteWithPermanentFallback } from './file-explorer-trash-fallback'
 import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
 import { translate } from '@/i18n/i18n'
 
@@ -76,27 +80,7 @@ export function useFileDeletion({
         )
         // Remote deletes bypass Trash and may be unrecoverable; batches confirm once up front.
         if (isRemote && !options?.skipConfirmation) {
-          const confirmed = await confirm({
-            title: translate(
-              'auto.components.right.sidebar.useFileDeletion.d979a4fbb5',
-              "Permanently delete '{{value0}}'?",
-              { value0: node.name }
-            ),
-            description: node.isDirectory
-              ? translate(
-                  'auto.components.right.sidebar.useFileDeletion.7fb9435c86',
-                  'This permanently deletes the directory and its contents on the remote host. This cannot be undone.'
-                )
-              : translate(
-                  'auto.components.right.sidebar.useFileDeletion.23e98f192f',
-                  'This permanently deletes the file on the remote host. This cannot be undone.'
-                ),
-            confirmLabel: translate(
-              'auto.components.right.sidebar.useFileDeletion.92276aceb7',
-              'Delete'
-            ),
-            confirmVariant: 'destructive'
-          })
+          const confirmed = await confirmRemoteDelete(confirm, node)
           if (!confirmed) {
             return false
           }
@@ -150,7 +134,19 @@ export function useFileDeletion({
         }
 
         operationGuard.assertCurrent()
-        await deleteRuntimePath(fileContext, node.path, node.isDirectory)
+        const deletion = await deleteWithPermanentFallback({
+          name: node.name,
+          isRemote,
+          isWindows,
+          confirm,
+          deletePath: (deleteOptions) =>
+            deleteRuntimePath(fileContext, node.path, node.isDirectory, deleteOptions),
+          beforePermanentDelete: () => operationGuard.assertCurrent()
+        })
+        if (!deletion) {
+          return false
+        }
+        const { permanent } = deletion
 
         if (undoContent !== undefined) {
           commitFileExplorerOp({
@@ -181,7 +177,8 @@ export function useFileDeletion({
                   connectionId: currentRoute.connectionId
                 },
                 node.path,
-                node.isDirectory
+                node.isDirectory,
+                { permanent }
               )
               await refreshDir(parentDir)
             }
@@ -219,16 +216,9 @@ export function useFileDeletion({
 
         return true
       } catch (error) {
-        const action = isRemote ? 'delete' : isWindows ? 'move to Recycle Bin' : 'move to Trash'
-        const errorMessage = getFileDeleteErrorMessage(error)
         toast.error(
-          errorMessage
-            ? errorMessage
-            : translate(
-                'auto.components.right.sidebar.useFileDeletion.72691dfebc',
-                "Failed to {{value0}} '{{value1}}'.",
-                { value0: action, value1: node.name }
-              )
+          getFileDeleteErrorMessage(error) ||
+            fileDeleteFailedMessage(node.name, isRemote, isWindows)
         )
         return false
       } finally {
@@ -262,7 +252,6 @@ export function useFileDeletion({
       const roots = selectDeletionRoots(nodes)
       // Mixed batches must distinguish permanent remote deletion from local Trash.
       const hasLocalDelete = roots.some(isLocalDeleteNode)
-      const trashName = isWindows ? 'Recycle Bin' : 'Trash'
       // Clear selection after the whole batch so concurrent completions cannot restore stale partial sets.
       void (async () => {
         const deletedRoots = await runBatchDeletion({
@@ -274,25 +263,21 @@ export function useFileDeletion({
               // Count selected children even when ancestor roots subsume their deletes.
               title: hasLocalDelete
                 ? translate(
-                    'auto.components.right.sidebar.useFileDeletion.77fdc36183',
+                    'auto.components.right.sidebar.useFileDeletion.deleteItems',
                     'Delete {{count}} items?',
-                    { count: nodes.length }
+                    { count: nodes.length, defaultValue_one: 'Delete {{count}} item?' }
                   )
                 : translate(
-                    'auto.components.right.sidebar.useFileDeletion.af1270b90d',
+                    'auto.components.right.sidebar.useFileDeletion.permanentlyDeleteItems',
                     'Permanently delete {{count}} items?',
-                    { count: nodes.length }
+                    { count: nodes.length, defaultValue_one: 'Permanently delete {{count}} item?' }
                   ),
-              description: hasLocalDelete
+              description: !hasLocalDelete
                 ? translate(
-                    'auto.components.right.sidebar.useFileDeletion.fca915a67a',
-                    'Remote items are permanently deleted and cannot be undone. Local items move to the {{value0}}.',
-                    { value0: trashName }
-                  )
-                : translate(
                     'auto.components.right.sidebar.useFileDeletion.dd029aa5cd',
                     'This permanently deletes the selected items and any directory contents on the remote host. This cannot be undone.'
-                  ),
+                  )
+                : mixedBatchDeleteDescription(isWindows),
               confirmLabel: translate(
                 'auto.components.right.sidebar.useFileDeletion.92276aceb7',
                 'Delete'

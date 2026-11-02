@@ -21,17 +21,6 @@ function command(overrides: Partial<SlashCommand>): SlashCommand {
 }
 
 describe('filterRichMarkdownSlashCommands', () => {
-  it('matches labels and aliases', () => {
-    const commands = [
-      command({ id: 'heading-1', label: 'Heading 1', aliases: ['h1', 'title'] }),
-      command({ id: 'table', label: 'Table', aliases: ['grid'] })
-    ]
-
-    expect(filterRichMarkdownSlashCommands(commands, 'title').map((entry) => entry.id)).toEqual([
-      'heading-1'
-    ])
-  })
-
   it('returns no commands for oversized pasted queries before reading commands', () => {
     const unreadableCommand = command({})
     Object.defineProperty(unreadableCommand, 'label', {

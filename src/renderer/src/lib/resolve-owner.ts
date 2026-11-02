@@ -2,6 +2,11 @@
  * The owner of a workspace as a {@link HostAuthority}, decided from the rows alone.
  */
 import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo,
+  selectDetectedWorktreesByRepo
+} from '@/store/workspace-record-selectors'
+import {
   getRepoSshConnectionId,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
@@ -10,7 +15,9 @@ import {
 } from '../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import {
-  findIndexedRepoOwnerForHost,
+  findIndexedWorktreeOwnerForHost,
+  resolveQualifiedIndexedRepoOwnerForHost,
+  findIndexedDetectedWorktrees,
   resolveIndexedFolderWorkspaceOwner,
   resolveIndexedProjectGroupOwner
 } from './worktree-runtime-owner-index'
@@ -60,7 +67,10 @@ function toOwnerMatch(
 
 /** Detect folder/project twins before unqualified route lookups collapse them into missing/local ownership. */
 function isFolderTwin(state: WorktreeOperationRouteState, folderWorkspaceId: string): boolean {
-  const folder = resolveIndexedFolderWorkspaceOwner(state.folderWorkspaces, folderWorkspaceId)
+  const folder = resolveIndexedFolderWorkspaceOwner(
+    selectFolderWorkspaces(state),
+    folderWorkspaceId
+  )
   if (folder.kind !== 'resolved') {
     return folder.kind === 'ambiguous'
   }
@@ -104,9 +114,7 @@ export function resolveOwner(
       ? resolveWorktreeOperationRouteResultForHost(state, ref.workspaceId, hostId)
       : resolveWorktreeOperationRouteResult(state, ref.workspaceId)
   )
-  return match.kind === 'resolved'
-    ? { kind: 'resolved', owner: withNestedPlace(state, ref, match.owner) }
-    : match
+  return match.kind === 'resolved' ? withNestedPlace(state, ref, match.owner) : match
 }
 
 /** Server routes omit nested SSH; resolve connectionId from the owning folder/repo row, matching resolveWorktreeExecutionHost. */
@@ -114,29 +122,66 @@ function withNestedPlace(
   state: WorktreeOperationRouteState,
   ref: WorkspaceOwnerRef,
   authority: HostAuthority
-): HostAuthority {
+): ExecutionHostOwnerMatch<HostAuthority> {
   if (authority.endpoint.kind !== 'environment' || authority.at !== 'local') {
-    return authority
+    return { kind: 'resolved', owner: authority }
   }
   const scope = parseWorkspaceKey(ref.workspaceId)
   const targetId =
     scope?.type === 'folder'
-      ? getNestedSshTargetIdForFolderWorkspace(state, scope.folderWorkspaceId, ref.hostId)
+      ? {
+          kind: 'resolved' as const,
+          owner: getNestedSshTargetIdForFolderWorkspace(state, scope.folderWorkspaceId, ref.hostId)
+        }
       : nestedRepoTargetId(state, ref.workspaceId, authority.endpoint.environmentId)
-  return targetId ? { ...authority, at: toSshExecutionHostId(targetId) } : authority
+  return targetId.kind === 'resolved'
+    ? {
+        kind: 'resolved',
+        owner: targetId.owner
+          ? { ...authority, at: toSshExecutionHostId(targetId.owner) }
+          : authority
+      }
+    : targetId
 }
 
 function nestedRepoTargetId(
   state: WorktreeOperationRouteState,
   worktreeId: string,
   environmentId: string
-): string | null {
-  const repo = findIndexedRepoOwnerForHost(
-    state.repos,
-    getRepoIdFromWorktreeId(worktreeId),
-    toRuntimeExecutionHostId(environmentId)
+): ExecutionHostOwnerMatch<string | null> {
+  const hostId = toRuntimeExecutionHostId(environmentId)
+  const row = findIndexedWorktreeOwnerForHost(selectWorktreesByRepo(state), worktreeId, hostId)
+  const physical = parseExecutionHostId(row?.hostId)
+  if (physical?.kind === 'ssh') {
+    return { kind: 'resolved', owner: physical.targetId }
+  }
+  const detected = findIndexedDetectedWorktrees(
+    selectDetectedWorktreesByRepo(state),
+    worktreeId
+  ).filter(
+    (candidate) =>
+      candidate.runtimeOwnerEnvironmentId === environmentId || candidate.hostId === hostId
   )
-  return repo ? getRepoSshConnectionId(repo) : null
+  const targets = new Set(
+    detected.map((candidate) => {
+      const physical = parseExecutionHostId(candidate.hostId)
+      return physical?.kind === 'ssh' ? physical.targetId : null
+    })
+  )
+  if (targets.size === 0) {
+    const repoId = getRepoIdFromWorktreeId(worktreeId)
+    let repo = resolveQualifiedIndexedRepoOwnerForHost(state.repos, repoId, hostId)
+    if (repo.kind === 'ambiguous' && physical?.id === hostId) {
+      repo = resolveQualifiedIndexedRepoOwnerForHost(state.repos, repoId, hostId, null)
+    }
+    if (repo.kind === 'ambiguous') {
+      return repo
+    }
+    targets.add(repo.kind === 'resolved' ? getRepoSshConnectionId(repo.owner) : null)
+  }
+  return targets.size > 1
+    ? { kind: 'ambiguous' }
+    : { kind: 'resolved', owner: targets.values().next().value ?? null }
 }
 
 /** Two hosts publish this workspace (or contest it), so no host-routed action may pick one. */
@@ -250,7 +295,7 @@ export function someWorktreeCopy(
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   const copyMatches = (row: WorktreeCopy & { id: string }) => row.id === worktreeId && matches(row)
   return Boolean(
-    state.worktreesByRepo?.[repoId]?.some(copyMatches) ||
-    state.detectedWorktreesByRepo?.[repoId]?.worktrees.some(copyMatches)
+    selectWorktreesByRepo(state)?.[repoId]?.some(copyMatches) ||
+    selectDetectedWorktreesByRepo(state)?.[repoId]?.worktrees.some(copyMatches)
   )
 }

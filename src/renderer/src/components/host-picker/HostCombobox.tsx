@@ -49,6 +49,7 @@ export function HostCombobox({
   placeholder,
   ariaLabel,
   size = 'default',
+  notifyOnReselect = false,
   className,
   disabled
 }: {
@@ -61,6 +62,7 @@ export function HostCombobox({
   size?: 'xs' | 'sm' | 'default'
   className?: string
   disabled?: boolean
+  notifyOnReselect?: boolean
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -118,7 +120,7 @@ export function HostCombobox({
                     disabled={option.disabled}
                     onSelect={() => {
                       setOpen(false)
-                      if (option.id !== value) {
+                      if (option.id !== value || notifyOnReselect) {
                         onChange(option.id)
                       }
                     }}

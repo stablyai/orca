@@ -5,6 +5,7 @@ import { getWindowsPathAccess } from '@/lib/windows-path-access'
 import { browseRuntimeServerDirectory } from '@/runtime/runtime-server-directory-browser'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import { pickWslHostFolder, type DroppedHostPath } from './add-repo-wsl-host-folder-picker'
+import type { WslHostWindowsDriveRefusal } from '../../../../shared/wsl-host-windows-drive-refusal'
 
 /** Prefill the host-path step from Windows drops or the folder picker for a WSL distro. */
 export function useAddRepoWslHostPaths({
@@ -12,13 +13,15 @@ export function useAddRepoWslHostPaths({
   droppedHostPath,
   selectedHostId,
   setServerPath,
-  setStep
+  setStep,
+  onWindowsDriveRefusal
 }: {
   isOpen: boolean
   droppedHostPath: DroppedHostPath | null
   selectedHostId: ExecutionHostId | null
   setServerPath: (path: string) => void
   setStep: (step: AddRepoDialogStep) => void
+  onWindowsDriveRefusal: (refusal: WslHostWindowsDriveRefusal) => void
 }): {
   browseWslHost: (() => void) | null
   /** The last path Windows handed over; only that path skips the host's own browser. */
@@ -74,7 +77,8 @@ export function useAddRepoWslHostPaths({
     const linuxPath = await pickWslHostFolder(access, {
       readHome: async () =>
         (await browseRuntimeServerDirectory(host.environmentId, '~')).resolvedPath,
-      pickDirectory: (args) => window.api.shell.pickDirectory(args)
+      pickDirectory: (args) => window.api.shell.pickDirectory(args),
+      onWindowsDriveRefusal
     })
     // Why: the dialog may have closed or switched hosts while Windows' picker was up.
     if (!linuxPath || pickerOwnerRef.current !== selectedHostId) {
@@ -82,7 +86,7 @@ export function useAddRepoWslHostPaths({
     }
     setPickedServerPath(linuxPath)
     setStep('server-path')
-  }, [access, selectedHostId, setPickedServerPath, setStep])
+  }, [access, onWindowsDriveRefusal, selectedHostId, setPickedServerPath, setStep])
 
   return {
     browseWslHost: access ? () => void browseWslHost() : null,

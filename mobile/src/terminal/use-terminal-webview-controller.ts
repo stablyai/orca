@@ -1,3 +1,4 @@
+import { parseTerminalKittyKeyboardFlags } from '../../../src/shared/terminal-kitty-keyboard-flags'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { readTerminalCellBox, type TerminalCellBox } from './terminal-cell-box'
 import { fitDimensionsFromCell } from './terminal-grid-fit'
@@ -30,6 +31,7 @@ export function useTerminalWebViewController(
 ) {
   const {
     terminalTheme,
+    interactionActive = true,
     textScale = 1,
     onWebReady,
     onEngineError,
@@ -42,6 +44,7 @@ export function useTerminalWebViewController(
     onHaptic,
     onTerminalInput,
     onTerminalQueryReply,
+    onTerminalInteraction,
     onTerminalTap,
     onFileTap,
     onOpenUrl,
@@ -96,11 +99,7 @@ export function useTerminalWebViewController(
     [postMessage]
   )
 
-  useEffect(() => {
-    return () => {
-      writeCoalescer.clear()
-    }
-  }, [writeCoalescer])
+  useEffect(() => () => writeCoalescer.clear(), [writeCoalescer])
 
   const confirmWebReady = useCallback(
     (notifyParent: boolean) => {
@@ -113,10 +112,12 @@ export function useTerminalWebViewController(
         onWebReady?.()
       }
       // Reload drops commands; readiness must restore the selected theme even if its React value did not change.
+      sendToDocument({ type: 'set-interaction-active', active: interactionActive })
       sendToDocument({ type: 'set-theme', terminalTheme })
       flushPendingMessages()
     },
     [
+      interactionActive,
       clearEngineError,
       clearWebReadyWatchdog,
       flushPendingMessages,
@@ -127,16 +128,22 @@ export function useTerminalWebViewController(
   )
 
   const probeWebReady = useCallback(() => {
-    if (isWebReadyRef.current || pendingPingIdRef.current !== null) {
-      return
+    if (!isWebReadyRef.current && pendingPingIdRef.current === null) {
+      pendingPingIdRef.current = sendToDocument({ type: 'ping' })
     }
-    pendingPingIdRef.current = sendToDocument({ type: 'ping' })
   }, [sendToDocument])
+
+  useEffect(() => {
+    if (isWebReadyRef.current) {
+      sendToDocument({ type: 'set-interaction-active', active: interactionActive })
+    }
+  }, [sendToDocument, interactionActive])
 
   const receive = useCallback(
     (msg: Record<string, unknown>) => {
       routeTerminalQueryReply(msg, onTerminalQueryReply)
       if (
+        interactionActive &&
         msg.type === 'terminal-input' &&
         typeof msg.bytes === 'string' &&
         isTerminalGestureInput(msg.bytes)
@@ -176,16 +183,18 @@ export function useTerminalWebViewController(
           onModesChanged,
           onKeyboardAvoidanceMetrics,
           onHaptic,
-          onTerminalInput,
-          onTerminalTap,
-          onFileTap,
-          onOpenUrl,
+          onTerminalInput: interactionActive ? onTerminalInput : undefined,
+          onTerminalInteraction: interactionActive ? onTerminalInteraction : undefined,
+          onTerminalTap: interactionActive ? onTerminalTap : undefined,
+          onFileTap: interactionActive ? onFileTap : undefined,
+          onOpenUrl: interactionActive ? onOpenUrl : undefined,
           onTextScaleChange
         })
       }
     },
     [
       confirmWebReady,
+      interactionActive,
       promises,
       reportEngineError,
       onSelectionMode,
@@ -197,6 +206,7 @@ export function useTerminalWebViewController(
       onHaptic,
       onTerminalInput,
       onTerminalQueryReply,
+      onTerminalInteraction,
       onTerminalTap,
       onFileTap,
       onOpenUrl,
@@ -250,7 +260,7 @@ export function useTerminalWebViewController(
       write(data: string) {
         writeCoalescer.write(data)
       },
-      init({ cols, rows, initialData, preserveScroll, oscLinks, frame }: TerminalInit) {
+      init({ cols, rows, initialData, preserveScroll, oscLinks, kittyFlags, frame }: TerminalInit) {
         // Arm ready before posting init so a synchronous reply cannot be lost.
         promises.armReady()
         // The init snapshot supersedes buffered chunks; replaying them afterward would duplicate old output.
@@ -261,6 +271,7 @@ export function useTerminalWebViewController(
           rows,
           initialData,
           oscLinks,
+          kittyKeyboardFlags: parseTerminalKittyKeyboardFlags(kittyFlags),
           terminalTheme,
           fontScale: textScale,
           preserveScroll,
@@ -281,6 +292,10 @@ export function useTerminalWebViewController(
         postMessage({ type: 'clear' })
       },
       fitDimensions,
+      scrollToBottom() {
+        writeCoalescer.flushNow()
+        postMessage({ type: 'scroll-to-bottom' })
+      },
       resetZoom() {
         postMessage({ type: 'reset-zoom' })
       },

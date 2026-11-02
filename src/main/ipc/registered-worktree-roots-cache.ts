@@ -1,11 +1,15 @@
 import { resolve } from 'node:path'
+import { findRegisteredWorktreeRoot } from './registered-worktree-root-match'
 import type { Repo } from '../../shared/repo-types'
 import type { RegisteredWorktreeRootStore as Store } from './registered-worktree-root-store'
 import {
   listWorktreeRootsWithConcurrency,
   pruneCreatedWorktreeRoots
 } from './registered-worktree-root-probes'
-import { isDescendantOrEqual, normalizeExistingPath } from './filesystem-path-containment'
+import {
+  isDescendantOrEqual,
+  normalizeExistingPath
+} from './filesystem/filesystem-path-containment'
 import {
   findOwnersListedThroughAnotherGit,
   shouldRelistOwner
@@ -125,7 +129,8 @@ export async function rebuildAuthorizedRootsCache(store: Store, onlyDirty = fals
   synchronizeOwners(store)
   for (const entry of pruned) {
     // A fresh create or ownership change makes both the graph and absence probes obsolete.
-    if (!entry || !entry.owner || !isCurrent(entry)) {
+    // A deferred owner is left as it was and stays dirty, so it is listed once its distro runs.
+    if (!entry || !entry.owner || !isCurrent(entry) || entry.deferred) {
       continue
     }
     entry.owner.listed = entry.roots
@@ -283,7 +288,7 @@ export async function isPathAllowedByCanonicalRegisteredRoot(
     return false
   }
   synchronizeOwners(store)
-  const textualRoot = findRegisteredWorktreeRoot(sourcePath)
+  const textualRoot = findRegisteredWorktreeRoot(sourcePath, registeredWorktreeRoots)
   if (!textualRoot) {
     return false
   }
@@ -313,14 +318,4 @@ export async function isPathAllowedByCanonicalRegisteredRoot(
     registeredWorktreeRoots.add(canonicalRoot)
   }
   return allowed
-}
-
-function findRegisteredWorktreeRoot(targetPath: string): string | null {
-  let bestRoot: string | null = null
-  for (const root of registeredWorktreeRoots) {
-    if (isDescendantOrEqual(targetPath, root) && (!bestRoot || root.length > bestRoot.length)) {
-      bestRoot = root
-    }
-  }
-  return bestRoot
 }

@@ -175,23 +175,7 @@ function recordClosedTerminalTabs(
   return withWorkspace(model, key, { ...workspace, closedTerminalTabs })
 }
 
-export function renameTab(model: WorkspaceLayoutModel, command: CommandOf<'renameTab'>): Applied {
-  const tab = findTab(model.workspaces[command.workspace]!, command.tabId)
-  if (!tab) {
-    return refuse('tab_not_found')
-  }
-  if (command.kind === 'aiVault') {
-    return updateTab(model, command.workspace, { ...tab, aiVaultTitle: command.title })
-  }
-  if (command.kind === 'custom') {
-    return updateTab(model, command.workspace, { ...tab, customTitle: command.title })
-  }
-  // As the window's own generated titles: an agent's later prompt does not rename the tab.
-  if (tab.generatedTitle?.trim() && !command.replaceExisting) {
-    return refuse('generated_title_kept')
-  }
-  return updateTab(model, command.workspace, { ...tab, generatedTitle: command.title })
-}
+export { renameTab } from './workspace-layout-tab-rename'
 
 export function setTabProps(
   model: WorkspaceLayoutModel,

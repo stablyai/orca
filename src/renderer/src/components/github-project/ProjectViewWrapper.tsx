@@ -23,6 +23,7 @@ import type {
 } from '../../../../shared/github/project-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 type Props = {
   selectedRepoIds: ReadonlySet<string>
@@ -114,9 +115,7 @@ function ProjectViewBody({
         host={activeProject.host}
         onOpenInGitHub={() => {
           if (table) {
-            void window.api.shell.openUrl(
-              `${table.project.url}/views/${table.selectedView.number ?? ''}`
-            )
+            openAppHttpLink(`${table.project.url}/views/${table.selectedView.number ?? ''}`)
           }
         }}
       />
@@ -145,7 +144,7 @@ function ProjectViewBody({
             telemetrySource: 'sidebar',
             openModalFallback: () => {
               if (item.url) {
-                void window.api.shell.openUrl(item.url)
+                openAppHttpLink(item.url)
               }
             }
           })
@@ -167,7 +166,7 @@ function ProjectViewBody({
       onEditIssueType={(row, issueType) => void rowActions.editIssueType(row, issueType)}
       onOpenInBrowser={(row) => {
         if (row.content.url) {
-          void window.api.shell.openUrl(row.content.url)
+          openAppHttpLink(row.content.url)
         }
       }}
       onStartWork={rowActions.startWork}

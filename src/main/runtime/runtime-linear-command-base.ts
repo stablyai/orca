@@ -6,7 +6,7 @@ import { RuntimeLinearBrowseCommands } from './runtime-linear-browse-commands'
 export type RuntimeLinearCommandPorts = {
   runtimeAvailable: () => boolean
   showTerminal: (handle: string) => Promise<RuntimeTerminalShow>
-  resolveWorktreeSelector: (selector: string) => Promise<ResolvedWorktree>
+  resolveWorkspaceSelector: (selector: string) => Promise<ResolvedWorktree>
   listResolvedWorktrees: () => Promise<ResolvedWorktree[]>
   setWorktreeMeta: (
     worktree: Pick<ResolvedWorktree, 'id' | 'hostId'>,
@@ -32,8 +32,8 @@ export class RuntimeLinearCommandBase extends RuntimeLinearBrowseCommands {
     return this.ports.showTerminal(handle)
   }
 
-  protected resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree> {
-    return this.ports.resolveWorktreeSelector(selector)
+  protected resolveWorkspaceSelector(selector: string): Promise<ResolvedWorktree> {
+    return this.ports.resolveWorkspaceSelector(selector)
   }
 
   protected listResolvedWorktrees(): Promise<ResolvedWorktree[]> {

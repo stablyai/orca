@@ -1,13 +1,14 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import type { PersistedAgentSessionLease } from '../../../shared/agent-session-legacy-handoff-lease'
+import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import type { PersistedAgentSessionLease } from '../../../shared/agent-session/lifecycle/agent-session-legacy-handoff-lease'
 import { writeOlderBuildLease } from '../../runtime/agent-session/ownership/agent-session-older-build-lease.test-fixture'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
@@ -19,9 +20,12 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 
@@ -144,6 +148,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -168,7 +173,7 @@ describe('a record an older build left mid terminal handoff', () => {
       claimStatus: 'released'
     })
 
-    await host.restoreReadableSessions()
+    await openTestChats(host)
 
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       handoffStage: null,
@@ -201,7 +206,7 @@ describe('a record an older build left mid terminal handoff', () => {
     })
     expect(store.getRecord(SESSION)?.lease.handoffStage).toBe('recovering')
 
-    await host.restoreReadableSessions()
+    await openTestChats(host)
 
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       handoffStage: null,
@@ -221,7 +226,7 @@ describe('a record an older build left mid terminal handoff', () => {
       claimStatus: 'live'
     })
 
-    await host.restoreReadableSessions()
+    await openTestChats(host)
 
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       handoffStage: null,
@@ -244,7 +249,7 @@ describe('a record an older build left mid terminal handoff', () => {
     })
     probe.mockResolvedValue({ outcome: 'identity-matched', matchedOn: ['spawn-token'] })
 
-    await host.restoreReadableSessions()
+    await openTestChats(host)
 
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'conflicted',

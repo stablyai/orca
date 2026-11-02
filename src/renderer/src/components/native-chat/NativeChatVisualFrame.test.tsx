@@ -14,7 +14,7 @@ import {
   NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE,
   NATIVE_CHAT_VISUAL_SIZE_TYPE,
   NATIVE_CHAT_VISUAL_THEME_TYPE
-} from '../../../../shared/native-chat-visual-shell'
+} from '../../../../shared/native-chat/native-chat-visual-shell'
 
 const openHttpLink = vi.fn()
 vi.mock('@/lib/http-link-routing', () => ({

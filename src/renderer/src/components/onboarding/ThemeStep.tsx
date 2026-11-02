@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Check, Monitor, Moon, Settings2, Sun } from 'lucide-react'
+import { Trans } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { track } from '@/lib/telemetry'
@@ -7,8 +8,10 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { GhosttyDiscoveryRow } from './GhosttyDiscoveryRow'
 import type { GhosttyImportPreview, GlobalSettings } from '../../../../shared/global-settings-types'
 import type { DiscoveryStatusEmitted } from '../../../../shared/onboarding-state-types'
-import { translate } from '@/i18n/i18n'
+import { i18n, translate } from '@/i18n/i18n'
 import { ChromePreview } from './theme-chrome-preview'
+import { withImportedTerminalColorOverrides } from '../../../../shared/terminal-theme-selection'
+import { getSystemPrefersDark } from '@/lib/terminal-theme'
 
 type ThemeStepProps = {
   theme: GlobalSettings['theme']
@@ -127,17 +130,9 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
         track('onboarding_ghostty_import_failed', { reason: 'empty_diff' })
         return
       }
-      await updateSettings({
-        ...resolved.diff,
-        ...(resolved.diff.terminalColorOverrides
-          ? {
-              terminalColorOverrides: {
-                ...settings.terminalColorOverrides,
-                ...resolved.diff.terminalColorOverrides
-              }
-            }
-          : {})
-      })
+      await updateSettings(
+        withImportedTerminalColorOverrides(settings, resolved.diff, getSystemPrefersDark())
+      )
       // Sync the controller’s local theme so Continue cannot overwrite the imported theme.
       if (resolved.diff.theme && mountedRef.current) {
         onThemeChange(resolved.diff.theme)
@@ -240,13 +235,14 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
       <div className="flex items-center gap-2 px-1 text-[12px] text-muted-foreground">
         <Settings2 className="size-3.5" />
         <span>
-          {translate(
-            'auto.components.onboarding.ThemeStep.dd5c16ad1b',
-            'More terminal options, including font, cursor, and palette, in'
-          )}{' '}
-          <span className="font-medium text-foreground">
-            {translate('auto.components.onboarding.ThemeStep.94b9dc561d', 'Settings → Terminal')}
-          </span>
+          <Trans
+            i18n={i18n}
+            defaults={translate(
+              'auto.components.onboarding.ThemeStep.moreTerminalOptions',
+              'More terminal options, including font, cursor, and palette, in <settings>Settings → Terminal</settings>'
+            )}
+            components={{ settings: <span className="font-medium text-foreground" /> }}
+          />
         </span>
       </div>
     </div>
@@ -278,7 +274,7 @@ function humanFields(diff: Partial<GlobalSettings>): string[] {
     },
     {
       label: translate('auto.components.onboarding.ThemeStep.b3a99a2d29', 'Window'),
-      keys: ['terminalBackgroundOpacity', 'windowBackgroundBlur', 'terminalInactivePaneOpacity']
+      keys: ['terminalBackgroundOpacity', 'windowMaterial', 'terminalInactivePaneOpacity']
     },
     {
       label: translate('auto.components.onboarding.ThemeStep.8ca01945f2', 'Dividers'),

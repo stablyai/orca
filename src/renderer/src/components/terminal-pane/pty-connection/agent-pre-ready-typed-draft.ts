@@ -100,6 +100,8 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
     }
     if (wasUserInput) {
       draft = appendTypedDraftText(draft, data, PTY_PRECONNECT_INPUT_MAX_CODE_UNITS)
+      // Why: a connect hung past its grace still needs typing to arm recovery; its guards stay quiet before then.
+      session.requestRecoveryForUndeliverableInput()
     }
     // Pre-bind focus reports have no terminal to reach.
     return true

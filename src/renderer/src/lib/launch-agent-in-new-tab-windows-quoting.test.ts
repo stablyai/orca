@@ -169,7 +169,7 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
     const prompt = 'x'.repeat(25_000)
 
-    launchAgentInNewTab({
+    const result = launchAgentInNewTab({
       requestId: 'request-1',
       agent: 'claude',
       worktreeId: 'wt-1',
@@ -178,6 +178,7 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
       launchPlatform: 'win32'
     })
 
+    await result?.terminalCompletion
     expect(mockCreateWebRuntimeAgentSessionTerminal).toHaveBeenCalledWith(
       expect.objectContaining({
         promptAfterReady: prompt,

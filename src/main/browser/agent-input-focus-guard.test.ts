@@ -21,8 +21,7 @@ vi.mock('electron', () => ({
 import {
   AGENT_INPUT_FOCUS_GUARD_CHANNEL,
   AGENT_INPUT_FOCUS_GUARD_READY_CHANNEL,
-  guardPaneFocusForAgentInput,
-  isFocusTakingCdpInput
+  guardPaneFocusForAgentInput
 } from './agent-input-focus-guard'
 
 function fakeRenderer(id: number, answer: boolean) {
@@ -111,16 +110,5 @@ describe('guardPaneFocusForAgentInput', () => {
     await expect(guarded).rejects.toMatchObject({ code: 'browser_user_composing' })
     expect(sent.map(({ data }) => data.active)).toEqual([true, false])
     expect(ipcListeners.get(AGENT_INPUT_FOCUS_GUARD_READY_CHANNEL)).toEqual([])
-  })
-})
-
-describe('isFocusTakingCdpInput', () => {
-  it('matches presses only', () => {
-    expect(isFocusTakingCdpInput('Input.dispatchMouseEvent', { type: 'mousePressed' })).toBe(true)
-    expect(isFocusTakingCdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased' })).toBe(false)
-    expect(isFocusTakingCdpInput('Input.dispatchMouseEvent', { type: 'mouseMoved' })).toBe(false)
-    expect(isFocusTakingCdpInput('Input.dispatchTouchEvent', { type: 'touchStart' })).toBe(true)
-    expect(isFocusTakingCdpInput('Input.synthesizeTapGesture', {})).toBe(true)
-    expect(isFocusTakingCdpInput('Input.dispatchKeyEvent', { type: 'keyDown' })).toBe(false)
   })
 })

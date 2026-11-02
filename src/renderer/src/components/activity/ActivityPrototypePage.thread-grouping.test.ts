@@ -94,6 +94,7 @@ describe('activity thread grouping', () => {
       agentType: 'claude'
     }
     const { events, liveAgentByPaneKey } = buildActivityEvents({
+      chatNames: new Map(),
       agentStatusByPaneKey: {
         [PANE_KEY]: {
           ...sharedDone,
@@ -132,6 +133,7 @@ describe('activity thread grouping', () => {
     const worktree = makeWorktreeWithId('wt-unknown', 'missing-repo', 'unknown-wt')
     const tab = makeTabWithIds('tab-unknown', worktree.id)
     const { events, liveAgentByPaneKey } = buildActivityEvents({
+      chatNames: new Map(),
       agentStatusByPaneKey: {
         [UNKNOWN_PANE_KEY]: {
           state: 'done',
@@ -183,6 +185,7 @@ describe('activity thread grouping', () => {
     const tabB1 = makeTabWithIds('tab-b1', wtB.id)
     const tabA2 = makeTabWithIds('tab-a2', wtA.id)
     const { events, liveAgentByPaneKey } = buildActivityEvents({
+      chatNames: new Map(),
       agentStatusByPaneKey: {
         [PANE_KEY_A1]: {
           state: 'done',

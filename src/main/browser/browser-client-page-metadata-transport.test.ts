@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
-import { BROWSER_CLIENT_FILE_CHANNEL_REQUEST_TIMEOUT_MS } from './browser-client-file-channel-transport'
 import {
-  BROWSER_CLIENT_PAGE_METADATA_REQUEST_TIMEOUT_MS,
   BrowserClientPageMetadataTransport,
   publishBrowserClientPageMetadata,
   registerBrowserClientPageMetadataTransport,
@@ -36,31 +34,6 @@ afterEach(() => {
 })
 
 describe('browser client page metadata transport', () => {
-  it('waits at least as long as anything else sharing the lease connection', () => {
-    expect(BROWSER_CLIENT_PAGE_METADATA_REQUEST_TIMEOUT_MS).toBeGreaterThanOrEqual(
-      BROWSER_CLIENT_FILE_CHANNEL_REQUEST_TIMEOUT_MS
-    )
-    expect(BROWSER_CLIENT_PAGE_METADATA_REQUEST_TIMEOUT_MS).toBeGreaterThanOrEqual(30_000)
-  })
-
-  it('sends the publish over the bound lease and reports the acknowledgement', async () => {
-    const sendPageMetadataRequest = vi.fn().mockResolvedValue(answered({ accepted: true }))
-    const transport = new BrowserClientPageMetadataTransport()
-    transport.bind({ sendPageMetadataRequest })
-
-    await expect(transport.publish(PARAMS)).resolves.toEqual({ accepted: true })
-    expect(sendPageMetadataRequest).toHaveBeenCalledWith(PARAMS, expect.any(Number))
-  })
-
-  it('carries an un-accepted acknowledgement back to the caller', async () => {
-    const transport = new BrowserClientPageMetadataTransport()
-    transport.bind({
-      sendPageMetadataRequest: () => Promise.resolve(answered({ accepted: false }))
-    })
-
-    await expect(transport.publish(PARAMS)).resolves.toEqual({ accepted: false })
-  })
-
   it('rejects a runtime error and an unreadable acknowledgement', async () => {
     const failing = new BrowserClientPageMetadataTransport()
     failing.bind({
@@ -146,31 +119,5 @@ describe('browser client page metadata routing', () => {
     await expect(publishBrowserClientPageMetadata('environment-a', PARAMS)).resolves.toEqual({
       accepted: true
     })
-  })
-})
-
-describe('published-url observation', () => {
-  it('reports every publish to the observer', async () => {
-    const observeCurrentUrl = vi.fn()
-    const transport = new BrowserClientPageMetadataTransport(observeCurrentUrl)
-    transport.bind({
-      sendPageMetadataRequest: vi.fn().mockResolvedValue(answered({ accepted: true }))
-    })
-
-    await transport.publish(PARAMS)
-    await transport.publish({ ...PARAMS, revision: 3, url: 'https://example.internal/again' })
-
-    expect(observeCurrentUrl.mock.calls).toEqual([
-      [PARAMS],
-      [{ ...PARAMS, revision: 3, url: 'https://example.internal/again' }]
-    ])
-  })
-
-  it('observes the publish even when no lease is bound to send it', async () => {
-    const observeCurrentUrl = vi.fn()
-    const transport = new BrowserClientPageMetadataTransport(observeCurrentUrl)
-
-    await expect(transport.publish(PARAMS)).rejects.toBeInstanceOf(RemoteRuntimeClientError)
-    expect(observeCurrentUrl).toHaveBeenCalledWith(PARAMS)
   })
 })

@@ -1,6 +1,6 @@
 import type { ITerminalOptions } from '@xterm/xterm'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal-scrollback-policy'
-import { LIGHT_BG_MIN_CONTRAST } from '@/lib/terminal-contrast-correction'
+import { LIGHT_BG_MIN_CONTRAST } from '../../../../shared/terminal-contrast-correction'
 
 type TerminalCursorStyle = NonNullable<ITerminalOptions['cursorStyle']>
 type TerminalCursorInactiveStyle = NonNullable<ITerminalOptions['cursorInactiveStyle']>
@@ -26,6 +26,9 @@ export function resolveTerminalCursorInactiveStyle(
   // Inactive outline adds unwanted strokes to bar/underline cursors; reserve it for block cursors.
   return (cursorStyle ?? 'block') === 'block' ? 'outline' : (cursorStyle ?? 'block')
 }
+
+// Panes own mode 2031 and ?996n because gated hidden output never reaches xterm; xterm's built-in reports would duplicate each flip.
+export const PANE_TERMINAL_VT_EXTENSIONS = { colorSchemeQuery: false } as const
 
 export function buildDefaultTerminalOptions(): ITerminalOptions {
   const cursorStyle: TerminalCursorStyle = 'block'

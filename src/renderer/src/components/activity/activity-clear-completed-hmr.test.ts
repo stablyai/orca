@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type { ActivityEvent, AgentPaneThread } from './activity-thread-types'
 import { makeTab, makeWorktree } from './ActivityPrototypePage-test-fixtures'
 

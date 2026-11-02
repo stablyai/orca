@@ -18,7 +18,7 @@ import { createCodexComposerReadyScanner } from '../../shared/codex-composer-rea
 import { createTerminalEscapeScanner } from '../../shared/terminal-escape-scanner'
 import { promisify } from 'node:util'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CodexListedHook } from './codex-app-server-client'
+import type { CodexListedHook } from './app-server/codex-app-server-client'
 import {
   CODEX_EVENTS,
   CODEX_EVENT_LABEL,
@@ -47,7 +47,8 @@ import {
 
 vi.mock('../codex-cli/command', async (importOriginal) => ({
   ...(await importOriginal<typeof CodexCommand>()),
-  resolveCodexCommand: () => process.env.ORCA_CODEX_HOOK_CONTRACT_BINARY ?? 'codex'
+  resolveCodexCommand: () => process.env.ORCA_CODEX_HOOK_CONTRACT_BINARY ?? 'codex',
+  resolveCodexCommandForSpawn: async () => process.env.ORCA_CODEX_HOOK_CONTRACT_BINARY ?? 'codex'
 }))
 vi.mock('electron', () => ({
   app: {

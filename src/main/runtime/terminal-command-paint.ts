@@ -52,7 +52,7 @@ export function observeTerminalCommandPaint(
   record.commandPaint.observe(data, normalizedText)
 }
 
-/** Without markers (older fish, relay zsh, unwrapped shells, Windows command args), any output is the only paint evidence. */
+/** Without markers (older fish, relay zsh, unwrapped shells, cmd.exe /K startup args), any output is the only paint evidence. */
 export function hasTerminalCommandPainted(record: TerminalCommandPaintRecord): boolean {
   return record.commandPaint?.hasPainted() ?? true
 }

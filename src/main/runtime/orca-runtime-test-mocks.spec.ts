@@ -50,7 +50,6 @@ export const advertisedUrlWatcher = importedValues.exportedAdvertisedUrlWatcher
 export const afterEach = importedValues.exportedAfterEach
 export const appendBrowserTabOrder = importedValues.exportedAppendBrowserTabOrder
 export const appendNormalizedToTailBuffer = importedValues.exportedAppendNormalizedToTailBuffer
-export const appendRecentPtyPathCandidates = importedValues.exportedAppendRecentPtyPathCandidates
 export const assertWorktreeCleanForRemoval = importedValues.exportedAssertWorktreeCleanForRemoval
 export const basename = importedValues.exportedBasename
 export const beforeEach = importedValues.exportedBeforeEach
@@ -109,10 +108,6 @@ export const performance = importedValues.exportedPerformance
 export const projectHostSetupProjectionFromRepos =
   importedValues.exportedProjectHostSetupProjectionFromRepos
 export const randomUUID = importedValues.exportedRandomUUID
-export const recentTerminalOutputIncludesPath =
-  importedValues.exportedRecentTerminalOutputIncludesPath
-export const recentTerminalPathCandidatesIncludePath =
-  importedValues.exportedRecentTerminalPathCandidatesIncludePath
 export const registerLocalPtyMemoryRow = importedValues.exportedRegisterLocalPtyMemoryRow
 export const removeWorktree = importedValues.exportedRemoveWorktree
 export const resolveSetupRunnerShell = importedValues.exportedResolveSetupRunnerShell
@@ -242,10 +237,6 @@ export type OrcaRuntimeService = InstanceType<typeof importedValues.exportedOrca
 export type EventEmitter = InstanceType<typeof importedValues.exportedEventEmitter>
 export type OrchestrationDb = InstanceType<typeof importedValues.exportedOrchestrationDb>
 
-export type {
-  AgentSessionExecutionClaim,
-  AgentSessionSurfaceBinding
-} from '../../shared/agent-session-host-authority'
 export type { BrowserClientHostCommandEvent } from '../../shared/browser-client-host-protocol'
 export type { FolderWorkspace } from '../../shared/folder-workspace-types'
 export type { GitUsernameModule }
@@ -261,7 +252,6 @@ export type {
   RuntimeTerminalCreate
 } from '../../shared/runtime-types'
 export type { RuntimeTerminalAgentStatusEvent } from './orca-runtime'
-export type { SleepingAgentSessionRecord } from '../../shared/agent-session-resume'
 export type { Tab } from '../../shared/tab-types'
 export type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
 export type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'

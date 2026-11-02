@@ -19,6 +19,15 @@ describe('normalizeProjectRuntimePreference', () => {
     })
   })
 
+  it('keeps Windows Git on a WSL preference and drops any other Git value', () => {
+    expect(
+      normalizeProjectRuntimePreference({ kind: 'wsl', distro: 'Ubuntu', git: 'windows-host' })
+    ).toEqual({ kind: 'wsl', distro: 'Ubuntu', git: 'windows-host' })
+    expect(
+      normalizeProjectRuntimePreference({ kind: 'wsl', distro: 'Ubuntu', git: 'wsl' })
+    ).toEqual({ kind: 'wsl', distro: 'Ubuntu' })
+  })
+
   it('falls back malformed project runtime preferences to inherit-global', () => {
     expect(normalizeProjectRuntimePreference(null)).toEqual({ kind: 'inherit-global' })
     expect(normalizeProjectRuntimePreference({ kind: 'wsl', distro: '   ' })).toEqual({
@@ -209,6 +218,28 @@ describe('resolveProjectExecutionRuntime', () => {
         projectId: 'project-1',
         reason: 'project-override',
         cacheKey: 'project-1:windows-host'
+      }
+    })
+  })
+
+  it('carries Windows Git into the resolved WSL runtime and its cache key', () => {
+    expect(
+      resolveProjectExecutionRuntime({
+        appPlatform: 'win32',
+        projectId: 'project-1',
+        projectRuntimePreference: { kind: 'wsl', distro: 'Debian', git: 'windows-host' },
+        globalWindowsRuntimeDefault: { kind: 'windows-host' }
+      })
+    ).toEqual({
+      status: 'resolved',
+      runtime: {
+        kind: 'wsl',
+        hostPlatform: 'wsl',
+        projectId: 'project-1',
+        distro: 'Debian',
+        reason: 'project-override',
+        git: 'windows-host',
+        cacheKey: 'project-1:wsl:Debian:git-windows-host'
       }
     })
   })

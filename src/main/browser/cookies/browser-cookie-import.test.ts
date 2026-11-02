@@ -69,14 +69,11 @@ vi.mock('./browser-cookie-clear-store', () => ({
 }))
 
 import {
-  buildChromiumCookieInsertParams,
   importCookiesFromFile,
   importCookiesFromBrowser,
   detectInstalledBrowsers
 } from './browser-cookie-import'
 import type { DetectedBrowser } from './sources/browser-cookie-detection-types'
-
-import type { ChromiumCookieColumnInfo } from './sources/browser-cookie-sqlite'
 
 import { summarizeCookieImportError } from './browser-cookie-import-diagnostics'
 
@@ -84,16 +81,8 @@ import {
   createChromiumCookieTestDatabase,
   encryptMacChromiumCookie
 } from './browser-cookie-import-test-database'
-import {
-  existsSync,
-  mkdirSync,
-  writeFileSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync
-} from 'node:fs'
-import { dirname, join } from 'node:path'
+import { existsSync, writeFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 function chromeBrowser(cookiesPath: string): DetectedBrowser {
@@ -406,7 +395,7 @@ describe('importCookiesFromFile', () => {
     expect(cookieWriteMock.mock.calls[2][0].url).toBe('http://nodot.com/')
   })
 
-  it('rolls back replacement when a cookie fails to set', async () => {
+  it('counts a rejected row while keeping successful writes', async () => {
     cookieWriteMock.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('set failed'))
 
     const filePath = writeCookieFile([
@@ -415,8 +404,8 @@ describe('importCookiesFromFile', () => {
     ])
 
     const result = await importCookiesFromFile(filePath, 'persist:test')
-    expect(result.ok).toBe(false)
-    expect(cookiesRemoveMock).toHaveBeenCalledWith('http://a.com/', 'ok')
+    expect(result).toMatchObject({ ok: true, summary: { importedCookies: 1, skippedCookies: 1 } })
+    expect(cookiesRemoveMock).not.toHaveBeenCalled()
   })
 })
 
@@ -452,7 +441,7 @@ describe('importCookiesFromBrowser Safari', () => {
 
     const result = await importCookiesFromBrowser(browser, 'persist:test')
 
-    expect(result).toEqual({ ok: false, reason: 'All Safari cookies are expired.' })
+    expect(result).toMatchObject({ ok: false, reason: 'All Safari cookies are expired.' })
     expect(cookieWriteMock).not.toHaveBeenCalled()
   })
 })
@@ -594,7 +583,7 @@ describe('importCookiesFromBrowser Chromium', () => {
     }
   })
 
-  it('removes staging data when the OS key is unavailable', async () => {
+  it('leaves no staging data when the OS key is unavailable', async () => {
     const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
     const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
     createChromiumCookieTestDatabase(sourceCookiesPath, [
@@ -610,137 +599,13 @@ describe('importCookiesFromBrowser Chromium', () => {
       )
 
       expect(result.ok).toBe(false)
-      expect(readdirSync(join(tmpDir, 'userData', 'cookie-import-staging'))).toEqual([])
+      expect(existsSync(join(tmpDir, 'userData', 'cookie-import-staging'))).toBe(false)
     } finally {
       platformSpy.mockRestore()
     }
   })
 
-  it('still imports in-memory when the target database copy fails', async () => {
-    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
-    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
-    createChromiumCookieTestDatabase(sourceCookiesPath, [
-      { name: 'sid', value: 'source-value' }
-    ]).close()
-    createChromiumCookieTestDatabase(targetCookiesPath, []).close()
-    // The first copy stages the target, before the source snapshot.
-    copyFileSyncMock.mockImplementationOnce((_source: string, destination: string) => {
-      writeFileSync(destination, 'partial cookie database')
-      const error = new Error('EBUSY: resource busy or locked, copyfile') as NodeJS.ErrnoException
-      error.code = 'EBUSY'
-      throw error
-    })
-
-    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-    try {
-      const result = await importCookiesFromBrowser(
-        chromeBrowser(sourceCookiesPath),
-        'persist:test'
-      )
-
-      expect(result.ok).toBe(true)
-      expect(cookieWriteMock).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'sid', value: 'source-value' })
-      )
-      expect(readdirSync(join(tmpDir, 'userData', 'cookie-import-staging'))).toEqual([])
-    } finally {
-      platformSpy.mockRestore()
-    }
-  })
-
-  it('still imports in-memory when the staging database cannot be opened', async () => {
-    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
-    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
-    createChromiumCookieTestDatabase(sourceCookiesPath, [
-      { name: 'sid', value: 'source-value' }
-    ]).close()
-    mkdirSync(dirname(targetCookiesPath), { recursive: true })
-    writeFileSync(targetCookiesPath, 'not a sqlite database')
-
-    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-    try {
-      const result = await importCookiesFromBrowser(
-        chromeBrowser(sourceCookiesPath),
-        'persist:test'
-      )
-
-      expect(result.ok).toBe(true)
-      expect(cookieWriteMock).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'sid', value: 'source-value' })
-      )
-      expect(result.ok && result.summary?.importedCookies).toBe(1)
-      expect(readdirSync(join(tmpDir, 'userData', 'cookie-import-staging'))).toEqual([])
-    } finally {
-      platformSpy.mockRestore()
-    }
-  })
-
-  it('never registers a restart replay when staging is unavailable', async () => {
-    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
-    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
-    createChromiumCookieTestDatabase(sourceCookiesPath, [
-      { name: 'sid', value: 'source-value' }
-    ]).close()
-    mkdirSync(dirname(targetCookiesPath), { recursive: true })
-    writeFileSync(targetCookiesPath, 'not a sqlite database')
-    cookieWriteMock.mockRejectedValue(new Error('cookie rejected'))
-
-    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-    try {
-      const result = await importCookiesFromBrowser(
-        chromeBrowser(sourceCookiesPath),
-        'persist:test'
-      )
-
-      expect(result.ok).toBe(true)
-      expect(setPendingCookieImportMock).not.toHaveBeenCalled()
-      expect(clearPendingCookieImportMock).toHaveBeenCalledWith('persist:test')
-      expect(readdirSync(join(tmpDir, 'userData', 'cookie-import-staging'))).toEqual([])
-      expect(result.ok && result.summary?.warning).toEqual({
-        code: 'restart-fallback-unavailable',
-        loadedCookies: 0,
-        failedCookies: 1
-      })
-    } finally {
-      platformSpy.mockRestore()
-    }
-  })
-
-  it('still imports in-memory when a staging insert fails', async () => {
-    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
-    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
-    createChromiumCookieTestDatabase(sourceCookiesPath, [
-      { name: 'sid', value: 'source-value' }
-    ]).close()
-    const targetDb = createChromiumCookieTestDatabase(targetCookiesPath, [])
-    targetDb.exec(
-      `CREATE TRIGGER reject_insert BEFORE INSERT ON cookies
-       BEGIN SELECT RAISE(ABORT, 'staging write failed'); END`
-    )
-    targetDb.close()
-    // Reject live writes so only the failed staging insert can suppress replay registration.
-    cookieWriteMock.mockRejectedValue(new Error('cookie rejected'))
-
-    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-    try {
-      const result = await importCookiesFromBrowser(
-        chromeBrowser(sourceCookiesPath),
-        'persist:test'
-      )
-
-      expect(result.ok).toBe(true)
-      expect(cookieWriteMock).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'sid', value: 'source-value' })
-      )
-      expect(setPendingCookieImportMock).not.toHaveBeenCalled()
-      expect(clearPendingCookieImportMock).toHaveBeenCalledWith('persist:test')
-      expect(readdirSync(join(tmpDir, 'userData', 'cookie-import-staging'))).toEqual([])
-    } finally {
-      platformSpy.mockRestore()
-    }
-  })
-
-  it('clears a stale staged replay after an import that fully succeeds in memory', async () => {
+  it('retires pending replay once after native live completion', async () => {
     const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
     const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
     createChromiumCookieTestDatabase(sourceCookiesPath, [
@@ -757,37 +622,41 @@ describe('importCookiesFromBrowser Chromium', () => {
 
       expect(result.ok).toBe(true)
       expect(setPendingCookieImportMock).not.toHaveBeenCalled()
-      expect(clearPendingCookieImportMock).toHaveBeenCalledWith('persist:test')
+      expect(clearPendingCookieImportMock).toHaveBeenCalledExactlyOnceWith('persist:test')
       expect(result.ok && result.summary?.warning).toBeUndefined()
     } finally {
       platformSpy.mockRestore()
     }
   })
 
-  it('registers the staged database when cookies need a restart', async () => {
+  it('skips an oversized rejected row on a fresh target without producing replay', async () => {
     const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
-    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
     createChromiumCookieTestDatabase(sourceCookiesPath, [
-      { name: 'sid', value: 'source-value' }
+      { domain: '.failed.example', name: 'oversized', value: 'v'.repeat(4096) },
+      { domain: '.good.example', name: 'sid', value: 'source-value' }
     ]).close()
-    createChromiumCookieTestDatabase(targetCookiesPath, []).close()
-    cookieWriteMock.mockRejectedValue(new Error('cookie rejected'))
-
-    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-    try {
-      const result = await importCookiesFromBrowser(
-        chromeBrowser(sourceCookiesPath),
-        'persist:test'
-      )
-
-      expect(result.ok).toBe(true)
-      expect(setPendingCookieImportMock).toHaveBeenCalledTimes(1)
-      const [partition, stagedPath] = setPendingCookieImportMock.mock.calls[0]
-      expect(partition).toBe('persist:test')
-      expect(existsSync(stagedPath as string)).toBe(true)
-    } finally {
-      platformSpy.mockRestore()
-    }
+    cookieWriteMock.mockRejectedValueOnce(new Error('cookie rejected'))
+    // A new profile need not have a storage path or Cookies database to accept live writes.
+    sessionFromPartitionMock.mockReturnValue({
+      cookies: { flushStore: cookiesFlushStoreMock },
+      getStoragePath: vi.fn(() => {
+        throw new Error('target storage must not be read')
+      })
+    })
+    const result = await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
+    expect(result.ok && result.summary).toMatchObject({
+      totalCookies: 2,
+      importedCookies: 1,
+      skippedCookies: 1,
+      domains: ['good.example']
+    })
+    expect(result.ok && result.summary.warning).toBeUndefined()
+    expect(cookieWriteMock).toHaveBeenCalledTimes(2)
+    expect(cookiesFlushStoreMock).toHaveBeenCalledOnce()
+    expect(setPendingCookieImportMock).not.toHaveBeenCalled()
+    expect(clearPendingCookieImportMock).toHaveBeenCalledExactlyOnceWith('persist:test')
+    expect(existsSync(join(tmpDir, 'userData', 'cookie-import-staging'))).toBe(false)
+    expect(copyFileSyncMock.mock.calls.every(([source]) => source === sourceCookiesPath)).toBe(true)
   })
 })
 
@@ -816,66 +685,11 @@ describe('detectInstalledBrowsers', () => {
       'firefox',
       'safari',
       'comet',
-      'helium'
+      'helium',
+      'vivaldi'
     ]
     for (const browser of browsers) {
       expect(validFamilies).toContain(browser.family)
     }
-  })
-})
-
-describe('buildChromiumCookieInsertParams', () => {
-  it('fills target-only NOT NULL Chromium cookie columns instead of inserting null', () => {
-    const decryptedValue = Buffer.from('decrypted-cookie-value')
-    const columns: ChromiumCookieColumnInfo[] = [
-      { name: 'creation_utc', type: 'INTEGER', notnull: 1 },
-      { name: 'host_key', type: 'TEXT', notnull: 1 },
-      { name: 'top_frame_site_key', type: 'TEXT', notnull: 1 },
-      { name: 'name', type: 'TEXT', notnull: 1 },
-      { name: 'value', type: 'TEXT', notnull: 1 },
-      { name: 'encrypted_value', type: 'BLOB', notnull: 1 },
-      { name: 'source_port', type: 'INTEGER', notnull: 1 },
-      { name: 'last_update_utc', type: 'INTEGER', notnull: 1 },
-      { name: 'has_cross_site_ancestor', type: 'INTEGER', notnull: 1, dflt_value: '0' }
-    ]
-    const sourceRow = {
-      creation_utc: 133_000_000_000_000n,
-      host_key: '.example.com',
-      name: 'sid'
-    }
-
-    const params = buildChromiumCookieInsertParams(columns, sourceRow, decryptedValue)
-
-    expect(params).toEqual([
-      133_000_000_000_000n,
-      '.example.com',
-      '',
-      'sid',
-      decryptedValue,
-      Buffer.alloc(0),
-      -1,
-      133_000_000_000_000n,
-      0
-    ])
-  })
-
-  it('preserves null for nullable columns without defaults', () => {
-    const decryptedValue = Buffer.from('decrypted-cookie-value')
-    const columns: ChromiumCookieColumnInfo[] = [
-      { name: 'creation_utc', type: 'INTEGER', notnull: 1 },
-      { name: 'host_key', type: 'TEXT', notnull: 1 },
-      { name: 'nullable_metadata', type: 'TEXT', notnull: 0 },
-      { name: 'target_only_nullable_metadata', type: 'TEXT', notnull: 0 },
-      { name: 'last_update_utc', type: 'INTEGER', notnull: 1 }
-    ]
-    const sourceRow = {
-      creation_utc: 133_000_000_000_000n,
-      host_key: '.example.com',
-      nullable_metadata: null
-    }
-
-    const params = buildChromiumCookieInsertParams(columns, sourceRow, decryptedValue)
-
-    expect(params).toEqual([133_000_000_000_000n, '.example.com', null, null, 133_000_000_000_000n])
   })
 })

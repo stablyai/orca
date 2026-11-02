@@ -197,6 +197,19 @@ describe('fetchAntigravityRateLimits', () => {
     expect(result.error).toContain('Sign in with `agy`')
   })
 
+  it('reports a login with no quota groups as unavailable, not a failed refresh', async () => {
+    const stdout = JSON.stringify({
+      status: 'SUCCESS',
+      num_turns: 0,
+      command: { name: 'usage', data: { groups: [] } }
+    })
+    const result = await harness({ result: processResult({ stdout }) }).fetch()
+
+    expect(result.status).toBe('unavailable')
+    expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
+    expect(result.error).toContain('no quota for this account')
+  })
+
   it('does not classify non-auth stderr as signed-out on non-zero exit', async () => {
     // Incidental auth-like words must not trigger credential guidance.
     const result = await harness({
@@ -219,7 +232,7 @@ describe('fetchAntigravityRateLimits', () => {
     expect(result.error).toContain('did not answer in time')
   })
 
-  it('cools down a read that reached agy\u2019s browser sign-in', async () => {
+  it('holds automated reads after agy\u2019s browser sign-in', async () => {
     // Why pinned: agy 1.4.2 opens this OAuth page and waits 60 s, so Orca's 30 s kill lands first (#26484).
     const result = await harness({
       result: processResult({
@@ -231,7 +244,7 @@ describe('fetchAntigravityRateLimits', () => {
 
     expect(result.status).toBe('unavailable')
     expect(result.usageMetadata?.failureKind).toBe('missing-credentials')
-    expect(result.usageMetadata?.retryAtMs).toBe(1_700_000_000_000 + 60 * 60 * 1000)
+    expect(result.usageMetadata?.retryAtMs).toBe(Number.MAX_SAFE_INTEGER)
   })
 
   it('keeps the reading when the browser sign-in completes within the read', async () => {
@@ -470,5 +483,55 @@ describe('quota read safety and diagnostic precedence', () => {
     expect((await h.fetch()).status).toBe('unavailable')
     expect((await h.fetch()).status).toBe('ok')
     expect(runCommand).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe("agy's own error envelope", () => {
+  beforeEach(() => resetAntigravityUsageSupportForTests())
+
+  const errorEnvelope = (error: string): string =>
+    `${JSON.stringify({ conversation_id: '', status: 'ERROR', response: '', error, num_turns: 0 })}\n`
+  const LOCATION_ERROR =
+    'Eligibility check failed: Your current account is not eligible for Antigravity, because it is not currently available in your location.'
+
+  it('shows agy’s text instead of the generic parse failure', async () => {
+    const result = await harness({
+      result: processResult({
+        code: 1,
+        stdout: errorEnvelope(LOCATION_ERROR),
+        stderr: `error: ${LOCATION_ERROR}\n`
+      })
+    }).fetch()
+
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.failureKind).toBe('parse')
+    expect(result.error).toBe(`Antigravity usage is not available. agy reported: ${LOCATION_ERROR}`)
+  })
+
+  it('redacts identities and bounds agy’s text to one line', async () => {
+    const token = 'ya29.a0AfB_byC1234567890abcdefghijklmnopqrstuvwxyz'
+    const result = await harness({
+      result: processResult({
+        code: 1,
+        stdout: errorEnvelope(
+          `\u001b[31mDenied\u001b[0m for person@example.com\nAGY_SESSION=shortsecret\nwith ${token} ${'x '.repeat(200)}`
+        )
+      })
+    }).fetch()
+
+    const shown = result.error?.replace('Antigravity usage is not available. agy reported: ', '')
+    expect(shown).toMatch(/^Denied for \[email\] AGY_SESSION=\S+ with ya29\.\[redacted\] x x/)
+    expect(shown).not.toContain('shortsecret')
+    expect(Array.from(shown ?? '').length).toBeLessThanOrEqual(160)
+    expect(shown?.endsWith('…')).toBe(true)
+  })
+
+  it('keeps sign-in guidance ahead of agy’s text', async () => {
+    const result = await harness({
+      result: processResult({ code: 1, stdout: errorEnvelope('Not authenticated. Run agy login.') })
+    }).fetch()
+
+    expect(result.usageMetadata?.failureKind).toBe('missing-credentials')
+    expect(result.error).toContain('Sign in with `agy`')
   })
 })

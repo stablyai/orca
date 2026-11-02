@@ -15,9 +15,6 @@ import {
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY
 } from '@/lib/orchestration-setup-state'
 import {
-  DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION,
-  onboardingFeatureSetupSkillNames,
-  onboardingFeatureSetupTelemetryFeature,
   runOnboardingFeatureSetup,
   type OnboardingFeatureSetupDeps,
   type OnboardingFeatureSetupSelection
@@ -71,38 +68,6 @@ function createDeps(
 describe('onboarding feature setup runner', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
-  })
-
-  it('defaults every setup item on so first-launch setup is ready to run', () => {
-    expect(DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION).toEqual({
-      browserUse: true,
-      computerUse: true,
-      orchestration: true,
-      linearTickets: false
-    })
-  })
-
-  it('lists the skills for the selected onboarding feature setup items', () => {
-    expect(
-      onboardingFeatureSetupSkillNames({
-        browserUse: true,
-        computerUse: true,
-        orchestration: true,
-        linearTickets: true
-      })
-    ).toEqual(ALL_SKILL_NAMES)
-    expect(
-      onboardingFeatureSetupSkillNames({
-        browserUse: false,
-        computerUse: false,
-        orchestration: true,
-        linearTickets: false
-      })
-    ).toEqual([ORCHESTRATION_SKILL_NAME])
-  })
-
-  it('maps feature setup items to privacy-safe telemetry ids', () => {
-    expect(onboardingFeatureSetupTelemetryFeature('browserUse')).toBe('browser_use')
   })
 
   it('runs selected feature setup through injected deps only', async () => {

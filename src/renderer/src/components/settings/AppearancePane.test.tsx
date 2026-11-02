@@ -82,9 +82,12 @@ vi.mock('../ui/select', async () => {
       </button>
     ),
     SelectValue: () => null,
+    SelectSeparator: () => null,
     SelectContent: ({ children }: { children: React.ReactNode }) => (
       <div data-slot="select-content">{children}</div>
     ),
+    SelectGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    SelectLabel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => {
       const { onValueChange } = React.useContext(SelectContext)
       return (
@@ -283,7 +286,7 @@ describe('AppearancePane', () => {
     ).toBeNull()
   })
 
-  it('renders the language dropdown with every built-in language option', async () => {
+  it('saves distinct language selections from the dropdown', async () => {
     mocks.state.settingsSearchQuery = 'language'
     const updateSettings = vi.fn()
     const settings = {
@@ -305,20 +308,18 @@ describe('AppearancePane', () => {
     expect(languageTrigger).not.toBeNull()
     expect(chineseOption).not.toBeNull()
     expect(portugueseOption).not.toBeNull()
-    expect(container.textContent).not.toContain('Advanced')
-    expect(container.textContent).toContain('System')
-    expect(container.textContent).toContain('English')
-    expect(container.textContent).toContain('中文（简体）')
-    expect(container.textContent).toContain('한국어')
-    expect(container.textContent).toContain('日本語')
-    expect(container.textContent).toContain('Español')
-    expect(container.textContent).toContain('Português (Brasil)')
-
     await act(async () => {
       chineseOption?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(updateSettings).toHaveBeenCalledWith({ uiLanguage: 'zh' })
+    expect(updateSettings).toHaveBeenNthCalledWith(1, { uiLanguage: 'zh' })
+
+    await act(async () => {
+      portugueseOption?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenNthCalledWith(2, { uiLanguage: 'pt' })
+    expect(updateSettings).toHaveBeenCalledTimes(2)
   })
 
   it('includes the selected language in the collapsed Interface summary', async () => {
@@ -350,18 +351,18 @@ describe('AppearancePane', () => {
     const settings = getDefaultSettings('/tmp')
 
     const container = await renderAppearancePane(settings, updateSettings)
-    const matchTerminalButton = Array.from(
+    const tintedButton = Array.from(
       container.querySelectorAll<HTMLButtonElement>('button[role="radio"]')
-    ).find((button) => button.textContent === 'Match Terminal')
+    ).find((button) => button.textContent === 'Tinted')
 
-    expect(matchTerminalButton).toBeDefined()
+    expect(tintedButton).toBeDefined()
 
     await act(async () => {
-      matchTerminalButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      tintedButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     expect(updateSettings).toHaveBeenCalledWith({
-      leftSidebarAppearanceMode: 'match-terminal'
+      leftSidebarAppearanceMode: 'tinted'
     })
   })
 
@@ -470,7 +471,7 @@ describe('AppearancePane', () => {
     ).not.toBeNull()
   })
 
-  it('shows and updates the menu bar icon preference only on desktop macOS', async () => {
+  it('shows and updates the menu bar icon preference on desktop macOS', async () => {
     mocks.state.appPlatform = 'darwin'
     mocks.state.settingsSearchQuery = 'menu bar'
     const updateSettings = vi.fn()

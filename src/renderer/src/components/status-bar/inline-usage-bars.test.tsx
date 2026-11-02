@@ -133,6 +133,37 @@ describe('InlineUsageBars', () => {
     expect(markup).toContain(row.label)
   })
 
+  it('renders the spend-cap monthly window for an inactive account without plan windows', async () => {
+    const { InlineUsageBars, isUnavailableInactiveUsage } = await import('./InlineProviderUsage')
+    const limits: ProviderRateLimits = {
+      provider: 'claude',
+      session: null,
+      weekly: null,
+      monthly: { usedPercent: 80, windowMinutes: 43_200, resetsAt: null, resetDescription: null },
+      updatedAt: 0,
+      error: null,
+      status: 'ok'
+    }
+
+    const markup = renderToStaticMarkup(<InlineUsageBars limits={limits} isFetching={false} />)
+
+    expect(markup).toContain('80% used 30d')
+    expect(markup).not.toContain('Sign in to see usage')
+    expect(isUnavailableInactiveUsage({ ...limits, status: 'error' })).toBe(false)
+  })
+
+  it('keeps the monthly window out of rows that have plan windows', async () => {
+    const { InlineUsageBars } = await import('./StatusBar')
+    const limits: ProviderRateLimits = {
+      ...claudeLimits(),
+      monthly: { usedPercent: 80, windowMinutes: 43_200, resetsAt: null, resetDescription: null }
+    }
+
+    const markup = renderToStaticMarkup(<InlineUsageBars limits={limits} isFetching={false} />)
+
+    expect(markup).not.toContain('80% used')
+  })
+
   it('derives the collapsed session label from resetsAt (#5399)', async () => {
     const { InlineUsageBars } = await import('./StatusBar')
 

@@ -16,6 +16,7 @@ import { encodeRunListCursor, decodeRunListCursor } from '../run-list-cursor'
 import type { RunListPage } from '../run-list-page'
 import type { OrchestrationDb } from '../orchestration-db'
 import { RUN_COLUMN_LIST } from '../row-column-lists'
+import { workerSeatGrabSql } from './run-coordinator-mail-routing'
 
 export type LegacyAdoptedMailboxOwner = {
   runId: string
@@ -27,14 +28,14 @@ const RUN_BY_ID_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs WHERE id = ?`
 const RUNS_BOUND_TO_PANE_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
          WHERE coordinator_pane_key IS NOT NULL AND legacy = 0
            AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?
-         ORDER BY rowid`
-// Use one query to preserve rowid order across pane and session matches; filter identity in JavaScript.
+         ORDER BY rowid DESC`
+// Use one query to preserve newest-first rowid order across pane and session matches; filter identity in JavaScript.
 const RUNS_BOUND_TO_COORDINATOR_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
          WHERE legacy = 0 AND (
            (coordinator_pane_key IS NOT NULL AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?)
            OR coordinator_orca_session_id = ?
          )
-         ORDER BY rowid`
+         ORDER BY rowid DESC`
 
 export function getRun(this: OrchestrationDb, id: string): RunRow | undefined {
   const run = this.getRunRaw(id)
@@ -57,17 +58,20 @@ export function getRunMailboxOwnerIdsForHandle(
   terminalHandle: string,
   legacyAdoptedMailboxOwner?: LegacyAdoptedMailboxOwner | null
 ): string[] {
-  const runIds = (
-    this.db
-      .prepare(
-        `SELECT coordinator.run_id
-         FROM run_coordinator_handles AS coordinator
-         JOIN runs ON runs.id = coordinator.run_id AND runs.legacy = 0
-         WHERE coordinator.terminal_handle = ?
-         ORDER BY coordinator.run_id`
-      )
-      .all(terminalHandle) as { run_id: string }[]
-  ).map((row) => row.run_id)
+  const runIds = this.db
+    .prepare(
+      `SELECT coordinator.run_id
+       FROM run_coordinator_handles AS coordinator
+       JOIN runs ON runs.id = coordinator.run_id AND runs.legacy = 0
+       WHERE coordinator.terminal_handle = ? AND NOT ${workerSeatGrabSql('coordinator')}
+       ORDER BY coordinator.run_id`
+    )
+    .all(terminalHandle)
+    .flatMap((row) =>
+      typeof row === 'object' && row !== null && 'run_id' in row && typeof row.run_id === 'string'
+        ? [row.run_id]
+        : []
+    )
   const adoptedOwner =
     legacyAdoptedMailboxOwner === undefined
       ? this.getLegacyAdoptedRunMailboxOwner()
@@ -142,7 +146,17 @@ export function getCurrentRunForCoordinator(
   return run ? exposeRunTimestamps(run) : undefined
 }
 
-/** Runs bound to this caller by pane or by Orca session id; a caller without one matches as before. */
+/** The named Run when this caller still coordinates it; a coordinator keeps every Run it created. */
+export function getCoordinatedRun(
+  this: OrchestrationDb,
+  caller: OrchestrationCoordinatorKey,
+  runId: string
+): RunRow | undefined {
+  const run = this.runsBoundToCoordinator(caller).find((bound) => bound.id === runId)
+  return run ? exposeRunTimestamps(run) : undefined
+}
+
+/** Runs bound to this caller by pane or by Orca session id, newest (current) first; a caller without one matches as before. */
 export function runsBoundToCoordinator(
   this: OrchestrationDb,
   caller: OrchestrationCoordinatorKey
@@ -159,7 +173,7 @@ export function runsBoundToCoordinator(
 export function unbindOtherRunsForCoordinator(
   this: OrchestrationDb,
   caller: OrchestrationCoordinatorKey,
-  exceptRunId?: string
+  exceptRunId: string
 ): void {
   for (const run of this.runsBoundToCoordinator(caller)) {
     if (run.id !== exceptRunId) {
@@ -196,6 +210,7 @@ export type RunLookupMethods = {
   getCurrentRunForPane: typeof getCurrentRunForPane
   runsBoundToPane: typeof runsBoundToPane
   getCurrentRunForCoordinator: typeof getCurrentRunForCoordinator
+  getCoordinatedRun: typeof getCoordinatedRun
   runsBoundToCoordinator: typeof runsBoundToCoordinator
   getRunRaw: typeof getRunRaw
   unbindOtherRunsForCoordinator: typeof unbindOtherRunsForCoordinator
@@ -211,6 +226,7 @@ export function attachRunLookup(ctor: { prototype: object }): void {
     getCurrentRunForPane,
     runsBoundToPane,
     getCurrentRunForCoordinator,
+    getCoordinatedRun,
     runsBoundToCoordinator,
     getRunRaw,
     unbindOtherRunsForCoordinator,

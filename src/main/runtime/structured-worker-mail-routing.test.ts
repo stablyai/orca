@@ -1,3 +1,9 @@
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import type { AgentSessionLease } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const hostRef: { current: unknown } = { current: null }
@@ -21,7 +27,7 @@ const getLivePaneKey = prototype.getLiveTerminalPaneKey
 const resolveActiveTerminal = prototype.resolveActiveTerminal
 
 function installRecord(
-  lease: { runtimeKind: string; claimStatus: string } | null,
+  lease: Pick<AgentSessionLease, 'runtimeKind' | 'claimStatus'> | null,
   tabListed = false
 ): void {
   hostRef.current = lease
@@ -32,10 +38,17 @@ function installRecord(
         }),
         deps: {
           store: {
-            getRecord: () => ({
-              location: { executionHostId: 'local', wslDistro: null },
-              lease: { ...lease, runtimeFence: 1, deathEvidence: null }
-            })
+            getConversation: () =>
+              agentSessionConversationView(
+                agentSessionRecordFixture(
+                  agentSessionLeaseFixture({
+                    ...lease,
+                    sessionId: SESSION_ID,
+                    runtimeFence: 1,
+                    deathEvidence: null
+                  })
+                )
+              )
           }
         },
         hasSession: () => lease.claimStatus === 'live'
@@ -71,15 +84,6 @@ describe('bare-handle direct mail to a structured session', () => {
     hostRef.current = null
   })
 
-  it('resolves a live pane key, so recipient routing does not answer terminal_not_found', () => {
-    // resolveBareOrchestrationRecipient reads this getter, not getTerminalPaneKey.
-    const handle = registerWorker()
-    installRecord({ runtimeKind: 'native', claimStatus: 'live' })
-    expect(getLivePaneKey.call(paneKeyStub, handle)).toBe(
-      structuredWorkerIdentities.get(handle)!.paneKey
-    )
-  })
-
   it('routes to a worker at rest, whose agent the mail starts', () => {
     // Released by the idle sweep with its chat tab still listed: owned, so mail reaches it.
     const handle = registerWorker()
@@ -107,7 +111,7 @@ describe('implicit sender resolution refuses to guess', () => {
     return {
       graphStatus: 'ready',
       assertGraphReady: () => {},
-      resolveWorktreeSelector: async () => ({ id: 'wt_1' }),
+      resolveWorkspaceSelector: async () => ({ id: 'wt_1' }),
       tabs: new Map(),
       leaves: new Map(
         leafIds.map((leafId) => [leafId, { tabId: 'tab_1', leafId, worktreeId: 'wt_1' }])
@@ -115,12 +119,6 @@ describe('implicit sender resolution refuses to guess', () => {
       issueHandle: (leaf: { leafId: string }) => `term_${leaf.leafId}`
     }
   }
-
-  it('returns the only candidate leaf', async () => {
-    await expect(
-      resolveActiveTerminal.call(senderStub(['leaf_a']), 'id:wt_1', { requireUnambiguous: true })
-    ).resolves.toBe('term_leaf_a')
-  })
 
   it('refuses rather than picking the first of several', async () => {
     // An arbitrary sender guess can settle a sibling's context-only Dispatch, which has no capability token to reject it.
@@ -135,7 +133,7 @@ describe('implicit sender resolution refuses to guess', () => {
     // Keep a focused terminal in the starting graph so only the pre-ready identity guard can refuse this request.
     const preReady = {
       graphStatus: 'starting',
-      resolveWorktreeSelector: async () => ({ id: 'wt_1' }),
+      resolveWorkspaceSelector: async () => ({ id: 'wt_1' }),
       getMobileSessionTabsForWorktree: () => ({
         tabs: [{ type: 'terminal', isActive: true, status: 'ready', terminal: 'term_focused' }]
       }),
@@ -146,11 +144,5 @@ describe('implicit sender resolution refuses to guess', () => {
     ).rejects.toThrow('no_active_terminal')
     // The same stub still answers the focus guess for a caller that is not claiming an identity.
     await expect(resolveActiveTerminal.call(preReady, 'id:wt_1')).resolves.toBe('term_focused')
-  })
-
-  it('still picks arbitrarily for callers that are not claiming an identity', async () => {
-    await expect(
-      resolveActiveTerminal.call(senderStub(['leaf_a', 'leaf_b']), 'id:wt_1')
-    ).resolves.toBe('term_leaf_a')
   })
 })

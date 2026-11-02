@@ -1,14 +1,14 @@
 // Adapter-reachable contract must remain free of host and Node-only process dependencies.
 
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
 import type {
   AgentSessionRecord,
   AgentSessionExecutionLocation,
   AgentSessionProcessIdentity
-} from '../../../shared/agent-session-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
-import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 
 /** Absolute registration-time ceiling, independent of shorter protocol-step bounds. */
 export const STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS = 10 * 60_000
@@ -29,7 +29,8 @@ export type StructuredAgentSessionStartupAttempt = {
   readonly launch: Pick<AgentSessionRecord, 'location' | 'accountHome' | 'launchDirectory'>
   /** Saved launch intent, never catalog guesses. */
   readonly options?: Readonly<Record<string, string>>
-  readonly permissionMode?: AgentChatPermissionMode
+  readonly permissionMode?: AgentChatPermissionChoice
+  /** Provider events may begin before spawn returns. */
   readonly events?: StructuredAgentSessionEventSink
   /** Attempt-scoped background evidence; adapters use registration reporting when absent. */
   readonly childWork?: (evidence: AgentChildWorkEvidence[]) => void

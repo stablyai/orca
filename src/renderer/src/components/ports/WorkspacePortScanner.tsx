@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { getHasAnyWorktreesFromState } from '@/store/selectors'
@@ -7,13 +8,13 @@ import {
   WORKSPACE_PORT_ALL_HOSTS_SCAN_KEY,
   scanWorkspacePortsForTarget,
   workspacePortScanKeyForTarget
-} from '@/lib/workspace-port-actions'
+} from '@/lib/workspace-ports/workspace-port-actions'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
 import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
 import {
   reconcileTransientPortScanFailures,
   type PortScanDebounceState
-} from '@/lib/workspace-port-scan-debounce'
+} from '@/lib/workspace-ports/workspace-port-scan-debounce'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
 
@@ -114,7 +115,16 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
             return { key, result }
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
-            return { key, result: makeUnavailableScan(message || 'Workspace port scan failed.') }
+            return {
+              key,
+              result: makeUnavailableScan(
+                message ||
+                  translate(
+                    'auto.components.right.sidebar.PortsPanel.740aca88ab',
+                    'Workspace port scan failed.'
+                  )
+              )
+            }
           }
         })
       )

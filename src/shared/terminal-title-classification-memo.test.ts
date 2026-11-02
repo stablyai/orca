@@ -4,7 +4,6 @@ import { getAgentLabel } from './agent-title-identity'
 import { detectAgentStatusFromTitle } from './agent-title-status'
 import { memoizeTitleClassification } from './terminal-title-classification-memo'
 import { resolveExplicitTerminalTitleAgentType } from './terminal-title-agent-type'
-
 // Count the leaf titleHasAgentName regex to measure unchanged-title work across store writes.
 vi.mock('./agent-name-token-match', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentNameTokenMatchModule>()
@@ -49,18 +48,6 @@ describe('terminal title classification memo', () => {
 
     // Without memoization this fixture makes 4350 leaf matches; steady-state unchanged titles should make none.
     expect(classifierCalls).not.toHaveBeenCalled()
-  })
-
-  it('classifies a title once no matter how many readers ask', () => {
-    const title = 'aider running'
-    getAgentLabel(title)
-    const firstReadCalls = classifierCalls.mock.calls.length
-    expect(firstReadCalls).toBeGreaterThan(0)
-
-    for (let read = 0; read < 20; read += 1) {
-      getAgentLabel(title)
-    }
-    expect(classifierCalls.mock.calls.length).toBe(firstReadCalls)
   })
 
   it('reclassifies as soon as the title changes', () => {

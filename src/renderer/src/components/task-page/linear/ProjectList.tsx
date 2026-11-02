@@ -1,9 +1,10 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { translate } from '@/i18n/i18n'
 import {
   LinearProjectTable,
   LinearCollectionNotice
 } from '@/components/linear-project-view-surfaces'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 export function TaskPageLinearProjectList({
   model
 }: {
@@ -43,7 +44,7 @@ export function TaskPageLinearProjectList({
           onSelectProject={openLinearProjectContext}
           onOpenProject={(project) => {
             if (project.url) {
-              void window.api.shell.openUrl(project.url)
+              openAppHttpLink(project.url)
             }
           }}
           onUseProjectIssues={(project) => {
@@ -56,7 +57,7 @@ export function TaskPageLinearProjectList({
         errors={linearProjectsResult.errors}
         hasMore={linearProjectsResult.hasMore}
         count={linearProjectsResult.items.length}
-        label={translate('auto.components.TaskPage.b39fe6511d', 'projects')}
+        kind="projects"
       />
     </div>
   )
