@@ -263,13 +263,13 @@ export function useRepositorySourceControlAiGlobalUx({
         if (!hasOwnActionOverride(next.actionOverrides, actionId)) {
           next = withRepoAiActionMode(next, settings, actionId, 'override')
         }
-        return withRepoAiActionRecipeText(next, settings, actionId, draft)
+        return withRepoAiActionRecipeText(next, settings, actionId, draft, repoIdForWrite)
       })
       if (repoIdRef.current !== repoIdForWrite || !mountedRef.current || !ok) {
         return
       }
       setImmediateRepoAi((current) => {
-        const next = withRepoAiActionRecipeText(current, settings, actionId, draft)
+        const next = withRepoAiActionRecipeText(current, settings, actionId, draft, repoIdForWrite)
         immediateRepoAiRef.current = next
         return next
       })

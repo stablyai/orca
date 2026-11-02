@@ -232,6 +232,23 @@ describe('useRepositorySourceControlAiGlobalUx', () => {
     ).toBe('edited')
   })
 
+  it('saving only Arguments keeps a newer model choice saved by another editor', async () => {
+    const withModel = (model: string): RepoSourceControlAiOverrides => ({
+      actionOverrides: { commitMessage: { agentId: 'codex', agentArgs: '' } },
+      modelOverridesByOperation: { commitMessage: { selectedModelByAgent: { codex: model } } }
+    })
+    const updateRepo = vi.fn().mockResolvedValue(true)
+    const view = setup(withModel('gpt-5.4'), updateRepo)
+    act(() => view.result.current.updateActionAgentArgs('commitMessage', '--verbose'))
+    view.rerender({ repoId: 'repo-1', persistedRepoAi: withModel('gpt-5.5') })
+    await act(() => view.result.current.saveActionRecipeText('commitMessage'))
+    const saved = updateRepo.mock.calls.at(-1)?.[1].sourceControlAi
+    expect(saved?.actionOverrides?.commitMessage?.agentArgs).toBe('--verbose')
+    expect(saved?.modelOverridesByOperation?.commitMessage?.selectedModelByAgent?.codex).toBe(
+      'gpt-5.5'
+    )
+  })
+
   it('reverts a typed action draft to the persisted template when discarded', async () => {
     const updateRepo = vi.fn().mockResolvedValue(true)
     const { result } = setup(withRecipe('orig'), updateRepo)

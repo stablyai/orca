@@ -8,7 +8,29 @@ export type TextActionPickerCatalog = {
   effortInArguments: boolean
   modelArgumentsUnrecognized: boolean
   effortArgumentsUnrecognized: boolean
+  /** The CLI takes effort inside the model operand (`model#variant`), so it follows the model's owner. */
+  effortInModel: boolean
   effortByModel: Record<string, string | undefined>
+}
+
+/** Arguments keep the model until a staged Model pick has removed every flag they set it with. */
+export function textActionArgumentsOwnModel(
+  entry: AgentPickerEntry,
+  draft: AgentPickerDraft
+): boolean {
+  const text = entry.textGeneration
+  return Boolean(
+    text?.modelInArguments &&
+    (!draft.textChanges?.includes('model') || text.modelArgumentsUnrecognized)
+  )
+}
+
+/** Effort for a model set in Arguments is edited in Arguments or after choosing Model. */
+export function textActionArgumentsOwnEffort(
+  entry: AgentPickerEntry,
+  draft: AgentPickerDraft
+): boolean {
+  return Boolean(entry.textGeneration?.effortInModel && textActionArgumentsOwnModel(entry, draft))
 }
 
 export function textActionPickerEffectiveChoices(

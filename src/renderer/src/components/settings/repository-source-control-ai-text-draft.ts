@@ -1,3 +1,4 @@
+import type { SourceControlAiModelEdits } from '../../../../shared/source-control-ai-action-model-edits'
 import {
   transportActionArgumentChoices,
   demoteActionArgumentChoices,
@@ -147,12 +148,14 @@ export function createRepoActionTextDraftEditors(
     updateActionTextModelChoice: (
       actionId: SourceControlActionId,
       modelChoice: SourceControlAiModelChoice | undefined,
-      agentArgs: string
+      agentArgs: string,
+      modelEdits: SourceControlAiModelEdits | undefined
     ) => {
       setActionTextDrafts((current) =>
         patchActionTextDraft(current, immediateRepoAiRef.current, actionId, {
           modelChoice,
-          agentArgs
+          agentArgs,
+          modelEdits
         })
       )
     },

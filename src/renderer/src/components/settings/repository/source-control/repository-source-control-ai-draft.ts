@@ -12,10 +12,11 @@ import { normalizeRepoSourceControlAiOverrides } from '../../../../../../shared/
 import { resolveSourceControlActionRecipe } from '../../../../../../shared/source-control-ai-operation-policy'
 import {
   SOURCE_CONTROL_ACTION_IDS,
-  AI_TEXT_ACTION_IDS,
+  SOURCE_CONTROL_TEXT_ACTION_IDS,
   type SourceControlActionId
 } from '../../../../../../shared/source-control-ai-actions'
 import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-types'
+import { withRepoTextModelEdits } from '../../source-control-text-action-model-replay'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { completeRepoActionRecipe } from './repository-source-control-ai-labels'
 import { SOURCE_CONTROL_TEXT_ACTION_ID_SET } from '../../source-control-action-recipe-options'
@@ -147,8 +148,8 @@ export function withRepoAiActionMode(
 ): RepoSourceControlAiOverrides {
   const nextActionOverrides = { ...base.actionOverrides }
   const modelOverridesByOperation = { ...base.modelOverridesByOperation }
-  const textAction = AI_TEXT_ACTION_IDS.find((id) => id === actionId)
-  if (mode === 'inherit' && textAction && textAction !== 'conversationName') {
+  const textAction = SOURCE_CONTROL_TEXT_ACTION_IDS.find((id) => id === actionId)
+  if (mode === 'inherit' && textAction) {
     delete modelOverridesByOperation[textAction]
   }
   if (mode === 'inherit') {
@@ -177,7 +178,8 @@ export function withRepoAiActionRecipeText(
   base: RepoSourceControlAiOverrides,
   _settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi' | 'defaultTuiAgent'> | null,
   actionId: SourceControlActionId,
-  text: ActionRecipeTextDraft
+  text: ActionRecipeTextDraft,
+  repoId = ''
 ): RepoSourceControlAiOverrides {
   const preferencesEdited = !sameDraftLaunchPreferences(
     text,
@@ -185,17 +187,7 @@ export function withRepoAiActionRecipeText(
   )
   const own = base.actionOverrides?.[actionId]
   const currentRecipe = own ?? {}
-  const textAction = AI_TEXT_ACTION_IDS.find((id) => id === actionId)
-  const next =
-    textAction && textAction !== 'conversationName'
-      ? {
-          ...base,
-          modelOverridesByOperation: {
-            ...base.modelOverridesByOperation,
-            [textAction]: text.modelChoice
-          }
-        }
-      : base
+  const next = withRepoTextModelEdits(base, repoId, actionId, text.modelEdits)
   return normalizeRepoAiDraft(
     setActionOverride(next, actionId, {
       ...currentRecipe,
@@ -226,10 +218,10 @@ export function composeDisplayRepoAi(
     if (!draft || !hasOwnActionOverride(next.actionOverrides, actionId) || !currentRecipe) {
       continue
     }
-    const textAction = AI_TEXT_ACTION_IDS.find((id) => id === actionId)
+    const textAction = SOURCE_CONTROL_TEXT_ACTION_IDS.find((id) => id === actionId)
     next = {
       ...next,
-      ...(textAction && textAction !== 'conversationName'
+      ...(textAction && draft.modelEdits?.length
         ? {
             modelOverridesByOperation: {
               ...next.modelOverridesByOperation,

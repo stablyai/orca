@@ -12,12 +12,13 @@ import type {
 } from '../../../../shared/source-control-ai-types'
 import {
   setSourceControlActionDefault,
-  AI_TEXT_ACTION_IDS,
   SOURCE_CONTROL_TEXT_ACTION_IDS,
   type SourceControlActionLaunchPreferences,
   type SourceControlActionId
 } from '../../../../shared/source-control-ai-actions'
 import type { ActionRecipeDraftState } from './source-control-ai-action-recipe-draft'
+import type { SourceControlAiModelEdits } from '../../../../shared/source-control-ai-action-model-edits'
+import { replayGlobalTextModelEdits } from './source-control-text-action-model-replay'
 import {
   readActionRecipeInputValues,
   serializeActionRecipeInputValues
@@ -30,7 +31,7 @@ type UseSourceControlActionRecipeDraftStateArgs = {
   writeConfig: (patch: SourceControlAiSettingsPatch) => Promise<void>
 }
 
-/** A model choice the user did not edit follows the saved one, so another editor's newer pick survives Save. */
+/** A model choice the user did not edit in the menu follows the saved one, so another editor's newer pick shows. */
 function rebaseUneditedModelChoices(
   current: ActionRecipeDraftState,
   persisted: ActionRecipeDraftState['values']
@@ -38,9 +39,7 @@ function rebaseUneditedModelChoices(
   const values = { ...current.values }
   for (const actionId of SOURCE_CONTROL_TEXT_ACTION_IDS) {
     const value = values[actionId]
-    if (
-      JSON.stringify(value.modelChoice) === JSON.stringify(current.baseValues[actionId].modelChoice)
-    ) {
+    if (!value.modelEdits?.length) {
       values[actionId] = { ...value, modelChoice: persisted[actionId].modelChoice }
     }
   }
@@ -190,13 +189,14 @@ export function useSourceControlActionRecipeDraftState({
   const onTextModelChoiceChange = (
     actionId: SourceControlActionId,
     modelChoice: SourceControlAiModelChoice | undefined,
-    agentArgs: string
+    agentArgs: string,
+    modelEdits: SourceControlAiModelEdits | undefined
   ): void => {
     setActionRecipeDraftState((current) => ({
       ...current,
       values: {
         ...current.values,
-        [actionId]: { ...current.values[actionId], modelChoice, agentArgs }
+        [actionId]: { ...current.values[actionId], modelChoice, agentArgs, modelEdits }
       }
     }))
   }
@@ -227,25 +227,27 @@ export function useSourceControlActionRecipeDraftState({
     ) {
       return
     }
-    // An unedited model choice keeps whatever is saved when the write runs.
-    const modelChoiceEdited =
-      JSON.stringify(nextValue.modelChoice) !==
-      JSON.stringify(actionRecipeDraftState.baseValues[actionId].modelChoice)
-    let savedValue = nextValue
+    const textAction = SOURCE_CONTROL_TEXT_ACTION_IDS.find((id) => id === actionId)
+    const { modelEdits, ...recipeValue } = nextValue
+    const replayEdits = textAction && modelEdits?.length ? modelEdits : undefined
+    let savedValue = recipeValue
     setSavingActionTemplateIds((current) => ({ ...current, [actionId]: true }))
     try {
       await writeConfig((current) => {
-        if (!modelChoiceEdited) {
-          const choices: Partial<Record<string, SourceControlAiModelChoice>> =
-            current.modelOverridesByOperation ?? {}
-          savedValue = { ...nextValue, modelChoice: choices[actionId] }
-        }
+        const choices: Partial<Record<string, SourceControlAiModelChoice>> =
+          current.modelOverridesByOperation ?? {}
+        // Menu edits replay against this write's settings and hosts; without them the saved model stays.
+        const modelChoice =
+          textAction && replayEdits
+            ? replayGlobalTextModelEdits(current, textAction, replayEdits)
+            : choices[actionId]
+        savedValue = { ...recipeValue, modelChoice }
         return {
-          ...(modelChoiceEdited && AI_TEXT_ACTION_IDS.some((id) => id === actionId)
+          ...(textAction && replayEdits
             ? {
                 modelOverridesByOperation: {
                   ...current.modelOverridesByOperation,
-                  [actionId]: nextValue.modelChoice
+                  [textAction]: modelChoice
                 }
               }
             : {}),

@@ -66,6 +66,7 @@ const SelectedRepositoryActionRows = memo(
     repoAi,
     source,
     defaultTuiAgent,
+    writeSourceControlAiSettings,
     onActionTextModelChoice,
     onActionModeChange,
     onActionAgentChange,
@@ -279,9 +280,10 @@ const SelectedRepositoryActionRows = memo(
                       draftScope={draftScopes.get(actionId)}
                       disabled={!hasOverride || isSavingAction}
                       onAgentChange={(value) => onActionAgentChange(actionId, value)}
-                      onChange={(choice, agentArgs) =>
-                        onActionTextModelChoice?.(actionId, choice, agentArgs)
+                      onChange={(choice, agentArgs, edits) =>
+                        onActionTextModelChoice?.(actionId, choice, agentArgs, edits)
                       }
+                      writeSourceControlAiSettings={writeSourceControlAiSettings}
                     />
                   )}
                   {agentWarningText ? (

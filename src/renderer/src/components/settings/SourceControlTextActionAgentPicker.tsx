@@ -3,6 +3,7 @@ import { shallow } from 'zustand/shallow'
 import { useShallow } from 'zustand/react/shallow'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useAppStore } from '@/store'
+import { getIndexedReposById } from '@/store/worktree-repo-index'
 import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
@@ -28,6 +29,8 @@ import {
   resolveSourceControlAiActionModelDefault
 } from '../../../../shared/source-control-ai'
 import { saveSourceControlTextPickerDraft } from './source-control-text-action-picker-save'
+import { registeredRepoTextModelHostKeys } from './source-control-text-action-model-replay'
+import type { SourceControlAiModelEdits } from '../../../../shared/source-control-ai-action-model-edits'
 import { useTextActionModelDiscovery } from './use-text-action-model-discovery'
 import { textActionPickerEntryView } from './source-control-text-action-picker-entries'
 import { AI_TEXT_ACTION_IDS, type AiActionId } from '../../../../shared/source-control-ai-actions'
@@ -49,6 +52,12 @@ import { DropdownMenuItem } from '../ui/dropdown-menu'
 import type { ActionRecipeDraftValue } from './source-control-ai-action-recipe-draft'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 
+type TextModelChange = (
+  choice: SourceControlAiModelChoice | undefined,
+  agentArgs: string,
+  edits: SourceControlAiModelEdits | undefined
+) => void
+
 type TextActionPickerProps = {
   actionId: AiActionId
   agent: TuiAgent | 'custom' | null
@@ -60,7 +69,7 @@ type TextActionPickerProps = {
   disabled?: boolean
   defaultAgentLabel?: string
   onAgentChange: (value: string) => void
-  onChange?: (choice: SourceControlAiModelChoice | undefined, agentArgs: string) => void
+  onChange?: TextModelChange
   /** Saves model lists the CLI reports; without it the menu shows only saved lists. */
   writeSourceControlAiSettings?: (patch: SourceControlAiSettingsPatch) => Promise<void>
 }
@@ -71,9 +80,8 @@ export function SourceControlTextActionAgentPicker(props: TextActionPickerProps)
     current.current = props
   })
   const onAgentChange = useCallback((value: string) => current.current.onAgentChange(value), [])
-  const onChange = useCallback(
-    (choice: SourceControlAiModelChoice | undefined, args: string) =>
-      current.current.onChange?.(choice, args),
+  const onChange = useCallback<TextModelChange>(
+    (choice, args, edits) => current.current.onChange?.(choice, args, edits),
     []
   )
   const write = useCallback(
@@ -106,9 +114,9 @@ const TextActionPicker = memo(
       )
     )
     const repoId = props.repoId
-    // Global cards have no repository; skip the scan on every store publication.
+    // The cached index keeps store publications from rescanning every repository per card.
     const repo = useAppStore((state) =>
-      repoId ? state.repos.find((repo) => repo.id === repoId) : undefined
+      repoId ? getIndexedReposById(state.repos, repoId)[0] : undefined
     )
     const operation = AI_TEXT_ACTION_IDS.find((id) => id === props.actionId)
     if (!operation) {
@@ -125,7 +133,11 @@ const TextActionPicker = memo(
       ? getRepoCommitMessageModelDiscoveryHostKey(repo)
       : LOCAL_COMMIT_MESSAGE_HOST_KEY
     const scope = props.repoId ? 'repo' : 'global'
-    const discovery = useTextActionModelDiscovery(hostKey, props.writeSourceControlAiSettings)
+    const discovery = useTextActionModelDiscovery(
+      hostKey,
+      props.repoId,
+      props.writeSourceControlAiSettings
+    )
     const choice = props.draft.modelChoice
     const defaultAgent = settings?.defaultTuiAgent
     const disabledAgents = settings?.disabledTuiAgents
@@ -239,7 +251,8 @@ const TextActionPicker = memo(
               modelInArguments: false,
               effortInArguments: false,
               modelArgumentsUnrecognized: false,
-              effortArgumentsUnrecognized: false
+              effortArgumentsUnrecognized: false,
+              effortInModel: false
             },
             catalog: {
               origin: 'probe',
@@ -365,14 +378,11 @@ const TextActionPicker = memo(
               agent,
               entry,
               draft,
-              // A global pick covers every registered repository's host, read when it is made.
-              hostKeys: props.repoId
-                ? [hostKey]
-                : useAppStore
-                    .getState()
-                    .repos.map((repo) => getRepoCommitMessageModelDiscoveryHostKey(repo))
+              edits: props.draft.modelEdits,
+              // The preview covers today's hosts; Save covers the hosts registered when it writes.
+              hostKeys: props.repoId ? [hostKey] : registeredRepoTextModelHostKeys()
             })
-            props.onChange?.(saved.choice, saved.agentArgs)
+            props.onChange?.(saved.choice, saved.agentArgs, saved.edits)
           },
           children: (
             <>

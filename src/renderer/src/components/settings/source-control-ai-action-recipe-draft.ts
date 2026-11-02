@@ -3,6 +3,7 @@ import type {
   SourceControlAiModelChoice
 } from '../../../../shared/source-control-ai-types'
 import { readActionModelSelection } from '../../../../shared/source-control-action-model-selection'
+import type { SourceControlAiModelEdits } from '../../../../shared/source-control-ai-action-model-edits'
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   SOURCE_CONTROL_ACTION_IDS,
@@ -13,6 +14,8 @@ import {
 
 export type ActionRecipeDraftValue = {
   modelChoice?: SourceControlAiModelChoice
+  /** Unsaved Model/Effort menu edits; their presence is what makes the model choice edited. */
+  modelEdits?: SourceControlAiModelEdits
   commandInputTemplate: string
   agentArgs?: string
   argumentChoices?: SourceControlActionRecipe['argumentChoices']

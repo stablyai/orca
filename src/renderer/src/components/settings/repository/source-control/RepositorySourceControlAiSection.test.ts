@@ -510,8 +510,9 @@ it.each([1, 10])(
       expect(
         deadlines().every((id) => cleared.mock.calls.some(([clearedId]) => clearedId === id))
       ).toBe(true)
+      // Five launch rows plus the three text cards' pickers.
       const previews = () => view.queryAllByRole('button', { name: 'Select agent' })
-      expect(previews()).toHaveLength(5 * sections)
+      expect(previews()).toHaveLength(8 * sections)
       fireEvent.change(view.container.querySelector('textarea')!, { target: { value: 'edited' } })
       expect(gets()).toHaveLength(1)
       view.rerender(tree(1))
@@ -530,7 +531,7 @@ it.each([1, 10])(
       await act(async () =>
         refresh.resolve({ settings: projectAgentLaunchSettings({ defaultTuiAgent: 'claude' }) })
       )
-      expect(previews()).toHaveLength(5)
+      expect(previews()).toHaveLength(8)
       rpc.mockImplementation((_target, method) =>
         method === 'settings.getAgentLaunch'
           ? new Promise(() => {})

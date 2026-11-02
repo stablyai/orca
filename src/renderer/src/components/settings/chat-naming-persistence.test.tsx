@@ -32,6 +32,7 @@ import {
   type SettingsPersistenceModel
 } from './__fixtures__/settings-persistence-test-fixture'
 import { ActiveSettingsSectionProvider } from './SettingsSection'
+import { renderGlobalCommitCard } from './__fixtures__/global-commit-card-test-fixture'
 import { TooltipProvider } from '../ui/tooltip'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }))
@@ -464,109 +465,104 @@ it.each(['global', 'repo'] as const)(
   }
 )
 
-function renderGlobalCommitCard(sourceControlAi: Partial<SourceControlAiSettings>) {
-  const settings = useAppStore.getState().settings
-  if (!settings) {
-    throw new Error('Missing settings')
-  }
-  useAppStore.setState({
-    settingsSearchQuery: '',
-    settings: {
-      ...settings,
-      defaultTuiAgent: 'codex',
-      sourceControlAi: normalizeSourceControlAiSettings({
-        ...getDefaultSourceControlAiSettings(),
-        enabled: true,
-        ...sourceControlAi
-      })
-    }
-  })
-  const model = settingsModel()
-  function Owner() {
-    const settings = useAppStore((state) => state.settings)!
-    const controller = useSettingsInteractionController(model)
-    return (
-      <CommitMessageAiPane
-        settings={settings}
-        updateSettings={model.updateSettings}
-        writeSourceControlAiSettings={controller.writeSourceControlAiSettingsOrThrow}
-      />
-    )
-  }
-  render(
-    <TooltipProvider>
-      <Owner />
-    </TooltipProvider>
-  )
-  const card = screen.getByText('Commit message').closest('.rounded-md')
-  if (!(card instanceof HTMLElement)) {
-    throw new Error('Missing commit card')
-  }
-  const row = within(card)
-  return {
-    row,
-    open: (agent: string) => {
-      fireEvent.pointerDown(row.getByRole('button', { name: 'Select agent' }), {
-        button: 0,
-        ctrlKey: false
-      })
-      fireEvent.click(screen.getByRole('button', { name: `Configure ${agent}` }))
-    },
-    save: async () => {
-      const calls = persist.mock.calls.length
-      fireEvent.click(row.getByRole('button', { name: 'Save' }))
-      await waitFor(() => expect(persist.mock.calls.length).toBe(calls + 1))
-      return useAppStore.getState().settings!
-    }
+const SOL_DISCOVERY = {
+  local: {
+    opencode2: [
+      {
+        id: 'openai/gpt-6.1-sol',
+        label: 'GPT-6.1 Sol',
+        thinkingLevels: [
+          { id: 'low', label: 'Low' },
+          { id: 'high', label: 'High' }
+        ],
+        defaultThinkingLevel: 'low'
+      }
+    ]
   }
 }
 
+/** Effort is a read-only row naming Arguments as its owner, with no level to pick. */
+function expectEffortSetByArguments() {
+  expect(screen.queryByRole('radiogroup', { name: 'Effort' })).toBeNull()
+  const row = screen.getByText('Effort').parentElement
+  if (!row) {
+    throw new Error('Missing Effort row')
+  }
+  expect(within(row).getByText('Set by your Arguments')).toBeDefined()
+}
+
+function plannedArgs(settings: GlobalSettings, agentArgs: string) {
+  const resolved = resolveSourceControlAiForOperation({
+    settings: {
+      ...settings,
+      sourceControlAi: {
+        ...settings.sourceControlAi!,
+        actions: { commitMessage: { agentId: 'opencode2', agentArgs } }
+      }
+    },
+    operation: 'commitMessage'
+  })
+  if (!resolved.ok) {
+    throw new Error(resolved.error)
+  }
+  const plan = planCommitMessageGeneration(resolved.value.params, 'prompt')
+  return plan.ok ? plan.plan.args : []
+}
+
 it.each([
-  ['a listed model moves into the menu', '--model openai/gpt-6.1-sol#high --verbose', '--verbose'],
-  [
-    'an unlisted model stays in Arguments',
-    '--model anthropic/claude-x#high --verbose',
-    '--model anthropic/claude-x#low --verbose'
-  ]
+  ['--model vendor/model-x#high --verbose', 'opencode/gpt-5.4-mini'],
+  ['--model "vendor/model-x"#high --verbose', undefined],
+  ['"--model=vendor/model-x#high" --verbose', undefined],
+  ['--model=vendor/model-x#high --verbose', undefined],
+  ['-m vendor/model-x#high --verbose', undefined],
+  ['--model vendor\\/model-x\\#high --verbose', undefined],
+  ['--model vendor/model-x#high --model other/model#low --verbose', undefined]
 ])(
-  'an OpenCode 2 effort-only pick keeps the Arguments model: %s',
-  async (_case, agentArgs, savedArgs) => {
+  'leaves an OpenCode 2 model set in Arguments untouched by Effort: %s',
+  async (agentArgs, typedModel) => {
     const card = renderGlobalCommitCard({
       agentId: 'opencode2',
-      selectedModelByAgent: { opencode2: 'opencode/gpt-5.4-mini' },
+      ...(typedModel ? { selectedModelByAgent: { opencode2: typedModel } } : {}),
+      actions: { commitMessage: { agentId: 'opencode2', agentArgs } }
+    })
+    const before = plannedArgs(useAppStore.getState().settings!, agentArgs)
+    card.open('OpenCode 2')
+    expectEffortSetByArguments()
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    expect(card.row.getByDisplayValue(agentArgs)).toBeDefined()
+    expect(card.row.queryByRole('button', { name: 'Save' })?.hasAttribute('disabled') ?? true).toBe(
+      true
+    )
+    expect(plannedArgs(useAppStore.getState().settings!, agentArgs)).toEqual(before)
+  }
+)
+
+it.each([
+  ['every proven model flag', '--model "vendor/model-x"#high -m other/model#low --verbose', true],
+  ['an unproven model flag', '--model "unfinished --verbose', false]
+])(
+  'an explicit OpenCode 2 Model pick takes over Effort after removing %s',
+  async (_case, agentArgs, owned) => {
+    const card = renderGlobalCommitCard({
+      agentId: 'opencode2',
       actions: { commitMessage: { agentId: 'opencode2', agentArgs } },
-      discoveredModelsByAgentByHost: {
-        local: {
-          opencode2: [
-            {
-              id: 'openai/gpt-6.1-sol',
-              label: 'GPT-6.1 Sol',
-              thinkingLevels: [
-                { id: 'low', label: 'Low' },
-                { id: 'high', label: 'High' }
-              ],
-              defaultThinkingLevel: 'low'
-            }
-          ]
-        }
-      }
+      discoveredModelsByAgentByHost: SOL_DISCOVERY
     })
     card.open('OpenCode 2')
-    fireEvent.click(
-      within(screen.getByRole('radiogroup', { name: 'Effort' })).getByRole('radio', {
-        name: 'Low'
-      })
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
-    const settings = await card.save()
-    expect(settings.sourceControlAi?.actions?.commitMessage?.agentArgs).toBe(savedArgs)
-    const resolved = resolveSourceControlAiForOperation({ settings, operation: 'commitMessage' })
-    if (!resolved.ok) {
-      throw new Error(resolved.error)
+    fireEvent.click(screen.getByRole('option', { name: 'GPT-6.1 Sol' }))
+    if (!owned) {
+      expectEffortSetByArguments()
+      return
     }
-    const plan = planCommitMessageGeneration(resolved.value.params, 'prompt')
-    const model = agentArgs.split(' ')[1].split('#')[0]
-    expect(plan.ok && plan.plan.args).toEqual(expect.arrayContaining([`${model}#low`]))
+    const effort = within(screen.getByRole('radiogroup', { name: 'Effort' }))
+    fireEvent.click(effort.getByRole('radio', { name: 'High' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    expect(card.row.getByDisplayValue('--verbose')).toBeDefined()
+    const settings = await card.save()
+    expect(settings.sourceControlAi?.actions?.commitMessage?.agentArgs).toBe('--verbose')
+    expect(plannedArgs(settings, '--verbose')).toEqual(
+      expect.arrayContaining(['--model', 'openai/gpt-6.1-sol#high'])
+    )
   }
 )
 
@@ -702,6 +698,68 @@ it('saving only Arguments keeps a newer model choice saved by another editor', a
   await act(() => view.result.current.saveActionTemplateDraft('commitMessage'))
   expect(current.actions?.commitMessage?.agentArgs).toBe('--verbose')
   expect(current.modelOverridesByOperation?.commitMessage?.selectedModelByAgent?.codex).toBe(
+    'gpt-5.5'
+  )
+})
+
+it('a global pick saved later covers the repository hosts registered by then', async () => {
+  Object.assign(window.api, {
+    git: { discoverCommitMessageModels: vi.fn(async () => ({ success: false, models: [] })) }
+  })
+  useAppStore.setState({ repos: [] })
+  const card = renderGlobalCommitCard({
+    agentId: 'codex',
+    actions: { commitMessage: { agentId: 'codex', agentArgs: '--model gpt-5.5 --verbose' } }
+  })
+  card.open('Codex')
+  fireEvent.click(screen.getByRole('option', { name: 'GPT-5.4' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+  const { TEST_REPO } = await import('@/store/slices/worktrees-slice-test-fixtures')
+  act(() =>
+    useAppStore.setState({
+      repos: [
+        { ...TEST_REPO, id: 'ssh', executionHostId: 'ssh:added%20box', connectionId: undefined },
+        { ...TEST_REPO, id: 'runtime', executionHostId: 'runtime:env-2', connectionId: undefined }
+      ]
+    })
+  )
+  const settings = await card.save()
+  expect(settings.sourceControlAi?.actions?.commitMessage?.agentArgs).toBe('--verbose')
+  const models = ['local', 'ssh:added box', 'runtime:env-2'].map((discoveryHostKey) => {
+    const result = resolveSourceControlAiForOperation({
+      settings,
+      operation: 'commitMessage',
+      discoveryHostKey
+    })
+    return result.ok && result.value.params.model
+  })
+  expect(models).toEqual(['gpt-5.4', 'gpt-5.4', 'gpt-5.4'])
+})
+
+it('saving only Chat name Arguments keeps a newer model choice saved by another editor', async () => {
+  const settings = useAppStore.getState().settings!
+  const withModel = (model: string) =>
+    normalizeSourceControlAiSettings({
+      ...settings.sourceControlAi,
+      modelOverridesByOperation: { conversationName: { selectedModelByAgent: { codex: model } } }
+    })
+  useAppStore.setState({ settings: { ...settings, sourceControlAi: withModel('gpt-5.4') } })
+  render(<ChatPersistenceHarness model={settingsModel()} />)
+  const naming = document.getElementById('chat-names')!
+  fireEvent.click(within(naming).getByRole('button', { name: 'Advanced' }))
+  fireEvent.change(screen.getByText('Arguments').nextElementSibling!, {
+    target: { value: '--verbose' }
+  })
+  act(() =>
+    useAppStore.setState(({ settings }) => ({
+      settings: settings && { ...settings, sourceControlAi: withModel('gpt-5.5') }
+    }))
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(persist).toHaveBeenCalledTimes(1))
+  const saved = useAppStore.getState().settings?.sourceControlAi
+  expect(saved?.actions?.conversationName?.agentArgs).toBe('--verbose')
+  expect(saved?.modelOverridesByOperation?.conversationName?.selectedModelByAgent?.codex).toBe(
     'gpt-5.5'
   )
 })

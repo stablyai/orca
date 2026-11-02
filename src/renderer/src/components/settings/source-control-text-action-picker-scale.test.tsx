@@ -39,6 +39,10 @@ it.each([5, 50])(
         settings: settings && { ...settings, defaultTuiAgent: 'codex', sourceControlAi: source }
       }))
       const draft = { commandInputTemplate: '{basePrompt}', agentArgs: '' }
+      const repoDraft = {
+        ...draft,
+        modelChoice: { selectedModelByAgentByHost: { 'ssh:box': { codex: 'gpt-5.4' } } }
+      }
       const view = render(
         <TooltipProvider>
           <SourceControlTextActionAgentPicker
@@ -54,7 +58,7 @@ it.each([5, 50])(
             source={source}
             repoId={`repo-${count - 1}`}
             repoAi={{}}
-            draft={draft}
+            draft={repoDraft}
             onAgentChange={unused}
           />
         </TooltipProvider>
@@ -62,10 +66,20 @@ it.each([5, 50])(
       const [globalCard, repoCard] = screen.getAllByRole('button', { name: 'Select agent' })
       idReads = 0
       act(() => useAppStore.setState({ settingsSearchQuery: `unrelated-${count}` }))
-      const total = idReads
-      // Only the repository card looks its repository up, once per publication.
-      expect(total).toBeLessThanOrEqual(count)
-      reads.repo.push(total)
+      // The repository card reuses the cached index instead of scanning on each publication.
+      reads.repo.push(idReads)
+      expect(repoCard.textContent).not.toContain('GPT-5.4')
+      act(() =>
+        useAppStore.setState(({ repos }) => ({
+          repos: repos.map((repo, index) =>
+            index === count - 1
+              ? { ...TEST_REPO, id: repo.id, executionHostId: 'ssh:box', connectionId: undefined }
+              : repo
+          )
+        }))
+      )
+      // Its own repository moving to another host still reaches the card.
+      expect(repoCard.textContent).toContain('GPT-5.4')
       view.rerender(
         <TooltipProvider>
           <SourceControlTextActionAgentPicker
@@ -99,7 +113,7 @@ it.each([5, 50])(
       expect(repoCard.isConnected).toBe(false)
       view.unmount()
     }
-    expect(reads.global).toEqual([0, 0])
+    expect(reads).toEqual({ global: [0, 0], repo: [0, 0] })
     process.stdout.write(
       `${JSON.stringify({ metric: 'text-card-repo-id-reads-per-unrelated-publication', size, reads })}\n`
     )

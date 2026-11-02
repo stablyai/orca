@@ -3,6 +3,7 @@ import type {
   SourceControlAiModelChoice
 } from '../../../../../../shared/source-control-ai-types'
 import type { SourceControlActionId } from '../../../../../../shared/source-control-ai-actions'
+import type { SourceControlAiModelEdits } from '../../../../../../shared/source-control-ai-action-model-edits'
 type RepoActionRecipe = NonNullable<
   NonNullable<RepoSourceControlAiOverrides['actionOverrides']>[SourceControlActionId]
 >
@@ -12,7 +13,7 @@ type RepoActionRecipe = NonNullable<
 export type ActionRecipeTextDraft = Pick<
   RepoActionRecipe,
   'commandInputTemplate' | 'agentArgs' | 'launchPreferences' | 'argumentChoices'
-> & { modelChoice?: SourceControlAiModelChoice }
+> & { modelChoice?: SourceControlAiModelChoice; modelEdits?: SourceControlAiModelEdits }
 
 // An own undefined is a deliberate clear; an absent preference leaves inheritance untouched.
 export function sameDraftLaunchPreferences(
@@ -27,7 +28,7 @@ export function sameDraftLaunchPreferences(
 
 export function sameActionRecipeText(a: ActionRecipeTextDraft, b: ActionRecipeTextDraft): boolean {
   return (
-    JSON.stringify(a.modelChoice) === JSON.stringify(b.modelChoice) &&
+    JSON.stringify(a.modelEdits) === JSON.stringify(b.modelEdits) &&
     a.commandInputTemplate === b.commandInputTemplate &&
     a.agentArgs === b.agentArgs &&
     JSON.stringify(a.argumentChoices) === JSON.stringify(b.argumentChoices) &&

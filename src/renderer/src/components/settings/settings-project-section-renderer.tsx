@@ -11,7 +11,7 @@ import { translate } from '@/i18n/i18n'
 import type { SettingsRenderContext } from './settings-render-context'
 
 export function renderProjectSettingsSections(context: SettingsRenderContext): React.ReactNode {
-  const { model, navigation, terminal, view } = context
+  const { model, navigation, terminal, view, interactions } = context
   return model.settingsProjectList.map((settingsProject) => {
     const repoSectionId = `repo-${settingsProject.representativeRepoId}`
     // Identity edits must follow the selected Available Hosts entry.
@@ -75,6 +75,7 @@ export function renderProjectSettingsSections(context: SettingsRenderContext): R
             updateProject={(projectId, updates) =>
               model.updateProject(projectId, updates, getRepoExecutionHostId(repo))
             }
+            writeSourceControlAiSettings={interactions.writeSourceControlAiSettings}
           />
         ) : null}
       </SettingsSection>

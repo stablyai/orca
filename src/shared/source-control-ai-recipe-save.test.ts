@@ -297,6 +297,7 @@ describe('text action model and effort writes', () => {
       cleared.update.sourceControlAi.modelOverridesByOperation?.branchName
         ?.selectedModelByAgentByHost
     ).toEqual({ 'ssh:saved': { claude: 'sonnet' } })
+    // A composed `model#variant` operand stays with Arguments on an effort edit.
     const variant = saveSourceControlAiActionModelChoice({
       target: { type: 'global' },
       settings: {
@@ -308,15 +309,16 @@ describe('text action model and effort writes', () => {
       },
       actionId: 'branchName',
       agentId: 'opencode2',
-      change: { field: 'effort', modelId: 'provider/model', value: 'low' }
+      change: { field: 'effort', modelId: 'opencode/gpt-5.4-mini', value: 'low' }
     })
     if (!('sourceControlAi' in variant)) {
-      throw new Error('Expected combined variant save')
+      throw new Error('Expected global effort save')
     }
-    expect(variant.sourceControlAi.actions?.branchName?.agentArgs).toBe('--trace')
-    expect(variant.sourceControlAi.modelOverridesByOperation?.branchName).toMatchObject({
-      selectedModelByAgent: { opencode2: 'provider/model' },
-      selectedThinkingByModel: { 'provider/model': 'low' }
+    expect(variant.sourceControlAi.actions?.branchName?.agentArgs).toBe(
+      '--model provider/model#high --trace'
+    )
+    expect(variant.sourceControlAi.modelOverridesByOperation?.branchName).toEqual({
+      selectedThinkingByModel: { 'opencode/gpt-5.4-mini': 'low' }
     })
     expect({ settings, repo }).toEqual(before)
   })

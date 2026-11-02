@@ -1,5 +1,6 @@
 import { AgentLaunchSetupActions } from './AgentLaunchSetupActions'
 import { AgentLaunchTextModelDefault } from './AgentLaunchTextModelDefault'
+import { textActionArgumentsOwnModel } from '../../../../shared/source-control-text-action-picker'
 import {
   agentLaunchSetupOptionRows,
   agentLaunchSetupCatalogState as catalogState
@@ -83,9 +84,7 @@ export function AgentLaunchSetupPanel({
       : undefined)
   // Settled with nothing chosen still lets the user pick; nothing is checked and the agent keeps its own default.
   const { hasModels, catalogPending, catalogMessage } = catalogState(entry, models, currentModel)
-  const modelInArguments =
-    entry.textGeneration?.modelInArguments &&
-    (!draft.textChanges?.includes('model') || entry.textGeneration.modelArgumentsUnrecognized)
+  const modelInArguments = textActionArgumentsOwnModel(entry, draft)
   const modelDisabled = disabled || defaultsPending || catalogPending
   const options = agentPickerEntryOptions(entry, currentModel, draft.surface)
   const optionRows = agentLaunchSetupOptionRows({

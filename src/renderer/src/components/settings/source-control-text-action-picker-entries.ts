@@ -35,7 +35,8 @@ export function textActionPickerEntryView(
       modelInArguments: model.unrecognized || model.agentArgs !== agentArgs,
       effortInArguments: effort.unrecognized || effort.agentArgs !== agentArgs,
       modelArgumentsUnrecognized: model.unrecognized,
-      effortArgumentsUnrecognized: effort.unrecognized
+      effortArgumentsUnrecognized: effort.unrecognized,
+      effortInModel: spec.effortFlag.some((flag) => flag.modelVariant)
     }
   }
 }

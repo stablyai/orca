@@ -1,4 +1,5 @@
 import { SourceControlTextActionAgentPicker } from './SourceControlTextActionAgentPicker'
+import type { SourceControlAiModelEdits } from '../../../../shared/source-control-ai-action-model-edits'
 import type {
   SourceControlAiSettings,
   SourceControlAiModelChoice,
@@ -46,7 +47,8 @@ type SourceControlActionRecipeRowProps<ActionId extends AiActionId> = {
   onTextModelChoiceChange?: (
     actionId: ActionId,
     choice: SourceControlAiModelChoice | undefined,
-    agentArgs: string
+    agentArgs: string,
+    edits: SourceControlAiModelEdits | undefined
   ) => void
   setupDiscardSignal?: number
   selectedAgent: TuiAgent | CustomAgentId | null
@@ -190,8 +192,8 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
               disabled={isSavingTemplate}
               defaultAgentLabel={defaultAgentLabel}
               onAgentChange={(value) => onAgentChange(actionId, value)}
-              onChange={(choice, agentArgs) =>
-                onTextModelChoiceChange?.(actionId, choice, agentArgs)
+              onChange={(choice, agentArgs, edits) =>
+                onTextModelChoiceChange?.(actionId, choice, agentArgs, edits)
               }
               writeSourceControlAiSettings={writeSourceControlAiSettings}
             />

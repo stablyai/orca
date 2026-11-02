@@ -7,29 +7,19 @@ import {
   type CommandTemplateBackslash
 } from './commit-message-prompt'
 
-type ProvenFlagSpans =
-  | { ok: false }
-  | {
-      ok: true
-      removals: Map<number, number>
-      unrecognized: boolean
-      /** The last proven value token: the one the CLI applies. */
-      applied?: { start: number; end: number; value: string }
-    }
-
-function findProvenFlagSpans(
+/** Remove only proven flag spans so unrelated arguments retain their spelling and quoting. */
+export function removeSourceControlAiArgumentFlag(
   agentArgs: string,
   spec: CommitMessageAgentSpec,
   field: 'model' | 'effort',
-  backslash: CommandTemplateBackslash
-): ProvenFlagSpans {
+  backslash: CommandTemplateBackslash = 'escape'
+): { agentArgs: string; unrecognized: boolean } {
   const parsed = tokenizeCustomCommandTemplate(agentArgs, backslash)
   if (!parsed.ok) {
-    return { ok: false }
+    return { agentArgs, unrecognized: true }
   }
   const removals = new Map<number, number>()
   let unrecognized = false
-  let applied: { start: number; end: number; value: string } | undefined
   const valueOptions = [
     ...agentRequiredValueOptions(spec.id),
     ...(spec.id === 'kimi' ? KIMI_VALUE_OPTIONS : []),
@@ -54,61 +44,16 @@ function findProvenFlagSpans(
         ) {
           unrecognized = true
         } else {
-          // A variant shares the model operand; the writer saves the effective model alongside effort.
           removals.set(parsed.spans[found.index].start, parsed.spans[end - 1].end)
-          applied = { ...parsed.spans[end - 1], value }
         }
       }
       cursor = end
       found = findOptionOccurrence(parsed.tokens, flag.aliases, true, valueOptions, cursor)
     }
   }
-  return { ok: true, removals, unrecognized, applied }
-}
-
-/** Remove only proven flag spans so unrelated arguments retain their spelling and quoting. */
-export function removeSourceControlAiArgumentFlag(
-  agentArgs: string,
-  spec: CommitMessageAgentSpec,
-  field: 'model' | 'effort',
-  backslash: CommandTemplateBackslash = 'escape'
-): { agentArgs: string; unrecognized: boolean; value?: string } {
-  const found = findProvenFlagSpans(agentArgs, spec, field, backslash)
-  if (!found.ok) {
-    return { agentArgs, unrecognized: true }
-  }
   let text = agentArgs
-  for (const [start, end] of [...found.removals].sort(([a], [b]) => b - a)) {
+  for (const [start, end] of [...removals].sort(([a], [b]) => b - a)) {
     text = text.slice(0, start) + text.slice(end)
   }
-  return found.removals.size
-    ? { agentArgs: text.trim(), unrecognized: found.unrecognized, value: found.applied?.value }
-    : { agentArgs, unrecognized: found.unrecognized }
-}
-
-/** Rewrite the applied value in place, keeping its flag spelling and every other argument. */
-export function rewriteSourceControlAiArgumentFlagValue(
-  agentArgs: string,
-  spec: CommitMessageAgentSpec,
-  field: 'model' | 'effort',
-  rewrite: (value: string) => string,
-  backslash: CommandTemplateBackslash = 'escape'
-): string {
-  const found = findProvenFlagSpans(agentArgs, spec, field, backslash)
-  const applied = found.ok ? found.applied : undefined
-  if (!applied) {
-    return agentArgs
-  }
-  const raw = agentArgs.slice(applied.start, applied.end)
-  const at = raw.lastIndexOf(applied.value)
-  if (at === -1) {
-    return agentArgs
-  }
-  return (
-    agentArgs.slice(0, applied.start) +
-    raw.slice(0, at) +
-    rewrite(applied.value) +
-    raw.slice(at + applied.value.length) +
-    agentArgs.slice(applied.end)
-  )
+  return { agentArgs: removals.size ? text.trim() : agentArgs, unrecognized }
 }

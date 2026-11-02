@@ -17,6 +17,7 @@ import { translate } from '@/i18n/i18n'
 import { Switch } from '../ui/switch'
 import { Card, CardContent } from '../ui/card'
 import { SourceControlActionRecipeRow } from './SourceControlActionRecipeRow'
+import { replayGlobalTextModelEdits } from './source-control-text-action-model-replay'
 import { CustomAgentCommandField } from './CustomAgentCommandField'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
@@ -54,7 +55,11 @@ export function ChatNamingSetting({
   const [draft, setDraft] = useState<ActionRecipeDraftValue | null>(null)
   const [customCommandDraft, setCustomCommandDraft] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
-  const value = draft ?? persisted
+  // Without a menu edit the model choice is whatever is saved now, including another editor's.
+  const value =
+    draft && !draft.modelEdits?.length
+      ? { ...draft, modelChoice: persisted.modelChoice }
+      : (draft ?? persisted)
   const customCommand = customCommandDraft ?? config.customAgentCommand
   const customCommandDirty = customCommand !== config.customAgentCommand
   const recipeDirty = JSON.stringify(value) !== JSON.stringify(persisted)
@@ -97,10 +102,18 @@ export function ChatNamingSetting({
           commandInputTemplate: value.commandInputTemplate,
           agentArgs: value.agentArgs
         }),
-        modelOverridesByOperation: {
-          ...current.modelOverridesByOperation,
-          conversationName: value.modelChoice
-        },
+        ...(value.modelEdits?.length
+          ? {
+              modelOverridesByOperation: {
+                ...current.modelOverridesByOperation,
+                conversationName: replayGlobalTextModelEdits(
+                  current,
+                  'conversationName',
+                  value.modelEdits
+                )
+              }
+            }
+          : {}),
         ...(customCommandDirty ? { customAgentCommand: customCommand } : {})
       }))
       if (!isMountedRef.current) {
@@ -216,8 +229,8 @@ export function ChatNamingSetting({
                 <SourceControlActionRecipeRow
                   actionId="conversationName"
                   source={config}
-                  onTextModelChoiceChange={(_id, modelChoice, agentArgs) =>
-                    updateDraft({ ...value, modelChoice, agentArgs })
+                  onTextModelChoiceChange={(_id, modelChoice, agentArgs, modelEdits) =>
+                    updateDraft({ ...value, modelChoice, agentArgs, modelEdits })
                   }
                   writeSourceControlAiSettings={writeSourceControlAiSettings}
                   selectedAgent={recipe?.agentId ?? null}

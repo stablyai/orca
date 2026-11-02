@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { discoverRuntimeCommitMessageModels } from '@/runtime/runtime-git-generation-client'
+import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
+import { resolveWorktreeModelDiscoveryRuntime } from '../native-chat/native-chat-session-option-discovery'
 import { getCommitMessageAgentCapability } from '../../../../shared/commit-message-agent-spec'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../../../shared/commit-message-host-key'
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control-ai'
@@ -11,23 +13,26 @@ import {
 import type { SourceControlAiSettingsPatch } from '../../../../shared/source-control-ai-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 
-// One listing per agent at a time, however many cards open their picker.
-const pending = new Map<TuiAgent, Promise<void>>()
+// One listing per host and agent at a time, however many cards open their picker.
+const pending = new Map<string, Promise<void>>()
+
+/** This machine is asked directly; a repository's host is asked through one of its worktrees. */
+function discoveryContext(hostKey: string, repoId: string | undefined): RuntimeGitContext | null {
+  const state = useAppStore.getState()
+  if (hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY) {
+    return { target: { kind: 'local' }, prefs: state.settings, worktreeId: null, worktreePath: '' }
+  }
+  const worktree = repoId ? state.worktreesByRepo[repoId]?.[0] : undefined
+  return worktree ? resolveWorktreeModelDiscoveryRuntime(state, worktree.id) : null
+}
 
 function listTextModels(
   agent: TuiAgent,
   hostKey: string,
+  context: RuntimeGitContext,
   writeSourceControlAiSettings: (patch: SourceControlAiSettingsPatch) => Promise<void>
 ): Promise<void> {
-  return discoverRuntimeCommitMessageModels(
-    {
-      target: { kind: 'local' },
-      prefs: useAppStore.getState().settings,
-      worktreeId: null,
-      worktreePath: ''
-    },
-    agent
-  )
+  return discoverRuntimeCommitMessageModels(context, agent)
     .then((result) => {
       const settings = useAppStore.getState().settings
       if (!result.success || !result.models.length || !settings) {
@@ -49,9 +54,10 @@ function listTextModels(
     .catch(() => undefined)
 }
 
-/** Ask this machine's CLI for its text models when a picker opens; the saved list feeds the menu. */
+/** Ask the card's host CLI for its text models when a picker opens; the saved list feeds the menu. */
 export function useTextActionModelDiscovery(
   hostKey: string,
+  repoId: string | undefined,
   writeSourceControlAiSettings?: (patch: SourceControlAiSettingsPatch) => Promise<void>
 ): { listing: TuiAgent | null; discover: (agent: TuiAgent) => void } {
   const [listing, setListing] = useState<TuiAgent | null>(null)
@@ -64,20 +70,24 @@ export function useTextActionModelDiscovery(
   }, [])
   const discover = useCallback(
     (agent: TuiAgent) => {
-      // Only the local CLI is reachable without a workspace; other hosts keep their saved list.
       if (
         !writeSourceControlAiSettings ||
-        hostKey !== LOCAL_COMMIT_MESSAGE_HOST_KEY ||
         getCommitMessageAgentCapability(agent)?.modelSource !== 'dynamic'
       ) {
         return
       }
-      let run = pending.get(agent)
+      const key = `${hostKey} ${agent}`
+      let run = pending.get(key)
       if (!run) {
-        run = listTextModels(agent, hostKey, writeSourceControlAiSettings).finally(() =>
-          pending.delete(agent)
+        // A repository with no worktree has nothing to ask through, so it keeps its saved list.
+        const context = discoveryContext(hostKey, repoId)
+        if (!context) {
+          return
+        }
+        run = listTextModels(agent, hostKey, context, writeSourceControlAiSettings).finally(() =>
+          pending.delete(key)
         )
-        pending.set(agent, run)
+        pending.set(key, run)
       }
       setListing(agent)
       void run.then(() => {
@@ -86,7 +96,7 @@ export function useTextActionModelDiscovery(
         }
       })
     },
-    [hostKey, writeSourceControlAiSettings]
+    [hostKey, repoId, writeSourceControlAiSettings]
   )
   return { listing, discover }
 }

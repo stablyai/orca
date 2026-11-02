@@ -31,13 +31,12 @@ type ActionModelChoiceInput = {
 function writeChoice(
   choice: SourceControlAiModelChoice | undefined,
   input: ActionModelChoiceInput,
-  remoteHostKeys: Iterable<string>,
-  pinModel: boolean
+  remoteHostKeys: Iterable<string>
 ): SourceControlAiModelChoice | undefined {
   const next = structuredClone(choice ?? {})
   const { agentId, change } = input
-  if (change.field === 'model' || pinModel) {
-    const value = change.field === 'model' ? change.value : change.modelId
+  if (change.field === 'model') {
+    const value = change.value
     next.selectedModelByAgent = { ...next.selectedModelByAgent }
     const byHost = { ...next.selectedModelByAgentByHost }
     next.selectedModelByAgentByHost = byHost
@@ -118,19 +117,19 @@ export function saveSourceControlAiActionModelChoice(
         ? undefined
         : repo?.actionOverrides?.[input.actionId]
   const spec = getCommitMessageAgentSpec(input.agentId)
-  const stripped = spec
-    ? removeSourceControlAiArgumentFlag(
-        recipe?.agentArgs ?? '',
-        spec,
-        input.change.field,
-        input.backslash
-      )
-    : { agentArgs: recipe?.agentArgs ?? '', unrecognized: false }
-  const pinModel =
-    input.change.field === 'effort' &&
-    Boolean(spec?.effortFlag.some((flag) => flag.modelVariant)) &&
-    stripped.agentArgs !== (recipe?.agentArgs ?? '')
-  const nextChoice = writeChoice(choice, input, remoteHostKeys, pinModel)
+  // A composed `model#variant` operand stays with Arguments on an effort edit; only a Model pick removes it.
+  const composedEffort =
+    input.change.field === 'effort' && Boolean(spec?.effortFlag.some((flag) => flag.modelVariant))
+  const stripped =
+    spec && !composedEffort
+      ? removeSourceControlAiArgumentFlag(
+          recipe?.agentArgs ?? '',
+          spec,
+          input.change.field,
+          input.backslash
+        )
+      : { agentArgs: recipe?.agentArgs ?? '', unrecognized: false }
+  const nextChoice = writeChoice(choice, input, remoteHostKeys)
   const modelOverridesByOperation = { ...scope?.modelOverridesByOperation }
   if (nextChoice) {
     modelOverridesByOperation[input.actionId] = nextChoice

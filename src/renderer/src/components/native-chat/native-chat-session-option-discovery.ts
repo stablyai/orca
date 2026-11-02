@@ -56,6 +56,23 @@ export function resolveNativeChatModelDiscoveryContext(
     Object.entries(state.tabsByWorktree ?? {}).find(([, tabs]) =>
       tabs.some((tab) => tab.id === terminalTabId)
     )?.[0] ?? null
+  const runtime = resolveWorktreeModelDiscoveryRuntime(state, worktreeId)
+  if (!runtime) {
+    return null
+  }
+  // The context omits a null connection id; the host key still needs it to mean "this machine".
+  const scope = getRuntimeGitScope(runtime.target, getConnectionIdFromState(state, worktreeId))
+  return {
+    hostKey: resolveNativeChatModelDiscoveryHostKey(state, worktreeId, runtime.worktreePath, scope),
+    runtime
+  }
+}
+
+/** How to ask a worktree's owner for models; null when the owner cannot be named. */
+export function resolveWorktreeModelDiscoveryRuntime(
+  state: ReturnType<typeof useAppStore.getState>,
+  worktreeId: string | null
+): RuntimeGitContext | null {
   const connectionId = getConnectionIdFromState(state, worktreeId)
   if (worktreeId && connectionId === undefined) {
     return null
@@ -67,17 +84,12 @@ export function resolveNativeChatModelDiscoveryContext(
   if (!target) {
     return null
   }
-  const worktreePath = worktreeId ? (findKnownWorktreeById(state, worktreeId)?.path ?? '') : ''
-  const scope = getRuntimeGitScope(target, connectionId)
   return {
-    hostKey: resolveNativeChatModelDiscoveryHostKey(state, worktreeId, worktreePath, scope),
-    runtime: {
-      target,
-      prefs: state.settings,
-      worktreeId,
-      worktreePath,
-      ...(connectionId ? { connectionId } : {})
-    }
+    target,
+    prefs: state.settings,
+    worktreeId,
+    worktreePath: worktreeId ? (findKnownWorktreeById(state, worktreeId)?.path ?? '') : '',
+    ...(connectionId ? { connectionId } : {})
   }
 }
 

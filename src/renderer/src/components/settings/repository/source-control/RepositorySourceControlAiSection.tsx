@@ -4,6 +4,7 @@ import type React from 'react'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { normalizeSourceControlAiSettings } from '../../../../../../shared/source-control-ai-settings'
 import type { SourceControlAiRepoUpdate } from '../../../../../../shared/source-control-ai-recipe-save'
+import type { SourceControlAiSettingsPatch } from '../../../../../../shared/source-control-ai-types'
 import { useAppStore } from '../../../../store/index'
 import { getRepositorySourceControlAiSectionId } from '../repository-settings-targets'
 import { RepositorySourceControlAiActionRows } from './RepositorySourceControlAiActionRows'
@@ -18,12 +19,15 @@ import { translate } from '@/i18n/i18n'
 type RepositorySourceControlAiSectionProps = {
   repo: Repo
   updateRepo: (repoId: string, updates: SourceControlAiRepoUpdate) => void | Promise<boolean>
+  /** Lets the text pickers save model lists the repository's host reports. */
+  writeSourceControlAiSettings?: (patch: SourceControlAiSettingsPatch) => Promise<void>
 }
 
 /** Persist simple controls immediately; draft CLI args/templates until per-action Save, matching global recipes. */
 export function RepositorySourceControlAiSection({
   repo,
-  updateRepo
+  updateRepo,
+  writeSourceControlAiSettings
 }: RepositorySourceControlAiSectionProps): React.JSX.Element {
   const settings = useAppStore(
     useShallow(
@@ -108,6 +112,7 @@ export function RepositorySourceControlAiSection({
         onActionModeChange={updateActionMode}
         onActionAgentChange={updateActionAgent}
         onActionTextModelChoice={updateActionTextModelChoice}
+        writeSourceControlAiSettings={writeSourceControlAiSettings}
         onActionLaunchPreferencesChange={updateActionLaunchPreferences}
         onActionTemplateChange={updateActionTemplate}
         onActionAgentArgsChange={updateActionAgentArgs}

@@ -1,4 +1,5 @@
 import { TEXT_ACTION_DEFAULT_MODEL } from '../../../../shared/agent-launch-picker'
+import { textActionArgumentsOwnEffort } from '../../../../shared/source-control-text-action-picker'
 import { translate } from '@/i18n/i18n'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type {
@@ -19,6 +20,31 @@ type AgentLaunchSetupOptionRowsInput = {
   defaultsPending: boolean | undefined
   disabled: boolean | undefined
   argumentsKnown: boolean
+}
+
+function argumentsOwnedRow(
+  id: string,
+  label: string,
+  category: SessionOptionDescriptor['category']
+): SessionOptionDescriptor {
+  return {
+    id,
+    label,
+    category,
+    kind: {
+      type: 'select',
+      choices: [
+        {
+          value: 'arguments',
+          label: translate('agentPicker.setByArguments', 'Set by your Arguments')
+        }
+      ],
+      currentValue: 'arguments'
+    },
+    valueSource: 'default',
+    transport: 'agent-session',
+    settable: false
+  }
 }
 
 /** Clearing Effort keeps the selected model, so its default is that model's inherited effort. */
@@ -45,6 +71,10 @@ export function agentLaunchSetupOptionRows({
   disabled,
   argumentsKnown
 }: AgentLaunchSetupOptionRowsInput): SessionOptionDescriptor[] {
+  // Shown even when the menu's model has no levels, so Effort explains where it is set.
+  if (textActionArgumentsOwnEffort(entry, draft)) {
+    return [argumentsOwnedRow('effort', options[0]?.label ?? 'Reasoning effort', 'thought_level')]
+  }
   return options.map((option) => {
     const effortInArguments =
       entry.textGeneration?.effortInArguments &&
@@ -62,24 +92,7 @@ export function agentLaunchSetupOptionRows({
               : undefined
         : undefined)
     if (argumentsView.context.analysis.opaqueKeys.has(option.id)) {
-      return {
-        id: option.id,
-        label: option.label,
-        category: option.category,
-        kind: {
-          type: 'select',
-          choices: [
-            {
-              value: 'arguments',
-              label: translate('agentPicker.setByArguments', 'Set by your Arguments')
-            }
-          ],
-          currentValue: 'arguments'
-        },
-        valueSource: 'default',
-        transport: 'agent-session',
-        settable: false
-      }
+      return argumentsOwnedRow(option.id, option.label, option.category)
     }
     const valueKnown =
       current !== undefined ||

@@ -104,7 +104,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
         for (const argument of flags[spec.id][field]) {
           expect(
             removeSourceControlAiArgumentFlag(`${argument} --other 'keep quoted'`, spec, field)
-          ).toMatchObject({
+          ).toEqual({
             agentArgs: "--other 'keep quoted'",
             unrecognized: false
           })
@@ -118,7 +118,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
         codex,
         'effort'
       )
-    ).toMatchObject({
+    ).toEqual({
       agentArgs: '-c sandbox_mode="read-only"  --model keep',
       unrecognized: false
     })
@@ -131,7 +131,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     const quotedOperand = '--append-system-prompt "--model" --model opus -- tail --model keep'
     expect(
       removeSourceControlAiArgumentFlag(quotedOperand, COMMIT_MESSAGE_AGENT_SPECS.claude!, 'model')
-    ).toMatchObject({
+    ).toEqual({
       agentArgs: '--append-system-prompt "--model"  -- tail --model keep',
       unrecognized: false
     })
