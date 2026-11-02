@@ -3126,6 +3126,7 @@ const ORCA_PLUGIN_AUTHORING_MANIFEST_REFERENCE_MARKDOWN = [
   "- `title` (string, required, since 1.4.160): Title shown in the command palette.",
   "- `when` (\"global\" | \"workspace\", since 1.4.160): Where the command is available. `workspace` hides it when no workspace is active. Defaults to `global`.",
   "- `action` (one of worktree.history.back, worktree.history.forward, sidebar.left.toggle, sidebar.sleepingWorkspaces.toggle, floatingWorkspace.maximize, tab.rename, workspace.rename, workspace.openBoard, view.tasks, sidebar.right.toggle, sidebar.explorer.toggle, sidebar.search.toggle, sidebar.sourceControl.toggle, sidebar.checks.toggle, sidebar.ports.toggle, since 1.4.160): Built-in Orca action this command runs. A command with an action is declarative and never starts the plugin worker; one without needs `main`.",
+  "- `replaces` (one of worktree.history.back, worktree.history.forward, sidebar.left.toggle, sidebar.sleepingWorkspaces.toggle, floatingWorkspace.maximize, tab.rename, workspace.rename, workspace.openBoard, view.tasks, sidebar.right.toggle, sidebar.explorer.toggle, sidebar.search.toggle, sidebar.sourceControl.toggle, sidebar.checks.toggle, sidebar.ports.toggle, since 1.4.248): Built-in Orca action this worker command runs in place of, from its shortcut, the palette or a menu. To also run Orca’s own, the command calls `commands.run` with the action (`workspace:write`); that never reaches a replacement. If the worker fails or takes over 2 s, Orca runs its own. The person sees it before approving and can turn it off in Settings; when two plugins replace one action, the one installed first does.",
   "",
   "## EventContribution",
   "",
@@ -3408,6 +3409,15 @@ const ORCA_PLUGIN_AUTHORING_RECIPES_REFERENCE_MARKDOWN = [
   "(`agent:launch`); `workspace.open({ workspaceId })`, `editor.open({ workspaceId, path })` (a path",
   "inside it) and `commands.run({ action })` (a built-in `contributes.commands[].action`, never a plugin's",
   "replacement) need `workspace:write` and the desktop app. Panels get none.",
+  "",
+  "## Replacing one of Orca's own actions",
+  "",
+  "Give a worker command `\"replaces\": \"view.tasks\"` (any action a declarative `action` may name;",
+  "`engines.orca` `>=1.4.248`) and register it with `orca.commands.register`. Orca runs it when that",
+  "action fires from its shortcut, the palette or a menu, and its own action when the worker fails or",
+  "takes over 2 s. To wrap Orca's own, call `orca.host.call('commands.run', { action: 'view.tasks' })`",
+  "(`workspace:write`) from the command: it always runs the built-in. The person can switch the",
+  "replacement back on the plugin's page.",
   "",
 ].join('\n')
 
