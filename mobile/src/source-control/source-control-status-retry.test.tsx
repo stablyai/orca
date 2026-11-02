@@ -137,6 +137,15 @@ vi.mock('./MobileSourceControlSegments', () => ({ MobileSourceControlSegments: (
 vi.mock('./MobileSourceControlBranchCard', () => ({ MobileSourceControlBranchCard: () => null }))
 vi.mock('./MobileGitHistoryList', () => ({ MobileGitHistoryList: () => null }))
 vi.mock('../components/mobile-pr-url', () => ({ openMobilePrUrl: () => {} }))
+vi.mock('../transport/client-context-connection-metrics', () => ({
+  useHostConnectionInputs: () => ({
+    reconnectAttempts: 0,
+    lastConnectedAt: null,
+    pendingPath: null,
+    pairingRejected: false,
+    relayHostReachability: 'connecting'
+  })
+}))
 vi.mock('./use-mobile-source-control-action-sheet', () => ({
   useMobileSourceControlActionSheet: () => ({})
 }))

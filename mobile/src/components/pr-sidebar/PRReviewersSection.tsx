@@ -8,6 +8,7 @@ import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import type { RpcClient } from '../../transport/rpc-client'
+import type { HostConnectionInputs } from '../../transport/client-context-connection-metrics'
 import type { MobilePrActions } from '../../session/use-mobile-pr-actions'
 import { isPrSidebarDetailsPlaceholder } from '../../session/mobile-pr-sidebar-state'
 import { getGitHubPRReviewerRows } from '../../../../src/shared/github/pr-reviewer-display'
@@ -21,6 +22,7 @@ type Props = {
   client: RpcClient | null
   prRepo: GitHubOwnerRepo | null
   worktreeId: string
+  hostConnection: HostConnectionInputs
 }
 
 function reviewerStateLabel(
@@ -54,7 +56,14 @@ function reviewerStateLabel(
 }
 
 // Requested reviewers/latest verdicts with optimistic request/remove picker.
-export function PRReviewersSection({ details, actions, client, worktreeId, prRepo }: Props) {
+export function PRReviewersSection({
+  details,
+  actions,
+  client,
+  worktreeId,
+  prRepo,
+  hostConnection
+}: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   // Null details means heavy phase 2 still loading; synthetic placeholder means failure, neither means no reviewers.
@@ -161,6 +170,7 @@ export function PRReviewersSection({ details, actions, client, worktreeId, prRep
         onClose={() => setPickerOpen(false)}
         client={client}
         worktreeId={worktreeId}
+        hostConnection={hostConnection}
         seededLogins={seededLogins}
         isRequested={isRequested}
         onToggle={(login) => {

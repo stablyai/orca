@@ -15,13 +15,15 @@ import { mobilePrSidebarStyles, PR_SIDEBAR_DOCK_WIDTH } from './pr-sidebar/mobil
 import { canDockPrSidebar, resolvePresentationMode } from './mobile-pr-sidebar-presentation'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import type { HostConnectionInputs } from '../transport/client-context-connection-metrics'
 
 type Props = {
   controller: ReturnType<typeof useMobileDiffReviewController>
+  hostConnection: HostConnectionInputs
   onBack: () => void
 }
 
-export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
+export function MobileDiffReviewScreenView({ controller, hostConnection, onBack }: Props) {
   useMobileColorScheme()
   const { isWideLayout } = useResponsiveLayout()
   const insets = useSafeAreaInsets()
@@ -120,6 +122,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
               client={controller.client}
               connState={controller.connState}
               worktreeId={controller.worktreeId}
+              hostConnection={hostConnection}
               gitBranch={controller.prSidebarBranch}
               gitStatus={gitStatus}
               headSha={controller.prSidebarHeadSha}
@@ -142,6 +145,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
             client={controller.client}
             connState={controller.connState}
             worktreeId={controller.worktreeId}
+            hostConnection={hostConnection}
             gitBranch={controller.prSidebarBranch}
             gitStatus={gitStatus}
             headSha={controller.prSidebarHeadSha}

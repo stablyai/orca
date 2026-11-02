@@ -5,6 +5,7 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { ConnectionState } from '../../transport/types'
 import type { RpcClient } from '../../transport/rpc-client'
+import type { HostConnectionInputs } from '../../transport/client-context-connection-metrics'
 import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
 import type { MobilePrSidebarController } from '../../session/use-mobile-pr-sidebar-controller'
 import { MobilePRSidebar } from '../MobilePRSidebar'
@@ -14,6 +15,7 @@ type Props = {
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
+  hostConnection: HostConnectionInputs
   branch: string | null
   headSha: string | null
   gitStatus: MobileGitStatusResult | null
@@ -28,6 +30,7 @@ export function MobilePrViewPanelBody({
   client,
   connState,
   worktreeId,
+  hostConnection,
   branch,
   headSha,
   gitStatus,
@@ -66,6 +69,7 @@ export function MobilePrViewPanelBody({
         client={client}
         connState={connState}
         worktreeId={worktreeId}
+        hostConnection={hostConnection}
         gitBranch={branch}
         gitStatus={gitStatus}
         headSha={headSha}

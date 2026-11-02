@@ -6,6 +6,7 @@ import { normalizeReviewAreaParam } from './mobile-diff-review-positioning'
 import { useMobileDiffReviewController } from './use-mobile-diff-review-controller'
 import { useForceReconnect } from '../transport/host-client-hooks'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
+import { useHostConnectionInputs } from '../transport/client-context-connection-metrics'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 
@@ -33,6 +34,7 @@ export function MobileDiffReviewRouteScreen() {
   const router = useWorkspaceRouteHandoff()
   const { client, state: connState } = useWorkspaceClient(hostId)
   const forceReconnect = useForceReconnect()
+  const hostConnection = useHostConnectionInputs(hostId)
 
   const openSession = useCallback(() => {
     const query = name ? `?${new URLSearchParams({ name }).toString()}` : ''
@@ -57,5 +59,11 @@ export function MobileDiffReviewRouteScreen() {
     onReconnect: forceReconnect
   })
 
-  return <MobileDiffReviewScreenView controller={controller} onBack={() => router.back()} />
+  return (
+    <MobileDiffReviewScreenView
+      controller={controller}
+      hostConnection={hostConnection}
+      onBack={() => router.back()}
+    />
+  )
 }

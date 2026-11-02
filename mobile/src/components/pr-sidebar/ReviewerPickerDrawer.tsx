@@ -12,6 +12,7 @@ import type {
 import type { RpcClient } from '../../transport/rpc-client'
 import type { ConnectionState } from '../../transport/types'
 import { useCalmConnectionState } from '../../transport/calm-connection-state'
+import type { HostConnectionInputs } from '../../transport/client-context-connection-metrics'
 import { classifyConnection, verdictDisplayLabel } from '../../transport/connection-health'
 import { fetchAssignableUsers } from '../../session/github-pr-rpc'
 import { BottomDrawer } from '../BottomDrawer'
@@ -29,13 +30,15 @@ type Props = {
   // Resolves the optimistic requested-state for a login (so a just-toggled row reflects it).
   isRequested: (login: string) => boolean
   onToggle: (login: string) => void
+  // The screen header's own verdict inputs, so a no-rows wait reads as the header does.
+  hostConnection: HostConnectionInputs
 }
 
 type PickerSnapshot = {
   // Undefined until this visit accepts a reply; [] is an accepted empty list.
   users: GitHubAssignableUser[] | undefined
   error: { message: string | null } | null
-  connection: { state: ConnectionState; lastConnectedAt: number | null; reconnectAttempts: number }
+  state: ConnectionState
 }
 
 // One open drawer for one client/worktree/repository; closing or retargeting starts a new visit.
@@ -66,11 +69,7 @@ function createPickerVisit(args: {
     latest: {
       users: undefined,
       error: null,
-      connection: {
-        state: args.client?.getState() ?? 'disconnected',
-        lastConnectedAt: args.client?.getLastConnectedAt() ?? null,
-        reconnectAttempts: args.client?.getReconnectAttempt() ?? 0
-      }
+      state: args.client?.getState() ?? 'disconnected'
     }
   }
 }
@@ -84,7 +83,8 @@ export function ReviewerPickerDrawer({
   prRepo,
   seededLogins,
   isRequested,
-  onToggle
+  onToggle,
+  hostConnection
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -134,19 +134,13 @@ export function ReviewerPickerDrawer({
         return
       }
       const generation = visitClient.getGeneration?.()
-      const connection = {
-        state,
-        lastConnectedAt: visitClient.getLastConnectedAt(),
-        reconnectAttempts: visitClient.getReconnectAttempt()
-      }
       const observed = visit.observed
       if (observed?.state === state && Object.is(observed.generation, generation)) {
-        publish({ connection })
         return
       }
       visit.observed = { state, generation }
       const attempt = ++visit.attempt
-      publish({ connection, error: null })
+      publish({ state, error: null })
       if (state !== 'connected') {
         return
       }
@@ -179,12 +173,12 @@ export function ReviewerPickerDrawer({
     }
   }, [visit])
 
-  const { users, error, connection } = snapshot
-  const presentedConnState = useCalmConnectionState(connection.state, connection.lastConnectedAt)
-  // Without rows, an outage the calm presentation reveals explains the wait instead of a spinner.
+  const { users, error, state } = snapshot
+  const presentedConnState = useCalmConnectionState(state, hostConnection.lastConnectedAt)
+  // Without rows, an outage the calm presentation reveals explains the wait with the header's verdict.
   const connectionLabel =
-    !users && !error && connection.state !== 'connected' && presentedConnState !== 'connected'
-      ? verdictDisplayLabel(classifyConnection(connection))
+    !users && !error && state !== 'connected' && presentedConnState !== 'connected'
+      ? verdictDisplayLabel(classifyConnection({ state, ...hostConnection }))
       : null
 
   const ordered = useMemo(() => {

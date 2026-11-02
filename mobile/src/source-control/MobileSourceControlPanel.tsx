@@ -5,6 +5,7 @@ import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { connectionRetryAction } from '../transport/connection-retry-action'
+import { useHostConnectionInputs } from '../transport/client-context-connection-metrics'
 import { useMobileSourceControlState } from './use-mobile-source-control-state'
 import { useMobileSourceControlActionSheet } from './use-mobile-source-control-action-sheet'
 import { MobileSourceControlHeader } from './MobileSourceControlHeader'
@@ -53,6 +54,7 @@ export function MobileSourceControlPanel({
 }: MobileSourceControlPanelProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const hostConnection = useHostConnectionInputs(hostId)
   const [activeTab, setActiveTab] = useState<SourceControlHubTab>(initialTab)
   const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<SourceControlHubTab>>(
     () => new Set<SourceControlHubTab>([initialTab])
@@ -340,6 +342,7 @@ export function MobileSourceControlPanel({
             client={client}
             connState={connState}
             worktreeId={worktreeId}
+            hostConnection={hostConnection}
             branch={prBranch}
             headSha={prHeadSha}
             gitStatus={status}

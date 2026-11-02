@@ -7,6 +7,7 @@ import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
 import type { PrSidebarLoadOptions } from '../session/use-mobile-pr-sidebar-controller'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
+import type { HostConnectionInputs } from '../transport/client-context-connection-metrics'
 import { useMobilePrActions, type MobilePrActions } from '../session/use-mobile-pr-actions'
 import {
   useMobilePrCommentActions,
@@ -41,6 +42,7 @@ type Props = {
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
+  hostConnection: HostConnectionInputs
   gitBranch: string | null
   gitStatus: MobileGitStatusResult | null
   headSha: string | null
@@ -59,6 +61,7 @@ export function MobilePRSidebar({
   client,
   connState,
   worktreeId,
+  hostConnection,
   gitBranch,
   gitStatus,
   headSha,
@@ -131,6 +134,7 @@ export function MobilePRSidebar({
         client={client}
         connState={connState}
         worktreeId={worktreeId}
+        hostConnection={hostConnection}
         gitBranch={gitBranch}
         gitStatus={gitStatus}
         actions={actions}
@@ -153,6 +157,7 @@ function PrSidebarContent({
   client,
   connState,
   worktreeId,
+  hostConnection,
   gitBranch,
   gitStatus,
   actions,
@@ -170,6 +175,7 @@ function PrSidebarContent({
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
+  hostConnection: HostConnectionInputs
   gitBranch: string | null
   gitStatus: MobileGitStatusResult | null
   actions: MobilePrActions
@@ -271,6 +277,7 @@ function PrSidebarContent({
           data={state.data}
           client={client}
           worktreeId={worktreeId}
+          hostConnection={hostConnection}
           actions={actions}
           commentActions={commentActions}
           titleAction={titleAction}
@@ -289,6 +296,7 @@ function PrSidebarSections({
   data,
   client,
   worktreeId,
+  hostConnection,
   actions,
   commentActions,
   titleAction,
@@ -300,6 +308,7 @@ function PrSidebarSections({
   data: Extract<PrSidebarState, { kind: 'ready' }>['data']
   client: RpcClient | null
   worktreeId: string
+  hostConnection: HostConnectionInputs
   actions: MobilePrActions
   commentActions: MobilePrCommentActions
   titleAction: MobilePrTitleAction
@@ -382,6 +391,7 @@ function PrSidebarSections({
         actions={actions}
         client={client}
         worktreeId={worktreeId}
+        hostConnection={hostConnection}
       />
       <PRChecksSection
         checks={data.checks}

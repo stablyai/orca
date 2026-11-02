@@ -8,6 +8,7 @@ import {
   rpcSuccess
 } from '@orca/test-mobile/mobile-web-shell/bridge-host-test-fakes'
 import { createStableLogicalRpcClient } from '@orca/test-mobile/transport/stable-logical-rpc-client'
+import type { HostConnectionInputs } from '@orca/test-mobile/transport/client-context-connection-metrics'
 import { RuntimeGitHubRepositoryQueryCommands } from '@orca/test-host/main/runtime/runtime-github-repository-query-commands'
 import { GITHUB_REPO_WORK_ITEM_METHODS } from '@orca/test-host/main/runtime/rpc/methods/github-repo-work-item-methods'
 import type { OrcaRuntimeService } from '@orca/test-host/main/runtime/orca-runtime'
@@ -214,10 +215,20 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
   }
   const container = document.createElement('div')
   root = createRoot(container)
+  // The screen header's verdict inputs; a relay verdict overrides them where a step sets one.
+  let relay: Partial<HostConnectionInputs> = {}
   const renderSidebar = (target: typeof prRepo, worktreeId: string) =>
     root!.render(
       <MobilePRSidebar
         client={logical}
+        hostConnection={{
+          reconnectAttempts: 0,
+          lastConnectedAt: null,
+          pendingPath: null,
+          pairingRejected: false,
+          relayHostReachability: 'connecting',
+          ...relay
+        }}
         state={{
           kind: 'ready',
           data: {
@@ -361,6 +372,12 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
   await press('Add or remove reviewers')
   expect(text()).not.toContain('fork-only')
   expect(text()).toContain('Disconnected')
+  // The header's relay verdict explains the wait rather than the bare dial state.
+  relay = { relayHostReachability: 'unreachable' }
+  await act(async () => renderSidebar(prRepo, 'clone::/worktree'))
+  expect(text()).toContain("Can't reach Relay")
+  relay = {}
+  await act(async () => renderSidebar(prRepo, 'clone::/worktree'))
   await act(async () => session.pushState('auth-failed'))
   expect(text()).toContain('Pairing invalid — re-pair with your desktop')
   expect(sent()).toEqual([])
