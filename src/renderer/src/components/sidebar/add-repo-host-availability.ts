@@ -11,9 +11,7 @@ export function canSelectAddRepoHost(
     case 'local':
     case 'available':
       return true
-    // Shared-control connection state follows a successful runtime status probe.
     case 'connecting':
-      return host.kind === 'runtime'
     case 'blocked':
     case 'disconnected':
     case 'error':
