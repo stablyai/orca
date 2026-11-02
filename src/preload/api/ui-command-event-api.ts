@@ -195,6 +195,7 @@ export type UiCommandEventApi = {
       targetGroupId?: string
       afterTabId?: string
       newTabPlacement?: RuntimeNewTerminalTabPlacement
+      preparedLaunchSetup?: true
       shellOverride?: string
       title?: string
       ptyId?: string

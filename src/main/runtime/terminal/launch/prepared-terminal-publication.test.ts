@@ -368,6 +368,11 @@ describe('prepared terminal publication recovery', () => {
       undefined,
       true
     ])
+    // Only Setup's reveal says its workspace waits for an agent still to come.
+    expect(f.createTerminal.mock.calls.map(([, options]) => options.preparedLaunchSetup)).toEqual([
+      true,
+      undefined
+    ])
   })
 
   it('retains the physical owner when the user closed its pane before publication', async () => {

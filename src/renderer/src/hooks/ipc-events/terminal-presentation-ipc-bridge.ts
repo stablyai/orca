@@ -8,6 +8,7 @@ import type { SplitTerminalPaneDetail } from '@/constants/terminal'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { verifyTerminalRevealIdentity } from '@/lib/terminal-reveal-identity'
 import { placeCreatedTerminalTab } from '@/lib/unified-tab-anchor-insertion'
+import { applyPreparedLaunchReveal } from '@/lib/prepared-launch-reveal'
 import { tryMakePaneKey } from './agent-status-routing'
 import { registerLaunchRecipe } from './launch-recipe-registration'
 import { wasAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
@@ -39,6 +40,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         targetGroupId,
         afterTabId,
         newTabPlacement,
+        preparedLaunchSetup,
         shellOverride,
         title,
         ptyId,
@@ -147,10 +149,10 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           if (afterTabId) {
             placeCreatedTerminalTab(worktreeId, tab.id, afterTabId)
           }
-          // Only the tab this reveal made takes the launch's initial place; an existing one keeps the user's.
-          if (newTabPlacement && !reusedTab) {
-            placeCreatedTerminalTab(worktreeId, tab.id, newTabPlacement.afterTabId ?? null)
-          }
+          applyPreparedLaunchReveal(worktreeId, tab.id, !reusedTab, {
+            ...(newTabPlacement ? { newTabPlacement } : {}),
+            ...(preparedLaunchSetup ? { preparedLaunchSetup } : {})
+          })
           // Different reused IDs break the PTY’s baked-in paneKey attribution; warn in dev.
           if (tabId !== undefined && tab.id !== tabId) {
             console.warn(

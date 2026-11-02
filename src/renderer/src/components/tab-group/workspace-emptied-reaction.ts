@@ -3,6 +3,7 @@ import { useAppStore } from '../../store'
 import { armFloatingPanelReclaimIntent } from '@/lib/floating-workspace-focus-reclaim'
 import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
 import { selectFloatingVisibleTabCount } from '@/store/selectors'
+import { holdsPreparedLaunchSetup } from '@/lib/prepared-launch-reveal'
 
 /** Capture panel ownership before prompts/removal blur it; run the captured reaction only after the close lands. */
 export function captureWorkspaceEmptiedReaction(
@@ -18,6 +19,10 @@ export function captureWorkspaceEmptiedReaction(
         armFloatingPanelReclaimIntent()
       }
     }
+  }
+  // Read before the close: emptying a workspace by closing its launch's Setup keeps it selected.
+  if (holdsPreparedLaunchSetup(worktreeId)) {
+    return () => {}
   }
   return () => leaveWorktreeIfEmpty(worktreeId)
 }

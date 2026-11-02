@@ -28,6 +28,7 @@ import {
   validatePrecomputedTerminalCloseState,
   type PrecomputedTerminalCloseState
 } from './terminal-close-target'
+import { closesPreparedLaunchSetup } from '@/lib/prepared-launch-reveal'
 export type { PrecomputedTerminalCloseState } from './terminal-close-target'
 export { closeOtherTerminalTabs, closeTerminalTabsToRight } from './terminal-tab-bulk-actions'
 
@@ -127,6 +128,9 @@ export function closeTerminalTab(
     options.onCancel?.()
     return
   }
+  // An accepted launch's agent is still to come, so closing its Setup does not leave the workspace.
+  const keepsWorkspace =
+    closesPreparedLaunchSetup(terminalTabId) || options?.preserveWorktreeSelection === true
 
   const runtimeEnvironmentId = worktreeRoute?.runtimeEnvironmentId ?? null
   if (runtimeEnvironmentId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
@@ -157,7 +161,7 @@ export function closeTerminalTab(
         ? { captureRecentlyClosed: options.captureRecentlyClosed }
         : {}),
       remoteCloseOwnedByHost: true,
-      ...(options?.preserveWorktreeSelection ? { preserveWorktreeSelection: true } : {}),
+      ...(keepsWorkspace ? { preserveWorktreeSelection: true } : {}),
       ...(options?.localPtyTeardownOwnedExternally
         ? { localPtyTeardownOwnedExternally: true }
         : {}),
@@ -216,14 +220,14 @@ export function closeTerminalTab(
     ...(options?.captureRecentlyClosed !== undefined
       ? { captureRecentlyClosed: options.captureRecentlyClosed }
       : {}),
-    ...(options?.preserveWorktreeSelection ? { preserveWorktreeSelection: true } : {}),
+    ...(keepsWorkspace ? { preserveWorktreeSelection: true } : {}),
     ...(options?.localPtyTeardownOwnedExternally ? { localPtyTeardownOwnedExternally: true } : {}),
     ...(options?.precomputedRetirementPlan
       ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
       : {})
   })
   if (
-    !options?.preserveWorktreeSelection &&
+    !keepsWorkspace &&
     terminalCountBeforeClose <= 1 &&
     state.activeWorktreeId === owningWorktreeId
   ) {

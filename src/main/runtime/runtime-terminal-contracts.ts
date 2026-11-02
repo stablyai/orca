@@ -83,6 +83,8 @@ export type TerminalCreateOptions = {
   afterTabId?: string
   /** A tab this create makes takes the launch's initial place (afterTabId, else first). */
   placeNewTab?: true
+  /** The Setup of an accepted agent launch: closing it leaves its workspace selected. */
+  preparedLaunchSetup?: true
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   telemetry?: WorktreeStartupLaunch['telemetry']
   /** Attribute host-built startupAgent launches by surface; missing/unknown surface becomes unknown. Ignore without startupAgent. */

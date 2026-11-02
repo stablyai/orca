@@ -168,7 +168,7 @@ export async function startLocalWorker(args: {
     dispatchId: started.dispatch.id,
     launch: launch.receipt
   }
-  return observePendingWorkerStart(async (onPending) => {
+  return observePendingWorkerStart(async (onPending, pendingOffered) => {
     let terminalHandle = params.terminal
     let placed: Awaited<ReturnType<typeof placeWorkerAgent>> | undefined
     let failedStage = 'terminal_create'
@@ -207,7 +207,8 @@ export async function startLocalWorker(args: {
         worktreeId: resolvedWorktree.id,
         terminalHandle,
         setup: setupReceipt,
-        effects
+        effects,
+        keepOpen: createsWorktree && pendingOffered()
       }
       recordCreatedWorkerTerminalCustody(runtime, setupStage, created && !structuredSession)
       if (persistGatedSetupSpawnFailure(setupStage)) {

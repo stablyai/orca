@@ -8,6 +8,7 @@ import type {
   PtyCreationDisposition
 } from '../../shared/claimed-agent-pty-owner'
 import { createSetupCompletionScanner } from '../runtime/orchestration/setup-completion-signal'
+import { lineAboveCursor } from './setup-outcome-line'
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import type {
@@ -46,6 +47,7 @@ export type SetupOutputSession = {
   terminalHandle: string | null
   paneKey?: string
   startupIngress: { accept(data: string): void }
+  cols?: number
 }
 
 export type PreparedLaunchDependencies = {
@@ -270,7 +272,7 @@ export abstract class PreparedAgentLaunchExecution {
       const session = work.status.physical ? undefined : work.liveSetup?.()
       work.setupOutcomeWritten = session !== undefined && isOneLine(text)
       if (session && work.setupOutcomeWritten) {
-        session.startupIngress.accept(`\r\n[orca] ${text}\r\n`)
+        session.startupIngress.accept(lineAboveCursor(`[orca] ${text}`, session.cols))
       }
     }
     return work.setupOutcomeWritten

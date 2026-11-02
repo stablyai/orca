@@ -34,6 +34,9 @@ it.each(['agent', 'shell'] as const)(
       worktreeId: 'wt_new'
     }
     const deliveries: string[] = []
+    let dispatchId = ''
+    // The new workspace's worker is kept open before its task arrives, so no report can close it first.
+    const releaseAtDelivery: (string | undefined)[] = []
     const runtime = {
       showTerminal: async () => ({ worktreeId: 'wt_coord' }),
       showManagedWorktree: async () => ({ id: 'wt_coord', repoId: 'repo' }),
@@ -70,6 +73,7 @@ it.each(['agent', 'shell'] as const)(
       ) => {
         await options.beforeWrite?.('agent')
         deliveries.push(body)
+        releaseAtDelivery.push(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state)
         return {}
       },
       waitForSetupTerminalCompletion: async () => ({ exitCode: 0 })
@@ -103,6 +107,7 @@ it.each(['agent', 'shell'] as const)(
       throw new Error('missing dispatch')
     }
     const dispatch = { id: result.dispatchId }
+    dispatchId = dispatch.id
     expect(db.getWorkerDispatch(dispatch.id)?.state).toBe('starting')
     expect(deliveries).toEqual([])
     physical.resolve({ handle: 'term_agent', worktreeId: 'wt_new', ptyId: 'agent', title: null })
@@ -112,6 +117,8 @@ it.each(['agent', 'shell'] as const)(
       last_error: foreground === 'agent' ? null : expect.any(String)
     })
     expect(deliveries).toEqual(foreground === 'agent' ? ['the complete task'] : [])
+    expect(releaseAtDelivery).toEqual(foreground === 'agent' ? ['retained'] : [])
+    expect(db.getWorkerTerminalResourceByOwner(dispatch.id)?.release_state).toBe('retained')
     expect(db.getWorkerDispatch(dispatch.id)?.state).toBe(
       foreground === 'agent' ? 'ready' : 'failed'
     )

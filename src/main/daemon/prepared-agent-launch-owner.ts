@@ -6,6 +6,7 @@ import {
 } from './prepared-agent-launch-execution'
 import type { Session } from './session'
 import { sessionSpawnPaneKey } from './terminal-host-session-listing'
+import { getTerminalHostAppliedSize } from './terminal-host-session-inspection-operations'
 import {
   validatePreparedAgentSpawn,
   fingerprintPreparedAgentLaunch,
@@ -300,11 +301,13 @@ export function preparedSetupSession(session: Session | undefined): SetupOutputS
     return undefined
   }
   const paneKey = sessionSpawnPaneKey(session)
+  const size = getTerminalHostAppliedSize(session)
   return {
     isAlive: session.isAlive,
     incarnationId: session.incarnationId,
     terminalHandle: session.terminalHandle,
     ...(paneKey ? { paneKey } : {}),
-    startupIngress: session.startupIngress
+    startupIngress: session.startupIngress,
+    ...(size ? { cols: size.cols } : {})
   }
 }

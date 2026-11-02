@@ -245,7 +245,8 @@ async function publishPreparedSetup(
     expectedIncarnationId: status.setup.incarnationId,
     preAllocatedHandle: setup.terminalHandle,
     attachOnly: true,
-    surfaceOwner: false
+    surfaceOwner: false,
+    preparedLaunchSetup: true
   })
   return true
 }
