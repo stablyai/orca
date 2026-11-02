@@ -112,7 +112,7 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
       return resolveNativeChatMediaPath(request, {
         getConversation: (id) => host?.deps.store.getConversation(id),
         getSessionTabId: (id) => host?.getSessionTabId(id),
-        providerRows: () => this.getAgentProviderSessionRows()
+        providerRows: (tabId) => this.getAgentProviderSessionRows(tabId)
       })
     },
     resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),

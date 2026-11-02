@@ -9,11 +9,19 @@ import {
   grokEncodedCwdDirName
 } from '../../shared/grok-session-paths'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import { makePaneKey } from '../../shared/stable-pane-id'
+import { AgentHookServer } from '../agent-hooks/server'
+import { agentHookRuntimeDeps } from '../agent-hooks/agent-hook-runtime-deps'
+import * as statusIdentity from '../agent-hooks/server/server-status-identity'
+import { LAST_STATUS_FILE_VERSION } from '../agent-hooks/server/server-constants'
 import { RuntimeTerminalPathResolver } from '../runtime/terminal/terminal-path-resolver'
 import {
   resolveNativeChatMediaPath,
   type NativeChatMediaPathRequest
 } from './native-chat-media-path'
+
+vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
+vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
 
 let root: string
 let home: string
@@ -29,6 +37,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await rm(root, { recursive: true, force: true })
   clearGrokSessionPathLookupCacheForTests()
 })
@@ -80,7 +89,7 @@ function setup(ids = ['provider-1']) {
   const sources = {
     getConversation: vi.fn((): typeof record | null => record),
     getSessionTabId: vi.fn(() => 'chat-tab'),
-    providerRows: vi.fn((): AgentStatusIpcPayload[] => [])
+    providerRows: vi.fn((_tabId: string): AgentStatusIpcPayload[] => [])
   }
   const request: NativeChatMediaPathRequest = {
     worktreeId: 'workspace-1',
@@ -193,9 +202,116 @@ describe('Grok session-owned media resolution', () => {
     ])
     expect(await fixture.resolve()).toEqual({ kind: 'matched', absolutePath: path })
     fixture.sources.providerRows.mockReturnValue([
-      { ...fixture.sources.providerRows()[0]!, connectionId: 'remote' }
+      { ...fixture.sources.providerRows('chat-tab')[0]!, connectionId: 'remote' }
     ])
     expect(await fixture.resolve()).toEqual({ kind: 'none' })
+  })
+
+  it.each([100, 1000])(
+    'shares provider row construction across image requests with %i retained panes',
+    async (population) => {
+      const directory = await session('provider-1')
+      const path = await image(directory)
+      const server = new AgentHookServer()
+      const leaf = '11111111-1111-4111-8111-111111111111'
+      const owner = makePaneKey('chat-tab', leaf)
+      const publish = (tabId: string, id: string, transcriptPath?: string) =>
+        server.recordLaunchResumeIdentity({
+          paneKey: makePaneKey(tabId, leaf),
+          worktreeId: 'workspace-1',
+          agentType: 'grok',
+          providerSession: { key: 'session_id', id, transcriptPath, cwd },
+          launchedAt: Date.now()
+        })
+      try {
+        publish('chat-tab', 'provider-1', join(directory, 'chat_history.jsonl'))
+        for (let index = 1; index < population; index += 1) {
+          publish(`unrelated-${index}`, `other-${index}`)
+        }
+        const construct = vi.spyOn(statusIdentity, 'toAgentStatusIpcPayload')
+        const deps = agentHookRuntimeDeps(
+          server,
+          { read: () => ({ kind: 'unobserved' }) },
+          () => ({})
+        )
+        let selectedRows = 0
+        const fixture = setup()
+        fixture.sources.getConversation.mockReturnValue(null)
+        fixture.request.context.sessionId = 'provider-1'
+        fixture.sources.providerRows.mockImplementation((tabId) => {
+          const selected = deps.getAgentProviderSessionSnapshot(tabId)
+          selectedRows += selected.length
+          return selected
+        })
+        const imageCount = population / 50
+        for (let index = 0; index < imageCount; index += 1) {
+          expect(await fixture.resolve()).toEqual({ kind: 'matched', absolutePath: path })
+        }
+        expect(construct).toHaveBeenCalledTimes(population)
+        expect(selectedRows).toBe(imageCount)
+        expect(fixture.sources.providerRows).toHaveBeenLastCalledWith('chat-tab')
+
+        const replacement = await session('provider-2')
+        const replacementPath = await image(replacement)
+        publish('chat-tab', 'provider-2', join(replacement, 'chat_history.jsonl'))
+        expect(await fixture.resolve()).toEqual({ kind: 'none' })
+        fixture.request.context.sessionId = 'provider-2'
+        expect(await fixture.resolve()).toEqual({ kind: 'matched', absolutePath: replacementPath })
+        server.dropStatusEntry(owner, { preserveResumeIdentity: false })
+        expect(await fixture.resolve()).toEqual({ kind: 'none' })
+      } finally {
+        server.stop()
+      }
+    }
+  )
+
+  it('retires source projections on hydration, reset and keep-status teardown', async () => {
+    class HydrationServer extends AgentHookServer {
+      hydrate(path: string): void {
+        this.lastStatusFilePath = path
+        this.hydrateLastStatusFromDisk()
+      }
+    }
+    const directory = await session('provider-1')
+    const server = new HydrationServer()
+    try {
+      const paneKey = makePaneKey('chat-tab', '11111111-1111-4111-8111-111111111111')
+      server.recordLaunchResumeIdentity({
+        paneKey,
+        worktreeId: 'workspace-1',
+        agentType: 'grok',
+        providerSession: {
+          key: 'session_id',
+          id: 'provider-1',
+          cwd,
+          transcriptPath: join(directory, 'chat_history.jsonl')
+        },
+        launchedAt: Date.now()
+      })
+      const file = join(root, 'last-status.json')
+      await writeFile(
+        file,
+        JSON.stringify({
+          version: LAST_STATUS_FILE_VERSION,
+          entries: Object.fromEntries(server._getStateForTests().lastStatusByPaneKey)
+        })
+      )
+      expect(server.getProviderSessionSourceRowsForTab('chat-tab')).toHaveLength(1)
+      server.stop({ keepStatus: true })
+      expect(server.getProviderSessionSourceRowsForTab('chat-tab')).toEqual([])
+      server.hydrate(file)
+      expect(server.getProviderSessionSourceRowsForTab('chat-tab')).toHaveLength(1)
+      server.dropStatusEntry(paneKey, { preserveResumeIdentity: false })
+      expect(server.getProviderSessionSourceRowsForTab('chat-tab')).toEqual([])
+      server.hydrate(file)
+      expect(server.getProviderSessionSourceRowsForTab('chat-tab')).toHaveLength(1)
+      server._resetCanonicalStatusForTests()
+      expect(server.getProviderSessionSourceRowsForTab('chat-tab')).toEqual(
+        server.getStatusSnapshot()
+      )
+    } finally {
+      server.stop()
+    }
   })
 })
 

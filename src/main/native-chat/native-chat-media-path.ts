@@ -37,7 +37,7 @@ export type NativeChatMediaPathRequest = {
 type MediaSources = {
   getConversation(id: string): AgentSessionConversationView | null | undefined
   getSessionTabId(id: string): string | null | undefined
-  providerRows(): readonly AgentStatusIpcPayload[]
+  providerRows(tabId: string): readonly AgentStatusIpcPayload[]
 }
 
 type GrokMediaSource = {
@@ -160,7 +160,7 @@ function sourceFor(
     }
   }
   const rows = sources
-    .providerRows()
+    .providerRows(context.tabId)
     .filter(
       (row) =>
         row.agentType === 'grok' &&
