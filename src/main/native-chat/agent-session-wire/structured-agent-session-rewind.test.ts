@@ -16,6 +16,8 @@ import {
 } from '../../../shared/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import {
+  appendRewindUsageLimitedTurn,
+  expectRestoredUsageLimitCancelled,
   expectUsageLimitRewindCancellation,
   expectReopenedUsageLimitCancellation
 } from './structured-agent-session-rewind-usage-limit.test-fixture'
@@ -787,7 +789,15 @@ describe('host rewind', () => {
   })
 
   it('settles the existing epoch after a crash between journal commit and record completion', async () => {
+    host.deps.usageLimitAutoContinue = {
+      isEnabled: () => true,
+      isWorkspaceAsleep: () => false,
+      subscribe: () => () => {}
+    }
     const target = await seed()
+    await store.setSessionTabVisibility(HOST_TEST_SESSION, true)
+    const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+    const cut = await appendRewindUsageLimitedTurn(journal, clock)
     const request = await params(target)
     const db = openTestJournalHostDatabase(directory).db
     db.exec(`CREATE TEMP TRIGGER fail_rewind_completion BEFORE UPDATE ON agent_session_records
@@ -797,6 +807,7 @@ describe('host rewind', () => {
     const committed = await host.journalSnapshot(HOST_TEST_SESSION)
     expect(committed.cursor.epoch).not.toBe(request.expectedEpoch)
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('provider-succeeded')
+    expect(store.getRecord(HOST_TEST_SESSION)?.usageLimitContinueCancel).toBeUndefined()
     db.exec('DROP TRIGGER fail_rewind_completion')
     const replace = vi.spyOn(AgentSessionJournal.prototype, 'replaceEpochItems')
     expect(
@@ -805,6 +816,12 @@ describe('host rewind', () => {
     expect(await host.journalSnapshot(HOST_TEST_SESSION)).toEqual(committed)
     expect(replace).not.toHaveBeenCalled()
     replace.mockRestore()
+    await expectRestoredUsageLimitCancelled(host, store, cut)
     expect(await host.rewind(caller, request)).toMatchObject({ ok: true, replayed: true })
+    await host.flushAllStreamedEvents()
+    store = await openTestAgentSessionRecordStore(directory)
+    host = new StructuredAgentSessionHost({ ...host.deps, store })
+    clock += 75_000
+    await expectReopenedUsageLimitCancellation(host, store)
   })
 })

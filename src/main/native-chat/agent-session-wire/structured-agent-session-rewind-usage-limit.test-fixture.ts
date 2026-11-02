@@ -11,21 +11,10 @@ import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
-export async function expectUsageLimitRewindCancellation({
-  host,
-  store,
-  target,
-  params,
-  clock
-}: {
-  host: StructuredAgentSessionHost
-  store: AgentSessionRecordStore
-  target: string
-  params: (itemId: string) => Promise<Parameters<StructuredAgentSessionHost['rewind']>[1]>
-  clock: number
-}) {
-  const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+/** A usage-limited turn whose reset is a minute after `clock`; tie it to a turn the rewind keeps. */
+export async function appendRewindUsageLimitedTurn(journal: AgentSessionJournal, clock: number) {
   const key = { provider: 'orca' as const, clientMessageId: 'limited-before-rewind' }
   const turnItemId = agentJournalItemKey(key)
   await journal.appendItem(
@@ -51,18 +40,46 @@ export async function expectUsageLimitRewindCancellation({
     },
     { fence: 1, turnScope: { kind: 'turn', turnItemId } }
   )
+  return { turnItemId, resetsAt }
+}
+
+export async function expectRestoredUsageLimitCancelled(
+  host: StructuredAgentSessionHost,
+  store: AgentSessionRecordStore,
+  cut: { turnItemId: string; resetsAt: number }
+) {
+  const restored = await host.journalSnapshot(HOST_TEST_SESSION)
+  expect(latestNativeChatUsageLimitCut(restored.items, restored.submissions)).toMatchObject(cut)
+  expect(store.getRecord(HOST_TEST_SESSION)?.usageLimitContinueCancel).toEqual(cut)
+  expect(host.usageLimitContinue.readState(HOST_TEST_SESSION)?.state).toBe('cancelled')
+}
+
+export async function expectUsageLimitRewindCancellation({
+  host,
+  store,
+  target,
+  params,
+  clock
+}: {
+  host: StructuredAgentSessionHost
+  store: AgentSessionRecordStore
+  target: string
+  params: (itemId: string) => Promise<Parameters<StructuredAgentSessionHost['rewind']>[1]>
+  clock: number
+}) {
+  const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+  const cut = await appendRewindUsageLimitedTurn(journal, clock)
   expect(await host.rewind({ callerKey: 'desktop' }, await params(target))).toMatchObject({
     ok: true
   })
-  const restored = await host.journalSnapshot(HOST_TEST_SESSION)
-  expect(latestNativeChatUsageLimitCut(restored.items, restored.submissions)).toMatchObject({
-    turnItemId,
-    resetsAt
-  })
-  expect(store.getRecord(HOST_TEST_SESSION)?.usageLimitContinueCancel).toEqual({
-    turnItemId,
-    resetsAt
-  })
+  await expectRestoredUsageLimitCancelled(host, store, cut)
+}
+
+/** Past the reset, a visible chat with the setting on still sends nothing automatically. */
+export async function expectNoUsageLimitAutoContinue(host: StructuredAgentSessionHost) {
+  const sent = vi.spyOn(host, 'send')
+  await host.usageLimitContinue.tick()
+  expect(sent).not.toHaveBeenCalled()
   expect(host.usageLimitContinue.readState(HOST_TEST_SESSION)?.state).toBe('cancelled')
 }
 
@@ -70,10 +87,7 @@ export async function expectReopenedUsageLimitCancellation(
   host: StructuredAgentSessionHost,
   store: AgentSessionRecordStore
 ) {
-  const sent = vi.spyOn(host, 'send')
-  await host.usageLimitContinue.tick()
-  expect(sent).not.toHaveBeenCalled()
-  expect(host.usageLimitContinue.readState(HOST_TEST_SESSION)?.state).toBe('cancelled')
+  await expectNoUsageLimitAutoContinue(host)
   const turnItemId = store.getRecord(HOST_TEST_SESSION)!.usageLimitContinueCancel!.turnItemId
   expect(
     await host.send(
