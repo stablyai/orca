@@ -1,6 +1,5 @@
-import { createReadStream } from 'node:fs'
-import { readdir, realpath, stat } from 'node:fs/promises'
-import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { realpath } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import type { PluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
 import {
   PLUGIN_SYNTAX_CONFIGURATION_MAX_BYTES,
@@ -11,11 +10,22 @@ import { PLUGIN_IMAGE_RULES } from '../../shared/plugins/images/plugin-image-fie
 import { PLUGIN_NEW_FILE_TEMPLATE_MAX_BYTES } from '../../shared/plugins/contributions/plugin-new-file-contribution'
 import { validatePluginImageArtifacts } from './plugin-image-artifact-validation'
 import { PLUGIN_PANEL_ENTRY_MAX_BYTES } from '../../shared/plugins/frames/plugin-frame-entry-limits'
+import {
+  PLUGIN_WORKER_ENTRY_MAX_BYTES,
+  readContainedPluginArtifactBytes,
+  readContainedPluginArtifactText,
+  resolveContainedPluginArtifact,
+  resolvePathFromRealRoot
+} from './plugin-contained-artifact'
 
 export type PluginArtifactValidationResult = { ok: true } | { ok: false; error: string }
 
-export { PLUGIN_PANEL_ENTRY_MAX_BYTES }
-export const PLUGIN_WORKER_ENTRY_MAX_BYTES = 50 * 1024 * 1024
+export { PLUGIN_PANEL_ENTRY_MAX_BYTES, PLUGIN_WORKER_ENTRY_MAX_BYTES }
+export {
+  readContainedPluginArtifactBytes,
+  readContainedPluginArtifactText,
+  resolveContainedPluginArtifact
+}
 const PLUGIN_ICON_MAX_BYTES = 2 * 1024 * 1024
 export const PLUGIN_LANGUAGE_PACK_MAX_BYTES = 5 * 1024 * 1024
 export const PLUGIN_VM_RECIPE_MAX_BYTES = 256 * 1024
@@ -102,115 +112,16 @@ function declaredArtifactPaths(manifest: PluginManifest): DeclaredArtifact[] {
   ]
 }
 
-export async function resolveContainedPluginArtifact(
-  rootDir: string,
-  relativePath: string,
-  maxBytes = PLUGIN_WORKER_ENTRY_MAX_BYTES
-): Promise<string> {
-  const rootReal = await realpath(resolve(rootDir))
-  return resolvePathFromRealRoot(rootDir, rootReal, relativePath, 'file', maxBytes)
-}
-
-export async function readContainedPluginArtifactText(
-  rootDir: string,
-  relativePath: string,
-  maxBytes: number
-): Promise<string> {
-  return (await readContainedPluginArtifactBytes(rootDir, relativePath, maxBytes)).toString('utf8')
-}
-
-export async function readContainedPluginArtifactBytes(
-  rootDir: string,
-  relativePath: string,
-  maxBytes: number
-): Promise<Buffer> {
-  const artifact = await resolveContainedPluginArtifact(rootDir, relativePath, maxBytes)
-  const chunks: Buffer[] = []
-  let totalBytes = 0
-  for await (const chunk of createReadStream(artifact)) {
-    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-    totalBytes += bytes.byteLength
-    if (totalBytes > maxBytes) {
-      throw new Error(`exceeds the ${maxBytes}-byte artifact limit`)
-    }
-    chunks.push(bytes)
-  }
-  return Buffer.concat(chunks, totalBytes)
-}
-
-async function resolvePathFromRealRoot(
-  rootDir: string,
-  rootReal: string,
-  relativePath: string,
-  kind: 'file' | 'directory',
-  maxBytes?: number
-): Promise<string> {
-  const artifactReal = await realpath(resolve(rootDir, ...relativePath.split(/[\\/]/)))
-  const fromRoot = relative(rootReal, artifactReal)
-  if (
-    fromRoot.length === 0 ||
-    isAbsolute(fromRoot) ||
-    fromRoot === '..' ||
-    fromRoot.startsWith(`..${sep}`)
-  ) {
-    throw new Error('resolves outside the plugin directory')
-  }
-  const artifactStat = await stat(artifactReal)
-  if (kind === 'file' && !artifactStat.isFile()) {
-    throw new Error('is not a regular file')
-  }
-  if (kind === 'directory' && !artifactStat.isDirectory()) {
-    throw new Error('is not a directory')
-  }
-  if (kind === 'file' && maxBytes !== undefined && artifactStat.size > maxBytes) {
-    throw new Error(`exceeds the ${maxBytes}-byte artifact limit`)
-  }
-  return artifactReal
-}
-
-/** Why: APFS and NTFS resolve `dark.json` to a committed `DARK.json`, but Linux does not. */
-async function assertExactPathSpelling(
-  rootDir: string,
-  relativePath: string,
-  listDirectory: (dir: string) => Promise<string[]>
-): Promise<void> {
-  let dir = resolve(rootDir)
-  for (const segment of relativePath.split(/[\\/]/)) {
-    const names = await listDirectory(dir)
-    if (!names.includes(segment)) {
-      const lower = segment.toLowerCase()
-      const actual = names.find((name) => name.toLowerCase() === lower)
-      throw new Error(
-        actual === undefined
-          ? `"${segment}" does not match its on-disk name (check case and Unicode normalization)`
-          : `"${segment}" is spelled "${actual}" on disk; paths are case-sensitive on Linux`
-      )
-    }
-    dir = join(dir, segment)
-  }
-}
-
 /** Presence and containment checks are bounded by the manifest's declared artifacts. */
 export async function validateDeclaredPluginArtifacts(
   rootDir: string,
-  manifest: PluginManifest,
-  // Why: installed plugins predate the case rule, so startup must not drop them on macOS/Windows.
-  { allowCaseMismatch = false }: { allowCaseMismatch?: boolean } = {}
+  manifest: PluginManifest
 ): Promise<PluginArtifactValidationResult> {
   const artifacts = declaredArtifactPaths(manifest)
   if (artifacts.length === 0) {
     return { ok: true }
   }
   const seen = new Set<string>()
-  const listings = new Map<string, Promise<string[]>>()
-  const listDirectory = (dir: string): Promise<string[]> => {
-    let listing = listings.get(dir)
-    if (!listing) {
-      listing = readdir(dir)
-      listings.set(dir, listing)
-    }
-    return listing
-  }
   let rootReal: string
   try {
     rootReal = await realpath(resolve(rootDir))
@@ -230,9 +141,6 @@ export async function validateDeclaredPluginArtifacts(
         artifact.kind,
         artifact.kind === 'file' ? artifact.maxBytes : undefined
       )
-      if (!allowCaseMismatch) {
-        await assertExactPathSpelling(rootDir, artifact.path, listDirectory)
-      }
     } catch (error) {
       return {
         ok: false,

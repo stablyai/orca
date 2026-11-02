@@ -80,7 +80,7 @@ describe('orca plugin check: custom editors', () => {
     ])
   })
 
-  it('reports a missing script, a broken inline script, and a file over 10 MiB', async () => {
+  it('reports a missing script, a broken inline script, and a script over 16 MiB', async () => {
     const dir = await editorPlugin()
     const html = join(dir, 'editor', 'index.html')
     await writeFile(
@@ -96,7 +96,7 @@ describe('orca plugin check: custom editors', () => {
       ].join('\n')
     )
     await mkdir(join(dir, 'editor'), { recursive: true })
-    await writeFile(join(dir, 'editor', 'big.js'), 'x'.repeat(10 * 1024 * 1024 + 1))
+    await writeFile(join(dir, 'editor', 'big.js'), 'x'.repeat(16 * 1024 * 1024 + 1))
     const [check] = await checkPluginEditors(dir)
     expect(check.issues.map(({ code, location }) => [code, location])).toEqual([
       ['editor_syntax', 'editor/index.html:6:1'],

@@ -123,7 +123,8 @@ declare module 'orca/testing' {
     replace(next: string | ArrayBuffer | Uint8Array): void
     /** Refuses the next edit with `conflict`, after landing `outside` first when given. */
     conflictNext(outside?: string | ArrayBuffer | Uint8Array): void
-    /** As a save does: asks the editor for pending edits and waits for its answer (1 s). */
+    /** As a save does: asks the editor for pending edits and waits for its answer (1 s);
+     *  rejects, as Orca refuses to save, after an edit too large to apply. */
     flush(): Promise<void>
     setTheme(colorScheme: 'light' | 'dark'): void
     /** Removes `globalThis.orca`. */

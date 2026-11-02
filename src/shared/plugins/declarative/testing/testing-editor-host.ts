@@ -10,6 +10,7 @@ import {
 } from '../../frames/plugin-custom-editor-bridge'
 import { EDITOR_METHODS, FRAME_EVENTS } from '../../frames/plugin-frame-bridge'
 import { buildPluginGuestShellHtml } from '../../frames/plugin-panel-shell'
+import { structuredCloneMessageBytes } from '../../frames/plugin-panel-message-budget'
 import {
   pluginError,
   PLUGIN_PROTOCOL_VERSION,
@@ -49,7 +50,8 @@ export type MockEditorHost = {
   replace(next: string | ArrayBuffer | Uint8Array): void
   /** Refuses the next edit with `conflict`, after landing `outside` first when given. */
   conflictNext(outside?: string | ArrayBuffer | Uint8Array): void
-  /** As a save does: asks the editor to post pending edits, and waits for its answer. */
+  /** As a save does: asks the editor to post pending edits, and waits for its answer; rejects
+   *  after an edit too large to apply, as Orca then refuses to save. */
   flush(): Promise<void>
   setTheme(colorScheme: 'light' | 'dark'): void
   dispose(): void
@@ -80,10 +82,6 @@ function toContent(next: string | ArrayBuffer | Uint8Array): CustomEditorContent
 
 function copy(content: CustomEditorContent): CustomEditorContent {
   return content.kind === 'text' ? content : { kind: 'bytes', bytes: content.bytes.slice(0) }
-}
-
-function contentBytes(content: CustomEditorContent): number {
-  return content.kind === 'text' ? Buffer.byteLength(content.text) : content.bytes.byteLength
 }
 
 /** Installs `globalThis.orca` for a custom editor over `file`; one at a time, like `mount`. */
@@ -128,8 +126,18 @@ export function mockEditorHost(
   }
   const theme = () => ({ colorScheme, tokens: '' })
 
-  const applyEdit = (params: unknown): PluginError | null => {
-    const edit = readCustomEditorEdit(params)
+  // As Orca's host: an oversized edit is refused before it is read, and blocks saving until a
+  // later edit lands, because the buffer lacks the editor's newest change.
+  let lostEdit = false
+  const applyEdit = (message: FrameMessage): PluginError | null => {
+    if (
+      structuredCloneMessageBytes(message, CUSTOM_EDITOR_DOCUMENT_MAX_BYTES) >
+      CUSTOM_EDITOR_DOCUMENT_MAX_BYTES
+    ) {
+      lostEdit = true
+      return CUSTOM_EDITOR_TOO_LARGE
+    }
+    const edit = readCustomEditorEdit(message.params)
     if (!edit) {
       return pluginError('invalid_params', 'malformed editor edit')
     }
@@ -155,9 +163,7 @@ export function mockEditorHost(
     if (edit.baseVersion !== version) {
       return refuse(CUSTOM_EDITOR_CONFLICT)
     }
-    if (contentBytes(edit.content) > CUSTOM_EDITOR_DOCUMENT_MAX_BYTES) {
-      return refuse(CUSTOM_EDITOR_TOO_LARGE)
-    }
+    lostEdit = false
     content = copy(edit.content)
     edits.push({ ...edit, content: copy(edit.content) })
     return null
@@ -171,7 +177,7 @@ export function mockEditorHost(
       deliver({ kind: 'evt', event: FRAME_EVENTS.hello, payload: hello() })
       sendDocument()
     } else if (message.kind === 'req' && message.method === EDITOR_METHODS.applyEdit) {
-      answer(message.id, applyEdit(message.params))
+      answer(message.id, applyEdit(message))
     } else if (message.kind === 'req') {
       answer(
         message.id,
@@ -249,6 +255,8 @@ export function mockEditorHost(
           clearTimeout(timer)
           if (error) {
             reject(new Error(`editor.flush failed: ${JSON.stringify(error)}`))
+          } else if (lostEdit) {
+            reject(new Error("Orca would not save: the editor's newest edit was too large"))
           } else {
             resolve()
           }

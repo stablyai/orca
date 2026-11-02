@@ -87,3 +87,27 @@ describe('mockEditorHost', () => {
     expect(Reflect.get(globalThis, 'orca')).toBeUndefined()
   })
 })
+
+describe('mockEditorHost saves as Orca does', () => {
+  it('blocks a save after an oversized edit until a later edit lands', async () => {
+    host = mockEditorHost({ text: 'a' })
+    const orca: unknown = Reflect.get(globalThis, 'orca')
+    const document: unknown = Reflect.get(Object(orca), 'document')
+    const applyEdit: unknown = Reflect.get(Object(document), 'applyEdit')
+    if (typeof applyEdit !== 'function') {
+      throw new Error('no applyEdit')
+    }
+    const send = (text: string): Promise<unknown> =>
+      Promise.resolve(
+        Reflect.apply(applyEdit, document, [{ baseVersion: 1, content: { kind: 'text', text } }])
+      )
+    await session()
+    await expect(send('x'.repeat(64 * 1024 * 1024 + 1))).rejects.toMatchObject({
+      code: 'too_large'
+    })
+    await expect(host.flush()).rejects.toThrow(/too large/)
+    await send('fits')
+    await expect(host.flush()).resolves.toBeUndefined()
+    expect(host.text).toBe('fits')
+  })
+})

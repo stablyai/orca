@@ -85,7 +85,7 @@
 - `edits: readonly MockEditorEdit[]`: Every `applyEdit`, in order, refused ones included.
 - `replace(next: string | ArrayBuffer | Uint8Array)`: An outside change, such as an agent writing the file.
 - `conflictNext(outside?: string | ArrayBuffer | Uint8Array)`: Refuses the next edit with `conflict`, after landing `outside` first when given.
-- `flush()`: As a save does: asks the editor for pending edits and waits for its answer (1 s).
+- `flush()`: As a save does: asks the editor for pending edits and waits for its answer (1 s); rejects, as Orca refuses to save, after an edit too large to apply.
 - `setTheme(colorScheme: 'light' | 'dark')`
 - `dispose()`: Removes `globalThis.orca`.
 
