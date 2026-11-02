@@ -148,6 +148,12 @@ describe('TrustDialogStatusObserver', () => {
         ['Continue without using this MCP server', '\r']
       ]
     ],
+    // A wrapped choice reads as an extra row, so the arrows cannot be aimed.
+    [
+      'claude-2-1-316-startup-mcp-server-wrapped',
+      'New MCP server found in this project: scratch-echo',
+      []
+    ],
     [
       'claude-2-1-316-startup-api-key',
       'Detected a custom API key in your environment',
