@@ -37,6 +37,11 @@ vi.mock('./use-orchestration-crew', () => ({
   })
 }))
 
+// Render the real panel synchronously; the lazy chunk boundary is the app's load detail.
+vi.mock('../orchestration-crew/LazyOrchestrationCrewPanel', async () => ({
+  LazyOrchestrationCrewPanel: (await import('../orchestration-crew/OrchestrationCrewPanel'))
+    .OrchestrationCrewPanel
+}))
 vi.mock('@/lib/open-agent-message-sender', () => ({ openOrchestrationCrewAgent: vi.fn() }))
 vi.mock('./native-chat-runtime-send', () => ({
   sendNativeChatMessage: vi.fn(() => ({ cancel() {}, settleAfterMs: 0 })),

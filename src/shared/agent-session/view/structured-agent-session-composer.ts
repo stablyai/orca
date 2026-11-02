@@ -1,3 +1,4 @@
+import { trailingAgentReferenceNotes } from '../../orchestration-agent-reference'
 import { getTextDrivenNativeChatCommands } from '../../native-chat/native-chat-agent-profiles'
 import type { AgentType } from '../../agent-status-types'
 import type {
@@ -75,12 +76,13 @@ function commandParts(text: string): { name: string; argument: string } | null {
   if (!text.startsWith('/')) {
     return null
   }
-  const goal = /^\/goal(?:\s+([\s\S]*))?$/i.exec(text.trimEnd())
-  if (goal) {
-    return { name: 'goal', argument: goal[1]?.trim() ?? '' }
-  }
-  const match = /^\/([^\s]+)(?:\s+(.*))?$/.exec(text.trimEnd())
-  return match ? { name: match[1]!.toLowerCase(), argument: match[2]?.trim() ?? '' } : null
+  // A typed /goal keeps a Mention's routing lines, which follow on their own lines, in its objective.
+  const trimmed = text.trimEnd()
+  const notes = /^\/goal\s/i.test(trimmed) ? trailingAgentReferenceNotes(trimmed) : ''
+  const match = /^\/([^\s]+)(?:\s+(.*))?$/.exec(trimmed.slice(0, trimmed.length - notes.length))
+  return match
+    ? { name: match[1]!.toLowerCase(), argument: `${match[2] ?? ''}${notes}`.trim() }
+    : null
 }
 
 /** Fallback menu combines host-owned and agent text-driven commands when no catalog is reported. */

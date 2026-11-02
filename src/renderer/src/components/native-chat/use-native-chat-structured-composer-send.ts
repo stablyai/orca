@@ -1,4 +1,5 @@
 import { serializeNativeChatAgentReferences } from './native-chat-agent-reference-send'
+import { mayHoldAgentReferences } from '../../../../shared/orchestration-agent-reference'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
@@ -106,8 +107,9 @@ export function useNativeChatStructuredComposerSend({
       }
       const isCurrent = structuredTransport.capturePresentation()
       if (
-        !hostCommand ||
-        (structuredTransport.threadGoal && isStructuredAgentSessionGoalCommand(text))
+        mayHoldAgentReferences(submittedText) &&
+        (!hostCommand ||
+          (structuredTransport.threadGoal && isStructuredAgentSessionGoalCommand(text)))
       ) {
         text = serializeNativeChatAgentReferences(
           submittedText,

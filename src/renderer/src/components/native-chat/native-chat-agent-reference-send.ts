@@ -1,8 +1,10 @@
 import type { JSONContent } from '@tiptap/react'
 import { imageReferenceToken } from '../../../../shared/native-chat/native-chat-image-reference'
 import {
+  agentReferenceNote,
   agentReferenceToken,
   isPublicOrchestrationAddress,
+  mayHoldAgentReferences,
   printableAgentLabel,
   type OrchestrationAgentReference
 } from '../../../../shared/orchestration-agent-reference'
@@ -29,6 +31,10 @@ export function serializeNativeChatAgentReferences(
   document?: JSONContent,
   files: Readonly<Record<string, string>> = {}
 ): string {
+  // Only a panel Mention prints a reference; any other draft keeps the ordinary send text.
+  if (!mayHoldAgentReferences(text)) {
+    return projectNativeChatPastedText(text, files)
+  }
   const selected = new Map<string, SelectedReference>()
   const occurrences: (SelectedReference | string)[] = []
   const render = (node: JSONContent): string => {
@@ -138,9 +144,6 @@ export function serializeNativeChatAgentReferences(
     .map((part) => (typeof part === 'string' ? part : `@${part.opaque.label}`))
     .join('')
   return `${body}\n\n${[...selected.values()]
-    .map(
-      ({ reference, label }) =>
-        `[Orca agent "${label}": ${reference.address} — message it with orca orchestration send --to ${reference.address}]`
-    )
+    .map(({ reference, label }) => agentReferenceNote(label, reference.address))
     .join('\n')}`
 }

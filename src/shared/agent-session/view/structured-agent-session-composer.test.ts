@@ -1,4 +1,5 @@
 import { queuedMessageEditAcceptsText } from '../../queued-message-edit-command'
+import { agentReferenceNote } from '../../orchestration-agent-reference'
 import { describe, expect, it, vi } from 'vitest'
 import {
   dispatchStructuredAgentSessionComposerCommand,
@@ -97,6 +98,17 @@ describe('agent-implemented commands pass through to the agent', () => {
         setThreadGoalObjective
       })
     ).toEqual({ handled: true, accepted: false, error: null })
+  })
+
+  it('keeps a typed multi-line /goal as prose, folding in only Mention routing lines', async () => {
+    const setThreadGoalObjective = vi.fn(async () => true)
+    const goalHost = { ...controller, agent: 'codex' as const, setThreadGoalObjective }
+    expect(
+      await dispatchStructuredAgentSessionComposerCommand('/goal fix it\nand add a test', goalHost)
+    ).toEqual({ handled: false, accepted: false, error: null })
+    const note = agentReferenceNote('Worker', 'term_worker')
+    await dispatchStructuredAgentSessionComposerCommand(`/goal ask @Worker\n\n${note}`, goalHost)
+    expect(setThreadGoalObjective).toHaveBeenCalledExactlyOnceWith(`ask @Worker\n\n${note}`)
   })
 
   it('asks for an objective when a goal-capable host gets a bare /goal', async () => {
