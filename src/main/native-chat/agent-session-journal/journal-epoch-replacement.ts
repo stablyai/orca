@@ -79,6 +79,8 @@ export function replaceJournalEpoch(input: {
   reason: AgentJournalEpochReason
   fence: number
   items: readonly JournalReplacementItem[]
+  /** The caller's completion receipt writes after the new epoch's records, in the same
+   * transaction, so it can restore the replaced conversation on `db`. */
   receipt?: (cursor: AgentJournalCursor) => JournalOperationReceipt
   isLiveGoal?: (id: string) => boolean
   claimAttachments?: JournalAttachmentClaim
@@ -264,8 +266,15 @@ export function replaceJournalEpoch(input: {
       }
       input.queue.receipt.write(db)
       publishJournalSessionEpoch(db, input.identity, epoch)
+      const publication = publishJournalOutcomeEpoch(
+        db,
+        sessionId,
+        state.epoch,
+        rows,
+        input.previous
+      )
       receipt?.write(db)
-      return publishJournalOutcomeEpoch(db, sessionId, state.epoch, rows, input.previous)
+      return publication
     },
     false,
     (publication) => {

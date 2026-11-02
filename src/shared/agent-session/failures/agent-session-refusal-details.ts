@@ -125,7 +125,12 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'conversationHeldElsewhere',
     'tabIdTaken'
   ],
-  execution_owner_reconciling: ['hostReconciling', 'recordUnreadable'],
+  execution_owner_reconciling: [
+    'hostReconciling',
+    'recordUnreadable',
+    /** A queued mail card whose mailbox Orca cannot yet confirm still owes it to this chat. */
+    'mailOwnerUnconfirmed'
+  ],
   agent_session_checkpoint_stale: ['fenceStale', 'leaseMoved', 'recordMissing'],
   agent_session_identity_required: ['recordMissing', 'transcriptNotFound', 'transcriptUnreadable'],
   agent_session_operation_conflict: ['fingerprintMismatch', 'operationIdReused', 'handoffInFlight'],

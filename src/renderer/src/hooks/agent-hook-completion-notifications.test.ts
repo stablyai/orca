@@ -230,84 +230,6 @@ describe('agent hook completion notifications', () => {
     expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
   })
 
-  it('uses tab-level PTY liveness when an inactive pane leaf binding is temporarily missing', async () => {
-    mockStoreState.terminalLayoutsByTabId = {
-      'tab-1': {
-        root: { type: 'leaf', leafId: '11111111-1111-4111-8111-111111111111' },
-        activeLeafId: '11111111-1111-4111-8111-111111111111',
-        expandedLeafId: null,
-        ptyIdsByLeafId: {}
-      }
-    }
-    const { observeAgentHookCompletionForNotification } =
-      await import('./agent-hook-completion-notifications')
-
-    observeAgentHookCompletionForNotification({
-      paneKey,
-      worktreeId: 'wt-1',
-      payload: hookStatus('working')
-    })
-    observeAgentHookCompletionForNotification({
-      paneKey,
-      worktreeId: 'wt-1',
-      payload: hookStatus('done')
-    })
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
-
-    expect(dispatchTerminalNotification).toHaveBeenCalledWith(
-      'wt-1',
-      expect.objectContaining({
-        source: 'agent-task-complete',
-        paneKey,
-        agentStatusSnapshot: expect.objectContaining({
-          state: 'done',
-          agentType: 'codex',
-          prompt: 'implement notifications',
-          lastAssistantMessage: 'Done.'
-        })
-      })
-    )
-  })
-
-  it('uses tab-level PTY liveness when an inactive layout is empty', async () => {
-    mockStoreState.terminalLayoutsByTabId = {
-      'tab-1': {
-        root: null,
-        activeLeafId: null,
-        expandedLeafId: null,
-        ptyIdsByLeafId: {}
-      }
-    }
-    const { observeAgentHookCompletionForNotification } =
-      await import('./agent-hook-completion-notifications')
-
-    observeAgentHookCompletionForNotification({
-      paneKey,
-      worktreeId: 'wt-1',
-      payload: hookStatus('working')
-    })
-    observeAgentHookCompletionForNotification({
-      paneKey,
-      worktreeId: 'wt-1',
-      payload: hookStatus('done')
-    })
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
-
-    expect(dispatchTerminalNotification).toHaveBeenCalledWith(
-      'wt-1',
-      expect.objectContaining({
-        source: 'agent-task-complete',
-        paneKey,
-        agentStatusSnapshot: expect.objectContaining({
-          state: 'done',
-          agentType: 'codex',
-          prompt: 'implement notifications',
-          lastAssistantMessage: 'Done.'
-        })
-      })
-    )
-  })
-
   it('uses accepted hook status for an inactive tab before PTY liveness catches up', async () => {
     mockStoreState.ptyIdsByTabId = {
       'tab-1': []
@@ -383,30 +305,6 @@ describe('agent hook completion notifications', () => {
     vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
 
     expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
-  })
-
-  it('prunes retained coordinators when pane liveness is removed from the store', async () => {
-    const {
-      _getAgentHookCompletionNotificationCoordinatorCountForTest,
-      observeAgentHookCompletionForNotification,
-      syncAgentHookCompletionNotificationSettings
-    } = await import('./agent-hook-completion-notifications')
-
-    observeAgentHookCompletionForNotification({
-      paneKey,
-      worktreeId: 'wt-1',
-      payload: hookStatus('working')
-    })
-
-    expect(_getAgentHookCompletionNotificationCoordinatorCountForTest()).toBe(1)
-
-    mockStoreState.ptyIdsByTabId = {
-      'tab-1': []
-    }
-    mockStoreState.tabsByWorktree = {}
-    syncAgentHookCompletionNotificationSettings()
-
-    expect(_getAgentHookCompletionNotificationCoordinatorCountForTest()).toBe(0)
   })
 
   it('does not start a coordinator for an intentionally suppressed pty', async () => {

@@ -45,12 +45,12 @@ describe('PR lookup conditional REST reads', () => {
     expect(ghExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
       [
         'api',
-        'repos/acme/widgets/pulls?head=acme%3Afeature%2Fmissing&state=all&per_page=1',
+        'repos/acme/widgets/pulls?head=acme%3Afeature%2Fmissing&state=all&per_page=10',
         '--include'
       ],
       [
         'api',
-        'repos/acme/widgets/pulls?head=acme%3Afeature%2Fmissing&state=all&per_page=1',
+        'repos/acme/widgets/pulls?head=acme%3Afeature%2Fmissing&state=all&per_page=10',
         '--include',
         '-H',
         'If-None-Match: "v1"'

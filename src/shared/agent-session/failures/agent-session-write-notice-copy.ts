@@ -93,6 +93,7 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   hostReconciling: 'Orca is still checking on this chat after restarting.',
   waitMoment: 'Wait a moment.',
   recordUnreadable: "Orca couldn't read this chat's saved state.",
+  mailOwnerUnconfirmed: "Orca couldn't confirm this message is still meant for this chat.",
   chatNotFound: "Orca can't find this chat.",
   startNewChat: START_NEW_CHAT,
   tryAgain: 'Try again.'

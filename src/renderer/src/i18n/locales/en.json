@@ -8074,9 +8074,6 @@
           "browserExtensions": {
             "copy": "Adds Settings › Browser › Extensions for local browser profiles.",
             "toggleLabel": "Toggle browser extensions"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "Toggle orchestration panel"
           }
         },
         "FloatingWorkspacePane": {
@@ -10289,14 +10286,6 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "password manager"
-            },
-            "orchestrationPanel": {
-              "title": "Orchestration panel",
-              "description": "Shows which agents each agent is working with, beside its chat or terminal.",
-              "orchestration": "orchestration",
-              "agents": "agents",
-              "workers": "workers",
-              "manager": "manager"
             }
           }
         },
@@ -19536,6 +19525,7 @@
         "hostReconciling": "Orca is still checking on this chat after restarting.",
         "waitMoment": "Wait a moment.",
         "recordUnreadable": "Orca couldn't read this chat's saved state.",
+        "mailOwnerUnconfirmed": "Orca couldn't confirm this message is still meant for this chat.",
         "chatNotFound": "Orca can't find this chat.",
         "startNewChat": "Start a new chat to continue.",
         "tryAgain": "Try again.",
@@ -20080,6 +20070,7 @@
         "estimated": "Estimated from the last response."
       },
       "contextMenu": {
+        "noSessionContext": "No chat context is available.",
         "copyOrcaSessionId": "Copy Orca Session ID",
         "orcaSessionIdCopied": "Orca session ID copied",
         "orcaSessionIdCopyFailed": "Unable to copy Orca session ID",
@@ -20334,6 +20325,13 @@
         "switchAccount": "Switch Account",
         "addAccount": "Add Account…",
         "accountUnavailable": "This chat cannot move to another account. Hand it off to another agent instead."
+      },
+      "usageLimitAutoContinue": {
+        "cancelFailed": "Couldn't cancel automatic continuation. Try again.",
+        "openSetting": "Continue automatically when limits reset",
+        "cancelled": "Orca won't continue this chat automatically.",
+        "scheduled": "Orca will continue this chat at {{time}}.",
+        "cancel": "Don't continue"
       }
     },
     "tab": {
@@ -20733,7 +20731,12 @@
         "linkPreviewsTitle": "Link previews",
         "linkPreviewsCopy": "Hovering a web link shows a preview card. Orca fetches the page to build it, so the site can see the request.",
         "linkPreviewsSearchUnfurl": "unfurl",
-        "linkPreviewsSearchHover": "hover card"
+        "linkPreviewsSearchHover": "hover card",
+        "usageLimitContinueTitle": "Continue chats automatically when a usage limit resets",
+        "usageLimitContinueCopy": "Orca sends \"Continue where you left off.\" when the limit resets. Applies to all chats with a known reset time.",
+        "usageLimitContinueSearchLimit": "usage limit",
+        "usageLimitContinueSearchReset": "reset",
+        "usageLimitContinueToggleLabel": "Toggle continuing chats when a usage limit resets"
       }
     },
     "agentChildRow": {
@@ -20909,6 +20912,9 @@
         "finished": "Temporary orchestration worker finished · Closes in {{countdown}}",
         "keepOpen": "Keep open"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "Runs on WSL: {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {
@@ -22860,6 +22866,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: no readable backup, so it will start empty.",
+      "sectionKeptCurrent": "{{section}}: your current runs will be kept",
       "sectionRestored": "{{section}}: restored from the backup saved {{time}}.",
       "projectsForgotten": "Orca will forget your projects and their workspace details. Files on disk are not touched.",
       "newerProjectsRemoved": "Projects added after that backup will be removed from Orca, along with their workspace details. Files on disk are not touched.",
@@ -22902,7 +22909,7 @@
       "noneFound": "(none found)",
       "sqlitePath": "SQLite path: {{path}}",
       "sectionsDamaged": "Part of this profile's saved state is damaged: {{sections}}. Everything else is intact.",
-      "repairCommand": "Stop Orca, then run `{{command}}` to replace only the damaged parts from backups and keep everything else. Orca keeps a copy of the damaged file.",
+      "repairCommand": "Stop Orca, then run `{{command}}` to repair only the damaged parts and keep everything else. Orca keeps a copy of the damaged file.",
       "restoreWholeBackup": "To restore a whole backup instead, run `{{exportsCommand}}`, then `{{rollbackCommand}}`.",
       "sqliteUnreadable": "Orca cannot safely open the active profile because its SQLite state is unreadable.",
       "legacyJsonPath": "Legacy JSON path: {{path}}",
@@ -23179,7 +23186,9 @@
     "toggleArguments": "Toggle Arguments",
     "argumentsTerminalHint": "Only applies to terminal (CLI) launches",
     "searchAgentModels": "Search {{agent}} models…",
-    "legacyModelCount": "{{total}} models"
+    "legacyModelCount": "{{total}} models",
+    "promptPlaceholder": "Add a prompt (optional): / for skills, @ for files",
+    "promptPlaceholderFilesOnly": "Add a prompt (optional): @ for files"
   },
   "automations": {
     "runFailures": {
