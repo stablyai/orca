@@ -55,10 +55,23 @@ export function claudeTextGenerationToolArgs(attempt: {
     const denied = LEGACY_CLAUDE_BUILTIN_TOOLS.filter(
       (tool) => !CLAUDE_TEXT_GENERATION_TOOLS.includes(tool)
     )
-    return ['--disallowedTools', denied.join(','), '--permission-mode', 'default']
+    // Root-path grants (`//` is the filesystem root; Windows paths match via their /c/... form) allow
+    // reads outside the checkout; a bare grant would also override a user's path-specific ask rule there.
+    const granted = CLAUDE_TEXT_GENERATION_TOOLS.map((tool) => `${tool}(//**)`)
+    return [
+      '--disallowedTools',
+      denied.join(','),
+      '--allowedTools',
+      granted.join(','),
+      '--permission-mode',
+      'default'
+    ]
   }
   return [
     '--tools',
+    CLAUDE_TEXT_GENERATION_TOOLS.join(','),
+    // dontAsk refuses reads outside the checkout unless the tools are also granted.
+    '--allowedTools',
     CLAUDE_TEXT_GENERATION_TOOLS.join(','),
     // Without strict MCP, managed servers load; deny their tools so this attempt matches the strict one.
     ...(attempt.strictMcp === false ? ['--disallowedTools', 'mcp__*'] : []),

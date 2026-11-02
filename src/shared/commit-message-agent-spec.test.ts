@@ -162,7 +162,7 @@ describe('buildArgs (Claude)', () => {
     'Task,Bash,LS,ExitPlanMode,Edit,MultiEdit,Write,NotebookEdit,WebFetch,TodoWrite,WebSearch,BashOutput,KillBash,KillShell,SlashCommand,Skill,AskUserQuestion,LSP,ListMcpResourcesTool,ReadMcpResourceTool'
 
   // Plan mode made the CLI run Sonnet for `haiku`; an explicit non-plan mode also outranks settings.
-  it('passes the picked model with only file tools and no plan mode', () => {
+  it('passes the picked model with only file tools, granted anywhere, and no plan mode', () => {
     expect(spec.buildArgs({ prompt: '', model: 'haiku' })).toEqual([
       '-p',
       '--output-format',
@@ -170,6 +170,8 @@ describe('buildArgs (Claude)', () => {
       '--model',
       'haiku',
       '--tools',
+      'Read,Grep,Glob',
+      '--allowedTools',
       'Read,Grep,Glob',
       '--permission-mode',
       'dontAsk',
@@ -182,6 +184,8 @@ describe('buildArgs (Claude)', () => {
       '--model',
       'sonnet',
       '--tools',
+      'Read,Grep,Glob',
+      '--allowedTools',
       'Read,Grep,Glob',
       '--permission-mode',
       'dontAsk',
@@ -200,6 +204,8 @@ describe('buildArgs (Claude)', () => {
       'haiku',
       '--tools',
       'Read,Grep,Glob',
+      '--allowedTools',
+      'Read,Grep,Glob',
       '--disallowedTools',
       'mcp__*',
       '--permission-mode',
@@ -209,7 +215,7 @@ describe('buildArgs (Claude)', () => {
     ])
   })
 
-  it('keeps the same tools and a non-plan mode in older CLI syntax', () => {
+  it('keeps the same tools, root-path grants and a non-plan mode in older CLI syntax', () => {
     expect(spec.buildArgs({ prompt: '', model: 'haiku', legacyToolPolicy: true })).toEqual([
       '-p',
       '--output-format',
@@ -218,6 +224,8 @@ describe('buildArgs (Claude)', () => {
       'haiku',
       '--disallowedTools',
       legacyDenied,
+      '--allowedTools',
+      'Read(//**),Grep(//**),Glob(//**)',
       '--permission-mode',
       'default',
       ...isolation
@@ -232,6 +240,8 @@ describe('buildArgs (Claude)', () => {
       'haiku',
       '--disallowedTools',
       legacyDenied,
+      '--allowedTools',
+      'Read(//**),Grep(//**),Glob(//**)',
       '--permission-mode',
       'default',
       '--settings',

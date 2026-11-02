@@ -221,6 +221,12 @@ it('keeps the picked model and a non-plan mode on an old CLI under enterprise MC
     expect(plan.args).not.toContain('plan')
   }
   expect(calls[2].args[calls[2].args.indexOf('--permission-mode') + 1]).toBe('default')
+  // Every rebuilt attempt keeps its read grant.
+  expect(calls.map((plan) => plan.args[plan.args.indexOf('--allowedTools') + 1])).toEqual([
+    'Read,Grep,Glob',
+    'Read(//**),Grep(//**),Glob(//**)',
+    'Read(//**),Grep(//**),Glob(//**)'
+  ])
 })
 
 it('preserves Jira custom output and OpenCode one-attempt behavior', async () => {
