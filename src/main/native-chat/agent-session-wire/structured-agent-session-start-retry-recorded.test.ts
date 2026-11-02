@@ -200,7 +200,7 @@ describe('recorded command rejection wrappers at the startup classifier', () => 
   })
 })
 
-// Source-shaped declarations: these provider-side temporary conditions are not locally reproducible.
+// The wire capture has no error.data, so the error is built without one.
 it('keeps the recorded canonical rollout filename refusal final on the first answer', () => {
   const { method, code, message } = canonicalFilenameRefusal
   expectFinalWithExitEvidence(new CodexAppServerRequestError(method, code, message, message))
