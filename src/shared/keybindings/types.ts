@@ -50,6 +50,8 @@ export type KeybindingActionId =
   | 'sidebar.checks.toggle'
   | 'sidebar.ports.toggle'
   | 'sidebar.agents.toggle'
+  | 'sidebar.agents.scopeNext'
+  | 'sidebar.agents.scopePrevious'
   | 'sidebar.sleepingWorkspaces.toggle'
   | 'sidebar.childWorkspaces.toggle'
   | 'sidebar.focusWorktreeList'

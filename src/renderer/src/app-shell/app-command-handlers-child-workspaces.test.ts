@@ -56,7 +56,7 @@ function shortcutState(): AppShortcutState {
       setRightSidebarTab: vi.fn(),
       showRightSidebarFiles: vi.fn(),
       showRightSidebarSearch: vi.fn(),
-      showAiVaultSearch: vi.fn(),
+      showAiVaultSearchKeepingScope: vi.fn(),
       openDiffNotesSendMenuForActiveWorktree: vi.fn()
     },
     creationLayoutActive: false,

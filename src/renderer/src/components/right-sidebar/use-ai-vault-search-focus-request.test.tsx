@@ -17,10 +17,20 @@ it('runs the request once and clears it so a remount stays put', () => {
   act(() => {
     useAppStore.getState().showAiVaultSearch()
   })
-  expect(onRequest).toHaveBeenCalledOnce()
+  expect(onRequest).toHaveBeenCalledExactlyOnceWith(false)
   expect(useAppStore.getState().aiVaultSearchFocusRequested).toBe(false)
 
   view.unmount()
   renderHook(() => useAiVaultSearchFocusRequest(onRequest))
   expect(onRequest).toHaveBeenCalledOnce()
+})
+
+it('tells the panel to keep its scope when the request asks for that', () => {
+  const onRequest = vi.fn()
+  renderHook(() => useAiVaultSearchFocusRequest(onRequest))
+  act(() => {
+    useAppStore.getState().showAiVaultSearchKeepingScope()
+  })
+  expect(onRequest).toHaveBeenCalledExactlyOnceWith(true)
+  expect(useAppStore.getState().aiVaultSearchKeepScope).toBe(false)
 })

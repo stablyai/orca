@@ -47,6 +47,10 @@ const STATIC_TITLE_COPY = {
   'sidebar.checks.toggle': () => translate('keybindings.title.sidebarChecksToggle', 'Show Checks'),
   'sidebar.ports.toggle': () => translate('keybindings.title.sidebarPortsToggle', 'Show Ports'),
   'sidebar.agents.toggle': () => translate('keybindings.title.sidebarAgentsToggle', 'Show Agents'),
+  'sidebar.agents.scopeNext': () =>
+    translate('keybindings.title.sidebarAgentsScopeNext', 'Agents: Next Scope'),
+  'sidebar.agents.scopePrevious': () =>
+    translate('keybindings.title.sidebarAgentsScopePrevious', 'Agents: Previous Scope'),
   'sidebar.sleepingWorkspaces.toggle': () =>
     translate('keybindings.title.sidebarSleepingWorkspacesToggle', 'Toggle Sleeping Workspaces'),
   'sidebar.focusWorktreeList': () =>

@@ -59,6 +59,7 @@ export default function AiVaultPanel({
   initialQuery = '',
   initialAgents,
   headerAction,
+  onSearchEscape,
   onSessionOpened,
   resumeHere
 }: AiVaultPanelProps): React.JSX.Element {
@@ -257,6 +258,7 @@ export default function AiVaultPanel({
 
   return (
     <div
+      data-ai-vault-panel="true"
       className="@container/ai-vault flex h-full min-h-0 flex-col bg-sidebar outline-none"
       {...aiVaultPanelKeyboardRootProps(keyboardRows ? listKeyboardRef : undefined)}
     >
@@ -277,6 +279,7 @@ export default function AiVaultPanel({
         adjustmentCount={viewAdjustmentCount}
         focusSearchRequestId={focusSearchRequestId}
         headerAction={headerAction}
+        onSearchEscape={onSearchEscape}
         onSearchKeyDown={
           keyboardRows ? (event) => listKeyboardRef.current?.handleKeyDown(event) : undefined
         }

@@ -4,6 +4,7 @@ import type { KeybindingActionId } from '../../../shared/keybindings'
 import { keybindingMatchesAction } from '../../../shared/keybindings'
 import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
 import { useAppStore } from '../store'
+import { agentsScopeShortcutOwnsChord } from '../app-shell/agents-shortcut-handlers'
 import {
   createFloatingWorkspaceBrowserTab,
   createFloatingWorkspaceMarkdownTab,
@@ -233,6 +234,10 @@ export function handleTerminalWorkspaceKeyDown(
     if (claimTabSwitch()) {
       dispatchWorkspaceTabCommand({ type: 'previous-recent' })
     }
+    return
+  }
+  // Why: while the Agents tab shows, its scope chords beat tab switching on a shared key.
+  if (agentsScopeShortcutOwnsChord(matchShortcut)) {
     return
   }
   const switchSameTypeDirection = matchShortcut('tab.nextSameType')

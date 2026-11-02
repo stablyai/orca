@@ -11,7 +11,7 @@ export function useAppShortcutActions() {
       setRightSidebarTab: s.setRightSidebarTab,
       showRightSidebarFiles: s.showRightSidebarFiles,
       showRightSidebarSearch: s.showRightSidebarSearch,
-      showAiVaultSearch: s.showAiVaultSearch,
+      showAiVaultSearchKeepingScope: s.showAiVaultSearchKeepingScope,
       openDiffNotesSendMenuForActiveWorktree: s.openDiffNotesSendMenuForActiveWorktree
     }))
   )

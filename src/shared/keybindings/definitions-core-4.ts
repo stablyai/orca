@@ -60,6 +60,41 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings([])
   },
   {
+    id: 'sidebar.agents.scopeNext',
+    title: 'Agents: Next Scope',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'agents',
+      'session',
+      'history',
+      'scope',
+      'workspace',
+      'project',
+      'all'
+    ],
+    // Why: ships unbound; the chord is claimed only while the Agents tab is showing, so it may share one with tab switching.
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'sidebar.agents.scopePrevious',
+    title: 'Agents: Previous Scope',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'agents',
+      'session',
+      'history',
+      'scope',
+      'workspace',
+      'project',
+      'all'
+    ],
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'terminal.clearPaneTitle',
     title: 'Clear Pane Title',
     group: 'Terminal Panes',

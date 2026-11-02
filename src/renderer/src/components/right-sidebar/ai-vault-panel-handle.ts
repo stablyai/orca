@@ -19,6 +19,8 @@ export type AiVaultPanelProps = {
   /** Read once, at mount; set, the panel filters agents on its own and never saves the filter. */
   initialAgents?: readonly AiVaultAgent[]
   headerAction?: ReactNode
+  /** Escape in the search box: the host takes over instead of the box clearing itself. */
+  onSearchEscape?: () => void
   /** Success may leave the tab unchanged; providing this callback also enables arrow/Enter row keys. */
   onSessionOpened?: () => void
   /** Set in `/resume`: picking a row resumes it in that chat, and rows offer no other action. */
