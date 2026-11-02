@@ -263,7 +263,8 @@ it('captures projected identity once for real typed-goal dispatch and Goal mode'
   )
     .replace(/^\/goal\s+/, '')
     .trim()
-  expect(expected).toContain('@Same name (2) @Same name (3) @Same name (2)')
+  expect(expected).toContain('@Same name (2) @Same name (3)')
+  expect(expected.match(/@Same name \(2\)/g)).toHaveLength(1)
   const setObjective = vi.fn(async () => true)
   const structured = transport()
   structured.threadGoal = { setObjective }

@@ -51,11 +51,25 @@ export const NativeChatAgentReference = Node.create({
   ]
 })
 
+/** A draft holds each agent once: references already in it, or repeated in the list, are skipped. */
 export function insertAgentReferences(
   editor: Editor,
-  references: OrchestrationAgentReference[]
+  candidates: OrchestrationAgentReference[]
 ): void {
   if (!editor.isEditable) {
+    return
+  }
+  const present = new Set<string>()
+  editor.state.doc.descendants((node) => {
+    if (node.type.name === NativeChatAgentReference.name) {
+      present.add(`${node.attrs.hostKey}\0${node.attrs.address}`)
+    }
+  })
+  const references = candidates.filter(({ hostKey, address }) => {
+    const key = `${hostKey}\0${address}`
+    return !present.has(key) && Boolean(present.add(key))
+  })
+  if (references.length === 0) {
     return
   }
   const nextNode = editor.state.selection.$to.nodeAfter
