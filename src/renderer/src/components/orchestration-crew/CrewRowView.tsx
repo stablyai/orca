@@ -56,12 +56,19 @@ export const CrewRowView = memo(function CrewRowView({
   }
   const toggle = () => setExpanded((value) => !value)
   const mention = () => mentionRows([row])
+  const mentionable = canMention && Boolean(row.sendAddress)
   return (
-    <div className="mx-2 mb-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5 rounded-lg border border-transparent px-2.5 py-2 hover:border-border/70 hover:bg-accent/50">
+    <div
+      className={cn(
+        'mx-2 mb-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5 rounded-lg border border-transparent px-2.5 py-2',
+        mentionable && 'hover:border-border/70 hover:bg-accent/50'
+      )}
+    >
+      {/* Without Mention the row's status and question stay at full strength; only the click goes away. */}
       <button
         type="button"
-        className="row-span-2 grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 rounded-md text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-50"
-        disabled={!canMention || !row.sendAddress}
+        className="row-span-2 grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 rounded-md text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default"
+        disabled={!mentionable}
         // Keep focus in the terminal or composer the mention lands in.
         onPointerDown={(event) => event.preventDefault()}
         onClick={mention}
