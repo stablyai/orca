@@ -177,57 +177,6 @@
       "ordinal": 43,
       "value": "Update Orca on the executing server to edit this item or load its repository options."
     },
-    "356e450d1fd0": {
-      "error": "",
-      "item": {
-        "provider": "github",
-        "source": {
-          "id": "github:issue:9",
-          "labels": ["bug"],
-          "number": 9,
-          "repoId": "repo-1",
-          "reviewRequests": [],
-          "state": "open",
-          "type": "issue",
-          "url": "https://github.com/owner/repo/issues/9"
-        },
-        "title": "An issue"
-      },
-      "items": [
-        {
-          "provider": "gitlab",
-          "source": {
-            "id": "gitlab:issue:4",
-            "labels": ["bug"],
-            "number": 4,
-            "projectRef": {
-              "host": "gitlab.com",
-              "path": "group/project"
-            },
-            "repoId": "repo-1",
-            "state": "opened",
-            "type": "issue"
-          },
-          "title": "A GitLab issue"
-        }
-      ],
-      "mutating": false,
-      "payload": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
-      }
-    },
     "37dc1884db8f": {
       "name": "itemBodyDraft",
       "ordinal": 16,
@@ -273,57 +222,6 @@
       "name": "mutatingStatus",
       "ordinal": 25,
       "value": false
-    },
-    "3a247b715c1c": {
-      "error": "Unknown method",
-      "item": {
-        "provider": "github",
-        "source": {
-          "id": "github:issue:9",
-          "labels": ["bug"],
-          "number": 9,
-          "repoId": "repo-1",
-          "reviewRequests": [],
-          "state": "open",
-          "type": "issue",
-          "url": "https://github.com/owner/repo/issues/9"
-        },
-        "title": "An issue"
-      },
-      "items": [
-        {
-          "provider": "gitlab",
-          "source": {
-            "id": "gitlab:issue:4",
-            "labels": ["bug"],
-            "number": 4,
-            "projectRef": {
-              "host": "gitlab.com",
-              "path": "group/project"
-            },
-            "repoId": "repo-1",
-            "state": "opened",
-            "type": "issue"
-          },
-          "title": "A GitLab issue"
-        }
-      ],
-      "mutating": false,
-      "payload": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
-      }
     },
     "3c8803d67b46": {
       "name": "items",
@@ -448,11 +346,6 @@
         },
         "title": "Renamed"
       }
-    },
-    "4abfa227cbc9": {
-      "name": "error",
-      "ordinal": 43,
-      "value": "outer refused"
     },
     "4b1d9a6a4322": {
       "name": "status.get#1",
@@ -587,11 +480,6 @@
         "$rpc": "null"
       }
     },
-    "8a342d443bf2": {
-      "name": "error",
-      "ordinal": 43,
-      "value": "The host sent a reply this app could not read (status.get)"
-    },
     "8c1d51d7724b": {
       "name": "detailCommentGroups",
       "ordinal": 30,
@@ -648,6 +536,11 @@
           }
         }
       }
+    },
+    "98e6065a28bd": {
+      "name": "error",
+      "ordinal": 43,
+      "value": "The Orca server connection changed. Try again."
     },
     "9a14ab19057c": {
       "error": "Update Orca on the executing server to edit this item or load its repository options.",
@@ -744,11 +637,6 @@
       "ordinal": 23,
       "value": ""
     },
-    "a359d67ab556": {
-      "name": "error",
-      "ordinal": 43,
-      "value": "transport failure"
-    },
     "a9b86a7b5b77": {
       "name": "status.get#1",
       "ordinal": 39,
@@ -781,6 +669,57 @@
           "message": "transport failure",
           "isRpcDeliveryUnknown": true
         }
+      }
+    },
+    "af72cee469d2": {
+      "error": "The Orca server connection changed. Try again.",
+      "item": {
+        "provider": "github",
+        "source": {
+          "id": "github:issue:9",
+          "labels": ["bug"],
+          "number": 9,
+          "repoId": "repo-1",
+          "reviewRequests": [],
+          "state": "open",
+          "type": "issue",
+          "url": "https://github.com/owner/repo/issues/9"
+        },
+        "title": "An issue"
+      },
+      "items": [
+        {
+          "provider": "gitlab",
+          "source": {
+            "id": "gitlab:issue:4",
+            "labels": ["bug"],
+            "number": 4,
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
+            "repoId": "repo-1",
+            "state": "opened",
+            "type": "issue"
+          },
+          "title": "A GitLab issue"
+        }
+      ],
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
       }
     },
     "b23f5097caf2": {
@@ -820,11 +759,6 @@
         }
       }
     },
-    "b2f3c4af0810": {
-      "name": "error",
-      "ordinal": 43,
-      "value": "Unknown method"
-    },
     "b3a1585ad6e2": {
       "name": "status.get#1",
       "ordinal": 39,
@@ -860,108 +794,6 @@
           "id": "frame-2",
           "ok": false
         }
-      }
-    },
-    "b61d73c66402": {
-      "error": "transport failure",
-      "item": {
-        "provider": "github",
-        "source": {
-          "id": "github:issue:9",
-          "labels": ["bug"],
-          "number": 9,
-          "repoId": "repo-1",
-          "reviewRequests": [],
-          "state": "open",
-          "type": "issue",
-          "url": "https://github.com/owner/repo/issues/9"
-        },
-        "title": "An issue"
-      },
-      "items": [
-        {
-          "provider": "gitlab",
-          "source": {
-            "id": "gitlab:issue:4",
-            "labels": ["bug"],
-            "number": 4,
-            "projectRef": {
-              "host": "gitlab.com",
-              "path": "group/project"
-            },
-            "repoId": "repo-1",
-            "state": "opened",
-            "type": "issue"
-          },
-          "title": "A GitLab issue"
-        }
-      ],
-      "mutating": false,
-      "payload": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
-      }
-    },
-    "b7c662ee9c9b": {
-      "error": "outer refused",
-      "item": {
-        "provider": "github",
-        "source": {
-          "id": "github:issue:9",
-          "labels": ["bug"],
-          "number": 9,
-          "repoId": "repo-1",
-          "reviewRequests": [],
-          "state": "open",
-          "type": "issue",
-          "url": "https://github.com/owner/repo/issues/9"
-        },
-        "title": "An issue"
-      },
-      "items": [
-        {
-          "provider": "gitlab",
-          "source": {
-            "id": "gitlab:issue:4",
-            "labels": ["bug"],
-            "number": 4,
-            "projectRef": {
-              "host": "gitlab.com",
-              "path": "group/project"
-            },
-            "repoId": "repo-1",
-            "state": "opened",
-            "type": "issue"
-          },
-          "title": "A GitLab issue"
-        }
-      ],
-      "mutating": false,
-      "payload": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
       }
     },
     "bcf62af95f5c": {
@@ -1003,11 +835,6 @@
           }
         }
       }
-    },
-    "c02a24eca598": {
-      "name": "error",
-      "ordinal": 43,
-      "value": ""
     },
     "c08bc7987774": {
       "name": "status.get#1",
@@ -1130,57 +957,6 @@
       "name": "itemAssignableUsers",
       "ordinal": 12,
       "value": []
-    },
-    "d6ccb8606b28": {
-      "error": "The host sent a reply this app could not read (status.get)",
-      "item": {
-        "provider": "github",
-        "source": {
-          "id": "github:issue:9",
-          "labels": ["bug"],
-          "number": 9,
-          "repoId": "repo-1",
-          "reviewRequests": [],
-          "state": "open",
-          "type": "issue",
-          "url": "https://github.com/owner/repo/issues/9"
-        },
-        "title": "An issue"
-      },
-      "items": [
-        {
-          "provider": "gitlab",
-          "source": {
-            "id": "gitlab:issue:4",
-            "labels": ["bug"],
-            "number": 4,
-            "projectRef": {
-              "host": "gitlab.com",
-              "path": "group/project"
-            },
-            "repoId": "repo-1",
-            "state": "opened",
-            "type": "issue"
-          },
-          "title": "A GitLab issue"
-        }
-      ],
-      "mutating": false,
-      "payload": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
-      }
     },
     "d7b7e32db4fa": {
       "name": "status.get#1",
@@ -1374,7 +1150,7 @@
             "gitlab-status-0": "eb79a9b3682a",
             "github-metadata-1": "eb79a9b3682a"
           },
-          "state": "d6ccb8606b28",
+          "state": "9a14ab19057c",
           "effects": [
             "cc2ece9478f0",
             "4cd7428b5e4e",
@@ -1414,7 +1190,7 @@
             "3d04becd956c",
             "fd959f61e110",
             "6b8871a4d5dd",
-            "8a342d443bf2",
+            "31f7dd5c4fa2",
             "dd7e877e0f8c"
           ]
         }
@@ -1429,7 +1205,7 @@
             "gitlab-status-0": "eb79a9b3682a",
             "github-metadata-1": "eb79a9b3682a"
           },
-          "state": "d6ccb8606b28",
+          "state": "9a14ab19057c",
           "effects": [
             "cc2ece9478f0",
             "4cd7428b5e4e",
@@ -1469,7 +1245,7 @@
             "3d04becd956c",
             "fd959f61e110",
             "6b8871a4d5dd",
-            "8a342d443bf2",
+            "31f7dd5c4fa2",
             "dd7e877e0f8c"
           ]
         }
@@ -1649,7 +1425,7 @@
             "gitlab-status-0": "eb79a9b3682a",
             "github-metadata-1": "eb79a9b3682a"
           },
-          "state": "b7c662ee9c9b",
+          "state": "9a14ab19057c",
           "effects": [
             "cc2ece9478f0",
             "4cd7428b5e4e",
@@ -1689,7 +1465,7 @@
             "3d04becd956c",
             "fd959f61e110",
             "6b8871a4d5dd",
-            "4abfa227cbc9",
+            "31f7dd5c4fa2",
             "dd7e877e0f8c"
           ]
         }
@@ -1704,7 +1480,7 @@
             "gitlab-status-0": "eb79a9b3682a",
             "github-metadata-1": "eb79a9b3682a"
           },
-          "state": "356e450d1fd0",
+          "state": "9a14ab19057c",
           "effects": [
             "cc2ece9478f0",
             "4cd7428b5e4e",
@@ -1744,7 +1520,7 @@
             "3d04becd956c",
             "fd959f61e110",
             "6b8871a4d5dd",
-            "c02a24eca598",
+            "31f7dd5c4fa2",
             "dd7e877e0f8c"
           ]
         }
@@ -1759,7 +1535,7 @@
             "gitlab-status-0": "eb79a9b3682a",
             "github-metadata-1": "eb79a9b3682a"
           },
-          "state": "3a247b715c1c",
+          "state": "9a14ab19057c",
           "effects": [
             "cc2ece9478f0",
             "4cd7428b5e4e",
@@ -1799,7 +1575,7 @@
             "3d04becd956c",
             "fd959f61e110",
             "6b8871a4d5dd",
-            "b2f3c4af0810",
+            "31f7dd5c4fa2",
             "dd7e877e0f8c"
           ]
         }
@@ -1814,7 +1590,7 @@
             "gitlab-status-0": "eb79a9b3682a",
             "github-metadata-1": "eb79a9b3682a"
           },
-          "state": "b61d73c66402",
+          "state": "af72cee469d2",
           "effects": [
             "cc2ece9478f0",
             "4cd7428b5e4e",
@@ -1854,7 +1630,7 @@
             "3d04becd956c",
             "fd959f61e110",
             "6b8871a4d5dd",
-            "a359d67ab556",
+            "98e6065a28bd",
             "dd7e877e0f8c"
           ]
         }
@@ -1869,7 +1645,7 @@
             "gitlab-status-0": "eb79a9b3682a",
             "github-metadata-1": "eb79a9b3682a"
           },
-          "state": "356e450d1fd0",
+          "state": "af72cee469d2",
           "effects": [
             "cc2ece9478f0",
             "4cd7428b5e4e",
@@ -1909,7 +1685,7 @@
             "3d04becd956c",
             "fd959f61e110",
             "6b8871a4d5dd",
-            "c02a24eca598",
+            "98e6065a28bd",
             "dd7e877e0f8c"
           ]
         }

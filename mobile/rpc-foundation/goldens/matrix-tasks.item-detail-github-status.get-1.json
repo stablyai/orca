@@ -204,52 +204,8 @@
         }
       }
     },
-    "3928220fd170": {
-      "name": "status.get#1",
-      "ordinal": 7,
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "beforeSend": "[local beforeSend]",
-            "failWhenDisconnected": true,
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "4227d71ce643": {
-      "name": "detailError",
-      "ordinal": 10,
-      "value": "The host sent a reply this app could not read (status.get)"
-    },
-    "46643bb88ce4": {
-      "name": "github.workItemDetails#1",
-      "ordinal": 11,
-      "json": "{\"expectedRuntimeSource\":{\"sourceId\":\"detail-host\",\"runtimeId\":\"detail-runtime\"},\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItemDetails\",\"params\":{\"repo\":\"id:repo-1\",\"number\":12,\"type\":\"pr\",\"ownerRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.com\"}}}"
-    },
-    "5a1f2d75b5af": {
-      "error": "transport failure",
+    "383dd2eb8a74": {
+      "error": "Update Orca on the executing server to edit this item or load its repository options.",
       "item": {
         "key": "github:repo-1:pr:12",
         "provider": "github",
@@ -305,6 +261,50 @@
         "$rpc": "null"
       }
     },
+    "3928220fd170": {
+      "name": "status.get#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "beforeSend": "[local beforeSend]",
+            "failWhenDisconnected": true,
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "42dbdd0ee40f": {
+      "name": "detailError",
+      "ordinal": 10,
+      "value": "The Orca server connection changed. Try again."
+    },
+    "46643bb88ce4": {
+      "name": "github.workItemDetails#1",
+      "ordinal": 11,
+      "json": "{\"expectedRuntimeSource\":{\"sourceId\":\"detail-host\",\"runtimeId\":\"detail-runtime\"},\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItemDetails\",\"params\":{\"repo\":\"id:repo-1\",\"number\":12,\"type\":\"pr\",\"ownerRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.com\"}}}"
+    },
     "617b71ab2cc6": {
       "name": "github.workItemDetails#1",
       "ordinal": 11,
@@ -321,6 +321,11 @@
       "value": {
         "$rpc": "null"
       }
+    },
+    "7cd8e40bc7e7": {
+      "name": "detailError",
+      "ordinal": 10,
+      "value": "Update Orca on the executing server to edit this item or load its repository options."
     },
     "88caa02cb9f2": {
       "name": "status.get#1",
@@ -436,63 +441,6 @@
         }
       }
     },
-    "91cd72d40cf9": {
-      "error": "Unknown method",
-      "item": {
-        "key": "github:repo-1:pr:12",
-        "provider": "github",
-        "source": {
-          "id": "github:pr:12",
-          "labels": ["bug"],
-          "latestReviews": [],
-          "number": 12,
-          "prRepo": {
-            "host": "github.com",
-            "owner": "owner",
-            "repo": "repo"
-          },
-          "repoId": "repo-1",
-          "reviewDecision": {
-            "$rpc": "null"
-          },
-          "reviewRequests": [],
-          "state": "open",
-          "type": "pr",
-          "url": "https://github.com/owner/repo/pull/12"
-        },
-        "title": "A pull request"
-      },
-      "items": [
-        {
-          "key": "github:repo-1:pr:12",
-          "provider": "github",
-          "source": {
-            "id": "github:pr:12",
-            "labels": ["bug"],
-            "latestReviews": [],
-            "number": 12,
-            "prRepo": {
-              "host": "github.com",
-              "owner": "owner",
-              "repo": "repo"
-            },
-            "repoId": "repo-1",
-            "reviewDecision": {
-              "$rpc": "null"
-            },
-            "reviewRequests": [],
-            "state": "open",
-            "type": "pr",
-            "url": "https://github.com/owner/repo/pull/12"
-          },
-          "title": "A pull request"
-        }
-      ],
-      "loading": false,
-      "payload": {
-        "$rpc": "null"
-      }
-    },
     "988fd3d6f1c4": {
       "name": "detailRefreshSeq",
       "ordinal": 5,
@@ -539,11 +487,6 @@
       "name": "detailError",
       "ordinal": 2,
       "value": ""
-    },
-    "a7fb6d964b37": {
-      "name": "detailLoading",
-      "ordinal": 10,
-      "value": false
     },
     "a917ac250898": {
       "name": "github.workItemDetails#1",
@@ -611,25 +554,10 @@
         }
       }
     },
-    "aaa57f9d128f": {
-      "name": "detailError",
-      "ordinal": 10,
-      "value": "outer refused"
-    },
     "b99a772c440f": {
       "name": "status.get#1",
       "ordinal": 9,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
-    "c187052ac3d0": {
-      "name": "detailError",
-      "ordinal": 10,
-      "value": "transport failure"
-    },
-    "c25dbe3b700c": {
-      "name": "detailError",
-      "ordinal": 10,
-      "value": "Unknown method"
     },
     "c540e93e8c8a": {
       "name": "detailPayload",
@@ -686,6 +614,63 @@
         "$rpc": "null"
       }
     },
+    "cfc7024af888": {
+      "error": "The Orca server connection changed. Try again.",
+      "item": {
+        "key": "github:repo-1:pr:12",
+        "provider": "github",
+        "source": {
+          "id": "github:pr:12",
+          "labels": ["bug"],
+          "latestReviews": [],
+          "number": 12,
+          "prRepo": {
+            "host": "github.com",
+            "owner": "owner",
+            "repo": "repo"
+          },
+          "repoId": "repo-1",
+          "reviewDecision": {
+            "$rpc": "null"
+          },
+          "reviewRequests": [],
+          "state": "open",
+          "type": "pr",
+          "url": "https://github.com/owner/repo/pull/12"
+        },
+        "title": "A pull request"
+      },
+      "items": [
+        {
+          "key": "github:repo-1:pr:12",
+          "provider": "github",
+          "source": {
+            "id": "github:pr:12",
+            "labels": ["bug"],
+            "latestReviews": [],
+            "number": 12,
+            "prRepo": {
+              "host": "github.com",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repoId": "repo-1",
+            "reviewDecision": {
+              "$rpc": "null"
+            },
+            "reviewRequests": [],
+            "state": "open",
+            "type": "pr",
+            "url": "https://github.com/owner/repo/pull/12"
+          },
+          "title": "A pull request"
+        }
+      ],
+      "loading": false,
+      "payload": {
+        "$rpc": "null"
+      }
+    },
     "d954c03ff983": {
       "name": "status.get#1",
       "ordinal": 7,
@@ -722,183 +707,12 @@
         }
       }
     },
-    "da440dbb22b9": {
-      "error": "outer refused",
-      "item": {
-        "key": "github:repo-1:pr:12",
-        "provider": "github",
-        "source": {
-          "id": "github:pr:12",
-          "labels": ["bug"],
-          "latestReviews": [],
-          "number": 12,
-          "prRepo": {
-            "host": "github.com",
-            "owner": "owner",
-            "repo": "repo"
-          },
-          "repoId": "repo-1",
-          "reviewDecision": {
-            "$rpc": "null"
-          },
-          "reviewRequests": [],
-          "state": "open",
-          "type": "pr",
-          "url": "https://github.com/owner/repo/pull/12"
-        },
-        "title": "A pull request"
-      },
-      "items": [
-        {
-          "key": "github:repo-1:pr:12",
-          "provider": "github",
-          "source": {
-            "id": "github:pr:12",
-            "labels": ["bug"],
-            "latestReviews": [],
-            "number": 12,
-            "prRepo": {
-              "host": "github.com",
-              "owner": "owner",
-              "repo": "repo"
-            },
-            "repoId": "repo-1",
-            "reviewDecision": {
-              "$rpc": "null"
-            },
-            "reviewRequests": [],
-            "state": "open",
-            "type": "pr",
-            "url": "https://github.com/owner/repo/pull/12"
-          },
-          "title": "A pull request"
-        }
-      ],
-      "loading": false,
-      "payload": {
-        "$rpc": "null"
-      }
-    },
-    "de3f24704fcd": {
-      "error": "",
-      "item": {
-        "key": "github:repo-1:pr:12",
-        "provider": "github",
-        "source": {
-          "id": "github:pr:12",
-          "labels": ["bug"],
-          "latestReviews": [],
-          "number": 12,
-          "prRepo": {
-            "host": "github.com",
-            "owner": "owner",
-            "repo": "repo"
-          },
-          "repoId": "repo-1",
-          "reviewDecision": {
-            "$rpc": "null"
-          },
-          "reviewRequests": [],
-          "state": "open",
-          "type": "pr",
-          "url": "https://github.com/owner/repo/pull/12"
-        },
-        "title": "A pull request"
-      },
-      "items": [
-        {
-          "key": "github:repo-1:pr:12",
-          "provider": "github",
-          "source": {
-            "id": "github:pr:12",
-            "labels": ["bug"],
-            "latestReviews": [],
-            "number": 12,
-            "prRepo": {
-              "host": "github.com",
-              "owner": "owner",
-              "repo": "repo"
-            },
-            "repoId": "repo-1",
-            "reviewDecision": {
-              "$rpc": "null"
-            },
-            "reviewRequests": [],
-            "state": "open",
-            "type": "pr",
-            "url": "https://github.com/owner/repo/pull/12"
-          },
-          "title": "A pull request"
-        }
-      ],
-      "loading": false,
-      "payload": {
-        "$rpc": "null"
-      }
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": {
         "$rpc": "undefined"
-      }
-    },
-    "eea646241f48": {
-      "error": "The host sent a reply this app could not read (status.get)",
-      "item": {
-        "key": "github:repo-1:pr:12",
-        "provider": "github",
-        "source": {
-          "id": "github:pr:12",
-          "labels": ["bug"],
-          "latestReviews": [],
-          "number": 12,
-          "prRepo": {
-            "host": "github.com",
-            "owner": "owner",
-            "repo": "repo"
-          },
-          "repoId": "repo-1",
-          "reviewDecision": {
-            "$rpc": "null"
-          },
-          "reviewRequests": [],
-          "state": "open",
-          "type": "pr",
-          "url": "https://github.com/owner/repo/pull/12"
-        },
-        "title": "A pull request"
-      },
-      "items": [
-        {
-          "key": "github:repo-1:pr:12",
-          "provider": "github",
-          "source": {
-            "id": "github:pr:12",
-            "labels": ["bug"],
-            "latestReviews": [],
-            "number": 12,
-            "prRepo": {
-              "host": "github.com",
-              "owner": "owner",
-              "repo": "repo"
-            },
-            "repoId": "repo-1",
-            "reviewDecision": {
-              "$rpc": "null"
-            },
-            "reviewRequests": [],
-            "state": "open",
-            "type": "pr",
-            "url": "https://github.com/owner/repo/pull/12"
-          },
-          "title": "A pull request"
-        }
-      ],
-      "loading": false,
-      "payload": {
-        "$rpc": "null"
       }
     },
     "f2255314735f": {
@@ -1076,7 +890,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "eea646241f48",
+          "state": "383dd2eb8a74",
           "effects": [
             "cc2ece9478f0",
             "a4f1a8696a24",
@@ -1085,7 +899,7 @@
             "988fd3d6f1c4",
             "cacd48cf20dc",
             "185dd46f0a38",
-            "4227d71ce643",
+            "7cd8e40bc7e7",
             "6d653e11366f"
           ]
         }
@@ -1098,7 +912,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "eea646241f48",
+          "state": "383dd2eb8a74",
           "effects": [
             "cc2ece9478f0",
             "a4f1a8696a24",
@@ -1107,7 +921,7 @@
             "988fd3d6f1c4",
             "cacd48cf20dc",
             "185dd46f0a38",
-            "4227d71ce643",
+            "7cd8e40bc7e7",
             "6d653e11366f"
           ]
         }
@@ -1186,7 +1000,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "da440dbb22b9",
+          "state": "383dd2eb8a74",
           "effects": [
             "cc2ece9478f0",
             "a4f1a8696a24",
@@ -1195,7 +1009,7 @@
             "988fd3d6f1c4",
             "cacd48cf20dc",
             "185dd46f0a38",
-            "aaa57f9d128f",
+            "7cd8e40bc7e7",
             "6d653e11366f"
           ]
         }
@@ -1208,7 +1022,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "de3f24704fcd",
+          "state": "383dd2eb8a74",
           "effects": [
             "cc2ece9478f0",
             "a4f1a8696a24",
@@ -1217,7 +1031,8 @@
             "988fd3d6f1c4",
             "cacd48cf20dc",
             "185dd46f0a38",
-            "a7fb6d964b37"
+            "7cd8e40bc7e7",
+            "6d653e11366f"
           ]
         }
       },
@@ -1229,7 +1044,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "91cd72d40cf9",
+          "state": "383dd2eb8a74",
           "effects": [
             "cc2ece9478f0",
             "a4f1a8696a24",
@@ -1238,7 +1053,7 @@
             "988fd3d6f1c4",
             "cacd48cf20dc",
             "185dd46f0a38",
-            "c25dbe3b700c",
+            "7cd8e40bc7e7",
             "6d653e11366f"
           ]
         }
@@ -1251,7 +1066,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "5a1f2d75b5af",
+          "state": "cfc7024af888",
           "effects": [
             "cc2ece9478f0",
             "a4f1a8696a24",
@@ -1260,7 +1075,7 @@
             "988fd3d6f1c4",
             "cacd48cf20dc",
             "185dd46f0a38",
-            "c187052ac3d0",
+            "42dbdd0ee40f",
             "6d653e11366f"
           ]
         }
@@ -1273,7 +1088,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "de3f24704fcd",
+          "state": "cfc7024af888",
           "effects": [
             "cc2ece9478f0",
             "a4f1a8696a24",
@@ -1282,7 +1097,8 @@
             "988fd3d6f1c4",
             "cacd48cf20dc",
             "185dd46f0a38",
-            "a7fb6d964b37"
+            "42dbdd0ee40f",
+            "6d653e11366f"
           ]
         }
       }
