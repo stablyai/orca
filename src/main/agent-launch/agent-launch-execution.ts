@@ -13,6 +13,7 @@ import type {
   AgentLaunchSurfaceFactory,
   AgentLaunchWorkspaceFactory
 } from './agent-launch-surface-factories'
+import type { AgentLaunchAcceptance } from './agent-launch-acceptance'
 
 /** Persist the surface result before delivery so a host crash leaves an honest prompt receipt. */
 export type AgentLaunchPublishedSurface = AgentLaunchResult
@@ -37,10 +38,13 @@ export type AgentLaunchSurfaceExecution = AgentLaunchExecutionBase & {
   /** Host-only override for callers that require a terminal handle. */
   terminalOnly?: boolean
   promptPolicy?: undefined
+  /** An existing-workspace launch accepted before Setup: it waits, then decides its surface. */
+  acceptance?: AgentLaunchAcceptance
 } & (
     | { decidedMode?: undefined }
     | {
-        /** Host-only preflight receipt; existing-workspace callers must already include the host verdict. */
+        /** Host-only preflight receipt; existing-workspace callers must already include the host verdict,
+         *  except an accepted launch, whose verdict waits for Setup. */
         decidedMode: AgentLaunchModeReceipt
         terminalOnly?: never
         callerRendersStructured?: never

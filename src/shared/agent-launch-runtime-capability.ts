@@ -60,6 +60,10 @@ export const AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY = 'settings.agent-permiss
 // explicit chat it cannot open before creating anything. Older hosts strip the field.
 export const AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY = 'agent.launch.surface.v1' as const
 
+// Host-advertised: agent.launchAccept answers before the workspace's required Setup finishes and
+// agent.launchStatus reads that launch; the host waits for Setup, then starts one chat or terminal.
+export const AGENT_LAUNCH_ACCEPT_RUNTIME_CAPABILITY = 'agent.launch.accept.v1' as const
+
 export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
   AGENT_LAUNCH_CHAT_OPTIONS_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_SETTINGS_CAPABILITY,
@@ -75,5 +79,6 @@ export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
   AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_CREATE_FOLDER_WORKSPACE_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_ACCEPT_RUNTIME_CAPABILITY
 ] as const

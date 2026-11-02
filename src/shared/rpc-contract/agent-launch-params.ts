@@ -112,7 +112,7 @@ export const AgentLaunchFields = z.object({
 })
 
 /** Caller IDs must retain the agent lane encoded by host-minted IDs. */
-function refuseSessionIdForAnotherAgent(
+export function refuseSessionIdForAnotherAgent(
   launch: { agent: string; sessionId?: string | undefined },
   ctx: z.RefinementCtx
 ): void {

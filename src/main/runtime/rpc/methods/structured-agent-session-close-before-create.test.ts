@@ -363,3 +363,42 @@ it.each(['succeeded', 'failed'] as const)(
     expect(resolveIntent).toHaveBeenCalledTimes(outcome === 'succeeded' ? 1 : 0)
   }
 )
+
+it('a recorded create answers from its record, not from support asked again', async () => {
+  expect(await create()).toMatchObject({ ok: true, result: { ok: true } })
+  expect(rig.store.getRecord(SESSION)).not.toBeNull()
+  // The CLI went missing and the Setup observer is gone; neither decides an operation already run.
+  const changed = {
+    getSetupRun: () => undefined,
+    resolveStructuredAgentSessionCreateIntent: vi.fn(async () => {
+      throw agentSessionRefusalError('structured_agent_session_unsupported', {
+        reason: 'hostUnsupported'
+      })
+    })
+  }
+  const retry = (params = createParams()) => call('agentSession.create', params, CLIENT, changed)
+  expect(await retry()).toMatchObject({ ok: true, result: { ok: true, replayed: true } })
+  expect(changed.resolveStructuredAgentSessionCreateIntent).not.toHaveBeenCalled()
+
+  const refused = (code: string) => ({ ok: true, result: { ok: false, refusal: { code } } })
+  const reused = structuredAgentSessionCreateParams({
+    sessionId: SESSION,
+    worktree: 'id:workspace-1',
+    agent: 'codex',
+    firstMessage: {
+      clientMessageId: 'another',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Another' }] }
+    },
+    randomUuid: () => '00000000-0000-0000-0000-0000000000fa',
+    now: NOW
+  })
+  expect(await retry(reused)).toMatchObject(refused('agent_session_operation_conflict'))
+
+  const recorded = rig.store.getOperationRow
+  vi.spyOn(rig.store, 'getOperationRow').mockImplementation((...key) => {
+    const row = recorded(...key)
+    return row && { ...row, outcome: { status: 'unknown' } }
+  })
+  expect(await retry()).toMatchObject(refused('agent_session_operation_unknown'))
+  expect(changed.resolveStructuredAgentSessionCreateIntent).not.toHaveBeenCalled()
+})

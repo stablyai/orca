@@ -15,6 +15,7 @@ import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/age
 import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/structured-agent-session-create'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch-params'
+import type { AgentLaunchTerminalStartupParams } from '../../shared/rpc-contract/agent-launch-accept-params'
 import { toAgentLaunchPreferences } from '../../shared/agent-launch-preferences'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../opencode/opencode-model-startup-plan'
 
@@ -49,6 +50,8 @@ export type AgentLaunchSurfaceFactory = {
     viewMode?: 'terminal' | 'chat'
     /** Account routing overrides merged over the agent environment. */
     accountEnv?: Readonly<Record<string, string>>
+    /** The caller's own command, run instead of the configured launcher; `draft` is left unsent once it is ready. */
+    startup?: Omit<AgentLaunchTerminalStartupParams, 'promptDelivery'> & { draft?: string }
   }): Promise<{
     handle: string
     /** Omit when the runtime reports no pane; never invent one. */

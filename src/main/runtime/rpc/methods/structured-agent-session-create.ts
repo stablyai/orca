@@ -33,9 +33,13 @@ import {
   type StructuredAgentCliSourceEvidence
 } from '../../../native-chat/structured-agent-cli-source'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
+import {
+  resolveUncommittedStructuredCreate,
+  type StructuredCreateRefused
+} from './structured-agent-session-precommit-refusal'
 import { structuredAgentSessionClosedBeforeCreate } from './structured-agent-session-close-before-create'
 import type { ChatTabPlacement } from '../../agent-session/agent-session-tab-layout'
+import { replayRecordedAtRestCreate } from './structured-agent-session-create-replay'
 
 export type PreparedStructuredAgentSessionCreate = {
   host: StructuredAgentSessionHost
@@ -94,7 +98,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
   atRest?: boolean
-}): Promise<PreparedStructuredAgentSessionCreate> {
+}): Promise<PreparedStructuredAgentSessionCreate | StructuredCreateRefused> {
   const structuredAgentCliSourceEvidence =
     args.structuredAgentCliSourceEvidence ??
     (args.resumeFrom?.cliSource
@@ -104,8 +108,16 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
           (source) => args.runtime.getStructuredAgentCliSourceRoute(source)
         )
       : undefined)
-  // Adoption replay may need the record loaded from disk before source discovery can be skipped.
-  let host = args.resumeFrom ? await args.ensureHost() : null
+  // Adoption replay may need the record loaded from disk before source discovery can be skipped,
+  // and a recorded at-rest create answers from its record before fresh support is asked.
+  let host = args.resumeFrom || args.atRest !== undefined ? await args.ensureHost() : null
+  const recorded =
+    host && args.atRest !== undefined
+      ? replayRecordedAtRestCreate(host, { ...args, atRest: args.atRest })
+      : null
+  if (recorded) {
+    return recorded
+  }
   const resolved = await args.runtime.resolveStructuredAgentSessionCreateIntent({
     envelope: args.envelope,
     worktree: args.worktree,

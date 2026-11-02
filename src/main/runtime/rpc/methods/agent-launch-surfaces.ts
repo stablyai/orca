@@ -28,6 +28,7 @@ import {
   type TerminalSpawnDispatch
 } from '../../../agent-launch/agent-launch-not-started'
 import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch-tab-closed'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   agentLaunchMovesHostWindow,
   agentLaunchTabViewerRule,
@@ -130,7 +131,8 @@ export function agentLaunchSurfaceFactory(
       paneKey,
       options,
       viewMode,
-      accountEnv
+      accountEnv,
+      startup
     }) => {
       const launchPreferences = toAgentLaunchPreferences(options, agent)
       let promptRodeLaunchCommand = false
@@ -142,27 +144,31 @@ export function agentLaunchSurfaceFactory(
       const created = context.runtime.createTerminal(`id:${worktreeId}`, {
         // An agent launch the caller asked for (CLI, window or paired client) is the user's act.
         wslUserAct: true,
-        // Let the runtime build the configured launcher: agent ids are not commands (cursor uses cursor-agent).
-        startupAgent: agent,
+        ...(startup
+          ? callerBuiltStartup(agent, startup)
+          : {
+              // Let the runtime build the configured launcher: agent ids are not commands (cursor uses cursor-agent).
+              startupAgent: agent,
+              // The runtime reports typed-line prompt carry; paste only when the command did not carry it.
+              ...(startupPrompt
+                ? {
+                    startupPrompt,
+                    onStartupPromptCarry: (carried: boolean) => {
+                      promptRodeLaunchCommand = carried
+                    }
+                  }
+                : {}),
+              ...(agentArgs !== undefined ? { agentArgs } : {}),
+              // The model the user picked outranks configured args here too, as it does on a chat.
+              ...(launchPreferences ? { launchPreferences } : {}),
+              ...(accountEnv ? { accountEnv: { ...accountEnv } } : {})
+            }),
         terminalImageViewerSupported: terminalImageViewerSupported(context),
-        // The runtime reports typed-line prompt carry; paste only when the command did not carry it.
-        ...(startupPrompt
-          ? {
-              startupPrompt,
-              onStartupPromptCarry: (carried: boolean) => {
-                promptRodeLaunchCommand = carried
-              }
-            }
-          : {}),
-        ...(agentArgs !== undefined ? { agentArgs } : {}),
         ...(cwd ? { cwd } : {}),
-        // The model the user picked outranks configured args here too, as it does on a chat.
-        ...(launchPreferences ? { launchPreferences } : {}),
         // A live reserved pane would be attached, not launched into, so the runtime refuses it.
         ...(paneKey ? { ...paneIdentity(paneKey), requireFreshPane: true } : {}),
         ...(launchSource ? { launchSource } : {}),
         ...(viewMode ? { viewMode } : {}),
-        ...(accountEnv ? { accountEnv: { ...accountEnv } } : {}),
         ...(presentation && (!movesHostWindow || !hasEarlyTab || presentation === 'background')
           ? { presentation: movesHostWindow ? presentation : ('background' as const) }
           : {}),
@@ -182,6 +188,12 @@ export function agentLaunchSurfaceFactory(
         // Close a terminal created after its tab was closed before pasting; command-line prompts may already have reached it.
         await context.runtime.closeTerminal(terminal.handle).catch(() => {})
         throw new AgentLaunchTabClosedError()
+      }
+      if (startup?.draft) {
+        context.runtime.pasteStartupDraftWhenReady(terminal.handle, {
+          agent,
+          content: startup.draft
+        })
       }
       return {
         handle: terminal.handle,
@@ -223,6 +235,22 @@ export function agentLaunchSurfaceFactory(
         ...(signal ? { signal } : {})
       })
     }
+  }
+}
+
+/** The caller quoted this command for its host; the runtime spawns it as given, attributed to `agent`. */
+function callerBuiltStartup(
+  agent: TuiAgent,
+  startup: NonNullable<Parameters<AgentLaunchSurfaceFactory['createTerminalAgent']>[0]['startup']>
+) {
+  return {
+    command: startup.command,
+    launchAgent: agent,
+    ...(startup.env ? { env: { ...startup.env } } : {}),
+    ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
+    ...(startup.startupCommandDelivery
+      ? { startupCommandDelivery: startup.startupCommandDelivery }
+      : {})
   }
 }
 

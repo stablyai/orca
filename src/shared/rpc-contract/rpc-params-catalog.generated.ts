@@ -65,6 +65,7 @@ import {
   SelectDataAccountParams
 } from './accounts-params'
 import { PrepareCodexForWslPaneParams } from './agent-hooks-params'
+import { AgentLaunchAccept, AgentLaunchStatus } from './agent-launch-accept-params'
 import { AgentLaunch, AgentLaunchReplay } from './agent-launch-params'
 import { AgentLaunchSettingsMutation } from './agent-launch-settings-params'
 import {
@@ -614,7 +615,6 @@ import {
   RespondParams,
   RespondToQuestionParams,
   RestartResumableParams,
-  RestartResumeParams,
   RevealParams,
   RewindParams,
   SendParams,
@@ -767,7 +767,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.zcodePlanCredentialsStatus': null,
   'accounts.zcodePlanSaveApiKey': UsageCredentialApiKeyParams,
   'agent.launch': AgentLaunch,
+  'agent.launchAccept': AgentLaunchAccept,
   'agent.launchReplay': AgentLaunchReplay,
+  'agent.launchStatus': AgentLaunchStatus,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,
   'agentSession.agents': AgentsParams,
@@ -800,10 +802,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.rename': RenameParams,
   'agentSession.respondToApproval': RespondParams,
   'agentSession.respondToQuestion': RespondToQuestionParams,
-  'agentSession.restartContinue': RestartResumeParams,
+  'agentSession.restartContinue': RestartResumableParams,
   'agentSession.restartResumable': RestartResumableParams,
   'agentSession.restartResumableDismiss': RestartResumableParams,
-  'agentSession.restartResume': RestartResumeParams,
+  'agentSession.restartResume': RestartResumableParams,
   'agentSession.reveal': RevealParams,
   'agentSession.rewind': RewindParams,
   'agentSession.send': SendParams,

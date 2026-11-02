@@ -209,7 +209,8 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     return recordCreatedWorktreeLineageState(this.store, worktree, lineageResolution)
   }
 
-  protected pasteStartupDraftWhenReady(handle: string, draft: WorktreeStartupDraftPaste): void {
+  /** Leave text unsent in an agent's input once it starts, as a workspace's startup draft is. */
+  pasteStartupDraftWhenReady(handle: string, draft: WorktreeStartupDraftPaste): void {
     pasteWorktreeStartupDraftWhenReady(this.getWorktreeStartupReadinessHost(), handle, draft)
   }
 

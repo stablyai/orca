@@ -7,6 +7,10 @@ import type { RpcContext } from '../core'
 import { readsAgentLaunchTabClosed, type AgentLaunchRefusal } from './agent-launch-replay'
 import type { EarlyAgentLaunchTab } from './agent-launch-tab-publication'
 import { agentLaunchFailureCode } from './agent-launch-failure-code'
+import {
+  WorktreeCreateCollisionError,
+  WORKTREE_CREATE_COLLISION_CODE
+} from '../../../../shared/new-workspace/worktree-create-collision'
 
 export class AgentLaunchExecutionError extends Error {
   constructor(
@@ -54,6 +58,29 @@ export async function withEarlyTab<T>(
     )
     throw error
   }
+}
+
+/** What agent.launchReplay answers for a failed launch.
+ * Nested failures cannot authorize another workspace, regardless of their message or code. */
+export function launchReplayAnswer(error: unknown, context: RpcContext): unknown {
+  if (!(error instanceof AgentLaunchExecutionError)) {
+    return error
+  }
+  if (error.cause instanceof AgentLaunchSetupNotCompletedError) {
+    return error.cause
+  }
+  if (error.cause instanceof WorktreeCreateCollisionError) {
+    return Object.assign(new Error(error.cause.message, { cause: error.cause }), {
+      code: WORKTREE_CREATE_COLLISION_CODE
+    })
+  }
+  if (error.cause instanceof AgentLaunchTabClosedError) {
+    return agentLaunchTabClosedAnswer(context)
+  }
+  if (error.failedWithoutEffects) {
+    return error.cause
+  }
+  return new Error('agent_session_operation_unknown', { cause: error.cause })
 }
 
 /** Use the definite tab-closed answer only for callers that understand it; older callers retain uncertainty. */

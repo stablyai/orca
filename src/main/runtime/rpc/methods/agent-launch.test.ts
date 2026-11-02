@@ -296,8 +296,7 @@ describe('the worktree factory', () => {
 
   it.each([
     { kind: 'failed', exitCode: 1 },
-    { kind: 'ended', reason: 'preparation_failed' },
-    { kind: 'ended', reason: 'observation_lost' }
+    { kind: 'ended', reason: 'preparation_failed' }
   ] as const)('never starts a structured agent or fallback after setup $kind', async (outcome) => {
     const setupRun = createSetupRun(true)
     setupRun.settle(outcome)

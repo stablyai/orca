@@ -7,3 +7,6 @@ export class AgentLaunchTabClosedError extends Error {
     this.name = 'AgentLaunchTabClosedError'
   }
 }
+
+/** The reserved chat was closed before any surface existed, so nothing started. */
+export class AgentLaunchClosedBeforeDispatchError extends AgentLaunchTabClosedError {}

@@ -45,6 +45,17 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
   ) {
     return 'wait'
   }
+  // A status read may hold its reply up to 20s for an accepted launch to settle.
+  if (
+    request.method === 'agent.launchStatus' &&
+    typeof request.params === 'object' &&
+    request.params !== null &&
+    'waitMs' in request.params &&
+    typeof request.params.waitMs === 'number' &&
+    request.params.waitMs > 0
+  ) {
+    return 'wait'
+  }
   // Chat inject may wait 60s for acceptance and needs keepalive past 30s idle; terminal inject stays a short RPC.
   if (
     request.method === 'orchestration.dispatch' &&

@@ -1,6 +1,5 @@
 import { activeAgentLaunchesFor } from './agent-launch-in-flight'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
-import { AgentLaunchSetupNotCompletedError } from '../../setup/setup-run'
 /** Capability-gated surface routing; callers must inspect outcome.kind and receipt for fallback reasons.
  * Keep worktree.create's PTY/handle contract for older clients.
  * operationId adds durable at-most-once execution and recorded replay; unknown outcomes refuse, while stranded-surface recovery remains separate. */
@@ -10,22 +9,20 @@ import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch-tab-c
 import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
 import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
 import { agentSessionOperationKey } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
-import {
-  WorktreeCreateCollisionError,
-  WORKTREE_CREATE_COLLISION_CODE
-} from '../../../../shared/new-workspace/worktree-create-collision'
 import { executeAgentLaunch } from '../../../agent-launch/agent-launch-executor'
 import { trackTerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
 import { defineMethod, type RpcContext } from '../core'
 import {
   admitAgentLaunchOperation,
   agentLaunchOperationCallerKey,
+  type AcceptedAgentLaunch,
   type ReplaySafeLaunch
 } from './agent-launch-replay'
 import {
   AgentLaunchExecutionError,
   agentLaunchRefusalError,
   agentLaunchTabClosedAnswer,
+  launchReplayAnswer,
   settleLaunchWhoseTabWasClosed,
   settleQuietly,
   withEarlyTab
@@ -75,6 +72,7 @@ async function runAgentLaunch(
     runtime: context.runtime,
     intent,
     decidedMode,
+    ...(replaySafe?.acceptance ? { acceptance: replaySafe.acceptance } : {}),
     surfaces: agentLaunchSurfaceFactory(
       context,
       replaySafe?.attachOperationId,
@@ -133,10 +131,12 @@ function runLegacyAgentLaunch(
 async function executeReplaySafeAgentLaunch(
   params: AgentLaunchParams & { operationId: string },
   context: HostLaunchContext,
-  fingerprint: string
+  fingerprint: string,
+  accepted?: AcceptedAgentLaunch
 ): Promise<AgentLaunchResult> {
   // The tab is the host's first act: admission has a cold cost the user should not watch.
-  const early = await publishEarlyTab(params, context)
+  // An accepted launch publishes nothing before dispatch; its caller shows its own pending surface.
+  const early = accepted ? null : await publishEarlyTab(params, context)
   let admission: Awaited<ReturnType<typeof admitAgentLaunchOperation>>
   try {
     admission = await admitAgentLaunchOperation(context, params, fingerprint, Date.now())
@@ -144,6 +144,7 @@ async function executeReplaySafeAgentLaunch(
     early?.finish()
     throw error
   }
+  accepted?.onAdmitted(admission)
   if (admission.decision !== 'execute') {
     // No effect runs on refusal; remove only this request's empty tab, never a pane that survived for replay.
     early?.finish(
@@ -161,7 +162,8 @@ async function executeReplaySafeAgentLaunch(
   return withEarlyTab(early, () =>
     executeAdmittedAgentLaunch(params, context, admission, {
       early,
-      presentation: params.presentation
+      presentation: params.presentation,
+      ...(accepted ? { acceptance: accepted.acceptance } : {})
     })
   )
 }
@@ -173,12 +175,14 @@ async function executeAdmittedAgentLaunch(
     Awaited<ReturnType<typeof admitAgentLaunchOperation>>,
     { decision: 'execute' }
   >,
-  view: AgentLaunchView
+  // An accepted launch's Setup and close travel with its view into the execution.
+  { acceptance, ...view }: AgentLaunchView & Pick<ReplaySafeLaunch, 'acceptance'>
 ): Promise<AgentLaunchResult> {
   let resolved: Awaited<ReturnType<typeof resolveUnlaunchedIntent>>
   try {
     resolved = await resolveUnlaunchedIntent(params, context.runtime, view.early, {
-      callerRendersStructured: callerRendersLaunchedChat(context, params.agent)
+      callerRendersStructured: callerRendersLaunchedChat(context, params.agent),
+      afterSetup: acceptance !== undefined
     })
   } catch (error) {
     await settleQuietly(admission.fail(agentLaunchFailureCode(error), error))
@@ -192,7 +196,8 @@ async function executeAdmittedAgentLaunch(
       attachOperationId: admission.attachOperationId,
       callerKey: admission.callerKey,
       terminalSpawn,
-      recordSurface: (provisional) => void settleQuietly(admission.record(provisional))
+      recordSurface: (provisional) => void settleQuietly(admission.record(provisional)),
+      ...(acceptance ? { acceptance } : {})
     })
   } catch (error) {
     if (view.early?.closedByUser()) {
@@ -217,9 +222,11 @@ async function executeAdmittedAgentLaunch(
   return handedOff(result)
 }
 
-function runReplaySafeAgentLaunch(
+/** One in-process execution per caller operation: a retry or an accepted launch's read joins it. */
+export function runReplaySafeAgentLaunch(
   params: AgentLaunchParams & { operationId: string },
-  context: HostLaunchContext
+  context: HostLaunchContext,
+  accepted?: AcceptedAgentLaunch
 ): Promise<AgentLaunchResult> {
   const callerKey = agentLaunchOperationCallerKey(context)
   const key = agentSessionOperationKey(callerKey, params.operationId)
@@ -234,7 +241,7 @@ function runReplaySafeAgentLaunch(
   }
 
   let promise: Promise<AgentLaunchResult>
-  promise = executeReplaySafeAgentLaunch(params, context, fingerprint).finally(() => {
+  promise = executeReplaySafeAgentLaunch(params, context, fingerprint, accepted).finally(() => {
     if (activeAgentLaunches.get(key)?.promise === promise) {
       activeAgentLaunches.delete(key)
     }
@@ -260,25 +267,7 @@ export const AGENT_LAUNCH_METHODS = [
           context.signal
         )
       } catch (error) {
-        // Nested failures cannot authorize another workspace, regardless of their message or code.
-        if (error instanceof AgentLaunchExecutionError) {
-          if (error.cause instanceof AgentLaunchSetupNotCompletedError) {
-            throw error.cause
-          }
-          if (error.cause instanceof WorktreeCreateCollisionError) {
-            throw Object.assign(new Error(error.cause.message, { cause: error.cause }), {
-              code: WORKTREE_CREATE_COLLISION_CODE
-            })
-          }
-          if (error.cause instanceof AgentLaunchTabClosedError) {
-            throw agentLaunchTabClosedAnswer(context)
-          }
-          if (error.failedWithoutEffects) {
-            throw error.cause
-          }
-          throw new Error('agent_session_operation_unknown', { cause: error.cause })
-        }
-        throw error
+        throw launchReplayAnswer(error, context)
       }
     }
   }),

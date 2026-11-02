@@ -21,6 +21,11 @@ import type { TerminalSpawnDispatch } from '../../../agent-launch/agent-launch-n
 import { FolderWorkspaceCreateRefusedError } from '../../../project-groups/folder-workspace-create-refusal'
 import { WorktreeCreateSetupChoiceRefusedError } from '../../worktree-create-setup-choice-refusal'
 import { AgentLaunchSurfaceUnavailableError } from '../../../agent-launch/agent-launch-surface-refusal'
+import { AgentLaunchSetupNotCompletedError } from '../../setup/setup-run'
+import {
+  AGENT_LAUNCH_TAB_CLOSED_CODE,
+  AgentLaunchClosedBeforeDispatchError
+} from '../../../../shared/agent-launch-tab-closed'
 
 /** Long enough for every code this path raises, with room for one a later guard adds. */
 const LAUNCH_FAILURE_CODE_MAX_LENGTH = 128
@@ -43,6 +48,7 @@ export function agentLaunchFailureMessage(
   return (
     formatTerminalStartFailure(error) ??
     (error instanceof OrchestrationError ||
+    error instanceof AgentLaunchSetupNotCompletedError ||
     (error instanceof RuntimeLineageError &&
       error.code === LINEAGE_PARENT_AMBIGUOUS &&
       targetKind === 'create-worktree')
@@ -87,6 +93,13 @@ export function launchFailureWithoutEffectsCode(
     targetKind === 'create-worktree'
   ) {
     return LINEAGE_PARENT_AMBIGUOUS
+  }
+  // Only an accepted existing-workspace launch waits for Setup or a close before any surface.
+  if (error instanceof AgentLaunchSetupNotCompletedError && targetKind === 'existing') {
+    return error.code
+  }
+  if (error instanceof AgentLaunchClosedBeforeDispatchError) {
+    return AGENT_LAUNCH_TAB_CLOSED_CODE
   }
   if (error instanceof AgentLaunchPaneAlreadyLiveError && targetKind === 'existing') {
     return AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE

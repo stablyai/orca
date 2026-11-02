@@ -81,13 +81,21 @@ export async function resolveUnlaunchedIntent(
   params: AgentLaunchParams,
   runtime: OrcaRuntimeService,
   early: EarlyAgentLaunchTab | null,
-  modeOptions: { terminalOnly?: boolean; callerRendersStructured?: boolean } = {}
+  {
+    afterSetup,
+    ...modeOptions
+  }: {
+    terminalOnly?: boolean
+    callerRendersStructured?: boolean
+    /** Accepted before Setup: host support is asked only after it, so preflight alone decides here. */
+    afterSetup?: boolean
+  } = {}
 ): Promise<{ intent: AgentLaunchIntent; decidedMode: AgentLaunchModeReceipt }> {
   const intent = await agentLaunchIntent(params, runtime, early?.paneKey)
   await validateReusedTerminal(intent, runtime)
   const preflight = decideAgentLaunchIntentMode({ intent, runtime, ...modeOptions })
   const decidedMode =
-    intent.target.kind === 'existing'
+    intent.target.kind === 'existing' && !afterSetup
       ? await resolveAgentLaunchModeOnHost(
           runtime,
           preflight,

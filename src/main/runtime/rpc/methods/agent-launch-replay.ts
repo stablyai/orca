@@ -14,6 +14,7 @@ import type {
 } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import { resolveAgentSessionReplayOutcome } from '../../../native-chat/agent-session-wire/structured-agent-session-replay-outcome'
 import type { TerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
+import type { AgentLaunchAcceptance } from '../../../agent-launch/agent-launch-acceptance'
 import type { RpcContext } from '../core'
 import { rpcCallerOperationKey } from '../rpc-caller-identity'
 import { agentLaunchFailureMessage } from './agent-launch-failure-code'
@@ -37,6 +38,13 @@ export type ReplaySafeLaunch = {
   terminalSpawn: TerminalSpawnDispatch
   /** Queue provisional surface/prompt recording without awaiting it; ordered ledger transactions keep final settlement after it. */
   recordSurface: (provisional: AgentLaunchResult) => void
+  acceptance?: AgentLaunchAcceptance
+}
+
+/** A launch accepted before Setup: what it waits on, and who hears its admission before it runs. */
+export type AcceptedAgentLaunch = {
+  acceptance: AgentLaunchAcceptance
+  onAdmitted: (admission: AgentLaunchAdmission) => void
 }
 
 export type AgentLaunchAdmission =
@@ -156,6 +164,16 @@ function presentRecordedAnswer(
     )
   }
   return { decision: 'replay', result: withLiveTerminalHandle(answer.result, context.runtime) }
+}
+
+/** A recorded row's answer as admission would give it; null while no one has answered it yet. */
+export function recordedAgentLaunchAnswer(
+  context: RpcContext,
+  operationId: string,
+  outcome: AgentSessionOperationOutcome
+): AgentLaunchAdmission | null {
+  const answer = answerFromRecordedRow(operationId, outcome)
+  return answer ? presentRecordedAnswer(context, operationId, answer) : null
 }
 
 /** Admit and conditionally claim in one durable transaction.
