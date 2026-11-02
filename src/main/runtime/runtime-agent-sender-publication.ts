@@ -28,6 +28,7 @@ function sameContent(
  *  when what clients read changes, so every delivery can say "unchanged" without the rows; the
  *  epoch is new for each runtime, so a replaced runtime is never mistaken for an older one. */
 export class AgentSenderPublisher {
+  constructor(private readonly ownsScope: (worktreeId: string) => boolean = () => false) {}
   readonly epoch = randomUUID()
   private revision = 0
   private publication: AgentSenderPublication = this.stamp({
@@ -36,6 +37,9 @@ export class AgentSenderPublisher {
     attachments: []
   })
   private scoped = new Map<string, AgentSenderScope>()
+  private framed = new Map<string, AgentSenderPublication>()
+  private contents = new Map<string, Content>()
+  private empty = this.stamp({ ...this.hostFields(), associations: [], attachments: [] })
 
   current(): AgentSenderPublication {
     return this.publication
@@ -45,10 +49,46 @@ export class AgentSenderPublisher {
   scope(worktreeId: string): AgentSenderPublication {
     let scoped = this.scoped.get(worktreeId)
     if (!scoped) {
-      scoped = this.stamp({ ...this.hostFields(), associations: [], attachments: [] })
-      this.scoped.set(worktreeId, scoped)
+      const content = this.contents.get(worktreeId)
+      scoped = content ? this.stamp(content) : this.empty
+      if (this.ownsScope(worktreeId) || content) {
+        this.scoped.set(worktreeId, scoped)
+      }
     }
     return scoped
+  }
+
+  retireScope(worktreeId: string): void {
+    this.scoped.delete(worktreeId)
+    this.framed.delete(worktreeId)
+  }
+
+  hasScope(worktreeId: string): boolean {
+    return this.scoped.has(worktreeId) || this.contents.has(worktreeId)
+  }
+
+  frame(worktreeId: string): AgentSenderPublication {
+    const scope = this.scope(worktreeId)
+    if (!this.framed.has(worktreeId) && this.hasScope(worktreeId)) {
+      this.framed.set(worktreeId, scope)
+    }
+    return scope
+  }
+
+  acknowledgeFrame(worktreeId: string, scope: AgentSenderPublication): void {
+    if (this.hasScope(worktreeId)) {
+      this.framed.set(worktreeId, scope)
+    }
+  }
+
+  changedScopes(worktreeIds: Iterable<string>): string[] {
+    return [...worktreeIds].filter(
+      (id) => this.framed.has(id) && this.framed.get(id) !== this.scope(id)
+    )
+  }
+
+  scopeCountsForTest() {
+    return { scoped: this.scoped.size, framed: this.framed.size }
   }
 
   /** A window graph reply: the rows only when the window's applied base is not current. */
@@ -69,6 +109,7 @@ export class AgentSenderPublisher {
     this.revision++
     this.publication = this.stamp(next)
     const host = this.hostFields()
+    this.empty = this.stamp({ ...host, associations: [], attachments: [] })
     const scopes = new Map<string, Content>()
     const scopeOf = (worktreeId: string) => {
       let scope = scopes.get(worktreeId)
@@ -78,19 +119,29 @@ export class AgentSenderPublisher {
       }
       return scope
     }
-    for (const id of this.scoped.keys()) {
-      scopeOf(id)
-    }
     for (const row of next.associations) {
       scopeOf(row.worktreeId).associations.push(row)
     }
     for (const row of next.attachments) {
       scopeOf(row.worktreeId).attachments.push(row)
     }
+    this.contents = new Map(scopes)
+    for (const id of this.scoped.keys()) {
+      if (this.contents.has(id) || this.ownsScope(id)) {
+        scopeOf(id)
+      } else {
+        this.scoped.delete(id)
+      }
+    }
     for (const [id, scope] of scopes) {
       const previous = this.scoped.get(id)
       if (!previous || !sameContent(previous, scope)) {
         this.scoped.set(id, this.stamp(scope))
+      }
+    }
+    for (const id of this.framed.keys()) {
+      if (!this.hasScope(id)) {
+        this.framed.delete(id)
       }
     }
   }

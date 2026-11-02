@@ -62,19 +62,21 @@ it.each([100, 1000])(
         worktreeId: WORKTREE_ID,
         ptyId: `leaf-pty-${i}`
       }
-      runtime['leaves'].set(runtime['getLeafKey'](leaf.tabId, LEAF_ID), leaf)
+      runtime['terminalIdentity'].replaceLeaves(
+        new Map(runtime['leaves']).set(runtime['getLeafKey'](leaf.tabId, LEAF_ID), leaf)
+      )
       runtime['issueHandle'](leaf)
     }
     // A leafless terminal whose handle survives only as its record, as invalidating its other
     // aliases leaves it, and n leafless terminals that hold no handle.
     const kept = makeTuiIdlePty({ ptyId: 'kept', incarnationId: 'inc-1', worktreeId: WORKTREE_ID })
     const keptHandle = runtime['issuePtyHandle'](kept)
-    runtime['handleByPtyId'].delete('kept')
+    runtime['terminalIdentity'].unbindPty('kept')
     const unissued = Array.from({ length: n }, (_, i) =>
       makeTuiIdlePty({ ptyId: `bare-${i}`, incarnationId: 'inc-1', worktreeId: WORKTREE_ID })
     )
     const passes = vi.spyOn(runtime['handles'], Symbol.iterator)
-    const read = runtime['peekPtyHandles']()
+    const read = runtime['terminalHandleAccess']().readPtyHandles()
     expect(read(kept)).toBe(keptHandle)
     expect(unissued.map(read).filter((handle) => handle !== null)).toEqual([])
     expect(passes).toHaveBeenCalledTimes(1)

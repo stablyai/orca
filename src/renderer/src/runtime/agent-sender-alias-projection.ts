@@ -28,6 +28,7 @@ const memo = new WeakMap<object, Memo>()
 const lastByBucket = new Map<string, AliasPart>()
 let aliasVisits = 0
 export const agentSenderAliasWorkForTest = () => aliasVisits
+export const agentSenderAliasBucketsForTest = () => [...lastByBucket.keys()]
 
 function part(
   id: string,
@@ -46,6 +47,7 @@ function part(
       [...cached.hosts].every(([worktreeId, host]) => hostOf(worktreeId) === host)
     ) {
       cached.owner = owner
+      lastByBucket.set(id, cached.part)
       return cached.part
     }
   }
@@ -74,6 +76,13 @@ function part(
 
 /** Each tab bucket's aliases, recomputed only for a bucket whose array or read hosts changed. */
 export function agentSenderAliasParts(state: AppState): readonly AliasPart[] {
+  for (const id of lastByBucket.keys()) {
+    const split = id.indexOf(':')
+    const buckets = id.startsWith('chat:') ? state.unifiedTabsByWorktree : state.tabsByWorktree
+    if (!Object.hasOwn(buckets, id.slice(split + 1))) {
+      lastByBucket.delete(id)
+    }
+  }
   const owner = structuredAgentSessionOwnerInputs(state)
   const chatOwner = (worktreeId: string) => resolveStructuredAgentSessionOwner(state, worktreeId)
   const terminalOwner = (worktreeId: string) =>

@@ -11,6 +11,7 @@ import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../shared/runtime-
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
 import { getMobileSessionTabOrderIds } from '../mobile-session-tab-merge'
 import { readCreatedWorkspaceLaunch } from '../../agent-launch/agent-launch-created-workspace'
+import type { AgentSenderRevision } from '../../../shared/agent-sender-associations'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab {
@@ -45,57 +46,122 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
       return
     }
     // Browser events are workspace-scoped; navigation/churn must not broadcast every workspace.
-    const result = this.toMobileSessionTabsFrame(snapshot)
-    for (const subscription of this.mobileSessionTabListeners) {
-      subscription.listener(
-        this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
-        changeSequence
-      )
-    }
+    this.createMobileSessionTabsDelivery()(this.toMobileSessionTabsResult(snapshot), changeSequence)
   }
 
   protected notifyMobileSessionTabSnapshots(): void {
     if (this.mobileSessionTabListeners.size === 0) {
       return
     }
-    for (const result of this.toMobileSessionTabsFrames(
-      this.mobileSessionTabsByWorktree.values()
-    )) {
-      const changeSequence = ++this.mobileSessionTabsChangeSequence
-      for (const subscription of this.mobileSessionTabListeners) {
-        subscription.listener(
-          this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
-          changeSequence
-        )
+    const deliver = this.createMobileSessionTabsDelivery()
+    for (const snapshot of this.mobileSessionTabsByWorktree.values()) {
+      deliver(this.toMobileSessionTabsResult(snapshot), ++this.mobileSessionTabsChangeSequence)
+    }
+  }
+
+  /** One lazy sender pass belongs to this synchronous delivery, shared across scopes and listeners. */
+  protected createMobileSessionTabsDelivery() {
+    let senderScope: ReturnType<typeof this.agentProjections.senders.buildForFramePass> | undefined
+    return (
+      result: RuntimeMobileSessionTabsResult,
+      changeSequence: number,
+      clientNavigationId?: string
+    ): void => {
+      const { agentSenderAssociations: _senders, ...tabsOnly } = result
+      let desktopFrame: RuntimeMobileSessionTabsResult | undefined
+      try {
+        for (const subscription of this.mobileSessionTabListeners) {
+          if (
+            clientNavigationId !== undefined &&
+            subscription.clientNavigationId !== clientNavigationId
+          ) {
+            continue
+          }
+          let frame: RuntimeMobileSessionTabsResult = tabsOnly
+          if (subscription.clientKind !== 'mobile') {
+            if (!desktopFrame) {
+              if (result.agentSenderAssociations) {
+                desktopFrame = result
+              } else {
+                senderScope ??= this.agentProjections.senders.buildForFramePass()
+                desktopFrame = { ...result, agentSenderAssociations: senderScope(result.worktree) }
+              }
+            }
+            frame = desktopFrame
+          }
+          subscription.listener(
+            this.projectMobileSessionTabsForClient(frame, subscription.clientNavigationId),
+            changeSequence
+          )
+        }
+        if (clientNavigationId === undefined && desktopFrame?.agentSenderAssociations) {
+          this.agentProjections.senders.acknowledgeFrame(
+            result.worktree,
+            desktopFrame.agentSenderAssociations
+          )
+        }
+      } finally {
+        if (senderScope) {
+          this.releaseAgentSenderHistoryIfUnobserved()
+        }
       }
     }
   }
 
-  /** A client frame: the public tabs plus sender identity, which internal tab lookups never pay for. */
-  protected toMobileSessionTabsFrame(
-    snapshot: RuntimeMobileSessionTabsSnapshot
-  ): RuntimeMobileSessionTabsResult {
-    return {
-      ...this.toMobileSessionTabsResult(snapshot),
-      agentSenderAssociations: this.agentProjections.senders.buildForFrame(snapshot.worktree)
+  protected agentSenderGraphReply(base: AgentSenderRevision | undefined) {
+    try {
+      return this.agentProjections.senders.buildForGraph(base)
+    } finally {
+      this.releaseAgentSenderHistoryIfUnobserved()
     }
   }
 
-  /** Frames for many worktrees in one pass, from one sender refresh rather than one per frame. */
+  protected toMobileSessionTabsFrame(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    includeAgentSenders = true
+  ): RuntimeMobileSessionTabsResult {
+    const result = this.toMobileSessionTabsResult(snapshot)
+    return includeAgentSenders ? this.withMobileSessionTabSenders(result) : result
+  }
+
+  protected withMobileSessionTabSenders(
+    result: RuntimeMobileSessionTabsResult
+  ): RuntimeMobileSessionTabsResult {
+    try {
+      return {
+        ...result,
+        agentSenderAssociations: this.agentProjections.senders.buildForFrame(result.worktree)
+      }
+    } finally {
+      this.releaseAgentSenderHistoryIfUnobserved()
+    }
+  }
+
   protected toMobileSessionTabsFrames(
-    snapshots: Iterable<RuntimeMobileSessionTabsSnapshot>
+    snapshots: Iterable<RuntimeMobileSessionTabsSnapshot>,
+    includeAgentSenders = true
   ): RuntimeMobileSessionTabsResult[] {
-    const senderScope = this.agentProjections.senders.buildForFramePass()
-    return [...snapshots].map((snapshot) => ({
-      ...this.toMobileSessionTabsResult(snapshot),
-      agentSenderAssociations: senderScope(snapshot.worktree)
-    }))
+    let senderScope: ReturnType<typeof this.agentProjections.senders.buildForFramePass> | undefined
+    try {
+      return [...snapshots].map((snapshot) => {
+        const result = this.toMobileSessionTabsResult(snapshot)
+        if (!includeAgentSenders) {
+          return result
+        }
+        senderScope ??= this.agentProjections.senders.buildForFramePass()
+        return { ...result, agentSenderAssociations: senderScope(snapshot.worktree) }
+      })
+    } finally {
+      if (senderScope) {
+        this.releaseAgentSenderHistoryIfUnobserved()
+      }
+    }
   }
 
   protected getMobileSessionTabsForWorktree(
     worktreeId: string,
     clientNavigationId?: string,
-    options?: { includeInitialSurfaceLaunch?: true }
+    options?: { includeInitialSurfaceLaunch?: true; includeAgentSenders?: boolean }
   ): RuntimeMobileSessionTabsResult {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (!snapshot) {
@@ -104,7 +170,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
         this.notifyEmptyWorktreeOnPublication(worktreeId)
       }
       const result = this.projectMobileSessionTabsForClient(
-        this.emptyMobileSessionTabsResult(worktreeId, publishedEpoch),
+        this.emptyMobileSessionTabsResult(worktreeId, publishedEpoch, options?.includeAgentSenders),
         clientNavigationId
       )
       const launch = options?.includeInitialSurfaceLaunch
@@ -113,7 +179,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
       return launch ? { ...result, initialSurfaceLaunch: launch } : result
     }
     const result = this.projectMobileSessionTabsForClient(
-      this.toMobileSessionTabsFrame(snapshot),
+      this.toMobileSessionTabsFrame(snapshot, options?.includeAgentSenders),
       clientNavigationId
     )
     const launch = options?.includeInitialSurfaceLaunch
@@ -125,11 +191,11 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
   // Only unpublished graphs mean ask later; published graphs without an entry are empty, allowing the first terminal create.
   protected emptyMobileSessionTabsResult(
     worktreeId: string,
-    publishedEpoch: number | null
+    publishedEpoch: number | null,
+    includeAgentSenders = true
   ): RuntimeMobileSessionTabsResult {
-    return {
+    const result: RuntimeMobileSessionTabsResult = {
       worktree: worktreeId,
-      agentSenderAssociations: this.agentProjections.senders.buildForFrame(worktreeId),
       publicationEpoch:
         publishedEpoch === null
           ? UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH
@@ -140,6 +206,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
       activeTabType: null,
       tabs: []
     }
+    return includeAgentSenders ? this.withMobileSessionTabSenders(result) : result
   }
 
   // Empty workspaces get no normal publication notice; explicitly settle clients previously told ask later.
@@ -158,14 +225,8 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
       ) {
         return
       }
-      const result = this.emptyMobileSessionTabsResult(worktreeId, publishedEpoch)
-      const changeSequence = ++this.mobileSessionTabsChangeSequence
-      for (const subscription of this.mobileSessionTabListeners) {
-        subscription.listener(
-          this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
-          changeSequence
-        )
-      }
+      const result = this.emptyMobileSessionTabsResult(worktreeId, publishedEpoch, false)
+      this.createMobileSessionTabsDelivery()(result, ++this.mobileSessionTabsChangeSequence)
     }
     this.sessionTabsInventoryWaiters.add(onPublished)
   }
@@ -173,17 +234,14 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
   protected emitMobileSessionTabsSnapshotToClient(
     projected: RuntimeMobileSessionTabsResult,
     clientNavigationId: string,
-    follow = false
+    follow = false,
+    deliver = this.createMobileSessionTabsDelivery()
   ): void {
-    const changeSequence = ++this.mobileSessionTabsChangeSequence
-    for (const subscription of this.mobileSessionTabListeners) {
-      if (subscription.clientNavigationId === clientNavigationId) {
-        subscription.listener(
-          follow ? { ...projected, navigationIntent: 'follow' } : projected,
-          changeSequence
-        )
-      }
-    }
+    deliver(
+      follow ? { ...projected, navigationIntent: 'follow' } : projected,
+      ++this.mobileSessionTabsChangeSequence,
+      clientNavigationId
+    )
   }
 
   protected async resolveMobileMarkdownWorktreeId(

@@ -7,6 +7,8 @@ import { createOrchestrationRpcHarness } from './methods/orchestration/rpc-test-
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 import { MIRROR_LEAVES_STEP_1 } from '../runtime-leaf-record-projection.test-fixture'
 import type { RuntimeAgentSenderAssociations } from '../runtime-agent-sender-associations'
+import { publishHeadlessRuntimeGraph } from '../headless-runtime-graph'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
 
 const harness = createOrchestrationRpcHarness()
 afterEach(() => {
@@ -38,7 +40,6 @@ it.each([50, 500])(
     }
     // The runtime's own state, reached the way its RPC refresh reaches it.
     const { senders } = runtime['agentProjections']
-    const leaves = runtime['leaves']
     const ptysById = runtime['ptysById']
     // A terminal the runtime knows, with the handle it issued when it learned of it.
     const openTerminal = (key: string, tabId: string) => {
@@ -48,7 +49,7 @@ it.each([50, 500])(
         worktreeId: 'workspace',
         ptyId: `pty-${key}`
       }
-      leaves.set(key, leaf)
+      runtime['terminalIdentity'].replaceLeaves(new Map([...runtime['leaves'], [key, leaf]]))
       runtime['issueHandle'](leaf)
     }
     openTerminal('live', 'tab_h0')
@@ -64,6 +65,7 @@ it.each([50, 500])(
     const touch = vi
       .spyOn(runtime, 'touchMobileSessionTabsForWorktree')
       .mockImplementation(() => undefined)
+    const unsubscribe = runtime.onMobileSessionTabsChanged(() => undefined, undefined, 'runtime')
     senders.buildForFrame('workspace')
     const settled = identityReads(senders)
     const walked = senders.workForTest()
@@ -95,7 +97,7 @@ it.each([50, 500])(
     expect({
       leaves: senders.workForTest().leafVisits - walked.leafVisits,
       ptys: senders.workForTest().ptyVisits - walked.ptyVisits
-    }).toEqual({ leaves: rpcs * leaves.size, ptys: rpcs * ptysById.size })
+    }).toEqual({ leaves: rpcs * runtime['leaves'].size, ptys: rpcs * ptysById.size })
     expect(touch).not.toHaveBeenCalled()
 
     // A real identity change, a new terminal, reaches only the worktree whose scope changed.
@@ -103,5 +105,55 @@ it.each([50, 500])(
     await send('after identity change')
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(touch.mock.calls.map(([worktreeId]) => worktreeId)).toEqual(['workspace'])
+    unsubscribe()
   }
 )
+
+it.each([100, 1000])(
+  'skips post-orchestration sender refresh with only phones at %i terminals',
+  async (n) => {
+    const { runtime, activeRunId } = harness.setup()
+    const leaves = new Map(runtime['leaves'])
+    for (let i = 0; i < n; i++) {
+      leaves.set(`leaf${i}`, {
+        ...MIRROR_LEAVES_STEP_1[0],
+        tabId: `tab${i}`,
+        worktreeId: 'workspace',
+        ptyId: `pty${i}`
+      })
+    }
+    runtime['terminalIdentity'].replaceLeaves(leaves)
+    const senders = runtime['agentProjections'].senders
+    const phone = runtime.onMobileSessionTabsChanged(() => undefined, 'phone', 'mobile')
+    const before = senders.workForTest()
+    const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
+    const result = await dispatcher.dispatch({
+      id: 'phone-send',
+      authToken: 'test-token',
+      method: 'orchestration.send',
+      params: { from: 'term_coord', to: `run:${activeRunId}`, subject: 'phone-only' },
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: 'phone-send'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(result.ok).toBe(true)
+    expect(senders.workForTest()).toEqual(before)
+    phone()
+  }
+)
+
+it('headless and discarded internal graph replies skip sender construction; desktop replies still build', () => {
+  const { runtime } = harness.setup()
+  const senders = runtime['agentProjections'].senders
+  const build = vi.spyOn(senders, 'buildForGraph')
+  publishHeadlessRuntimeGraph(runtime)
+  expect(build).not.toHaveBeenCalled()
+  runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+  expect(build).not.toHaveBeenCalled()
+  runtime.attachWindow(1)
+  runtime.syncWindowGraph(1, { tabs: [], leaves: [] }, { includeAgentSenders: false })
+  expect(build).not.toHaveBeenCalled()
+  const reply = runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+  expect(build).toHaveBeenCalledTimes(1)
+  expect(reply.agentSenderAssociations).toBeDefined()
+})

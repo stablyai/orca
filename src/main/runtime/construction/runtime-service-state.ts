@@ -137,6 +137,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
 
   protected readonly agentProjections = createRuntimeAgentProjections(this, {
     ...this.agentOrchestrationDependencies(),
+    hasPublishedScope: (id) => this.mobileSessionTabsByWorktree.has(id),
     ...this.terminalHandleAccess()
   })
 

@@ -42,7 +42,9 @@ function markDirty(row: 'NEW' | 'OLD', trigger: (typeof HISTORY_TRIGGERS)[number
       : [])
   ]
   return `INSERT OR IGNORE INTO temp.agent_sender_dirty (kind, key)
-  SELECT kind, key FROM (${keys.join(' UNION ALL ')}) WHERE key IS NOT NULL;`
+  SELECT kind, key FROM (${keys.join(' UNION ALL ')}) AS changed WHERE key IS NOT NULL AND EXISTS (
+    SELECT 1 FROM temp.agent_sender_tracked AS tracked
+    WHERE tracked.kind = changed.kind AND tracked.key = changed.key);`
 }
 
 // Why connection-local triggers: identity follows writes to the facts the history reads, from any
@@ -53,6 +55,8 @@ CREATE TEMP TABLE IF NOT EXISTS agent_sender_generation (
   history INTEGER NOT NULL, principals INTEGER NOT NULL);
 INSERT INTO temp.agent_sender_generation SELECT 0, 0
   WHERE NOT EXISTS (SELECT 1 FROM temp.agent_sender_generation);
+CREATE TEMP TABLE IF NOT EXISTS agent_sender_tracked (
+  kind TEXT NOT NULL, key TEXT NOT NULL, PRIMARY KEY (kind, key)) WITHOUT ROWID;
 CREATE TEMP TABLE IF NOT EXISTS agent_sender_dirty (
   kind TEXT NOT NULL, key TEXT NOT NULL, PRIMARY KEY (kind, key)) WITHOUT ROWID;
 ${HISTORY_TRIGGERS.flatMap((trigger) => {
@@ -112,4 +116,39 @@ export function readAgentSenderDirtyKeys(db: OrchestrationDb): Set<string> {
 /** Only once the history read them all: a failed refresh leaves every key for the next. */
 export function clearAgentSenderDirtyKeys(db: OrchestrationDb): void {
   db.db.prepare('DELETE FROM temp.agent_sender_dirty').run()
+}
+
+/** Track only current direct dependencies; misses occupy one slot until their owner dies. */
+export function trackAgentSenderHistoryKeys(
+  db: OrchestrationDb,
+  panes: Iterable<string>,
+  dispatches: Iterable<string>,
+  previous?: Set<string>
+): void {
+  const next = new Set([
+    ...[...panes].map((key) => `p:${key}`),
+    ...[...dispatches].map((id) => `d:${id}`)
+  ])
+  if (!previous) {
+    db.db.prepare('DELETE FROM temp.agent_sender_tracked').run()
+  }
+  const insert = db.db.prepare('INSERT OR IGNORE INTO temp.agent_sender_tracked VALUES (?, ?)')
+  const remove = db.db.prepare('DELETE FROM temp.agent_sender_tracked WHERE kind = ? AND key = ?')
+  const parts = (key: string) => [key.startsWith('p:') ? 'pane' : 'dispatch', key.slice(2)]
+  for (const key of next) {
+    if (!previous?.has(key)) {
+      insert.run(...parts(key))
+    }
+  }
+  for (const key of previous ?? []) {
+    if (!next.has(key)) {
+      remove.run(...parts(key))
+    }
+  }
+}
+
+/** An unowned projection retains no event backlog; the next owner starts from current facts. */
+export function releaseAgentSenderHistoryKeys(db: OrchestrationDb): void {
+  db.db.prepare('DELETE FROM temp.agent_sender_tracked').run()
+  clearAgentSenderDirtyKeys(db)
 }

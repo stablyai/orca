@@ -7,7 +7,6 @@ import { worktreeIdentityKey, worktreeIdsEqual } from '../../../../shared/worktr
 import { defineMethod, defineStreamingMethod } from '../core'
 import {
   CreateTerminalTab,
-  SessionTabsUnsubscribe,
   WorktreeTabSelector
 } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import { SESSION_TAB_CLOSE_METHODS } from './session-tab-close-methods'
@@ -21,9 +20,12 @@ import { SESSION_TAB_MUTATION_METHODS } from './session-tab-mutation-methods'
 import { createSessionTabsStreamDelta } from './session-tabs-sender-delta'
 import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../ai-vault/structured-session-ownership'
-import { SessionTabsUnsubscribeAllParams } from '../../../../shared/rpc-contract/session-tabs-params'
 import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { createSessionTabsTabDeltaEncoder } from '../../../../shared/session-tabs-tab-delta'
+import {
+  SESSION_TABS_UNSUBSCRIBE_METHOD,
+  SESSION_TABS_UNSUBSCRIBE_ALL_METHOD
+} from './session-tabs-unsubscribe'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 
 export const SESSION_TAB_METHODS = [
@@ -35,7 +37,8 @@ export const SESSION_TAB_METHODS = [
       await prepareStructuredTabsIfSupported({ runtime, clientKind, clientCapabilities })
       return projectSessionTabsForClient(
         await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId, {
-          includeInitialSurfaceLaunch: true
+          includeInitialSurfaceLaunch: true,
+          includeAgentSenders: clientKind !== 'mobile'
         }),
         clientKind,
         clientCapabilities
@@ -204,7 +207,9 @@ export const SESSION_TAB_METHODS = [
         if (released) {
           return
         }
-        const initial = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
+        const initial = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId, {
+          includeAgentSenders: clientKind !== 'mobile'
+        })
         if (released) {
           return
         }
@@ -223,35 +228,39 @@ export const SESSION_TAB_METHODS = [
         if (released) {
           return
         }
-        stopListening = runtime.onMobileSessionTabsChanged((snapshot) => {
-          if (
-            snapshot.worktree !== subscribedWorktree &&
-            worktreeIdsEqual(snapshot.worktree, subscribedWorktree)
-          ) {
-            // Subscribe can precede publication of the host's stored spelling.
-            try {
-              subscribedWorktree =
-                runtime.getExplicitSessionWorktreeIdSelector(`id:${initial.worktree}`) ??
-                subscribedWorktree
-            } catch {
-              // An ambiguous alias cannot authorize switching to either session.
-              return
+        stopListening = runtime.onMobileSessionTabsChanged(
+          (snapshot) => {
+            if (
+              snapshot.worktree !== subscribedWorktree &&
+              worktreeIdsEqual(snapshot.worktree, subscribedWorktree)
+            ) {
+              // Subscribe can precede publication of the host's stored spelling.
+              try {
+                subscribedWorktree =
+                  runtime.getExplicitSessionWorktreeIdSelector(`id:${initial.worktree}`) ??
+                  subscribedWorktree
+              } catch {
+                // An ambiguous alias cannot authorize switching to either session.
+                return
+              }
             }
-          }
-          if (snapshot.worktree === subscribedWorktree) {
-            // Keep one stream spelling because clients index frames by worktree.
-            const streamSnapshot =
-              snapshot.worktree === initial.worktree
-                ? snapshot
-                : { ...snapshot, worktree: initial.worktree }
-            const { navigationIntent: _intent, ...retained } = streamSnapshot
-            currentSnapshot = retained
-            emit({
-              type: 'updated',
-              ...tabDelta.update(withProofDelta(project(streamSnapshot)))
-            })
-          }
-        }, pairedDeviceId)
+            if (snapshot.worktree === subscribedWorktree) {
+              // Keep one stream spelling because clients index frames by worktree.
+              const streamSnapshot =
+                snapshot.worktree === initial.worktree
+                  ? snapshot
+                  : { ...snapshot, worktree: initial.worktree }
+              const { navigationIntent: _intent, ...retained } = streamSnapshot
+              currentSnapshot = retained
+              emit({
+                type: 'updated',
+                ...tabDelta.update(withProofDelta(project(streamSnapshot)))
+              })
+            }
+          },
+          pairedDeviceId,
+          clientKind
+        )
       } catch (error) {
         // A stream already ended by its release must not also report an error.
         if (released) {
@@ -263,49 +272,13 @@ export const SESSION_TAB_METHODS = [
       }
     }
   }),
-  defineMethod({
-    name: 'session.tabs.unsubscribe',
-    permission: 'workspace',
-    params: SessionTabsUnsubscribe,
-    handler: async (
-      params,
-      { runtime, connectionId, pairedDeviceId, subscriptionRegistrationVersion }
-    ) => {
-      const worktreeId =
-        getExplicitWorktreeIdSelector(params.worktree) ??
-        (await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)).worktree
-      const connection = connectionId ?? 'local'
-      const cleanupPrefix = `session.tabs:${connection}:${worktreeIdentityKey(worktreeId)}`
-      if (params.subscriptionId) {
-        runtime.cleanupSubscription(`${cleanupPrefix}:${params.subscriptionId}`)
-        return { unsubscribed: true }
-      }
-      runtime.cleanupSubscription(cleanupPrefix)
-      // Spare subscribes registered after this unsubscribe arrived.
-      runtime.cleanupSubscriptionsByPrefix(`${cleanupPrefix}:`, subscriptionRegistrationVersion)
-      return { unsubscribed: true }
-    }
-  }),
+  SESSION_TABS_UNSUBSCRIBE_METHOD,
   defineStreamingMethod({
     name: 'session.tabs.subscribeAll',
     permission: 'workspace',
     params: null,
     handler: (_params, context, emit) => subscribeSessionTabsInventory(context, emit)
   }),
-  defineMethod({
-    name: 'session.tabs.unsubscribeAll',
-    permission: 'workspace',
-    params: SessionTabsUnsubscribeAllParams,
-    handler: async (params, { runtime, connectionId }) => {
-      const cleanupPrefix = `session.tabs:${connectionId ?? 'local'}:*`
-      if (params?.subscriptionId) {
-        runtime.cleanupSubscription(`${cleanupPrefix}:${params.subscriptionId}`)
-        return { unsubscribed: true }
-      }
-      runtime.cleanupSubscription(cleanupPrefix)
-      runtime.cleanupSubscriptionsByPrefix(`${cleanupPrefix}:`)
-      return { unsubscribed: true }
-    }
-  }),
+  SESSION_TABS_UNSUBSCRIBE_ALL_METHOD,
   ...SESSION_TAB_MARKDOWN_METHODS
 ]

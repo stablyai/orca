@@ -1,9 +1,5 @@
 import { z } from 'zod'
-import {
-  getFollowUpDispatch,
-  resolveWorkerLineage,
-  type WorkerLineageReader
-} from './orchestration/db/dispatch-context/worker-follow-up-lineage'
+import { getFollowUpDispatch } from './orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { parseWorkerTerminalPriorOwnerIds } from './orchestration/db/pane-key-match'
 import type { WorkerTerminalResourceRow } from './orchestration/worker-terminal-ownership'
 import { potentiallyLiveRemoteAttachmentSql } from './orchestration/db/federation/remote-attachment-liveness'
@@ -12,8 +8,11 @@ import type { OrchestrationDb } from './orchestration/db'
 import { tolerant, type AgentSenderPane } from './runtime-agent-sender-history'
 import {
   clearAgentSenderDirtyKeys,
-  readAgentSenderDirtyKeys
+  readAgentSenderDirtyKeys,
+  trackAgentSenderHistoryKeys,
+  releaseAgentSenderHistoryKeys
 } from './runtime-agent-sender-history-triggers'
+import { AgentSenderLineageGraph } from './runtime-agent-sender-lineage'
 
 /** An identity (`dispatch:<id>`, or an earlier handle of that worker) located in a live pane. */
 export type AgentSenderWorker = { identity: string; paneKey: string }
@@ -57,18 +56,19 @@ type PaneSlice = {
   former: [string, WorkerTerminalResourceRow][]
   remote: RemoteWorker[]
 }
-/** One Dispatch's verdict and every key its reads touched, misses included. */
-type DispatchEntry = { parent: string | null; rows: AgentSenderWorker[]; deps: string[] }
-export type AgentSenderHistoryWork = { lineageReads: number; paneReads: number }
+type DispatchEntry = { parent: string | null; rows: AgentSenderWorker[] }
+export type AgentSenderHistoryWork = {
+  lineageReads: number
+  paneReads: number
+  lineageVisits?: number
+}
 
 /** Live workers' sender history, kept between builds: a write re-reads only the panes and
  *  Dispatch lineages its keys reach. A commit from another connection, which no trigger sees,
  *  rebuilds everything. */
 export class AgentSenderWorkerHistory {
   private readonly slices = new Map<string, PaneSlice>()
-  private readonly entries = new Map<string, DispatchEntry>()
-  /** Dependency key -> the Dispatch entries whose reads touched it. */
-  private readonly dependents = new Map<string, Set<string>>()
+  private readonly graph = new AgentSenderLineageGraph()
   private dataVersion: unknown
   private cold = true
   private result: AgentSenderWorkers = { workers: [], remote: [] }
@@ -96,32 +96,53 @@ export class AgentSenderWorkerHistory {
       }
     }
     if (dirty.size > 0 || this.cold) {
+      const previous = this.cold
+        ? undefined
+        : new Set([
+            ...[...this.slices.keys()].map((key) => `p:${key}`),
+            ...[...this.graph.keys()].map((id) => `d:${id}`)
+          ])
       try {
         this.update(db, panes, live, dirty, work)
         this.cold = false
+        if (db.db.isTransaction) {
+          // A write that may yet roll back is never kept: the next build starts cold.
+          this.reset()
+        } else {
+          trackAgentSenderHistoryKeys(db, this.slices.keys(), this.graph.keys(), previous)
+          clearAgentSenderDirtyKeys(db)
+        }
       } catch (error) {
         // Nothing consumed: the next build starts cold and still sees every pending key.
         this.reset()
         throw error
-      }
-      if (db.db.isTransaction) {
-        // A write that may yet roll back is never kept: the next build starts cold.
-        this.reset()
-      } else {
-        clearAgentSenderDirtyKeys(db)
       }
     }
     return this.result
   }
 
   sizeForTest() {
-    return { entries: this.entries.size, dependencies: this.dependents.size }
+    return {
+      entries: this.graph.sizeForTest().nodes,
+      dependencies: this.graph.sizeForTest().nodes + this.slices.size
+    }
+  }
+
+  graphSizeForTest() {
+    return this.graph.sizeForTest()
+  }
+
+  release(db: OrchestrationDb | null): void {
+    this.reset()
+    this.result = { workers: [], remote: [] }
+    if (db) {
+      releaseAgentSenderHistoryKeys(db)
+    }
   }
 
   private reset(): void {
     this.slices.clear()
-    this.entries.clear()
-    this.dependents.clear()
+    this.graph.clear()
     this.dataVersion = undefined
     this.cold = true
   }
@@ -153,18 +174,34 @@ export class AgentSenderWorkerHistory {
         dirty.add(`d:${id}`)
       }
     }
-    for (const key of dirty) {
-      for (const id of this.dependents.get(key) ?? []) {
-        this.forget(id)
-        changed = true
+    const visit = () => {
+      if (work.lineageVisits !== undefined) {
+        work.lineageVisits++
       }
     }
+    const dispatches = [...dirty].filter((key) => key.startsWith('d:')).map((key) => key.slice(2))
+    changed = this.graph.invalidate(dispatches, visit) || changed
     // A write no pane or lineage here read changes nothing: the last result stands.
     if (!changed) {
       return
     }
     const former = new Map(panes.flatMap((pane) => this.slices.get(pane.paneKey)?.former ?? []))
-    const reads = memoizedReads(db, former, work)
+    const read =
+      <T>(fn: (id: string) => T) =>
+      (id: string) => {
+        work.lineageReads++
+        return fn(id)
+      }
+    this.graph.retain(
+      [...this.slices.values()].flatMap((slice) => slice.candidates),
+      {
+        dispatch: read((id) => db.getDispatchContextById(id)),
+        ownedResource: read((id) => db.getWorkerTerminalResourceByOwner(id)),
+        formerResource: (id) => former.get(id),
+        followUp: read((id) => getFollowUpDispatch(db, id))
+      },
+      visit
+    )
     const workers: AgentSenderWorker[] = []
     const seen = new Set<string>()
     for (const pane of panes) {
@@ -178,17 +215,11 @@ export class AgentSenderWorkerHistory {
           continue
         }
         seen.add(id)
-        const entry = this.entry(id, reads, live)
+        const entry = this.entry(id, live)
         workers.push(...entry.rows)
         if (entry.parent) {
           pending.push(entry.parent)
         }
-      }
-    }
-    // A Dispatch no live pane reaches now is read again if one ever does.
-    for (const id of this.entries.keys()) {
-      if (!seen.has(id)) {
-        this.forget(id)
       }
     }
     this.result = {
@@ -239,24 +270,13 @@ export class AgentSenderWorkerHistory {
   }
 
   /** A Dispatch's verdict: the live pane its lineage runs in now, if any. */
-  private entry(
-    id: string,
-    reads: MemoizedReads,
-    live: Map<string, AgentSenderPane>
-  ): DispatchEntry {
-    const cached = this.entries.get(id)
-    if (cached) {
-      return cached
-    }
-    const deps = new Set<string>()
-    const reader = reads.recording(deps)
-    const row = reader.getDispatchContextById(id)
-    const lineage = resolveWorkerLineage(reader, id, reader.followUp)
+  private entry(id: string, live: Map<string, AgentSenderPane>): DispatchEntry {
+    const row = this.graph.row(id)
+    const lineage = this.graph.resolve(id)
     let rows: AgentSenderWorker[] = []
     if (lineage && !lineage.latest.assignee_orca_session_id) {
       const { latest, resource } = lineage
       const paneKey = resource?.pane_key ?? latest.assignee_pane_key ?? ''
-      deps.add(`p:${paneKey}`)
       const pane = live.get(paneKey)
       const runs = resource
         ? pane && holdsWorker(resource, pane)
@@ -272,69 +292,11 @@ export class AgentSenderWorkerHistory {
         }
       }
     }
-    const entry = { parent: row?.follow_up_of_dispatch_id ?? null, rows, deps: [...deps] }
-    this.entries.set(id, entry)
-    for (const key of entry.deps) {
-      this.dependents.set(key, (this.dependents.get(key) ?? new Set()).add(id))
-    }
+    const entry = { parent: row?.follow_up_of_dispatch_id ?? null, rows }
     return entry
-  }
-
-  private forget(id: string): void {
-    const entry = this.entries.get(id)
-    this.entries.delete(id)
-    for (const key of entry?.deps ?? []) {
-      const ids = this.dependents.get(key)
-      ids?.delete(id)
-      if (ids?.size === 0) {
-        this.dependents.delete(key)
-      }
-    }
   }
 }
 
 function paneFacts(pane: AgentSenderPane): string {
   return `${pane.handle}\0${pane.processIncarnation ?? ''}`
-}
-
-type MemoizedReads = ReturnType<typeof memoizedReads>
-
-/** One refresh's Dispatch, owner and follow-up reads, misses included; each entry records the
- *  keys it read, so a later write to any of them, a new follow-up after a miss included, reaches it. */
-function memoizedReads(
-  db: OrchestrationDb,
-  former: Map<string, WorkerTerminalResourceRow>,
-  work: AgentSenderHistoryWork
-) {
-  const memo = <T>(read: (id: string) => T) => {
-    const values = new Map<string, T>()
-    return (id: string): T => {
-      if (!values.has(id)) {
-        work.lineageReads++
-        values.set(id, read(id))
-      }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: set just above for this id.
-      return values.get(id) as T
-    }
-  }
-  const dispatch = memo((id) => db.getDispatchContextById(id))
-  const owner = memo((id) => db.getWorkerTerminalResourceByOwner(id))
-  const followUp = memo((id) => getFollowUpDispatch(db, id))
-  return {
-    recording: (deps: Set<string>): WorkerLineageReader & { followUp: typeof followUp } => {
-      const touch =
-        <T>(read: (id: string) => T) =>
-        (id: string) => {
-          deps.add(`d:${id}`)
-          return read(id)
-        }
-      return {
-        db: db.db,
-        getDispatchContextById: touch(dispatch),
-        getWorkerTerminalResourceByOwner: touch(owner),
-        getWorkerTerminalResourceFormerlyOwnedBy: touch((id) => former.get(id)),
-        followUp: touch(followUp)
-      }
-    }
-  }
 }

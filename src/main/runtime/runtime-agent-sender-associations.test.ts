@@ -33,6 +33,7 @@ import { projectSessionTabsForClient } from './rpc/methods/session-tabs-inventor
 import { AGENT_SENDER_PANE_READS } from './runtime-agent-sender-worker-history'
 import { structuredMailSource } from './orchestration/structured-mail-source'
 import { scaleStore } from './agent-session-scale.test-fixture'
+import { AgentSenderPublisher } from './runtime-agent-sender-publication'
 
 const unissued = (): never => {
   throw new Error('a sender build issued a terminal handle')
@@ -73,6 +74,7 @@ function harness(n = 1, records: AgentSessionRecordReader | null = null) {
   )
   // A warm restart keeps each terminal's handle; tests replace one to model a fresh terminal.
   const handles = new Map(leaves.map((l, i) => [l.tabId, handle(i)]))
+  const scopes = new Set(['workspace', 'other'])
   const resolveServer = vi.fn(() => ({
     environmentId: 'remote',
     name: 'Remote',
@@ -97,6 +99,7 @@ function harness(n = 1, records: AgentSessionRecordReader | null = null) {
         issuePtyHandle: unissued,
         readLeafHandle: (l) => handles.get(l.tabId) ?? null,
         readPtyHandles: () => () => null,
+        hasPublishedScope: (id) => scopes.has(id),
         makePaneKey: (l) => pane(l.tabId),
         getWorktreeId: () => null,
         getHandleForPaneKey: () => null,
@@ -141,6 +144,7 @@ function harness(n = 1, records: AgentSessionRecordReader | null = null) {
     leaves,
     ptys,
     handles,
+    scopes,
     get projection() {
       return projection
     },
@@ -389,6 +393,120 @@ it('reports only worktrees whose scope changed since their last frame', () => {
   expect(h.projection.changedScopes(['workspace', 'other', 'never-framed'])).toEqual(['workspace'])
   expect(h.projection.build('other')).toBe(other)
   expect(h.projection.build('workspace')).not.toBe(workspace)
+})
+
+it('keeps an existing subscriber owed its update when another client reads the newer scope', () => {
+  const h = harness(1)
+  const first = h.projection.buildForFrame('workspace')
+  h.handles.set('tab-0', 'term_changed')
+  const oneShot = h.projection.buildForFrame('workspace')
+  expect(oneShot).not.toBe(first)
+  expect(h.projection.changedScopes(['workspace'])).toEqual(['workspace'])
+  h.projection.buildForFramePass()('workspace')
+  expect(h.projection.changedScopes(['workspace'])).toEqual(['workspace'])
+  h.projection.acknowledgeFrame('workspace', oneShot)
+  expect(h.projection.changedScopes(['workspace'])).toEqual([])
+})
+
+it.each([100, 1000])(
+  'retires %i frame owners and reconstructs a scope from current authority',
+  (n) => {
+    const h = harness(1)
+    for (let i = 0; i < n; i++) {
+      h.projection.buildForFrame(`absent-${i}`)
+    }
+    expect(h.projection.scopeCountsForTest()).toEqual({ scoped: 1, framed: 0 })
+    const before = h.projection.buildForFrame('workspace')
+    h.projection.retireScope('workspace')
+    expect(h.projection.scopeCountsForTest()).toEqual({ scoped: 0, framed: 0 })
+    const restored = h.projection.buildForFrame('workspace')
+    expect(restored.associations).toEqual(before.associations)
+    expect(restored.revision).toEqual(before.revision)
+    expect(h.projection.changedScopes(['workspace'])).toEqual([])
+    h.worker(0)
+    expect(h.projection.changedScopes(['workspace'])).toEqual(['workspace'])
+  }
+)
+
+it.each([100, 1000])(
+  'releases %i former sender-only scopes without a snapshot retirement callback',
+  (n) => {
+    const h = harness(n)
+    h.scopes.clear()
+    for (let i = 0; i < n; i++) {
+      h.leaves[i] = { ...h.leaves[i], worktreeId: `sender-only-${i}` }
+      h.ptys[i] = { ...h.ptys[i], worktreeId: `sender-only-${i}` }
+    }
+    const frame = h.projection.buildForFramePass()
+    for (let i = 0; i < n; i++) {
+      frame(`sender-only-${i}`)
+    }
+    expect(h.projection.scopeCountsForTest()).toEqual({ scoped: n, framed: n })
+    h.leaves.splice(1)
+    h.ptys.splice(1)
+    h.projection.build()
+    expect(h.projection.scopeCountsForTest()).toEqual({ scoped: 1, framed: 1 })
+    const stringify = vi.spyOn(JSON, 'stringify')
+    h.handles.set('tab-0', 'term_changed')
+    h.projection.build()
+    expect(stringify.mock.calls.length).toBeLessThanOrEqual(20)
+  }
+)
+
+it.each([100, 1000])('keeps publish work bounded after %i populated scopes retire', (n) => {
+  const publisher = new AgentSenderPublisher()
+  const row = (worktreeId: string) => ({
+    identity: `term_${worktreeId}`,
+    paneKey: 'tab:leaf',
+    worktreeId
+  })
+  publisher.publish({
+    associations: Array.from({ length: n }, (_, i) => row(`retired-${i}`)),
+    principals: [],
+    attachments: []
+  })
+  publisher.publish({ associations: [row('live')], principals: [], attachments: [] })
+  const old = publisher.scope('retired-0')
+  expect(publisher.scopeCountsForTest().scoped).toBe(1)
+  const stringify = vi.spyOn(JSON, 'stringify')
+  publisher.publish({
+    associations: [{ ...row('live'), identity: 'term_changed' }],
+    principals: [],
+    attachments: []
+  })
+  expect(stringify.mock.calls.length).toBeLessThanOrEqual(12)
+  stringify.mockRestore()
+  for (let i = 0; i < n; i++) {
+    publisher.scope(`never-owned-${i}`)
+  }
+  expect(publisher.scopeCountsForTest().scoped).toBe(1)
+  const empty = publisher.scope('retired-0')
+  expect(empty.associations).toEqual([])
+  expect(empty.revision!.revision).toBeGreaterThan(old.revision!.revision)
+  expect(publisher.scopeCountsForTest().scoped).toBe(1)
+})
+
+it('keeps responses available after history cleanup fails and rebuilds tracking from current owners', () => {
+  const h = harness()
+  h.worker(0)
+  h.projection.buildForFrame('workspace')
+  const prepare = h.db.db.prepare.bind(h.db.db)
+  const cleanup = vi.spyOn(h.db.db, 'prepare').mockImplementation((sql: string) => {
+    if (sql === 'DELETE FROM temp.agent_sender_tracked') {
+      throw new Error('disk I/O error')
+    }
+    return prepare(sql)
+  })
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  expect(() => h.projection.releaseDerivedHistory()).not.toThrow()
+  expect(warn).toHaveBeenCalledOnce()
+  cleanup.mockRestore()
+  h.leaves.splice(0)
+  h.ptys.splice(0)
+  expect(h.projection.build().associations).toEqual([])
+  expect(h.db.db.prepare('SELECT COUNT(*) AS n FROM temp.agent_sender_tracked').get()).toEqual({
+    n: 0
+  })
 })
 
 it('keeps the last good publication when a read fails and retries on the next identity change', () => {

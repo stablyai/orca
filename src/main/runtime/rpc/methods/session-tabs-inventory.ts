@@ -188,20 +188,24 @@ export async function subscribeSessionTabsInventory(
       deliveredChangeSequenceByWorktree.set(snapshot.worktree, changeSequence)
     }
   }
-  const unsubscribe = runtime.onMobileSessionTabsChanged((runtimeSnapshot, changeSequence) => {
-    const snapshot = runtimeSnapshot as SessionTabsChange
-    if (!initialized) {
-      bufferChange(snapshot, changeSequence)
-      return
-    }
-    if (
-      changeSequence <= (censusChangeSequence ?? 0) ||
-      changeSequence <= (deliveredChangeSequenceByWorktree.get(snapshot.worktree) ?? 0)
-    ) {
-      return
-    }
-    publishChange(snapshot, changeSequence)
-  }, pairedDeviceId)
+  const unsubscribe = runtime.onMobileSessionTabsChanged(
+    (runtimeSnapshot, changeSequence) => {
+      const snapshot = runtimeSnapshot as SessionTabsChange
+      if (!initialized) {
+        bufferChange(snapshot, changeSequence)
+        return
+      }
+      if (
+        changeSequence <= (censusChangeSequence ?? 0) ||
+        changeSequence <= (deliveredChangeSequenceByWorktree.get(snapshot.worktree) ?? 0)
+      ) {
+        return
+      }
+      publishChange(snapshot, changeSequence)
+    },
+    pairedDeviceId,
+    context.clientKind
+  )
   const stopCapabilities = context.capabilitySource?.observe(() => {
     if (!initialized || closed) {
       return

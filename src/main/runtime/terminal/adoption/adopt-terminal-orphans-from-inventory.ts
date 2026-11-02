@@ -125,7 +125,9 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
       onlyRuntimeOwnedTerminals: true
     })
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
-    return this.getMobileSessionTabsForWorktree(worktreeId)
+    return this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+      includeAgentSenders: false
+    })
   }
 
   // Omitted --terminal follows the current worktree's active terminal, like browser active-tab resolution.
@@ -138,8 +140,12 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
         ? (await this.resolveWorkspaceSelector(worktreeSelector)).id
         : null
       const snapshots = targetWorktreeId
-        ? [this.getMobileSessionTabsForWorktree(targetWorktreeId)]
-        : await this.listAllMobileSessionTabs()
+        ? [
+            this.getMobileSessionTabsForWorktree(targetWorktreeId, undefined, {
+              includeAgentSenders: false
+            })
+          ]
+        : await this.listAllMobileSessionTabs(undefined, { includeAgentSenders: false })
       // Active-tab focus cannot establish the caller's identity.
       for (const snapshot of options.requireUnambiguous ? [] : snapshots) {
         const activeTerminal = snapshot.tabs.find(

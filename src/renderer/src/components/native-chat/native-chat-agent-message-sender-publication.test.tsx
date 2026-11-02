@@ -35,6 +35,10 @@ import type {
 } from '../../../../shared/runtime-types'
 import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
 import { applyReceivedAgentSenderPublications } from '@/runtime/web-session-tabs-sync/received-agent-sender-publications'
+import {
+  agentSenderAliasBucketsForTest,
+  agentSenderAliasParts
+} from '@/runtime/agent-sender-alias-projection'
 
 let revision = 0
 /** Each delivery is the host's next revision, as a publishing host stamps it. */
@@ -84,6 +88,34 @@ it('finds title/process-only terminal rows and uses their sidebar dot before a h
   const hook = renderHook(() => useAgentMessageSenderView(proved, 'workspace', { kind: 'local' }))
   expect(hook.result.current).toMatchObject({ agentType: 'claude', dot: 'idle' })
 })
+
+it.each([100, 1000])(
+  'releases %i retired alias buckets and preserves hidden owners and re-adds',
+  (n) => {
+    const buckets = Object.fromEntries(
+      Array.from({ length: n }, (_, i) => [
+        `retired-${i}`,
+        [makeTab({ id: `tab-${i}`, worktreeId: `retired-${i}` })]
+      ])
+    )
+    const hidden = [makeTab({ id: 'hidden', worktreeId: 'hidden' })]
+    useAppStore.setState({
+      tabsByWorktree: { ...buckets, hidden },
+      unifiedTabsByWorktree: { 'hidden-chat': [] }
+    })
+    agentSenderAliasParts(useAppStore.getState())
+    expect(agentSenderAliasBucketsForTest()).toHaveLength(n + 2)
+    useAppStore.setState({ tabsByWorktree: { hidden } })
+    agentSenderAliasParts(useAppStore.getState())
+    expect(agentSenderAliasBucketsForTest().sort()).toEqual(['chat:hidden-chat', 'terminal:hidden'])
+    useAppStore.setState({ tabsByWorktree: { hidden, 'retired-0': buckets['retired-0'] } })
+    agentSenderAliasParts(useAppStore.getState())
+    expect(agentSenderAliasBucketsForTest()).toHaveLength(3)
+    useAppStore.setState({ tabsByWorktree: {}, unifiedTabsByWorktree: {} })
+    expect(agentSenderAliasParts(useAppStore.getState())).toEqual([])
+    expect(agentSenderAliasBucketsForTest()).toEqual([])
+  }
+)
 it('finds a chat before tab hydration and follows its canonical /clear successor', () => {
   const root = testOrcaSessionId('11111111-1111-4111-8111-111111111111')
   const live = testOrcaSessionId('22222222-2222-4222-8222-222222222222')

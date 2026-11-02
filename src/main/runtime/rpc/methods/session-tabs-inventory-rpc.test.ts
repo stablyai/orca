@@ -187,7 +187,9 @@ describe('session tabs inventory RPC methods', () => {
     await expect(listSessionTabsInventory({ runtime, signal: controller.signal })).rejects.toThrow(
       'client_disconnected'
     )
-    expect(inventory).toHaveBeenCalledWith(undefined, controller.signal)
+    expect(inventory).toHaveBeenCalledWith(undefined, controller.signal, {
+      includeAgentSenders: true
+    })
   })
 
   it('lets the final authoritative inventory subsume prior-epoch updates', async () => {

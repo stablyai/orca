@@ -116,10 +116,10 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
       issuePtyHandle: (pty) => this.issuePtyHandle(pty),
       ...readIssuedTerminalHandles({
         leafHandle: (leaf) => this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId)),
-        ptyHandles: this.handleByPtyId,
-        incarnations: this.handleByPtyIncarnation,
-        ptys: this.ptysById,
-        handles: this.handles,
+        ptyHandles: () => this.handleByPtyId,
+        incarnations: () => this.handleByPtyIncarnation,
+        ptys: () => this.ptysById,
+        handles: () => this.handles,
         runtimeId: () => this.runtimeId,
         rendererGraphEpoch: () => this.rendererGraphEpoch
       })

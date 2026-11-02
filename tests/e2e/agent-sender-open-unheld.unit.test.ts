@@ -66,10 +66,17 @@ function hostRuntime() {
       ptyId: `pty-${tabId}`,
       connected: true
     }
-    runtime['leaves'].set(runtime['getLeafKey'](tabId, LEAF), leaf)
+    runtime['terminalIdentity'].replaceLeaves(
+      new Map(runtime['leaves']).set(runtime['getLeafKey'](tabId, LEAF), leaf)
+    )
     return runtime['issueHandle'](leaf)
   }
-  const close = (tabId: string) => runtime['leaves'].delete(runtime['getLeafKey'](tabId, LEAF))
+  const close = (tabId: string) => {
+    const leaves = new Map(runtime['leaves'])
+    const removed = leaves.delete(runtime['getLeafKey'](tabId, LEAF))
+    runtime['terminalIdentity'].replaceLeaves(leaves)
+    return removed
+  }
   const answer = async (method: string, params: unknown) => {
     const response = await dispatcher.dispatch({
       id: `rpc_${method}`,

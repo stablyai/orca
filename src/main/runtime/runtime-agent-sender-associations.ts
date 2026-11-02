@@ -24,6 +24,7 @@ import { AgentSenderPublisher, type AgentSenderScope } from './runtime-agent-sen
 /** The handles terminals already hold, read without issuing one: display bookkeeping never
  *  changes terminal identity, so a terminal with no issued handle has no sender row. */
 export type AgentSenderHandleReads = {
+  hasPublishedScope?(worktreeId: string): boolean
   readLeafHandle(leaf: RuntimeLeafRecord): string | null
   /** One reader per walk, so a lookup that must index records does it once per build. */
   readPtyHandles(): (pty: RuntimePtyWorktreeRecord) => string | null
@@ -73,11 +74,7 @@ export class RuntimeAgentSenderAssociations {
     return {
       historyReads: this.historyReads,
       chatReads: this.chatReads,
-      lineageReads: this.work.lineageReads,
-      paneReads: this.work.paneReads,
-      chatRecords: this.work.chatRecords,
-      leafVisits: this.work.leafVisits,
-      ptyVisits: this.work.ptyVisits
+      ...this.work
     }
   }
   /** The process each handle was first seen running; a respawn that kept the handle is not it. */
@@ -90,8 +87,7 @@ export class RuntimeAgentSenderAssociations {
   }
   private chatKey: unknown[] = []
   private chats: AgentSenderAssociation[] = []
-  readonly publisher = new AgentSenderPublisher()
-  private framed = new Map<string, AgentSenderPublication>()
+  readonly publisher = new AgentSenderPublisher((id) => this.deps.hasPublishedScope?.(id) ?? false)
   constructor(private readonly deps: Dependencies) {}
 
   /** Display bookkeeping: a failure keeps the last good publication and never fails a caller. */
@@ -112,29 +108,42 @@ export class RuntimeAgentSenderAssociations {
 
   /** The scope a client frame carries; remembered so a refresh republishes only changed worktrees. */
   buildForFrame(worktreeId: string): AgentSenderPublication {
-    this.build()
-    return this.framedScope(worktreeId)
+    return this.buildForFramePass()(worktreeId)
   }
 
   /** One refresh for a synchronous pass that frames many worktrees: each reads that one result. */
   buildForFramePass(): (worktreeId: string) => AgentSenderPublication {
     this.build()
-    return (worktreeId) => this.framedScope(worktreeId)
+    return (worktreeId) => this.publisher.frame(worktreeId)
   }
 
-  private framedScope(worktreeId: string): AgentSenderPublication {
-    const scope = this.publisher.scope(worktreeId)
-    this.framed.set(worktreeId, scope)
-    return scope
+  acknowledgeFrame(worktreeId: string, scope: AgentSenderPublication): void {
+    this.publisher.acknowledgeFrame(worktreeId, scope)
+  }
+
+  retireScope(worktreeId: string): void {
+    this.publisher.retireScope(worktreeId)
+  }
+
+  releaseDerivedHistory(): void {
+    try {
+      this.workerHistory.release(this.database)
+    } catch (error) {
+      console.warn('[runtime] Sender identity history cleanup failed', error)
+    } finally {
+      this.terminalKey = []
+      this.failedKey = []
+    }
+  }
+
+  scopeCountsForTest() {
+    return this.publisher.scopeCountsForTest()
   }
 
   /** Worktrees whose scope differs from the one their last frame carried; an unframed one has no stale client. */
   changedScopes(worktreeIds: Iterable<string>): string[] {
     this.build()
-    return [...worktreeIds].filter((id) => {
-      const framed = this.framed.get(id)
-      return framed !== undefined && framed !== this.publisher.scope(id)
-    })
+    return this.publisher.changedScopes(worktreeIds)
   }
 
   private livePanes(): Map<string, AgentSenderPane & { original: boolean }> {
