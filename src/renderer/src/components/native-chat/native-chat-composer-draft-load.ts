@@ -2,11 +2,14 @@
 
 import {
   dirtyScopes,
+  installNativeChatDraftRecord,
   load,
   nextSavedAt,
+  nativeChatDraftPositions,
   notifyScope,
   records,
-  reconcileRestoredImageChecks
+  reconcileRestoredImageChecks,
+  type NativeChatDraftPosition
 } from './native-chat-composer-draft-memory'
 import {
   flushNativeChatComposerDrafts,
@@ -44,10 +47,18 @@ function withAppends(
     return { draft: loaded, changed: false }
   }
   const merged = missing.reduce((draft, entry) => entry.append(draft), loaded)
-  return { draft: { ...merged, savedAt: nextSavedAt() }, changed: true }
+  return {
+    draft: { ...merged, savedAt: nextSavedAt() },
+    changed: true,
+    position: nativeChatDraftPositions.get(merged)
+  }
 }
 
-type DraftLoadResult = { draft: StoredNativeChatComposerDraft; changed: boolean }
+type DraftLoadResult = {
+  draft: StoredNativeChatComposerDraft
+  changed: boolean
+  position?: NativeChatDraftPosition
+}
 
 function applyLoaded(
   loaded: ReadonlyMap<string, unknown>,
@@ -76,9 +87,13 @@ function applyLoaded(
       dirtyScopes.add(scopeKey)
       continue
     }
-    const { draft, changed } = withAppends(scopeKey, stored, readAtSequence)
+    const { draft, changed, position } = withAppends(scopeKey, stored, readAtSequence)
     reconcileRestoredImageChecks(scopeKey, draft.images, records.get(scopeKey)?.images ?? [])
-    records.set(scopeKey, draft)
+    installNativeChatDraftRecord(
+      scopeKey,
+      draft,
+      position ?? (changed ? undefined : { at: 'start', pending: true })
+    )
     if (changed) {
       dirtyScopes.add(scopeKey)
     }

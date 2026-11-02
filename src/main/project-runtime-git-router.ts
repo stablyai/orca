@@ -22,7 +22,7 @@ import {
   type LocalGitRuntimeRouter
 } from './git/command-runner/local-git-runtime-route'
 import { isWslDistroRunningForBackgroundWork } from './wsl-background-distro-gate'
-import { wslHostsGateOpen } from './wsl/wsl-host-gate'
+import { onWslHostsNewWorkChanged, wslHostsGateOpen, wslHostsOptedIn } from './wsl/wsl-host-gate'
 import {
   followWslAutomountRoots,
   knownWslAutomountRoots,
@@ -33,7 +33,9 @@ import {
 export type ProjectRuntimeGitRouterStore = {
   getRepos: () => Repo[]
   getProjects: () => Project[]
-  getSettings: () => Partial<Pick<GlobalSettings, 'localWindowsRuntimeDefault'>>
+  getSettings: () => Partial<
+    Pick<GlobalSettings, 'localWindowsRuntimeDefault' | 'experimentalWslHosts'>
+  >
   getAllWorktreeMeta: () => Record<string, unknown>
 }
 
@@ -183,7 +185,15 @@ function readRealpath(folder: string): string | null {
 }
 
 function buildRoutes(store: ProjectRuntimeGitRouterStore): Route[] {
-  const projects = store.getProjects()
+  const ownerByRepoId = new Map<string, Project>()
+  for (const project of store.getProjects()) {
+    for (const repoId of project.sourceRepoIds) {
+      // First owner wins.
+      if (!ownerByRepoId.has(repoId)) {
+        ownerByRepoId.set(repoId, project)
+      }
+    }
+  }
   const globalDefault = store.getSettings().localWindowsRuntimeDefault
   const localRepos = new Map(
     store
@@ -192,7 +202,10 @@ function buildRoutes(store: ProjectRuntimeGitRouterStore): Route[] {
       .map((repo) => [repo.id, repo])
   )
   const distroByRepo = new Map(
-    [...localRepos.values()].map((repo) => [repo.id, wslGitDistro(repo, projects, globalDefault)])
+    [...localRepos.values()].map((repo) => [
+      repo.id,
+      wslGitDistro(repo, ownerByRepoId, globalDefault)
+    ])
   )
   // Host-Git routes stay too, so a project nested in a WSL one keeps its own Git.
   const routes: Route[] = [...localRepos.values()].map((repo) => ({
@@ -219,13 +232,13 @@ function buildRoutes(store: ProjectRuntimeGitRouterStore): Route[] {
  */
 function wslGitDistro(
   repo: Repo,
-  projects: readonly Project[],
+  ownerByRepoId: ReadonlyMap<string, Project>,
   globalWindowsRuntimeDefault: unknown
 ): string | undefined {
   if (isFolderRepo(repo)) {
     return undefined
   }
-  const project = projects.find((entry) => entry.sourceRepoIds.includes(repo.id))
+  const project = ownerByRepoId.get(repo.id)
   const resolution = resolveProjectExecutionRuntime({
     appPlatform: 'win32',
     projectId: project?.id ?? repo.id,
@@ -262,16 +275,24 @@ export function installProjectRuntimeGitRouter(
     setBackgroundWslGitGate(null)
     return
   }
-  setBackgroundWslGitGate(isWslDistroRunningForBackgroundWork)
   const router = createProjectRuntimeGitRouter(store)
+  // Stage 1 is opt-in: with the WSL hosts setting off, Git runs exactly as before D1c.
+  const optedIn = (): boolean => wslHostsOptedIn(store.getSettings())
+  const applyOptIn = (): void => {
+    setLocalGitRuntimeRouter(optedIn() ? router : null)
+    setBackgroundWslGitGate(optedIn() ? isWslDistroRunningForBackgroundWork : null)
+  }
+  applyOptIn()
+  // A block learned this run uninstalls both at once, as turning the setting off does.
+  onWslHostsNewWorkChanged(applyOptIn)
   // Synchronous with the write, so no Git call can run between a change and the table's drop.
   store.onStateWritten((domains) => {
     if (!domains || domains.some((domain) => ROUTE_DOMAINS.has(domain))) {
       router.invalidate()
+      applyOptIn()
     }
   })
   // A distro's mount root changes how links its Git wrote map back to a drive.
-  followWslAutomountRoots(router.distros)
+  followWslAutomountRoots(() => (optedIn() ? router.distros() : []))
   onWslAutomountRootsChanged(router.invalidate)
-  setLocalGitRuntimeRouter(router)
 }

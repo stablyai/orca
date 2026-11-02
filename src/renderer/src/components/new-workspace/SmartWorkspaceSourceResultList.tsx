@@ -1,4 +1,5 @@
 import React from 'react'
+import { isIntegrationCredentialDecryptionError } from '../../../../shared/integration-credential-errors'
 import { Button } from '@/components/ui/button'
 import { CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
 import { translate } from '@/i18n/i18n'
@@ -59,6 +60,8 @@ export function SmartWorkspaceSourceResultList({
   } = model
   // Why: only the Linear tab speaks for Linear; Smart lists what the other sources return.
   const visibleLinearReadError = mode === 'linear' ? linearReadError : null
+  const credentialError =
+    visibleLinearReadError && isIntegrationCredentialDecryptionError(visibleLinearReadError)
   return (
     <>
       {mode === 'gitlab' ? (
@@ -99,6 +102,28 @@ export function SmartWorkspaceSourceResultList({
             </CommandItem>
           </div>
         ) : null}
+        {visibleLinearReadError && !jiraSource.intent && !loading ? (
+          <div role="status" aria-live="polite" className="px-3 py-6 text-center text-xs">
+            {credentialError ? (
+              <>
+                <p className="font-medium text-foreground">
+                  {translate(
+                    'auto.components.new.workspace.SmartWorkspaceNameField.linearLoginUnreadableTitle',
+                    'Reconnect Linear'
+                  )}
+                </p>
+                <p className="mt-0.5 text-muted-foreground">
+                  {translate(
+                    'auto.components.new.workspace.SmartWorkspaceNameField.linearLoginUnreadableBody',
+                    'Unable to read saved Linear login. Reconnect it in Settings.'
+                  )}
+                </p>
+              </>
+            ) : (
+              <p className="text-muted-foreground">{visibleLinearReadError}</p>
+            )}
+          </div>
+        ) : null}
         {jiraSource.errorKind ? null : reserveLinearLoadingResults ? (
           <div
             aria-hidden="true"
@@ -120,22 +145,7 @@ export function SmartWorkspaceSourceResultList({
               <div key={index} className="h-8 animate-pulse rounded bg-muted/40" />
             ))}
           </div>
-        ) : searchResultRows.length === 0 && visibleLinearReadError && !jiraSource.intent ? (
-          <div role="status" aria-live="polite" className="px-3 py-6 text-center text-xs">
-            <p className="font-medium text-foreground">
-              {translate(
-                'auto.components.new.workspace.SmartWorkspaceNameField.linearLoginUnreadableTitle',
-                'Reconnect Linear'
-              )}
-            </p>
-            <p className="mt-0.5 text-muted-foreground">
-              {translate(
-                'auto.components.new.workspace.SmartWorkspaceNameField.linearLoginUnreadableBody',
-                'Unable to read saved Linear login. Reconnect it in Settings.'
-              )}
-            </p>
-          </div>
-        ) : searchResultRows.length === 0 && !typedTextActionRow ? (
+        ) : searchResultRows.length === 0 && !typedTextActionRow && !visibleLinearReadError ? (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
             {jiraSource.intent
               ? null

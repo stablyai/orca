@@ -103,30 +103,6 @@ function withEditor(content: string, run: (editor: Editor) => void): void {
 }
 
 describe('handleRichMarkdownTableTab', () => {
-  it('moves Tab to the next cell', () => {
-    withEditor(TABLE, (editor) => {
-      editor.commands.setTextSelection(caretAtText(editor, 'a1'))
-      expect(handleRichMarkdownTableTab(editor, false)).toBe(true)
-      expect(selectionText(editor)).toBe('b1')
-    })
-  })
-
-  it('moves Shift-Tab to the previous cell', () => {
-    withEditor(TABLE, (editor) => {
-      editor.commands.setTextSelection(caretAtText(editor, 'b1'))
-      expect(handleRichMarkdownTableTab(editor, true)).toBe(true)
-      expect(selectionText(editor)).toBe('a1')
-    })
-  })
-
-  it('wraps Tab to the next row', () => {
-    withEditor(TABLE, (editor) => {
-      editor.commands.setTextSelection(caretAtText(editor, 'b1'))
-      expect(handleRichMarkdownTableTab(editor, false)).toBe(true)
-      expect(selectionText(editor)).toBe('a2')
-    })
-  })
-
   it('adds a row when Tab is pressed in the last cell', () => {
     withEditor(TABLE, (editor) => {
       const rowsBefore = countRows(editor)

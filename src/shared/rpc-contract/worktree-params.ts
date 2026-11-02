@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { normalizeExecutionHostId } from '../execution-host'
+import { CLIENT_PROVENANCE_SNAPSHOT_MAX } from '../automation-workspace-provenance'
 import { isTuiAgent } from '../tui-agent-config'
 import type { TuiAgent } from '../tui-agent'
 import {
@@ -45,6 +46,21 @@ export const AutomationWorkspaceProvenanceRequest = z.object({
   createRequestId: z.string()
 })
 
+// A label for another owner's run: the host records it only for automations it does not hold, and stamps createdAt.
+const ProvenanceId = z.string().min(1).max(256)
+const ProvenanceSnapshot = z.string().max(CLIENT_PROVENANCE_SNAPSHOT_MAX)
+export const ClientAutomationWorkspaceProvenance = z.object({
+  automationId: ProvenanceId,
+  automationNameSnapshot: ProvenanceSnapshot,
+  automationRunId: ProvenanceId,
+  automationRunTitleSnapshot: ProvenanceSnapshot,
+  executionTargetType: z.enum(['local', 'ssh']),
+  executionTargetId: z.string().max(256),
+  projectId: z.string().max(256),
+  repoId: z.string().max(256).optional(),
+  hostId: OptionalExecutionHostId
+})
+
 // Descriptive provenance grants no authority; the host stamps createdAt to avoid client-clock sort skew.
 export const CliWorkspaceProvenanceRequest = z.object({
   callerTerminalHandle: OptionalString
@@ -70,6 +86,8 @@ export const WorktreeTeardownMissingTerminalsParams = WorktreeDetectedListParams
 export const WorktreePsParams = z.object({
   limit: OptionalFiniteNumber,
   afterSnapshotId: z.string().min(1).max(128).nullable().optional(),
+  // Opt-in: the caller holds afterSnapshotId's rows and can rebuild a catalog from rowsFromBase; older hosts ignore it.
+  acceptRowDelta: z.literal(true).optional(),
   supportsWorktreeVisibilitySourceDefaults: z.literal(true).optional(),
   // Opt-in: wait lookups read screens and probe PTYs, too costly for pollers; older hosts omit agentWait.
   includeAgentWait: z.literal(true).optional()
@@ -178,6 +196,8 @@ export const WorktreeSet = WorktreeSelector.extend({
 })
 
 export const WorktreeRemove = WorktreeSelector.extend({
+  // Omission retains legacy/UI metadata policy; explicit CLI intent overrides it.
+  deleteBranch: OptionalBoolean,
   hostId: OptionalExecutionHostId,
   force: OptionalBoolean,
   // Desktop force also means ordinary confirmed delete; PTY-stop waivers need their own field (#11960).

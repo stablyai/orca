@@ -1,8 +1,8 @@
 // A tool run remains live until a later row from the same agent speaks or acts beyond it.
 
-import { isToolCallBlock, type NativeChatMessage } from '../native-chat-types'
-import { deriveNativeChatRowContent } from '../native-chat-row-content'
-import type { NativeChatResolvedPrompt } from '../native-chat-resolution-receipt'
+import { isToolCallBlock, type NativeChatMessage } from './native-chat-types'
+import { deriveNativeChatRowContent } from './transcript/native-chat-row-content'
+import type { NativeChatResolvedPrompt } from './native-chat-resolution-receipt'
 
 /** Whether a row moves its agent past the run above it. An approval's receipt
  *  decides a call of that run, which then runs, so it does not. */
@@ -12,6 +12,7 @@ export function nativeChatRowSpeaksOrActs(
   receipts: ReadonlyMap<string, NativeChatResolvedPrompt>
 ): boolean {
   return (
+    !message.agentStart &&
     message.role !== 'user' &&
     message.role !== 'reasoning' &&
     receipts.get(message.id)?.kind !== 'approval' &&

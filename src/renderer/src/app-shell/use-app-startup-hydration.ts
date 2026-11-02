@@ -1,4 +1,4 @@
-import { restoreStructuredLaunchSurfaces } from '@/lib/structured-agent-session-launch-surface'
+import { restoreStructuredLaunchSurfaces } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { useEffect, useRef } from 'react'
 import { restoreLocalStructuredChatsAtStartup } from '@/runtime/local-structured-chats'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
@@ -32,6 +32,7 @@ import {
 import {
   getRepoExecutionHostId,
   isOwnedSshTargetId,
+  LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
 } from '../../../shared/execution-host'
 import { listRuntimeSessionHostsForStartup } from './startup-runtime-session-hosts'
@@ -219,6 +220,8 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           void timeRendererStartupStep('fetch-browser-session-profiles', () =>
             actions.fetchBrowserSessionProfiles()
           ).catch(() => {})
+          // Why: local and SSH tabs use this desktop's profiles even when Settings shows a paired server.
+          void actions.fetchBrowserSessionProfiles(LOCAL_EXECUTION_HOST_ID)
           const onboardingState = await onboardingPromise
           if (!cancelled) {
             onOnboardingLoadedRef.current(onboardingState)

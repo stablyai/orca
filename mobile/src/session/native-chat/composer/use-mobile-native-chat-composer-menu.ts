@@ -36,6 +36,7 @@ export function useMobileNativeChatComposerMenu(input: {
   onNeedSkills?: () => void
   /** The `/` menu opened; the session's list may have changed since it was read. */
   onSlashMenuOpen?: () => void
+  onSlashMenuDemand?: (open: boolean) => void
   /** A picked skill; a send carries its file while its token stays, and treats a leading one as chat. */
   onPickSkill?: (skill: { token: string; path?: string }) => void
   editing?: boolean
@@ -124,12 +125,18 @@ export function useMobileNativeChatComposerMenu(input: {
       onNeedFiles?.(mentionQuery)
     }
   }, [onNeedFiles, mentionQuery])
+  const { onSlashMenuDemand } = input
   const slashOpen = autocomplete.mode === 'slash'
   useEffect(() => {
     if (slashOpen) {
       onSlashMenuOpen?.()
     }
   }, [onSlashMenuOpen, slashOpen])
+
+  useEffect(() => {
+    onSlashMenuDemand?.(slashOpen)
+    return () => onSlashMenuDemand?.(false)
+  }, [onSlashMenuDemand, slashOpen])
 
   const placeCaret = useCallback((at: number): void => {
     setCursor(at)

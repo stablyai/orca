@@ -1,7 +1,5 @@
-import {
-  getAgentSessionOptionCatalog,
-  type CatalogModel
-} from '../../../../shared/agent-session-option-catalog'
+import { getAgentSessionOptionCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
+import type { CatalogModel } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { stripScrollbackAnsi } from './native-chat-scrape-fallback'
 

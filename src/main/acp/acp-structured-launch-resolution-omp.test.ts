@@ -1,7 +1,7 @@
 import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV
@@ -117,6 +117,8 @@ describe('OMP ACP launch resolution', () => {
     const launch = await resolver(ompRecord(), {
       probeVersion: async (input) => (asked.push(input), { version: '17.0.5' })
     })({ identity })
-    expect(asked).toEqual([{ program: launch.command, cwd: launch.cwd, env: launch.env }])
+    expect(asked).toEqual([
+      { program: launch.command, prefixArgs: launch.prefixArgs, cwd: launch.cwd, env: launch.env }
+    ])
   })
 })

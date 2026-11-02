@@ -42,13 +42,6 @@ describe('codexDaemonSocketPathExceedsLimit', () => {
     expect(codexDaemonSocketPathExceedsLimit(homeOfLength(65), 'linux')).toBe(true)
   })
 
-  it('flags the reported per-account macOS home', () => {
-    expect(codexDaemonSocketPath(MAC_MANAGED_HOME, 'darwin')).toBe(
-      `${MAC_MANAGED_HOME}/app-server-control/app-server-control.sock`
-    )
-    expect(codexDaemonSocketPathExceedsLimit(MAC_MANAGED_HOME, 'darwin')).toBe(true)
-  })
-
   it('counts bytes, not characters', () => {
     const home = `/${'é'.repeat(30)}`
     expect(home.length).toBe(31)

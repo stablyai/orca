@@ -102,7 +102,10 @@ export type SectionRepo = ProjectSectionRepo & {
 export type SectionPendingCreation = { key: string; repoName: string | null }
 
 export type Section = {
+  /** The list identity; unique even when one header repeats in several host sections. */
   key: string
+  /** The view's collapse key when it differs from `key`; a header's copies share it. */
+  collapseKey?: string
   title: string
   icon?: 'pin'
   repo?: SectionRepo

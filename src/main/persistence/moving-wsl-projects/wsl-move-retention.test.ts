@@ -8,7 +8,7 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
-import type { Store } from '../../persistence'
+import type { Store } from '../loading-store/store'
 import {
   closeTestStores,
   createStore,

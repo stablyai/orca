@@ -1,16 +1,10 @@
-import { useState, type MouseEvent } from 'react'
+import type { MouseEvent } from 'react'
 import type { WorkspaceAttachment } from '../../../../shared/worktree/types'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { workspaceAttachmentProviderLabel } from './worktree-attachment-editing'
-import { Ellipsis, MonitorUp } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { MonitorUp } from 'lucide-react'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { WorktreeCardRowActionsMenu } from './WorktreeCardRowActionsMenu'
 import { HostedReviewUnlinkMenuItem } from '@/components/HostedReviewUnlinkMenuItem'
 import { translate } from '@/i18n/i18n'
 
@@ -33,78 +27,44 @@ export function WorktreeCardReviewActions({
   onUnlink?: () => void
   closeHover: () => void
 }): React.JSX.Element | null {
-  const [internalOpen, setInternalOpen] = useState(false)
-  const isOpen = open ?? internalOpen
   if (!onOpenInOrca && !onUnlink) {
     return null
   }
-  const moreActionsLabel = translate(
-    'auto.components.sidebar.WorktreeCardMeta.dbe2d18972',
-    'More {{value0}} actions',
-    { value0: label }
-  )
-  const trigger = (
-    <DropdownMenuTrigger asChild>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        className="size-5 shrink-0"
-        aria-label={moreActionsLabel}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <Ellipsis className="size-3" />
-      </Button>
-    </DropdownMenuTrigger>
-  )
   return (
-    <DropdownMenu
-      modal={false}
-      open={isOpen}
-      onOpenChange={(next) => {
-        setInternalOpen(next)
-        onOpenChange(next)
-      }}
-    >
-      {isOpen ? (
-        trigger
-      ) : (
-        <Tooltip>
-          <TooltipTrigger asChild>{trigger}</TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {moreActionsLabel}
-          </TooltipContent>
-        </Tooltip>
+    <WorktreeCardRowActionsMenu
+      label={translate(
+        'auto.components.sidebar.WorktreeCardMeta.dbe2d18972',
+        'More {{value0}} actions',
+        {
+          value0: label
+        }
       )}
-      <DropdownMenuContent
-        align="end"
-        className="w-52"
-        onClick={(event) => event.stopPropagation()}
-      >
-        {onOpenInOrca ? (
-          <DropdownMenuItem
-            onClick={(event) => {
-              closeHover()
-              onOpenInOrca(event)
-            }}
-          >
-            <MonitorUp className="size-3.5" />
-            {translate('auto.components.sidebar.WorktreeCardMeta.2c67730e07', 'Open in Orca')}
-          </DropdownMenuItem>
-        ) : null}
-        {onUnlink ? (
-          <HostedReviewUnlinkMenuItem
-            reviewLabel={label}
-            reviewIdentifier={`${label === 'MR' ? '!' : '#'}${number}`}
-            providerLabel={provider}
-            onSelect={() => {
-              closeHover()
-              onUnlink()
-            }}
-          />
-        ) : null}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      open={open}
+      onOpenChange={onOpenChange}
+    >
+      {onOpenInOrca ? (
+        <DropdownMenuItem
+          onClick={(event) => {
+            closeHover()
+            onOpenInOrca(event)
+          }}
+        >
+          <MonitorUp className="size-3.5" />
+          {translate('auto.components.sidebar.WorktreeCardMeta.2c67730e07', 'Open in Orca')}
+        </DropdownMenuItem>
+      ) : null}
+      {onUnlink ? (
+        <HostedReviewUnlinkMenuItem
+          reviewLabel={label}
+          reviewIdentifier={`${label === 'MR' ? '!' : '#'}${number}`}
+          providerLabel={provider}
+          onSelect={() => {
+            closeHover()
+            onUnlink()
+          }}
+        />
+      ) : null}
+    </WorktreeCardRowActionsMenu>
   )
 }
 

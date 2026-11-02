@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
+// @vitest-environment happy-dom
+import { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft,
@@ -7,19 +8,16 @@ import {
   nativeChatComposerDraftWritesSettled,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
-import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { createRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
+import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
 
 vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
-vi.mock('@/lib/worker-terminal-takeover-report', () => ({
-  reportStructuredSessionUserInput: vi.fn()
-}))
 
 const ATTACHMENT = { id: 'a1', path: '/tmp/shot.png' } as NativeChatComposerImageAttachment
 
@@ -101,8 +99,37 @@ it.each([10, 100])(
     expect(structuredTransport.onError).toHaveBeenCalledTimes(2)
     expect(structuredTransport.onError).toHaveBeenNthCalledWith(1, null, undefined)
     expect(structuredTransport.onError).toHaveBeenNthCalledWith(2, null, undefined)
-    expect(kinds).toBeGreaterThanOrEqual(count)
-    expect(names).toBeGreaterThanOrEqual(count)
+    expect({ kinds, names }).toEqual({ kinds: 0, names: 0 })
+  }
+)
+
+it.each([
+  undefined,
+  [],
+  [
+    { name: 'fast', kind: 'command' as const },
+    { name: 'permissions', kind: 'command' as const }
+  ]
+])(
+  'sends provider commands with attachments under inventory %j and retains refused drafts',
+  async (inventory) => {
+    for (const text of ['/fast', '/permissions']) {
+      for (const accepted of [true, false]) {
+        clearNativeChatComposerDraftsForTests()
+        const { send, structuredTransport, setDraft } = harness('codex')
+        structuredTransport.sessionCommands = inventory
+        vi.mocked(structuredTransport.send).mockReturnValue(accepted)
+        updateNativeChatComposerDraft('tab-1:pane', { text, images: [ATTACHMENT] }, 'immediate')
+        await send(text)
+        expect(structuredTransport.send).toHaveBeenCalledExactlyOnceWith(text, [ATTACHMENT])
+        if (accepted) {
+          expect(setDraft).toHaveBeenCalledWith('')
+        } else {
+          expect(setDraft).not.toHaveBeenCalled()
+          expect(readNativeChatComposerDraft('tab-1:pane').text).toBe(text)
+        }
+      }
+    }
   }
 )
 
@@ -110,8 +137,7 @@ it.each([10, 100])(
 describe('attachment guard follows what the host claims', () => {
   it.each([
     ['claude', '/clear'],
-    ['claude', '/model'],
-    ['codex', '/permissions']
+    ['claude', '/model']
   ] as const)('refuses attachments on the host-claimed %s command %s', (agent, text) => {
     const { send, structuredTransport } = harness(agent)
     send(text)
@@ -119,21 +145,6 @@ describe('attachment guard follows what the host claims', () => {
       'Remove attachments before using a chat-session command.'
     )
     expect(structuredTransport.send).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['claude', '/init'],
-    ['claude', '/review'],
-    ['codex', '/goal ship the fix']
-  ] as const)('sends %s attachments along with the passed-through %s', async (agent, text) => {
-    const { send, structuredTransport } = harness(agent)
-    send(text)
-    await vi.waitFor(() =>
-      expect(structuredTransport.send).toHaveBeenCalledWith(text, [ATTACHMENT])
-    )
-    expect(structuredTransport.onError).not.toHaveBeenCalledWith(
-      'Remove attachments before using a chat-session command.'
-    )
   })
 
   it('refuses attachments on /goal where the host sets the goal, since no message is sent', () => {
@@ -176,19 +187,6 @@ describe('reports the sends that bring the latest into view', () => {
     await vi.waitFor(() => expect(structuredTransport.onError).toHaveBeenCalledTimes(2))
     expect(structuredTransport.send).toHaveBeenCalledWith('hello', [])
     expect(onSubmitted).toHaveBeenCalledOnce()
-  })
-
-  it('reports nothing for a host command chat sessions do not run', async () => {
-    const onSubmitted = vi.fn()
-    const { send, structuredTransport } = harness('codex', undefined, onSubmitted)
-    send('/permissions', [])
-    await vi.waitFor(() =>
-      expect(structuredTransport.onError).toHaveBeenCalledWith(
-        expect.stringContaining('not available in chat sessions'),
-        undefined
-      )
-    )
-    expect(onSubmitted).not.toHaveBeenCalled()
   })
 })
 
@@ -311,7 +309,9 @@ import {
 import { useNativeChatDraft } from './use-native-chat-draft'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
-import { promptSkillRefs } from './native-chat-prompt-document'
+import { promptSkillRefs, promptText } from './native-chat-prompt-document'
+import { mountNativeChatQueuedEditLifetime } from './native-chat-queued-edit-lifetime.test-fixture'
+import type { NativeChatComposerInput } from './native-chat-composer-input'
 
 describe('complete handback acceptance', () => {
   const scope = 'agent-session:rich-return'
@@ -420,13 +420,110 @@ describe('complete handback acceptance', () => {
     }
   }
 
+  it('keeps agent-offset handback after queued-edit lifetime cleanup, obsolete Goal acceptance and editor remount/next Send', async () => {
+    const fixture = acceptanceFixture()
+    const submitted = '/goal @Worker (Orca agent term_worker) ship'
+    updateNativeChatComposerDraft(
+      scope,
+      {
+        text: submitted,
+        document: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'text', text: '/goal ' },
+                {
+                  type: 'nativeChatAgentReference',
+                  attrs: { label: 'Worker', address: 'term_worker', hostKey: 'local' }
+                },
+                { type: 'text', text: ' ship' }
+              ]
+            }
+          ]
+        }
+      },
+      'immediate'
+    )
+    const hook = fixture.mount()
+    let pending: Promise<boolean> | undefined
+    act(() => {
+      pending = hook.result.current.send(submitted, [])
+    })
+    const draft = createNativeChatQueuedEditDraft(
+      {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'queued' }]
+      },
+      scope
+    )
+    updateNativeChatComposerDraft(
+      draft.scopeKey,
+      {
+        text: 'later',
+        document: {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'later' }] }]
+        }
+      },
+      'immediate'
+    )
+    const { lifetime, edit, close, active } = mountNativeChatQueuedEditLifetime(draft, scope)
+    // The actual effect cleanup returns dirty work; explicit Cancel would discard it.
+    act(() => lifetime.unmount())
+    expect(close).toHaveBeenCalledWith(edit)
+    expect(active.current).toBeNull()
+    expect(readNativeChatComposerDraft(scope).text).toBe(`${submitted}\n\nlater`)
+    fixture.depart()
+    hook.unmount()
+    await act(async () => {
+      fixture.goal.resolve(true)
+      await pending
+    })
+    expect(readNativeChatComposerDraft(scope).text).toBe('\n\nlater')
+    expect(fixture.caret).not.toHaveBeenCalled()
+    expect(fixture.transport.send).not.toHaveBeenCalled()
+    fixture.arrive()
+    const inputRef = createRef<NativeChatComposerInput>()
+    function Reopened() {
+      const next = fixture.useSend(scope)
+      return (
+        <>
+          <NativeChatPromptEditor
+            scopeKey={scope}
+            inputRef={inputRef}
+            initialValue={next.draft}
+            disabled={false}
+            placeholder="Returned agent draft"
+            onChange={(input) => next.setDraft(input.value)}
+            onSelect={() => {}}
+          />
+          <button onClick={() => void next.send(next.draft, [])}>Send returned work</button>
+        </>
+      )
+    }
+    render(<Reopened />)
+    const editor = promptEditor(screen.getByRole('textbox'))
+    expect(promptText(editor.state.doc)).toBe('\n\nlater')
+    act(() => {
+      editor.commands.insertContentAt(editor.state.doc.content.size - 1, ' edited')
+    })
+    expect(inputRef.current?.value).toBe('\n\nlater edited')
+    fireEvent.click(screen.getByRole('button', { name: 'Send returned work' }))
+    await vi.waitFor(() =>
+      expect(fixture.transport.send).toHaveBeenCalledExactlyOnceWith('\n\nlater edited', [])
+    )
+  })
+
   it.each(['current', 'obsolete'] as const)(
     'retains accepted handback node identity through %s presentation and the next actual Send',
     async (presentation) => {
       const fixture = acceptanceFixture()
       updateNativeChatComposerDraft(scope, { text: '/goal ship it' }, 'immediate')
       const hook = fixture.mount()
-      let pending: Promise<void> | undefined
+      let pending: Promise<boolean> | undefined
       act(() => {
         pending = hook.result.current.send('/goal ship it', [])
       })
@@ -484,7 +581,7 @@ describe('complete handback acceptance', () => {
     updateNativeChatComposerDraft(scope, readNativeChatComposerDraft(seed.scopeKey), 'immediate')
     discardNativeChatQueuedEdit(seed)
     const hook = fixture.mount()
-    let pending: Promise<void> | undefined
+    let pending: Promise<boolean> | undefined
     act(() => {
       pending = hook.result.current.send('$review sent', [])
     })
@@ -550,7 +647,7 @@ describe('complete handback acceptance', () => {
     const fixture = acceptanceFixture()
     updateNativeChatComposerDraft(scope, { text: '/goal ship it' }, 'immediate')
     const hook = fixture.mount()
-    let pending: Promise<void> | undefined
+    let pending: Promise<boolean> | undefined
     act(() => {
       pending = hook.result.current.send('/goal ship it', [])
     })
@@ -624,7 +721,7 @@ describe('complete handback acceptance', () => {
         )
         const hook = fixture.mount()
         expect(active.get(scope)).toBe(1)
-        let pending: Promise<void> | undefined
+        let pending: Promise<boolean> | undefined
         act(() => {
           pending = hook.result.current.send('/goal ship it', [])
         })

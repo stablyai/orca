@@ -47,7 +47,7 @@ export default function ClientHostedBrowserTab({
       >
         <div
           data-client-hosted-browser-row-id={row.browserPageId}
-          className={`group relative flex h-full cursor-pointer select-none items-center px-1.5 text-xs outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getTabRootStateClasses(isActive)}`}
+          className={`w-full group relative flex h-full cursor-pointer select-none items-center px-1.5 text-xs outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getTabRootStateClasses(isActive)}`}
           onPointerDown={onActivate}
           onMouseDown={(event) => {
             if (event.button === 1) {

@@ -1,3 +1,7 @@
+import {
+  aggregateAsyncQuestions,
+  scanPendingAsks
+} from '../../../../../src/shared/native-chat/input/native-chat-ask'
 import { useMemo } from 'react'
 import type { AgentStatusEntry } from '../../../../../src/shared/agent-status-types'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
@@ -6,7 +10,7 @@ import {
   type ChatApproval
 } from '../../../../../src/shared/native-chat-interactive-prompt'
 import { nativeChatPromptWaitStartedAt } from '../../../../../src/shared/native-chat-prompt-dismiss-key'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   useMobileStructuredAsyncQuestion,
   type MobileStructuredAskSession
@@ -30,8 +34,27 @@ export function useMobileNativeChatPrompts(args: {
   messages: readonly NativeChatMessage[]
   // Unsettled/retained reconnect history may contain answered asks and cannot supply current prompt cards.
   transcriptLoading: boolean
+  asyncSourceScope: string
+  hiddenAsyncIds: ReadonlySet<string>
 }): MobileNativeChatPrompts {
   const { enabled, structured = null, status, messages, transcriptLoading } = args
+  const scan = useMemo(
+    () => (!transcriptLoading ? scanPendingAsks(messages) : null),
+    [messages, transcriptLoading]
+  )
+  const queuedCards = structured?.queued?.cards
+  const queuedTexts = useMemo(() => queuedCards?.map((card) => card.text), [queuedCards])
+  const pendingAsk = useMemo(
+    () =>
+      aggregateAsyncQuestions(
+        scan?.contributors ?? [],
+        args.asyncSourceScope,
+        args.hiddenAsyncIds,
+        queuedTexts
+      ),
+    [scan, args.asyncSourceScope, args.hiddenAsyncIds, queuedTexts]
+  )
+  const transcriptAsk = scan?.blocking ?? pendingAsk
   const interactivePrompt = status?.interactivePrompt
   const toolName = status?.toolName
   const agent = status?.agentType
@@ -42,13 +65,14 @@ export function useMobileNativeChatPrompts(args: {
         toolName,
         agent,
         messages,
+        transcriptAsk,
         transcriptSettled: !transcriptLoading
       }),
-    [interactivePrompt, toolName, agent, messages, transcriptLoading]
+    [interactivePrompt, toolName, agent, messages, transcriptLoading, transcriptAsk]
   )
   const structuredAsk = useMobileStructuredAsyncQuestion({
     structured,
-    messages,
+    pendingAsk,
     transcriptLoading
   })
   if (structured) {

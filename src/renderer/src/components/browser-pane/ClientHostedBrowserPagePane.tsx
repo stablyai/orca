@@ -1,6 +1,6 @@
 import { useCallback, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { useBrowserAgentCursor } from './agent-cursor/use-browser-agent-cursor'
-import { BrowserPageZoomIndicator } from './assemble-chrome/browser-page-zoom-indicator'
+import { BrowserPageFeedbackBadge } from './assemble-chrome/browser-page-feedback-badge'
 import { BrowserLinkStatusBubble } from './assemble-chrome/browser-link-status-bubble'
 import { useAppStore } from '@/store'
 import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
@@ -30,7 +30,6 @@ import { useBrowserAddressBarEditSession } from './assemble-chrome/use-browser-a
 import { useBrowserPageFindShortcuts } from './assemble-chrome/use-browser-page-find-shortcuts'
 import { useWebviewGuestFocus } from './assemble-chrome/browser-page-guest-focus'
 import { RemoteRuntimeEgressIndicator } from './assemble-chrome/browser-egress-indicator'
-import { getBrowserPageZoomIndicatorState } from './host-guest/browser-page-zoom'
 import { useBrowserPageWebviewShortcuts } from './host-guest/use-browser-page-webview-shortcuts'
 import { useBrowserPageZoomFeedback } from './host-guest/use-browser-page-zoom-feedback'
 import { isPageDocumentNavigationStart } from './host-guest/browser-page-webview-navigation-handlers'
@@ -216,6 +215,7 @@ export function ClientHostedBrowserPagePane({
       // A commit is a successful load; did-stop-loading must preserve the preceding did-fail-load overlay.
       if (event?.type === 'did-navigate') {
         activeLoadFailureRef.current = null
+        setFindOpen(false)
       }
       const activeLoadFailure = activeLoadFailureRef.current
       // URL writes clear certificate challenges, so preserve them while a failure stands.
@@ -281,9 +281,6 @@ export function ClientHostedBrowserPagePane({
   ])
 
   const showFailureOverlay = !attachmentError && Boolean(browserTab.loadError)
-  const browserZoomIndicatorState = getBrowserPageZoomIndicatorState({
-    feedbackVisible: zoom.browserZoomFeedbackVisible
-  })
 
   const markup = useClientHostedBrowserMarkup({
     webviewRef,
@@ -357,10 +354,7 @@ export function ClientHostedBrowserPagePane({
           style={devToolsPageFlex === null ? undefined : { flex: devToolsPageFlex }}
         >
           {markup.overlay}
-          <BrowserPageZoomIndicator
-            state={browserZoomIndicatorState}
-            percent={zoom.browserZoomPercent}
-          />
+          <BrowserPageFeedbackBadge ref={zoom.feedbackBadgeRef} />
           <BrowserFind
             isOpen={findOpen}
             onClose={() => setFindOpen(false)}

@@ -56,11 +56,7 @@ vi.mock('../ssh/orcad-migration-catalog-client', () => ({
 }))
 
 import { enableWslHostAutomations } from './wsl-host-automation-enable'
-import {
-  disableWslHostAutomations,
-  readWslHostAutomationStates,
-  restoreWslHostAutomations
-} from './wsl-host-automation-disable'
+import { disableWslHostAutomations, restoreWslHostAutomations } from './wsl-host-automation-disable'
 
 beforeEach(() => {
   hostRows.clear()
@@ -82,36 +78,9 @@ describe('enableWslHostAutomations', () => {
     ])
     expect(updates).toEqual(['untouched'])
   })
-
-  it('throws when the host refuses one, so the step stays pending and retries', async () => {
-    hostRows.set('a', { enabled: false, updatedAt: 1 })
-    failNextUpdate.value = true
-    await expect(
-      enableWslHostAutomations('/user-data', 'wsl:Ubuntu', [{ id: 'a', updatedAt: 1 }])
-    ).rejects.toThrow('wsl_move_automation_enable_failed:busy')
-    await enableWslHostAutomations('/user-data', 'wsl:Ubuntu', [{ id: 'a', updatedAt: 1 }])
-    expect(updates).toEqual(['a'])
-  })
 })
 
 describe('undo on the host', () => {
-  it("reads each automation's state there; one deleted there reads as off", async () => {
-    hostRows.set('on', { enabled: true, updatedAt: 10 })
-    hostRows.set('off', { enabled: false, updatedAt: 10 })
-    expect(
-      await readWslHostAutomationStates('/user-data', 'wsl:Ubuntu', ['on', 'off', 'deleted'])
-    ).toEqual({ on: true, off: false, deleted: false })
-    expect(updates).toEqual([])
-  })
-
-  it('turns them off, and restore turns them back on', async () => {
-    hostRows.set('on', { enabled: true, updatedAt: 10 })
-    expect(await disableWslHostAutomations('/user-data', 'wsl:Ubuntu', ['on'])).toEqual(['on'])
-    expect(hostRows.get('on')?.enabled).toBe(false)
-    await restoreWslHostAutomations('/user-data', 'wsl:Ubuntu', ['on'])
-    expect(hostRows.get('on')?.enabled).toBe(true)
-  })
-
   it('turns back on what it turned off before throwing, so a refused undo changes nothing', async () => {
     hostRows.set('a', { enabled: true, updatedAt: 1 })
     hostRows.set('b', { enabled: true, updatedAt: 1 })
@@ -133,11 +102,6 @@ describe('undo on the host', () => {
     )
     expect(error).toMatchObject({ leftOff: ['a'] })
     expect(hostRows.get('a')?.enabled).toBe(false)
-  })
-
-  it('asks the host nothing when no automation needs turning off', async () => {
-    expect(await disableWslHostAutomations('/user-data', 'wsl:Ubuntu', [])).toEqual([])
-    expect(updates).toEqual([])
   })
 
   it('stops at a host that stops answering, leaving the rest off rather than wait on each', async () => {

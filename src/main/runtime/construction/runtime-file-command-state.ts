@@ -115,7 +115,15 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
         this.notifyMobileSessionTabsChanged(id)
       }
     }),
-    openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId, navigation) => {
+    openDiff: (
+      worktreeId,
+      filePath,
+      relativePath,
+      staged,
+      runtimeEnvironmentId,
+      navigation,
+      oldPath
+    ) => {
       if (isChatScratchWorktreeId(worktreeId)) {
         throw new Error('chat_scratch_not_openable')
       }
@@ -128,7 +136,8 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
         relativePath,
         staged,
         runtimeEnvironmentId,
-        navigation
+        navigation,
+        ...(oldPath ? ([oldPath] as const) : [])
       )
     }
   })

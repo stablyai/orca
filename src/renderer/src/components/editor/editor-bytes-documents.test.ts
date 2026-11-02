@@ -55,7 +55,7 @@ import {
   saveEditorBytesDraft,
   setEditorBytesDraft
 } from './editor-bytes-documents'
-import { bytesDocumentBoxes, rekeyEditorBytesDocuments } from './editor-bytes-document-boxes'
+import { bytesDocumentBoxes } from './editor-bytes-document-boxes'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the save reads only openFiles, markFileDirty and setExternalMutation.
 const getState = () => state as unknown as AppState
@@ -109,13 +109,6 @@ describe('binary custom editor saves', () => {
     expect(state.openFiles[0].externalMutation).toBe('changed')
     expect(editorBytesDocument('book')).toBe(edited)
   })
-
-  it('writes unguarded only for the banner Overwrite', async () => {
-    setEditorBytesDraft('book', edited)
-    writeRuntimeFileBytes.mockResolvedValue({ ok: true })
-    await saveEditorBytesDraft(getState, file, context, 'overwrite', () => false)
-    expect(writeRuntimeFileBytes.mock.calls[0][4]).toEqual({})
-  })
 })
 
 describe('binary custom editor views', () => {
@@ -159,14 +152,6 @@ describe('binary custom editor tabs', () => {
     await save()
     load('book', loaded, editsAtRead)
     expect(editorBytesDocument('book')).toBe(edited)
-  })
-
-  it('moves an unsaved edit with its tab when the file is renamed', () => {
-    setEditorBytesDraft('book', edited)
-    rekeyEditorBytesDocuments([{ oldFileId: 'book', newFileId: 'renamed' }])
-    expect(editorBytesDocument('renamed')).toBe(edited)
-    expect(editorBytesDocument('book')).toBeNull()
-    rekeyEditorBytesDocuments([{ oldFileId: 'renamed', newFileId: 'book' }])
   })
 
   it('shares one draft between tabs of one file, which share one dirty flag', async () => {

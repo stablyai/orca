@@ -1,5 +1,5 @@
 import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 
 export class StructuredAgentSessionTaskQueue {
   private readonly chains = new Map<string, Promise<void>>()

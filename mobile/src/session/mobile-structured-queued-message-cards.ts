@@ -1,20 +1,20 @@
 import { stripSentImagePromptMarkers } from '../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
 // The shared projection decides each card's hold; this layer words it for the phone.
 
-import type { AgentSessionFailureFact } from '../../../src/shared/agent-session-failure'
+import type { AgentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
 import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
-import type { AgentJournalSubmission } from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage
-} from '../../../src/shared/agent-session-wire'
+} from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import {
   projectQueuedMessageCards,
   queuedMessageCardLine,
   queuedMessageCardNeedsAttention,
   queuedMessageReturnedNotice,
   type QueuedMessageCard
-} from '../../../src/shared/structured-agent-session-queued-cards'
+} from '../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import { agentMessageAttribution } from './mobile-agent-message-attribution'
 
 export type MobileQueuedMessageCard = QueuedMessageCard & {
@@ -70,7 +70,10 @@ export function mobileQueuedMessageCards(
     ...card,
     line: queuedMessageCardLine({
       ...card,
-      text: stripSentImagePromptMarkers(card.text, card.images?.length ?? 0)
+      displayText: stripSentImagePromptMarkers(
+        card.displayText ?? card.text,
+        card.images?.length ?? 0
+      )
     }),
     needsAttention: queuedMessageCardNeedsAttention(card),
     caption: queuedMessageCardCaption(card, facts.agentName, facts.statedFailures ?? []),

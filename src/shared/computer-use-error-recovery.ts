@@ -35,6 +35,11 @@ export function computerUseErrorRecoveryData(
         'Retry once with `--restore-window`.',
         'If `--restore-window` was already used, stop retrying restore; bring the app forward manually, check permissions, or prefer `set-value` for editable fields.'
       )
+    case 'background_unavailable':
+      return recoverWith(
+        'If the message names a popup menu or `<select>`, set its option with `orca computer set-value` on that element instead of clicking.',
+        'Otherwise retry once with `--restore-window`; that brings the app forward and uses foreground input, so tell the user it will take over their screen.'
+      )
     case 'window_stale':
       return recoverWith(
         'Run `orca computer list-windows --app <app> --json` and choose a current window selector.',
@@ -84,6 +89,11 @@ export function computerUseErrorRecoveryData(
       return recoverWith(
         'Run `orca computer get-app-state --app <app> --json` before retrying so you know whether the UI changed.',
         'Retry with a simpler semantic action or `--no-screenshot` if observation is slow; do not repeat the same timed-out action blindly.'
+      )
+    case 'verification_failed':
+      return recoverWith(
+        'Run `orca computer get-app-state --app <app> --json` and check which field holds the value; another field may have changed instead.',
+        'Do not retry the same `set-value` unchanged. For editable text, click the field and confirm focus, select all (`cmd+a` on macOS, `ctrl+a` on Windows/Linux), then use `type-text` and inspect the resulting value.'
       )
     case 'screenshot_failed':
       return recoverWith(

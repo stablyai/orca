@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -17,11 +18,17 @@ vi.mock('@/lib/web-client-location', () => ({ isWebClientLocation: () => mocks.i
 
 import { useAppStore } from '../store'
 import { useLocalStructuredSessionTabsSync } from './local-structured-session-tabs-sync'
-import { resetLocalStructuredChatsForTests } from './local-structured-chats'
+import {
+  resetLocalStructuredChatsForTests,
+  useLocalStructuredChatsInUse
+} from './local-structured-chats'
 
 function setStructuredChat(enabled: boolean): void {
   useAppStore.setState({
-    settings: { ...useAppStore.getState().settings!, experimentalNativeChat: enabled }
+    settings: {
+      ...useAppStore.getState().settings!,
+      nativeChatProviders: enabled ? EVERY_AGENT_CHAT : {}
+    }
   })
 }
 
@@ -138,4 +145,75 @@ describe("this machine's structured chat mirror", () => {
 
     expect(mocks.start).not.toHaveBeenCalled()
   })
+})
+
+it.each([100, 1000])('bounds root preference work for %i choices', async (size) => {
+  let reads = 0
+  const choicesFor = (on: boolean): Record<string, boolean> => {
+    const choices: Record<string, boolean> = {}
+    for (let index = 0; index < size; index++) {
+      Object.defineProperty(choices, `agent-${index}`, {
+        enumerable: true,
+        get: () => {
+          reads++
+          return on && index === size - 1
+        }
+      })
+    }
+    return choices
+  }
+  const choices = choicesFor(false)
+  useAppStore.setState({
+    settings: { ...useAppStore.getState().settings!, nativeChatProviders: choices }
+  })
+  const renders = vi.fn()
+  renderHook(() => {
+    renders(useLocalStructuredChatsInUse())
+    useLocalStructuredSessionTabsSync()
+  })
+  await act(async () => {
+    await Promise.resolve()
+  })
+  const initialRenders = renders.mock.calls.length
+  reads = 0
+  act(() => useAppStore.setState({ activeRepoId: 'unrelated-repo' }))
+  expect(renders).toHaveBeenCalledTimes(initialRenders)
+  // Two root consumers each enumerate exactly this map; no per-chat acquisition or fanout.
+  expect(reads).toBe(2 * size)
+  expect(mocks.start).not.toHaveBeenCalled()
+  act(() =>
+    useAppStore.setState({
+      settings: {
+        ...useAppStore.getState().settings!,
+        nativeChatProviders: choicesFor(true)
+      }
+    })
+  )
+  expect(mocks.start).toHaveBeenCalledOnce()
+  expect(renders).toHaveBeenLastCalledWith(true)
+  const onRenders = renders.mock.calls.length
+  act(() =>
+    useAppStore.setState({
+      settings: {
+        ...useAppStore.getState().settings!,
+        nativeChatProviders: choicesFor(true)
+      }
+    })
+  )
+  expect(renders).toHaveBeenCalledTimes(onRenders)
+  expect(mocks.start).toHaveBeenCalledOnce()
+  act(() =>
+    useAppStore.setState({
+      settings: {
+        ...useAppStore.getState().settings!,
+        agentDefaultSurface: 'chat',
+        nativeChatProviders: choicesFor(false)
+      }
+    })
+  )
+  reads = 0
+  act(() => useAppStore.setState({ activeRepoId: 'another-unrelated-repo' }))
+  expect(reads).toBe(0)
+  expect(renders).toHaveBeenCalledTimes(onRenders)
+  expect(mocks.start).toHaveBeenCalledOnce()
 })

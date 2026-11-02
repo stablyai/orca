@@ -102,7 +102,7 @@ describe('Linear issue context', () => {
         }
       }
     })
-    expect(getClients).toHaveBeenCalledWith('workspace-stably')
+    expect(getClients).toHaveBeenCalledWith('workspace-stably', undefined)
   })
 
   it('returns partial context and attachment metadata when the optional comment read fails', async () => {

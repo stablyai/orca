@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
+import { runPsInProcess } from './libproc-process-table'
 import type { AgentProcessIdentity, AgentProcessVerdict } from './agent-process-presence'
 
 export type AgentProcessObservation =
@@ -42,14 +43,18 @@ export async function readAgentProcess(pid: number): Promise<AgentProcessObserva
       }
     }
     if (process.platform === 'darwin') {
-      const result = await runProcess({
-        program: '/bin/ps',
-        args: ['-p', String(pid), '-o', 'stat=,lstart='],
-        // Pin the hook capture's zone/locale so local-time lstart strings compare.
-        env: { ...process.env, TZ: 'UTC0', LC_ALL: 'C', LANG: 'C' },
-        timeoutMs: 1000,
-        maxOutputBytes: 4096
-      })
+      const args = ['-p', String(pid), '-o', 'stat=,lstart=']
+      // Pin the hook capture's zone/locale so local-time lstart strings compare.
+      const env = { ...process.env, TZ: 'UTC0', LC_ALL: 'C', LANG: 'C' }
+      const result =
+        (await runPsInProcess(args, { env, timeoutMs: 1000, maxOutputBytes: 4096 })) ??
+        (await runProcess({
+          program: '/bin/ps',
+          args,
+          env,
+          timeoutMs: 1000,
+          maxOutputBytes: 4096
+        }))
       if (!result.timedOut && result.code === 0) {
         const match = /^\s*(\S+)\s+(.+?)\s*$/.exec(result.stdout)
         if (match) {

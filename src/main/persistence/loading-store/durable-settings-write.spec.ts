@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { expect, it, vi } from 'vitest'
 import { agentModelCatalogStore } from '../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { createAgentModelCatalogService } from '../../native-chat/agent-model-catalog/agent-model-catalog-service'

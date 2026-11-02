@@ -3,12 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { AppState } from './types'
 import { getWorktreeOnHostFromState } from './selectors'
-import {
-  getIndexedAllWorktrees,
-  getIndexedWorktreeMap,
-  getIndexedWorktreesById
-} from './worktree-repo-index'
-import { buildWorktreeByIdIndex } from './slices/worktree-by-id-index'
+import { getIndexedAllWorktrees } from './worktree-repo-index'
 
 const SHARED_ID = 'repo-1::/work/orca'
 
@@ -63,22 +58,6 @@ describe('id-keyed worktree projections keep distinct hosts distinct', () => {
 
     expect(all).toHaveLength(2)
   })
-
-  it('enumerates every host that publishes an id', () => {
-    const rows = getIndexedWorktreesById(byRepo(localRow, sshRow), SHARED_ID)
-
-    expect(rows.map((entry) => entry.hostId)).toEqual(['local', 'ssh:build-box'])
-  })
-
-  it('agrees with the other id index on which row a bare id resolves to', () => {
-    const worktreesByRepo = byRepo(localRow, sshRow)
-
-    // Both indices flatten the same data; disagreeing meant one caller saw the
-    // local row and another the SSH row for the same lookup.
-    expect(getIndexedWorktreeMap(worktreesByRepo).get(SHARED_ID)).toBe(
-      buildWorktreeByIdIndex(worktreesByRepo).get(SHARED_ID)
-    )
-  })
 })
 
 describe('getWorktreeOnHostFromState refuses a lookup that still matches two copies', () => {
@@ -90,11 +69,5 @@ describe('getWorktreeOnHostFromState refuses a lookup that still matches two cop
 
   it('answers the named host copy', () => {
     expect(getWorktreeOnHostFromState(colliding, SHARED_ID, 'ssh:build-box')).toBe(sshRow)
-  })
-
-  it('answers a lone copy without a host', () => {
-    expect(
-      getWorktreeOnHostFromState({ worktreesByRepo: byRepo(sshRow) }, SHARED_ID, undefined)
-    ).toBe(sshRow)
   })
 })

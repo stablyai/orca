@@ -5,7 +5,7 @@ import * as Pools from './codex-at-rest-skills-probe-pools'
 import {
   isLegacyAgentSessionAccountHome,
   requireLegacyAgentSessionAccountHome
-} from '../../shared/agent-session-account-home'
+} from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
@@ -15,7 +15,10 @@ import {
   AtRestCommandCatalog,
   type AtRestCommandScan
 } from '../native-chat/agent-session-wire/at-rest-command-catalog'
-import { runCodexAppServerSession, type CodexAppServerRpc } from './codex-app-server-session'
+import {
+  runCodexAppServerSession,
+  type CodexAppServerRpc
+} from './app-server/codex-app-server-session'
 import {
   CODEX_SKILLS_LIST_METHOD,
   codexFolderSkillReport,
@@ -72,14 +75,17 @@ export function createCodexAtRestSkillCatalog(deps: CodexAtRestSkillsDeps): AtRe
     dispose,
     scan: async (record, cwd, isCurrent, generation, signal, admitted) => {
       const accountHomePath = requireLegacyAgentSessionAccountHome(record.accountHome).path
-      const { command, environment } = await resolveCodexStructuredInvocation({
+      const { command, prefixArgs, environment } = await resolveCodexStructuredInvocation({
         ...deps,
         signal,
         resolveWorkingDirectory: () => cwd
       })
-      const args = codexStructuredLaunchArgs(
-        await waitForPromiseWithSignal(Promise.resolve(deps.resolveLaunchArgs()), signal)
-      )
+      const args = [
+        ...prefixArgs,
+        ...codexStructuredLaunchArgs(
+          await waitForPromiseWithSignal(Promise.resolve(deps.resolveLaunchArgs()), signal)
+        )
+      ]
       if (!isCurrent()) {
         return NO_SCAN
       }

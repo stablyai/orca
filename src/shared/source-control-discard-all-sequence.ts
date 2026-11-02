@@ -12,7 +12,9 @@ export function getDiscardAllPaths(
       (entry) =>
         (entry.area === area || (area === 'unstaged' && entry.area === 'untracked')) &&
         entry.conflictStatus !== 'unresolved' &&
-        entry.conflictStatus !== 'resolved_locally'
+        entry.conflictStatus !== 'resolved_locally' &&
+        !entry.submoduleRoot &&
+        (area === 'staged' || !isWorktreeUndiscardableGitlink(entry))
     )
     .flatMap((entry) =>
       area === 'staged' && entry.status === 'renamed' && entry.oldPath
@@ -38,6 +40,11 @@ export function isStageableStatusEntry(entry: GitStatusEntry): boolean {
     !entry.submoduleRoot &&
     !isSubmoduleWorktreeOnlyChange(entry)
   )
+}
+
+/** Non-recursive restore leaves a present submodule's checkout untouched, so only a deleted one can be restored. */
+export function isWorktreeUndiscardableGitlink(entry: GitStatusEntry): boolean {
+  return !!entry.submodule && entry.status !== 'deleted' && entry.submodule.restoreRecurses !== true
 }
 
 export function isSubmoduleWorktreeOnlyChange(entry: GitStatusEntry): boolean {

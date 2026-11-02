@@ -31,6 +31,32 @@ function isClientHostedBrowserPage(browserPageId: string): boolean {
   )
 }
 
+/** One automation-visibility lease per page while main reports it held; repeats are ignored. */
+function createMainOwnedPaintHolds(): {
+  set: (browserPageId: string, held: boolean) => void
+  releaseAll: () => void
+} {
+  const tokens = new Map<string, string>()
+  return {
+    set: (browserPageId, held) => {
+      const token = tokens.get(browserPageId)
+      if (held && !token) {
+        tokens.set(browserPageId, acquireBrowserAutomationVisibility(browserPageId))
+      } else if (!held && token) {
+        tokens.delete(browserPageId)
+        releaseBrowserAutomationVisibility(token)
+      }
+    },
+    // A dead hold cannot release later; clear it now so the page cannot remain drawn indefinitely.
+    releaseAll: () => {
+      for (const token of tokens.values()) {
+        releaseBrowserAutomationVisibility(token)
+      }
+      tokens.clear()
+    }
+  }
+}
+
 export function registerBrowserStateIpcBridge(
   unsubs: (() => void)[],
   isRuntimeEnvironmentActive: () => boolean
@@ -99,26 +125,14 @@ export function registerBrowserStateIpcBridge(
     })
   )
   // Why: main owns capture holds and sends each page's first hold and last release; no reply is awaited.
-  const capturePaintHoldTokens = new Map<string, string>()
+  const capturePaintHolds = createMainOwnedPaintHolds()
   const unsubscribeCapturePaintHold = window.api.browser.onCapturePaintHold?.(
-    ({ browserPageId, held }) => {
-      const token = capturePaintHoldTokens.get(browserPageId)
-      if (held && !token) {
-        capturePaintHoldTokens.set(browserPageId, acquireBrowserAutomationVisibility(browserPageId))
-      } else if (!held && token) {
-        capturePaintHoldTokens.delete(browserPageId)
-        releaseBrowserAutomationVisibility(token)
-      }
-    }
+    ({ browserPageId, held }) => capturePaintHolds.set(browserPageId, held)
   )
   if (unsubscribeCapturePaintHold) {
     unsubs.push(() => {
       unsubscribeCapturePaintHold()
-      // A dead hold cannot release later; clear it now so the page cannot remain drawn indefinitely.
-      for (const token of capturePaintHoldTokens.values()) {
-        releaseBrowserAutomationVisibility(token)
-      }
-      capturePaintHoldTokens.clear()
+      capturePaintHolds.releaseAll()
     })
   }
   const unsubscribeAgentInputFocusGuard = window.api.browser.onAgentInputFocusGuard?.(
@@ -139,13 +153,19 @@ export function registerBrowserStateIpcBridge(
       clearAgentInputFocusGuards()
     })
   }
+  // Why: the bootstrap lease is fixed at creation; an agent's page in a hidden worktree must keep drawing while it drives it.
+  const agentActivityPaintHolds = createMainOwnedPaintHolds()
   const unsubscribeAgentActivity = window.api.browser.onAgentActivity?.(
     ({ browserPageId, worktreeId, active }) => {
       setBrowserAgentPageActive(browserPageId, active, worktreeId)
+      agentActivityPaintHolds.set(browserPageId, active)
     }
   )
   if (unsubscribeAgentActivity) {
-    unsubs.push(unsubscribeAgentActivity)
+    unsubs.push(() => {
+      unsubscribeAgentActivity()
+      agentActivityPaintHolds.releaseAll()
+    })
   }
   const unsubscribeAgentCursor = window.api.browser.onAgentCursor?.((event) => {
     // Main waits for this answer, so a page nobody can see answers at once.

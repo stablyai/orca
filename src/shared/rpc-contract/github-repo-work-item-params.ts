@@ -24,10 +24,16 @@ export const WorkItemByOwnerRepo = RepoSelector.extend({
   // Preserve Enterprise host through parsing for host-qualified gh requests.
   host: OptionalString,
   number: z.number().int().positive(),
-  type: z.enum(['issue', 'pr'])
+  type: z.enum(['issue', 'pr']),
+  // Older hosts strip it and answer with the full lookup.
+  preview: z.boolean().optional()
 })
 
-export const WorkItemDetails = WorkItem
+export const WorkItemDetails = WorkItem.extend({
+  ownerRepo: z
+    .object({ owner: z.string().min(1), repo: z.string().min(1), host: OptionalString })
+    .optional()
+})
 
 export const WorkItemsCount = RepoSelector.extend({
   query: OptionalString

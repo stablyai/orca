@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
-import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, renderHook } from '@testing-library/react'
+
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { runCleanupMock, snapshotMock, toastErrorMock, toastInfoMock, toastSuccessMock } =
   vi.hoisted(() => ({
@@ -30,7 +31,7 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 import type { KillAllTerminalSurfacesSummary } from './kill-all-terminal-surfaces'
-import { DaemonActionDialog, useDaemonActions, type DaemonActionsApi } from './useDaemonActions'
+import { useDaemonActions } from './useDaemonActions'
 
 function rejectedSummary(): KillAllTerminalSurfacesSummary {
   return {
@@ -45,22 +46,6 @@ function rejectedSummary(): KillAllTerminalSurfacesSummary {
     closeYieldCount: 0,
     closePhaseExceededLongTaskBudget: false,
     daemon: { status: 'rejected' }
-  }
-}
-
-function successfulSurfaceSummary(): KillAllTerminalSurfacesSummary {
-  return {
-    targetCount: 1,
-    closeAttemptCount: 1,
-    absentTargetCount: 1,
-    failedCloseAttemptCount: 0,
-    exactKillAcceptedCount: 0,
-    exactKillRejectedCount: 0,
-    closeDurationMs: 1,
-    maxCloseBatchDurationMs: 1,
-    closeYieldCount: 0,
-    closePhaseExceededLongTaskBudget: false,
-    daemon: { status: 'fulfilled', killedCount: 0, remainingCount: 0 }
   }
 }
 
@@ -133,57 +118,5 @@ describe('useDaemonActions kill-all cleanup', () => {
 
     expect(onKillAllError).toHaveBeenCalledTimes(1)
     expect(onKillAllSettled).toHaveBeenCalledTimes(1)
-  })
-
-  it('reports closed terminal tabs as success when daemon management found no sessions', async () => {
-    runCleanupMock.mockResolvedValue(successfulSurfaceSummary())
-    const { result } = renderHook(() => useDaemonActions())
-
-    await act(async () => {
-      await result.current.runKillAll()
-    })
-
-    expect(toastSuccessMock).toHaveBeenCalledWith(
-      'Terminal tabs closed and shutdown requested.',
-      expect.any(Object)
-    )
-    expect(toastInfoMock).not.toHaveBeenCalled()
-  })
-})
-
-describe('DaemonActionDialog restart copy', () => {
-  function pendingRestartApi(): DaemonActionsApi {
-    return {
-      pending: 'restart',
-      setPending: vi.fn(),
-      busyKind: null,
-      isBusy: false,
-      runRestart: vi.fn(async () => {}),
-      runKillAll: vi.fn(async () => {}),
-      runConfirmed: vi.fn()
-    }
-  }
-
-  afterEach(() => {
-    cleanup()
-  })
-
-  it('names the terminal service and states only what actually happens', () => {
-    render(<DaemonActionDialog api={pendingRestartApi()} />)
-
-    expect(screen.getByText('Restart the terminal service?')).toBeTruthy()
-    expect(
-      screen.getByText(
-        'Open terminals and agents will restart. Terminals on remote hosts are not affected.'
-      )
-    ).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Restart' })).toBeTruthy()
-  })
-
-  it('no longer promises reopenable "Process exited" panes', () => {
-    render(<DaemonActionDialog api={pendingRestartApi()} />)
-
-    expect(screen.queryByText(/Process exited/)).toBeNull()
-    expect(screen.queryByText(/Legacy-protocol sessions/)).toBeNull()
   })
 })

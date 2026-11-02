@@ -1,6 +1,11 @@
 import type { RuntimeBrowserClientPlacement } from '../../../../../shared/runtime-browser-placement'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type { BrowserGrabPayload } from '../../../../../shared/browser-grab-types'
+import type {
+  BrowserAnnotationIntent,
+  BrowserGrabPayload,
+  BrowserPageAnnotation,
+  GrabIntent
+} from '../../../../../shared/browser-grab-types'
 import type { BrowserContextMenuRequestedEvent } from '../../../../../shared/browser-guest-events'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import type { GrabModeHook } from '../annotate/useGrabMode'
@@ -19,7 +24,12 @@ export type BrowserPageUrlSetter = (
   options?: { preserveLoadError?: boolean }
 ) => void
 
-export type BrowserChromeShortcutScope = 'focused' | 'inactive' | 'owned-target'
+/** 'owned-target' panes answer only chords from their own overlay; '-focused' marks the one in the focused split. */
+export type BrowserChromeShortcutScope =
+  | 'focused'
+  | 'inactive'
+  | 'owned-target'
+  | 'owned-target-focused'
 
 export type { GrabIntent } from '../../../../../shared/browser-grab-types'
 
@@ -57,6 +67,28 @@ export type BrowserPageGrabAnnotationsOptions = {
   browserAnnotationsLength: number
 }
 
+export type BrowserPageGrabAnnotations = {
+  grabIntent: GrabIntent
+  startGrabIntent: (nextIntent: GrabIntent) => void
+  pendingAnnotationPayload: BrowserGrabPayload | null
+  setPendingAnnotationPayload: Dispatch<SetStateAction<BrowserGrabPayload | null>>
+  grabToast: BrowserPageGrabToastState | null
+  setGrabToast: Dispatch<SetStateAction<BrowserPageGrabToastState | null>>
+  grabToastTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | undefined>
+  dismissGrabToast: () => void
+  handleGrabCopy: () => void
+  handleGrabCopyScreenshot: () => void
+  grabMenuActionTakenRef: MutableRefObject<boolean>
+  handleAddBrowserAnnotation: (
+    comment: string,
+    intent: BrowserAnnotationIntent,
+    imagePaths?: string[]
+  ) => void
+  handleCancelPendingBrowserAnnotation: () => void
+  cancelPendingBrowserCapture: () => void
+  handleGrabActionShortcut: (key: 'c' | 's') => void
+}
+
 export type BrowserPageRecoveryNavigationValidation = {
   committed: boolean
   started: boolean
@@ -73,6 +105,30 @@ export type BrowserPageFailLoadEvent = {
   errorDescription?: string
   validatedURL?: string
   isMainFrame?: boolean
+}
+
+export type BrowserPageAnnotationTrayProps = {
+  browserAnnotations: BrowserPageAnnotation[]
+  currentUrl?: string
+  annotationTraySendOpen: boolean
+  handleAnnotationTraySendOpenChange: (open: boolean) => void
+  worktreeId: string
+  activeGroupId: string | undefined
+  browserAnnotationsPrompt: string
+  includePageDetails: boolean
+  handleIncludePageDetailsChange: (include: boolean) => void
+  handleBrowserAnnotationsSentToAgent: () => void
+  handleBrowserAnnotationsHandedOff: (delivered: Promise<unknown>) => void
+  handleCopyBrowserAnnotations: () => void
+  browserAnnotationsCopied: boolean
+  handleClearBrowserAnnotations: () => void
+  handleDeleteBrowserAnnotation: (annotationId: string) => void
+  handleUpdateBrowserAnnotation: (
+    annotationId: string,
+    comment: string,
+    intent: BrowserAnnotationIntent,
+    imagePaths: string[]
+  ) => void
 }
 
 export type ClientHostedBrowserPagePaneProps = {

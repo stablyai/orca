@@ -21,7 +21,7 @@ import {
   runCodexAppServerSession,
   type CodexAppServerInvocation,
   type CodexAppServerRpc
-} from './codex-app-server-session'
+} from './app-server/codex-app-server-session'
 
 export type { CodexSessionIndexHealPaths } from './codex-session-index-heal-state'
 

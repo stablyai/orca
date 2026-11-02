@@ -32,7 +32,7 @@ import { HistoryReader } from '../../../daemon/history-reader'
 import { servesWslMovedPaneHistory } from '../../../orcad/orcad-migration-wsl-destination'
 import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/orcad-terminal-history-installer'
 import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
@@ -225,7 +225,9 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     if (resumeStartup === undefined && tab.launchAgent) {
       let workspace
       try {
-        workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
+        workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`, undefined, {
+          wslUserAct: wslUserAct === true
+        })
         agentStartup = await this.resolveMobileSessionTerminalCommand(workspace, {
           agent: tab.launchAgent
         })
@@ -300,6 +302,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
               }
             : {}),
           ...(automatic ? { refuseSleptWorktree: true } : {}),
+          reopensPane: true,
           // Only resumes from this pane's record show the window banner.
           ...(resumedRecord ? { resumesSleepingRecord: true as const } : {})
         }

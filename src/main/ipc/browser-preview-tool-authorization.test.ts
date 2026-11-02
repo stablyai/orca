@@ -140,6 +140,7 @@ const BROWSER_PAGE_CHANNELS = [
   'browser:session:deleteProfile',
   'browser:session:ensureManagedProfile',
   'browser:session:importCookies',
+  'browser:session:importCookiesForClientHost',
   'browser:session:resolvePartition',
   'browser:session:clearDefaultCookies',
   'browser:session:clearGoogleCookies',

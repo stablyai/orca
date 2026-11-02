@@ -7,6 +7,8 @@ import type {
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
 import { translate } from '@/i18n/i18n'
 import { pluginInstallErrorMessage } from '../presentation/plugin-error-presentation'
+import { catalogInstallTrustPrompt } from '../presentation/plugin-install-trust'
+import { confirmPluginInstallTrust } from '@/store/plugin-install-trust-request'
 import { PLUGIN_ACTION_TOAST_DURATION_MS } from './plugin-action-toast'
 import { applyPluginThemesNow } from './plugin-theme-apply'
 import { pluginTryAction } from './plugin-try-action'
@@ -52,11 +54,17 @@ const downloadFailed = (): string =>
  */
 export function usePluginInstallAction({
   fetchPreview,
-  onInstalled
+  onInstalled,
+  isFromInstallLink,
+  applyThemes = applyPluginThemesNow
 }: {
   fetchPreview: (listing: PluginMarketplaceHostListing) => Promise<PluginPagePreview>
   /** Reloads the list; opens review on the page for any plugin still waiting for it. */
   onInstalled: (pluginKey: string) => Promise<void>
+  /** Whether this install is on the page an install link opened; only labels telemetry. */
+  isFromInstallLink?: (pluginKey: string) => boolean
+  /** Shows an installed theme plugin at once; true when it did. Defaults to all of its themes. */
+  applyThemes?: (pluginKey: string) => Promise<boolean>
 }): {
   phaseOf: (pluginKey: string) => PluginInstallPhase | null
   install: (
@@ -117,6 +125,15 @@ export function usePluginInstallAction({
         })
         return
       }
+      // Why here: the card, the page and every link-opened page install through this one gate.
+      const trustPrompt = catalogInstallTrustPrompt(listing, preview)
+      if (trustPrompt) {
+        setPhase(pluginKey, null)
+        if (!(await confirmPluginInstallTrust(trustPrompt))) {
+          return
+        }
+        setPhase(pluginKey, { kind: 'installing' })
+      }
       const execution = listing.release?.execution ?? pluginExecutionProfile(preview.manifest)
       try {
         const result = await window.api.plugins.installMarketplacePlugin({
@@ -124,6 +141,7 @@ export function usePluginInstallAction({
           marketplaceCommit: preview.marketplaceCommit,
           pluginKey,
           resolvedCommit: preview.resolvedCommit,
+          ...(isFromInstallLink?.(pluginKey) ? { fromInstallLink: true as const } : {}),
           // Why the fingerprint: main turns on only the exact bytes this preview showed.
           ...(execution === 'data'
             ? { enableIfData: true as const, expectedFingerprint: preview.consentFingerprint }
@@ -155,7 +173,7 @@ export function usePluginInstallAction({
         const { themes, iconThemes, terminalThemes } = preview.manifest.contributes
         const themed = themes.length + iconThemes.length + terminalThemes.length > 0
         // Why: a click to install a theme should show it at once; its toast offers Switch back.
-        if (themed && (await applyPluginThemesNow(pluginKey).catch(() => false))) {
+        if (themed && (await applyThemes(pluginKey).catch(() => false))) {
           return
         }
         // Why: only a plugin that is on by now has anything to try; recipes still wait for review.
@@ -183,7 +201,7 @@ export function usePluginInstallAction({
         setPhase(pluginKey, { kind: 'error', message: catalogInstallErrorMessage(cause) })
       }
     },
-    [dismiss, fetchPreview, onInstalled, setPhase]
+    [applyThemes, dismiss, fetchPreview, isFromInstallLink, onInstalled, setPhase]
   )
 
   const phaseOf = useCallback(
