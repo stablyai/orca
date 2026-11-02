@@ -160,7 +160,7 @@ export function registerRuntimeWindowLifecycle(
           reject(new Error('runtime_unavailable'))
         }
       }),
-    setTabContent: (request) => requestTabContentFromRenderer(mainWindow, request),
+    setTabContent: (request, late) => requestTabContentFromRenderer(mainWindow, request, late),
     publishAgentLaunchTab: (request) =>
       requestAgentLaunchTabPublishFromRenderer(mainWindow, request),
     agentLaunchPaneVerdict: (event) => send('ui:agentLaunchPaneVerdict', event),

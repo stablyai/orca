@@ -14,6 +14,7 @@ import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-w
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { publishesSameChatRow } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-pane-tree'
+import { chatTabIdAmong } from '../../../shared/workspace-layout/workspace-layout-tab-content'
 
 /** Placement in the creating client's host-owned group/tab ids. */
 export type ChatTabPlacement = { groupId?: string; afterTabId?: string; index?: number }
@@ -33,24 +34,6 @@ export type ChatTabLayoutCommand =
   | (CommandOf<'openAgentSessionTab'> & { tabId: string })
   | (CommandOf<'closeTabs'> & { tabIds: [string] })
   | CommandOf<'setTabContent'>
-
-/** A chat's tab among these: the one holding it, else its usual id, else the next free one. */
-export function chatTabIdAmong(
-  tabs: readonly { id: string; holds: boolean }[],
-  sessionId: string
-): string {
-  const held = tabs.find((tab) => tab.holds)
-  if (held) {
-    return held.id
-  }
-  const taken = new Set(tabs.map((tab) => tab.id))
-  const preferred = structuredAgentSessionTabId(sessionId)
-  let id = preferred
-  for (let suffix = 2; taken.has(id); suffix++) {
-    id = `${preferred}-${suffix}`
-  }
-  return id
-}
 
 /** Shared by main's queue and windowless saves; null means unchanged. */
 export function chatTabLayoutCommand(

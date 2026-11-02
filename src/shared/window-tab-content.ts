@@ -29,11 +29,24 @@ export type WindowTabContentRequest = {
   decide?: boolean
   /** Read just `tabId` (no search by content): what a decided tab holds now. */
   exact?: boolean
-  /** Past this (ms since epoch) the window refuses: a request delivered late changes nothing. */
-  expiresAt: number
+  /** The switch this request belongs to. Deciding grants it the tab; its one change applies at
+   *  most once, and asking again (or `status`) answers what that change did. */
+  operation?: string
+  /** The page that granted `operation`: a reloaded page never applies or answers for it. */
+  page?: string
+  /** Only answer what `operation`'s change did, changing nothing. */
+  status?: boolean
 }
 
-/** Whether a tab now holds the content, and which; false changed nothing. */
-export type WindowTabContentOutcome = { retargeted: boolean; tabId?: string }
+/** Whether a tab now holds the content, and which; false changed nothing. `superseded`: the change
+ *  applied, and the tab has changed since (closed, switched again). A refusal of a chat may name
+ *  `tabId`: where this window would open the chat instead (the tab holding it, else a free id). */
+export type WindowTabContentOutcome = {
+  retargeted: boolean
+  tabId?: string
+  superseded?: boolean
+  /** The answering page (`WindowTabContentRequest.page`). */
+  page?: string
+}
 
 export type WindowTabContentReply = WindowTabContentOutcome & { requestId: string; error?: string }

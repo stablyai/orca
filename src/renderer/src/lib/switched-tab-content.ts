@@ -1,6 +1,9 @@
 import { useAppStore } from '@/store'
 import type { WindowTabContentRequest } from '../../../shared/window-tab-content'
-import { switchedTab } from '../../../shared/workspace-layout/workspace-layout-tab-content'
+import {
+  chatTabIdAmong,
+  switchedTab
+} from '../../../shared/workspace-layout/workspace-layout-tab-content'
 import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-pane-tree'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
@@ -21,9 +24,7 @@ import { tabHolding } from './switched-tab-holding'
  * place, pin and color and now holds the destination (the one condition, `switchedTab`). Answers
  * which tab and whether it does; false changes nothing.
  */
-export function setWindowTabContent(
-  request: Omit<WindowTabContentRequest, 'requestId' | 'expiresAt'>
-): {
+export function setWindowTabContent(request: Omit<WindowTabContentRequest, 'requestId'>): {
   retargeted: boolean
   tabId?: string
 } {
@@ -56,7 +57,11 @@ export function setWindowTabContent(
     !request.decide || request.exact === true
   )
   if (!found || found.done || request.decide) {
-    return found ? { retargeted: true, tabId: found.tab.id } : { retargeted: false }
+    return found
+      ? { retargeted: true, tabId: found.tab.id }
+      : content.kind === 'agent-session'
+        ? { retargeted: false, tabId: windowChatTabId(worktreeId, content.sessionId) }
+        : { retargeted: false }
   }
   const { tab } = found.tab
   const tabId = tab.id
@@ -151,25 +156,14 @@ export function setWindowTabContent(
   return { retargeted: true, tabId }
 }
 
-/** A switch changes what one of this window's tabs holds; main waits for whether it did. */
-export function registerWindowTabContentRequests(unsubs: (() => void)[]): void {
-  if (!window.api.ui.onSetTabContent) {
-    return
-  }
-  unsubs.push(
-    window.api.ui.onSetTabContent(({ requestId, expiresAt, ...request }) => {
-      try {
-        // Past its deadline a request was never applied: main reads the tab again instead.
-        const outcome =
-          Date.now() >= expiresAt ? { retargeted: false } : setWindowTabContent(request)
-        window.api.ui.replyTabContent?.({ requestId, ...outcome })
-      } catch (error) {
-        window.api.ui.replyTabContent?.({
-          requestId,
-          retargeted: false,
-          error: error instanceof Error ? error.message : 'Tab content change failed'
-        })
-      }
-    })
+/** Where this window would open a chat a switch's tab didn't take: the tab holding it, else its
+ *  usual id, else the next free one, as this window has its tabs now (main's copy can trail). */
+export function windowChatTabId(worktreeId: string, sessionId: string): string {
+  return chatTabIdAmong(
+    (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => ({
+      id: tab.id,
+      holds: tab.contentType === 'agent-session' && tab.entityId === sessionId
+    })),
+    sessionId
   )
 }

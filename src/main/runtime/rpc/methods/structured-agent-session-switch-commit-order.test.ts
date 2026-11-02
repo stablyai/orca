@@ -90,9 +90,9 @@ it.each([
   // Committed: the switch happened, whatever the window's answer, and its source was replaced.
   expect(result).toEqual({ status: 'completed', sessionId: id })
   if (cut === 'lost') {
-    // No answer is unknown, never a refusal: the tab is asked once more, and with the owner still
-    // silent the committed tab stands.
-    expect(changes).toEqual([true, false, false])
+    // No answer is unknown, never a refusal (the relay asks the window what it did, read-only),
+    // so the committed tab stands and nothing opens beside it.
+    expect(changes).toEqual([true, false])
     expect(rig.store.getSessionTabId(id)).toBe(TAB_ID)
     expect(settled).toHaveBeenCalledExactlyOnceWith({ ...stoppedSource, replacedBySessionId: id })
   } else {

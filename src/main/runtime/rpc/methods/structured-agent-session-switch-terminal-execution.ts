@@ -115,21 +115,28 @@ export async function executeStructuredSessionTerminalSwitch(
       terminal,
       chatSessionId: sessionId,
       chatTabId: switchedTabId,
-      // A later switch back or close of the chat supersedes this placement's settling.
-      current: () => host.getSessionTabId(sessionId) === null,
       activate: true,
       focusWindow: agentLaunchMovesHostWindow(ctx),
       // The commit point, before the layout owner replaces the chat: it leaves the saved chat
-      // tabs. From here the terminal is the conversation's, so no failure discards it.
+      // tabs. From here the terminal is the conversation's, so no failure discards it. Any later
+      // write to the chat's record (a reopen, a switch back, even one ending hidden again)
+      // supersedes this placement's settling.
       commit: async () => {
+        let generation = -1
         await host
-          .setSessionTabVisibility(sessionId, false, undefined, { check })
+          .setSessionTabVisibility(sessionId, false, undefined, {
+            check,
+            capture: (_tabId, written) => {
+              generation = written
+            }
+          })
           .catch((error: unknown) => {
             commitFailed = true
             throw error
           })
         committed = true
         onCommitted(sessionId)
+        return () => host.getSessionTabGeneration(sessionId) === generation
       }
     })
   } catch (error) {

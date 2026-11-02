@@ -82,11 +82,14 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
   ): Promise<void> {
     input.workspaceAuthority?.check()
     input.check?.()
-    const { tabId, current, eligible } = await admitStructuredSessionTabPublication(input, () =>
-      input.workspaceAuthority
-        ? this.prepareStructuredAgentSessionStartupRestoration()
-        : this.restoreStructuredAgentSessionTabs()
-    )
+    const { tabId, current, eligible } =
+      input.committed && input.tabId
+        ? { tabId: input.tabId, current: input.tabId, eligible: input.committed }
+        : await admitStructuredSessionTabPublication(input, () =>
+            input.workspaceAuthority
+              ? this.prepareStructuredAgentSessionStartupRestoration()
+              : this.restoreStructuredAgentSessionTabs()
+          )
     if (!eligible()) {
       throw new Error('Chat tab publication was superseded')
     }

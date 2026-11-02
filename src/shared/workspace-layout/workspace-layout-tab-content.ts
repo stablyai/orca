@@ -3,6 +3,7 @@
 // content is replaced, only if it still shows what the action started from).
 
 import type { AgentType } from '../agent-status-types'
+import { structuredAgentSessionTabId } from '../agent-session/view/structured-agent-session-projection'
 import { filterRecord } from './stored-record-fields'
 import { getNextTerminalOrdinal } from './terminal-tab-ordinal'
 import { applied, leafIdsOf, type Applied } from './workspace-layout-command-steps'
@@ -230,4 +231,22 @@ function withPane(
       : { ...next, leaves: { ...next.leaves, [content.leafId]: adoptedLeaf(content.adopt) } }
   }
   return { ...next, tabs: next.tabs.map((entry) => (entry.id === tabId ? replacement : entry)) }
+}
+
+/** A chat's tab among these: the one holding it, else its usual id, else the next free one. */
+export function chatTabIdAmong(
+  tabs: readonly { id: string; holds: boolean }[],
+  sessionId: string
+): string {
+  const held = tabs.find((tab) => tab.holds)
+  if (held) {
+    return held.id
+  }
+  const taken = new Set(tabs.map((tab) => tab.id))
+  const preferred = structuredAgentSessionTabId(sessionId)
+  let id = preferred
+  for (let suffix = 2; taken.has(id); suffix++) {
+    id = `${preferred}-${suffix}`
+  }
+  return id
 }

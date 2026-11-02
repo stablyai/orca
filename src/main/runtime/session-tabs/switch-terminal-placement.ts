@@ -1,16 +1,18 @@
+import { randomUUID } from 'node:crypto'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import type { AgentType } from '../../../shared/agent-status-types'
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-terminal-create-contract'
 import type { WindowTabContent, WindowTabContentOutcome } from '../../../shared/window-tab-content'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import {
+  chatTabIdAmong,
   decideTabContent,
   tabContentRef,
   type TabContent,
   type TabContentRef
 } from '../../../shared/workspace-layout/workspace-layout-tab-content'
-import { chatTabIdAmong, loadChatTabLayout } from '../agent-session/agent-session-tab-layout'
+import { loadChatTabLayout } from '../agent-session/agent-session-tab-layout'
 import type { WorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-model'
-import { logicalTabIdOf } from '../../../shared/runtime-mobile-session-tab-contracts'
 import type { LayoutCommandRunOptions, WindowLayoutCommand } from '../runtime-layout-apply'
 import { OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal } from './pty-backed-session-publication'
 import { TerminalNotPlacedError } from './terminal-not-placed-error'
@@ -20,12 +22,27 @@ export type SwitchedTabContentRequest = {
   tabId?: string
   /** Read just `tabId` (no search by content). */
   exact?: boolean
+  /** The switch, and the window page that granted it its tab (`WindowTabContentRequest`). */
+  operation?: string
+  page?: string
   expectSource: TabContentRef
   /** What the window shows; main's model takes `layout`. */
   window: WindowTabContent
   layout: TabContent
   focus: boolean
 }
+
+/** How a committed switch's one change settled (`switchTabContent`). */
+export type SwitchSettlement =
+  /** The decided tab holds the destination, and the switch is still the chat's current one. */
+  | { kind: 'applied'; tabId: string }
+  /** Nothing changed (no tab decided, or the owner refused before applying); `destination` is
+   *  where the owner would open the chat instead. */
+  | { kind: 'refused'; committed: boolean; destination?: string }
+  /** It applied, and a later close or switch has changed that tab or the chat's record since. */
+  | { kind: 'superseded'; tabId: string }
+  /** No answer: the committed record stands until the owner's startup or a late answer. */
+  | { kind: 'unknown'; tabId: string }
 
 export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal {
   abstract applyLayoutCommand(
@@ -43,19 +60,25 @@ export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntime
   async setSwitchedTabContent(
     workspaceId: string,
     request: SwitchedTabContentRequest,
-    decide = false
+    decide = false,
+    late?: (outcome: WindowTabContentOutcome) => void
   ): Promise<WindowTabContentOutcome> {
     const windowOwnsLayout = !ORCA_LAYOUT_OWNER_IS_MAIN && this.getAvailableAuthoritativeWindow()
     if (windowOwnsLayout && this.notifier?.setTabContent) {
-      return this.notifier.setTabContent({
-        worktreeId: workspaceId,
-        ...(request.tabId !== undefined ? { tabId: request.tabId } : {}),
-        expectSource: request.expectSource,
-        content: request.window,
-        focus: request.focus,
-        ...(decide ? { decide } : {}),
-        ...(request.exact ? { exact: true } : {})
-      })
+      return this.notifier.setTabContent(
+        {
+          worktreeId: workspaceId,
+          ...(request.tabId !== undefined ? { tabId: request.tabId } : {}),
+          expectSource: request.expectSource,
+          content: request.window,
+          focus: request.focus,
+          ...(decide ? { decide } : {}),
+          ...(request.exact ? { exact: true } : {}),
+          ...(request.operation ? { operation: request.operation } : {}),
+          ...(request.page ? { page: request.page } : {})
+        },
+        late
+      )
     }
     if (decide) {
       return decideTabContent(
@@ -118,68 +141,88 @@ export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntime
 
   /**
    * The tab a switch's chat opens in when it doesn't fill the switched tab: the tab already holding
-   * the chat, else its usual id, else the next free one, as the layout owner has its tabs (a
-   * window lists its own tabs; main follows the same rule, `mirroredTabContainers`).
+   * the chat, else its usual id, else the next free one, as the layout owner has its tabs now. A
+   * window answers for itself (its tabs can be newer than main's copy); main reads its own model.
    */
-  switchChatTabId(workspaceId: string, sessionId: string): string {
-    const shown = (this.mobileSessionTabsByWorktree.get(workspaceId)?.tabs ?? []).map((row) => ({
-      id: logicalTabIdOf(row),
-      holds: row.type === 'agent-session' && row.sessionId === sessionId
-    }))
-    const tabs = [
-      ...(this.ownerLayoutWorkspace(workspaceId)?.tabs ?? []).map((tab) => ({
+  async switchChatTabId(workspaceId: string, sessionId: string, agent: AgentType): Promise<string> {
+    const windowOwnsLayout = !ORCA_LAYOUT_OWNER_IS_MAIN && this.getAvailableAuthoritativeWindow()
+    if (windowOwnsLayout && this.notifier?.setTabContent) {
+      const chat = { kind: 'agent-session' as const, sessionId, agent }
+      const asked = await this.setSwitchedTabContent(
+        workspaceId,
+        { window: chat, layout: chat, expectSource: chat, focus: false },
+        true
+      ).catch(() => undefined)
+      if (asked?.tabId) {
+        return asked.tabId
+      }
+    }
+    return chatTabIdAmong(
+      (this.ownerLayoutWorkspace(workspaceId)?.tabs ?? []).map((tab) => ({
         id: tab.id,
         holds: tab.kind === 'agent-session' && tab.entityId === sessionId
       })),
-      ...(ORCA_LAYOUT_OWNER_IS_MAIN ? [] : shown)
-    ]
-    return chatTabIdAmong(tabs, sessionId)
+      sessionId
+    )
   }
 
   /**
-   * A switch's layout change in commit order: the owner says which tab would take the
-   * destination, changing nothing; `commit` records that tab in the chat-tab journal; then the
-   * owner changes exactly that tab, checking again. A refusal there (the user changed the tab
-   * meanwhile, or the request reached the window past its deadline) changed nothing, and the
-   * caller opens the destination as an ordinary tab. A failed decision or commit leaves the source
-   * as it was.
+   * A switch's layout change in commit order: the owner decides which tab would take the
+   * destination, granting this switch that tab and changing nothing; `commit` records it in the
+   * chat-tab journal and returns whether the switch is still the chat's current one; then the
+   * owner changes exactly that tab, at most once, with no deadline on the change itself. A failed
+   * decision or commit leaves the source as it was.
    *
-   * After the commit an answer that never came is unknown, never a refusal: the tab is asked again,
-   * bound to it, unless `current` says a later close or switch superseded this one. Already
-   * holding the destination is done, still holding the source applies it now, anything else is
-   * the ordinary fallback. With the owner still silent, the committed tab stands, and the owner's
-   * startup puts the destination there.
+   * The owner's answer, not time, settles it: applied (and current), refused before it applied
+   * (the user changed the tab meanwhile: the caller opens the destination where the owner says),
+   * applied then superseded by a later close or switch (nothing more happens), or unknown (the
+   * committed record stands; the owner's startup or a `late` answer settles the display).
    */
   async switchTabContent(
     workspaceId: string,
     request: SwitchedTabContentRequest,
-    commit: (tabId: string) => Promise<void>,
-    current: () => boolean = () => true
-  ): Promise<WindowTabContentOutcome> {
-    const decided = await this.setSwitchedTabContent(workspaceId, request, true)
+    commit: (tabId: string) => Promise<() => boolean>,
+    late?: (settlement: SwitchSettlement) => void
+  ): Promise<SwitchSettlement> {
+    const operation = randomUUID()
+    const decided = await this.setSwitchedTabContent(workspaceId, { ...request, operation }, true)
     if (!decided.retargeted || !decided.tabId) {
-      return { retargeted: false }
+      return { kind: 'refused', committed: false }
     }
-    await commit(decided.tabId)
-    const bound = { ...request, tabId: decided.tabId }
+    const tabId = decided.tabId
+    const current = await commit(tabId)
+    const settled = (outcome: WindowTabContentOutcome): SwitchSettlement =>
+      !outcome.retargeted
+        ? {
+            kind: 'refused',
+            committed: true,
+            ...(outcome.tabId ? { destination: outcome.tabId } : {})
+          }
+        : outcome.superseded || !current()
+          ? { kind: 'superseded', tabId }
+          : { kind: 'applied', tabId }
     try {
-      return await this.setSwitchedTabContent(workspaceId, bound)
-    } catch {
-      if (!current()) {
-        return { retargeted: true, tabId: decided.tabId }
+      return settled(
+        await this.setSwitchedTabContent(
+          workspaceId,
+          { ...request, tabId, operation, ...(decided.page ? { page: decided.page } : {}) },
+          false,
+          late && ((outcome) => late(settled(outcome)))
+        )
+      )
+    } catch (error) {
+      if (error instanceof TerminalNotPlacedError) {
+        return { kind: 'refused', committed: true }
       }
-    }
-    try {
-      return await this.setSwitchedTabContent(workspaceId, bound)
-    } catch {
-      return { retargeted: true, tabId: decided.tabId }
+      return { kind: 'unknown', tabId }
     }
   }
 
   /**
    * The terminal direction's write: the chat's tab now holds the parked terminal, once `commit`
    * took the chat out of the saved chat tabs. A tab that no longer holds just the chat (the user
-   * closed it meanwhile) is left alone, and the terminal opens as an ordinary tab instead.
+   * closed it meanwhile) is left alone, and the terminal opens as an ordinary tab instead. Only a
+   * settlement while the switch is current publishes: a later close or switch leaves it unshown.
    */
   async placeSwitchTerminal(
     workspaceId: string,
@@ -189,11 +232,10 @@ export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntime
       /** The chat's tab as its owner named it; none (a retry whose chat already left) finds the
        *  tab holding the terminal. */
       chatTabId?: string
-      /** False once a later switch or close superseded this placement. */
-      current?: () => boolean
       activate: boolean
       focusWindow: boolean
-      commit: () => Promise<void>
+      /** Records the switch; returns whether it is still the chat's current one. */
+      commit: () => Promise<() => boolean>
     }
   ): Promise<{ tabId: string; leafId: string; retargeted: boolean }> {
     const { terminal } = args
@@ -222,6 +264,23 @@ export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntime
       },
       layout: { kind: 'terminal' as const, terminalId: tabId, leafId, adopt }
     }
+    const publish = (inTab?: string): void =>
+      this.publishPtyBackedMobileSessionTerminal(workspaceId, pty, {
+        tabId,
+        leafId,
+        title: terminal.title,
+        activate: args.activate,
+        ...(inTab ? { inTab } : {})
+      })
+    const settle = async (settlement: SwitchSettlement): Promise<void> => {
+      if (settlement.kind === 'applied') {
+        publish(settlement.tabId)
+      } else if (settlement.kind === 'refused') {
+        await this.placeOrdinaryTerminal(workspaceId, terminal, { tabId, leafId, adopt }, args)
+        publish()
+      }
+    }
+    let current = (): boolean => true
     const switched = await this.switchTabContent(
       workspaceId,
       {
@@ -230,20 +289,17 @@ export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntime
         ...content,
         focus: args.focusWindow
       },
-      args.commit,
-      args.current
+      async () => (current = await args.commit()),
+      (late) => {
+        if (current()) {
+          settle(late).catch((error: unknown) =>
+            console.warn('[switch] a late terminal placement failed:', error)
+          )
+        }
+      }
     )
-    if (!switched.retargeted) {
-      await this.placeOrdinaryTerminal(workspaceId, terminal, { tabId, leafId, adopt }, args)
-    }
-    this.publishPtyBackedMobileSessionTerminal(workspaceId, pty, {
-      tabId,
-      leafId,
-      title: terminal.title,
-      activate: args.activate,
-      ...(switched.retargeted && switched.tabId ? { inTab: switched.tabId } : {})
-    })
-    return { tabId, leafId, retargeted: switched.retargeted }
+    await settle(switched)
+    return { tabId, leafId, retargeted: switched.kind !== 'refused' }
   }
 
   private async placeOrdinaryTerminal(

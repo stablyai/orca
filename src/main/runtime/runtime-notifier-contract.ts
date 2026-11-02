@@ -108,9 +108,10 @@ export type RuntimeNotifier = {
     }
   ): Promise<TerminalRevealReply> | TerminalRevealReply | void
   /** A switch: the window's tab holding just `expectSource` now holds `content` in place.
-   *  Resolves whether a tab does, and which. */
+   *  Resolves whether a tab does, and which; `late` hears an answer that missed the wait. */
   setTabContent?(
-    request: Omit<WindowTabContentRequest, 'requestId' | 'expiresAt'>
+    request: Omit<WindowTabContentRequest, 'requestId'>,
+    late?: (outcome: WindowTabContentOutcome) => void
   ): Promise<WindowTabContentOutcome>
   /** Shows an agent launch's tab before its process exists; the pane attaches when it does. */
   publishAgentLaunchTab?(

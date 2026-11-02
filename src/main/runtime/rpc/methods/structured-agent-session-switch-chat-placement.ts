@@ -12,13 +12,18 @@ import type { StructuredAgentSessionHost } from '../../../native-chat/agent-sess
  * the chat, if it still holds just that terminal; the chat's record names that tab (`commit`, the
  * switch's commit point); then the tab takes the chat in place. A split pane's tab keeps its other
  * panes, so the chat opens beside it; a source in another workspace keeps its tab untouched; a tab
- * the user changed meanwhile, or a source the client could only name, opens the chat as an
- * ordinary tab, its record following it there. Returns whether the chat now fills the terminal's
+ * the user changed before the write, or a source the client could only name, opens the chat as an
+ * ordinary tab where the layout owner says, its record following it there. After the commit the
+ * chat's record is the authority: the tab's rows only show it (never a second open), and only while
+ * no later close, reopen or switch wrote that record. Returns whether the chat took the terminal's
  * tab.
  */
 export async function placeSwitchChat(
   ctx: RpcContext,
-  host: Pick<StructuredAgentSessionHost, 'setSessionTabVisibility' | 'getSessionTabId'>,
+  host: Pick<
+    StructuredAgentSessionHost,
+    'setSessionTabVisibility' | 'getSessionTabId' | 'getSessionTabGeneration'
+  >,
   chat: Omit<StructuredSessionTabPublicationInput, 'activate'>,
   source: {
     /** The stopped terminal, when it was in the chat's workspace; `wholeTab` when it was the
@@ -36,7 +41,27 @@ export async function placeSwitchChat(
   const terminal = { kind: 'terminal' as const, terminalId: source.terminalId ?? '' }
   const content = { kind: 'agent-session' as const, sessionId, agent: chat.agent }
   const shown = ctx.runtime.mobileSessionTabsByWorktree.get(workspaceId)
-  let recorded: string | undefined
+  /** Whether the record is still the one this switch wrote. */
+  let current = (): boolean => true
+  const record = async (tabId: string, admit: () => void): Promise<void> => {
+    let generation = -1
+    await host.setSessionTabVisibility(sessionId, true, tabId, {
+      check: admit,
+      move: true,
+      capture: (_tabId, written) => {
+        generation = written
+      }
+    })
+    current = () => host.getSessionTabGeneration(sessionId) === generation
+  }
+  const project = (tabId: string): void =>
+    ctx.runtime.projectStructuredAgentSessionTab({
+      ...chat,
+      tabId,
+      inTab: tabId,
+      activate: false,
+      eligible: current
+    })
   // The switched tab becomes the conversation's chat tab, also when the chat was open in another
   // tab: that one goes in the same write, and the chat's one record moves here (Brennan: "same
   // session, so same tab").
@@ -52,31 +77,39 @@ export async function placeSwitchChat(
             focus: agentLaunchMovesHostWindow(ctx)
           },
           async (tabId) => {
-            await host.setSessionTabVisibility(sessionId, true, tabId, { check, move: true })
-            recorded = tabId
+            await record(tabId, check)
             committed()
+            return current
           },
-          // A later close or switch moved the chat's record: this one no longer settles anything.
-          () => host.getSessionTabId(sessionId) === recorded
+          // An answer after the wait shows the chat only while this switch is still current.
+          (late) => {
+            if (late.kind === 'applied' && current()) {
+              project(late.tabId)
+            }
+          }
         )
       : undefined
-  if (switched?.retargeted && switched.tabId) {
-    // Nothing may refuse this write now that the tab holds the chat: it projects the chat into
-    // that tab's rows (its record already names the tab).
-    await ctx.runtime.publishStructuredAgentSessionTab({
-      ...chat,
-      tabId: switched.tabId,
-      inTab: switched.tabId,
-      activate: false
-    })
+  if (switched?.kind === 'applied') {
+    project(switched.tabId)
+    return true
+  }
+  if (switched?.kind === 'superseded' || switched?.kind === 'unknown') {
     return true
   }
   // The chat's actual tab, as the layout owner has its tabs: never the switched tab, which the
   // user changed (a refused write) or which stays the split source's.
-  const tabId = ctx.runtime.switchChatTabId(workspaceId, sessionId)
-  if (recorded) {
-    // The tab refused at the write: the record follows the chat to that tab.
-    await host.setSessionTabVisibility(sessionId, true, tabId, { move: true })
+  const tabId =
+    switched?.destination ?? (await ctx.runtime.switchChatTabId(workspaceId, sessionId, chat.agent))
+  if (switched?.committed) {
+    // Refused before it applied: the record follows the chat there unless a later close or
+    // switch wrote it since.
+    const committedRecord = current
+    await record(tabId, () => {
+      check()
+      if (!committedRecord()) {
+        throw new Error('Chat tab publication was superseded')
+      }
+    })
   }
   const beside = source.besideTerminalId
   const slot = switchChatSlot(
@@ -99,6 +132,7 @@ export async function placeSwitchChat(
         activate: true,
         check,
         focusWindow: agentLaunchMovesHostWindow(ctx),
+        ...(switched?.committed ? { committed: current } : {}),
         ...slot.publish
       })
   )

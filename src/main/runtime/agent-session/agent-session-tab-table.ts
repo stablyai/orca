@@ -189,6 +189,18 @@ export abstract class AgentSessionRecordTabs extends AgentSessionRecordPublicati
   private readonly legacyTabIds: ReadonlySet<string> = new Set(
     this.transactions.legacySessionTabIds
   )
+  /** Each chat's tab-record lifetime, this run only: every write to its record (a close, a reopen,
+   *  a switch) is a new one, even one naming the same tab again. */
+  private readonly tabGenerations = new Map<string, number>()
+
+  private nextTabGeneration(sessionId: string): number {
+    const generation = (this.tabGenerations.get(sessionId) ?? 0) + 1
+    this.tabGenerations.set(sessionId, generation)
+    return generation
+  }
+
+  /** A switch settles only while the chat's record is still the one its commit wrote. */
+  getSessionTabGeneration = (sessionId: string): number => this.tabGenerations.get(sessionId) ?? 0
 
   listVisibleSessionIds = (): string[] =>
     this.transactions.state.sessionTabs
@@ -221,7 +233,7 @@ export abstract class AgentSessionRecordTabs extends AgentSessionRecordPublicati
     visible: boolean,
     tabId?: string,
     check?: () => void,
-    capture?: (tabId: string | null) => void,
+    capture?: (tabId: string | null, generation: number) => void,
     /** A switch: the chat's one record names `tabId`, leaving any tab it had. */
     move = false
   ): Promise<void> {
@@ -247,7 +259,8 @@ export abstract class AgentSessionRecordTabs extends AgentSessionRecordPublicati
         tabId,
         this.transactions.legacySessionTabIds
       )
-      capture?.(visible ? (draft.sessionTabs?.tabIdFor(sessionId) ?? null) : retired)
+      const generation = this.nextTabGeneration(sessionId)
+      capture?.(visible ? (draft.sessionTabs?.tabIdFor(sessionId) ?? null) : retired, generation)
     })
   }
 
@@ -273,14 +286,18 @@ export abstract class AgentSessionRecordTabs extends AgentSessionRecordPublicati
         tabId,
         this.transactions.legacySessionTabIds
       )
+      this.nextTabGeneration(sessionId)
       return true
     })
   }
 
   /** Publish the complete tab index in one write; a partial index would drop remaining chats on restart. */
   showSessionTabs(sessionIds: readonly string[]): Promise<void> {
-    return this.transact((draft) =>
+    return this.transact((draft) => {
       showAgentSessionTabs(draft, sessionIds, this.transactions.legacySessionTabIds)
-    )
+      for (const sessionId of sessionIds) {
+        this.nextTabGeneration(sessionId)
+      }
+    })
   }
 }

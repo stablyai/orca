@@ -18,8 +18,7 @@ const { createTestStore, makeTab, makeTabGroup, makeUnifiedTab, makeWorktree, se
 const store = createTestStore()
 vi.mock('@/store', () => ({ useAppStore: store }))
 
-const { registerWindowTabContentRequests, setWindowTabContent } =
-  await import('./switched-tab-content')
+const { setWindowTabContent } = await import('./switched-tab-content')
 const { applyStructuredSessionTabSnapshots } =
   await import('@/runtime/local-structured-session-tabs-sync/snapshot-apply')
 const { resetLocalStructuredSessionVersionForTests } =
@@ -225,36 +224,19 @@ it('a chat tab takes the switch’s terminal under the terminal’s own id and k
   expect(group()?.tabOrder).toEqual(['before', SWITCHED, 'after'])
 })
 
-it('answers which tab would take the chat without changing it, and refuses a late request', () => {
+it('answers which tab would take the chat without changing it', () => {
   seed(SWITCHED)
   const before = tabs()
-  const request = {
-    worktreeId: WORKTREE,
-    tabId: SWITCHED,
-    expectSource: { kind: 'terminal', terminalId: SWITCHED },
-    content: { kind: 'agent-session', sessionId: 'session-decide', agent: 'codex' },
-    focus: true
-  } as const
-  expect(setWindowTabContent({ ...request, decide: true })).toEqual({
-    retargeted: true,
-    tabId: SWITCHED
-  })
-  expect(tabs()).toEqual(before)
-  // Main stopped waiting at the deadline and took the request as refused: it changes nothing.
-  let receive: ((request: object) => void) | undefined
-  const reply = vi.fn()
-  Object.assign(api, {
-    ui: {
-      onSetTabContent: (handler: typeof receive) => {
-        receive = handler
-        return () => {}
-      },
-      replyTabContent: reply
-    }
-  })
-  registerWindowTabContentRequests([])
-  receive!({ ...request, requestId: 'late', expiresAt: Date.now() - 1 })
-  expect(reply).toHaveBeenCalledExactlyOnceWith({ requestId: 'late', retargeted: false })
+  expect(
+    setWindowTabContent({
+      worktreeId: WORKTREE,
+      tabId: SWITCHED,
+      expectSource: { kind: 'terminal', terminalId: SWITCHED },
+      content: { kind: 'agent-session', sessionId: 'session-decide', agent: 'codex' },
+      focus: true,
+      decide: true
+    })
+  ).toEqual({ retargeted: true, tabId: SWITCHED })
   expect(tabs()).toEqual(before)
 })
 
@@ -284,7 +266,7 @@ it('changes nothing for a tab that no longer holds just the source', () => {
       content: { kind: 'agent-session', sessionId: 'session-1', agent: 'codex' },
       focus: true
     })
-  ).toEqual({ retargeted: false })
+  ).toMatchObject({ retargeted: false })
   expect(tabs()).toEqual(before)
 })
 
@@ -310,10 +292,10 @@ it('changes only the decided tab: another tab holding the source is never change
     retargeted: true,
     tabId: SWITCHED
   })
-  expect(setWindowTabContent({ ...request, decide: true, exact: true })).toEqual({
+  expect(setWindowTabContent({ ...request, decide: true, exact: true })).toMatchObject({
     retargeted: false
   })
-  expect(setWindowTabContent(request)).toEqual({ retargeted: false })
+  expect(setWindowTabContent(request)).toMatchObject({ retargeted: false })
   expect(tabs()).toEqual(before)
 })
 
@@ -327,9 +309,10 @@ vi.mock('electron', () => ({
   }
 }))
 
-// Through main's real relay: the window applies in time and its answer is lost. That is unknown,
-// never a refusal, and asking the same tab again finds the change done, without changing it twice.
-it('settles a change whose answer was lost by asking the same tab again', async () => {
+// Through main's real relay and this window's real receiver: a switch's change applies once,
+// whenever it arrives; a lost answer is read back from its receipt, never redone or refused; a
+// later close makes it superseded; a reloaded page answers for none of it.
+it('applies a switch once whenever it arrives, and answers a lost reply from its receipt', async () => {
   seed(SWITCHED)
   vi.useFakeTimers()
   try {
@@ -338,40 +321,77 @@ it('settles a change whose answer was lost by asking the same tab again', async 
       await import('../../../main/window/tab-content-request-relay')
     const { TerminalRevealUnconfirmedError } =
       await import('../../../main/runtime/session-tabs/terminal-not-placed-error')
-    let answer = false
+    const { registerWindowTabContentRequests } = await import('./switched-tab-content-requests')
+    let receive: ((request: object) => void) | undefined
+    let dropNextReply = false
+    let delayMs = 0
+    // Delivered in order, as IPC is: a slow page answers late, never out of order.
+    let deliveredAt = 0
     const webContents = Object.assign(new EventEmitter(), {
       isDestroyed: () => false,
-      send: (_channel: string, request: Parameters<typeof setWindowTabContent>[0]) => {
-        const outcome = setWindowTabContent(request)
-        if (answer) {
+      send: (_channel: string, request: object) => {
+        deliveredAt = Math.max(Date.now() + delayMs, deliveredAt)
+        setTimeout(() => receive?.(request), deliveredAt - Date.now())
+      }
+    })
+    Object.assign(api, {
+      ui: {
+        onSetTabContent: (handler: typeof receive) => {
+          receive = handler
+          return () => {}
+        },
+        replyTabContent: (reply: object) => {
+          if (dropNextReply) {
+            dropNextReply = false
+            return
+          }
           for (const listener of ipcListeners.get('ui:tabContentReply') ?? []) {
-            listener(
-              { sender: webContents },
-              { ...outcome, requestId: (request as never)['requestId'] }
-            )
+            listener({ sender: webContents }, reply)
           }
         }
       }
     })
+    registerWindowTabContentRequests([])
     const mainWindow = Object.assign(new EventEmitter(), { isDestroyed: () => false, webContents })
-    const request = {
-      worktreeId: WORKTREE,
-      tabId: SWITCHED,
-      expectSource: { kind: 'terminal', terminalId: SWITCHED },
-      content: { kind: 'agent-session', sessionId: 'session-lost', agent: 'codex' },
-      focus: false
-    } as const
-    const lost = requestTabContentFromRenderer(mainWindow as never, request).catch((e) => e)
-    await vi.advanceTimersByTimeAsync(12_000)
-    expect(await lost).toBeInstanceOf(TerminalRevealUnconfirmedError)
+    const ask = (request: object) =>
+      requestTabContentFromRenderer(mainWindow as never, {
+        worktreeId: WORKTREE,
+        tabId: SWITCHED,
+        expectSource: { kind: 'terminal', terminalId: SWITCHED },
+        content: { kind: 'agent-session', sessionId: 'session-lost', agent: 'codex' },
+        focus: false,
+        operation: 'op-1',
+        ...request
+      })
+    const decided = ask({ decide: true })
+    await vi.advanceTimersByTimeAsync(0)
+    const { page } = await decided
+    expect(page).toEqual(expect.any(String))
+    // The change arrives past the old ten-second deadline, and its answer is lost: main asks what
+    // it did, and the receipt answers.
+    delayMs = 10_500
+    dropNextReply = true
+    const settled = ask({ page })
+    delayMs = 0
+    await vi.advanceTimersByTimeAsync(10_500)
     const changed = tabs()
-    answer = true
-    await expect(requestTabContentFromRenderer(mainWindow as never, request)).resolves.toEqual({
-      retargeted: true,
-      tabId: SWITCHED
-    })
+    expect(changed.filter((tab) => tab.entityId === 'session-lost')).toHaveLength(1)
+    await expect(settled).resolves.toMatchObject({ retargeted: true, tabId: SWITCHED })
+    // Delivered again, the same switch answers from its receipt and changes nothing.
+    const again = ask({ page })
+    await vi.advanceTimersByTimeAsync(0)
+    await expect(again).resolves.toMatchObject({ retargeted: true })
     expect(tabs()).toEqual(changed)
-    expect(tabs().filter((tab) => tab.entityId === 'session-lost')).toHaveLength(1)
+    // The user closes the tab: what the switch did is superseded, never redone.
+    store.getState().closeUnifiedTab(SWITCHED, { recordInteraction: false })
+    const status = ask({ page, status: true })
+    await vi.advanceTimersByTimeAsync(0)
+    await expect(status).resolves.toMatchObject({ retargeted: true, superseded: true })
+    expect(tabs().some((tab) => tab.id === SWITCHED)).toBe(false)
+    // A page that never granted it (a reload) answers nothing for it: unknown.
+    const reloaded = ask({ page: 'another-page' }).catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(await reloaded).toBeInstanceOf(TerminalRevealUnconfirmedError)
   } finally {
     vi.useRealTimers()
   }

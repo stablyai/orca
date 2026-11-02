@@ -18,7 +18,7 @@ export async function setStructuredAgentSessionTabVisibility(
           visible: boolean,
           tabId?: string,
           check?: () => void,
-          capture?: (tabId: string | null) => void,
+          capture?: (tabId: string | null, generation: number) => void,
           move?: boolean
         ) => Promise<void>
       }
@@ -30,7 +30,7 @@ export async function setStructuredAgentSessionTabVisibility(
   visible: boolean,
   tabId?: string,
   check?: () => void,
-  capture?: (tabId: string | null) => void,
+  capture?: (tabId: string | null, generation: number) => void,
   move?: boolean
 ): Promise<void> {
   await (move
@@ -69,6 +69,7 @@ export function createStructuredAgentSessionTabSurface(
         AgentSessionRecordStore,
         | 'getVisibleSessionTabIndex'
         | 'getSessionTabId'
+        | 'getSessionTabGeneration'
         | 'showSessionTabs'
         | 'getConversation'
         | 'listConversations'
@@ -106,6 +107,9 @@ export function createStructuredAgentSessionTabSurface(
     getPersistedVisibleSessionTabIndex: () => host.deps.store.getVisibleSessionTabIndex(),
     getSessionTabId: (sessionId: string): string | null =>
       host.deps.store.getSessionTabId(sessionId),
+    /** The chat's tab-record lifetime: changed by every write to its record. */
+    getSessionTabGeneration: (sessionId: string): number =>
+      host.deps.store.getSessionTabGeneration(sessionId),
     showSessionTabs: (sessionIds: readonly string[]) => host.deps.store.showSessionTabs(sessionIds),
     notifySessionTabHidden: (sessionId: string, tabId?: string): void =>
       notifyTabHidden(host, sessionId, tabId),
@@ -117,7 +121,7 @@ export function createStructuredAgentSessionTabSurface(
       options?: {
         deferHiddenNotice?: boolean
         check?: () => void
-        capture?: (tabId: string | null) => void
+        capture?: (tabId: string | null, generation: number) => void
         /** A switch: the chat's one record names `tabId`, leaving any tab it had. */
         move?: boolean
       }
@@ -129,9 +133,9 @@ export function createStructuredAgentSessionTabSurface(
         visible,
         tabId,
         options?.check,
-        (id) => {
+        (id, generation) => {
           actualId = id
-          options?.capture?.(id)
+          options?.capture?.(id, generation)
         },
         options?.move
       )

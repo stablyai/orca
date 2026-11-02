@@ -43,6 +43,9 @@ export type StructuredSessionTabPublicationInput = {
   placement?: { groupId?: string; afterTabId?: string; index?: number }
   /** A switch's open: refused once newer work supersedes it, and its tab write is awaited. */
   check?: () => void
+  /** A committed switch's chat: its record already names `tabId`, so this shows it there (no
+   *  second open of the record) while the record is still the one the switch wrote. */
+  committed?: () => boolean
   focusWindow?: boolean
   /** A switch's chat: the layout tab it now fills, whose rows it takes in place. */
   inTab?: string

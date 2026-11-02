@@ -119,61 +119,166 @@ const chatRequest = {
 }
 
 it.each([
-  ['asks the same tab again and takes its answer', true, 3],
-  ['asks nothing more once a later close or switch superseded it', false, 2]
-])('settles a committed change whose answer was lost: %s', async (_name, current, asked) => {
-  const { runtime } = setupMainOwnedWorkspace()
-  let applied = false
-  const answer = vi
-    .spyOn(runtime, 'setSwitchedTabContent')
-    .mockImplementation(async (_ws, request, decide) => {
-      expect(request.tabId).toBe(TAB_ID)
-      if (decide || applied) {
-        return { retargeted: true, tabId: TAB_ID }
-      }
-      applied = true
-      throw new TerminalRevealUnconfirmedError('Tab content change unanswered')
-    })
-  const commit = vi.fn(async () => {})
-  await expect(
-    runtime.switchTabContent(WORKTREE_ID, chatRequest, commit, () => current)
-  ).resolves.toEqual({ retargeted: true, tabId: TAB_ID })
-  expect(commit).toHaveBeenCalledExactlyOnceWith(TAB_ID)
-  expect(answer).toHaveBeenCalledTimes(asked)
-})
+  ['applied while current', { retargeted: true }, true, { kind: 'applied', tabId: TAB_ID }],
+  [
+    'applied, then a later close or switch',
+    { retargeted: true },
+    false,
+    { kind: 'superseded', tabId: TAB_ID }
+  ],
+  [
+    'applied, then the tab changed',
+    { retargeted: true, superseded: true },
+    true,
+    { kind: 'superseded', tabId: TAB_ID }
+  ],
+  [
+    'refused before it applied',
+    { retargeted: false, tabId: 'chat-elsewhere' },
+    true,
+    { kind: 'refused', committed: true, destination: 'chat-elsewhere' }
+  ],
+  [
+    'its answer lost',
+    new TerminalRevealUnconfirmedError('lost'),
+    true,
+    { kind: 'unknown', tabId: TAB_ID }
+  ]
+] as const)(
+  'settles a committed switch by its owner, never by time: %s',
+  async (_name, answer, current, settled) => {
+    const { runtime } = setupMainOwnedWorkspace()
+    const asked = vi
+      .spyOn(runtime, 'setSwitchedTabContent')
+      .mockImplementation(async (_ws, request, decide) => {
+        expect(request).toMatchObject({ operation: expect.any(String) })
+        if (decide) {
+          return { retargeted: true, tabId: TAB_ID, page: 'page-1' }
+        }
+        expect(request).toMatchObject({ tabId: TAB_ID, page: 'page-1' })
+        if (answer instanceof Error) {
+          throw answer
+        }
+        return answer
+      })
+    const commit = vi.fn(async () => () => current)
+    await expect(runtime.switchTabContent(WORKTREE_ID, chatRequest, commit)).resolves.toEqual(
+      settled
+    )
+    expect(commit).toHaveBeenCalledExactlyOnceWith(TAB_ID)
+    // One decision and one change, the same switch: a lost answer is asked about by the relay,
+    // read-only, never redone here.
+    expect(asked).toHaveBeenCalledTimes(2)
+    expect(asked.mock.calls[0]![1].operation).toBe(asked.mock.calls[1]![1].operation)
+  }
+)
 
-// A terminal placed in the chat's tab, its answer lost both times: the committed tab stands, so
-// paired clients see it in that tab, and no ordinary tab opens beside it.
-it('keeps a lost terminal answer in the committed tab, opening no ordinary tab', async () => {
+// A terminal placed in the chat's tab, its answer lost: the committed record stands, nothing opens
+// beside it, and nothing shows it until an answer says the switch applied while still current.
+it('keeps a lost terminal answer committed, and shows it in that tab once a late answer comes', async () => {
   const { runtime } = setupMainOwnedWorkspace()
   runtime.registerPty('settling-pty', WORKTREE_ID, null, { tabId: 'terminal-E', leafId: LEAF_B })
-  vi.spyOn(runtime, 'setSwitchedTabContent').mockImplementation(async (_ws, _request, decide) => {
-    if (decide) {
-      return { retargeted: true, tabId: TAB_ID }
+  let late: ((outcome: { retargeted: boolean }) => void) | undefined
+  vi.spyOn(runtime, 'setSwitchedTabContent').mockImplementation(
+    async (_ws, _request, decide, onLate) => {
+      if (decide) {
+        return { retargeted: true, tabId: TAB_ID }
+      }
+      late = onLate
+      throw new TerminalRevealUnconfirmedError('Tab content change unanswered')
     }
-    throw new TerminalRevealUnconfirmedError('Tab content change unanswered')
-  })
+  )
   const ordinary = vi.spyOn(runtime, 'applyLayoutCommand')
   const publish = vi
     .spyOn(runtime, 'publishPtyBackedMobileSessionTerminal')
     .mockImplementation(() => {})
-  await runtime.placeSwitchTerminal(WORKTREE_ID, {
-    terminal: {
-      handle: 'settling-handle',
-      ptyId: 'settling-pty',
-      tabId: 'terminal-E',
-      paneKey: `terminal-E:${LEAF_B}`
-    },
-    chatSessionId: 'chat-S',
-    chatTabId: TAB_ID,
-    activate: true,
-    focusWindow: false,
-    commit: async () => {}
-  })
+  await expect(
+    runtime.placeSwitchTerminal(WORKTREE_ID, {
+      terminal: {
+        handle: 'settling-handle',
+        ptyId: 'settling-pty',
+        tabId: 'terminal-E',
+        paneKey: `terminal-E:${LEAF_B}`
+      },
+      chatSessionId: 'chat-S',
+      chatTabId: TAB_ID,
+      activate: true,
+      focusWindow: false,
+      commit: async () => () => true
+    })
+  ).resolves.toMatchObject({ retargeted: true })
+  expect(publish).not.toHaveBeenCalled()
+  expect(ordinary).not.toHaveBeenCalled()
+  late?.({ retargeted: true })
   expect(publish).toHaveBeenCalledWith(
     WORKTREE_ID,
     expect.anything(),
     expect.objectContaining({ inTab: TAB_ID })
   )
   expect(ordinary).not.toHaveBeenCalled()
+})
+
+// The owner applied, then the user closed the new chat before its lost answer settled: the close
+// stands, in both owner modes, through publication and the record.
+it.each([false, true])(
+  'keeps closed a chat the user closed after its switch applied (main owns the layout: %s)',
+  async (main) => {
+    owner.main = main
+    const { runtime, session } = setupMainOwnedWorkspace()
+    const real = runtime.setSwitchedTabContent.bind(runtime)
+    vi.spyOn(runtime, 'setSwitchedTabContent').mockImplementation(async (ws, request, decide) => {
+      const answer = await real(ws, request, decide)
+      if (!decide) {
+        expect(answer).toMatchObject({ retargeted: true, tabId: TAB_ID })
+        await rig.host.setSessionTabVisibility(id, false)
+        await runtime.applyLayoutCommand({
+          type: 'closeTabs',
+          workspace: WORKTREE_ID,
+          tabIds: [TAB_ID],
+          force: true
+        })
+        throw new TerminalRevealUnconfirmedError('lost reply after the user closed it')
+      }
+      return answer
+    })
+    const project = vi.spyOn(runtime, 'projectStructuredAgentSessionTab')
+    await placeSwitchChat(
+      { runtime } as never,
+      rig.host,
+      { workspaceId: WORKTREE_ID, sessionId: id, agent: 'codex' },
+      { terminalId: TAB_ID, wholeTab: true },
+      () => {},
+      () => {}
+    )
+    expect(rig.store.getSessionTabId(id)).toBeNull()
+    const tabs = session().unifiedTabs?.[WORKTREE_ID] ?? []
+    expect(tabs.some((tab) => tab.contentType === 'agent-session' && tab.entityId === id)).toBe(
+      false
+    )
+    expect(project).not.toHaveBeenCalled()
+  }
+)
+
+// A window-owned switch the window refused before applying: the chat's record names the tab the
+// window says it will open the chat in (main's copy of its tabs can trail it).
+it("records a refused switch's chat where the owning window opens it", async () => {
+  const { runtime } = setupMainOwnedWorkspace()
+  vi.spyOn(runtime, 'getAvailableAuthoritativeWindow').mockReturnValue(7 as never)
+  const usual = structuredAgentSessionTabId(id)
+  vi.spyOn(runtime, 'setSwitchedTabContent').mockImplementation(async (_ws, _request, decide) =>
+    decide ? { retargeted: true, tabId: TAB_ID } : { retargeted: false, tabId: `${usual}-2` }
+  )
+  const publish = vi.spyOn(runtime, 'publishStructuredAgentSessionTab').mockResolvedValue()
+  await placeSwitchChat(
+    { runtime } as never,
+    rig.host,
+    { workspaceId: WORKTREE_ID, sessionId: id, agent: 'codex' },
+    { terminalId: TAB_ID, wholeTab: true, besideTerminalId: TAB_ID },
+    () => {},
+    () => {}
+  )
+  expect(rig.store.getSessionTabId(id)).toBe(`${usual}-2`)
+  expect(publish).toHaveBeenCalledWith(
+    expect.objectContaining({ tabId: `${usual}-2`, committed: expect.any(Function) })
+  )
 })

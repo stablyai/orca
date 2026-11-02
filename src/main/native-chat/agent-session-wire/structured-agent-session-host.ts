@@ -218,6 +218,7 @@ export class StructuredAgentSessionHost extends StructuredAgentSessionHostContex
   isSessionTabVisible = this.tabs.isSessionTabVisible
   getPersistedVisibleSessionTabIndex = this.tabs.getPersistedVisibleSessionTabIndex
   getSessionTabId = this.tabs.getSessionTabId
+  getSessionTabGeneration = this.tabs.getSessionTabGeneration
   showSessionTabs = this.tabs.showSessionTabs
   setSessionTabVisibility = this.tabs.setSessionTabVisibility
   notifySessionTabHidden = this.tabs.notifySessionTabHidden
