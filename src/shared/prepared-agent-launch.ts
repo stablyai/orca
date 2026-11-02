@@ -70,6 +70,9 @@ export type PreparedAgentLaunchStatus = PreparedAgentLaunchIdentity & {
   input?: PreparedLaunchInputOutcome
 }
 
+/** An automatic launch whose Setup ended before finishing; the window shows one short notice. */
+export type PreparedAgentSetupClosedEvent = { worktreeId: string; agent: string }
+
 export type PreparedLaunchInputOutcome = 'written' | 'uncertain'
 
 /** Accepted presentation the daemon returns to the exact publication observer; never listed or saved. */

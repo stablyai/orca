@@ -1,6 +1,7 @@
 import type { WorktreeSetupLaunch } from '../../../../shared/worktree/launch-types'
 import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
 import {
+  type PreparedPublicationPorts,
   preparedPromptUncertainText,
   readPreparedTerminalStatus,
   reconcilePreparedTerminalPublications,
@@ -62,12 +63,8 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
       color,
       targetKind: created ? (workspace.folderWorkspace ? 'new-folder' : 'new-git') : 'existing',
       ports: {
-        controller,
+        ...this.preparedPublicationPorts(controller, store),
         store,
-        setTabColor: (handle, color) =>
-          this.getWorktreeTerminalProvisioningHost().setTabColor(handle, color),
-        placePrimary: this.placePreparedPrimary.bind(this),
-        deliverPrompts: this.deliverPreparedTerminalPrompts.bind(this),
         prepare: (options) => this.prepareTerminalForSetup(selector, options, created),
         createClaim: (operationId, spawn) => {
           const agent = startupOptions.launchAgent
@@ -96,15 +93,25 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
     if (!(await controller.supportsPreparedAgentLaunches?.())) {
       return
     }
-    await reconcilePreparedTerminalPublications({
+    await reconcilePreparedTerminalPublications(
+      this.preparedPublicationPorts(controller, await this.openAgentSessionRecordStore())
+    )
+  }
+
+  private preparedPublicationPorts(
+    controller: RuntimePtyController,
+    store: PreparedPublicationPorts['store']
+  ): PreparedPublicationPorts {
+    return {
       controller,
-      store: await this.openAgentSessionRecordStore(),
+      store,
       createTerminal: (selector, options) => this.createTerminal(selector, options),
       setTabColor: (handle, color) =>
         this.getWorktreeTerminalProvisioningHost().setTabColor(handle, color),
       placePrimary: this.placePreparedPrimary.bind(this),
-      deliverPrompts: this.deliverPreparedTerminalPrompts.bind(this)
-    })
+      deliverPrompts: this.deliverPreparedTerminalPrompts.bind(this),
+      notifySetupClosed: (event) => this.notifier?.preparedAgentSetupClosed?.(event)
+    }
   }
 
   /** Joins the exact launch: a descriptor still owed publishes it; a retired one reads the owner's result. */
@@ -125,15 +132,11 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
     let status: PreparedAgentLaunchStatus
     try {
       const terminal = isPreparedAgentLaunchDescriptor(row?.preparedLaunch)
-        ? await publishPreparedTerminal(identity, row.preparedLaunch, {
-            controller,
-            store,
-            createTerminal: (selector, options) => this.createTerminal(selector, options),
-            setTabColor: (handle, color) =>
-              this.getWorktreeTerminalProvisioningHost().setTabColor(handle, color),
-            placePrimary: this.placePreparedPrimary.bind(this),
-            deliverPrompts: this.deliverPreparedTerminalPrompts.bind(this)
-          })
+        ? await publishPreparedTerminal(
+            identity,
+            row.preparedLaunch,
+            this.preparedPublicationPorts(controller, store)
+          )
         : null
       if (terminal) {
         return terminal

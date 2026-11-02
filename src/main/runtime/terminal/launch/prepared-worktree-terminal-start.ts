@@ -60,6 +60,7 @@ export async function startPreparedWorktreeTerminals(args: {
     ) => Promise<RuntimeTerminalCreate>
     setTabColor: (handle: string, color: string) => Promise<void>
     placePrimary?: PreparedPublicationPorts['placePrimary']
+    notifySetupClosed?: PreparedPublicationPorts['notifySetupClosed']
     deliverPrompts: (
       terminal: RuntimeTerminalCreate,
       prompts: PreparedTerminalPrompts

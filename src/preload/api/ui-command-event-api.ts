@@ -61,6 +61,7 @@ import type {
   SessionTabCloseResponse
 } from '../../shared/session-tab-close'
 import type { WorkspaceSleepNotice } from '../../shared/workspace-sleep'
+import type { PreparedAgentSetupClosedEvent } from '../../shared/prepared-agent-launch'
 import type {
   RemoteCliBrowserScopeQuery,
   RemoteCliBrowserScopeReply
@@ -298,6 +299,10 @@ export type UiCommandEventApi = {
   respondTerminalTabClose: (response: TerminalTabCloseResponse) => void
   /** Follow main's workspace sleep even when another client requested it. */
   onWorkspaceSleep: (callback: (notice: WorkspaceSleepNotice) => void) => () => void
+  /** An automatic agent launch whose Setup ended before finishing. */
+  onPreparedAgentSetupClosed?: (
+    callback: (event: PreparedAgentSetupClosedEvent) => void
+  ) => () => void
   onProjectMovePause?: (callback: (request: ProjectMovePauseRequest) => void) => () => void
   respondProjectMovePause?: (response: ProjectMovePauseResponse) => void
   onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void) => () => void

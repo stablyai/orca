@@ -19,6 +19,7 @@ import {
   type PreparedAgentLaunchIdentity,
   type PreparedAgentLaunchDescriptor,
   type PreparedAgentLaunchStatus,
+  type PreparedAgentSetupClosedEvent,
   type PreparedLaunchPublication
 } from '../../../../shared/prepared-agent-launch'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
@@ -40,6 +41,8 @@ export type PreparedPublicationPorts = {
     terminal: RuntimeTerminalCreate,
     prompts: PreparedTerminalPrompts
   ) => Promise<boolean>
+  /** Setup that ended before finishing has no terminal left to explain why the agent is absent. */
+  notifySetupClosed?: (event: PreparedAgentSetupClosedEvent) => void
 }
 const publications = new WeakMap<
   RuntimePtyController,
@@ -119,6 +122,13 @@ async function publish(
   }
   if (!status.physical) {
     if (status.retirement === 'unused-retired') {
+      // Failure and deadline already wrote into the surviving Setup terminal; never say it twice.
+      if (status.failure === 'setup-ended') {
+        ports.notifySetupClosed?.({
+          worktreeId: descriptor.surface.worktreeId,
+          agent: descriptor.claim.agent
+        })
+      }
       await retirePreparedDescriptor(ports, identity)
       return null
     }
