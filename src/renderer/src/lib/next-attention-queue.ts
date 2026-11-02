@@ -16,7 +16,7 @@ import {
 } from '../../../shared/agent-status-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
-import { structuredAgentSessionPaneKey } from '../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { isSyntheticAgentPermissionTitle } from '../../../shared/synthetic-agent-title'
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { orderedWorkspaceTabs, type OrderedTab } from './next-attention-tab-order'

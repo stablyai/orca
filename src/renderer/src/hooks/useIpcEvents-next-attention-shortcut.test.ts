@@ -28,7 +28,7 @@ vi.mock('@/lib/terminal-tab-owner-activation', () => ({
 
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { structuredAgentSessionPaneKey } from '../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../shared/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import { jumpToNextAttentionFromShortcut } from './ipc-events/next-attention-command'
