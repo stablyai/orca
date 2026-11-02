@@ -247,6 +247,7 @@ export class PluginWorkerManager {
   reapIdle(now = Date.now()): void {
     for (const [pluginKey, record] of this.workers) {
       if (
+        record.spec.keepWarm ||
         record.handle.inFlightCount() !== 0 ||
         now - record.handle.lastActivityAt() <= this.idleReapMs
       ) {

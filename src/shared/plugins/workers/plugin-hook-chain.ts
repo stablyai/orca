@@ -13,7 +13,10 @@ export type PluginHookChainInput = {
   payload: unknown
   /** Plugins whose manifest lists the hook, in the order they run. */
   participants: readonly string[]
-  /** Starts the worker if needed and runs its handlers; rejects on crash or refusal. */
+  /** Readies the plugin (starts its worker), bounded by `startTimeoutMs`, not the deadline. */
+  start?: (pluginKey: string) => Promise<unknown>
+  startTimeoutMs?: number
+  /** Runs its handlers; rejects on crash or refusal. */
   invoke: (pluginKey: string, payload: unknown, timeoutMs: number) => Promise<unknown>
   log: (pluginKey: string, line: string) => void
   now: () => number
@@ -24,10 +27,10 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function withinDeadline<T>(work: Promise<T>, deadlineMs: number): Promise<T> {
+function withinDeadline<T>(work: Promise<T>, deadlineMs: number, what = 'timed out'): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const deadline = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => reject(new Error(`timed out after ${deadlineMs}ms`)), deadlineMs)
+    timer = setTimeout(() => reject(new Error(`${what} after ${deadlineMs}ms`)), deadlineMs)
   })
   return Promise.race([work, deadline]).finally(() => clearTimeout(timer))
 }
@@ -74,6 +77,10 @@ export async function runPluginHookChain(
       )
     let raw: unknown
     try {
+      if (input.start) {
+        const startTimeoutMs = input.startTimeoutMs ?? deadlineMs
+        await withinDeadline(input.start(pluginKey), startTimeoutMs, 'worker did not start')
+      }
       raw = await withinDeadline(input.invoke(pluginKey, current, deadlineMs), deadlineMs)
     } catch (error) {
       skip(errorText(error))
