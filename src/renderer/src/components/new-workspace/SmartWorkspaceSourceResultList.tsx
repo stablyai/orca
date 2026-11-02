@@ -85,10 +85,7 @@ export function SmartWorkspaceSourceResultList({
           ))}
         </div>
       ) : null}
-      <CommandList
-        className="!max-h-none min-h-0 flex-1 scrollbar-sleek"
-        data-focus-behavior={focusBehavior}
-      >
+      <CommandList className="!max-h-none min-h-0 flex-1" data-focus-behavior={focusBehavior}>
         {beforeResults}
         {typedTextActionRow ? (
           <div
