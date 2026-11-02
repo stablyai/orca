@@ -1024,7 +1024,8 @@ html.native-shell .app-layout {
   content: '';
   position: absolute;
   border-radius: 1px;
-  background: var(--split-divider);
+  /* Set only when Settings changed the divider color from its default. */
+  background: var(--split-divider-setting, var(--split-divider));
   transition: background 100ms ease;
 }
 
