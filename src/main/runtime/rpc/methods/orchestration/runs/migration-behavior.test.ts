@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { PROJECT_DEFAULT_AGENT_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
@@ -258,5 +259,61 @@ describe('orchestration migration behavior', () => {
     ).rejects.toMatchObject({ code: 'capability_unsupported' })
     expect(db.getTask(task.id)?.status).toBe('ready')
     expect(db.getDispatchContext(task.id)).toBeUndefined()
+  })
+  it('refuses a remote blank default before creating a Run or Task', async () => {
+    const { db, runtime } = createRuntime()
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+      environmentId: 'environment_builder',
+      name: 'builder',
+      peerFingerprint: 'builder_peer'
+    })
+    vi.spyOn(runtime, 'callOrchestrationWorkerServer').mockImplementation(
+      async (_server, method) => {
+        if (method === 'status.get') {
+          return {
+            capabilities: [
+              ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+              ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
+              PROJECT_DEFAULT_AGENT_RUNTIME_CAPABILITY
+            ]
+          }
+        }
+        if (method === 'agent.resolveDefault') {
+          return { agent: null, source: 'project', projectId: 'project-b' }
+        }
+        throw new Error(`Unexpected remote operation: ${method}`)
+      }
+    )
+
+    await expect(
+      startFederatedWorker({
+        runtime,
+        db,
+        params: {
+          from: 'term_coord',
+          on: 'builder',
+          worktree: 'new-top-level',
+          repo: 'id:builder-repo',
+          agent: 'default',
+          spec: 'remote work'
+        },
+        bindRunId: () =>
+          db.createRun({
+            objective: 'remote work',
+            coordinatorHandle: 'term_coord',
+            coordinatorPaneKey: 'tab_coord:leaf_coord'
+          }).id,
+        taskDeps: undefined,
+        orchestrationMutation: {
+          callerFingerprint: 'caller',
+          requestId: 'remote_default_start',
+          method: 'orchestration.workerStart',
+          payloadHash: 'payload'
+        }
+      })
+    ).rejects.toMatchObject({ code: 'agent_unconfigured' })
+
+    expect(db.listRuns().runs.filter((run) => !run.legacy)).toEqual([])
+    expect(db.listTasks()).toEqual([])
   })
 })

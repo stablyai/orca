@@ -77,6 +77,7 @@ import { ARTIFACT_METHODS } from './artifacts/artifacts'
 import { AGENT_HOOK_METHODS } from './agent-hooks/agent-hooks'
 import { AGENT_LAUNCH_METHODS } from './agent-launch/agent-launch'
 import { AGENT_CONVERSATION_METHODS } from './agent-conversations/agent-conversation-methods'
+import { PROJECT_DEFAULT_AGENT_METHODS } from './agent-launch/project-default-agent'
 import { CONNECTOR_METHODS } from './connectors/connector'
 import {
   LAYOUT_APPLY_METHODS,
@@ -111,6 +112,7 @@ export const ALL_RPC_METHODS = [
   ...MANAGED_RUNTIME_INSTALL_METHODS,
   ...AGENT_LAUNCH_METHODS,
   ...AGENT_CONVERSATION_METHODS,
+  ...PROJECT_DEFAULT_AGENT_METHODS,
   ...CONNECTOR_METHODS,
   ...TERMINAL_METHODS,
   ...TERMINAL_ORPHAN_METHODS,
