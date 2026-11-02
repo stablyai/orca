@@ -25,6 +25,7 @@ import { startPushTokenSync } from '../src/notifications/push-registration'
 import { ensureDesktopNotificationChannel } from '../src/notifications/desktop-notification-channel'
 import { loadHostCatalog } from '../src/transport/host-store'
 import { usePairingLinks } from '../src/navigation/use-pairing-links'
+import { useIncomingShareIntake } from '../src/share/use-incoming-share-intake'
 import { consumeInitialLaunchIntent } from '../src/navigation/initial-launch-intent'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
 import { appUpdateChecker } from '../src/app-update/app-update-runtime'
@@ -78,6 +79,7 @@ export default function RootLayout() {
   }, [pathname, hostId, worktreeId, executionHost])
   const openNotificationRoute = useOpenNotificationRoute()
   usePairingLinks()
+  useIncomingShareIntake()
 
   useEffect(() => {
     // Reconcile the crash-persistent pairing journal before another scan can replace it.

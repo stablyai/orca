@@ -45,6 +45,8 @@ import { MobileNativeChatSubagentGroup } from './MobileNativeChatSubagentGroup'
 import { ToolRun } from './MobileNativeChatToolRun'
 import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import { styles } from './mobile-native-chat-message-styles'
+import { MobileNativeChatFileTile } from './MobileNativeChatFileTile'
+import { splitUserFileMentions } from './mobile-native-chat-file-mentions'
 import { MobileNativeChatAgentMessageCard } from './MobileNativeChatAgentMessageCard'
 import { MobileNativeChatVisualContext } from '../visual/mobile-native-chat-visual-context'
 import { useMobileNativeChatFullMessage } from '../MobileNativeChatFullContent'
@@ -265,6 +267,8 @@ function MobileNativeChatMessageImpl({
         revealing={revealing}
       />
     )
+  // Shared documents arrive as mention lines; draw them as tiles beside photos.
+  const userFiles = isUser ? splitUserFileMentions(drawnProse) : { paths: [], blocks: drawnProse }
   const proseRows = (blocks: NativeChatBlock[]) =>
     blocks.map((block, index) => proseRow(block, index, isTextBlock(block) ? block.text : ''))
   return (
@@ -300,6 +304,14 @@ function MobileNativeChatMessageImpl({
               {isUser ? (
                 <>
                   {proseRows(drawnProse.filter(isImageRefBlock))}
+                  {userFiles.paths.map((path) => (
+                    <MobileNativeChatFileTile
+                      key={`file:${path}`}
+                      path={path}
+                      onOpenFile={onOpenFile}
+                      onLongPress={onLongPress}
+                    />
+                  ))}
                   <MobileNativeChatUserMessageFold
                     text={deriveNativeChatRowContent(message.blocks).markdown}
                     fontScale={fontScale}
@@ -308,7 +320,7 @@ function MobileNativeChatMessageImpl({
                     recovery={recovery}
                     status={showFull}
                   >
-                    {proseRows(drawnProse.filter((block) => !isImageRefBlock(block)))}
+                    {proseRows(userFiles.blocks.filter((block) => !isImageRefBlock(block)))}
                   </MobileNativeChatUserMessageFold>
                 </>
               ) : (

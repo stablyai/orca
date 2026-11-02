@@ -15,7 +15,9 @@ import {
   mediaReleaseParamsSchema,
   mediaReleaseResultSchema,
   mediaNameParamsSchema,
-  mediaNameResultSchema
+  mediaNameResultSchema,
+  shareTakeParamsSchema,
+  shareTakeResultSchema
 } from './bridge-media-verbs'
 import { PAGE_STORAGE_MAX_KEY_CHARS } from '../page-storage-keys'
 import { mobileFileMediaMime, PDF_MIME_TYPE } from '../../files/mobile-file-media'
@@ -35,7 +37,9 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.audio.read',
   'native.audio.stop',
   'native.storage.read',
-  'native.pdf.view'
+  'native.pdf.view',
+  'native.share.take',
+  'native.pdf.thumbnail'
 ] as const
 
 export type BridgeNativeVerb = (typeof BRIDGE_NATIVE_VERB_NAMES)[number]
@@ -79,6 +83,25 @@ export const pdfViewParamsSchema = z.discriminatedUnion('action', [
   z.strictObject({ action: z.literal('cancel') })
 ])
 export const pdfViewResultSchema = z.strictObject({})
+
+// The shell downloads and draws the first page itself; one small JPEG fits a single reply.
+export const PDF_THUMBNAIL_MAX_BASE64_CHARS = 256 * 1024
+
+export const pdfThumbnailParamsSchema = z.strictObject({
+  worktreeId: z.string().min(1),
+  relativePath: z.string().refine((path) => mobileFileMediaMime(path) === PDF_MIME_TYPE),
+  executionHost: z.templateLiteral(['runtime:', z.string().min(1)]).optional()
+})
+
+export const pdfThumbnailResultSchema = z.strictObject({
+  jpegBase64: z
+    .string()
+    .min(1)
+    .max(PDF_THUMBNAIL_MAX_BASE64_CHARS)
+    .regex(/^[A-Za-z0-9+/]*={0,2}$/)
+})
+
+export type BridgePdfThumbnailParams = z.infer<typeof pdfThumbnailParamsSchema>
 
 export type BridgePdfOpenParams = Omit<
   Extract<z.infer<typeof pdfViewParamsSchema>, { action: 'open' }>,
@@ -129,6 +152,14 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.pdf.view': {
     params: pdfViewParamsSchema,
     result: pdfViewResultSchema
+  },
+  'native.share.take': {
+    params: shareTakeParamsSchema,
+    result: shareTakeResultSchema
+  },
+  'native.pdf.thumbnail': {
+    params: pdfThumbnailParamsSchema,
+    result: pdfThumbnailResultSchema
   }
 }
 

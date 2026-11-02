@@ -237,6 +237,7 @@ export function useMobileNativeChatController(args: {
     nativeChatSessionLive: activeChatResolution?.sessionLive === true,
     chatDraftKey,
     setChatComposerText,
+    appendChatComposerText: appendComposerText,
     getChatComposerEditGeneration,
     chatPending,
     chatImagePreviewsByMessageId: activeChatStructured

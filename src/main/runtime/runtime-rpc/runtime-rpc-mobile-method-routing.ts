@@ -59,6 +59,8 @@ export const EXECUTION_HOST_METHODS = [
   'files.resolveTerminalPath',
   'files.searchPaths',
   'files.stat',
+  // Saves a document shared to the phone into the workspace; a paired phone can already write there through its terminals.
+  'files.writeBase64Chunk',
   'files.writeTerminalArtifact',
   'folderWorkspace.list',
   'git.abortMerge',

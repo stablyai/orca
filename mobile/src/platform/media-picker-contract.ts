@@ -40,9 +40,23 @@ export class ImageLibraryPermissionError extends Error {
   }
 }
 
+// What another app shared, split by what the composer takes; files read lazily like a pick.
+export type SharedMobileContent = {
+  readonly text: string
+  readonly images: AsyncIterable<PickedMobileImage> | null
+  readonly files: AsyncIterable<PickedMobileFile> | null
+  // Shared files the composer cannot take, already discarded.
+  readonly skipped: number
+}
+
 // A hook supplies the page’s bridge context. Cancellation returns null/empty; refusal rejects so callers can show failure.
 export type MediaPicker = {
   pickImage: (source: MobileImageSource) => Promise<PickedMobileImage | null>
   pickImages: (source: MobileImageSource) => AsyncIterable<PickedMobileImage>
   pickFiles: () => AsyncIterable<PickedMobileFile>
+  // Takes the pending share once; null when none waits or this shell cannot hand one over.
+  takeShare: (accepts: {
+    readonly images: boolean
+    readonly files: boolean
+  }) => Promise<SharedMobileContent | null>
 }

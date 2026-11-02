@@ -11,7 +11,8 @@ import type { ConnectionState } from '../../../transport/types'
 import { useMediaPicker } from '../../../platform/media-picker'
 import {
   ImageLibraryPermissionError,
-  type MobileImageSource
+  type MobileImageSource,
+  type PickedMobileImage
 } from '../../../platform/media-picker-contract'
 import {
   uploadMobileNativeChatImages,
@@ -37,7 +38,11 @@ export function useMobileNativeChatImageUpload(args: {
   onAttachSuccess?: () => void
   onError?: () => void
 }): {
-  attachImage: (source: MobileImageSource) => Promise<void>
+  // `picked` attaches images that arrived without the picker, such as an Android share.
+  attachImage: (
+    source: MobileImageSource,
+    picked?: AsyncIterable<PickedMobileImage>
+  ) => Promise<void>
   isAttaching: boolean
 } {
   const {
@@ -61,7 +66,7 @@ export function useMobileNativeChatImageUpload(args: {
   }, [connState])
 
   const attachImage = useCallback(
-    async (source: MobileImageSource): Promise<void> => {
+    async (source: MobileImageSource, picked?: AsyncIterable<PickedMobileImage>): Promise<void> => {
       const scope = scopeKey
       if (
         !client ||
@@ -84,7 +89,7 @@ export function useMobileNativeChatImageUpload(args: {
           canContinue: () => destination.active,
           client,
           getConnectionId: getActiveWorktreeConnectionId,
-          pickImages: picker.pickImages,
+          pickImages: picked ? () => picked : picker.pickImages,
           onImageUploaded: (image) => uploadedImages.push(image),
           onUploadStart: () => {
             started = true

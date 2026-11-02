@@ -14,7 +14,10 @@ vi.mock('../transport/host-client-hooks', () => ({
 }))
 
 import { RpcClientProvider } from '../transport/client-context.web'
-import { BRIDGE_MEDIA_READ_MAX_BYTES } from '../mobile-web-shell/bridge/bridge-media-verbs'
+import {
+  BRIDGE_MEDIA_READ_MAX_BYTES,
+  shareTakeResultSchema
+} from '../mobile-web-shell/bridge/bridge-media-verbs'
 import { BridgeNativeVerbRefusedError } from '../mobile-web-shell/bridge-host-errors'
 import {
   createFakeBridgePortPair,
@@ -27,6 +30,7 @@ import {
   type MediaTestShell
 } from './media-picker-test-shell'
 import { NativeVerbError } from '../mobile-web-shell/bridge/use-native-verbs'
+import { MOBILE_WEB_SHELL_GRANTS } from '../mobile-web-shell/page-route-policy'
 import { useMediaPicker } from './media-picker.web'
 import {
   MobileFileTooLargeError,
@@ -364,5 +368,106 @@ describe('picking files from inside the shell', () => {
     const refused = await collectFiles(pair, picker).catch((error: unknown) => error)
 
     expect(refused).toBeInstanceOf(MobileFileTooLargeError)
+  })
+})
+
+describe('taking a share from inside the shell', () => {
+  async function collectAll<Item>(pair: BridgePortPair, items: AsyncIterable<Item> | null) {
+    const taken: Item[] = []
+    if (!items) {
+      return taken
+    }
+    const iterator = items[Symbol.asyncIterator]()
+    for (;;) {
+      const next = await settle(pair, iterator.next())
+      if (next.done === true) {
+        return taken
+      }
+      taken.push(next.value)
+    }
+  }
+
+  const sharedPhoto = { bytes: stagedTestBytes(9), mime: 'image/jpeg' }
+  const sharedPaper = { bytes: stagedTestBytes(5), mime: 'application/pdf', name: 'paper.pdf' }
+
+  it('takes the share once and reads its files like a pick, under their shared names', async () => {
+    const shell = createMediaTestShell({
+      staged: {},
+      share: { text: 'https://example.com', items: [sharedPhoto, sharedPaper] }
+    })
+    const pair = pairFor(shell)
+    const picker = await mount(pair)
+
+    const share = await settle(pair, picker.takeShare({ images: true, files: true }))
+
+    expect(share?.text).toBe('https://example.com')
+    expect(share?.skipped).toBe(0)
+    expect(await collectAll(pair, share?.images ?? null)).toEqual([
+      { base64: encodeTestBase64(sharedPhoto.bytes) }
+    ])
+    expect(await collectAll(pair, share?.files ?? null)).toEqual([
+      {
+        name: 'paper.pdf',
+        mime: 'application/pdf',
+        byteLength: 5,
+        base64: encodeTestBase64(sharedPaper.bytes)
+      }
+    ])
+    expect(shell.released).toEqual(['media-1', 'media-2'])
+    expect(await settle(pair, picker.takeShare({ images: true, files: true }))).toBeNull()
+  })
+
+  it('releases shared files the session cannot take before handing over the rest', async () => {
+    const shell = createMediaTestShell({
+      staged: {},
+      share: { text: '', items: [sharedPhoto, sharedPaper] }
+    })
+    const pair = pairFor(shell)
+    const picker = await mount(pair)
+
+    const share = await settle(pair, picker.takeShare({ images: true, files: false }))
+
+    expect(share?.skipped).toBe(1)
+    expect(share?.files).toBeNull()
+    expect(shell.released).toEqual(['media-2'])
+    await collectAll(pair, share?.images ?? null)
+    expect(shell.released).toEqual(['media-2', 'media-1'])
+  })
+
+  it('counts files the shell could not stage among the skipped', async () => {
+    const shell = createMediaTestShell({
+      staged: {},
+      share: { text: 'look', items: [sharedPhoto] }
+    })
+    // A shell that dropped two more shared files it had no free handles for.
+    const pair = createFakeBridgePortPair({
+      serveNativeVerb: async (verb, params) => {
+        const answer = await shell.serveNativeVerb(verb, params)
+        const share =
+          verb === 'native.share.take' ? shareTakeResultSchema.parse(answer).share : null
+        return share ? { share: { ...share, skipped: 2 } } : answer
+      }
+    })
+    const picker = await mount(pair)
+
+    const share = await settle(pair, picker.takeShare({ images: true, files: false }))
+
+    expect(share?.skipped).toBe(2)
+    expect(await collectAll(pair, share?.images ?? null)).toHaveLength(1)
+  })
+
+  it('leaves the share with a shell that never granted the take', async () => {
+    const shell = createMediaTestShell({
+      staged: {},
+      share: { text: 'https://example.com', items: [] }
+    })
+    const pair = pairFor(
+      shell,
+      MOBILE_WEB_SHELL_GRANTS.filter((grant) => grant !== 'native.share.take')
+    )
+    const picker = await mount(pair)
+
+    expect(await settle(pair, picker.takeShare({ images: true, files: true }))).toBeNull()
+    expect(shell.calls).toEqual([])
   })
 })

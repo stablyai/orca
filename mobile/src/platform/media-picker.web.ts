@@ -15,7 +15,8 @@ import {
   type MediaPicker,
   type MobileImageSource,
   type PickedMobileFile,
-  type PickedMobileImage
+  type PickedMobileImage,
+  type SharedMobileContent
 } from './media-picker-contract'
 import { isPickedImageMime, mobilePickedFileFallbackName } from './mobile-picked-file-name'
 
@@ -96,6 +97,26 @@ async function* readPickedFiles(
   }
 }
 
+async function takeShare(
+  verbs: NativeVerbs,
+  accepts: { readonly images: boolean; readonly files: boolean }
+): Promise<SharedMobileContent | null> {
+  const share = verbs.canTakeShare ? await verbs.takeShare() : null
+  if (!share) {
+    return null
+  }
+  const images = share.items.filter((item) => accepts.images && isPickedImageMime(item.mime))
+  const files = share.items.filter((item) => accepts.files && !isPickedImageMime(item.mime))
+  const skipped = share.items.filter((item) => !images.includes(item) && !files.includes(item))
+  await releaseAllStagedMedia(verbs, skipped)
+  return {
+    text: share.text,
+    images: images.length > 0 ? readPicked(verbs, images, 'library') : null,
+    files: files.length > 0 ? readPickedFiles(verbs, files) : null,
+    skipped: skipped.length + share.skipped
+  }
+}
+
 export function useMediaPicker(): MediaPicker {
   const verbs = useNativeVerbs()
 
@@ -116,7 +137,8 @@ export function useMediaPicker(): MediaPicker {
         [Symbol.asyncIterator]: async function* () {
           yield* readPickedFiles(verbs, await pickFileItems(verbs))
         }
-      })
+      }),
+      takeShare: (accepts) => takeShare(verbs, accepts)
     }),
     [verbs]
   )

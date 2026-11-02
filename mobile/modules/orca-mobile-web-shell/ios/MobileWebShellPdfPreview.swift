@@ -23,3 +23,9 @@ final class PdfPresenterUnavailableException: Exception {
     "No screen is available to present the PDF"
   }
 }
+
+final class PdfThumbnailUnavailableException: Exception {
+  override var reason: String {
+    "The PDF's first page could not be drawn"
+  }
+}

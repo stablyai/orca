@@ -545,6 +545,10 @@
       "lastOpened": "Last opened",
       "connectToOpen": "Connect {{desktop}} to open"
     },
+    "shareCard": {
+      "title": "Open a workspace chat to add this",
+      "cancel": "Cancel share"
+    },
     "sections": {
       "tasks": "Tasks",
       "tasksSubtitle": "Browse your issues and reviews"
@@ -4501,6 +4505,12 @@
           }
         }
       }
+    }
+  },
+  "share": {
+    "claim": {
+      "unsupportedFiles": "This session can't take some of the shared files",
+      "saveFailed": "Couldn't save {{name}} to the workspace"
     }
   }
 }

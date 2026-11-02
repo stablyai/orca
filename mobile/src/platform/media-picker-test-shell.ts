@@ -5,6 +5,7 @@ import {
   mediaPickParamsSchema,
   mediaReadParamsSchema,
   mediaReleaseParamsSchema,
+  shareTakeParamsSchema,
   type BridgeMediaItem
 } from '../mobile-web-shell/bridge/bridge-media-verbs'
 import type { BridgeNativeVerb } from '../mobile-web-shell/bridge/bridge-native-verbs'
@@ -48,11 +49,14 @@ export function createMediaTestShell(options: {
   readonly chunkBytes?: number
   // Simulate premature eof so callers cannot silently upload a truncated file.
   readonly endAt?: number
+  // A pending share from another app; the first take empties it.
+  readonly share?: { readonly text: string; readonly items: readonly StagedTestMedia[] }
 }): MediaTestShell {
   const calls: string[] = []
   const released: string[] = []
   const live = new Map<string, StagedTestMedia>()
   let minted = 0
+  let share = options.share ?? null
 
   function hold(handle: string): StagedTestMedia {
     const record = live.get(handle)
@@ -65,10 +69,32 @@ export function createMediaTestShell(options: {
     return record
   }
 
+  function mint(item: StagedTestMedia): BridgeMediaItem {
+    minted += 1
+    const handle = `media-${minted}`
+    live.set(handle, item)
+    return {
+      handle,
+      mime: item.mime ?? 'image/png',
+      byteLength: item.bytes.byteLength,
+      ...(item.width === undefined ? {} : { width: item.width }),
+      ...(item.height === undefined ? {} : { height: item.height })
+    }
+  }
+
   return {
     calls,
     released,
     serveNativeVerb: (verb, params) => {
+      if (verb === 'native.share.take') {
+        shareTakeParamsSchema.parse(params)
+        calls.push('take share')
+        const taken = share
+        share = null
+        return Promise.resolve({
+          share: taken ? { text: taken.text, items: taken.items.map(mint), skipped: 0 } : null
+        })
+      }
       if (verb === 'native.media.pick') {
         // Parse the real verb schema so this fake cannot accept params the device would refuse.
         const { source, multiple } = mediaPickParamsSchema.parse(params)
@@ -76,19 +102,7 @@ export function createMediaTestShell(options: {
         if (options.refusePick) {
           return Promise.reject(options.refusePick)
         }
-        const items: BridgeMediaItem[] = (options.staged[source] ?? []).map((item) => {
-          minted += 1
-          const handle = `media-${minted}`
-          live.set(handle, item)
-          return {
-            handle,
-            mime: item.mime ?? 'image/png',
-            byteLength: item.bytes.byteLength,
-            ...(item.width === undefined ? {} : { width: item.width }),
-            ...(item.height === undefined ? {} : { height: item.height })
-          }
-        })
-        return Promise.resolve({ items })
+        return Promise.resolve({ items: (options.staged[source] ?? []).map(mint) })
       }
       if (verb === 'native.media.read') {
         const { handle, offset, length } = mediaReadParamsSchema.parse(params)

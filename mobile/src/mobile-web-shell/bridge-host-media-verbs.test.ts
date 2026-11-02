@@ -96,7 +96,8 @@ function pairWith(options: { grants?: readonly string[]; byteLength?: number } =
     copyIntoCache: (uri) => {
       throw new Error(`nothing in this suite picks a uri needing a copy: ${uri}`)
     },
-    discard: (uri) => discarded.push(uri)
+    discard: (uri) => discarded.push(uri),
+    takeShare: () => null
   })
   const pair = createFakeBridgePortPair({
     routeGrants: options.grants ?? MOBILE_WEB_SHELL_GRANTS,

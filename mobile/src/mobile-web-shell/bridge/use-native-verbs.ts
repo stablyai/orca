@@ -6,9 +6,11 @@ import {
   mediaPickResultSchema,
   mediaReadResultSchema,
   mediaReleaseResultSchema,
+  shareTakeResultSchema,
   type BridgeMediaChunk,
   type BridgeMediaItem,
-  type BridgeMediaSource
+  type BridgeMediaSource,
+  type BridgeShare
 } from './bridge-media-verbs'
 import {
   audioReadResultSchema,
@@ -19,10 +21,12 @@ import {
 import {
   clipboardReadResultSchema,
   clipboardWriteResultSchema,
+  pdfThumbnailResultSchema,
   pdfViewResultSchema,
   type BridgeClipboardMime,
   type BridgeNativeVerb,
-  type BridgePdfOpenParams
+  type BridgePdfOpenParams,
+  type BridgePdfThumbnailParams
 } from './bridge-native-verbs'
 
 // Use ordinary request frames/caps, served only on-device. Refuse ungranted verbs before posting and parse results because the installed shell can differ from this page build.
@@ -47,6 +51,12 @@ export type NativeVerbs = {
   canOpenPdf: boolean
   openPdf: (params: BridgePdfOpenParams) => Promise<void>
   cancelPdf: () => Promise<void>
+  // Shared files leave through media read/release, so a take needs those grants too.
+  canTakeShare: boolean
+  takeShare: () => Promise<BridgeShare | null>
+  canThumbnailPdf: boolean
+  // Resolves the first page as base64 JPEG.
+  thumbnailPdf: (params: BridgePdfThumbnailParams) => Promise<string>
 }
 
 // Expose stable reason codes, including local ungranted and frame refusals. Unknown newer-shell codes floor to unreported so caller switches remain exhaustive.
@@ -163,7 +173,13 @@ export function useNativeVerbs(): NativeVerbs {
       },
       cancelPdf: async () => {
         await call('native.pdf.view', { action: 'cancel' }, pdfViewResultSchema)
-      }
+      },
+      canTakeShare:
+        has('native.share.take') && has('native.media.read') && has('native.media.release'),
+      takeShare: async () => (await call('native.share.take', {}, shareTakeResultSchema)).share,
+      canThumbnailPdf: has('native.pdf.thumbnail'),
+      thumbnailPdf: async (params) =>
+        (await call('native.pdf.thumbnail', params, pdfThumbnailResultSchema)).jpegBase64
     }
   }, [client])
 }

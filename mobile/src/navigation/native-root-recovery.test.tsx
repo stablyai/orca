@@ -78,6 +78,7 @@ vi.mock('../notifications/desktop-notification-channel', () => ({
   ensureDesktopNotificationChannel: async () => {}
 }))
 vi.mock('../transport/host-store', () => ({ loadHostCatalog: async () => [{ id: 'desktop' }] }))
+vi.mock('../share/use-incoming-share-intake', () => ({ useIncomingShareIntake: () => {} }))
 vi.mock('../transport/mobile-relay-pairing-recovery', () => ({
   recoverMobileRelayPairing: async () => {}
 }))
