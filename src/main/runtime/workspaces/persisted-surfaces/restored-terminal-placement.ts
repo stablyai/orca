@@ -28,6 +28,8 @@ import {
   panesBoundToGoneLocalTerminals
 } from '../../terminal/recovery/foreign-pane-bindings'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { getAppEnvironment } from '../../../../shared/app-environment'
+import { listEnvironments } from '../../../../shared/runtime-environment-store'
 import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
 import { followExportedPaneKeys } from '../../terminal/identity/exported-pane-key-follow'
 
@@ -232,7 +234,11 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends OrcaRunti
         (store?.getWorkspaceSessionHostIds?.() ?? []).flatMap((hostId) => {
           const other = hostId === partition ? null : store?.getWorkspaceSession?.(hostId)
           return other ? [other] : []
-        })
+        }),
+      portsOnlySshTargetIds: () =>
+        listEnvironments(getAppEnvironment().getPath('userData')).flatMap(({ sshAccess }) =>
+          sshAccess?.portsOnly ? [sshAccess.sshTargetId] : []
+        )
     })
   }
 }

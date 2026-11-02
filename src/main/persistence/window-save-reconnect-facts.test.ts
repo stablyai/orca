@@ -41,14 +41,15 @@ const factsFor =
   (
     live: string[],
     ssh: [string, SshConnectionStatus][],
-    more: { exited?: string[]; others?: WorkspaceSessionState[] } = {}
+    more: { exited?: string[]; others?: WorkspaceSessionState[]; portsOnly?: string[] } = {}
   ) =>
   (session: WorkspaceSessionState) =>
     deriveShutdownReconnectFacts(session, {
       isLiveLocalPty: (ptyId) => live.includes(ptyId),
       isKnownExited: (ptyId) => more.exited?.includes(ptyId) ?? false,
       sshStatusByTargetId: new Map(ssh),
-      otherPartitions: () => more.others ?? []
+      otherPartitions: () => more.others ?? [],
+      portsOnlySshTargetIds: () => more.portsOnly ?? []
     })
 
 function forgetfulSave(stored: WorkspaceSessionState): WorkspaceSessionState {
@@ -156,6 +157,22 @@ describe('what the next startup reconnects comes from main, not the window’s s
 
     expect(windowViewSaveForMain(local, local, null, facts).activeConnectionIdsAtShutdown).toEqual([
       TARGET
+    ])
+  })
+
+  it('a ports-only host still reconnecting at quit is redialed for its forwards; one left offline is not', () => {
+    const local = localPartition()
+    const facts = factsFor(
+      [],
+      [
+        ['ports-host', 'reconnecting'],
+        ['ports-host-off', 'disconnected']
+      ],
+      { portsOnly: ['ports-host', 'ports-host-off'] }
+    )
+
+    expect(windowViewSaveForMain(local, local, null, facts).activeConnectionIdsAtShutdown).toEqual([
+      'ports-host'
     ])
   })
 

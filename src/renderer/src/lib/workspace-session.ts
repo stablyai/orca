@@ -65,6 +65,7 @@ export type WorkspaceSessionSnapshot = Pick<
     /** Optional so the many partial snapshot fixtures keep type-checking; see buildTerminalSessionData. */
     pendingReconnectPtyIdByTabId?: AppState['pendingReconnectPtyIdByTabId']
     deferredSshSessionIdsByTabId?: AppState['deferredSshSessionIdsByTabId']
+    runtimeEnvironments?: AppState['runtimeEnvironments']
   }
 
 // Why: shallow-equality gate for the debounced session writer; _exhaustive below keeps it in sync with the snapshot type.
@@ -104,7 +105,8 @@ export const SESSION_RELEVANT_FIELDS = [
   'clientHostedBrowserCloseIntentsByEnvironment',
   'pairedTerminalTabCloseIntentsByEnvironment',
   'pendingReconnectPtyIdByTabId',
-  'deferredSshSessionIdsByTabId'
+  'deferredSshSessionIdsByTabId',
+  'runtimeEnvironments'
 ] as const satisfies readonly (keyof WorkspaceSessionSnapshot)[]
 
 type _MissingSessionField = Exclude<

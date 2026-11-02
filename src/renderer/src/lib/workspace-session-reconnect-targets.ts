@@ -1,6 +1,7 @@
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { isOwnedSshTargetId } from '../../../shared/execution-host'
+import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import type { WorkspaceSessionSnapshot } from './workspace-session'
 
 export function buildActiveConnectionIdsAtShutdown(
@@ -21,11 +22,23 @@ export function buildActiveConnectionIdsAtShutdown(
     if (!connectionId || isOwnedSshTargetId(connectionId)) {
       continue
     }
-    const status = snapshot.sshConnectionStates.get(connectionId)?.status
-    if (status && status !== 'disconnected' && status !== 'auth-failed') {
+    if (keepsReconnectIntent(snapshot.sshConnectionStates.get(connectionId)?.status)) {
       targetIds.add(connectionId)
+    }
+  }
+  // A ports-only SSH access's saved forwards retain its host the same way: nothing else redials it.
+  for (const { sshAccess } of snapshot.runtimeEnvironments ?? []) {
+    if (
+      sshAccess?.portsOnly &&
+      keepsReconnectIntent(snapshot.sshConnectionStates.get(sshAccess.sshTargetId)?.status)
+    ) {
+      targetIds.add(sshAccess.sshTargetId)
     }
   }
 
   return targetIds.size > 0 ? Array.from(targetIds) : undefined
+}
+
+function keepsReconnectIntent(status: SshConnectionStatus | undefined): boolean {
+  return status !== undefined && status !== 'disconnected' && status !== 'auth-failed'
 }

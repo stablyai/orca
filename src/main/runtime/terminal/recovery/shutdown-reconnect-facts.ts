@@ -20,6 +20,8 @@ export type ReconnectFactSources = {
   sshStatusByTargetId: ReadonlyMap<string, SshConnectionStatus>
   /** The other partitions' sessions: the connection list is global across them. */
   otherPartitions?: () => readonly WorkspaceSessionState[]
+  /** Hosts a ports-only SSH access forwards a paired server's ports through. */
+  portsOnlySshTargetIds?: () => readonly string[]
 }
 
 /** Every terminal a tab's panes name, in tree order, then its tab-level id. */
@@ -109,16 +111,23 @@ function activeConnectionIds(
   }
   for (const sessionId of relaySessionIds) {
     const targetId = parseAppSshPtyId(sessionId)?.connectionId
-    const status = targetId ? sources.sshStatusByTargetId.get(targetId) : undefined
     if (
       targetId &&
       !isOwnedSshTargetId(targetId) &&
-      status &&
-      status !== 'disconnected' &&
-      status !== 'auth-failed'
+      keepsReconnectIntent(sources.sshStatusByTargetId.get(targetId))
     ) {
       targetIds.add(targetId)
     }
   }
+  // A ports-only SSH access's saved forwards retain its host the same way: nothing else redials it.
+  for (const targetId of sources.portsOnlySshTargetIds?.() ?? []) {
+    if (keepsReconnectIntent(sources.sshStatusByTargetId.get(targetId))) {
+      targetIds.add(targetId)
+    }
+  }
   return targetIds.size > 0 ? [...targetIds] : undefined
+}
+
+function keepsReconnectIntent(status: SshConnectionStatus | undefined): boolean {
+  return status !== undefined && status !== 'disconnected' && status !== 'auth-failed'
 }

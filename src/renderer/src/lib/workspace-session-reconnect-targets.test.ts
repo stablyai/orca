@@ -4,8 +4,15 @@ import type { SshConnectionState } from '../../../shared/ssh-types'
 import type { WorkspaceSessionSnapshot } from './workspace-session'
 import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnect-targets'
 
+function withStatus(
+  targetId: string,
+  status: SshConnectionState['status']
+): [string, SshConnectionState] {
+  return [targetId, { targetId, status, error: null, reconnectAttempt: 0 }]
+}
+
 function connected(targetId: string): [string, SshConnectionState] {
-  return [targetId, { targetId, status: 'connected', error: null, reconnectAttempt: 0 }]
+  return withStatus(targetId, 'connected')
 }
 
 describe('buildActiveConnectionIdsAtShutdown', () => {
@@ -24,5 +31,27 @@ describe('buildActiveConnectionIdsAtShutdown', () => {
         remoteSessions
       )
     ).toEqual(['ssh-user'])
+  })
+
+  it('keeps a ports-only host still reconnecting at quit, since only its forwards need it', () => {
+    const snapshot = {
+      sshConnectionStates: new Map([
+        withStatus('ports-host', 'reconnecting'),
+        withStatus('ports-host-off', 'disconnected'),
+        withStatus('access-host', 'reconnecting')
+      ]),
+      runtimeEnvironments: [
+        { sshAccess: { sshTargetId: 'ports-host', portsOnly: true } },
+        { sshAccess: { sshTargetId: 'ports-host-off', portsOnly: true } },
+        { sshAccess: { sshTargetId: 'access-host' } }
+      ]
+    }
+    expect(
+      buildActiveConnectionIdsAtShutdown(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the builder reads only sshConnectionStates and each environment's sshAccess.
+        snapshot as unknown as WorkspaceSessionSnapshot,
+        null
+      )
+    ).toEqual(['ports-host'])
   })
 })
