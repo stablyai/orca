@@ -196,15 +196,14 @@ export function structuredAgentSessionStartStillQueued(
   session: Pick<StructuredAgentSessionHostSession, 'journal'> | undefined,
   startedFor: string | undefined
 ): boolean {
+  if (startedFor === undefined) {
+    return true
+  }
+  const entry = session?.journal.submission(startedFor)
   return (
-    startedFor === undefined ||
-    session?.journal
-      .submissions()
-      .some(
-        (entry) =>
-          entry.clientMessageId === startedFor &&
-          (isQueuedAgentJournalSubmission(entry) ||
-            continuingStructuredAgentSessionInput(session.journal, startedFor))
-      ) === true
+    session !== undefined &&
+    entry !== undefined &&
+    (isQueuedAgentJournalSubmission(entry) ||
+      continuingStructuredAgentSessionInput(session.journal, startedFor))
   )
 }

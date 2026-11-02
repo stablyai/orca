@@ -286,6 +286,9 @@ export async function performAttach(
 
   const fence = record.lease.runtimeFence
   const tabId = store.getSessionTabId(sessionId)
+  const view = attached.journal.publicRead()
+  const work = heldStructuredAgentSessionCurrentWork(store, sessionId, attached.journal, undefined)
+  let page: ReturnType<typeof readAgentSessionHydrationPage> | undefined
   return {
     ok: true,
     replayed,
@@ -294,10 +297,12 @@ export async function performAttach(
     value: {
       sessionId,
       fence,
-      page: withPublishedWork(
-        readAgentSessionHydrationPage(attached.journal, fence),
-        heldStructuredAgentSessionCurrentWork(store, sessionId, attached.journal, undefined)
-      ),
+      get page() {
+        return (page ??= withPublishedWork(
+          readAgentSessionHydrationPage(attached.journal, fence, undefined, view.snapshot),
+          work
+        ))
+      },
       unconfirmedClientMessageIds: attached.unconfirmedClientMessageIds,
       ...(tabId ? { tabId } : {})
     }

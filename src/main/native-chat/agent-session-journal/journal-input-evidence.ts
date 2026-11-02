@@ -10,10 +10,11 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReducerState } from './journal-reducer'
 import { JournalInputPlaceIndex } from './journal-input-place-index'
+import { JournalInputObservations } from './journal-input-observations'
 import { JournalSubmissionLinks } from './journal-submission-links'
 
 /** Reconstructible query evidence on the input owner; canonical records remain authoritative. */
-export class JournalInputEvidence {
+export class JournalInputEvidence extends JournalInputObservations {
   private readonly links = new JournalSubmissionLinks()
   private readonly recoverable = new Map<string, AgentJournalSubmission>()
   private readonly nonRefused = new JournalInputPlaceIndex('')
@@ -33,8 +34,6 @@ export class JournalInputEvidence {
   private readonly stoppedOwed = new Set<string>()
   private readonly carrierCoverage = new Map<string, readonly string[]>()
   private readonly coveredBy = new Map<string, Set<string>>()
-
-  constructor(protected readonly state: JournalReducerState) {}
 
   refreshLink(id: string): void {
     this.links.refreshInput(this.state, id)
@@ -147,6 +146,7 @@ export class JournalInputEvidence {
       this.recoverable.delete(id)
     }
     const ordinal = this.inputOrdinal(id)
+    this.refreshObservations(id, entry, ordinal)
     if (entry) {
       this.inputIds.set(agentJournalSubmissionKey(id), id)
     } else {

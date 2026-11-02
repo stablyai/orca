@@ -6,7 +6,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import { isStructuredAgentSessionCommandTurnId } from './structured-agent-session-command-turn'
 
 /** Scope active turns to the live generation so ended commands cannot hold delivery waits. */
-export type SendSettlementJournal = Pick<AgentSessionJournal, 'submissions' | 'cursor'> & {
+export type SendSettlementJournal = Pick<AgentSessionJournal, 'submission' | 'cursor'> & {
   attemptEnded?: (clientMessageId: string) => boolean
   activeTurnId: () => string | null
   behindCommand?: (clientMessageId: string) => boolean
@@ -48,9 +48,7 @@ function settledSend(
   journal: SendSettlementJournal,
   clientMessageId: string,
   until: SendSettlementPoint,
-  submission: AgentJournalSubmission | undefined = journal
-    .submissions()
-    .find((candidate) => candidate.clientMessageId === clientMessageId)
+  submission: AgentJournalSubmission | undefined = journal.submission(clientMessageId)
 ): SendSettlement {
   if (!submission) {
     return 'missing'
@@ -147,15 +145,12 @@ export class StructuredAgentSessionSendSettlement {
     if (!waiters) {
       return
     }
-    const submissions = new Map(
-      journal.submissions().map((submission) => [submission.clientMessageId, submission])
-    )
     for (const waiter of waiters) {
       const result = settledSend(
         journal,
         waiter.clientMessageId,
         waiter.until,
-        submissions.get(waiter.clientMessageId)
+        journal.submission(waiter.clientMessageId)
       )
       if (result !== 'pending') {
         this.remove(sessionId, waiter)

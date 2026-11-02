@@ -43,9 +43,7 @@ export function beginStructuredAgentSessionInputHandover(
   let recorder = deps.recordRanOptions?.(sessionId, binding.fence)
   const ownsInput = () =>
     deps.sessions.get(sessionId) === session &&
-    session.journal
-      .submissions()
-      .some((s) => s.clientMessageId === next.clientMessageId && s.dispatchState === 'pending')
+    session.journal.submission(next.clientMessageId)?.dispatchState === 'pending'
   const isBound = () => deps.sessions.get(sessionId) === session && session.child === binding
   const isCurrent = () => isBound() && !binding.close
   const validate = (signal?: AbortSignal) => {
@@ -141,11 +139,7 @@ export function beginStructuredAgentSessionInputHandover(
               validate(signal)
               if (
                 !ownsInput() ||
-                !session.journal
-                  .submissions()
-                  .some(
-                    (s) => s.clientMessageId === next.clientMessageId && s.fence === binding.fence
-                  ) ||
+                session.journal.submission(next.clientMessageId)?.fence !== binding.fence ||
                 !continuingStructuredAgentSessionInput(session.journal, next.clientMessageId)
               ) {
                 throw new Error('input continuation no longer owns its submission')

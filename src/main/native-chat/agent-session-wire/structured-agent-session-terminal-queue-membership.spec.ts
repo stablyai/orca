@@ -1,5 +1,6 @@
 import * as reducer from '../agent-session-journal/journal-reducer'
 import { newestAcceptedSendKey } from './structured-agent-session-status-child-work'
+import { withStoppedHistory } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
 import { carriedStoppedHistory } from './structured-agent-session-stopped-history-selection'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
@@ -15,6 +16,7 @@ import * as transitions from '../agent-session-journal/journal-reducer-transitio
 import { JournalInputOrder } from '../agent-session-journal/journal-input-order'
 import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
 import { expect, it, vi } from 'vitest'
+import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import { JournalInputCardIndex } from '../agent-session-journal/journal-input-card-index'
 import { JournalInputPlaceIndex } from '../agent-session-journal/journal-input-place-index'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
@@ -23,6 +25,7 @@ import { createQueuedMessageTestRig } from './structured-agent-session-queued-me
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_NOW,
+  HOST_TEST_THREAD,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
@@ -289,6 +292,7 @@ it.each([10, 100])(
       rig.host.stopDelivery() // Freeze provider/drain scheduling; all following queue triggers are real writes.
       let journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
       const physical = journal.physicalCursor().epoch
+      const fence = () => rig.store.getRecord(SESSION)!.lease.runtimeFence
       const gate = () =>
         structuredQueueSendGate(
           { store: rig.store, sessions: rig.host.collaboratorsForTests().sessions },
@@ -300,11 +304,17 @@ it.each([10, 100])(
       }
       const lane = <T>(run: () => Promise<T>) =>
         rig.host.collaboratorsForTests().serialize(SESSION, run)
-      const insert = async (id: string) => {
+      const insert = async (id: string, held = false) => {
         const body = hostTestMessage(id)
         expect(queuedMessagesPublishedBytesRefusal(journal, body, true)).toBeNull()
         const cursor = journal.cursor()
-        await lane(() => journal.queuedMessages.insert({ messageId: id, body }))
+        await lane(() =>
+          journal.queuedMessages.insert({
+            messageId: id,
+            body,
+            ...(held ? { holdReason: QUEUED_MESSAGE_PAUSED_SEND_FAILED } : {})
+          })
+        )
         expect(journal.cursor().sequence).toBeGreaterThan(cursor.sequence)
       }
       for (let i = 0; i < h; i++) {
@@ -312,7 +322,7 @@ it.each([10, 100])(
         await insert(id)
         expect(await rig.deleteQueued(id)).toMatchObject({ ok: true })
         if (i % 2 === 0) {
-          await lane(() => journal.replaceEpochItems('unreconcilable_prefix', 1, []))
+          await lane(() => journal.replaceEpochItems('unreconcilable_prefix', fence(), []))
         }
         const sent = `archive-sent-${i}`,
           input = `archive-input-${i}`
@@ -324,7 +334,7 @@ it.each([10, 100])(
               clientMessageId: input,
               body: row.body,
               payloadFingerprint: row.fingerprint,
-              fence: 1,
+              fence: fence(),
               handoverRecorded: true
             },
             { messageId: sent, expect: 'waiting' }
@@ -335,7 +345,7 @@ it.each([10, 100])(
             clientMessageId: input,
             state: 'pending',
             turnScope: AGENT_JOURNAL_THREAD_SCOPE,
-            fence: 1
+            fence: fence()
           })
         )
         await lane(() =>
@@ -343,11 +353,11 @@ it.each([10, 100])(
             clientMessageId: input,
             state: 'accepted',
             providerIdentity: { provider: 'orca', clientMessageId: `accepted-${i}` },
-            fence: 1
+            fence: fence()
           })
         )
       }
-      await lane(() => journal.replaceEpochItems('unreconcilable_prefix', 1, []))
+      await lane(() => journal.replaceEpochItems('unreconcilable_prefix', fence(), []))
       expect(journal.physicalCursor().epoch).toBe(physical)
       const raw = journal.queuedMessages.displayState()
       expect(
@@ -362,13 +372,15 @@ it.each([10, 100])(
       ).toHaveLength(h)
       expect(journal.queuedMessages.list()).toEqual([])
       publication()
+      let stopped: { clientMessageId: string; words: string }[] = []
+      let acceptedKey = `archive-input-${h - 1}`
       const run = async (name: string, action: () => Promise<void>) => {
         phase = name
         count()
         await action()
         publication()
         expect(newestAcceptedSendKey(journal.epoch, journal.statusRead().submissions)).toBe(
-          `${journal.epoch}:archive-input-${h - 1}`
+          `${journal.epoch}:${acceptedKey}`
         )
         expect(
           carriedStoppedHistory(
@@ -377,7 +389,11 @@ it.each([10, 100])(
             journal.submission(original)!,
             hostTestMessage('next human')
           )
-        ).toBeNull()
+        ).toEqual(
+          stopped.length
+            ? { messages: stopped, covers: stopped.map((s) => s.clientMessageId) }
+            : null
+        )
         phase = 'between'
       }
       for (const l of [0, 1]) {
@@ -441,25 +457,25 @@ it.each([10, 100])(
           }
         })
         await run(`stop-${l}`, async () => {
-          await lane(() =>
-            journal.stops.accept({
-              event: { reason: 'user-stop' },
-              fence: 1,
-              liveTurnId: () => null
-            })
-          )
+          const pending = rig.send(`stop pending ${l}`)
+          expect(await pending.result).toMatchObject({ ok: true })
+          const settled = rig.host.waitForSendSettlement(SESSION, pending.id)
+          expect(await rig.stop()).toMatchObject({ ok: true })
+          expect((await settled)?.value.submission.clientMessageId).toBe(pending.id)
+          expect(journal.submission(pending.id)?.dispatchState).not.toBe('pending')
+          stopped.push({ clientMessageId: pending.id, words: `stop pending ${l}` })
           publication()
           await insert(`after-stop-${l}`)
           publication()
           expect(await rig.deleteQueued(`after-stop-${l}`)).toMatchObject({ ok: true })
         })
         await run(`resume-${l}`, async () => {
-          await lane(() => journal.appendQueueResume(1))
+          expect(await rig.resume()).toMatchObject({ ok: true })
           publication()
           await cycle(`after-resume-${l}`)
         })
         await run(`rewind-${l}`, async () => {
-          await lane(() => journal.replaceEpochItems('unreconcilable_prefix', 1, []))
+          await lane(() => journal.replaceEpochItems('unreconcilable_prefix', fence(), []))
           publication()
           await cycle(`after-rewind-${l}`)
           expect(journal.physicalCursor().epoch).toBe(physical)
@@ -478,7 +494,7 @@ it.each([10, 100])(
                 body: card.body,
                 payloadFingerprint: card.fingerprint,
                 handoverRecorded: true,
-                fence: 1
+                fence: fence()
               },
               { messageId: id, expect: 'waiting' }
             )
@@ -491,7 +507,7 @@ it.each([10, 100])(
               clientMessageId: input,
               state: 'pending',
               turnScope: AGENT_JOURNAL_THREAD_SCOPE,
-              fence: 1
+              fence: fence()
             })
           )
           expect(journal.queuedMessages.displayState().queue.revision).toBe(revision)
@@ -500,7 +516,7 @@ it.each([10, 100])(
           expect(journal.queuedMessages.awaitReopenMark()).toBe(true)
           await lane(() =>
             holdUnsentSends(journal, {
-              fence: 1,
+              fence: fence(),
               hold: { cause: 'chatClosed' },
               unrun: (entry) => entry.clientMessageId === input
             })
@@ -514,20 +530,20 @@ it.each([10, 100])(
               body: hostTestMessage(direct),
               payloadFingerprint: direct,
               handoverRecorded: true,
-              fence: 1
+              fence: fence()
             })
           )
           await lane(() =>
             journal.appendLifecycleBatch({
               settlementId: direct,
               mutations: [],
-              fence: 1,
+              fence: fence(),
               keepFailedStart: true,
               dispatches: [
                 {
                   clientMessageId: direct,
                   state: 'rejected',
-                  fence: 1,
+                  fence: fence(),
                   ...agentSessionFailureWords(
                     agentSessionFailureFact('providerStartFailed', { neverReachedAgent: true }),
                     { surface: 'rejection' }
@@ -564,7 +580,6 @@ it.each([10, 100])(
       await rig.restartHostProcess()
       await rig.host.history({ sessionId: SESSION, direction: 'tail' })
       journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
-      rig.host.stopDelivery()
       publication()
       expect(journal.physicalCursor().epoch).toBe(physical)
       phase = 'raw-proof'
@@ -574,14 +589,38 @@ it.each([10, 100])(
         expect(journal.submission(`archive-input-${i}`)?.dispatchState).toBe('accepted')
       }
       await run('after-reopen', async () => {
-        await insert('after-reopen')
+        await insert('after-reopen', true)
         expect(publication().queuedMessages.map((card) => card.messageId)).toEqual(['after-reopen'])
         expect(await rig.deleteQueued('after-reopen')).toMatchObject({ ok: true })
         expect(publication().queuedMessages).toEqual([])
       })
+      await run('delivery', async () => {
+        const before = rig.dispatch.mock.calls.length
+        const next = rig.send('real delivery after reopen')
+        expect(await next.result).toMatchObject({ ok: true })
+        const settled = rig.host.waitForSendSettlement(SESSION, next.id)
+        await eventually(() => expect(rig.dispatch.mock.calls.length).toBe(before + 1))
+        expect(journal.submission(next.id)?.handedOverAt).toBeDefined()
+        expect(rig.dispatch.mock.calls.at(-1)?.[0].body).toEqual(
+          withStoppedHistory(hostTestMessage('real delivery after reopen'), stopped)
+        )
+        await rig.host.settleLateDispatch({
+          sessionId: SESSION,
+          clientMessageId: next.id,
+          providerIdentity: {
+            provider: 'codex',
+            threadId: HOST_TEST_THREAD,
+            turnId: 'turn-real-delivery',
+            ordinal: 0
+          }
+        })
+        expect((await settled)?.value.submission.dispatchState).toBe('accepted')
+        acceptedKey = next.id
+        stopped = []
+      })
       console.info('terminal-queue-membership-counts', JSON.stringify({ h, phases }))
       for (const [name, c] of Object.entries(phases)) {
-        if (!/^(cycles|stop|resume|rewind|recovery)-|^after-reopen$/.test(name)) {
+        if (!/^(cycles|stop|resume|rewind|recovery)-|^(after-reopen|delivery)$/.test(name)) {
           continue
         }
         expect(c.archived, name).toBe(0)

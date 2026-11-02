@@ -7,14 +7,16 @@ import { selectableStructuredSubmission } from './structured-agent-session-input
 
 /** Read opening-turn evidence from the journal fold without a snapshot. */
 export function structuredAgentSessionSendOpeningTurnInJournal(
-  journal: Pick<AgentSessionJournal, 'submissions' | 'visitItemsWithLinkage'>,
+  journal: Pick<AgentSessionJournal, 'inputOrder' | 'visitItemsWithLinkage'>,
   fence: number,
   work?: Pick<StructuredAgentSessionCurrentWork, 'owesSend'> | null
 ): boolean {
   return structuredAgentSessionSendOpeningTurn(
     work
-      ? journal.submissions().filter((submission) => work.owesSend(submission))
-      : journal.submissions(),
+      ? journal.inputOrder
+          .recoverableSubmissions()
+          .filter((submission) => work.owesSend(submission))
+      : journal.inputOrder.recoverableSubmissions(),
     (visit) =>
       journal.visitItemsWithLinkage((itemId, sequence, body, linkage) =>
         visit({ itemId, sequence, body, turnScope: linkage.turnScope, agentId: linkage.agentId })

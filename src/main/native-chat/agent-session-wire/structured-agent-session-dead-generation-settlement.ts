@@ -81,14 +81,19 @@ export function planStructuredAgentSessionDeadGeneration(
     startupFailure ?? (closed && agentSessionFailureWords(closed, { surface: 'rejection' }))
   const dispatches = [
     ...journalPendingSubmissionResolutions(
-      (input.journal.submissions?.() ?? input.journal.pendingSubmissions?.() ?? []).filter(
-        (entry) => owns(entry.fence)
-      ),
+      (
+        input.journal.inputOrder?.recoverableSubmissions() ??
+        input.journal.submissions?.() ??
+        input.journal.pendingSubmissions?.() ??
+        []
+      ).filter((entry) => owns(entry.fence)),
       input.fence,
       unrun ? { rejection: unrun } : { reason: input.pendingSubmissionReason }
     )
   ]
-  const allItems = providerTimelineExecutionItems(input.journal.snapshot().items)
+  const allItems = providerTimelineExecutionItems(
+    (input.journal.statusRead?.() ?? input.journal.snapshot()).items
+  )
   const items = allItems.filter((item) => owns(input.journal.itemFence(item.itemId)))
   const proven = watchedExitRevisions(items, input.exit, input.journal)
   const mutations: JournalLifecycleMutationInput[] = []
@@ -98,7 +103,9 @@ export function planStructuredAgentSessionDeadGeneration(
     // Existing rejection wording is terminal and must remain unchanged.
     const recordedByDeliveryLoop =
       input.exitedDuringStartup.flightOwned ||
-      input.journal.submissions?.().some(isQueuedAgentJournalSubmission) ||
+      (input.journal.inputOrder?.recoverableSubmissions() ?? input.journal.submissions?.())?.some(
+        isQueuedAgentJournalSubmission
+      ) ||
       hasStructuredAgentSessionStartFailureRow(allItems, startKey)
     if (!recordedByDeliveryLoop) {
       mutations.push(structuredAgentSessionStartFailureRow(startKey, startupFailure))

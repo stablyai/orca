@@ -169,9 +169,7 @@ export function sendPlan(
       if (queued) {
         return queued
       }
-      const submission = ctx.journal
-        .submissions()
-        .find((entry) => entry.clientMessageId === clientMessageId)
+      const submission = ctx.journal.submission(clientMessageId)
       if (submission) {
         return { clientMessageId, submission: { ...submission } }
       }
@@ -242,7 +240,7 @@ export function conversationCommandPlan(params: {
           ? { queued: queued.queued }
           : { clientMessageId: queued.submission.clientMessageId }
       }
-      if (ctx.journal.submissions().some((entry) => entry.clientMessageId === clientMessageId)) {
+      if (ctx.journal.submission(clientMessageId) !== undefined) {
         return { clientMessageId }
       }
       const prior = params.priorRecord()

@@ -320,7 +320,7 @@ export class StructuredAgentSessionClientDelivery {
 
   private settlementReading(sessionId: string, journal: AgentSessionJournal) {
     return {
-      submissions: () => journal.submissions(),
+      submission: (id: string) => journal.submission(id),
       cursor: () => journal.cursor(),
       attemptEnded: (id: string) => journal.queuedMessages.attemptEnded(id),
       activeTurnId: () => this.currentWork(sessionId, journal).activeTurnId(),

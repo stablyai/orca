@@ -196,7 +196,9 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
   const wakeQueuedDelivery = (): void => {
     if (
       !session.journal.submissions ||
-      session.journal.submissions().some(isQueuedAgentJournalSubmission)
+      (session.journal.inputOrder?.recoverableSubmissions() ?? session.journal.submissions()).some(
+        isQueuedAgentJournalSubmission
+      )
     ) {
       context.wakeDelivery?.(sessionId)
     }

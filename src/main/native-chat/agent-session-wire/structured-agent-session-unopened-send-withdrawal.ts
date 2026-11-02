@@ -7,6 +7,9 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 
 /** Missing methods withdraw nothing. */
 export type UnopenedSendJournal = {
+  statusRead?: AgentSessionJournal['statusRead']
+  inputOrder?: Pick<AgentSessionJournal['inputOrder'], 'recoverableSubmissions'>
+  submission?: AgentSessionJournal['submission']
   agent?: AgentType
   queuedMessages?: Pick<AgentSessionJournal['queuedMessages'], 'userStopInForce'>
   snapshot: () => Pick<ReturnType<AgentSessionJournal['snapshot']>, 'items'>

@@ -8,7 +8,12 @@ export type InputPlaceQuery = {
   handoff?: QueuedMessageRow
   position: number
 }
-type Entry = InputPlaceQuery & { id: string; sequence: number; domain: string; tie?: number }
+type Entry = InputPlaceQuery & {
+  id: string
+  sequence: number
+  domain: string | undefined
+  tie?: number
+}
 type Node = {
   entry: Entry
   height: number
@@ -135,7 +140,7 @@ export class JournalInputPlaceIndex {
       return
     }
     this.delete(id)
-    const entry: Entry = { id, sequence: position, domain: '', position, tie }
+    const entry: Entry = { id, sequence: position, domain: undefined, position, tie }
     this.entries.set(id, entry)
     this.change(entry, false)
   }
@@ -150,11 +155,13 @@ export class JournalInputPlaceIndex {
 
   private change(entry: Entry, remove: boolean): void {
     const epoch = entry.domain
-    const root = put(this.epochs.get(epoch), entry, remove)
-    if (root) {
-      this.epochs.set(epoch, root)
-    } else {
-      this.epochs.delete(epoch)
+    if (epoch !== undefined) {
+      const root = put(this.epochs.get(epoch), entry, remove)
+      if (root) {
+        this.epochs.set(epoch, root)
+      } else {
+        this.epochs.delete(epoch)
+      }
     }
     this.all = put(this.all, entry, remove)
   }
