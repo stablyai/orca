@@ -218,6 +218,35 @@ describe('ClaudeTerminalSessionNameSync', () => {
     expect(written).toEqual([])
   })
 
+  it('drops a Claude confirmation that a tab rename overtook during the transcript read', async () => {
+    let finishRead: (() => void) | undefined
+    const { sync, renamed, sent } = harness({
+      readCustomTitle: () => new Promise((resolve) => (finishRead = () => resolve('old'))),
+      sendCommand: async (_handle, text) => {
+        sent.push(text)
+      }
+    })
+    sync.observeTitle(PANE, '✳ old')
+    sync.tabRenamed('tab-1', 'newer')
+    finishRead?.()
+    await settle()
+    expect(renamed).toEqual([])
+    expect(sent).toEqual(['/rename newer'])
+  })
+
+  it('retries a Claude name whose tab rename failed', async () => {
+    const renameTab = vi
+      .fn<ClaudeTerminalSessionNameSyncDeps['renameTab']>()
+      .mockRejectedValueOnce(new Error('terminal_handle_stale'))
+      .mockResolvedValue(undefined)
+    const { sync, claudeRenames } = harness({ renameTab })
+    claudeRenames('from claude')
+    await settle()
+    sync.observeTurnChange(PANE)
+    await settle()
+    expect(renameTab).toHaveBeenCalledTimes(2)
+  })
+
   it('rechecks a title shown before its transcript path was known', async () => {
     let path: string | null = null
     const { sync, renamed } = harness({

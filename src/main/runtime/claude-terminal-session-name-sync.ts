@@ -49,11 +49,14 @@ export class ClaudeTerminalSessionNameSync {
   private readonly unconfirmedTitles = new Map<string, string>()
   // The name each pane's title last showed; spinner frames of one name share it.
   private readonly lastTitleNames = new Map<string, string>()
+  // Bumped on every tab rename, so a confirmation that read the transcript before one is dropped.
+  private readonly tabRenameGenerations = new Map<string, number>()
 
   constructor(private readonly deps: ClaudeTerminalSessionNameSyncDeps) {}
 
   /** Orca → Claude: the tab was given `title` by the user, a phone or the CLI. */
   tabRenamed(tabId: string, title: string | null): void {
+    this.tabRenameGenerations.set(tabId, this.tabRenameGeneration(tabId) + 1)
     const name = normalizeClaudeSessionName(title)
     if (!name) {
       // A cleared title withdraws a rename still waiting for the composer.
@@ -170,7 +173,13 @@ export class ClaudeTerminalSessionNameSync {
     }
   }
 
+  private tabRenameGeneration(tabId: string | undefined): number {
+    return (tabId && this.tabRenameGenerations.get(tabId)) || 0
+  }
+
   private async confirmTitle(paneKey: string, title: string): Promise<void> {
+    const tabId = parsePaneKey(paneKey)?.tabId
+    const generation = this.tabRenameGeneration(tabId)
     const transcriptPath = this.deps.readTranscriptPath(paneKey)
     if (!transcriptPath) {
       // The hook row may not carry the transcript yet; recheck at the pane's next turn change.
@@ -183,7 +192,10 @@ export class ClaudeTerminalSessionNameSync {
     } catch {
       name = null
     }
-    if (this.lastTitleNames.get(paneKey) !== claudeTitleName(title)) {
+    if (
+      this.lastTitleNames.get(paneKey) !== claudeTitleName(title) ||
+      this.tabRenameGeneration(tabId) !== generation
+    ) {
       return
     }
     // Claude also titles its window from auto-generated topics; only a recorded /rename names the tab.
@@ -211,6 +223,11 @@ export class ClaudeTerminalSessionNameSync {
     try {
       await this.deps.renameTab(handle, name)
     } catch (error) {
+      // Not renamed: keep the name retryable at the pane's next turn change.
+      if (this.agreed.get(paneKey) === name) {
+        this.agreed.delete(paneKey)
+      }
+      this.unconfirmedTitles.set(paneKey, title)
       console.warn('[claude-session-name] the tab was not renamed:', describe(error))
     }
   }
