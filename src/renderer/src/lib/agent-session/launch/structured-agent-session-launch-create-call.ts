@@ -76,6 +76,11 @@ async function requireHostCreateSupport(
       support.kind === 'declined' ? support.reason : undefined
     )
   }
+  if (support.kind === 'refused') {
+    abandonStructuredAgentSessionLaunchIntent(intent)
+    const { code } = support.refusal
+    throw new StructuredAgentSessionCreateRefusalError(code, code, support.refusal)
+  }
   return support.seedOptions
 }
 

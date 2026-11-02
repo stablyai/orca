@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
 import type * as FrameDrawnChatTabPlacementModule from '@/lib/frame-drawn-chat-tab-placement'
+import type * as CloseTerminalModule from './cli-chat-resume-close-terminal'
 
 const mocks = vi.hoisted(() => {
   const state: { source: CliChatResumeSource | null } = { source: null }
@@ -13,12 +14,14 @@ const mocks = vi.hoisted(() => {
     probe: vi.fn(),
     createCapability: vi.fn(),
     call: vi.fn(),
+    createSupport: vi.fn(),
     toast: vi.fn(),
     activate: vi.fn(async () => true),
     frameDrawn: false
   }
 })
-vi.mock('./cli-chat-resume-close-terminal', () => ({
+vi.mock('./cli-chat-resume-close-terminal', async (importOriginal) => ({
+  ...(await importOriginal<typeof CloseTerminalModule>()),
   closeCliChatResumeTerminal: mocks.closeTerminal
 }))
 vi.mock('./cli-chat-resume-source', () => ({ resolveCliChatResumeSource: () => mocks.source }))
@@ -28,9 +31,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   supportsStructuredAgentSessionCliSource: mocks.sourceCapability,
   supportsStructuredAgentSessionCreateMessage: mocks.createCapability,
   callStructuredAgentSession: (...args: unknown[]) =>
-    args[1] === 'agentSession.createSupport'
-      ? Promise.resolve({ supported: true })
-      : mocks.call(...args)
+    args[1] === 'agentSession.createSupport' ? mocks.createSupport(args[2]) : mocks.call(...args)
 }))
 vi.mock('@/runtime/structured-session-tab-inventory', () => ({
   readStructuredSessionTabInventory: async () => {
@@ -82,6 +83,7 @@ import {
   type TabsDrawnFromMain
 } from '@/store/slices/tabs-drawn-from-main.test-fixture'
 import { runCliChatResume } from './cli-chat-resume-run'
+import { LOCAL_ADMISSION_WAIT_MS } from '@/lib/agent-session/launch/structured-agent-session-host-admission'
 import {
   SOURCE,
   deferred,
@@ -108,6 +110,7 @@ afterEach(() => {
 })
 beforeEach(async () => {
   resetCliChatResumeRun(mocks)
+  mocks.createSupport.mockResolvedValue({ supported: true })
   main = await drawTabsFromMain(useAppStore)
 })
 
@@ -238,6 +241,46 @@ describe('close terminal then continue on capable hosts', () => {
     expect(creates()).toHaveLength(asks ? 0 : 1)
     expect(tabs()).toHaveLength(asks ? 0 : 1)
     expect(mocks.toast).not.toHaveBeenCalled()
+  })
+
+  // Create would refuse it after the close, leaving a failed chat in place of a closed terminal.
+  it('refuses before the close when another terminal runs the conversation', async () => {
+    mocks.createSupport.mockImplementation(async (params: { resumeFrom?: unknown }) => {
+      if (params.resumeFrom) {
+        throw Object.assign(new Error('agent_session_conflict'), {
+          code: 'agent_session_conflict',
+          data: { refusal: held() }
+        })
+      }
+      return { supported: true }
+    })
+    await runCliChatResume(SOURCE)
+    expect(mocks.createSupport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resumeFrom: { providerSessionId: SOURCE.providerSessionId, closingPaneKeys: ['tab-1:leaf'] }
+      })
+    )
+    expect(mocks.closeTerminal).not.toHaveBeenCalled()
+    expect(tabs()).toEqual([])
+    expect(creates()).toEqual([])
+    expect(mocks.toast.mock.calls).toEqual([
+      [
+        'Claude is running this conversation in another terminal. Quit it there or close that terminal, then try again.'
+      ]
+    ])
+  })
+
+  // Only the host's answer lets the terminal close: past the wait for it, nothing closes or opens.
+  it('keeps the terminal when this machine does not answer in time', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    mocks.createSupport.mockReturnValue(new Promise(() => undefined))
+    const running = runCliChatResume(SOURCE)
+    await vi.advanceTimersByTimeAsync(LOCAL_ADMISSION_WAIT_MS)
+    await running
+    expect(mocks.closeTerminal).not.toHaveBeenCalled()
+    expect(tabs()).toEqual([])
+    expect(creates()).toEqual([])
+    expect(mocks.toast).toHaveBeenCalledOnce()
   })
 
   // Joining it would re-send an unconfirmed chat's create beside the still-running CLI.

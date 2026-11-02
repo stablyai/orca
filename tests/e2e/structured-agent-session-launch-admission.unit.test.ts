@@ -28,12 +28,13 @@ vi.mock('@/lib/ai-vault-session-resume-preparation', () => ({
   prepareAiVaultSessionForResume: async () => ({ sessionId: 'provider-1' })
 }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: vi.fn(async (_target: unknown, method: string) => {
+  callStructuredAgentSession: vi.fn(async (_target: unknown, method: string, params: unknown) => {
     if (method === 'agentSession.createSupport') {
-      return mocks.createSupport()
+      return mocks.createSupport(params)
     }
     return new Promise(() => undefined)
-  })
+  }),
+  structuredAgentSessionHostSupports: async () => true
 }))
 
 vi.mock('@/runtime/structured-chat-host-permission', async (importOriginal) => ({
@@ -681,6 +682,40 @@ describe('a structured chat launch on this machine', () => {
       vi.useRealTimers()
     }
   })
+})
+
+// Another terminal running the conversation: create would refuse it, so nothing opens first.
+it('opens nothing for a resume the host refuses, leaving the one notice to its caller', async () => {
+  mocks.createSupport.mockRejectedValue(
+    Object.assign(new Error('agent_session_conflict'), {
+      code: 'agent_session_conflict',
+      data: {
+        refusal: {
+          code: 'agent_session_conflict',
+          details: { reason: 'conversationHeldElsewhere' }
+        }
+      }
+    })
+  )
+  const onHostDeclined = vi.fn()
+  const launch = beginStructuredAgentSessionProvisionalLaunch({
+    plan: pairedPlan({ executionHostId: 'local', resumeFrom: { providerSessionId: 'provider-1' } }),
+    hooks: {},
+    onHostDeclined
+  })
+
+  const settlement = await launch?.settlement
+  expect(settlement).toMatchObject({
+    kind: 'failed',
+    error: { code: 'agent_session_conflict', refusal: { code: 'agent_session_conflict' } }
+  })
+  expect(settlement).not.toHaveProperty('notified')
+  expect(mocks.createSupport).toHaveBeenCalledWith(
+    expect.objectContaining({ resumeFrom: { providerSessionId: 'provider-1' } })
+  )
+  expect(onHostDeclined).not.toHaveBeenCalled()
+  expect(mocks.toastError).not.toHaveBeenCalled()
+  expectNoChatCommitted()
 })
 
 describe('a paired server that cannot resolve a new workspace yet', () => {
