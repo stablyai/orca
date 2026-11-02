@@ -456,7 +456,7 @@
   --git-decoration-renamed: #007acc;
   --git-decoration-untracked: #007100;
   --git-decoration-copied: #007acc;
-  --git-decoration-ignored: #8c8c8c;
+  --git-decoration-ignored: #737373;
   --diff-added: var(--git-decoration-added);
   --diff-removed: var(--git-decoration-deleted);
   --diff-added-background: color-mix(in srgb, var(--diff-added) 13%, transparent);
@@ -491,7 +491,7 @@
   --git-decoration-renamed: #73c991;
   --git-decoration-untracked: #73c991;
   --git-decoration-copied: #73c991;
-  --git-decoration-ignored: #6e6e6e;
+  --git-decoration-ignored: #808080;
   --diff-added: var(--git-decoration-added);
   --diff-removed: var(--git-decoration-deleted);
   --diff-added-background: color-mix(in srgb, var(--diff-added) 16%, transparent);
