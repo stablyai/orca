@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { AttachmentTextViewport } from '../../../../shared/attachment-text-viewport'
 import type {
   AttachmentTextSource,
@@ -66,7 +66,7 @@ function TextViewport({
     const next = new AttachmentTextViewport(source, position.rowHeight, node.clientHeight, revision)
     setProjection({ layout: next, top: next.restore(layout, live), position, contentWidth })
   }, [source, revision, position, projection, layout])
-  useLayoutEffect(() => {
+  const correctCommittedScroll = useEffectEvent(() => {
     const node = scroll.current
     if (!node) {
       return
@@ -75,6 +75,9 @@ function TextViewport({
       node.scrollTop = projection.top
     }
     setProjection((old) => (old.top === node.scrollTop ? old : { ...old, top: node.scrollTop }))
+  })
+  useLayoutEffect(() => {
+    correctCommittedScroll()
   }, [layout])
   useLayoutEffect(() => {
     const node = viewport.current
@@ -133,12 +136,18 @@ function TextViewport({
     }
     return () => observer.disconnect()
   }, [])
-  const window = layout.window(projection.top)
+  const { block, row, rows, fraction, tail } = layout.window(projection.top)
   useEffect(() => {
     if (source.size !== null) {
-      demand(window)
+      demand({
+        block,
+        row,
+        rows,
+        ...(fraction === undefined ? {} : { fraction }),
+        ...(tail === undefined ? {} : { tail })
+      })
     }
-  }, [source, demand, window.block, window.row, window.rows, window.fraction, window.tail])
+  }, [source, demand, block, row, rows, fraction, tail])
   const model = useRef({ layout, position })
   useLayoutEffect(() => {
     model.current = { layout, position }
