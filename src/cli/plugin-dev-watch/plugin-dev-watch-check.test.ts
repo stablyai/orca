@@ -45,7 +45,8 @@ const passed: PluginDevWatchCheckResult = {
       issues: [],
       warnings: []
     }
-  ]
+  ],
+  editors: []
 }
 const failed: PluginDevWatchCheckResult = {
   ok: false,
@@ -59,7 +60,8 @@ const failed: PluginDevWatchCheckResult = {
       issues: [{ kind: 'plugin', message: 'boom', location: 'src/panel.tsx:4:7' }],
       warnings: []
     }
-  ]
+  ],
+  editors: []
 }
 
 /** Polls: 1 baseline, 2 status (unchanged), 3 logs, 4 status (one save), then Ctrl-C. */

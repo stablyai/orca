@@ -202,7 +202,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       var baseVersion = first.version
       var value = base
       var dirty = false
-      var posted = undefined
+      // Bumped by change() only, so a reused object or buffer still counts as a new change.
+      var generation = 0
+      var sentGeneration = 0
       var inFlight = null
       var timer = null
       var disposed = false
@@ -221,7 +223,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         return base
       }
       function refused(error) {
-        if (!error || error.code !== 'conflict' || doc.version === baseVersion) throw error
+        if (disposed || !error || error.code !== 'conflict' || doc.version === baseVersion) throw error
         var previous = base
         var mine = value
         var outside = rebase(doc)
@@ -236,37 +238,46 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         emitReplace(value)
         return send()
       }
+      function snapshot(content) {
+        return content && content.bytes instanceof ArrayBuffer
+          ? { kind: content.kind, bytes: content.bytes.slice(0) }
+          : content
+      }
+      // One edit in flight at a time: every send waits for the last to settle.
       function send() {
         clearTimer()
+        if (disposed) return Promise.resolve()
         var sent = value
         var content
-        try { content = encode(sent) } catch (e) { return Promise.reject(e) }
-        posted = sent
+        try { content = snapshot(encode(sent)) } catch (e) { return Promise.reject(e) }
+        sentGeneration = generation
+        var mine = sentGeneration
         var attempt = applyEdit({ baseVersion: baseVersion, content: content }).then(function () {
           base = sent
           baseContent = content
-          if (value === sent) dirty = false
+          if (generation === mine) dirty = false
         }, refused)
         inFlight = attempt
         attempt.then(settled, settled)
         function settled() {
           if (inFlight === attempt) inFlight = null
-          if (!disposed && dirty && value !== posted && timer === null && inFlight === null) {
+          if (!disposed && dirty && generation !== sentGeneration && timer === null && inFlight === null) {
             send().catch(function () {})
           }
         }
         return attempt
       }
+      // Settles once every change so far is accepted, or refused with nothing newer to send.
       function flush() {
         clearTimer()
         if (disposed) return Promise.resolve()
         var current = inFlight
         if (!current) return dirty && !doc.readOnly ? send() : Promise.resolve()
-        var sentValue = posted
+        var waited = sentGeneration
         return current.then(function () {
-          return value !== sentValue ? flush() : undefined
+          return generation !== waited ? flush() : undefined
         }, function (error) {
-          if (value !== sentValue) return flush()
+          if (!disposed && generation !== waited) return flush()
           throw error
         })
       }
@@ -279,11 +290,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         value = rebase(next)
         emitReplace(value)
       })
+      // Orca drains its held edits during a save, so waiting here fits its deadline.
       var flushes = on(C.editor.flush, function () {
-        clearTimer()
-        // Posted is enough: Orca reads it before this answer, and waiting could outlast its deadline.
-        if (disposed || !dirty || doc.readOnly || (inFlight && value === posted)) return
-        send().catch(function () {})
+        return disposed || doc.readOnly ? undefined : flush()
       })
       return Object.freeze({
         get value() { return value },
@@ -291,6 +300,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         change: function (next) {
           if (disposed || doc.readOnly) return
           value = next
+          generation += 1
           dirty = true
           clearTimer()
           timer = setTimeout(function () {
