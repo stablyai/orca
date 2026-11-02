@@ -148,10 +148,12 @@ export function invalidateWorkItemDetailsCacheByMatch(args: {
 
 // Why: field writers change only the payload; the entry's request ownership (an owed reread, the current pending
 // read) is copied by construction, so a local update can neither cancel nor orphan the whole-payload read.
+// supersedesRead: the patch is newer than a read already running, which must not restore older content.
 function patchWorkItemDetailsPayload(
   key: string,
   update: (details: GitHubWorkItemDetails) => GitHubWorkItemDetails | null,
-  fetchedAt?: number
+  fetchedAt?: number,
+  supersedesRead = false
 ): boolean {
   const prev = workItemDetailsCache.get(key)
   const details = prev?.details ? update(prev.details) : null
@@ -161,7 +163,7 @@ function patchWorkItemDetailsPayload(
   touchWorkItemDetailsCache(key, {
     details,
     fetchedAt: fetchedAt ?? prev.fetchedAt,
-    pending: prev.pending,
+    pending: supersedesRead ? undefined : prev.pending,
     rereadOwed: prev.rereadOwed,
     error: undefined
   })
@@ -211,17 +213,13 @@ export function patchCachedPRReviewRequests(
 
 // An issue's saved body drops `pending` so a read (Refresh included) started before it settles superseded.
 export function patchCachedWorkItemBody(cacheKey: string, body: string): void {
-  const prev = workItemDetailsCache.get(cacheKey)
-  if (!prev?.details) {
-    return
-  }
-  touchWorkItemDetailsCache(cacheKey, {
-    ...prev,
-    details: { ...prev.details, body },
-    fetchedAt: Date.now(),
-    pending: prev.details.item.type === 'issue' ? undefined : prev.pending,
-    error: undefined
-  })
+  const supersedesRead = workItemDetailsCache.get(cacheKey)?.details?.item.type === 'issue'
+  patchWorkItemDetailsPayload(
+    cacheKey,
+    (details) => ({ ...details, body }),
+    Date.now(),
+    supersedesRead
+  )
 }
 
 // Expire fetchedAt so a reopen refreshes server fields; a comment alone starts no read. False: nothing loaded or a duplicate.
