@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { RateLimitService } from './service'
+import { MIN_REFETCH_MS } from './service/service-types'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import {
@@ -509,4 +510,176 @@ describe('RateLimitService', () => {
       }
     ])
   })
+
+  it('reads the selected account from the same poll when no live session is open', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+    try {
+      const service = new RateLimitService()
+      service.setInactiveClaudeAccountsResolver(() => [{ id: 'idle' }])
+      service.setActiveClaudeUsageAccountResolver(() => ({ id: 'active' }))
+      vi.mocked(fetchManagedAccountUsage).mockImplementation(async (account) =>
+        claudePollReading(account.id === 'active' ? 11 : 22, account.id === 'active' ? 3 : 4, {
+          authProvenance: `profile:${account.id}`,
+          source: 'oauth'
+        })
+      )
+
+      await service.fetchInactiveClaudeAccountsOnOpen()
+
+      expect(vi.mocked(fetchManagedAccountUsage).mock.calls.map((call) => call[0].id)).toEqual([
+        'idle',
+        'active'
+      ])
+      const state = service.getState()
+      expect(state.claude).toEqual(
+        expect.objectContaining({
+          status: 'ok',
+          usageMetadata: expect.objectContaining({ authProvenance: 'profile:active' })
+        })
+      )
+      expect(state.claude?.weekly?.usedPercent).toBe(11)
+      expect(state.claude?.fableWeekly?.usedPercent).toBe(3)
+      expect(state.inactiveClaudeAccounts.map((row) => row.accountId)).toEqual(['idle'])
+      expect(state.inactiveClaudeAccounts[0]?.rateLimits?.weekly?.usedPercent).toBe(22)
+      expect(state.inactiveClaudeAccounts[0]?.rateLimits?.fableWeekly?.usedPercent).toBe(4)
+
+      info.mockClear()
+      await service.fetchInactiveClaudeAccountsOnOpen()
+      expect(info).toHaveBeenCalledWith('[claude-usage] inactive fetch skipped reason=debounce')
+      expect(fetchManagedAccountUsage).toHaveBeenCalledTimes(2)
+    } finally {
+      info.mockRestore()
+    }
+  })
+
+  it('does not overwrite a fresh live session or a usage reading from the same poll cycle', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+    try {
+      const live = new SeededRateLimits()
+      live.setInactiveClaudeAccountsResolver(() => [{ id: 'idle' }])
+      live.setActiveClaudeUsageAccountResolver(() => ({ id: 'active' }))
+      live.seedClaude(
+        claudePollReading(40, 7, { source: 'live-session', authProvenance: 'profile:active' }),
+        null
+      )
+      vi.mocked(fetchManagedAccountUsage).mockImplementation(async (account) =>
+        claudePollReading(99, 99, { authProvenance: `profile:${account.id}`, source: 'oauth' })
+      )
+
+      await live.fetchInactiveClaudeAccountsOnOpen()
+
+      expect(vi.mocked(fetchManagedAccountUsage).mock.calls.map((call) => call[0].id)).toEqual([
+        'idle'
+      ])
+      expect(live.getState().claude?.weekly?.usedPercent).toBe(40)
+      expect(info.mock.calls.map((call) => String(call[0]))).toContain(
+        '[claude-usage] inactive fetch skipped reason=live-session account=active'
+      )
+
+      const sameCycle = new SeededRateLimits()
+      sameCycle.setInactiveClaudeAccountsResolver(() => [{ id: 'idle' }])
+      sameCycle.setActiveClaudeUsageAccountResolver(() => ({ id: 'active' }))
+      sameCycle.seedClaude(
+        claudePollReading(15, 2, { source: 'oauth', authProvenance: 'profile:active' }),
+        Date.now()
+      )
+      vi.mocked(fetchManagedAccountUsage).mockClear()
+      info.mockClear()
+
+      await sameCycle.fetchInactiveClaudeAccountsOnOpen()
+
+      expect(vi.mocked(fetchManagedAccountUsage).mock.calls.map((call) => call[0].id)).toEqual([
+        'idle'
+      ])
+      expect(sameCycle.getState().claude?.weekly?.usedPercent).toBe(15)
+      expect(info.mock.calls.map((call) => String(call[0]))).toContain(
+        '[claude-usage] inactive fetch skipped reason=already-read account=active'
+      )
+
+      const systemDefault = new SeededRateLimits()
+      systemDefault.setActiveClaudeUsageAccountResolver(() => ({
+        id: 'active',
+        runsOnSystemDefault: true
+      }))
+      systemDefault.seedClaude(
+        claudePollReading(8, 1, { source: 'oauth', authProvenance: 'system' }),
+        Date.now()
+      )
+      vi.mocked(fetchManagedAccountUsage).mockClear()
+
+      await systemDefault.fetchInactiveClaudeAccountsOnOpen()
+
+      expect(fetchManagedAccountUsage).not.toHaveBeenCalled()
+      expect(systemDefault.getState().claude?.weekly?.usedPercent).toBe(8)
+    } finally {
+      info.mockRestore()
+    }
+  })
+
+  it('replaces a stale live session reading and logs when nothing is attached', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+    try {
+      const bare = new RateLimitService()
+      await bare.fetchInactiveClaudeAccountsOnOpen()
+      bare.setInactiveClaudeAccountsResolver(() => [])
+      await bare.fetchInactiveClaudeAccountsOnOpen()
+      const lines = info.mock.calls.map((call) => String(call[0]))
+      expect(lines).toContain('[claude-usage] inactive fetch skipped reason=not-attached')
+      expect(lines).toContain('[claude-usage] inactive fetch skipped reason=no-accounts')
+      expect(lines).toContain('[claude-usage] inactive fetch start n=0')
+      expect(lines).toContain('[claude-usage] inactive fetch done n=0 ok=0 failed=0')
+
+      const service = new SeededRateLimits()
+      service.setActiveClaudeUsageAccountResolver(() => ({ id: 'active' }))
+      const stale = claudePollReading(40, 7, {
+        source: 'live-session',
+        authProvenance: 'profile:active'
+      })
+      stale.updatedAt = Date.now() - MIN_REFETCH_MS - 1
+      service.seedClaude(stale, null)
+      vi.mocked(fetchManagedAccountUsage).mockResolvedValue(
+        claudePollReading(12, 5, { authProvenance: 'profile:active', source: 'oauth' })
+      )
+
+      await service.fetchInactiveClaudeAccountsOnOpen()
+
+      expect(vi.mocked(fetchManagedAccountUsage).mock.calls.map((call) => call[0].id)).toEqual([
+        'active'
+      ])
+      expect(service.getState().claude?.weekly?.usedPercent).toBe(12)
+      expect(service.getState().inactiveClaudeAccounts).toEqual([])
+    } finally {
+      info.mockRestore()
+    }
+  })
 })
+
+function claudePollReading(
+  weekly: number,
+  fable: number,
+  usageMetadata: ProviderRateLimits['usageMetadata']
+): ProviderRateLimits {
+  const pane = (usedPercent: number) => ({
+    usedPercent,
+    windowMinutes: 10080,
+    resetsAt: null,
+    resetDescription: null
+  })
+  return {
+    provider: 'claude',
+    session: pane(weekly),
+    weekly: pane(weekly),
+    fableWeekly: pane(fable),
+    updatedAt: Date.now(),
+    error: null,
+    status: 'ok',
+    usageMetadata
+  }
+}
+
+class SeededRateLimits extends RateLimitService {
+  seedClaude(limits: ProviderRateLimits, checkedAt: number | null): void {
+    this.lastClaudeCheckCompletedAt = checkedAt
+    this.updateState({ ...this.state, claude: limits })
+  }
+}

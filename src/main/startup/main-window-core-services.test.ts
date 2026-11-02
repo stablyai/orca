@@ -32,7 +32,7 @@ const {
       museUsage: {},
       codexAccounts: {},
       claudeAccounts: {},
-      rateLimits: { attach: vi.fn(), start: vi.fn() },
+      rateLimits: { attach: vi.fn(), start: vi.fn(), stop: vi.fn() },
       automations: { setWebContents: vi.fn(), start: vi.fn() },
       keybindings: {},
       codexRuntimeHome: {},
@@ -44,6 +44,7 @@ const {
       pluginMarketplaceInstaller: null,
       desktopRelayService: null,
       isServeMode: false,
+      stopClaudeUsagePolling: null as (() => void) | null,
       localPtyStartupReady: Promise.resolve(),
       localPtyProviderStartupReady: Promise.resolve()
     },
@@ -163,6 +164,7 @@ const usageOff = {
 
 describe('serve usage polling', () => {
   const start = state.rateLimits.start
+  let info: ReturnType<typeof vi.spyOn>
 
   function attach(onClosed?: (listener: () => void) => void): void {
     const window = {
@@ -183,18 +185,27 @@ describe('serve usage polling', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     state.isServeMode = false
+    state.stopClaudeUsagePolling?.()
+    state.stopClaudeUsagePolling = null
     store.getSettings.mockImplementation(() => ({}))
     store.onSettingsChanged.mockImplementation(() => () => {})
+    info = vi.spyOn(console, 'info').mockImplementation(() => {})
   })
 
   afterEach(() => {
+    state.stopClaudeUsagePolling?.()
+    state.stopClaudeUsagePolling = null
     state.isServeMode = false
+    info.mockRestore()
   })
 
   it('keeps the desktop focus gate when serve mode is off', () => {
     attach()
     expect(start).toHaveBeenCalledTimes(1)
     expect(start).toHaveBeenCalledWith({ fetchImmediately: false })
+    expect(info).toHaveBeenCalledWith(
+      '[claude-usage] polling switch: mode=desktop pollInactive=false pollWithoutWindow=false'
+    )
   })
 
   it('starts inactive Claude polling from Electron serve when a usage feature is on', () => {
@@ -206,6 +217,17 @@ describe('serve usage polling', () => {
       pollWithoutWindow: true,
       pollInactiveClaude: true
     })
+    expect(info).toHaveBeenCalledWith(
+      '[claude-usage] polling switch: mode=serve pollInactive=true pollWithoutWindow=true'
+    )
+  })
+
+  it('does not replace a serve launch poll with the desktop focus gate', () => {
+    state.isServeMode = true
+    state.stopClaudeUsagePolling = vi.fn()
+    attach()
+    expect(start).not.toHaveBeenCalled()
+    expect(info).not.toHaveBeenCalled()
   })
 
   it('does not poll when every usage feature is off, then starts when one turns on', () => {
@@ -223,6 +245,9 @@ describe('serve usage polling', () => {
       closed = listenerOnClosed
     })
     expect(start).not.toHaveBeenCalled()
+    expect(info).toHaveBeenCalledWith(
+      '[claude-usage] polling switch: mode=serve pollInactive=false pollWithoutWindow=false'
+    )
 
     store.getSettings.mockImplementation(() => ({
       ...usageOff,
@@ -235,6 +260,9 @@ describe('serve usage polling', () => {
       pollWithoutWindow: true,
       pollInactiveClaude: true
     })
+    expect(info).toHaveBeenCalledWith(
+      '[claude-usage] polling switch: mode=serve pollInactive=true pollWithoutWindow=true'
+    )
 
     closed?.()
     listener?.({ claudeModelPolicy: { enabled: false } })

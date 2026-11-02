@@ -54,6 +54,7 @@ import { resolveUpdateInstallMode } from '../updater/updater-service'
 import { scheduleAgentLaunchRecordWarmup } from './agent-launch-record-warmup'
 import { emitServeBrowserIdentityActionLine } from '../server/serve-stdout-boundary'
 import { getBrowserIdentityModeStatus } from '../browser/browser-identity-mode-store'
+import { armServeClaudeUsagePolling } from './serve-claude-usage-polling'
 
 type RuntimeService = NonNullable<typeof state.runtime>
 
@@ -204,6 +205,8 @@ async function launchServeMode(
   // Arm history-removal GC without a window so interrupted serve deletions do not leak until desktop launch.
   void scheduleAllPendingHistoryTreeRemovals()
   emitServeBrowserIdentityActionLine(getBrowserIdentityModeStatus())
+  // Electron serve never opens a window, so the window-attach switch never ran.
+  armServeClaudeUsagePolling()
   await printServeReady(serveOptions)
   const store = state.store!
   setupHeadlessServeAutoUpdater(store, {

@@ -15,6 +15,7 @@ import {
   type ZcodePlanRateLimitConfig,
   type GeminiCliOAuthEnabledResolver,
   type InactiveCodexAccountInfo,
+  type ActiveClaudeUsageAccount,
   type InactiveClaudeAccountInfo,
   type RateLimitState,
   normalizeCodexAccountSelectionTarget,
@@ -74,6 +75,11 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
   setInactiveClaudeAccountsResolver(resolver: () => InactiveClaudeAccountInfo[]): void {
     this.inactiveClaudeAccountsResolver = resolver
     this.inactiveClaudeAccountsGeneration += 1
+  }
+
+  /** Host account whose windows fill `state.claude` when no live session has. */
+  setActiveClaudeUsageAccountResolver(resolver: () => ActiveClaudeUsageAccount | null): void {
+    this.activeClaudeUsageAccountResolver = resolver
   }
 
   /** Maps a normalized `CLAUDE_CONFIG_DIR` to the managed account whose folder it is, or null. */

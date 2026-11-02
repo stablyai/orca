@@ -1,4 +1,5 @@
 import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
+import type { InactiveClaudeAccountInfo as InactiveClaudeAccountShape } from '../claude-fetcher'
 import type { ZcodePlanSite } from '../../../shared/zcode-plan-sites'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from '../../claude-accounts/runtime-selection'
@@ -14,6 +15,11 @@ export type {
   RateLimitRuntimeTarget
 } from '../../../shared/rate-limit-types'
 export type { InactiveClaudeAccountInfo } from '../claude-fetcher'
+
+/** Selected host account. Its reading is stored on `state.claude`, not the inactive cache. */
+export type ActiveClaudeUsageAccount = InactiveClaudeAccountShape & {
+  runsOnSystemDefault?: true
+}
 export type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
 export type { NetworkProxySettings } from '../../../shared/network-proxy'
 export type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth-service'

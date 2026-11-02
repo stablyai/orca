@@ -171,6 +171,26 @@ export function createProviderAccountServices(
         wslLinuxAuthPath: account.wslLinuxAuthPath
       }))
   })
+  // The selected host account stays out of the inactive cache so a live statusline still lands on state.claude.
+  rateLimits.setActiveClaudeUsageAccountResolver(() => {
+    const settings = store.getSettings()
+    const id = normalizeClaudeRuntimeSelection(settings).host
+    if (!id) {
+      return null
+    }
+    const account = settings.claudeManagedAccounts.find((entry) => entry.id === id)
+    if (!account || account.managedAuthRuntime === 'wsl') {
+      return null
+    }
+    const runsOnSystemDefault = claudeRuntimeAuth.router.coveredBySystemDefault(account.id)
+    return {
+      id: account.id,
+      managedAuthRuntime: account.managedAuthRuntime,
+      wslDistro: account.wslDistro,
+      wslLinuxAuthPath: account.wslLinuxAuthPath,
+      ...(runsOnSystemDefault ? { runsOnSystemDefault: true as const } : {})
+    }
+  })
   // Why: a statusline post names its CLAUDE_CONFIG_DIR; only the account layer knows whose folder that is.
   rateLimits.setLiveClaudeAccountResolver((configDir) =>
     resolveClaudeAccountHome(configDir, store.getSettings().claudeManagedAccounts, (id) =>

@@ -419,4 +419,65 @@ describe('desktop startup activation', () => {
       state.codexRuntimeHome = null
     }
   })
+
+  it('reads inactive Claude usage once at serve start and again after the poll interval', async () => {
+    const { RateLimitService } = await import('../rate-limits/service')
+    const { DEFAULT_POLL_MS } = await import('../rate-limits/service/service-types')
+    class ServeUsageProbe extends RateLimitService {
+      protected override fetchAll = vi.fn(async () => {})
+    }
+    const service = new ServeUsageProbe()
+    const inactive = vi
+      .spyOn(service, 'fetchInactiveClaudeAccountsOnOpen')
+      .mockResolvedValue(undefined)
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+    vi.useFakeTimers()
+    state.isServeMode = true
+    state.stopClaudeUsagePolling?.()
+    state.stopClaudeUsagePolling = null
+    vi.mocked(getServeOptions).mockReturnValueOnce({
+      json: false,
+      pairingAddress: null,
+      noPairing: true,
+      mobilePairing: false,
+      grantDesktopControl: false,
+      recipeJson: false,
+      projectRoot: null
+    })
+    Object.assign(state.runtime!, {
+      refreshRestoredOrchestrationAuthority: vi.fn(async () => {}),
+      reconcileLegacyWorkerTerminals: vi.fn(async () => {})
+    })
+    const store = {
+      getSettings: () => ({}),
+      onSettingsChanged: () => () => {}
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: serve launch only reads settings and subscribes while this probe stands in for rate limits.
+    state.store = store as unknown as NonNullable<typeof state.store>
+    state.rateLimits = service
+    try {
+      await initializeMainProcessReady({
+        openMainWindow: () => {
+          throw new Error('serve must not open a window')
+        },
+        handleMacAppActivation: vi.fn()
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(windows).toHaveLength(0)
+      expect(inactive).toHaveBeenCalledTimes(1)
+      expect(info.mock.calls.map((call) => String(call[0]))).toContain(
+        '[claude-usage] polling switch: mode=serve pollInactive=true pollWithoutWindow=true'
+      )
+      await vi.advanceTimersByTimeAsync(DEFAULT_POLL_MS)
+      expect(inactive).toHaveBeenCalledTimes(2)
+    } finally {
+      service.stop()
+      state.stopClaudeUsagePolling = null
+      state.rateLimits = null
+      state.store = null
+      state.isServeMode = false
+      info.mockRestore()
+      vi.useRealTimers()
+    }
+  })
 })

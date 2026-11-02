@@ -18,6 +18,7 @@ import {
   type GeminiCliOAuthEnabledResolver,
   type NormalizedCodexAccountSelectionTarget,
   type NormalizedClaudeAccountSelectionTarget,
+  type ActiveClaudeUsageAccount,
   type InactiveClaudeAccountInfo,
   type NetworkProxySettings,
   DEFAULT_POLL_MS
@@ -114,6 +115,7 @@ export abstract class RateLimitServiceState {
   protected geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
   protected antigravityUsageEnabledResolver: AntigravityUsageEnabledResolver | null = null
   protected inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
+  protected activeClaudeUsageAccountResolver: (() => ActiveClaudeUsageAccount | null) | null = null
   // Why: statusline posts name a folder, not an account; the account layer answers which managed account owns it.
   protected liveClaudeAccountResolver: ((configDir: string) => string | null) | null = null
   // Why: a billed post on System Default names an account the user folder covers; only the router knows which ones.

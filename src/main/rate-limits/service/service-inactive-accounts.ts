@@ -1,15 +1,15 @@
 import { fetchManagedAccountUsage } from '../claude-fetcher'
 import { fetchCodexRateLimits } from '../codex-fetcher'
 import { makeClaudeUsageResult } from '../claude-usage-result'
-import { RateLimitServicePolling } from './service-polling'
+import {
+  inactiveClaudeThrownFailureKind,
+  RateLimitServiceSelectedClaudeUsage
+} from './service-selected-claude-usage'
 import { INACTIVE_CODEX_PROBE_STAGGER_MS, INACTIVE_FETCH_DEBOUNCE_MS } from './service-types'
 import { delayUnlessAborted } from '../../../shared/abort-aware-delay'
-import type {
-  ProviderRateLimits,
-  UsageRateLimitFailureKind
-} from '../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
 
-export abstract class RateLimitServiceInactiveAccounts extends RateLimitServicePolling {
+export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceSelectedClaudeUsage {
   protected override afterBackgroundFetch(): void {
     if (!this.pollInactiveClaude) {
       return
@@ -19,20 +19,38 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
 
   async fetchInactiveClaudeAccountsOnOpen(): Promise<void> {
     if (Date.now() - this.lastInactiveClaudeFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
+      console.info('[claude-usage] inactive fetch skipped reason=debounce')
       return
     }
     this.pruneInactiveClaudeState()
     if (this.inactiveClaudeFetching.size > 0) {
+      console.info('[claude-usage] inactive fetch skipped reason=in-flight')
+      return
+    }
+    if (!this.inactiveClaudeAccountsResolver && !this.activeClaudeUsageAccountResolver) {
+      console.info('[claude-usage] inactive fetch skipped reason=not-attached')
       return
     }
     const accounts = (this.inactiveClaudeAccountsResolver?.() ?? []).filter(
       (account) => !this.isRetryAfterActive(this.inactiveClaudeCache.get(account.id) ?? null)
     )
-    console.info(`[claude-usage] inactive fetch start n=${accounts.length}`)
-    if (accounts.length === 0) {
+    const selected = this.selectedHostUsageAccount(accounts)
+    if (selected.omission) {
+      console.info(
+        `[claude-usage] inactive fetch skipped reason=${selected.omission.reason} account=${selected.omission.accountId}`
+      )
+    }
+    const activeAccount = selected.account
+    const count = accounts.length + (activeAccount ? 1 : 0)
+    if (count === 0) {
+      if (!selected.omission) {
+        console.info('[claude-usage] inactive fetch skipped reason=no-accounts')
+      }
+      console.info('[claude-usage] inactive fetch start n=0')
       console.info('[claude-usage] inactive fetch done n=0 ok=0 failed=0')
       return
     }
+    console.info(`[claude-usage] inactive fetch start n=${count}`)
     const fetchGeneration = this.inactiveClaudeAccountsGeneration
     const controller = this.beginFetchCycle()
     const signal = controller.signal
@@ -103,14 +121,21 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
         this.pushToRenderer()
       }
 
+      if (activeAccount && !signal.aborted) {
+        const outcome = await this.fetchSelectedClaudeUsage(activeAccount, signal)
+        if (outcome === 'ok') {
+          ok += 1
+        } else if (outcome === 'failed') {
+          failed += 1
+        }
+      }
+
       if (!signal.aborted && fetchGeneration === this.inactiveClaudeAccountsGeneration) {
         this.lastInactiveClaudeFetchAt = Date.now()
       }
     } finally {
       this.finishFetchCycle(controller)
-      console.info(
-        `[claude-usage] inactive fetch done n=${accounts.length} ok=${ok} failed=${failed}`
-      )
+      console.info(`[claude-usage] inactive fetch done n=${count} ok=${ok} failed=${failed}`)
     }
   }
 
@@ -284,14 +309,4 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     this.inactiveCodexFetching.delete(accountId)
     this.pushToRenderer()
   }
-}
-
-function inactiveClaudeThrownFailureKind(error: unknown): UsageRateLimitFailureKind {
-  const message = error instanceof Error ? error.message : ''
-  const code =
-    typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
-  if (code === 36 || /interaction is not allowed|keychain/i.test(message)) {
-    return 'keychain-unavailable'
-  }
-  return 'unknown'
 }
