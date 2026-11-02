@@ -7,9 +7,8 @@ import { QUICK_CHAT_FINISHED_EVENT } from './quick-chat-events'
 type Authority = ReturnType<typeof captureBrowserLinkReveal>
 export type QuickChatIntent = {
   id: string
-  control?: HTMLElement
-  anchorControl?: HTMLElement
-  anchor?: DOMRect
+  control: HTMLElement
+  anchor: DOMRect
   destination?: QuickChatDestination
   authority: Authority
 }
@@ -46,12 +45,11 @@ export class QuickChatIntents {
       }
     })
   }
-  accept(id: string, control?: HTMLElement): QuickChatIntent {
+  accept(id: string, control: HTMLElement): QuickChatIntent {
     const intent: QuickChatIntent = {
       id,
       control,
-      anchorControl: control,
-      anchor: control?.getBoundingClientRect(),
+      anchor: control.getBoundingClientRect(),
       authority: { canReveal: () => false, dispose: () => {} }
     }
     intent.authority = this.capture(intent)
@@ -70,7 +68,7 @@ export class QuickChatIntents {
       return
     }
     intent.authority.dispose()
-    intent.control?.dispatchEvent(new CustomEvent(QUICK_CHAT_FINISHED_EVENT, { detail: intent.id }))
+    intent.control.dispatchEvent(new CustomEvent(QUICK_CHAT_FINISHED_EVENT, { detail: intent.id }))
     this.changed()
   }
   /** Only this synchronous transition hands current foreground authority to siblings. */
@@ -96,15 +94,6 @@ export class QuickChatIntents {
       })
     }
     return true
-  }
-  anchor(control?: HTMLElement, accepted?: QuickChatIntent): void {
-    for (const intent of accepted ? [accepted] : this.pending.values()) {
-      if (!intent.anchorControl?.isConnected) {
-        intent.anchorControl = control
-        intent.anchor = control?.getBoundingClientRect()
-      }
-    }
-    this.changed()
   }
   dispose(): void {
     for (const intent of this.pending.values()) {

@@ -92,9 +92,7 @@ export function installMainWindowShortcutRouting(args: {
     }
 
     if (
-      (action.type === 'toggleQuickCommandsMenu' ||
-        action.type === 'deleteCurrentWorkspace' ||
-        action.type === 'quickStartChat') &&
+      (action.type === 'toggleQuickCommandsMenu' || action.type === 'deleteCurrentWorkspace') &&
       isAutoRepeat
     ) {
       event.preventDefault()

@@ -23471,7 +23471,6 @@
     "newChat": "Novo chat",
     "startChatting": "Começar a conversar",
     "projectName": "Conversas",
-    "shortcutTitle": "Novo chat sem projeto",
     "failed": "Não foi possível iniciar um chat. Verifique a pasta Conversas e tente novamente."
   }
 }

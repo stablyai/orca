@@ -22791,7 +22791,6 @@
     "newChat": "新建聊天",
     "startChatting": "开始聊天",
     "projectName": "聊天",
-    "shortcutTitle": "不使用项目新建聊天",
     "failed": "无法开始聊天。请检查聊天文件夹，然后重试。"
   }
 }

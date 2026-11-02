@@ -16,7 +16,7 @@ import {
   type QuickChatDestination
 } from '@/lib/start-quick-chat'
 import { QuickChatIntents, type QuickChatIntent } from '@/lib/quick-chat-intents'
-import { QUICK_CHAT_EVENT, QUICK_CHAT_ANCHOR_EVENT } from '@/lib/quick-chat-events'
+import { QUICK_CHAT_EVENT } from '@/lib/quick-chat-events'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
@@ -175,7 +175,7 @@ const QuickChatObservation = memo(function QuickChatObservation({
       })
     }
   })
-  if (!first || model.state !== 'settled' || !first.anchor) {
+  if (!first || model.state !== 'settled') {
     return null
   }
   const defaultRow = model.rows.some(
@@ -187,7 +187,7 @@ const QuickChatObservation = memo(function QuickChatObservation({
       open={!defaultRow}
       onOpenChange={(open) => {
         if (!open && intents.live(first)) {
-          if (first.control?.isConnected) {
+          if (first.control.isConnected) {
             first.control.focus()
           }
           intents.finish(first)
@@ -218,14 +218,6 @@ const QuickChatObservation = memo(function QuickChatObservation({
   )
 })
 
-function mountedAnchor() {
-  return (
-    document.querySelector<HTMLButtonElement>('[data-quick-chat="sidebar"]') ??
-    document.querySelector<HTMLButtonElement>('[data-quick-chat="landing"]') ??
-    undefined
-  )
-}
-
 export function QuickChatController() {
   const [intents] = useState(() => new QuickChatIntents())
   useSyncExternalStore(intents.subscribe, intents.snapshot, intents.snapshot)
@@ -235,23 +227,10 @@ export function QuickChatController() {
         return
       }
       const { id, control } = event.detail
-      if (typeof id !== 'string' || (control !== undefined && !(control instanceof HTMLElement))) {
+      if (typeof id !== 'string' || !(control instanceof HTMLElement)) {
         return
       }
       const intent = intents.accept(id, control)
-      if (!control) {
-        const mounted = mountedAnchor()
-        if (mounted) {
-          intents.anchor(mounted, intent)
-        }
-      }
-      const state = useAppStore.getState()
-      if (!control && (state.activeView !== 'terminal' || !state.sidebarOpen)) {
-        intents.transition(intent, () => {
-          state.setActiveView('terminal')
-          state.setSidebarOpen(true)
-        })
-      }
       void startQuickChat().then((destination) => {
         if (!intents.live(intent)) {
           return
@@ -264,16 +243,9 @@ export function QuickChatController() {
         intents.changed()
       })
     }
-    const anchor = (event: Event) => {
-      if (event instanceof CustomEvent) {
-        intents.anchor(event.detail instanceof HTMLElement ? event.detail : mountedAnchor())
-      }
-    }
     window.addEventListener(QUICK_CHAT_EVENT, start)
-    window.addEventListener(QUICK_CHAT_ANCHOR_EVENT, anchor)
     return () => {
       window.removeEventListener(QUICK_CHAT_EVENT, start)
-      window.removeEventListener(QUICK_CHAT_ANCHOR_EVENT, anchor)
       intents.dispose()
     }
   }, [intents])

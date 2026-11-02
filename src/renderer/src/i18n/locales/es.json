@@ -23480,7 +23480,6 @@
     "newChat": "Nuevo chat",
     "startChatting": "Empezar a chatear",
     "projectName": "Chats",
-    "shortcutTitle": "Nuevo chat sin proyecto",
     "failed": "No se pudo iniciar un chat. Revisa la carpeta Chats e inténtalo de nuevo."
   }
 }

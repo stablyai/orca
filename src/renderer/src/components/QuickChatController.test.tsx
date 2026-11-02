@@ -25,7 +25,7 @@ import {
 } from '@/runtime/host-structured-agents'
 import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { QuickChatController } from './QuickChatController'
-import { QuickChatButton, requestQuickChatFromShortcut } from './QuickChatButton'
+import { QuickChatButton } from './QuickChatButton'
 import { TooltipProvider } from './ui/tooltip'
 import { requestQuickChat, QUICK_CHAT_FINISHED_EVENT } from '@/lib/quick-chat-events'
 import { useTabAgentMenuLaunch } from './tab-bar/QuickLaunchButton'
@@ -33,12 +33,7 @@ import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
 import fr from '@/i18n/locales/fr.json'
 import { noteUserWorkspaceSwitch } from '@/lib/workspace-switch-user-act'
-import { RecoverableRenderErrorBoundary } from './error-boundaries/RecoverableRenderErrorBoundary'
-import { useGlobalKeybindings } from '@/app-shell/use-global-keybindings'
-import { registerWorkspaceShortcutIpcBridge } from '@/hooks/ipc-events/workspace-shortcut-ipc-bridge'
-import { uiStateAndMenuCommandsApi } from '../../../preload/api/ui-bridge-state-and-menu-commands'
 import { createReposApi } from '@/web/preload-api/web-repositories-api'
-import { createWebUiApi } from '@/web/preload-api/web-ui-api'
 import { i18n } from '@/i18n/i18n'
 
 const mocks = vi.hoisted(() => ({
@@ -47,16 +42,7 @@ const mocks = vi.hoisted(() => ({
   detect: vi.fn(),
   error: vi.fn(),
   ensure: vi.fn(),
-  builds: 0,
-  ipc: new Map<string, (...args: unknown[]) => void>()
-}))
-vi.mock('electron', () => ({
-  ipcRenderer: {
-    on: (channel: string, listener: (...args: unknown[]) => void) =>
-      mocks.ipc.set(channel, listener),
-    removeListener: (channel: string) => mocks.ipc.delete(channel),
-    invoke: vi.fn()
-  }
+  builds: 0
 }))
 vi.mock('@/lib/new-tab-agent-menu-rows', async (original) => {
   const actual = await original<typeof NewTabRows>()
@@ -78,7 +64,6 @@ vi.mock('./native-chat/use-native-chat-composer-reveal-focus', () => ({
   captureNativeChatComposerFocusIntent: () => ({ request: vi.fn(), cancel: vi.fn() }),
   requestNativeChatComposerFocus: vi.fn()
 }))
-vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
 vi.mock('@/i18n/use-ui-language-revision', () => ({ useUiLanguageRevision: () => {} }))
 vi.mock('sonner', () => ({
   toast: { error: mocks.error, success: vi.fn(), info: vi.fn(), message: vi.fn() }
@@ -103,20 +88,20 @@ function settings(defaultAgent: 'codex' | 'blank' = 'codex') {
     localWindowsRuntimeDefault: { kind: 'windows-host' as const }
   }
 }
-function mount(buttons = true) {
+function mount() {
   return render(
     <TooltipProvider>
       <QuickChatController />
-      {buttons && (
-        <>
-          <QuickChatButton landing />
-          <QuickChatButton />
-        </>
-      )}
+      <QuickChatButton landing />
+      <QuickChatButton />
     </TooltipProvider>
   )
 }
+// Stands in for a Start chatting control still mounted after an earlier request registered Chats.
+let control: HTMLButtonElement
+const startChat = () => requestQuickChat(control)
 beforeEach(() => {
+  control = document.body.appendChild(document.createElement('button'))
   useAppStore.setState(initial, true)
   vi.clearAllMocks()
   mocks.builds = 0
@@ -150,6 +135,7 @@ beforeEach(() => {
 afterEach(async () => {
   await i18n.changeLanguage('en')
   cleanup()
+  control.remove()
   vi.restoreAllMocks()
   resetHostStructuredAgentsForTests()
   setLocalRuntimeCapabilitiesForTests(null)
@@ -158,7 +144,6 @@ afterEach(async () => {
 
 it('preserves Q accepted default actions across their own activations, with separate launch IDs and addressed finish', async () => {
   mount()
-  const control = screen.getByRole('button', { name: 'New chat' })
   const finished = vi.fn()
   control.addEventListener(QUICK_CHAT_FINISHED_EVENT, finished)
   await act(async () => {
@@ -194,7 +179,7 @@ it.each(['ensure', 'inventory'])(
       )
     }
     mount()
-    await act(async () => requestQuickChatFromShortcut())
+    await act(async () => startChat())
     await act(async () => {
       useAppStore.setState({
         activeWorktreeId: worktree.id,
@@ -209,7 +194,7 @@ it.each(['ensure', 'inventory'])(
   }
 )
 
-it('serves fallback siblings individually, releases only their addressed control obligations and cancels obsolete menus', async () => {
+it('serves fallback siblings from one landing control individually and cancels obsolete menus', async () => {
   useAppStore.setState({ repos: [], settings: settings('blank') })
   useAppStore.setState({
     addRepoPath: async () => {
@@ -219,12 +204,11 @@ it('serves fallback siblings individually, releases only their addressed control
   })
   mount()
   const landing = document.querySelector<HTMLButtonElement>('[data-quick-chat="landing"]')!
-  const sidebar = document.querySelector<HTMLButtonElement>('[data-quick-chat="sidebar"]')!
   const finished = vi.fn()
   landing.addEventListener(QUICK_CHAT_FINISHED_EVENT, finished)
   await act(async () => {
     fireEvent.click(landing)
-    fireEvent.click(sidebar)
+    fireEvent.click(landing)
   })
   await waitFor(() => expect(screen.getByRole('menu')).toBeTruthy())
   fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
@@ -233,6 +217,7 @@ it('serves fallback siblings individually, releases only their addressed control
   expect(mocks.launch).not.toHaveBeenCalled()
   await act(async () => useAppStore.setState({ activeView: 'settings' }))
   expect(screen.queryByRole('menu')).toBeNull()
+  expect(finished).toHaveBeenCalledTimes(2)
   expect(mocks.launch).not.toHaveBeenCalled()
 })
 
@@ -250,7 +235,7 @@ it.each([false, true])(
       localDetectedAgentIdsByContext: warm ? { host: ['codex'] } : {}
     })
     mount()
-    await act(async () => requestQuickChatFromShortcut())
+    await act(async () => startChat())
     await waitFor(() => expect(mocks.launch).toHaveBeenCalledOnce())
     expect(mocks.launch.mock.calls[0][0]).toMatchObject({
       worktreeId: worktree.id,
@@ -282,32 +267,19 @@ it.each([false, true])(
   }
 )
 
-it('accepts the shortcut without any mounted anchor, then wakes fallback on actual surface remount', async () => {
-  useAppStore.setState({ settings: settings('blank') })
-  const view = mount(false)
-  await act(async () => requestQuickChatFromShortcut())
-  expect(mocks.ensure).toHaveBeenCalledOnce()
-  expect(screen.queryByRole('menu')).toBeNull()
-  view.rerender(
-    <TooltipProvider>
-      <QuickChatController />
-      <QuickChatButton />
-    </TooltipProvider>
-  )
-  await waitFor(() => expect(screen.getByRole('menu')).toBeTruthy())
-  expect(mocks.ensure).toHaveBeenCalledOnce()
-})
-
-it('hides both web controls and rejects programmatic ingress, and renders a representative translation on desktop', async () => {
+it('hides the web control and rejects programmatic ingress, and renders a representative translation on desktop', async () => {
   Object.assign(window, { __ORCA_WEB_CLIENT__: true })
+  useAppStore.setState({ repos: [] })
   const view = mount()
-  expect(screen.queryByRole('button')).toBeNull()
-  await act(async () => requestQuickChatFromShortcut())
+  expect(screen.queryByRole('button', { name: 'New chat' })).toBeNull()
+  await act(async () => startChat())
   expect(mocks.ensure).not.toHaveBeenCalled()
+  await expect(createReposApi().ensureQuickChatFolder()).rejects.toThrow(
+    'unavailable in paired web'
+  )
   Object.assign(window, { __ORCA_WEB_CLIENT__: false })
   i18n.addResourceBundle('fr', 'translation', fr, true, true)
   await i18n.changeLanguage('fr')
-  useAppStore.setState({ repos: [] })
   view.rerender(
     <TooltipProvider>
       <QuickChatController />
@@ -353,7 +325,7 @@ it.each([false, true])(
     })
     mocks.detect.mockResolvedValue(['claude'])
     mount()
-    await act(async () => requestQuickChatFromShortcut())
+    await act(async () => startChat())
     await waitFor(() => expect(screen.getByRole('menu')).toBeTruthy())
     if (!warm) {
       expect(mocks.detect).toHaveBeenCalledWith(expect.objectContaining({ wslDistro: 'Ubuntu' }))
@@ -384,7 +356,7 @@ it('abandons obsolete WSL acquisition when the live destination runtime becomes 
       : Promise.resolve(['codex'])
   )
   mount()
-  await act(async () => requestQuickChatFromShortcut())
+  await act(async () => startChat())
   await waitFor(() =>
     expect(mocks.detect).toHaveBeenCalledWith(expect.objectContaining({ wslDistro: 'Ubuntu' }))
   )
@@ -425,7 +397,7 @@ it.each(['add', 'fetch'])(
       })
     }
     mount()
-    await act(async () => requestQuickChatFromShortcut())
+    await act(async () => startChat())
     await act(async () => {
       useAppStore.setState({ activeWorkspaceExecutionHostId: 'runtime:peer' })
       release()
@@ -434,7 +406,7 @@ it.each(['add', 'fetch'])(
     useAppStore.setState({
       fetchWorktrees: localWorktreeFetch(Promise.resolve(true))
     })
-    await act(async () => requestQuickChatFromShortcut())
+    await act(async () => startChat())
     await waitFor(() => expect(mocks.launch).toHaveBeenCalledOnce())
   }
 )
@@ -481,7 +453,7 @@ it.each([10, 100])(
     )
     mount()
     for (let i = 0; i < q; i++) {
-      await act(async () => requestQuickChatFromShortcut())
+      await act(async () => startChat())
     }
     expect(mocks.detect).toHaveBeenCalledOnce()
     expect(subscribe.mock.calls.length).toBeLessThan(q * 3 + 20)
@@ -526,72 +498,20 @@ it('settles a real failed local catalog publication into the existing fallback i
   })
   useAppStore.setState({ settings: settings('blank') })
   mount()
-  await act(async () => requestQuickChatFromShortcut())
+  await act(async () => startChat())
   await waitFor(() => expect(screen.getByRole('menu')).toBeTruthy())
   fireEvent.click(screen.getByRole('menuitem', { name: /Codex/ }))
   expect(mocks.launch).toHaveBeenCalledOnce()
 })
 
-it.each([false, true])(
-  'accepts before revealing Settings/collapsed sidebar and survives contained-sidebar-error recovery (fallback=%s)',
-  async (fallback) => {
-    useAppStore.setState({
-      activeView: 'settings',
-      sidebarOpen: false,
-      settings: settings(fallback ? 'blank' : 'codex')
-    })
-    function Sidebar({ broken }: { broken: boolean }) {
-      if (broken) {
-        throw new Error('contained sidebar fixture')
-      }
-      return <QuickChatButton />
-    }
-    const view = render(
-      <TooltipProvider>
-        <QuickChatController />
-        <RecoverableRenderErrorBoundary
-          boundaryId="sidebar"
-          surface="sidebar"
-          reportAsCrash={false}
-          resetKey="terminal"
-        >
-          <Sidebar broken />
-        </RecoverableRenderErrorBoundary>
-      </TooltipProvider>
-    )
-    await act(async () => requestQuickChatFromShortcut())
-    expect(useAppStore.getState()).toMatchObject({ activeView: 'terminal', sidebarOpen: true })
-    if (fallback) {
-      expect(mocks.launch).not.toHaveBeenCalled()
-      view.rerender(
-        <TooltipProvider>
-          <QuickChatController />
-          <RecoverableRenderErrorBoundary
-            boundaryId="sidebar"
-            surface="sidebar"
-            reportAsCrash={false}
-            resetKey="recovered"
-          >
-            <Sidebar broken={false} />
-          </RecoverableRenderErrorBoundary>
-        </TooltipProvider>
-      )
-      await waitFor(() => expect(screen.getByRole('menu')).toBeTruthy())
-      fireEvent.click(screen.getByRole('menuitem', { name: /Codex/ }))
-    }
-    await waitFor(() => expect(mocks.launch).toHaveBeenCalledOnce())
-    expect(mocks.ensure).toHaveBeenCalledOnce()
-  }
-)
-
 it('finishes activation refusal and launch failure exactly as the existing launch seam, allowing re-entry', async () => {
   mount()
   mocks.activate.mockReturnValueOnce(false)
-  await act(async () => requestQuickChatFromShortcut())
+  await act(async () => startChat())
   expect(mocks.launch).not.toHaveBeenCalled()
   expect(mocks.error).toHaveBeenCalledOnce()
   mocks.launch.mockReturnValueOnce(null)
-  await act(async () => requestQuickChatFromShortcut())
+  await act(async () => startChat())
   expect(mocks.launch).toHaveBeenCalledOnce()
   expect(mocks.error).toHaveBeenCalledTimes(2)
   const failure = mocks.error.mock.calls.at(-1)
@@ -601,82 +521,8 @@ it('finishes activation refusal and launch failure exactly as the existing launc
   mocks.launch.mockReturnValueOnce(null)
   act(() => existing.result.current({ kind: 'chat', agent: 'codex', executionHostId: 'local' }))
   expect(mocks.error.mock.calls.at(-1)).toEqual(failure)
-  await act(async () => requestQuickChatFromShortcut())
+  await act(async () => startChat())
   expect(mocks.launch).toHaveBeenCalledTimes(3)
-})
-
-it('delivers native/guest IPC through the real preload subscription and renderer bridge to controller settlement, and unsubscribes', async () => {
-  Object.assign(window.api, {
-    ui: { ...uiStateAndMenuCommandsApi, onToggleStatusBar: () => () => {} }
-  })
-  const unsubs: (() => void)[] = []
-  registerWorkspaceShortcutIpcBridge(unsubs)
-  mount()
-  await act(async () => mocks.ipc.get('ui:quickStartChat')?.({}))
-  expect(mocks.launch).toHaveBeenCalledOnce()
-  unsubs.forEach((stop) => stop())
-  expect(mocks.ipc.has('ui:quickStartChat')).toBe(false)
-  const web = createWebUiApi()
-  const callback = vi.fn()
-  web.onQuickStartChat(callback)()
-  expect(callback).not.toHaveBeenCalled()
-  await expect(createReposApi().ensureQuickChatFolder()).rejects.toThrow(
-    'unavailable in paired web'
-  )
-})
-
-it('runs the production renderer dispatcher from floating xterm focus before that surface yields, respecting repeats and recorder/composition', async () => {
-  useAppStore.setState({ keybindings: { 'chat.quickStart': ['Mod+Shift+Q'] } })
-  function Keys() {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this dispatch fixture supplies every layout field read by useGlobalKeybindings.
-    const layout = {
-      activeView: 'terminal',
-      creationLayoutActive: false,
-      workspaceChromeActive: true
-    } as Parameters<typeof useGlobalKeybindings>[0]['layout']
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these floating focus/command facts are read by this hook.
-    const floatingWorkspace = {
-      enabled: true,
-      open: true,
-      visibleTabCount: 1,
-      openMaximized: vi.fn(),
-      setOpenWithFocus: vi.fn(),
-      cancelReturnFocusFrame: vi.fn(),
-      shouldMountPanel: true,
-      showToggleButton: true,
-      tourInteractionSnapshotRef: { current: null }
-    } as Parameters<typeof useGlobalKeybindings>[0]['floatingWorkspace']
-    useGlobalKeybindings({ layout, floatingWorkspace })
-    return (
-      <div data-floating-terminal-panel>
-        <textarea className="xterm-helper-textarea" data-testid="xterm" />
-      </div>
-    )
-  }
-  const view = render(
-    <>
-      <QuickChatController />
-      <Keys />
-    </>
-  )
-  const terminal = screen.getByTestId('xterm')
-  const send = (extra = {}) =>
-    fireEvent.keyDown(terminal, { key: 'q', code: 'KeyQ', ctrlKey: true, shiftKey: true, ...extra })
-  await act(async () => send())
-  expect(mocks.launch).toHaveBeenCalledOnce()
-  await act(async () => {
-    send({ repeat: true })
-    send({ isComposing: true })
-    terminal.setAttribute('data-shortcut-recorder-active', 'true')
-    send()
-  })
-  expect(mocks.launch).toHaveBeenCalledOnce()
-  terminal.removeAttribute('data-shortcut-recorder-active')
-  await act(async () => send())
-  expect(mocks.launch).toHaveBeenCalledTimes(2)
-  view.unmount()
-  await act(async () => send())
-  expect(mocks.launch).toHaveBeenCalledTimes(2)
 })
 
 it('retires removed in-flight preparation and allows a new identity before the stale fetch returns', async () => {
@@ -696,13 +542,13 @@ it('retires removed in-flight preparation and allows a new identity before the s
     )
   })
   mount()
-  await act(async () => requestQuickChatFromShortcut())
+  await act(async () => startChat())
   await act(async () => useAppStore.setState({ repos: [], worktreesByRepo: {} }))
   mocks.ensure.mockResolvedValue({ path: repo.path, canonicalPath: repo.path, repoId: fresh.id })
   useAppStore.setState({
     fetchWorktrees: localWorktreeFetch(Promise.resolve(true))
   })
-  await act(async () => requestQuickChatFromShortcut())
+  await act(async () => startChat())
   expect(mocks.launch).toHaveBeenCalledOnce()
   expect(mocks.launch.mock.calls[0][0].worktreeId).toBe(freshWorktree.id)
   await act(async () => release())
@@ -719,7 +565,6 @@ it('waits for earlier accepted fallback preparation and executes distinct choice
   )
   useAppStore.setState({ settings: settings('blank') })
   mount()
-  const control = screen.getByRole('button', { name: 'New chat' })
   const finished: string[] = []
   control.addEventListener(QUICK_CHAT_FINISHED_EVENT, (event) => {
     if (event instanceof CustomEvent) {
@@ -763,7 +608,7 @@ it.each([false, true])(
       localDetectedAgentIdsByContext: warm ? { host: ['codex'] } : {}
     })
     mount()
-    await act(async () => requestQuickChatFromShortcut())
+    await act(async () => startChat())
     await waitFor(() => expect(mocks.launch).toHaveBeenCalledOnce())
     expect(mocks.launch.mock.calls[0][0]).toMatchObject({
       worktreeId: worktree.id,
@@ -778,7 +623,6 @@ it.each([false, true])(
 it('launches the accepted fallback choice after an unrelated settings broadcast', async () => {
   useAppStore.setState({ settings: settings('blank') })
   mount()
-  const control = screen.getByRole('button', { name: 'New chat' })
   const finished = vi.fn()
   control.addEventListener(QUICK_CHAT_FINISHED_EVENT, finished)
   await act(async () => requestQuickChat(control))

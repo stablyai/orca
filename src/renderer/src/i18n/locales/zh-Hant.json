@@ -22758,7 +22758,6 @@
     "newChat": "新增聊天",
     "startChatting": "開始聊天",
     "projectName": "聊天",
-    "shortcutTitle": "不使用專案新增聊天",
     "failed": "無法開始聊天。請檢查聊天資料夾，然後重試。"
   }
 }
