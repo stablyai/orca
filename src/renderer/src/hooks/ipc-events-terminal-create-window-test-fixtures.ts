@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
+import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
 type ListenerRef = { current: unknown }

@@ -15,13 +15,18 @@ import { MobileDictationSetupSheet } from '../components/MobileDictationSetupShe
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 import { MobileBrowserTabActionSheet } from './MobileBrowserTabActionSheet'
 import { getMobileTerminalActionSheetActions } from './mobile-terminal-action-sheet-actions'
-import { getMobileNativeChatCliForkActions } from './mobile-native-chat-cli-fork'
 import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import { describeBulkCloseConfirmation } from './mobile-bulk-close-sheet-actions'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { useMobileAllowAutoCloseActions } from './mobile-worker-auto-close'
+import { MobileAgentSessionTabActionSheet } from './MobileAgentSessionTabActionSheet'
 
 export function MobileSessionSheets({ controller }: { controller: MobileSessionController }) {
   const t = useMobileTranslation()
+  const terminalWorkerActions = useMobileAllowAutoCloseActions(
+    controller.client,
+    controller.actionTarget && { terminal: controller.actionTarget.handle }
+  )
   const {
     worktreeId,
     isFolderWorkspaceRoute,
@@ -39,8 +44,6 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     setFileActionTarget,
     browserActionTarget,
     setBrowserActionTarget,
-    agentSessionActionTarget,
-    setAgentSessionActionTarget,
     terminalModes,
     browserScreencastSupported,
     quickCommandsSupported,
@@ -190,7 +193,8 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
           onClear: (target) => void handleClearTerminal(target),
           onClose: (target) => void handleCloseTerminal(target),
           onCloseSessionTab: (tab) => void handleCloseSessionTab(tab),
-          bulkCloseActions
+          bulkCloseActions,
+          workerActions: terminalWorkerActions
         })}
         onClose={() => setActionTarget(null)}
       />
@@ -255,19 +259,9 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         onCloseTab={handleCloseSessionTab}
         bulkCloseActions={bulkCloseActions}
       />
-      <ActionSheetModal
-        visible={agentSessionActionTarget != null}
-        title={agentSessionActionTarget?.title || t('session.sheets.chat', 'Chat')}
-        actions={[
-          ...getMobileNativeChatCliForkActions({
-            controller,
-            tab: agentSessionActionTarget,
-            workspaceOnPairedHost: onPairedHost,
-            onDismiss: () => setAgentSessionActionTarget(null)
-          }),
-          ...closeWithBulkActions(agentSessionActionTarget, () => setAgentSessionActionTarget(null))
-        ]}
-        onClose={() => setAgentSessionActionTarget(null)}
+      <MobileAgentSessionTabActionSheet
+        controller={controller}
+        workspaceOnPairedHost={onPairedHost}
       />
       <ActionSheetModal
         visible={controller.leaveDrafts != null}
@@ -337,7 +331,8 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         submitLabel={t('common.open', 'Open')}
         allowEmpty
         selectTextOnFocus
-        keyboardType={Platform.OS === 'ios' ? 'url' : 'default'}
+        // The session page reports 'web', where RN Web maps 'url' to the URL keyboard.
+        keyboardType={Platform.OS === 'android' ? 'default' : 'url'}
         onSubmit={(value) => {
           void handleCreateBrowser(value).then((created) => {
             if (created) {

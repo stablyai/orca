@@ -10,6 +10,7 @@ import { buildNotificationOptions } from '../ipc/notification-options'
 import { translateMain } from '../i18n/main-i18n'
 import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
 import { toHostSessionPaneKey } from '../../shared/terminal-surface-id'
+import { isNotificationSourceEnabled } from '../../shared/notification-source-gate'
 
 export type NotificationDeliveryDependencies = {
   readNotificationSettings: () => NotificationSettings
@@ -78,10 +79,11 @@ export function createNotificationDeliveryService(
         request.notificationSourceId !== undefined &&
         settings.mutedNotificationSourceIds.includes(request.notificationSourceId)
       // Machine mutes leave mobile eligibility and its cooldown unchanged.
-      const desktopAllowed =
-        settings.enabled &&
-        (request.source !== 'agent-task-complete' || settings.agentTaskComplete) &&
-        (request.source !== 'terminal-bell' || settings.terminalBell)
+      const desktopAllowed = isNotificationSourceEnabled(
+        settings,
+        request.source,
+        request.agentState
+      )
 
       const notificationOptions = buildNotificationOptions(request, translateMain)
 

@@ -9,10 +9,12 @@ import { useWorkItemSourceSearch } from './use-work-item-source-search'
 import { useSmartWorkspaceFieldFocusControls } from './use-smart-workspace-field-focus-controls'
 import { useSmartWorkspaceNameFieldActions } from './use-smart-workspace-name-field-actions'
 import { getSmartWorkspaceNameFieldCopy } from './smart-workspace-name-field-copy'
+import { useLatestHandler } from '@/lib/use-latest-handler'
 
 export function useSmartWorkspaceNameFieldController(props: SmartWorkspaceNameFieldProps) {
   const search = useWorkItemSourceSearch({
     ...props,
+    defaultLinearWorkspaceId: 'all',
     typedTextEnabled: true,
     sourceSelected: props.selectedSource !== null,
     gitlabEnabled: Boolean(props.onGitLabItemSelect)
@@ -27,6 +29,8 @@ export function useSmartWorkspaceNameFieldController(props: SmartWorkspaceNameFi
   })
   const { value, selectedSource, disabled = false, onActiveSourceModeChange } = props
   const { mode: sourceMode } = search
+  // Why: the composer's value handler changes identity per keystroke; a stable wrapper lets the memoized emoji button skip re-renders.
+  const handleEmojiPickerValueChange = useLatestHandler(props.onValueChange)
   const { emojiCursor, emojiCommandValue } = focus
   const activeEmojiShortcode = useMemo(
     () => getActiveWorkspaceEmojiShortcode(value, emojiCursor),
@@ -85,6 +89,7 @@ export function useSmartWorkspaceNameFieldController(props: SmartWorkspaceNameFi
     ...actions,
     ...copy,
     handleModeChange,
+    handleEmojiPickerValueChange,
     activeEmojiShortcode,
     emojiSuggestions,
     emojiMenuOpen,

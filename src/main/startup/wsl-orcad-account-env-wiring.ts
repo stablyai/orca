@@ -2,7 +2,7 @@ import { BrowserWindow } from 'electron'
 import { withClaudeProfileTerminalEnv } from '../claude-accounts/claude-profile-installed-router'
 import { getSelectedClaudeAccountIdForTarget } from '../claude-accounts/runtime-selection'
 import { getSelectedCodexAccountIdForTarget } from '../codex-accounts/runtime-selection'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { installWslOrcadAccountEnvDependencies } from '../wsl/wsl-orcad-account-env'
 import {
   WSL_ORCAD_ACCOUNT_NOT_APPLIED_CHANNEL,

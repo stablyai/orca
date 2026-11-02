@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import { openRelayDatabase, type RelayDatabase } from './database.js'
 import {
   REGIONAL_REHOME_RECONNECTS_PER_CELL_LIMIT,

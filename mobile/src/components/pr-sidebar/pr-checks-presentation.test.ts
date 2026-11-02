@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
 import {
-  firstFailingCheckKey,
   prCheckKey,
   prChecksSummaryLabel,
   prStateBadge,
@@ -17,25 +16,6 @@ function check(over: Partial<PRCheckDetail>): PRCheckDetail {
     ...over
   }
 }
-
-describe('firstFailingCheckKey', () => {
-  it('returns the key of the first failing check in the given order', () => {
-    const checks = [
-      check({ name: 'ok', checkRunId: 1, conclusion: 'success' }),
-      check({ name: 'broke', checkRunId: 2, conclusion: 'failure' }),
-      check({ name: 'also-broke', checkRunId: 3, conclusion: 'cancelled' })
-    ]
-    expect(firstFailingCheckKey(checks)).toBe(prCheckKey(check({ checkRunId: 2 })))
-  })
-  it('returns null when nothing is failing', () => {
-    expect(
-      firstFailingCheckKey([
-        check({ conclusion: 'success' }),
-        check({ status: 'in_progress', conclusion: null })
-      ])
-    ).toBeNull()
-  })
-})
 
 describe('summarizePRChecks', () => {
   it('returns a "No checks" summary for an empty list', () => {

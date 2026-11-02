@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
-import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { Button } from '@/components/ui/button'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../../store'
 import { summarizeCodexRestartStatus } from './codex-restart-status-summary'
 import { translate } from '@/i18n/i18n'
@@ -25,33 +26,35 @@ export function CodexRestartStatusPrompt(): React.JSX.Element | null {
   }
 
   return (
-    <>
-      <DropdownMenuSeparator />
-      <div className="px-2 py-2">
-        <div className="text-[11px] text-muted-foreground">
-          {/* Why: notices are per-PTY-session but restart is per-pane; show both counts so split panes don't look wrong. */}
-          {translate(
-            'auto.components.status.bar.StatusBar.staleCodexSessions',
-            '{{count}} Codex sessions are still on the old account.',
-            {
-              count: staleCodexStatus.staleSessionCount,
-              defaultValue_one: '{{count}} Codex session is still on the old account.'
-            }
-          )}
-          {staleCodexStatus.staleWorktreeCount > 1 ? (
-            <span className="mt-0.5 block">
-              {translate(
-                'auto.components.status.bar.StatusBar.59c6e7b4e0',
-                'Visible sessions restart now. Others restart when their worktree becomes active.'
-              )}
-            </span>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          onClick={() => queuePaneAccountRestarts(staleCodexStatus.stalePtyIds, 'codex')}
-          className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
-        >
+    <div className="mx-1 mb-1 flex items-center gap-2 rounded-md border border-border px-2 py-1.5">
+      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-muted-foreground" />
+      <div className="min-w-0 flex-1 text-2xs text-foreground">
+        {/* Why: notices are per-PTY-session but restart is per-pane; show both counts so split panes don't look wrong. */}
+        {translate(
+          'auto.components.status.bar.StatusBar.staleCodexSessions',
+          '{{count}} Codex sessions are still on the old account.',
+          {
+            count: staleCodexStatus.staleSessionCount,
+            defaultValue_one: '{{count}} Codex session is still on the old account.'
+          }
+        )}
+        {staleCodexStatus.staleWorktreeCount > 1 ? (
+          <span className="mt-0.5 block text-muted-foreground">
+            {translate(
+              'auto.components.status.bar.StatusBar.59c6e7b4e0',
+              'Visible sessions restart now. Others restart when their worktree becomes active.'
+            )}
+          </span>
+        ) : null}
+      </div>
+      <DropdownMenuItem
+        asChild
+        onSelect={(event) => {
+          event.preventDefault()
+          queuePaneAccountRestarts(staleCodexStatus.stalePtyIds, 'codex')
+        }}
+      >
+        <Button type="button" variant="outline" size="xs" className="shrink-0">
           {staleCodexStatus.staleSessionCount === 1
             ? translate('auto.components.status.bar.StatusBar.6cd6650b4c', 'Restart Session')
             : translate(
@@ -59,9 +62,9 @@ export function CodexRestartStatusPrompt(): React.JSX.Element | null {
                 'Restart {{value0}} Sessions',
                 { value0: staleCodexStatus.staleSessionCount }
               )}
-        </button>
-      </div>
-    </>
+        </Button>
+      </DropdownMenuItem>
+    </div>
   )
 }
 

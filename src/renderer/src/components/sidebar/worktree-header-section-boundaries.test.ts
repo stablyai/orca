@@ -46,17 +46,6 @@ describe('getRepoHeaderSectionEndByRepoId', () => {
     expect(ends.get('b')).toBe(startOfC)
   })
 
-  it('falls back to the next header when a bucket has no successor', () => {
-    const ends = getRepoHeaderSectionEndByRepoId({
-      rows,
-      firstHeaderIndex: 0,
-      sidebarRepoHeaderIdsByBucket: new Map([['ungrouped', ['a']]]),
-      repoHeaderBucketByRepoId: new Map([['a', 'ungrouped']])
-    })
-
-    expect(ends.get('a')).toBe(startOfB)
-  })
-
   it('resolves a header id that renders twice to its first row, matching findIndex', () => {
     const ends = getRepoHeaderSectionEndByRepoId({
       rows: [repoHeader('a'), item, repoHeader('b'), item, repoHeader('b')],

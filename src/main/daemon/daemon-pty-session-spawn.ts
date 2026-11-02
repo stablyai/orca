@@ -17,7 +17,7 @@ import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { probeRecoveredStartupCwdDirectory } from '../ipc/pty/host-env/startup-cwd-directory-exists'
-import { resolveUnixShellPath } from '../providers/local-pty-utils'
+import { resolveUnixShellPath } from '../providers/local-pty/local-pty-executable-spawn'
 import type { PtySpawnOptions, PtySpawnResult } from '../providers/pty-provider-contract'
 import { injectHistoryEnv, injectWslFishHistoryEnv, logHistoryInjection } from '../terminal-history'
 import { addWslEnvKeys } from '../wsl-env'
@@ -294,6 +294,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     const exitedResult: PtySpawnResult = {
       id: sessionId,
       exitedBeforeSpawnReply: true,
+      ...(matchingExit.cause ? { exitCause: matchingExit.cause } : {}),
       ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
       ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}),
       ...(!result.isNew ? { isReattach: true } : {})

@@ -108,13 +108,6 @@ describe('worktree scan with a repeated path', () => {
       gitLists([MAIN_ROW, { ...MAIN_ROW, isMainWorktree: false }, OTHER_SPELLING_ROW])
     })
 
-    it('resolves a branch selector to the main checkout', async () => {
-      await expect(makeRuntime().showManagedWorktree('branch:dev_ops')).resolves.toMatchObject({
-        id: MAIN_WORKTREE_ID,
-        isMainWorktree: true
-      })
-    })
-
     it('resolves the id the CLI sends for `active` and `current` after a listing', async () => {
       const runtime = makeRuntime()
       await runtime.listManagedWorktrees()

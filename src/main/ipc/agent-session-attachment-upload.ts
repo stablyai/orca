@@ -12,7 +12,7 @@ import {
   type AgentSessionAttachmentUploadCommitResult,
   type AgentSessionAttachmentUploadStartResult,
   type AgentSessionAttachmentUploadTarget
-} from '../../shared/agent-session-attachments'
+} from '../../shared/agent-session/agent-session-attachments'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
 import {

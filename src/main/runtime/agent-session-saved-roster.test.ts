@@ -5,11 +5,11 @@ import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subj
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
-import type { AgentSessionStatusEvent } from '../../shared/agent-session-wire'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
+import type { AgentSessionStatusEvent } from '../../shared/agent-session/agent-session-wire'
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
-import { AgentSessionRecoveryCapsule } from './agent-session-recovery-capsule'
+import type { AgentSessionOwnerProbe } from '../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import { AgentSessionRecoveryCapsule } from './agent-session/records/agent-session-recovery-capsule'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 afterEach(() => vi.restoreAllMocks())

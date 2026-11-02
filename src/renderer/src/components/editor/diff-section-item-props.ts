@@ -9,12 +9,6 @@ export type DiffSectionItemProps = {
   isBranchMode: boolean
   sideBySide: boolean
   isDark: boolean
-  settings: {
-    terminalFontSize?: number
-    terminalFontFamily?: string
-    diffWordWrap?: boolean
-    diffShowWhitespace?: boolean
-  } | null
   sectionHeight: number | undefined
   worktreeId?: string
   loadSection: (index: number) => void

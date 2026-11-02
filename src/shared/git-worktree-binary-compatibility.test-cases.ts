@@ -92,8 +92,19 @@ export function registerGitWorktreeBinaryCompatibilityCases(
         'files'
       ])
       // Why the env: git otherwise waits ~1 s before its first record, longer than this checkout.
+      // Orca passes checkout.workers=0; Git before 2.32 ignores the unknown key.
       const { stderr } = await runGit(
-        ['-C', 'progress-source', 'worktree', 'add', '-b', 'compat-progress', '../progress-wt'],
+        [
+          '-C',
+          'progress-source',
+          '-c',
+          'checkout.workers=0',
+          'worktree',
+          'add',
+          '-b',
+          'compat-progress',
+          '../progress-wt'
+        ],
         { GIT_PROGRESS_DELAY: '0' }
       )
       const records: GitProgressRecord[] = []

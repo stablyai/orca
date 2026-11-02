@@ -1,6 +1,5 @@
 import type { AppState } from '@/store/types'
 import {
-  getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
@@ -11,6 +10,8 @@ import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import { resolveExactWorktreeRoute } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,
+  findIndexedRepoOwnerForHost,
+  findIndexedWorktreeOwners,
   hasIndexedDetectedWorktree,
   resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
@@ -20,6 +21,7 @@ import { onPairedWebClientHost } from './paired-web-client-host'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
+  getRuntimeEnvironmentIdForFolderWorkspace,
   type FolderWorkspaceRuntimeOwnerState
 } from './folder-workspace-runtime-owner'
 
@@ -50,8 +52,9 @@ export type WorktreeOperationOwnerRecord = {
 }
 
 // settings/runtimeEnvironments come from FolderWorkspaceRuntimeOwnerState's legacy-owner base.
-export type WorktreeOperationRouteState = FolderWorkspaceRuntimeOwnerState & {
-  repos?: readonly Pick<AppState['repos'][number], 'id' | 'connectionId' | 'executionHostId'>[]
+export type WorktreeOperationRouteState = Omit<FolderWorkspaceRuntimeOwnerState, 'repos'> & {
+  repos?: readonly (Pick<AppState['repos'][number], 'id' | 'connectionId' | 'executionHostId'> &
+    Partial<Pick<AppState['repos'][number], 'path' | 'projectGroupId'>>)[]
   worktreesByRepo?: Record<string, readonly WorktreeOperationOwnerRecord[]>
   detectedWorktreesByRepo?: Record<string, { worktrees: readonly WorktreeOperationOwnerRecord[] }>
   runtimeEnvironmentCatalogHydrated?: boolean
@@ -65,14 +68,9 @@ function ownerRecordsOnHost(
   executionHostId: ExecutionHostId
 ): WorktreeOperationOwnerRecord[] {
   const owners: WorktreeOperationOwnerRecord[] = []
-  for (const worktrees of Object.values(state.worktreesByRepo ?? {})) {
-    for (const worktree of worktrees) {
-      if (
-        worktree.id === worktreeId &&
-        parseExecutionHostId(worktree.hostId)?.id === executionHostId
-      ) {
-        owners.push(worktree)
-      }
+  for (const worktree of findIndexedWorktreeOwners(state.worktreesByRepo, worktreeId)) {
+    if (parseExecutionHostId(worktree.hostId)?.id === executionHostId) {
+      owners.push(worktree)
     }
   }
   for (const worktree of findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, worktreeId)) {
@@ -126,11 +124,7 @@ function isDirectListing(
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   return (
     hubOwners.environmentIds.size === 0 &&
-    Boolean(
-      state.repos?.some(
-        (repo) => repo.id === repoId && getRepoExecutionHostId(repo) === executionHostId
-      )
-    )
+    Boolean(findIndexedRepoOwnerForHost(state.repos, repoId, executionHostId))
   )
 }
 
@@ -173,6 +167,23 @@ function resolveSelectedHostRoute(
       })
     }
   }
+  const scope = parseWorkspaceKey(worktreeId)
+  if (
+    scope?.type === 'folder' &&
+    findFolderWorkspaceOwner(state, scope.folderWorkspaceId, selectedHost.id)
+  ) {
+    return {
+      kind: 'resolved',
+      route: {
+        executionHostId: selectedHost.id,
+        runtimeEnvironmentId: getRuntimeEnvironmentIdForFolderWorkspace(
+          state,
+          scope.folderWorkspaceId,
+          selectedHost.id
+        )
+      }
+    }
+  }
   const hubOwners = collectHubOwnerEnvironmentIds(state, worktreeId, selectedHost.id)
   if (
     hubOwners.environmentIds.size > 1 ||
@@ -195,12 +206,10 @@ export function getWorktreeOperationOwnerHostIds(
   worktreeId: string
 ): ExecutionHostId[] {
   const hostIds = new Set<ExecutionHostId>()
-  for (const worktrees of Object.values(state.worktreesByRepo ?? {})) {
-    for (const worktree of worktrees) {
-      const hostId = worktree.id === worktreeId ? parseExecutionHostId(worktree.hostId)?.id : null
-      if (hostId) {
-        hostIds.add(hostId)
-      }
+  for (const worktree of findIndexedWorktreeOwners(state.worktreesByRepo, worktreeId)) {
+    const hostId = parseExecutionHostId(worktree.hostId)?.id
+    if (hostId) {
+      hostIds.add(hostId)
     }
   }
   for (const worktree of findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, worktreeId)) {
@@ -312,7 +321,10 @@ function resolveFolderWorkspaceOperationRoute(
     kind: 'resolved',
     route: {
       executionHostId,
-      runtimeEnvironmentId: parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
+      runtimeEnvironmentId:
+        parsedHost?.kind === 'runtime'
+          ? parsedHost.environmentId
+          : getRuntimeEnvironmentIdForFolderWorkspace(state, folderWorkspaceId, executionHostId)
     }
   }
 }

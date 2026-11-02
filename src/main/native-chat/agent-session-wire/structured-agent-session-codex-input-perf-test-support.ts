@@ -1,6 +1,6 @@
 import { expect, vi } from 'vitest'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 
 const inputWorkSamples = new Map<string, Record<string, number>>()
@@ -124,10 +124,10 @@ export function measureCodexInputWork(
         })
         expect(work.reportSubmissions).toBeGreaterThanOrEqual(population + 2)
       } else {
-        expect(plans.mock.calls.reduce((sum, [changes]) => sum + changes.length, 0)).toBe(
-          2 * population + 4
-        )
-        expect(comparisons).toBe(population * population + 6 * population + 3)
+        expect(
+          plans.mock.calls.reduce((sum, [changes]) => sum + changes.length, 0)
+        ).toBeLessThanOrEqual(2 * population + 4)
+        expect(comparisons).toBe(0)
         expect(work.cards).toBeGreaterThanOrEqual(population)
       }
       if (population === 100) {

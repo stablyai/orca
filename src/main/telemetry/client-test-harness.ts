@@ -2,7 +2,7 @@ import type { PostHog } from 'posthog-node'
 import { vi } from 'vitest'
 import type { CommonProps } from '../../shared/telemetry-events'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   _enableTransportForTests,
   _resetFirstAppOpenedFiredForTests,
@@ -79,8 +79,11 @@ export function makeFakeSettings(telemetry: GlobalSettings['telemetry']): Global
 }
 
 export function makeFakeStore(settings: GlobalSettings): Store {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fakes every Store method telemetry reads or writes; other methods are never called.
   return {
     getSettings: vi.fn(() => settings),
+    getUI: vi.fn(() => ({ featureTipsSeenIds: [] })),
+    getChatUiLaunchTipVariant: vi.fn(() => 'none'),
     updateSettings: vi.fn((updates: Partial<GlobalSettings>) => {
       if (updates.telemetry) {
         settings.telemetry = {
