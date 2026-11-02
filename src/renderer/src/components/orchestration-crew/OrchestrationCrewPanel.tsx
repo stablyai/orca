@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { PanelRight, PanelRightClose, Workflow } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -24,9 +24,20 @@ import {
   type CrewStatusGroup
 } from './CrewAgentIcons'
 
+function runningWorker(row: OrchestrationCrewRow): boolean {
+  return Boolean(
+    row.sendAddress &&
+    row.task &&
+    !['completed', 'failed'].includes(row.task.state) &&
+    (row.task.state === 'dispatched' || ['working', 'waiting', 'blocked'].includes(row.status))
+  )
+}
+
 type PanelProps = {
   target: RuntimeClientTarget
   party: string
+  canMention: boolean
+  mention: (rows: OrchestrationCrewRow[]) => void
   isVisible?: boolean
 }
 
@@ -99,6 +110,8 @@ export function OrchestrationCrewPanel(props: PanelProps): React.JSX.Element | n
 
 export function CrewPanelContent({
   target,
+  canMention,
+  mention,
   snapshot,
   isVisible = true
 }: PanelProps & { snapshot: OrchestrationCrewSnapshot }): React.JSX.Element | null {
@@ -107,6 +120,15 @@ export function CrewPanelContent({
   const tab = useRef<HTMLButtonElement>(null)
   const collapse = useRef<HTMLButtonElement>(null)
   const restore = useRef(false)
+  // Hosts pass a new mention function each render; rows get one stable function so their memo holds.
+  const latestMention = useRef(mention)
+  useLayoutEffect(() => {
+    latestMention.current = mention
+  })
+  const stableMention = useCallback(
+    (rows: OrchestrationCrewRow[]) => latestMention.current(rows),
+    []
+  )
   useLayoutEffect(() => {
     if (open) {
       collapse.current?.focus({ preventScroll: true })
@@ -216,9 +238,20 @@ export function CrewPanelContent({
             {sections.map(([key, sectionTitle, rows]) =>
               rows.length > 0 ? (
                 <section key={key} aria-label={sectionTitle}>
-                  <div className="flex items-center gap-1.5 px-3 pb-1.5 pt-3 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    <span>{sectionTitle}</span>
-                    <span>{rows.length}</span>
+                  <div className="flex items-center gap-1.5 px-3 pb-1.5 pt-3 text-2xs font-semibold text-muted-foreground">
+                    <span className="uppercase tracking-wider">{sectionTitle}</span>
+                    <span className="tracking-wider">{rows.length}</span>
+                    {key === 'Managing' ? (
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        className="ml-auto h-5"
+                        disabled={!canMention || !rows.some(runningWorker)}
+                        onClick={() => mention(rows.filter(runningWorker))}
+                      >
+                        {translate('components.orchestrationCrew.mentionAll', 'Mention all')}
+                      </Button>
+                    ) : null}
                   </div>
                   {rows.map((row) => (
                     <CrewRowView
@@ -227,6 +260,8 @@ export function CrewPanelContent({
                       look={lookByParty.get(row.partyKey)!}
                       target={target}
                       isVisible={isVisible}
+                      canMention={canMention}
+                      mention={stableMention}
                     />
                   ))}
                 </section>

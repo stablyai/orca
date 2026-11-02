@@ -48,6 +48,8 @@ function panel(rows: OrchestrationCrewRow[], target: RuntimeClientTarget = local
     <CrewPanelContent
       target={target}
       party="term_owner"
+      canMention={false}
+      mention={vi.fn()}
       snapshot={{
         ...emptyCrew('ok'),
         sections: { managedBy: [], managing: rows, talkingWith: [] }
@@ -83,7 +85,7 @@ it('groups the closed tab and shows the row by the live terminal state, with a q
   const mounted = render(panel([row()]))
   const tab = screen.getByRole('button', { name: 'Show orchestration: 1 worker, 1 working' })
   fireEvent.click(tab)
-  const body = screen.getByRole('button', { name: /Keep task 0/ })
+  const body = screen.getByRole('button', { name: /^Mention Worker 0:/ })
   expect(within(body).getByRole('img', { name: 'Working' })).toBeInTheDocument()
   expect(within(body).queryByRole('img', { name: 'Done' })).toBeNull()
   expect(within(body).getByRole('img', { name: 'Claude' })).toBeInTheDocument()
@@ -121,6 +123,29 @@ it('resolves the actual session before a conflicting terminal', () => {
   render(<Looks rows={rows} />)
   expect(screen.getByRole('img', { name: 'Needs permission' })).toBeInTheDocument()
   expect(screen.queryByRole('img', { name: 'Working' })).toBeNull()
+})
+
+it('follows a terminal into retained state and falls back only after its local pane disappears', () => {
+  render(<Looks rows={[{ ...row(), status: 'waiting' }]} />)
+  expect(screen.getByRole('img', { name: 'Working' })).toBeInTheDocument()
+  const entry = { ...status(0), state: 'done' as const }
+  act(() =>
+    useAppStore.setState({
+      agentStatusByPaneKey: {},
+      retainedAgentsByPaneKey: {
+        [entry.paneKey]: {
+          entry,
+          tab: makeTab({ id: 'tab-0', worktreeId: 'workspace' }),
+          worktreeId: 'workspace',
+          agentType: 'claude',
+          startedAt: 1
+        }
+      }
+    })
+  )
+  expect(screen.getByRole('img', { name: 'Done' })).toBeInTheDocument()
+  act(() => useAppStore.setState({ retainedAgentsByPaneKey: {} }))
+  expect(screen.getByRole('img', { name: 'Needs permission' })).toBeInTheDocument()
 })
 
 it('keeps imported, missing, dispatch and failed-task peers on the Crew snapshot despite matching local handles', () => {
@@ -194,7 +219,7 @@ it.each([10, 100])(
     const listeners = readStoreListenerCount() ?? 0
     const mounted = render(panel(Array.from({ length: n }, (_, i) => row(i))))
     await act(async () => {})
-    expect(readStoreListenerCount()).toBe(listeners + 1)
+    expect(readStoreListenerCount()).toBe((listeners ?? 0) + 1)
     fireEvent.click(screen.getByRole('button', { name: /^Show orchestration:/ }))
     expect(normalize).toHaveBeenCalledTimes(n)
     visits = 0
