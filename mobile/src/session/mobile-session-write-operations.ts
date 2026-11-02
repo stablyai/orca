@@ -93,6 +93,16 @@ export const sessionTabActivate = bindDeferredRpcOperation(
   })
 )
 
+export const sessionTabMove = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'session.tabs-move',
+    method: 'session.tabs.move',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('session-tab-moved', sessionWriteUnreadReplySchema)
+  })
+)
+
 // Preserve host refusal text for optimistic rollback; the reply's record carries the host's merged notes.
 export const sessionWorktreeNotesWrite = bindDeferredRpcOperation(
   defineRpcOperation({

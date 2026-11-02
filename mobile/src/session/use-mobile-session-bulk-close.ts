@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   createBulkCloseSheetActions,
   createCloseWithBulkActions
@@ -7,6 +7,10 @@ import type { RpcSuccess } from '../transport/types'
 import { mobileBulkTabCloseCopy } from './mobile-bulk-tab-close-copy'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
+import {
+  computeSessionTabReorderPlan,
+  requestMobileSessionTabMove
+} from './mobile-session-tab-reorder'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
 import type { MobileSessionCloseActionsModel } from './use-mobile-session-close-actions'
 
@@ -18,7 +22,10 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
     client,
     connState,
     sessionTabs,
+    setSessionTabs,
     sessionTabsRef,
+    sessionTabGroupsRef,
+    activeSessionGroupIdRef,
     activeSessionTabIdRef,
     markdownDocs,
     pendingTerminalActivationAttemptRef,
@@ -32,6 +39,76 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
     parkedPendingTerminalContext,
     retryPendingTerminalRecovery
   } = scope
+  const executeTabReorderPlan = useCallback(
+    (plan: NonNullable<ReturnType<typeof computeSessionTabReorderPlan>>): boolean => {
+      sessionTabsRef.current = plan.reorderedTabs
+      sessionTabGroupsRef.current = plan.reorderedTabGroups
+      setSessionTabs(plan.reorderedTabs)
+      if (!client || connState !== 'connected') {
+        return true
+      }
+      void requestMobileSessionTabMove(client, {
+        worktree: `id:${worktreeId}`,
+        ...plan.rpcMove
+      })
+        .then((response) => {
+          if (!response.ok) {
+            void fetchSessionTabs()
+            return
+          }
+          const result = (response as RpcSuccess).result as SessionTabsResult | undefined
+          if (result && Array.isArray(result.tabs)) {
+            applySessionTabs(result)
+          }
+        })
+        .catch(() => {
+          void fetchSessionTabs()
+        })
+      return true
+    },
+    [
+      applySessionTabs,
+      client,
+      connState,
+      fetchSessionTabs,
+      sessionTabGroupsRef,
+      sessionTabsRef,
+      setSessionTabs,
+      worktreeId
+    ]
+  )
+  const reorderSessionTab = useCallback(
+    (tabId: string, targetBlockIndex: number): boolean => {
+      const plan = computeSessionTabReorderPlan({
+        tabs: sessionTabsRef.current,
+        tabGroups: sessionTabGroupsRef.current,
+        activeGroupId: activeSessionGroupIdRef.current,
+        tabId,
+        targetBlockIndex
+      })
+      if (!plan) {
+        return false
+      }
+      return executeTabReorderPlan(plan)
+    },
+    [activeSessionGroupIdRef, executeTabReorderPlan, sessionTabGroupsRef, sessionTabsRef]
+  )
+  const moveSessionTabByOffset = useCallback(
+    (tabId: string, delta: -1 | 1): boolean => {
+      const plan = computeSessionTabReorderPlan({
+        tabs: sessionTabsRef.current,
+        tabGroups: sessionTabGroupsRef.current,
+        activeGroupId: activeSessionGroupIdRef.current,
+        tabId,
+        delta
+      })
+      if (!plan) {
+        return false
+      }
+      return executeTabReorderPlan(plan)
+    },
+    [activeSessionGroupIdRef, executeTabReorderPlan, sessionTabGroupsRef, sessionTabsRef]
+  )
   const [answerBulkClose, setAnswerBulkClose] = useState<((confirmed: boolean) => void) | null>(
     null
   )
@@ -54,7 +131,10 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
     activeSessionTabIdRef,
     switchSessionTab,
     closeSessionTab: handleCloseSessionTab,
-    confirmBulkClose: () => new Promise<boolean>((resolve) => setAnswerBulkClose(() => resolve))
+    confirmBulkClose: () => new Promise<boolean>((resolve) => setAnswerBulkClose(() => resolve)),
+    moveTabByOffset: (tabId, delta) => {
+      moveSessionTabByOffset(tabId, delta)
+    }
   })
   const closeWithBulkActions = createCloseWithBulkActions(handleCloseSessionTab, bulkCloseActions)
 
@@ -120,6 +200,8 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
     bulkCloseActions,
     bulkCloseConfirm,
     closeWithBulkActions,
+    reorderSessionTab,
+    moveSessionTabByOffset,
     visibleTabs,
     activeMarkdownTab,
     activeFileTab,

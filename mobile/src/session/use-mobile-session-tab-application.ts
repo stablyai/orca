@@ -63,9 +63,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     unsubscribeTerminal,
     subscribeToTerminal,
     lastKnownTerminalCountRef,
-    clientRef,
-    creatingTerminalRef,
-    setCreating
+    clientRef
   } = scope
   const draftOwnershipRef = useRef<DraftTabOwnership | null>(null)
   const applySessionTabs = useCallback(
@@ -75,6 +73,12 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         return { accepted: false }
       }
       const applicationRevision = ++appliedSessionTabsRevisionRef.current
+      if (Array.isArray(result.tabGroups)) {
+        scope.sessionTabGroupsRef.current = result.tabGroups
+      }
+      if (result.activeGroupId !== undefined) {
+        scope.activeSessionGroupIdRef.current = result.activeGroupId ?? null
+      }
       const now = Date.now()
       let nextTabs = withRememberedNativeChatIdentity(
         withSessionTabStatusReceipts(
@@ -174,11 +178,9 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         const launch = resolveLaunchedSelection(pending, nextTabs)
         pendingSelectionRef.current = launch.selection
         if (launch.landedTabId && pending?.kind === 'launched') {
-          // Release creation when its tab lands; prompt delivery can delay the reply by a minute.
-          releaseTerminalCreateLock({ creatingTerminalRef, setCreating }, pending.lock)
+          releaseTerminalCreateLock(scope, pending.lock)
         }
         if (launch.landedTabId && clientRef.current) {
-          // Launches carry no navigation; persist the pick or this device stays on its old host tab.
           void activateMobileSessionTab(clientRef.current, {
             worktree: `id:${result.worktree}`,
             tabId: launch.landedTabId,
@@ -254,20 +256,20 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       if (active?.type === 'terminal') {
         if (typeof active.terminal !== 'string') {
           const previous = activeHandleRef.current
-          if (previous) {
-            if (!keepsTerminalPaneVisible(previous, visibleTerminalHandlesRef?.current)) {
-              unsubscribeTerminal(previous)
-            }
+          if (previous && !keepsTerminalPaneVisible(previous, visibleTerminalHandlesRef?.current)) {
+            unsubscribeTerminal(previous)
           }
           activeHandleRef.current = null
           setActiveHandle(null)
           return outcome
         }
         const previous = activeHandleRef.current
-        if (previous && previous !== active.terminal) {
-          if (!keepsTerminalPaneVisible(previous, visibleTerminalHandlesRef?.current)) {
-            unsubscribeTerminal(previous)
-          }
+        if (
+          previous &&
+          previous !== active.terminal &&
+          !keepsTerminalPaneVisible(previous, visibleTerminalHandlesRef?.current)
+        ) {
+          unsubscribeTerminal(previous)
         }
         activeHandleRef.current = active.terminal
         setActiveHandle(active.terminal)
@@ -275,10 +277,8 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       } else if (active) {
         // Transient empty snapshots may omit a live terminal; only explicit successful close clears it.
         const previous = activeHandleRef.current
-        if (previous) {
-          if (!keepsTerminalPaneVisible(previous, visibleTerminalHandlesRef?.current)) {
-            unsubscribeTerminal(previous)
-          }
+        if (previous && !keepsTerminalPaneVisible(previous, visibleTerminalHandlesRef?.current)) {
+          unsubscribeTerminal(previous)
         }
         activeHandleRef.current = null
         setActiveHandle(null)
@@ -287,9 +287,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     },
     [hostId, worktreeId, subscribeToTerminal, unsubscribeTerminal]
   )
-  return {
-    applySessionTabs
-  }
+  return { applySessionTabs }
 }
 
 export type MobileSessionTabApplicationModel = MobileSessionTerminalListModel &
