@@ -72,8 +72,9 @@ export function useNativeChatComposerKeyDown({
         }
         return
       }
-      // An open layer that keeps focus here, like the context card, already spent this Escape closing itself.
-      if (event.key === 'Escape' && event.defaultPrevented) {
+      // An open layer that keeps focus here, like the context card, already spent this Escape closing
+      // itself; a layer around the composer (a launch panel) leaves an open picker to take it.
+      if (event.key === 'Escape' && event.defaultPrevented && autocomplete.mode === 'none') {
         return
       }
 
