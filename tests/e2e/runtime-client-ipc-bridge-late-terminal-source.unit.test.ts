@@ -98,6 +98,10 @@ export function registerLateTerminalSourceRetryTest(
         }
       })
       const resident = getTerminalSemanticResident(ptyId)!
+      // A quiet report snapshot cannot seed the pane's live notification state.
+      expect(resident.policy.completion.canAnnounceCompletion()).toBe(false)
+      expect(useAppStore.getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
+      expect(dispatch).not.toHaveBeenCalled()
       const policy = resident.policy
       const parser = measuredParser(policy.legacySource)
       const cursor = measuredConsumption(resident)
@@ -185,7 +189,9 @@ export function registerLateTerminalSourceRetryTest(
       source.record({ kind: 'agent-status', payload }, Date.now() + 1)
       runtime.applyTerminalTransientObservation('physical', 'incarnation', source.snapshot())
       expect(live?.batch.facts).toEqual([{ kind: 'agent-status', payload }])
-      expect(policy.completion.hasPendingHookDoneCompletion()).toBe(true)
+      // Main settles a first live Done immediately when no live Working preceded it.
+      expect(policy.completion.hasPendingHookDoneCompletion()).toBe(false)
+      expect(policy.notification.hasPendingAgentTaskCompleteNotification()).toBe(true)
       const firstLive = live!
       source.record({ kind: 'bell' }, Date.now() + 2)
       runtime.applyTerminalTransientObservation('physical', 'incarnation', source.snapshot())
@@ -200,10 +206,12 @@ export function registerLateTerminalSourceRetryTest(
       h.emit(2, false, live)
       dispatchTerminalSideEffectBatch(forged)
       expect(markTerminalBell).toHaveBeenCalledOnce()
-      expect(policy.completion.hasPendingHookDoneCompletion()).toBe(true)
-      await vi.advanceTimersByTimeAsync(AGENT_DONE_QUIET_MS)
+      expect(policy.completion.hasPendingHookDoneCompletion()).toBe(false)
       expect(policy.notification.hasPendingAgentTaskCompleteNotification()).toBe(true)
-      await vi.advanceTimersByTimeAsync(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+      await vi.advanceTimersByTimeAsync(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS - 1)
+      expect(dispatch).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(policy.notification.hasPendingAgentTaskCompleteNotification()).toBe(false)
       expect(dispatch).toHaveBeenCalledExactlyOnceWith(
         'remote-wt',
         expect.objectContaining({
@@ -213,6 +221,9 @@ export function registerLateTerminalSourceRetryTest(
           agentStatusSnapshot: expect.objectContaining({ turnCompletedAt: payload.turnCompletedAt })
         })
       )
+      await vi.advanceTimersByTimeAsync(AGENT_DONE_QUIET_MS)
+      expect(dispatch).toHaveBeenCalledOnce()
+      expect(useAppStore.getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
       source.record({ kind: 'bell' }, Date.now() + 1)
       runtime.applyTerminalTransientObservation('physical', 'incarnation', source.snapshot())
       expect(markTerminalBell).toHaveBeenCalledTimes(2)
