@@ -54,11 +54,12 @@ export type FileLinkTarget = {
 
 export type FileLinkPathExistence = ReturnType<typeof createTerminalPathExistenceBatch>
 
-/** A paired server knows its own home; a guess from the cwd can name another user's file. WSL homes stay client-expanded. */
+/** Without the pane's own HOME, a paired server's home beats a guess from the cwd, which can name another user's file. WSL homes stay client-expanded. */
 function hostExpandsTilde(pathText: string, host: FileLinkHost): boolean {
   return (
     /^~[\\/]/.test(pathText) &&
     host.homeOnHost === true &&
+    !host.homePath &&
     Boolean(host.runtimeEnvironmentId) &&
     !parseWslUncPath(host.worktreePath)
   )

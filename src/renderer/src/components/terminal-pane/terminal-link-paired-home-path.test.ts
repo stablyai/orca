@@ -46,9 +46,14 @@ function hostHoldsVideoInSibling(): void {
   })
 }
 
-function provideLinks(worktreePath: string, text = `Saved ${VIDEO}`): Promise<ILink[]> {
+function provideLinks(
+  worktreePath: string,
+  text = `Saved ${VIDEO}`,
+  terminalHomePath?: string
+): Promise<ILink[]> {
   const { provider } = createProviderSetup([makeBufferLine(text)], new Map(), {
     worktreePath,
+    terminalHomePath,
     startupCwd: worktreePath,
     runtimeEnvironmentId: 'env-1',
     getRuntimeTerminalHandleForPane: () => 'term-1'
@@ -155,6 +160,15 @@ describe('a home-relative path printed in a paired-server terminal', () => {
 
     expect(await provideLinks('/data/m/work/project')).toEqual([])
     expect(statMock).not.toHaveBeenCalled()
+  })
+
+  // Why: a HOME the pane was launched with is what its shell expands `~` to, not the server's.
+  it('expands home from the HOME the pane was launched with', async () => {
+    hostHoldsVideoInSibling()
+
+    await provideLinks('/data/m/work/project', `Saved ${VIDEO}`, '/data/agent-home')
+
+    expect(hostWasAskedFor()).toEqual(['/data/agent-home/work/project-rh/guides/presentation.mp4'])
   })
 
   it('keeps expanding home on this client for a WSL workspace', async () => {
