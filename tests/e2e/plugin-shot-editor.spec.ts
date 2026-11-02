@@ -1,12 +1,12 @@
 /**
  * Invariant: `orca plugin shot --editor` opens a file in a plugin's custom editor from the hidden
  * test window, waits for the editor to get and ask for its document, sends `--act` input into the
- * editor's isolated guest, and captures what it drew without showing or focusing the window. A
+ * editor's isolated guest on a temporary copy of the file, and captures what it drew without showing or focusing the window. A
  * file no workspace holds opens its folder as a folder workspace; an editor that never asks for its
  * document, or throws, fails the command.
  */
 
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ElectronApplication } from '@stablyai/playwright-test'
@@ -110,6 +110,17 @@ test('plugin shot --editor opens the file, acts in the guest and fails a broken 
       )
       .toMatchObject({ width: 320, height: 200, subscribed: true, errors: [], acted: 1 })
     expect(await redShare(electronApp, join(tempRoot, 'acted.png'))).toBeGreaterThan(0.9)
+    // The acts ran on a copy: the file is unchanged, and no tab or workspace of the copy is left.
+    expect(await readFile(join(docs, 'a.redclick'), 'utf8')).toBe('x')
+    expect(
+      await orcaPage.evaluate(() => {
+        const state = window.__store?.getState()
+        return {
+          tabs: state?.openFiles.filter((file) => file.filePath.endsWith('a.redclick')).length,
+          scratch: state?.repos.filter((repo) => repo.path.includes('orca-editor-shot-')).length
+        }
+      })
+    ).toEqual({ tabs: 0, scratch: 0 })
     expect(
       await electronApp.evaluate(({ BrowserWindow }) =>
         BrowserWindow.getAllWindows().some((window) => window.isVisible() || window.isFocused())

@@ -289,8 +289,11 @@ export const PLUGIN_VIEW_HANDLERS: Record<string, CommandHandler> = {
       })
       return
     }
-    if (stringFlag(ctx, 'height') !== undefined) {
-      throw new RuntimeClientError('invalid_argument', '--height sizes an editor shot (--editor).')
+    if (stringFlag(ctx, 'height') !== undefined || ctx.flags.has('in-place')) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--height and --in-place are for an editor shot (--editor).'
+      )
     }
     const pluginKey = requirePluginKey(ctx)
     const panelId = stringFlag(ctx, 'panel')

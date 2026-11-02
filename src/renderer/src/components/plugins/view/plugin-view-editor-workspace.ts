@@ -6,7 +6,13 @@ import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type WorkspaceRow = { id: string; path: string; hostId?: string; isArchived?: boolean }
 
-export type PluginEditorWorkspace = { worktreeId: string; relativePath: string; filePath: string }
+export type PluginEditorWorkspace = {
+  worktreeId: string
+  relativePath: string
+  filePath: string
+  /** Set when no workspace held the file, so its folder was added as this project. */
+  addedRepoId?: string
+}
 
 /** The deepest local workspace whose folder holds one of `paths` (the same file, spelled as given
  *  and as its real path, since `/tmp` and `/private/tmp` name one folder on macOS). */
@@ -56,6 +62,7 @@ export async function showWorkspaceForFile(
     return findWorkspaceShowingFile(selectWorktreesByRepo(state), paths, state.activeWorktreeId)
   }
   let found = find()
+  let addedRepoId: string | undefined
   if (!found) {
     const state = useAppStore.getState()
     // Why local: plugin open resolves paths on the Orca that runs it, which is this one.
@@ -64,6 +71,7 @@ export async function showWorkspaceForFile(
       return null
     }
     await useAppStore.getState().fetchWorktrees(repo.id)
+    addedRepoId = repo.id
     found = find()
   }
   if (!found) {
@@ -74,5 +82,5 @@ export async function showWorkspaceForFile(
     // The editor tab is the surface, so activation must not start a terminal of its own.
     activateAndRevealWorktree(found.worktreeId, { providesInitialSurface: true })
   }
-  return found
+  return addedRepoId ? { ...found, addedRepoId } : found
 }

@@ -95,6 +95,7 @@ export type PluginViewDesktop = {
     width?: number
     height?: number
     acts?: PluginEditorShotAct[]
+    inPlace?: boolean
   }): Promise<PluginEditorShotResult>
 }
 
@@ -111,6 +112,8 @@ export type PluginViewDesktopDeps = {
   guestsOf(pluginKey: string): WebContents[]
   /** `nativeImage.createFromBitmap`, to draw an html panel's guest over the window capture. */
   imageFromBitmap: BitmapImageFactory
+  /** Where `shot --editor --act` copies the file; the OS temp folder when absent. */
+  shotScratchRoot?: () => string
 }
 
 const OPEN_TIMEOUT_MS = 10_000

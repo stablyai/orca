@@ -1,6 +1,14 @@
-import { mkdtempSync, mkdirSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  mkdtempSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import type { NativeImage, WebContents } from 'electron'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
@@ -98,26 +106,37 @@ const answer =
 beforeEach(() => relay.requestPluginViewFromRenderer.mockReset())
 
 describe('shot --editor', () => {
-  it('opens the file for capture, sends acts to the guest in its own pixels, then puts the theme back', async () => {
+  it('acts on a temporary copy, never the file, and removes the copy afterwards', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-editor-shot-file-')))
+    const file = join(root, 'a.sketch')
+    writeFileSync(file, '{"shapes":[]}')
+    const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'orca-editor-shot-scratch-')))
     const guest = fakeContents(GUEST_URL)
     relay.requestPluginViewFromRenderer.mockImplementation(answer(drawn(true)))
-    const shot = await shootPluginEditor(deps(guest.contents), fakeContents().contents, {
-      pluginKey: KEY,
-      filePath: '/w/a.sketch',
-      colorScheme: 'light',
-      width: 400,
-      acts: [{ click: [10, 20] }]
+    const shot = await shootPluginEditor(
+      { ...deps(guest.contents), shotScratchRoot: () => scratch },
+      fakeContents().contents,
+      {
+        pluginKey: KEY,
+        filePath: file,
+        colorScheme: 'light',
+        width: 400,
+        acts: [{ click: [10, 20] }]
+      }
+    )
+    expect(shot).toMatchObject({ editorId: 'sketch', subscribed: true, acted: 1, copy: true })
+    const [open, end] = relay.requestPluginViewFromRenderer.mock.calls.map((call) => call[1])
+    expect(open).toMatchObject({
+      kind: 'open-editor',
+      capture: { scratch: true, colorScheme: 'light', width: 400 }
     })
-    expect(shot).toMatchObject({ editorId: 'sketch', subscribed: true, errors: [], acted: 1 })
-    expect(relay.requestPluginViewFromRenderer.mock.calls.map((call) => call[1])).toEqual([
-      expect.objectContaining({
-        kind: 'open-editor',
-        editorId: 'sketch',
-        fallbackFolder: '/w',
-        capture: expect.objectContaining({ colorScheme: 'light', width: 400 })
-      }),
-      { kind: 'end-capture' }
-    ])
+    const copied = open?.kind === 'open-editor' ? open.filePath : ''
+    expect(copied.startsWith(join(scratch, 'orca-editor-shot-'))).toBe(true)
+    expect(basename(copied)).toBe('a.sketch')
+    expect(end).toEqual({ kind: 'end-capture' })
+    // The copy and its folder are gone, and the author's file was never opened for input.
+    expect(readdirSync(scratch)).toEqual([])
+    expect(readFileSync(file, 'utf8')).toBe('{"shapes":[]}')
     expect(guest.sent).toContainEqual({
       type: 'mouseDown',
       x: 10,
@@ -125,6 +144,29 @@ describe('shot --editor', () => {
       button: 'left',
       clickCount: 1
     })
+  })
+
+  it('opens the file itself without acts, or with --in-place', async () => {
+    const guest = fakeContents(GUEST_URL)
+    relay.requestPluginViewFromRenderer.mockImplementation(answer(drawn(true)))
+    await shootPluginEditor(deps(guest.contents), fakeContents().contents, {
+      pluginKey: KEY,
+      filePath: '/w/a.sketch'
+    })
+    await shootPluginEditor(deps(guest.contents), fakeContents().contents, {
+      pluginKey: KEY,
+      filePath: '/w/a.sketch',
+      acts: [{ key: 'r' }],
+      inPlace: true
+    })
+    const opens = relay.requestPluginViewFromRenderer.mock.calls
+      .map((call) => call[1])
+      .filter((body) => body?.kind === 'open-editor')
+    expect(opens).toEqual([
+      expect.objectContaining({ filePath: '/w/a.sketch', fallbackFolder: '/w' }),
+      expect.objectContaining({ filePath: '/w/a.sketch', fallbackFolder: '/w' })
+    ])
+    expect(opens.every((body) => body?.kind === 'open-editor' && !body.capture?.scratch)).toBe(true)
   })
 
   it('reports a frame that never asked for its document and the errors it logged', async () => {

@@ -1,4 +1,4 @@
-import { nativeImage, type BrowserWindow } from 'electron'
+import { app, nativeImage, type BrowserWindow } from 'electron'
 import { setPluginViewForRpc } from '../../runtime/rpc/methods/plugin-view'
 import { listPluginsForClients } from '../plugin-client-list'
 import type { PluginService } from '../plugin-service'
@@ -37,7 +37,8 @@ export function bindPluginDesktopViews(
       },
       logsSince: (pluginKey, cursor) => service.getLogsSince(pluginKey, cursor),
       guestsOf: livePluginFrameGuests,
-      imageFromBitmap: (bitmap, size) => nativeImage.createFromBitmap(bitmap, size)
+      imageFromBitmap: (bitmap, size) => nativeImage.createFromBitmap(bitmap, size),
+      shotScratchRoot: () => app.getPath('temp')
     })
   )
 }

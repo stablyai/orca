@@ -148,7 +148,9 @@ export const PluginShotEditorParams = z.object({
   colorScheme: z.enum(['light', 'dark']).optional(),
   width: z.number().int().min(PLUGIN_SHOT_MIN_WIDTH).max(PLUGIN_SHOT_MAX_WIDTH).optional(),
   height: z.number().int().min(PLUGIN_SHOT_MIN_HEIGHT).max(PLUGIN_SHOT_MAX_HEIGHT).optional(),
-  acts: pluginEditorShotActsSchema.optional()
+  acts: pluginEditorShotActsSchema.optional(),
+  /** With acts: act on the file itself instead of a temporary copy. */
+  inPlace: z.boolean().optional()
 })
 
 // Why the render lane's cap: the same bytes a live panel may send Orca for one tree.

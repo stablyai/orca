@@ -27,6 +27,7 @@ import { pluginPanelNotShownReason } from './plugin-view-shown'
 import { endPluginShotReplay, replayPluginPanel } from './plugin-view-replay'
 import { showWorkspaceForFile } from './plugin-view-editor-workspace'
 import { captureOpenEditor } from './plugin-view-editor-capture'
+import { planEditorShotCleanup, runEditorShotCleanup } from './plugin-view-editor-shot-cleanup'
 
 type Failure = Extract<PluginViewReply, { ok: false }>
 
@@ -161,11 +162,13 @@ async function openEditor(
   if (useAppStore.getState().activeView === 'settings') {
     useAppStore.getState().closeSettingsPage()
   }
+  const previousWorktreeId = useAppStore.getState().activeWorktreeId
   const paths = [filePath, ...(request.filePathAliases ?? [])]
   const workspace = await showWorkspaceForFile(paths, request.fallbackFolder)
   if (!workspace) {
     return fail(requestId, PLUGIN_VIEW_NO_WORKSPACE_CODE, NO_EDITOR_WORKSPACE_MESSAGE)
   }
+  const openBefore = new Set(useAppStore.getState().openFiles.map((file) => file.id))
   const fileId = useAppStore.getState().openFile(
     {
       filePath: workspace.filePath,
@@ -177,7 +180,16 @@ async function openEditor(
     { preview: false }
   )
   useCustomEditorViewStore.getState().setChoice(fileId, editor.key)
-  return capture ? captureOpenEditor(requestId, fileId, capture) : { requestId, ok: true }
+  if (!capture) {
+    return { requestId, ok: true }
+  }
+  planEditorShotCleanup({
+    fileId,
+    openedByShot: !openBefore.has(fileId),
+    scratchRepoId: capture.scratch ? (workspace.addedRepoId ?? null) : null,
+    previousWorktreeId
+  })
+  return captureOpenEditor(requestId, fileId, capture)
 }
 
 export async function handlePluginViewRequest(
@@ -194,6 +206,7 @@ export async function handlePluginViewRequest(
       case 'end-capture': {
         endPluginShotReplay()
         usePluginViewCaptureStore.getState().end()
+        await runEditorShotCleanup()
         const restored = await restoreActedPanel()
         return {
           requestId: request.requestId,

@@ -1,5 +1,6 @@
-import { realpath } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { copyFile, mkdtemp, realpath, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { basename, dirname, join } from 'node:path'
 import type { WebContents } from 'electron'
 import type {
   PluginViewColorScheme,
@@ -40,6 +41,8 @@ export type PluginEditorShotResult = {
   errors: string[]
   /** How many `acts` were sent. */
   acted?: number
+  /** The acts ran on a temporary copy, so the file itself was never changed. */
+  copy?: true
 }
 
 /** What `plugins.open --editor` sends the renderer to find, or else open, the file's workspace. */
@@ -84,6 +87,8 @@ export async function shootPluginEditor(
     width?: number
     height?: number
     acts?: PluginEditorShotAct[]
+    /** Act on the file itself instead of a copy. */
+    inPlace?: boolean
   }
 ): Promise<PluginEditorShotResult> {
   const { pluginKey, filePath, acts } = params
@@ -99,18 +104,28 @@ export async function shootPluginEditor(
     deps.windowShown()
   )
   const { cursor } = deps.logsSince(pluginKey)
+  // Why a copy: acts are real input, and a shot must never change the author's file.
+  const scratchDir =
+    acts && !params.inPlace
+      ? await mkdtemp(join(deps.shotScratchRoot?.() ?? tmpdir(), 'orca-editor-shot-'))
+      : null
+  const shotPath = scratchDir ? join(scratchDir, basename(filePath)) : filePath
   return withPaintingWhileHidden([contents, ...deps.guestsOf(pluginKey)], async () => {
     let wokeGuest: WebContents | undefined
     try {
+      if (scratchDir) {
+        await copyFile(filePath, shotPath)
+      }
       const reply: PluginViewReply = await requestPluginViewFromRenderer(
         contents,
         {
           kind: 'open-editor',
           pluginKey,
           editorId: editor.editorId,
-          filePath,
-          ...(await pluginEditorFileTarget(filePath)),
+          filePath: shotPath,
+          ...(await pluginEditorFileTarget(shotPath)),
           capture: {
+            ...(scratchDir ? { scratch: true as const } : {}),
             ...(colorScheme === undefined ? {} : { colorScheme }),
             ...(params.width === undefined ? {} : { width: params.width }),
             ...(params.height === undefined ? {} : { height: params.height }),
@@ -169,16 +184,20 @@ export async function shootPluginEditor(
         settled: drawn.settled,
         subscribed: drawn.subscribed === true,
         errors: [...(drawn.issue ? [drawn.issue] : []), ...logged].slice(0, MAX_ERRORS),
-        ...(acts ? { acted: acts.length } : {})
+        ...(acts ? { acted: acts.length } : {}),
+        ...(scratchDir ? { copy: true as const } : {})
       }
     } finally {
       if (wokeGuest && !wokeGuest.isDestroyed()) {
         wokeGuest.setBackgroundThrottling(true)
       }
-      // Puts back the theme and the editor's size.
+      // Puts back the theme and the editor's size, and closes what the shot opened.
       await requestPluginViewFromRenderer(contents, { kind: 'end-capture' }, OPEN_TIMEOUT_MS).catch(
         () => null
       )
+      if (scratchDir) {
+        await rm(scratchDir, { recursive: true, force: true })
+      }
     }
   })
 }

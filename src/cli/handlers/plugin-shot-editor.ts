@@ -35,6 +35,7 @@ type PluginEditorShotReply = {
   subscribed: boolean
   errors: string[]
   acted?: number
+  copy?: true
 }
 
 export type PluginEditorShotSaved = Omit<PluginEditorShotReply, 'png' | 'colorScheme'> & {
@@ -105,7 +106,11 @@ export function formatPluginEditorShot(shot: PluginEditorShotSaved, requested?: 
     ...(requested && !shot.themeApplied
       ? [`  note: ${requested} was not applied (${shot.themeReason ?? 'Orca could not paint it'}).`]
       : []),
-    ...(shot.acted ? [`  acted: ${shot.acted} input action(s) sent to the editor`] : []),
+    ...(shot.acted
+      ? [
+          `  acted: ${shot.acted} input action(s) sent to the editor${shot.copy ? ', on a temporary copy of the file' : ', on the file itself'}`
+        ]
+      : []),
     ...shot.errors.map((error) => `  error: ${error}`)
   ].join('\n')
 }
@@ -130,7 +135,8 @@ export async function runPluginEditorShot(
       filePath: resolveHostPluginPath(ctx, request.editor),
       ...(request.colorScheme ? { colorScheme: request.colorScheme } : {}),
       ...parseEditorShotSize(ctx),
-      ...(acts ? { acts } : {})
+      ...(acts ? { acts } : {}),
+      ...(ctx.flags.has('in-place') ? { inPlace: true } : {})
     },
     { timeoutMs: EDITOR_SHOT_RPC_TIMEOUT_MS + (acts?.length ?? 0) * EDITOR_SHOT_RPC_ACT_TIMEOUT_MS }
   )

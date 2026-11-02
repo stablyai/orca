@@ -83,10 +83,11 @@ the editor afresh, waits for it to get its document and ask for it (`orca.docume
 `onDidChange`) and paint, then captures exactly the editor with the window hidden. `--act` is real
 input in the editor's own CSS pixels: `[{"click":[200,150]},{"drag":[[200,150],[400,300]]},
 {"key":"r"}]` (`key` takes a name such as `Enter` and optional `"modifiers":["meta"]`), each
-painted before the next; it needs the window hidden or minimized, and edits it makes reach the
-file's buffer like typing. It exits 1 and lists `errors` when the editor threw, was blocked by its
+painted before the next; it needs the window hidden or minimized. A shot never changes your file:
+`--act` runs on a copy in a temporary folder workspace that is removed afterwards (`--in-place`
+acts on the file itself), and a shot without acts closes the tab it opened. It exits 1 and lists `errors` when the editor threw, was blocked by its
 content policy, or never asked for its document within 5s; the PNG is written anyway. The theme
-and size are put back; the file stays open. Default file `.orca/shots/<plugin-key>-<editor>.png`.
+and size are put back. Default file `.orca/shots/<plugin-key>-<editor>.png`.
 
 - Both need the desktop app with a workspace showing. A shot never changes the view: it fails with
   `no_workspace` while Orca shows Settings or another full page. Without them, use `plugin check`.

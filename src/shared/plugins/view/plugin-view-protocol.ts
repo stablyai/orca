@@ -32,6 +32,8 @@ export type PluginViewEditorCapture = {
   /** The editor's size in CSS pixels for this capture only. */
   width?: number
   height?: number
+  /** The file is a temporary copy: its tab and folder workspace go when the capture ends. */
+  scratch?: true
   timeoutMs: number
 }
 

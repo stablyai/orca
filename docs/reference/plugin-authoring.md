@@ -492,13 +492,17 @@ and has painted, then captures exactly the editor, hidden window included. `--wi
 back afterwards. `--act '<json>'` sends real input to the editor first, in its own CSS pixels
 from its top-left: `[{"click":[200,150]},{"drag":[[200,150],[400,300]]},{"key":"r"}]` (a `key`
 takes a name such as `Enter` and optional `"modifiers":["shift"|"control"|"alt"|"meta"]`), each
-painted before the next, and only while Orca's window is hidden or minimized. Acts behave like
-your own input: edits the editor makes reach the file's buffer, saved by your autosave setting.
+painted before the next, and only while Orca's window is hidden or minimized. A shot never
+changes your file: with `--act` it copies the file into a temporary folder, shoots the copy in a
+temporary folder workspace and removes both afterwards (`copy: true` in the result); pass
+`--in-place` to act on the file itself, where edits reach its buffer like your own typing.
+Without `--act` it opens the file itself, leaves its buffer alone, and closes the tab if the shot
+opened it.
 The PNG is always written (`.orca/shots/<plugin-key>-<editor>.png` unless `--out`), but the
 command exits 1 and prints `errors` when the editor threw, was blocked by its content policy, or
 never asked for its document within 5 seconds. `--json` prints `{ path, editorId, filePath, width,
-height, theme, themeApplied, settled, subscribed, errors, acted? }`. The file stays open in its
-workspace afterwards.
+height, theme, themeApplied, settled, subscribed, errors, acted?, copy? }`. Afterwards Orca shows
+the workspace it showed before.
 
 `orca plugin dev watch . --shot ./.orca/shots` opens one panel (the first, or
 `--shot-panel <id>`) in the right sidebar once, then after the load and after each reload that
