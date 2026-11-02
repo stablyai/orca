@@ -9299,7 +9299,6 @@
       "src/renderer/src/components/sidebar/use-wsl-distro-list.test.ts": 542,
       "src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts": 286,
       "src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts": 262,
-      "src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts": 266,
       "src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts": 429,
       "src/renderer/src/components/sidebar/useRenderedSetupScriptPromptState.test.ts": 623,
       "src/renderer/src/components/sidebar/useSetupScriptPromptRevalidation.test.tsx": 2035,
