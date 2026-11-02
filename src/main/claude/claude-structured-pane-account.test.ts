@@ -158,7 +158,7 @@ describe('structured Claude launch account', () => {
     installClaudePoolLaunchRead(() => ({ accountId: 'a', named: false }))
     const second: Record<string, string> = {}
     const again = await prepareStructuredClaudeLaunchAccount(router, second, '/recorded', SESSION)
-    expect(again).toBe(router.accountHome('b'))
+    expect(again.home).toBe(router.accountHome('b'))
     expect(claudeAuthProxySlotId(second.ANTHROPIC_BASE_URL ?? '')).toBe(slot)
   })
 
