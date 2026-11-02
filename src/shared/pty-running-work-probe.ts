@@ -16,6 +16,8 @@ export type PtyRunningWorkProbe = {
   timedOut: boolean
   /** The pty is owned by a remote execution host (relay runtime or app SSH). */
   remote: boolean
+  /** The owning host's foreground process name, when it answered with one. */
+  foregroundProcess?: string
 }
 
 /** Never rejects; unanswered probes stay unverifiable until owning-host evidence arrives. */
@@ -54,6 +56,9 @@ export async function probePtyRunningWorkWithInspection(
           probe.verdict = 'unverifiable'
           probe.reason = 'host_child_processes_unobserved'
           return
+        }
+        if (inspection.foregroundProcess) {
+          probe.foregroundProcess = inspection.foregroundProcess
         }
         probe.verdict =
           (inspection.childProcessEvidence ??
