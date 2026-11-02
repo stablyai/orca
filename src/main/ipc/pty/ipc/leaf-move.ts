@@ -2,7 +2,7 @@ import { getPtyIpc } from '../pty-host-bindings'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { rekeyMovedPaneOwners } from '../../../runtime/moved-pane-owner-rekey'
-import { commitRelayedPaneMove } from '../../../window/terminal-pane-move-request-relay'
+import { commitFencedPaneMove } from '../../../window/terminal-pane-move-commit-fence'
 import {
   isTerminalLeafMoveRequest,
   type TerminalLeafMoveRequest,
@@ -35,7 +35,7 @@ export function installPtyLeafMoveIpcHandler(deps: {
     if (!isTerminalLeafMoveRequest(args)) {
       return { status: 'refused', reason: 'invalid_request' } satisfies TerminalLeafMoveResult
     }
-    return commitRelayedPaneMove(event.sender, args.targetTabId, () =>
+    return commitFencedPaneMove(event.sender, args.targetTabId, () =>
       commitLeafMoveAndRekey(deps, args)
     )
   })

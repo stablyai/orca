@@ -15,9 +15,12 @@ const ipcMainMock = {
 vi.mock('electron', () => ({ ipcMain: ipcMainMock }))
 
 const move = { worktreeId: 'wt-1', sourceTabId: 'tab-1', targetTabId: 'tab-new', leafId: 'leaf-1' }
+const moved: TerminalLeafMoveResult = { status: 'moved', ptyId: 'pty-1' }
+const refused: TerminalLeafMoveResult = { status: 'refused', reason: 'pane_unavailable' }
 
 function createMainWindow() {
   const webContents = Object.assign(new EventEmitter(), {
+    id: 1,
     isDestroyed: () => false,
     send: vi.fn()
   })
@@ -29,21 +32,33 @@ function createMainWindow() {
 }
 
 async function requestMove() {
-  const relay = await import('./terminal-pane-move-request-relay')
+  const { requestTerminalPaneMoveFromRenderer } = await import('./terminal-pane-move-request-relay')
+  const { commitFencedPaneMove } = await import('./terminal-pane-move-commit-fence')
   const { mainWindow, webContents } = createMainWindow()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the EventEmitter double implements the BrowserWindow members the relay uses.
-  const pending = relay.requestTerminalPaneMoveFromRenderer(mainWindow as never, move)
-  const request = webContents.send.mock.calls[0]?.[1] as { requestId: string }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the relay compares the sender by identity only.
-  const sender = webContents as never
-  const reply = (result: TerminalLeafMoveResult): void => {
-    ipcEmitter.emit(
-      'ui:terminalPaneMoveToNewTabReply',
-      { sender: webContents },
-      { requestId: request.requestId, result }
-    )
+  const pending = requestTerminalPaneMoveFromRenderer(mainWindow as never, move)
+  const outcome = pending.then(
+    (result) => result,
+    (error: Error) => error.message
+  )
+  const sent: unknown = webContents.send.mock.calls[0]?.[1]
+  const requestId =
+    typeof sent === 'object' && sent !== null && 'requestId' in sent ? sent.requestId : null
+  return {
+    outcome,
+    commit: (result: TerminalLeafMoveResult) => {
+      const run = vi.fn(async () => result)
+      return { run, committed: commitFencedPaneMove(webContents, move.targetTabId, run) }
+    },
+    reply: (result: TerminalLeafMoveResult) =>
+      ipcEmitter.emit(
+        'ui:terminalPaneMoveToNewTabReply',
+        { sender: webContents },
+        { requestId, result }
+      ),
+    passDeadline: () => vi.advanceTimersByTimeAsync(10_000),
+    closeWindow: () => mainWindow.emit('closed')
   }
-  return { relay, pending, sender, reply }
 }
 
 describe('requestTerminalPaneMoveFromRenderer', () => {
@@ -52,61 +67,47 @@ describe('requestTerminalPaneMoveFromRenderer', () => {
     ipcEmitter.removeAllListeners()
   })
 
-  it('commits nothing the window tries after the client was told the move timed out', async () => {
-    const { relay, pending, sender, reply } = await requestMove()
-    const timedOut = expect(pending).rejects.toThrow('terminal_pane_move_timeout')
-    await vi.advanceTimersByTimeAsync(10_000)
-    await timedOut
-
-    const commit = vi.fn(async (): Promise<TerminalLeafMoveResult> => ({
-      status: 'moved',
-      ptyId: 'pty-1'
-    }))
-    const late = await relay.commitRelayedPaneMove(sender, move.targetTabId, commit)
-
-    expect(late).toEqual({ status: 'refused', reason: 'pane_unavailable' })
-    expect(commit).not.toHaveBeenCalled()
-    reply({ status: 'refused', reason: 'pane_unavailable' })
+  it('refuses a move the window has not committed by the deadline, and its late commit', async () => {
+    const relay = await requestMove()
+    await relay.passDeadline()
+    await expect(relay.outcome).resolves.toBe('terminal_pane_move_timeout')
     expect(ipcEmitter.listenerCount('ui:terminalPaneMoveToNewTabReply')).toBe(0)
+
+    const late = relay.commit(moved)
+    await expect(late.committed).resolves.toEqual(refused)
+    expect(late.run).not.toHaveBeenCalled()
   })
 
-  it.each<TerminalLeafMoveResult>([
-    { status: 'moved', ptyId: 'pty-1' },
-    { status: 'refused', reason: 'pane_unavailable' }
-  ])(
-    'answers with the window’s final reply once it commits, past the deadline (%o)',
-    async (windowReply) => {
-      const { relay, pending, sender, reply } = await requestMove()
-      let finishCommit: (result: TerminalLeafMoveResult) => void = () => {}
-      const committing = relay.commitRelayedPaneMove(
-        sender,
-        move.targetTabId,
-        () =>
-          new Promise((resolve) => {
-            finishCommit = resolve
-          })
-      )
-      await vi.advanceTimersByTimeAsync(10_000)
-      finishCommit({ status: 'moved', ptyId: 'pty-1' })
-      await expect(committing).resolves.toEqual({ status: 'moved', ptyId: 'pty-1' })
-      await vi.advanceTimersByTimeAsync(10_000)
+  it('answers with the reply of a window that committed, not the commit', async () => {
+    const relay = await requestMove()
+    await relay.commit(moved).committed
+    relay.reply(refused)
+    await expect(relay.outcome).resolves.toEqual(refused)
+  })
 
-      reply(windowReply)
-      await expect(pending).resolves.toEqual(windowReply)
-    }
-  )
+  it.each([
+    [
+      'stays silent past the deadline',
+      (relay: Awaited<ReturnType<typeof requestMove>>) => relay.passDeadline()
+    ],
+    ['goes away', (relay: Awaited<ReturnType<typeof requestMove>>) => relay.closeWindow()]
+  ])('answers with the commit when the window %s after committing', async (_, end) => {
+    const relay = await requestMove()
+    await relay.commit(moved).committed
+    await end(relay)
+    await expect(relay.outcome).resolves.toEqual(moved)
+  })
+
+  it('rejects a move whose window goes away before committing', async () => {
+    const relay = await requestMove()
+    relay.closeWindow()
+    await expect(relay.outcome).resolves.toBe('renderer_unavailable')
+  })
 
   it('leaves a commit no client asked for alone', async () => {
-    const { relay, sender } = await requestMove()
-    const commit = vi.fn(async (): Promise<TerminalLeafMoveResult> => ({
-      status: 'moved',
-      ptyId: null
-    }))
-
-    await expect(relay.commitRelayedPaneMove(sender, 'tab-other', commit)).resolves.toEqual({
-      status: 'moved',
-      ptyId: null
-    })
-    expect(commit).toHaveBeenCalledOnce()
+    const { commitFencedPaneMove } = await import('./terminal-pane-move-commit-fence')
+    const run = vi.fn(async (): Promise<TerminalLeafMoveResult> => moved)
+    await expect(commitFencedPaneMove({ id: 2 }, 'tab-other', run)).resolves.toEqual(moved)
+    expect(run).toHaveBeenCalledOnce()
   })
 })
