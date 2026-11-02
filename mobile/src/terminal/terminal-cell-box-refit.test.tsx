@@ -74,6 +74,7 @@ function refitHarness(cellWidth: number, split = false) {
       connState: 'connected',
       tabStripVisible: false,
       textScale: 1,
+      resizeForKeyboard: false,
       unsubscribeTerminal,
       subscribeToTerminal
     })

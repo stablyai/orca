@@ -74,7 +74,8 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     handleSend,
     isAttaching,
     attachImage,
-    keyboardLift
+    keyboardLift,
+    terminalKeyboardResizeActive
   } = controller
   if (!sessionCommandDockShown(controller)) {
     return null
@@ -108,7 +109,10 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     <View
       style={[
         dockStyles.dock,
-        { paddingBottom: insets.bottom, transform: [{ translateY: -keyboardLift }] }
+        {
+          paddingBottom: insets.bottom + (terminalKeyboardResizeActive ? keyboardLift : 0),
+          transform: [{ translateY: terminalKeyboardResizeActive ? 0 : -keyboardLift }]
+        }
       ]}
     >
       <View>

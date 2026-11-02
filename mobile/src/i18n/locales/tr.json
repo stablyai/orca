@@ -3652,6 +3652,11 @@
     },
     "webviewReadyWatchdog": {
       "initializeFailed": "Terminal başlatılamadı - terminal görünümünden hazır sinyali alınamadı"
+    },
+    "keyboardResize": {
+      "heading": "KLAVYE DÜZENİ",
+      "description": "Terminali ekran klavyesinin üstündeki alana sığdırır. Klavye açıldığında veya kapandığında çalışan programlar yeniden çizilir. Telefona göre boyutlandırılmış terminali gösteren masaüstü de yeniden boyutlandırılır.",
+      "label": "Terminal boyutunu klavyeye göre ayarla"
     }
   },
   "webShell": {

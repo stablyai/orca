@@ -1,8 +1,10 @@
 import { settleSessionPreferenceRead } from './session-preference-read'
 import { useCallback, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
+import { hostOs } from '../platform/host-os'
 import {
   loadTerminalAutocompleteEnabled,
+  loadTerminalKeyboardResizeEnabled,
   loadTerminalLinkOpenMode,
   loadTerminalTextScale
 } from '../storage/preferences'
@@ -15,13 +17,15 @@ export function useMobileSessionPreferenceFocus(
     | 'terminalTextScaleRevisionRef'
     | 'setAutocompleteEnabled'
     | 'setTerminalLinkOpenMode'
+    | 'setTerminalKeyboardResizeEnabled'
   >
 ) {
   const {
     setTerminalTextScale,
     terminalTextScaleRevisionRef,
     setAutocompleteEnabled,
-    setTerminalLinkOpenMode
+    setTerminalLinkOpenMode,
+    setTerminalKeyboardResizeEnabled
   } = scope
   const [terminalPreferencesReady, setTerminalPreferencesReady] = useState(false)
   // Reload on Settings return without dropping readiness or remounting terminal panes.
@@ -33,17 +37,19 @@ export function useMobileSessionPreferenceFocus(
         Promise.all([
           loadTerminalTextScale(),
           loadTerminalAutocompleteEnabled(),
-          loadTerminalLinkOpenMode()
+          loadTerminalLinkOpenMode(),
+          hostOs() === 'android' ? loadTerminalKeyboardResizeEnabled() : Promise.resolve(false)
         ])
       ).then((preferences) => {
         if (active) {
           if (preferences) {
-            const [scale, autocomplete, linkMode] = preferences
+            const [scale, autocomplete, linkMode, keyboardResize] = preferences
             if (terminalTextScaleRevisionRef.current === scaleRevision) {
               setTerminalTextScale(scale)
             }
             setAutocompleteEnabled(autocomplete)
             setTerminalLinkOpenMode(linkMode)
+            setTerminalKeyboardResizeEnabled(keyboardResize)
           }
           setTerminalPreferencesReady(true)
         }

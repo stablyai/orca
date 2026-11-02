@@ -3648,6 +3648,11 @@
     },
     "webviewReadyWatchdog": {
       "initializeFailed": "終端機未能初始化：未收到終端機檢視的就緒訊號"
+    },
+    "keyboardResize": {
+      "heading": "鍵盤配置",
+      "description": "將終端機調整為螢幕鍵盤上方的大小。開啟或關閉鍵盤時，執行中的程式會重新繪製。顯示手機尺寸終端機的桌面視窗也會隨之調整。",
+      "label": "依鍵盤調整終端機大小"
     }
   },
   "webShell": {

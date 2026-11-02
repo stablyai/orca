@@ -108,7 +108,9 @@ export function MobileSessionActiveContent({
     showEmptyState,
     keyboardLift,
     activeTerminalKeyboardLift,
+    terminalKeyboardResizeActive,
     toastAnimatedStyle,
+    terminalToastAnimatedStyle,
     createTabBusy
   } = controller
   const hostProfile = useHostProfile(hostId)
@@ -267,12 +269,13 @@ export function MobileSessionActiveContent({
             }
             splitDirection={paneDirection}
             splitFrame={paneFrame}
-            keyboardInset={keyboardLift}
+            keyboardInset={terminalKeyboardResizeActive ? 0 : keyboardLift}
             title={terminal.title}
             onFrame={notifyTerminalPaneFrame}
             keyboardLift={
-              terminal.handle !== activeHandle &&
-              !(terminalSplitActive && visibleTerminalHandles.includes(terminal.handle))
+              terminalKeyboardResizeActive ||
+              (terminal.handle !== activeHandle &&
+                !(terminalSplitActive && visibleTerminalHandles.includes(terminal.handle)))
                 ? 0
                 : terminalSplitActive
                   ? computeActiveTerminalKeyboardLift({
@@ -352,7 +355,7 @@ export function MobileSessionActiveContent({
           </MobileDictationMeterContext.Provider>
         </MobileNativeChatDictationPreviewContext.Provider>
         {toastMessage && (
-          <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
+          <Animated.View pointerEvents="none" style={[styles.toast, terminalToastAnimatedStyle]}>
             <Text style={styles.toastText}>{toastMessage}</Text>
           </Animated.View>
         )}

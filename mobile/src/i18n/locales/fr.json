@@ -3746,6 +3746,11 @@
     },
     "webviewReadyWatchdog": {
       "initializeFailed": "Échec de l'initialisation du terminal - aucun signal de disponibilité reçu de la vue du terminal"
+    },
+    "keyboardResize": {
+      "heading": "DISPOSITION DU CLAVIER",
+      "description": "Adapte le terminal à l’espace au-dessus du clavier à l’écran. Ouvrir ou fermer le clavier redessine les programmes en cours. Le terminal affiché au format du téléphone sur le bureau est également redimensionné.",
+      "label": "Adapter le terminal au clavier"
     }
   },
   "webShell": {

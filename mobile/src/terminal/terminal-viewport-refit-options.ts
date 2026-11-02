@@ -23,6 +23,8 @@ export type TerminalViewportRefitOptions = {
   tabStripVisible: boolean
   // Why: text size (font scale); changing it changes cell size, so the PTY must be re-fitted to a new column count.
   textScale: number
+  // Android's opt-in allows keyboard-driven height changes to resize the PTY.
+  resizeForKeyboard: boolean
   unsubscribeTerminal: (handle: string) => void
   subscribeToTerminal: (handle: string) => void
 }

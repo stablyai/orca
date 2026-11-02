@@ -3746,6 +3746,11 @@
     },
     "webviewReadyWatchdog": {
       "initializeFailed": "La terminal no se inicializó - la vista de la terminal no indicó que estuviera lista"
+    },
+    "keyboardResize": {
+      "heading": "DISTRIBUCIÓN DEL TECLADO",
+      "description": "Ajusta el terminal al espacio sobre el teclado en pantalla. Al abrir o cerrar el teclado, los programas en ejecución se redibujan. Si el escritorio muestra el terminal con el tamaño del teléfono, también se ajusta.",
+      "label": "Ajustar el terminal al teclado"
     }
   },
   "webShell": {

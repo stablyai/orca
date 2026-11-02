@@ -3648,6 +3648,11 @@
     },
     "webviewReadyWatchdog": {
       "initializeFailed": "终端未能初始化：未收到终端视图的就绪信号"
+    },
+    "keyboardResize": {
+      "heading": "键盘布局",
+      "description": "将终端调整为屏幕键盘上方的大小。打开或关闭键盘时，运行中的程序会重新绘制。显示手机尺寸终端的桌面窗口也会随之调整。",
+      "label": "根据键盘调整终端大小"
     }
   },
   "webShell": {

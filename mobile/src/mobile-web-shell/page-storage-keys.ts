@@ -32,6 +32,8 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   'orca:mobileStructuredSendOperations:v1',
   'orca:terminalTextScale',
   'orca:terminalAutocompleteEnabled',
+  /** Whether Android resizes the terminal above its keyboard. */
+  'orca:terminalKeyboardResizeEnabled',
   /** Whether a terminal link opens in Orca's browser or the phone's. */
   'orca:terminalLinkOpenMode',
   /** The split terminal's chosen direction. */
@@ -43,7 +45,10 @@ export const PAGE_STORAGE_EXACT_KEYS = [
  * reader refines each key against its own list and refuses the whole frame on one it lacks, so
  * the host sends these only to a page whose `ready` named them in `storageKeys`.
  */
-export const NEGOTIATED_PAGE_STORAGE_KEYS = ['orca:terminalSplitLayout'] as const
+export const NEGOTIATED_PAGE_STORAGE_KEYS = [
+  'orca:terminalKeyboardResizeEnabled',
+  'orca:terminalSplitLayout'
+] as const
 
 /** Whether a page that declared `storageKeys` (null: declared nothing) reads this key in `init`. */
 export function pageReadsStorageKey(key: string, declared: readonly string[] | null): boolean {

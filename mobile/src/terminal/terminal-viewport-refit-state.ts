@@ -25,7 +25,7 @@ export function resolveTerminalUpdateViewportCapability(
   return isMethodNotFoundRefusal(response) ? 'unsupported' : 'unknown'
 }
 
-// Defer typing-time height refits and coalesce them into one correction after keyboard close.
+// Defer typing-time refits unless keyboard resizing is enabled.
 export type TerminalFrameHeightRefitState = {
   frameHeight: number
   keyboardVisible: boolean
@@ -39,11 +39,12 @@ export type TerminalFrameHeightRefitEvent =
 
 export function reduceTerminalFrameHeightRefit(
   state: TerminalFrameHeightRefitState,
-  event: TerminalFrameHeightRefitEvent
+  event: TerminalFrameHeightRefitEvent,
+  resizeForKeyboard = false
 ): { state: TerminalFrameHeightRefitState; shouldRefit: boolean } {
   if (event.type === 'refit-committed') {
-    // Keyboard may reopen during debounce; defer again instead of reflowing mid-keystroke.
-    if (state.keyboardVisible) {
+    // Recheck when the debounce fires because the keyboard may have reopened.
+    if (state.keyboardVisible && !resizeForKeyboard) {
       return { state: { ...state, pending: true }, shouldRefit: false }
     }
     return { state: { ...state, pending: false }, shouldRefit: true }
@@ -65,7 +66,7 @@ export function reduceTerminalFrameHeightRefit(
   if (event.height === state.frameHeight) {
     return { state, shouldRefit: false }
   }
-  if (state.keyboardVisible) {
+  if (state.keyboardVisible && !resizeForKeyboard) {
     return {
       state: { ...state, frameHeight: event.height, pending: true },
       shouldRefit: false

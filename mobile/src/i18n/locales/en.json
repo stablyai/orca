@@ -4279,6 +4279,11 @@
     },
     "webviewReadyWatchdog": {
       "initializeFailed": "Terminal did not initialize - no ready signal from the terminal view"
+    },
+    "keyboardResize": {
+      "heading": "KEYBOARD LAYOUT",
+      "description": "Fit the terminal above the on-screen keyboard. Opening or closing the keyboard makes running programs redraw. A desktop showing the phone-sized terminal resizes with it.",
+      "label": "Resize terminal for keyboard"
     }
   },
   "mobileWebShell": {

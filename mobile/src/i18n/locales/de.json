@@ -3652,6 +3652,11 @@
     },
     "webviewReadyWatchdog": {
       "initializeFailed": "Terminal konnte nicht initialisiert werden – kein Bereitschaftssignal von der Terminal-Ansicht"
+    },
+    "keyboardResize": {
+      "heading": "TASTATURLAYOUT",
+      "description": "Passt das Terminal an den Platz über der Bildschirmtastatur an. Beim Öffnen oder Schließen der Tastatur werden laufende Programme neu gezeichnet. Ein Desktop, der das Terminal in Telefongröße anzeigt, wird ebenfalls angepasst.",
+      "label": "Terminalgröße an die Tastatur anpassen"
     }
   },
   "webShell": {

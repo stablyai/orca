@@ -3746,6 +3746,11 @@
     },
     "webviewReadyWatchdog": {
       "initializeFailed": "O terminal não foi inicializado - a visualização do terminal não sinalizou que está pronta"
+    },
+    "keyboardResize": {
+      "heading": "LAYOUT DO TECLADO",
+      "description": "Ajusta o terminal ao espaço acima do teclado na tela. Abrir ou fechar o teclado redesenha os programas em execução. Um desktop que mostra o terminal no tamanho do telefone também é redimensionado.",
+      "label": "Ajustar o terminal ao teclado"
     }
   },
   "webShell": {
