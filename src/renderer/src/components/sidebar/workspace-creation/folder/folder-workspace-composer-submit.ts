@@ -21,7 +21,7 @@ import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { getNewWorkspaceProjectGroupHostId } from '@/lib/new-workspace-project-options'
 import { useAppStore } from '@/store/index'
-import { getLinkedWorkItemPromptTemplate } from '@/lib/linked-work-item-context'
+import { getDesktopLinkedWorkItemPromptTemplate } from '@/lib/linked-work-item-context'
 import { resolveExecutionHostAgentStartupShell } from '@/lib/execution-host-facts'
 import {
   buildFolderWorkspaceLinkedStartupPlan,
@@ -78,7 +78,13 @@ export async function submitFolderWorkspaceCreate({
           { name: projectGroup.name }
         )
   const launchState = useAppStore.getState()
-  const promptTemplate = getLinkedWorkItemPromptTemplate(launchState)
+  const promptTemplate = linkedWorkItem
+    ? getDesktopLinkedWorkItemPromptTemplate(
+        launchState,
+        linkedWorkItem.repoId,
+        getNewWorkspaceProjectGroupHostId(projectGroup)
+      )
+    : undefined
   const launchHost = getFolderWorkspaceAgentLaunchFact(launchState, projectGroup)
   if (quickAgent && launchHost.kind === 'withheld') {
     throw new Error(launchHost.reason)
