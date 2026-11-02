@@ -32,7 +32,7 @@ import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-cap
 import { projectSourceControlActionLaunch } from '../../../../../../shared/source-control-action-launch-preferences'
 import { projectAgentLaunchSettings } from '../../../../../../shared/agent-launch-settings'
 import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
-import { clearHostAgentMenuSettingsForTests } from '../../use-host-agent-launch-preferences'
+import { clearHostAgentMenuSettingsForTests } from '../../host-agent-launch-preferences-resource'
 import { mutateHostAgentLaunchSettings } from '../../agent-launch-settings-transport'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'

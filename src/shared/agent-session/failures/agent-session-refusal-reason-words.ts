@@ -1,7 +1,10 @@
 // Require wording and next steps for every new refusal reason at compile time.
 
 import type { AgentSessionFailureKind } from './agent-session-failure'
-import type { AgentSessionRefusalReason } from './agent-session-refusal-details'
+import type {
+  AgentSessionConversationOwner,
+  AgentSessionRefusalReason
+} from './agent-session-refusal-details'
 import type { AgentSessionWriteNoticeSentence } from './agent-session-write-notice-copy'
 import type { AgentSessionWireRefusalCode } from './agent-session-wire-refusals'
 import type { AgentSessionWriteKind, AgentSessionWriteRefusal } from './agent-session-write-failure'
@@ -159,7 +162,8 @@ const REASON_WORDS = {
   },
   agent_session_identity_required: {
     recordMissing: causeWords('chatNotFound', 'goElsewhere', 'startNewChat'),
-    transcriptNotFound: codeWords('retry'),
+    // Usually not written yet: the agent saves it after its first reply.
+    transcriptNotFound: causeWords('historyUnavailable', 'retry', 'tryAgain'),
     transcriptUnreadable: causeWords('historyUnavailable', 'retry', 'tryAgain')
   },
   agent_session_operation_conflict: {
@@ -202,11 +206,28 @@ const REASON_WORDS = {
   >
 }
 
+const HELD_IN_TERMINAL: AgentSessionRefusalReasonWords = {
+  fact: 'conversationOpenInTerminal',
+  action: 'actFirst'
+}
+
+/** The chat a failed start's refusal named as holding the conversation, or null when it named
+ *  none; absent where the refusal's owner was not kept, so who holds it is unknown. */
+export type AgentSessionRefusalHolder = { owner?: AgentSessionConversationOwner | null }
+
 /** The words and next step a reason gets; undefined when the refusal names none. */
 export function agentSessionRefusalReasonWords(
-  failure: AgentSessionWriteRefusal
+  failure: AgentSessionWriteRefusal & AgentSessionRefusalHolder
 ): AgentSessionRefusalReasonWords | undefined {
   const reason = failure.details?.reason
+  // A holder that is no chat is a terminal's agent, which the host found still running.
+  if (
+    failure.code === 'agent_session_conflict' &&
+    reason === 'conversationHeldElsewhere' &&
+    failure.owner === null
+  ) {
+    return HELD_IN_TERMINAL
+  }
   const byReason: Partial<Record<string, AgentSessionRefusalReasonWords>> | undefined =
     REASON_WORDS[failure.code]
   return reason === undefined ? undefined : byReason?.[reason]

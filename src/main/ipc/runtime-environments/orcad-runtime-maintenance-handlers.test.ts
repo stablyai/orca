@@ -33,7 +33,8 @@ const clearHostServerNotes = vi.fn()
 const store = {
   removeWorkspaceSessionHost: vi.fn(),
   getRemoteLayoutSnapshot: vi.fn(),
-  setRemoteLayoutSnapshot: vi.fn()
+  setRemoteLayoutSnapshot: vi.fn(),
+  setHostRepoCatalogSnapshot: vi.fn()
 }
 
 function handler(channel: string): (_event: unknown, args: unknown) => Promise<unknown> {

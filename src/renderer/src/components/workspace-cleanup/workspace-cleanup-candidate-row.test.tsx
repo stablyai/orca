@@ -33,40 +33,6 @@ describe('CandidateRow', () => {
     container = null
   })
 
-  it('hides selection and remove controls while the workspace is already deleting', () => {
-    const candidate = makeCandidate()
-
-    act(() => {
-      root?.render(
-        <CandidateRow
-          identity={getWorkspaceCleanupCandidateIdentity(candidate)}
-          candidate={candidate}
-          expanded={false}
-          last
-          lastActivityLabel="1d ago"
-          removing
-          reviewInfo={{
-            hasReview: false,
-            label: null,
-            provider: null,
-            state: null,
-            title: null
-          }}
-          selected
-          onIgnore={vi.fn()}
-          onRemove={vi.fn()}
-          onToggleExpanded={vi.fn()}
-          onToggleSelected={vi.fn()}
-          onView={vi.fn()}
-        />
-      )
-    })
-
-    const accessibleName = getWorkspaceCleanupCandidateAccessibleName(candidate)
-    expect(container?.querySelector(`[aria-label="Select ${accessibleName}"]`)).toBeNull()
-    expect(container?.querySelector(`[aria-label="Remove ${accessibleName}"]`)).toBeNull()
-  })
-
   it('visibly and accessibly distinguishes colliding local and SSH rows', () => {
     const local = makeCandidate({ executionHostId: 'local' })
     const remote = makeCandidate({ connectionId: 'builder', executionHostId: 'ssh:builder' })

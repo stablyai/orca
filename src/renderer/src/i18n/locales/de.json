@@ -19610,7 +19610,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Orca auf diesem Host aktualisieren, um in der Chat-Oberfläche fortzufahren.",
-        "notSavedYet": "{{agent}} hat diese Unterhaltung noch nicht gespeichert. Nach der Antwort erneut versuchen."
+        "notSavedYet": "{{agent}} hat diese Unterhaltung noch nicht gespeichert. Nach der Antwort erneut versuchen.",
+        "exitUnconfirmed": "{{agent}} führt diese Unterhaltung in einem anderen Terminal aus. Dort beenden oder das Terminal schließen, dann erneut versuchen."
       },
       "state": {
         "loading": {
@@ -20549,6 +20550,9 @@
         "finished": "Temporärer Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
         "keepOpen": "Offen halten"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "Läuft in WSL: {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {
@@ -22480,6 +22484,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: Es gibt keine lesbare Sicherungskopie, daher startet dieser Abschnitt leer.",
+      "sectionKeptCurrent": "{{section}}: Ihre aktuellen Ausführungen bleiben erhalten",
       "sectionRestored": "{{section}}: aus der {{time}} gespeicherten Sicherungskopie wiederhergestellt.",
       "projectsForgotten": "Orca vergisst die Projekte und ihre Arbeitsbereichsdetails. Dateien auf dem Datenträger bleiben unverändert.",
       "newerProjectsRemoved": "Projekte, die nach dieser Sicherungskopie hinzugefügt wurden, werden zusammen mit ihren Arbeitsbereichsdetails aus Orca entfernt. Dateien auf dem Datenträger bleiben unverändert.",
@@ -22522,7 +22527,7 @@
       "noneFound": "(keine gefunden)",
       "sqlitePath": "SQLite-Pfad: {{path}}",
       "sectionsDamaged": "Ein Teil des gespeicherten Zustands dieses Profils ist beschädigt: {{sections}}. Alles andere ist intakt.",
-      "repairCommand": "Orca beenden und dann `{{command}}` ausführen, um nur die beschädigten Teile aus Sicherungskopien zu ersetzen und alles andere beizubehalten. Orca bewahrt eine Kopie der beschädigten Datei auf.",
+      "repairCommand": "Beenden Sie Orca und führen Sie dann `{{command}}` aus, um nur die beschädigten Teile zu reparieren und alles andere beizubehalten. Orca bewahrt eine Kopie der beschädigten Datei auf.",
       "restoreWholeBackup": "Um stattdessen eine vollständige Sicherungskopie wiederherzustellen, zuerst `{{exportsCommand}}` und dann `{{rollbackCommand}}` ausführen.",
       "sqliteUnreadable": "Orca kann das aktive Profil nicht sicher öffnen, da sein SQLite-Zustand nicht lesbar ist.",
       "legacyJsonPath": "Pfad der alten JSON-Datei: {{path}}",

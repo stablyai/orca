@@ -8,7 +8,7 @@ import { findTaskPageDialogWorkItem } from '@/components/task-page/task-page-cac
 import { useTaskPageWorkItemsCacheSelection } from './use-task-page-work-items-cache-selection'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
-import { getTaskPageRepoSourceContext } from '../task-page-source-context'
+import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
 import { startGitHubListScrollRestore } from './task-page-github-list-scroll-restore'
 
 function getTaskPageScrollTop(

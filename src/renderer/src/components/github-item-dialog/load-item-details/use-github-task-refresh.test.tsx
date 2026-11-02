@@ -237,6 +237,40 @@ describe('Refresh task with real shared record and mounted copy', () => {
     expect(workItemDetailsCache.get(model.detailsCacheKey!)?.details?.body).toBe('Saved body')
   })
 
+  it('lets the Refresh loop alone replace its read that a saved description crossed in the dialog', async () => {
+    let dialog!: ReturnType<typeof useGitHubItemDialogDetails>
+    function Dialog() {
+      dialog = useGitHubItemDialogDetails({
+        workItem: row,
+        repoPath: repo.path,
+        effectiveRepoId: repo.id,
+        sourceContext: source
+      })
+      return <output>{dialog.details?.body}</output>
+    }
+    const first = deferred<GitHubWorkItemDetails>()
+    mocks.details
+      .mockResolvedValueOnce(details)
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce({ ...details, body: 'Saved body' })
+    await act(async () => root.render(<Dialog />))
+    await flush()
+    let refresh!: Promise<void>
+    await act(async () => {
+      refresh = dialog.refreshTask()
+      await Promise.resolve()
+    })
+    // The dialog renders between the save and the old answer, so an owed ordinary read would start here.
+    await act(async () => patchCachedWorkItemBody(dialog.detailsCacheKey!, 'Saved body'))
+    await act(async () => {
+      first.resolve({ ...details, body: 'Body stays visible' })
+      await refresh
+    })
+    await flush()
+    expect(mocks.details).toHaveBeenCalledTimes(3)
+    expect(node.textContent).toBe('Saved body')
+  })
+
   it('reads for a Refresh clicked after the dialog closed mid-Refresh and reopened', async () => {
     await render()
     const first = deferred<GitHubWorkItemDetails>()

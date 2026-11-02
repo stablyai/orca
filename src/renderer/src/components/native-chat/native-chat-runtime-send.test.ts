@@ -34,7 +34,7 @@ import {
 import {
   buildNativeChatPasteBytes,
   NATIVE_CHAT_SUBMIT
-} from '../../../../shared/native-chat-paste-bytes'
+} from '../../../../shared/native-chat/input/native-chat-paste-bytes'
 
 const PTY = 'pty-1'
 

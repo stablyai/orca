@@ -39,7 +39,6 @@ const WINDOWS_SHIM_SPAWN_ALLOWLIST = [
   // Benchmarks, repros and e2e drivers — developer-invoked or Linux-only in CI.
   'config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs',
   'config/scripts/run-multi-client-navigation-e2e.mjs',
-  'config/scripts/run-multi-workspace-typing-bench.mjs',
   'config/scripts/run-ssh-staged-upload-reliability.mjs',
   'config/scripts/run-terminal-ibus-hangul-e2e.mjs',
   'config/scripts/run-terminal-scale-perf-e2e.mjs',
