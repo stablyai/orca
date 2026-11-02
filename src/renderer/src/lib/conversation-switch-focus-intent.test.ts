@@ -6,19 +6,32 @@ import {
   resetWebSessionFocusIntentForTests
 } from '@/runtime/web-session-focus-intent'
 
-const store = vi.hoisted(() => ({ activeTabId: 'local-source' }))
+const store = vi.hoisted(() => ({ activeTabId: 'local-tab', split: true }))
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
       groupsByWorktree: {
-        ws: [{ id: 'group', activeTabId: store.activeTabId, tabOrder: ['local-source', 'other'] }]
+        ws: [{ id: 'group', activeTabId: store.activeTabId, tabOrder: ['local-tab', 'other'] }]
       },
       activeGroupIdByWorktree: { ws: 'group' },
       unifiedTabsByWorktree: {
         ws: [
-          { id: 'local-source', groupId: 'group' },
-          { id: 'other', groupId: 'group' }
+          // A host switch earlier left this terminal in a tab with another id.
+          { id: 'local-tab', entityId: 'local-source', contentType: 'terminal', groupId: 'group' },
+          { id: 'other', entityId: 'other', groupId: 'group' }
         ]
+      },
+      terminalLayoutsByTabId: {
+        'local-source': {
+          root: store.split
+            ? {
+                type: 'split',
+                direction: 'vertical',
+                first: { type: 'leaf', leafId: 'a' },
+                second: { type: 'leaf', leafId: 'b' }
+              }
+            : { type: 'leaf', leafId: 'a' }
+        }
       }
     })
   }
@@ -36,14 +49,15 @@ const record = (target: Parameters<typeof recordConversationSwitchFocus>[0]['tar
 
 beforeEach(() => {
   resetWebSessionFocusIntentForTests()
-  store.activeTabId = 'local-source'
+  store.activeTabId = 'local-tab'
+  store.split = true
 })
 
-it('lets only a paired client still on the source follow its switch, until a refusal withdraws it', () => {
+it('lets only a paired client still on a split source follow its switch, until a refusal withdraws it', () => {
   const abandon = record(remote)
   expect(peekWebSessionFocusIntent({ environmentId: 'env' }, 'ws')).toEqual({
     hostTabId: 'agent-session:chat',
-    expectedCurrentLocalTabId: 'local-source',
+    expectedCurrentLocalTabId: 'local-tab',
     afterHostTabId: 'host-source'
   })
   abandon()
@@ -51,10 +65,13 @@ it('lets only a paired client still on the source follow its switch, until a ref
 })
 
 it.each([
-  ['this host’s own window, which main focuses', { kind: 'local' as const }, 'local-source'],
-  ['a client looking at another tab', remote, 'other']
-] as const)('records nothing for %s', (_name, target, active) => {
+  ['this host’s own window, which main focuses', { kind: 'local' as const }, 'local-tab', true],
+  ['a client looking at another tab', remote, 'other', true],
+  // The same tab takes the chat, so its selection already stays.
+  ['a whole tab', remote, 'local-tab', false]
+] as const)('records nothing for %s', (_name, target, active, split) => {
   store.activeTabId = active
+  store.split = split
   record(target)
   expect(peekWebSessionFocusIntent(structuredAgentSessionFocusOwner(target), 'ws')).toBeNull()
 })

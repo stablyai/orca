@@ -12,30 +12,37 @@ import {
   resolveWebSessionVisibleTabId
 } from '@/runtime/web-session-focus-intent'
 import { agentSessionRowId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
+import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-pane-tree'
 
 /**
- * A paired client's switch of a terminal pane to chat: the chat lands where this client looks only
- * if the source still holds its selection when the chat arrives. From Session History the user
- * asked from wherever they look, so the chat is selected as any chat they open is (if that tab
- * still holds the selection). Recorded before the request, so
- * a snapshot ahead of the answer, or a lost answer, still finds it; matched by the slot the host
- * names, so a chat the host reused still lands. On this host's own window, main focuses instead.
- * Returns how to withdraw it after a definite refusal.
+ * A paired client's switch of a split pane to chat: the chat opens beside the source's tab, and
+ * lands where this client looks only if that tab still holds its selection when the chat arrives
+ * (a whole tab needs nothing: the same tab holds the chat). From Session History the user asked
+ * from wherever they look, so the chat is selected as any chat they open is (if that tab still
+ * holds the selection). Recorded before the request, so a snapshot ahead of the answer, or a lost
+ * answer, still finds it; matched by the slot the host names, so a chat the host reused still
+ * lands. On this host's own window, main focuses instead. Returns how to withdraw it after a
+ * definite refusal.
  */
 export function recordConversationSwitchFocus(args: {
   target: RuntimeClientTarget
   workspaceId: string
-  /** This client's id for the source tab, and the host's. */
+  /** This client's id for the source terminal, and the host's for its tab. */
   sourceTabId: string
   hostSourceTabId: string | undefined
   chatSessionId: string
   fromHistory?: boolean
 }): () => void {
-  const visible = resolveWebSessionVisibleTabId(useAppStore.getState(), args.workspaceId)
+  const state = useAppStore.getState()
+  const visible = resolveWebSessionVisibleTabId(state, args.workspaceId)
+  const shown = state.unifiedTabsByWorktree[args.workspaceId]?.find((tab) => tab.id === visible)
+  const split =
+    collectLayoutLeafIdsInOrder(state.terminalLayoutsByTabId[args.sourceTabId]?.root ?? null)
+      .length > 1
   if (
     args.target.kind === 'local' ||
     !args.hostSourceTabId ||
-    (!args.fromHistory && visible !== args.sourceTabId)
+    (!args.fromHistory && (!split || shown?.entityId !== args.sourceTabId))
   ) {
     return () => {}
   }
@@ -46,7 +53,7 @@ export function recordConversationSwitchFocus(args: {
     args.workspaceId,
     hostTabId,
     undefined,
-    args.fromHistory ? visible : args.sourceTabId,
+    visible,
     args.hostSourceTabId
   )
   return () => clearWebSessionFocusIntentIfMatches(owner, args.workspaceId, hostTabId)
