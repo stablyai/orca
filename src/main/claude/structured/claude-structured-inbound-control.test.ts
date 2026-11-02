@@ -1,7 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk'
 import { ClaudePromptRegistry } from '../claude-prompt-registry'
+import { invokeCanUseTool } from '../claude-can-use-tool-test-support'
 import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
+import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import { claudeStructuredPermissionOptions } from './launch/claude-structured-launch-resolution'
+import {
+  adapterFor,
+  fakeClaude,
+  identityFor,
+  PROVIDER_SESSION_ID,
+  recordingJournalSink,
+  tick,
+  type FakeConnection
+} from './claude-structured-session-test-support'
 
 type CanUseToolOptions = Parameters<CanUseTool>[2]
 
@@ -21,18 +33,14 @@ function permissionOptions(
   }
 }
 
-function callbacksFor(
-  reported: { reportedPermissionMode?: string | null } = {},
-  launchedMode?: string
-) {
+function callbacksFor(fullAccess = false) {
   const prompts = new ClaudePromptRegistry()
   const emit = vi.fn()
   const { canUseTool, onUserDialog } = buildClaudePermissionCallbacks({
     sessionId: 'session-1',
     prompts,
     emit,
-    reported,
-    live: () => (launchedMode ? { launchIntent: { permissionMode: launchedMode } } : null)
+    fullAccessAt: () => fullAccess
   })
   return { prompts, emit, canUseTool, onUserDialog }
 }
@@ -176,34 +184,8 @@ describe('Claude permission callbacks', () => {
     )
   })
 
-  it('approves Claude safety-check asks in Full access, re-reading the mode for each request', async () => {
-    // Launched with Full access, before Claude's first mode report.
-    const reported: { reportedPermissionMode?: string | null } = {}
-    const control = callbacksFor(reported, 'bypassPermissions')
-    // Shape of a real Claude Code 2.1.310 ask under --dangerously-skip-permissions.
-    const askOptions = (id: string): CanUseToolOptions =>
-      permissionOptions(id, `tool-${id}`, new AbortController().signal, [], {
-        decisionReason:
-          'Dangerous rm operation not ruled out — the shell may read this command differently than it was parsed'
-      })
-    const input = { command: 'for v in A B; do echo "$v"; done', description: 'List' }
-
-    await expect(control.canUseTool('Bash', input, askOptions('a'))).resolves.toEqual({
-      behavior: 'allow',
-      updatedInput: input,
-      toolUseID: 'tool-a'
-    })
-    expect(control.prompts.find('a')).toBeNull()
-    expect(control.emit).not.toHaveBeenCalled()
-
-    // Claude's own report wins once it arrives, e.g. after an approved plan moved it to default.
-    reported.reportedPermissionMode = 'default'
-    void control.canUseTool('Bash', input, askOptions('b'))
-    expect(control.prompts.find('b')).not.toBeNull()
-  })
-
-  it('still asks the user questions and plan approval in Full access', () => {
-    const control = callbacksFor({ reportedPermissionMode: 'full-access' })
+  it('still asks for questions, plan approval and interaction-flagged tools in Full access', () => {
+    const control = callbacksFor(true)
     void control.canUseTool(
       'AskUserQuestion',
       { questions: [{ question: 'Which?', header: 'Pick', options: [], multiSelect: false }] },
@@ -214,7 +196,163 @@ describe('Claude permission callbacks', () => {
       { plan: '# Plan' },
       permissionOptions('p', 'tool-p', new AbortController().signal)
     )
+    // The SDK passes the CLI's requires_user_interaction through, outside its declared type.
+    const flagged = { title: 'Confirm your answer', requiresUserInteraction: true }
+    void control.canUseTool(
+      'mcp__forms__confirm',
+      { request: 'Please enter your answer' },
+      permissionOptions('m', 'tool-m', new AbortController().signal, [], flagged)
+    )
     expect(control.prompts.find('q')).not.toBeNull()
     expect(control.prompts.find('p')).not.toBeNull()
+    expect(control.prompts.find('m')).not.toBeNull()
   })
+})
+
+// The recorded Claude Code 2.1.310 safety-check ask under --dangerously-skip-permissions.
+const SAFETY_CHECK =
+  'Dangerous rm operation not ruled out — the shell may read this command differently than it was parsed'
+const SHELL_INPUT = {
+  command: 'for v in HOME PATH; do echo "${(P)v}" | head -c 5; done',
+  description: 'Print the start of HOME and PATH'
+}
+
+type WireItem = Record<string, unknown>
+
+const modeFrame = (subtype: 'init' | 'status', permissionMode?: unknown): WireItem => ({
+  type: 'system',
+  subtype,
+  ...(subtype === 'status' ? { status: null } : {}),
+  ...(permissionMode === undefined ? {} : { permissionMode }),
+  session_id: PROVIDER_SESSION_ID
+})
+const ask = (id: string): WireItem => ({
+  type: 'control_request',
+  request_id: id,
+  request: {
+    subtype: 'can_use_tool',
+    tool_name: 'Bash',
+    input: SHELL_INPUT,
+    tool_use_id: `tool-${id}`,
+    decision_reason: SAFETY_CHECK
+  }
+})
+const allowed = (id: string) => ({
+  behavior: 'allow',
+  updatedInput: SHELL_INPUT,
+  toolUseID: `tool-${id}`
+})
+
+function askFor(connection: FakeConnection, id: string) {
+  return invokeCanUseTool(connection, 'Bash', id, `tool-${id}`, {
+    input: SHELL_INPUT,
+    decisionReason: SAFETY_CHECK
+  })
+}
+
+async function outcome(request: ReturnType<typeof askFor>): Promise<unknown> {
+  await tick()
+  return request.settled() ? request.promise : 'card'
+}
+
+/** One stdout chunk, then each request in it, as the SDK asks only after reading the whole chunk. */
+async function overWire(connection: FakeConnection, wire: WireItem[]) {
+  connection.handlers.onStdout?.(wire.map((frame) => `${JSON.stringify(frame)}\n`).join(''))
+  const asked = wire.flatMap((frame) =>
+    frame.type === 'control_request' ? [askFor(connection, String(frame.request_id))] : []
+  )
+  return Promise.all(asked.map(outcome))
+}
+
+function cards(events: ClaudeStructuredSessionEvent[]): string[] {
+  return events.flatMap((event) => (event.type === 'prompt' ? [event.prompt.promptKey] : []))
+}
+
+async function acquireWith(
+  choice: Parameters<typeof claudeStructuredPermissionOptions>[0],
+  events: ClaudeStructuredSessionEvent[],
+  beforePublish?: (connection: FakeConnection) => void
+): Promise<FakeConnection> {
+  const claude = fakeClaude()
+  const adapter = adapterFor(
+    {
+      ...claude,
+      openConnection: async (launch, handlers) => {
+        const connection = await claude.openConnection(launch, handlers)
+        beforePublish?.(claude.connections.at(-1)!)
+        return connection
+      }
+    },
+    { options: claudeStructuredPermissionOptions(choice) },
+    events
+  )
+  await adapter.acquire({
+    identity: identityFor(),
+    fence: 7,
+    spawnToken: 'spawn-9',
+    events: recordingJournalSink()
+  })
+  return claude.connections.at(-1)!
+}
+
+describe('Full access through a Claude process', () => {
+  it("approves Claude's own asks only while the mode before each request is Full access", async () => {
+    const events: ClaudeStructuredSessionEvent[] = []
+    let early: ReturnType<typeof askFor> | undefined
+    const connection = await acquireWith('full-access', events, (opened) => {
+      early = askFor(opened, 'before-publish')
+    })
+    await expect(outcome(early!)).resolves.toEqual(allowed('before-publish'))
+
+    const table: [string, WireItem[], unknown[]][] = [
+      ['before any report', [ask('first')], [allowed('first')]],
+      [
+        'init bypassPermissions',
+        [modeFrame('init', 'bypassPermissions'), ask('init')],
+        [allowed('init')]
+      ],
+      ['status default', [modeFrame('status', 'default'), ask('default')], ['card']],
+      ['a status without a mode', [modeFrame('status'), ask('absent')], ['card']],
+      [
+        'a later bypassPermissions',
+        [modeFrame('status', 'bypassPermissions'), ask('back')],
+        [allowed('back')]
+      ],
+      ...['plan', null, 'dontAsk', 'someFutureMode'].map(
+        (mode): [string, WireItem[], unknown[]] => [
+          `${mode} then bypassPermissions in one chunk`,
+          [
+            modeFrame('status', mode),
+            ask(`in-${mode}`),
+            modeFrame('status', 'bypassPermissions'),
+            ask(`after-${mode}`)
+          ],
+          ['card', allowed(`after-${mode}`)]
+        ]
+      )
+    ]
+    for (const [label, wire, expected] of table) {
+      expect(await overWire(connection, wire), label).toEqual(expected)
+    }
+    expect(cards(events)).toEqual([
+      'default',
+      'absent',
+      'in-plan',
+      'in-null',
+      'in-dontAsk',
+      'in-someFutureMode'
+    ])
+  })
+
+  it.each(['own', 'ask'] as const)(
+    'keeps the card in a %s chat even when Claude reports bypassPermissions',
+    async (choice) => {
+      const events: ClaudeStructuredSessionEvent[] = []
+      const connection = await acquireWith(choice, events)
+      expect(
+        await overWire(connection, [modeFrame('init', 'bypassPermissions'), ask('r')])
+      ).toEqual(['card'])
+      expect(cards(events)).toEqual(['r'])
+    }
+  )
 })

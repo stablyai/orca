@@ -17,6 +17,7 @@ import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/ag
 import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { claudeQuerySettingsReader } from './claude-agent-sdk-control-requests'
+import { createClaudeFullAccessPolicy } from './structured/claude-full-access-policy'
 
 // Exercise the real SDK against a scripted CLI to detect protocol and spawn-contract drift.
 
@@ -482,6 +483,73 @@ describe('Claude Agent SDK contract pins', () => {
       .controlResponses.find((frame) => frame.response.request_id === 'perm-421')
     expect(settled?.response.response?.behavior).toBe('deny')
     expect(spawns).toHaveLength(1)
+  })
+
+  it('hands Orca each stdout chunk before canUseTool runs for a request in it, with the interaction flag', async () => {
+    const status = (permissionMode: string) => ({
+      type: 'system',
+      subtype: 'status',
+      status: null,
+      permissionMode,
+      session_id: SESSION_ID
+    })
+    const ask = (id: string, extra: Record<string, unknown> = {}) => ({
+      type: 'control_request',
+      request_id: id,
+      request: {
+        subtype: 'can_use_tool',
+        tool_name: 'mcp__forms__confirm',
+        input: {},
+        tool_use_id: `tool-${id}`,
+        ...extra
+      }
+    })
+    const scenario = scriptScenario([
+      { awaitUserMessage: true },
+      {
+        emitTogether: [
+          status('plan'),
+          ask('in-plan'),
+          status('bypassPermissions'),
+          ask('restored', { requires_user_interaction: true })
+        ]
+      },
+      { awaitControlResponse: 'in-plan' },
+      { awaitControlResponse: 'restored' },
+      { emit: RESULT_FRAME }
+    ])
+    const policy = createClaudeFullAccessPolicy(SESSION_ID)
+    const seen: { requestId: string; fullAccess: boolean; requiresUserInteraction: unknown }[] = []
+    const canUseTool: CanUseTool = (_toolName, _input, options) => {
+      seen.push({
+        requestId: options.requestId,
+        fullAccess: policy.allows(options.requestId),
+        requiresUserInteraction:
+          'requiresUserInteraction' in options ? options.requiresUserInteraction : undefined
+      })
+      return Promise.resolve({ behavior: 'deny', message: 'pinned', toolUseID: options.toolUseID })
+    }
+    const spawner = createClaudeCodeProcessSpawn(
+      spawnProcess,
+      process.platform,
+      { pathToClaudeCodeExecutable: FAKE_CLI },
+      policy.observe
+    )
+    const messages = await drainQuery({
+      pathToClaudeCodeExecutable: FAKE_CLI,
+      cwd: scenario.cwd,
+      env: scenarioEnv(scenario),
+      canUseTool,
+      spawnClaudeCodeProcess: spawner.spawn
+    })
+
+    // The SDK reads the whole chunk only after Orca's tap saw it; each request keeps its own position.
+    expect(seen).toEqual([
+      { requestId: 'in-plan', fullAccess: false, requiresUserInteraction: undefined },
+      { requestId: 'restored', fullAccess: true, requiresUserInteraction: true }
+    ])
+    expect(messages.filter((message) => message.subtype === 'status')).toHaveLength(2)
+    expect(policy.retained()).toEqual({ partialChars: 0, requests: 0 })
   })
 
   it('runs the executable given via pathToClaudeCodeExecutable under the default spawner', async () => {

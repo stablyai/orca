@@ -11,13 +11,15 @@ export function invokeCanUseTool(
     suggestions?: unknown[]
     signal?: AbortSignal
     agentID?: string
+    decisionReason?: string
   } = {}
 ): { promise: Promise<unknown>; settled: () => boolean } {
   const options = {
     requestId,
     toolUseID,
     signal: extra.signal ?? new AbortController().signal,
-    ...(extra.suggestions ? { suggestions: extra.suggestions } : {})
+    ...(extra.suggestions ? { suggestions: extra.suggestions } : {}),
+    ...(extra.decisionReason ? { decisionReason: extra.decisionReason } : {})
   } as unknown as Parameters<NonNullable<ClaudeStreamJsonConnectionHandlers['canUseTool']>>[2]
   const asked = extra.agentID ? { ...options, agentID: extra.agentID } : options
   let done = false
