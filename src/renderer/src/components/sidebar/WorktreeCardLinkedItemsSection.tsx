@@ -16,6 +16,8 @@ import {
 } from './worktree-task-state'
 import { WorkspaceAttachmentOrigins } from './WorkspaceAttachmentOrigins'
 import { WorktreeCardReferenceRow } from './WorktreeCardReferenceRow'
+import { WorktreeCardTaskActions } from './WorktreeCardTaskDetailSection'
+import type { WorktreeCardTaskActionHandlers } from './worktree-card-task-actions'
 import type {
   WorkspaceReferenceDetails,
   WorkspaceReferenceDetailsMap
@@ -59,7 +61,7 @@ export function WorktreeCardLinkedItemsSection({
   onManage,
   onOpen,
   renderReviewActions,
-  renderTaskActions
+  taskMenu
 }: {
   workspace?: Worktree
   referenceDetails?: WorkspaceReferenceDetailsMap
@@ -70,11 +72,7 @@ export function WorktreeCardLinkedItemsSection({
   showItems: boolean
   onManage?: (event: React.MouseEvent) => void
   onOpen?: (url: string, event: React.MouseEvent) => void
-  renderTaskActions?: (
-    item: WorkspaceAttachment,
-    url: string | undefined,
-    isCardTask: boolean
-  ) => React.ReactNode
+  taskMenu?: { actions: WorktreeCardTaskActionHandlers; onOpenChange: (open: boolean) => void }
   renderReviewActions?: (
     item: WorkspaceAttachment,
     review: WorktreeCardPrDisplay | null
@@ -159,7 +157,15 @@ export function WorktreeCardLinkedItemsSection({
                         }
                         actions={
                           item.type === 'issue'
-                            ? renderTaskActions?.(item, url, Boolean(liveTask))
+                            ? taskMenu && (
+                                <WorktreeCardTaskActions
+                                  item={item}
+                                  url={url}
+                                  isCardTask={Boolean(liveTask)}
+                                  actions={taskMenu.actions}
+                                  onOpenChange={taskMenu.onOpenChange}
+                                />
+                              )
                             : renderReviewActions?.(item, live)
                         }
                       />

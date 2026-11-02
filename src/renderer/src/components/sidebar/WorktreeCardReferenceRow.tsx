@@ -22,6 +22,8 @@ const PROVIDER_MARKS: Partial<
   Jira: JiraIcon
 }
 
+const STALE_SHIMMER = 'shimmer shimmer-duration-2400 shimmer-steps-30'
+
 function StateGlyph({
   label,
   children
@@ -163,23 +165,14 @@ export function WorktreeCardReferenceRow({
               <ProviderMark className="size-3" />
             </span>
           ) : null}
-          <span
-            className={cn('shrink-0', stale && 'shimmer shimmer-duration-2400 shimmer-steps-30')}
-          >
-            {label}
-          </span>
+          <span className={cn('shrink-0', stale && STALE_SHIMMER)}>{label}</span>
           {review?.status ? <ReviewChecksIndicator status={review.status} /> : null}
           {sourceText ? (
             <>
               <span aria-hidden className="shrink-0">
                 ·
               </span>
-              <span
-                className={cn(
-                  'min-w-0 shrink-[2] truncate',
-                  stale && 'shimmer shimmer-duration-2400 shimmer-steps-30'
-                )}
-              >
+              <span className={cn('min-w-0 shrink-[2] truncate', stale && STALE_SHIMMER)}>
                 {sourceText}
               </span>
             </>
@@ -210,7 +203,7 @@ function ReferenceLabels({ labels }: { labels: readonly string[] }): React.JSX.E
         >
           <Badge
             variant="referenceLabel"
-            className={cn('hidden min-w-0 max-w-[5rem] shrink justify-start @[16rem]:inline-flex')}
+            className="hidden min-w-0 max-w-[5rem] shrink justify-start @[16rem]:inline-flex"
           >
             <span className="truncate">{labels[0]}</span>
           </Badge>

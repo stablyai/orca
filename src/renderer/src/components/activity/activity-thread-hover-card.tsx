@@ -1,6 +1,5 @@
 import React, { useCallback } from 'react'
 import { Pencil, StickyNote } from 'lucide-react'
-import { toast } from 'sonner'
 import { HoverCardContent } from '@/components/ui/hover-card'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import { translate } from '@/i18n/i18n'
@@ -11,6 +10,7 @@ import {
   WorktreeCardDetailSectionContent
 } from '../sidebar/WorktreeCardDetailSection'
 import { WorktreeCardTaskDetailSection } from '../sidebar/WorktreeCardTaskDetailSection'
+import { getWorktreeCardTaskActions } from '../sidebar/worktree-card-task-actions'
 import { WorktreeCardReviewDetailSection } from '../sidebar/WorktreeCardReviewDetailSection'
 import { WorktreeCardAutomationDetailSection } from '../sidebar/WorktreeCardAutomationDetailSection'
 import { WorktreeCardCliDetailSection } from '../sidebar/WorktreeCardCliDetailSection'
@@ -172,31 +172,12 @@ function ActivityThreadHoverCardContent({
     settings: foundation.settings
   })
 
-  const copyLinkedWorkItemLink = useCallback(async (url: string, label: string) => {
-    try {
-      await window.api.ui.writeClipboardText(url)
-      toast.success(
-        translate('auto.components.sidebar.WorktreeCardMeta.copyLinkSuccess', '{{value0}} copied', {
-          value0: label
-        })
-      )
-    } catch {
-      toast.error(
-        translate('auto.components.sidebar.WorktreeCardMeta.copyLinkFailure', 'Failed to copy link')
-      )
-    }
-  }, [])
-
-  const handleCopyIssueLink = useCallback(
-    (url: string) => {
-      detailsHoverControl.closeHover()
-      void copyLinkedWorkItemLink(
-        url,
-        translate('auto.components.sidebar.WorktreeCardMeta.issueLinkLabel', 'Issue link')
-      )
-    },
-    [copyLinkedWorkItemLink, detailsHoverControl]
-  )
+  const taskActions = getWorktreeCardTaskActions(detailsHoverControl.closeHover, {
+    onEditIssue: foundation.handleEditIssue,
+    onOpenGitHubIssueInOrca: secondary.handleOpenGitHubIssueInOrca,
+    onOpenIssueInBrowser: secondary.handleOpenIssueInBrowser,
+    onOpenLinearIssueInOrca: secondary.handleOpenLinearIssueInOrca
+  })
 
   const dismissAndRun = useCallback(
     (handler: ((event: React.MouseEvent) => void) | undefined) => (event: React.MouseEvent) => {
@@ -242,26 +223,10 @@ function ActivityThreadHoverCardContent({
           issue={secondary.hoverIssue}
           linearIssue={secondary.hoverLinearIssue}
           jiraIssue={secondary.hoverJiraIssue}
-          onManageLinks={dismissAndRun(foundation.handleManageLinks)}
-          issueMenuOpen={detailsHoverControl.issueMenuOpen}
-          onIssueMenuOpenChange={detailsHoverControl.handleIssueMenuOpenChange}
+          actions={taskActions}
+          onMenuOpenChange={detailsHoverControl.handleIssueMenuOpenChange}
           onOpenLink={onOpenLink}
-          onCopyLink={handleCopyIssueLink}
-          onEditIssue={foundation.handleEditIssue}
-          onOpenGitHubIssueInOrca={
-            secondary.handleOpenGitHubIssueInOrca
-              ? dismissAndRun(secondary.handleOpenGitHubIssueInOrca)
-              : undefined
-          }
-          onOpenIssueInBrowser={(url: string) => {
-            detailsHoverControl.closeHover()
-            secondary.handleOpenIssueInBrowser(url)
-          }}
-          onOpenLinearIssueInOrca={
-            secondary.handleOpenLinearIssueInOrca
-              ? dismissAndRun(secondary.handleOpenLinearIssueInOrca)
-              : undefined
-          }
+          onManageLinks={dismissAndRun(foundation.handleManageLinks)}
         />
 
         {/* Automation Provenance */}

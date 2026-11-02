@@ -5,7 +5,6 @@ import { getWorkspaceAttachments } from '../../../../shared/workspace-attachment
 import { WorktreeCardLinkedItemsSection } from './WorktreeCardLinkedItemsSection'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import { Pencil, StickyNote } from 'lucide-react'
-import { toast } from 'sonner'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from './WorktreeContextMenu'
 import {
@@ -28,10 +27,8 @@ import { translate } from '@/i18n/i18n'
 import { WorktreeCardReviewDetailSection } from './WorktreeCardReviewDetailSection'
 import { WorktreeCardAutomationDetailSection } from './WorktreeCardAutomationDetailSection'
 import { WorktreeCardCliDetailSection } from './WorktreeCardCliDetailSection'
-import {
-  WorktreeCardLinkedTaskActions,
-  WorktreeCardTaskDetailSection
-} from './WorktreeCardTaskDetailSection'
+import { WorktreeCardTaskDetailSection } from './WorktreeCardTaskDetailSection'
+import { getWorktreeCardTaskActions } from './worktree-card-task-actions'
 import { WorktreeCardHoverIdentityHeader } from './WorktreeCardHoverIdentityHeader'
 import { CommentMarkdownAsync, preloadCommentMarkdown } from './comment-markdown-lazy'
 
@@ -89,7 +86,6 @@ export function WorktreeCardDetailsHover({
   const detailsHoverControl = hoverControl ?? internalHoverControl
   const {
     hoverOpen,
-    issueMenuOpen,
     reviewMenuOpen,
     handleHoverOpenChange,
     handleIssueMenuOpenChange,
@@ -129,37 +125,12 @@ export function WorktreeCardDetailsHover({
     },
     [closeHover]
   )
-  const copyLinkedWorkItemLink = React.useCallback(async (url: string, label: string) => {
-    try {
-      // Electron clipboard IPC survives nested overlays that can lose browser activation.
-      await window.api.ui.writeClipboardText(url)
-      toast.success(
-        translate('auto.components.sidebar.WorktreeCardMeta.copyLinkSuccess', '{{value0}} copied', {
-          value0: label
-        })
-      )
-    } catch {
-      toast.error(
-        translate('auto.components.sidebar.WorktreeCardMeta.copyLinkFailure', 'Failed to copy link')
-      )
-    }
-  }, [])
-  const handleCopyIssueLink = React.useCallback(
-    (url: string): void => {
-      closeHover()
-      void copyLinkedWorkItemLink(
-        url,
-        translate('auto.components.sidebar.WorktreeCardMeta.issueLinkLabel', 'Issue link')
-      )
-    },
-    [closeHover, copyLinkedWorkItemLink]
-  )
-  const handleOpenTaskInBrowser = onOpenIssueInBrowser
-    ? (url: string): void => {
-        closeHover()
-        onOpenIssueInBrowser(url)
-      }
-    : undefined
+  const taskActions = getWorktreeCardTaskActions(closeHover, {
+    onEditIssue,
+    onOpenGitHubIssueInOrca,
+    onOpenIssueInBrowser,
+    onOpenLinearIssueInOrca
+  })
   const showIdentityHeader = Boolean(branchName || workspaceTitle)
   const attachments = getWorkspaceAttachments(workspace ?? {})
   const showAttachmentCollection =
@@ -239,19 +210,10 @@ export function WorktreeCardDetailsHover({
                 issue={issue}
                 linearIssue={linearIssue}
                 jiraIssue={jiraIssue}
-                onManageLinks={onManageLinks ? dismissAndRun(onManageLinks) : undefined}
-                issueMenuOpen={issueMenuOpen}
-                onIssueMenuOpenChange={handleIssueMenuOpenChange}
+                actions={taskActions}
+                onMenuOpenChange={handleIssueMenuOpenChange}
                 onOpenLink={onOpenLink}
-                onCopyLink={handleCopyIssueLink}
-                onEditIssue={onEditIssue}
-                onOpenGitHubIssueInOrca={
-                  onOpenGitHubIssueInOrca ? dismissAndRun(onOpenGitHubIssueInOrca) : undefined
-                }
-                onOpenIssueInBrowser={handleOpenTaskInBrowser}
-                onOpenLinearIssueInOrca={
-                  onOpenLinearIssueInOrca ? dismissAndRun(onOpenLinearIssueInOrca) : undefined
-                }
+                onManageLinks={onManageLinks ? dismissAndRun(onManageLinks) : undefined}
               />
             </>
           ) : null}
@@ -265,23 +227,7 @@ export function WorktreeCardDetailsHover({
             showItems={showAttachmentCollection}
             onManage={onManageLinks ? dismissAndRun(onManageLinks) : undefined}
             onOpen={onOpenLink}
-            renderTaskActions={(item, url, isCardTask) => (
-              <WorktreeCardLinkedTaskActions
-                item={item}
-                url={url}
-                isCardTask={isCardTask}
-                onOpenChange={handleIssueMenuOpenChange}
-                onCopyLink={handleCopyIssueLink}
-                onEditIssue={onEditIssue}
-                onOpenGitHubIssueInOrca={
-                  onOpenGitHubIssueInOrca ? dismissAndRun(onOpenGitHubIssueInOrca) : undefined
-                }
-                onOpenIssueInBrowser={handleOpenTaskInBrowser}
-                onOpenLinearIssueInOrca={
-                  onOpenLinearIssueInOrca ? dismissAndRun(onOpenLinearIssueInOrca) : undefined
-                }
-              />
-            )}
+            taskMenu={{ actions: taskActions, onOpenChange: handleIssueMenuOpenChange }}
             renderReviewActions={(item, live) => (
               <WorktreeCardLinkedReviewActions
                 item={item}
