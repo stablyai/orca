@@ -46,6 +46,27 @@ function rebaseUneditedModelChoices(
   return values
 }
 
+/**
+ * Follow a newly saved recipe unless the user still has their own change. Both the draft and its
+ * old base take unedited model choices from the new save, so another editor's model pick is never
+ * mistaken for a local edit.
+ */
+function followPersistedRecipeValues(
+  current: ActionRecipeDraftState,
+  persisted: ActionRecipeDraftState['values']
+): ActionRecipeDraftState {
+  const values = rebaseUneditedModelChoices(current.values, persisted)
+  const serialized = serializeActionRecipeInputValues(values)
+  if (
+    serialized ===
+      serializeActionRecipeInputValues(rebaseUneditedModelChoices(current.baseValues, persisted)) ||
+    serialized === serializeActionRecipeInputValues(persisted)
+  ) {
+    return { values: persisted, baseValues: persisted }
+  }
+  return { values, baseValues: persisted }
+}
+
 export function useSourceControlActionRecipeDraftState({
   config,
   customPromptDiscardSignal,
@@ -53,24 +74,25 @@ export function useSourceControlActionRecipeDraftState({
   writeConfig
 }: UseSourceControlActionRecipeDraftStateArgs) {
   const persistedActionRecipeValues = useMemo(() => readActionRecipeInputValues(config), [config])
-  const persistedActionRecipeSerialized = useMemo(
-    () => serializeActionRecipeInputValues(persistedActionRecipeValues),
-    [persistedActionRecipeValues]
-  )
   const persistedActionRecipeValuesRef = useRef(persistedActionRecipeValues)
   persistedActionRecipeValuesRef.current = persistedActionRecipeValues
   const [storedDraftState, setActionRecipeDraftState] = useState<ActionRecipeDraftState>(() => ({
     values: persistedActionRecipeValues,
     baseValues: persistedActionRecipeValues
   }))
-  // Derived during render so the saved model shows in the same frame the settings change.
-  const actionRecipeDraftState = useMemo<ActionRecipeDraftState>(
-    () => ({
-      baseValues: storedDraftState.baseValues,
-      values: rebaseUneditedModelChoices(storedDraftState.values, persistedActionRecipeValues)
-    }),
-    [storedDraftState, persistedActionRecipeValues]
-  )
+  // Adjusted during render so a newer save shows in the same frame the settings change.
+  const [followedPersisted, setFollowedPersisted] = useState(persistedActionRecipeValues)
+  let actionRecipeDraftState = storedDraftState
+  if (followedPersisted !== persistedActionRecipeValues) {
+    actionRecipeDraftState = followPersistedRecipeValues(
+      storedDraftState,
+      persistedActionRecipeValues
+    )
+    setFollowedPersisted(persistedActionRecipeValues)
+    setActionRecipeDraftState((current) =>
+      followPersistedRecipeValues(current, persistedActionRecipeValues)
+    )
+  }
   const [savingActionTemplateIds, setSavingActionTemplateIds] = useState<
     Partial<Record<SourceControlActionId, boolean>>
   >({})
@@ -83,26 +105,6 @@ export function useSourceControlActionRecipeDraftState({
     [actionRecipeDraftState.baseValues]
   )
   const actionTemplateDirty = actionRecipeDraftSerialized !== actionRecipeBaseSerialized
-
-  useEffect(() => {
-    setActionRecipeDraftState((current) => {
-      const currentSerialized = serializeActionRecipeInputValues(current.values)
-      const baseSerialized = serializeActionRecipeInputValues(current.baseValues)
-      if (
-        currentSerialized === baseSerialized ||
-        currentSerialized === persistedActionRecipeSerialized
-      ) {
-        return {
-          values: persistedActionRecipeValues,
-          baseValues: persistedActionRecipeValues
-        }
-      }
-      return {
-        values: current.values,
-        baseValues: persistedActionRecipeValues
-      }
-    })
-  }, [persistedActionRecipeSerialized, persistedActionRecipeValues])
 
   useEffect(() => {
     setActionRecipeDraftState({
