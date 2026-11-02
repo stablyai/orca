@@ -1,5 +1,8 @@
 import { SourceControlTextActionAgentPicker } from '../../SourceControlTextActionAgentPicker'
-import { readActionRecipeTextDraft } from './repository-source-control-ai-draft'
+import {
+  hasOwnActionOverride,
+  readActionRecipeTextDraft
+} from './repository-source-control-ai-draft'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { SourceControlActionId } from '../../../../../../shared/source-control-ai-actions'
 import { useRepositoryActionPickerInputs } from './use-repository-action-picker-inputs'
@@ -45,7 +48,6 @@ import {
   readInheritedCommandTemplate,
   resolveAgentArgsPlaceholderAgent
 } from './repository-source-control-ai-labels'
-import { hasOwnActionOverride } from './repository-source-control-ai-draft'
 import { getRepositorySourceControlAiActionRecipeSectionId } from '../repository-settings-targets'
 import { translate } from '@/i18n/i18n'
 import { SourceControlActionOptionField } from '../../SourceControlActionOptionField'

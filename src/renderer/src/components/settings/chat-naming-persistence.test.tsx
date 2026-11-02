@@ -1,12 +1,12 @@
 // @vitest-environment happy-dom
 import type { ComponentProps } from 'react'
 import { CommitMessageAiPane } from './CommitMessageAiPane'
-import { getDefaultSourceControlAiSettings } from '../../../../shared/source-control-ai'
 import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { setSourceControlActionDefault } from '../../../../shared/source-control-ai-actions'
 import {
+  getDefaultSourceControlAiSettings,
   normalizeSourceControlAiSettings,
   projectSourceControlAiToLegacyCommitMessageAi,
   resolveSourceControlAiForOperation
