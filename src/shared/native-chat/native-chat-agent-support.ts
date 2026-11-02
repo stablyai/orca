@@ -11,7 +11,8 @@ export const NATIVE_CHAT_SUPPORTED_AGENT_LIST: readonly TuiAgent[] = [
   'omp',
   'opencode',
   'opencode2',
-  'zcode'
+  'zcode',
+  'antigravity'
 ]
 
 export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set(

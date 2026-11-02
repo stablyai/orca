@@ -116,6 +116,16 @@ describe('resolveMobileNativeChat', () => {
     expect(resolveMobileNativeChat({ type: 'terminal', launchAgent: 'gemini' })).toBeNull()
   })
 
+  it('admits Antigravity as a supported native chat agent', () => {
+    expect(resolveMobileNativeChat({ type: 'terminal', launchAgent: 'antigravity' })).toEqual({
+      agent: 'antigravity',
+      sessionId: null,
+      transcriptPath: null,
+      agentConfirmed: true,
+      sessionLive: false
+    })
+  })
+
   it('admits Grok only when its transcript is readable by the serving host', () => {
     const tab = { type: 'terminal', launchAgent: 'grok' }
     expect(resolveMobileNativeChat(tab, isNativeChatTranscriptLocalReadable(null))).toMatchObject({
