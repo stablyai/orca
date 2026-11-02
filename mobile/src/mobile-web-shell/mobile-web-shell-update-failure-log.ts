@@ -11,7 +11,7 @@ import {
 
 // Keep enough history to distinguish one bad download from repeated failures without growing diagnostic storage.
 export const MAX_UPDATE_FAILURES_PER_HOST = 5
-// Bound all hosts too; cached-host eviction does not bound failure-log hosts.
+// Bound the whole log too: any number of paired hosts may record failures.
 export const MAX_UPDATE_FAILURES = 30
 
 const UPDATE_FAILURE_LOG_FILE_NAME = 'update-failures.json'

@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import {
   MobileWebBundleManifestReadSchema,
   type MobileWebBundleManifestRead
@@ -21,9 +20,6 @@ import {
 
 const GENERATIONS_DIRECTORY_NAME = 'generations'
 const STAGING_DIRECTORY_NAME = 'tmp'
-const HOST_INDEX_FILE_NAME = 'hosts.json'
-
-export const MAX_CACHED_HOSTS = 6
 
 export type ActiveGeneration = {
   readonly buildId: string
@@ -51,6 +47,8 @@ export type GenerationStore = {
   abortStagedGeneration(staged: StagedGeneration): Promise<void>
   sweepStagedGenerations(): Promise<void>
   deleteHostCache(hostKey: string): Promise<void>
+  // Bundles live as long as their pairing; a rejected read skips the sweep rather than guess.
+  deleteUnpairedHostCaches(readPairedHostKeys: () => Promise<ReadonlySet<string>>): Promise<void>
   // Best-effort Troubleshoot evidence; must never reject.
   recordUpdateFailure(failure: MobileWebShellUpdateFailure): Promise<void>
   // Oldest first; unreadable logs count as empty.
@@ -58,9 +56,6 @@ export type GenerationStore = {
   // Key by host id so evidence outlives cached generations; never reject.
   forgetHostUpdateFailures(hostId: string): Promise<void>
 }
-
-// Recency only: unreadable or legacy timestamp indexes count as empty, making unlisted hosts first to evict.
-const HostOrderSchema = z.array(z.string())
 
 export function createGenerationStore(options: {
   fileSystem: GenerationFileSystem
@@ -75,61 +70,13 @@ export function createGenerationStore(options: {
   const stagingRoot = (hostKey: string): string =>
     joinUri(hostRoot(hostKey), STAGING_DIRECTORY_NAME)
 
-  async function readHostOrder(): Promise<readonly string[]> {
-    // Index read failures lose eviction order only; the next activation rewrites it.
-    const text = await fs.readText(joinUri(fs.rootUri, HOST_INDEX_FILE_NAME)).catch(() => null)
-    const parsed = text === null ? null : HostOrderSchema.safeParse(parseJson(text))
-    return parsed?.success === true ? parsed.data : []
-  }
-
-  async function writeHostOrder(order: readonly string[]): Promise<void> {
-    // Index write failures must not reject an activation already on disk; the next activation rewrites it.
-    await fs
-      .writeText(joinUri(fs.rootUri, HOST_INDEX_FILE_NAME), JSON.stringify(order))
-      .catch(() => undefined)
-  }
-
-  // No eviction pass: touching recency does not add a host.
-  async function touchHost(hostKey: string): Promise<void> {
-    const order = await readHostOrder()
-    if (order.at(-1) !== hostKey) {
-      await writeHostOrder(withHostLast(order, hostKey))
-    }
-  }
-
   async function listHostDirectories(): Promise<readonly GenerationDirectoryEntry[]> {
     const entries = await fs.list(fs.rootUri)
     return entries.filter((entry) => entry.isDirectory && isHostCacheKey(entry.name))
   }
 
-  // Count/evict only hosts with generations; evicting staged-only hosts would delete a tree awaiting commit. Sweeps still visit them.
-  async function listActivatedHosts(): Promise<readonly string[]> {
-    const activated: string[] = []
-    for (const host of await listHostDirectories()) {
-      const generations = await fs.list(joinUri(fs.rootUri, host.name, GENERATIONS_DIRECTORY_NAME))
-      if (generations.some((entry) => entry.isDirectory)) {
-        activated.push(host.name)
-      }
-    }
-    return activated
-  }
-
   async function dropHostTree(hostKey: string): Promise<void> {
     await fs.delete(hostRoot(hostKey))
-  }
-
-  async function enforceHostLimit(order: readonly string[]): Promise<void> {
-    const hosts = await listActivatedHosts()
-    // Unlisted hosts sort first after index loss; keep the just-activated host last so it survives eviction.
-    const evicted = new Set(
-      [...hosts]
-        .sort((left, right) => order.indexOf(left) - order.indexOf(right))
-        .slice(0, Math.max(0, hosts.length - MAX_CACHED_HOSTS))
-    )
-    for (const host of evicted) {
-      await dropHostTree(host)
-    }
-    await writeHostOrder(order.filter((key) => hosts.includes(key) && !evicted.has(key)))
   }
 
   async function readActive(hostKey: string): Promise<ActiveGeneration | null> {
@@ -217,8 +164,6 @@ export function createGenerationStore(options: {
       existing?.isDirectory === true &&
       (await fs.fileExists(joinUri(target, MANIFEST_FILE_NAME)))
     ) {
-      // A same-build redownload still updates recency, or an active host could be evicted first.
-      await touchHost(staged.hostKey)
       await fs.delete(staged.directory)
       return active
     }
@@ -237,16 +182,6 @@ export function createGenerationStore(options: {
       await fs.delete(target)
       throw new Error(`generation ${staged.buildId} did not carry its manifest through the rename`)
     }
-    await enforceHostLimit(withHostLast(await readHostOrder(), staged.hostKey))
-    return active
-  }
-
-  async function openActive(hostKey: string): Promise<ActiveGeneration | null> {
-    const active = await readActive(hostKey)
-    // Opening counts as use even if the host’s bundle was downloaded long ago.
-    if (active !== null) {
-      await touchHost(hostKey)
-    }
     return active
   }
 
@@ -261,11 +196,16 @@ export function createGenerationStore(options: {
     }
   }
 
-  async function deleteHost(hostKey: string): Promise<void> {
-    await dropHostTree(hostKey)
-    const order = await readHostOrder()
-    if (order.includes(hostKey)) {
-      await writeHostOrder(order.filter((key) => key !== hostKey))
+  async function deleteUnpairedHosts(
+    readPairedHostKeys: () => Promise<ReadonlySet<string>>
+  ): Promise<void> {
+    // Read inside the queue: a host paired later can only stage after this sweep finishes.
+    const paired = await readPairedHostKeys()
+    for (const host of await listHostDirectories()) {
+      if (!paired.has(host.name)) {
+        // One undeletable folder must not keep the rest.
+        await dropHostTree(host.name).catch(() => undefined)
+      }
     }
   }
 
@@ -278,24 +218,22 @@ export function createGenerationStore(options: {
   }
 
   return {
-    readActiveGeneration: (hostKey) => serialize(() => openActive(hostKey)),
+    readActiveGeneration: (hostKey) => serialize(() => readActive(hostKey)),
     openReusableAssets: (hostKey) => serialize(() => openReusable(hostKey)),
     stageGeneration: (hostKey, result, signal) => serialize(() => stage(hostKey, result, signal)),
     commitGeneration: (staged) => serialize(() => commit(staged)),
     abortStagedGeneration: (staged) =>
       serialize(() => fs.delete(requireIssuedHandle(staged).directory)),
     sweepStagedGenerations: () => serialize(sweep),
-    deleteHostCache: (hostKey) => serialize(() => deleteHost(hostKey)),
+    deleteHostCache: (hostKey) => serialize(() => dropHostTree(hostKey)),
+    deleteUnpairedHostCaches: (readPairedHostKeys) =>
+      serialize(() => deleteUnpairedHosts(readPairedHostKeys)),
     recordUpdateFailure: (failure) =>
       serialize(() => recordUpdateFailureIn(fs, failure)).catch(() => undefined),
     readUpdateFailures: () => serialize(() => readUpdateFailureLog(fs)),
     forgetHostUpdateFailures: (hostId) =>
       serialize(() => forgetHostUpdateFailuresIn(fs, hostId)).catch(() => undefined)
   }
-}
-
-function withHostLast(order: readonly string[], hostKey: string): string[] {
-  return [...order.filter((key) => key !== hostKey), hostKey]
 }
 
 // Use the forward-compatible reader on disk too; newer desktop fields must not force redownload every launch.

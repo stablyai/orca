@@ -29,6 +29,9 @@ const doubles = vi.hoisted((): Doubles => ({
 
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
+vi.mock('../../modules/orca-mobile-web-shell/src', () => ({
+  excludeFromBackup: async () => undefined
+}))
 vi.mock('../transport/mobile-endpoint-supervisor-support', () => ({
   encodeBase64Url: () => 'session-id'
 }))
