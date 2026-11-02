@@ -26,7 +26,35 @@ const refuse = (id: number, code: string) => ({
 })
 const settle = () => vi.advanceTimersByTimeAsync(0)
 
-async function open(options?: object, first = doc(1, 'a')) {
+function isContent(value: unknown): value is Content {
+  if (typeof value !== 'object' || value === null || !('kind' in value)) {
+    return false
+  }
+  return value.kind === 'text'
+    ? 'text' in value && typeof value.text === 'string'
+    : value.kind === 'bytes' && 'bytes' in value && value.bytes instanceof ArrayBuffer
+}
+
+/** The content an `editor.applyEdit` message carries. */
+function sentContent(message: Record<string, unknown> | undefined): Content {
+  const params = message?.params
+  const content =
+    typeof params === 'object' && params !== null && 'content' in params ? params.content : null
+  if (!isContent(content)) {
+    throw new Error('not an editor edit')
+  }
+  return content
+}
+const sentText = (message: Record<string, unknown>): string | undefined => {
+  const content = sentContent(message)
+  return content.kind === 'text' ? content.text : undefined
+}
+const sentBytes = (message: Record<string, unknown> | undefined): number[] => {
+  const content = sentContent(message)
+  return content.kind === 'bytes' ? [...new Uint8Array(content.bytes)] : []
+}
+
+async function open(options?: object, first: object = doc(1, 'a')) {
   const shell = mountShell('editor')
   fromHostAll(shell.fromHost, [hello, first])
   const session = await shell.orca.document!.session(options)
@@ -84,7 +112,7 @@ describe('orca.document.session', () => {
     expect(edits()).toHaveLength(1)
     fromHost(accept(0))
     await settle()
-    expect(edits().map((edit) => edit.params.content.text)).toEqual(['b', 'd'])
+    expect(edits().map(sentText)).toEqual(['b', 'd'])
   })
 
   it('moves the baseline only on accept and keeps a refused draft', async () => {
@@ -228,7 +256,7 @@ describe('orca.document.session', () => {
     session.change(buffer)
     fromHost(accept(0))
     await settle()
-    const sent = edits().map((edit) => [...new Uint8Array(edit.params.content.bytes)])
+    const sent = edits().map(sentBytes)
     expect(sent).toEqual([[3], [4]])
   })
 
@@ -304,7 +332,7 @@ describe('orca.document.session', () => {
     session.change([3])
     await settle()
     const edit = shell.posted().find((message) => message.method === 'editor.applyEdit')
-    expect([...new Uint8Array(edit.params.content.bytes)]).toEqual([3])
+    expect(sentBytes(edit)).toEqual([3])
   })
 
   it('stops sending and reporting after dispose', async () => {
