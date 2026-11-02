@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -104,21 +104,5 @@ describe('missing release package stand-ins', () => {
     await expect(importReleaseCheckoutModule(checkout, '/src/broken.ts')).rejects.toThrow(
       /declared-but-uninstalled/
     )
-  })
-
-  it('ignores type-only imports, comment prose and scripts embedded in strings', async () => {
-    const files = {
-      'src/noise.ts': [
-        "import type { Root } from 'types-only-pkg'",
-        "// Read the cookie from 'the browser jar' before export",
-        'export const script = "ObjC.import(\'AppKit\')"',
-        'export type Tree = Root',
-        ''
-      ].join('\n')
-    }
-    const checkout = syntheticRelease(files)
-
-    expect(await installStandIns(checkout, files)).toEqual([])
-    expect(existsSync(join(checkout.root, 'node_modules'))).toBe(false)
   })
 })

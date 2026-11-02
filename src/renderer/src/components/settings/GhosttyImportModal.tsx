@@ -1,3 +1,4 @@
+import { FileUp } from 'lucide-react'
 import type { GhosttyImportPreview } from '../../../../shared/global-settings-types'
 import { Button } from '../ui/button'
 import {
@@ -9,6 +10,7 @@ import {
   DialogTitle
 } from '../ui/dialog'
 import { SETTING_LABELS } from './setting-labels'
+import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
 import { translate } from '@/i18n/i18n'
 
 type GhosttyImportModalProps = {
@@ -16,18 +18,40 @@ type GhosttyImportModalProps = {
   onOpenChange: (open: boolean) => void
   preview: GhosttyImportPreview | null
   loading: boolean
+  choosingFile?: boolean
   onApply: () => void | Promise<void>
+  onChooseFile: () => void | Promise<void>
   applied?: boolean
   applyError?: string | null
 }
 
 function formatDiffValue(value: unknown): string {
   if (value && typeof value === 'object') {
-    return Object.entries(value)
-      .map(([k, v]) => `${k}: ${String(v)}`)
-      .join(', ')
+    const entries = Object.entries(value)
+    return entries.length === 0
+      ? translate('auto.components.settings.GhosttyImportModal.cleared', 'Cleared')
+      : entries.map(([k, v]) => `${k}: ${String(v)}`).join(', ')
   }
   return String(value)
+}
+
+// Theme selections are opaque IDs, so show the theme names the import resolved instead.
+function formatPreviewEntry(preview: GhosttyImportPreview, key: string, value: unknown): string {
+  const themeNames = preview.terminalThemes ?? {}
+  if (key === 'terminalThemeDark' && themeNames.dark) {
+    return themeNames.dark
+  }
+  if (key === 'terminalThemeLight' && themeNames.light) {
+    return themeNames.light
+  }
+  if (key === 'terminalCustomThemes') {
+    const names = new Set([themeNames.dark, themeNames.light])
+    return normalizeTerminalCustomThemes(value)
+      .filter((theme) => theme.source === 'ghostty' && names.has(theme.name))
+      .map((theme) => theme.name)
+      .join(', ')
+  }
+  return formatDiffValue(value)
 }
 
 export function GhosttyImportModal({
@@ -35,7 +59,9 @@ export function GhosttyImportModal({
   onOpenChange,
   preview,
   loading,
+  choosingFile = false,
   onApply,
+  onChooseFile,
   applied = false,
   applyError = null
 }: GhosttyImportModalProps): React.JSX.Element {
@@ -60,6 +86,24 @@ export function GhosttyImportModal({
             )}
           </DialogDescription>
         </DialogHeader>
+
+        {!applied ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={loading || choosingFile}
+              onClick={() => void onChooseFile()}
+            >
+              <FileUp className="size-4" />
+              {translate(
+                'auto.components.settings.GhosttyImportModal.choose_file',
+                'Choose Config File'
+              )}
+            </Button>
+          </div>
+        ) : null}
 
         {loading ? (
           <p className="text-xs text-muted-foreground">
@@ -90,7 +134,7 @@ export function GhosttyImportModal({
                   {Object.entries(preview.diff).map(([key, value]) => (
                     <li key={key} className="flex justify-between gap-2">
                       <span className="text-muted-foreground">{SETTING_LABELS[key] ?? key}</span>
-                      <span className="font-mono">{formatDiffValue(value)}</span>
+                      <span className="font-mono">{formatPreviewEntry(preview, key, value)}</span>
                     </li>
                   ))}
                 </ul>
@@ -107,7 +151,7 @@ export function GhosttyImportModal({
                   {Object.entries(preview.diff).map(([key, value]) => (
                     <li key={key} className="flex justify-between gap-2">
                       <span className="text-muted-foreground">{SETTING_LABELS[key] ?? key}</span>
-                      <span className="font-mono">{formatDiffValue(value)}</span>
+                      <span className="font-mono">{formatPreviewEntry(preview, key, value)}</span>
                     </li>
                   ))}
                 </ul>
@@ -146,8 +190,8 @@ export function GhosttyImportModal({
         ) : (
           <p className="text-xs text-muted-foreground">
             {translate(
-              'auto.components.settings.GhosttyImportModal.e4bda7ce6f',
-              'No Ghostty config found on this system.'
+              'auto.components.settings.GhosttyImportModal.not_found_choose_file',
+              'No Ghostty config found on this computer. Choose a config file to import one from another location.'
             )}
           </p>
         )}
@@ -163,7 +207,7 @@ export function GhosttyImportModal({
                 {translate('auto.components.settings.GhosttyImportModal.f96688b6bc', 'Cancel')}
               </Button>
               {hasChanges && (
-                <Button onClick={() => void onApply()}>
+                <Button disabled={choosingFile} onClick={() => void onApply()}>
                   {translate(
                     'auto.components.settings.GhosttyImportModal.9d3e56ca36',
                     'Apply Changes'

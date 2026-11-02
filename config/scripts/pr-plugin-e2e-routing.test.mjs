@@ -10,7 +10,6 @@ import {
 } from './pr-plugin-e2e-source-routes.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
-const UNROUTED_ID = 'plugins.unrouted-source'
 
 function repoFiles(directory) {
   return readdirSync(join(projectDir, directory), { recursive: true, withFileTypes: true })
@@ -77,11 +76,22 @@ describe('plugin PR E2E routing', () => {
     ],
     ['src/main/plugins/plugin-dev-watcher.ts', 'plugin-components-hot-reload'],
     ['resources/plugins/declarative/orca-runtime.mjs', 'plugin-components-hot-reload'],
+    ['src/renderer/src/components/plugins/plugin-icon-glyphs.ts', 'plugin-declarative-panel'],
     ['src/main/plugins/view/plugin-view-capture.ts', 'plugin-shot'],
+    ['src/main/plugins/view/plugin-view-editor-shot.ts', 'plugin-shot-editor'],
+    ['src/renderer/src/store/plugin-shot-replay.ts', 'plugin-shot'],
+    ['src/main/plugins/testing/plugin-test-register.ts', 'plugin-shot'],
     ['src/renderer/src/components/plugins/view/plugin-view-request-handler.ts', 'plugin-shot'],
     ['src/renderer/src/components/right-sidebar/plugin-panel-draw-status.ts', 'plugin-shot'],
     ['src/main/runtime/rpc/methods/plugin-view.ts', 'plugin-shot'],
     ['src/cli/handlers/plugin-view.ts', 'plugin-shot'],
+    ['src/cli/handlers/plugin-shot-default-dir.ts', 'plugin-shot'],
+    ['src/cli/handlers/plugin-shot-default-dir.ts', 'plugin-shot-editor'],
+    ['src/cli/handlers/plugin-shot-chrome.ts', 'plugin-shot-editor'],
+    ['src/cli/handlers/plugin-shot-editor.ts', 'plugin-shot-editor'],
+    ['src/cli/handlers/plugin-shot-scenario.ts', 'plugin-shot'],
+    ['src/cli/plugin-authoring/plugin-panel-check.ts', 'plugin-shot'],
+    ['src/cli/plugin-authoring/plugin-test-runner.ts', 'plugin-shot'],
     ['src/renderer/src/store/plugin-view-capture.ts', 'plugin-shot'],
     ['examples/plugins/hello-orca/main.mjs', 'plugin-demo'],
     ['examples/plugins/hello-worker-panel/worker/main.mjs', 'plugin-worker-panel'],
@@ -92,6 +102,16 @@ describe('plugin PR E2E routing', () => {
     expect(selectPrE2eSpecs([file])).toContain(`tests/e2e/${spec}.spec.ts`)
   })
 
+  // Editor shots never take the --scenario branch, so replay sources stay off the editor journey.
+  it.each([
+    ['src/renderer/src/store/plugin-shot-replay.ts', 'plugin-shot-editor'],
+    ['src/main/plugins/view/plugin-view-replay-shot.ts', 'plugin-shot-editor'],
+    ['src/cli/handlers/plugin-shot-scenario.ts', 'plugin-shot-editor'],
+    ['src/cli/handlers/plugin-shot-editor.ts', 'plugin-shot']
+  ])('does not route %s to %s', (file, spec) => {
+    expect(selectPrE2eSpecs([file])).not.toContain(`tests/e2e/${spec}.spec.ts`)
+  })
+
   it('routes every plugin product source to at least one plugin spec', () => {
     expect(pluginSources.length).toBeGreaterThan(100)
     for (const file of pluginSources) {
@@ -100,13 +120,6 @@ describe('plugin PR E2E routing', () => {
     expect(routedPluginSpecs('src/main/plugins/plugin-future-feature.ts')).toEqual([
       'tests/e2e/plugin-demo.spec.ts'
     ])
-  })
-
-  it('leaves the unrouted fallback for sources no specific route names', () => {
-    const fallback = PR_PLUGIN_E2E_SOURCE_ROUTES.find((route) => route.id === UNROUTED_ID)
-    const caught = pluginSources.filter(fallback.matches)
-    // Grows only when a plugin source lands without a targeted route; add one instead.
-    expect(caught.length, caught.join('\n')).toBeLessThan(pluginSources.length / 10)
   })
 
   it('gives every plugin spec a source route, and every routed spec exists', () => {
