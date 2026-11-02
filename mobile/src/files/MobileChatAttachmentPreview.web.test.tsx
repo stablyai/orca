@@ -70,7 +70,7 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
     }
   )
   const path = '/host/agent-session-attachments/12345678-1234-1234-1234-123456789abc/report.txt'
-  let content = Buffer.from('\n'.repeat(25 * 1024 * 1024) + 'TAIL')
+  let content = Buffer.from(`${'\n'.repeat(25 * 1024 * 1024)}TAIL`)
   const sourceBlocks = vi.spyOn(AttachmentTextSource.prototype, 'block')
   const reads: { offset: number; length: number }[] = []
   mocks.send.mockImplementation(

@@ -70,12 +70,11 @@ function TextViewport({
     if (!node) {
       return
     }
-    const measure = () =>
-      setPosition((old) => ({
-        ...old,
-        height: node.clientHeight,
-        rowHeight: probe.current?.getBoundingClientRect().height || old.rowHeight
-      }))
+    const measure = () => {
+      const height = node.clientHeight
+      const rowHeight = probe.current?.getBoundingClientRect().height
+      setPosition((old) => ({ ...old, height, rowHeight: rowHeight || old.rowHeight }))
+    }
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(node)
@@ -98,7 +97,9 @@ function TextViewport({
     }
   }, [source, first, needsNext, demand])
   const model = useRef({ layout, position })
-  model.current = { layout, position }
+  useLayoutEffect(() => {
+    model.current = { layout, position }
+  })
   useEffect(() => {
     const node = scroll.current
     if (!node) {

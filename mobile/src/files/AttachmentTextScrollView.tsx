@@ -60,7 +60,9 @@ export function AttachmentTextScrollView({
     }
   }, [source, block, needsNext, demand])
   const model = useRef(layout)
-  model.current = layout
+  useLayoutEffect(() => {
+    model.current = layout
+  })
   useEffect(() => {
     if (Platform.OS !== 'web') {
       return
