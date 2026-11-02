@@ -39,7 +39,7 @@ vi.mock('../navigation/route-handoff', () => ({
   useRouteHandoff: () => ({ back: vi.fn() })
 }))
 
-vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: () => null }))
+vi.mock('../components/bottom-drawer/BottomDrawer', () => ({ BottomDrawer: () => null }))
 
 vi.mock('../platform/random-v4-uuid', () => ({
   randomV4Uuid: () => '00000000-0000-4000-8000-000000000000'
