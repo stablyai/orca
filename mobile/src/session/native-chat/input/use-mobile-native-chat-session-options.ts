@@ -23,12 +23,12 @@ import type { MobileNativeChatSendOutcome } from '../mobile-native-chat-send'
 import {
   createNativeChatPtySessionOptions,
   type NativeChatPtySessionOptionsSurface
-} from '../../../../../src/shared/native-chat-pty-session-options'
+} from '../../../../../src/shared/native-chat/input/native-chat-pty-session-options'
 import {
   clearNativeChatSessionOptionCacheForTests,
   readNativeChatSessionOptionCache,
   writeNativeChatSessionOptionCache
-} from '../../../../../src/shared/native-chat-session-option-cache'
+} from '../../../../../src/shared/native-chat/input/native-chat-session-option-cache'
 import {
   createNativeChatSessionOptionRecord,
   matchNativeChatCatalogModelId

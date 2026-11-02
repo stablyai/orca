@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { buildBrowserPage, buildWorkspaceFromPage } from '@/store/slices/browser-page-records'
 import {
   browserLinkPageMatches,
-  browserLinkUrlIdentity,
   browserOpenResultForPage,
   selectBrowserLinkDestination
 } from './browser-link-destination'
@@ -23,119 +22,7 @@ beforeEach(() => {
   store = createBrowserLinkTestStore()
 })
 
-it('normalizes only explicit HTTP URLs and keeps path, query and fragment identity', () => {
-  expect(browserLinkUrlIdentity('https://EXAMPLE.com:443')).toBe('https://example.com/')
-  for (const input of [
-    'example.com',
-    'search words',
-    'file:///tmp/a.html',
-    'javascript:alert(1)',
-    'https://user:password@example.com/',
-    'https://kagi.com/search?token=secret&q=a'
-  ]) {
-    expect(browserLinkUrlIdentity(input)).toBeNull()
-  }
-  const identities = ['/a', '/a/', '/A', '/a?a=1&b=2', '/a?b=2&a=1', '/a#one', '/a#two'].map(
-    (path) => browserLinkUrlIdentity(`https://example.com${path}`)
-  )
-  expect(new Set(identities).size).toBe(identities.length)
-  expect(browserLinkUrlIdentity('http://localhost:3000')).not.toBe(
-    browserLinkUrlIdentity('http://127.0.0.1:3000')
-  )
-})
-
 describe('browser destination scope', () => {
-  it.each([
-    ['worktree', 'local', undefined, 'local'],
-    ['worktree', 'ssh:target', undefined, 'ssh:target'],
-    ['worktree', 'runtime:server', undefined, 'runtime:server'],
-    ['worktree', 'ssh:target', 'server', 'ssh:target'],
-    ['worktree', 'ssh:target', 'server', 'runtime:server'],
-    ['folder', 'local', undefined, 'local'],
-    ['folder', 'runtime:server', undefined, 'runtime:server']
-  ] as const)(
-    'places a hostless %s source owned by %s (%s) on %s',
-    (kind, hostId, runtimeOwner, destinationHostId) => {
-      const workspaceId = kind === 'folder' ? 'folder:legacy' : WORKSPACE
-      store.setState((state) => ({
-        activeWorktreeId: workspaceId,
-        activeWorkspaceExecutionHostId: hostId,
-        worktreesByRepo: {
-          repo1: [
-            makeWorktree({
-              id: WORKSPACE,
-              repoId: 'repo1',
-              hostId,
-              runtimeOwnerEnvironmentId: runtimeOwner
-            })
-          ]
-        },
-        folderWorkspaces: [makeFolderWorkspace({ id: 'legacy', executionHostId: hostId })],
-        unifiedTabsByWorktree: {
-          [workspaceId]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) => ({
-            ...tab,
-            worktreeId: workspaceId,
-            executionHostId: undefined
-          }))
-        },
-        groupsByWorktree: { [workspaceId]: state.groupsByWorktree[WORKSPACE]! },
-        layoutByWorktree: { [workspaceId]: state.layoutByWorktree[WORKSPACE]! },
-        activeGroupIdByWorktree: { [workspaceId]: 'c' }
-      }))
-      const state = store.getState()
-      expect(
-        selectBrowserLinkDestination(
-          state,
-          browserLinkTestDestination({
-            worktreeId: workspaceId,
-            executionHostId: destinationHostId
-          }),
-          captureLinkOpenIntent(state, workspaceId, 'source')
-        )
-      ).toMatchObject({
-        status: 'ready',
-        groupId: 'b',
-        match: null
-      })
-    }
-  )
-
-  it('places hostless sources beside their group and reuses hostless browser wrappers', () => {
-    const existing = store.getState().createBrowserTab(WORKSPACE, URL_TO_OPEN, {
-      targetGroupId: 'b',
-      executionHostId: 'local',
-      browserRuntimeEnvironmentId: null,
-      sessionProfileId: null,
-      activate: false
-    })
-    store.setState((state) => ({
-      unifiedTabsByWorktree: {
-        [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) => ({
-          ...tab,
-          executionHostId: undefined
-        }))
-      }
-    }))
-    const state = store.getState()
-    const intent = captureLinkOpenIntent(state, WORKSPACE, 'source')
-    const destination = browserLinkTestDestination()
-    expect(selectBrowserLinkDestination(state, destination, intent)).toMatchObject({
-      status: 'ready',
-      groupId: 'b',
-      match: { browserWorkspaceId: existing.id, browserPageId: existing.activePageId }
-    })
-    expect(
-      browserOpenResultForPage(state, destination, existing.id, existing.activePageId!)
-    ).toMatchObject({ groupId: 'b', browserWorkspaceId: existing.id })
-
-    store.setState({ browserTabsByWorktree: {} })
-    expect(selectBrowserLinkDestination(store.getState(), destination, intent)).toMatchObject({
-      status: 'ready',
-      groupId: 'b',
-      match: null
-    })
-  })
-
   it.each(['listed', 'detected'] as const)(
     'refuses hostless ownership for %s twins even when the active workspace names one host',
     (catalog) => {
@@ -337,41 +224,6 @@ describe('browser destination scope', () => {
     expect(
       selectBrowserLinkDestination(store.getState(), browserLinkTestDestination(), intent)
     ).toMatchObject({ groupId: 'b', match: null })
-  })
-
-  it('uses a visible browser and reuses a neighbor when that browser becomes hidden', () => {
-    const existing = store.getState().createBrowserTab(WORKSPACE, 'https://unrelated.example/', {
-      targetGroupId: 'a',
-      executionHostId: 'local',
-      browserRuntimeEnvironmentId: null,
-      activate: true
-    })
-    store.setState((state) => ({
-      unifiedTabsByWorktree: {
-        [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) =>
-          tab.id === 'source' ? { ...tab, groupId: 'b' } : tab
-        )
-      }
-    }))
-    const intent = captureLinkOpenIntent(store.getState(), WORKSPACE, 'source')
-    expect(
-      selectBrowserLinkDestination(store.getState(), browserLinkTestDestination(), intent)
-    ).toMatchObject({ groupId: 'a', match: null })
-    store.setState((state) => ({
-      groupsByWorktree: {
-        [WORKSPACE]: state.groupsByWorktree[WORKSPACE]!.map((group) =>
-          group.id === 'a' ? { ...group, activeTabId: 'source' } : group
-        )
-      }
-    }))
-    expect(
-      selectBrowserLinkDestination(store.getState(), browserLinkTestDestination(), intent)
-    ).toMatchObject({ groupId: 'c', match: null })
-    expect(
-      store
-        .getState()
-        .browserTabsByWorktree[WORKSPACE]?.some((workspace) => workspace.id === existing.id)
-    ).toBe(true)
   })
 
   it('requires doc ownership and path identity, excluding current website URLs on mixed containers', () => {

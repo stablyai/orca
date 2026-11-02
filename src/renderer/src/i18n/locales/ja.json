@@ -18811,7 +18811,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "チャット UI で続けるには、このホストの Orca を更新してください。",
-        "notSavedYet": "{{agent}} はまだこの会話を保存していません。応答してから再度お試しください。"
+        "notSavedYet": "{{agent}} はまだこの会話を保存していません。応答してから再度お試しください。",
+        "exitUnconfirmed": "{{agent}} は別のターミナルでこの会話を実行しています。そちらで終了するか、そのターミナルを閉じてから、もう一度お試しください。"
       },
       "state": {
         "loading": {
@@ -19852,6 +19853,9 @@
         "finished": "一時的なオーケストレーションワーカーが完了 · {{countdown}}後に閉じます",
         "keepOpen": "開いたままにする"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "WSL で実行: {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {
@@ -21971,6 +21975,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: 読み取れるバックアップがないため、空の状態から始まります。",
+      "sectionKeptCurrent": "{{section}}：現在の実行履歴は保持されます",
       "sectionRestored": "{{section}}: {{time}} に保存されたバックアップから復元されます。",
       "projectsForgotten": "Orca はプロジェクトとそのワークスペースの詳細を忘れます。ディスク上のファイルには影響しません。",
       "newerProjectsRemoved": "そのバックアップ以降に追加したプロジェクトは、ワークスペースの詳細とともに Orca から削除されます。ディスク上のファイルには影響しません。",
@@ -22013,7 +22018,7 @@
       "noneFound": "（見つかりません）",
       "sqlitePath": "SQLite パス: {{path}}",
       "sectionsDamaged": "このプロファイルの保存状態の一部が破損しています: {{sections}}。それ以外はすべて正常です。",
-      "repairCommand": "Orca を終了し、`{{command}}` を実行すると、破損した部分だけをバックアップから置き換え、それ以外をすべて維持できます。Orca は破損したファイルのコピーを保持します。",
+      "repairCommand": "Orca を終了してから `{{command}}` を実行すると、破損した部分だけを修復し、他のデータを保持します。Orca は破損したファイルのコピーを保存します。",
       "restoreWholeBackup": "代わりにバックアップ全体を復元するには、`{{exportsCommand}}`、次に `{{rollbackCommand}}` を実行してください。",
       "sqliteUnreadable": "SQLite の状態を読み取れないため、Orca はアクティブなプロファイルを安全に開けません。",
       "legacyJsonPath": "従来の JSON パス: {{path}}",

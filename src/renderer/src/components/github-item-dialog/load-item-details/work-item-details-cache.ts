@@ -22,6 +22,8 @@ export type WorkItemDetailsCacheEntry = {
   fetchedAt: number
   pending?: Promise<GitHubWorkItemDetails | null> & { isCurrent?: () => boolean }
   error?: string
+  // Why: invalidation keeps the shown details but owes one fresh read; the read's start clears it.
+  rereadOwed?: true
   viewed?: { requests: Map<string, object>; paths: ReadonlySet<string> }
 }
 export const optimisticWorkItemComments = new Map<string, PRComment[]>()
@@ -91,13 +93,30 @@ export function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCac
 }
 
 export function invalidateWorkItemDetailsCacheForKey(key: string): void {
-  const existed = workItemDetailsCache.delete(key)
-  if (optimisticWorkItemComments.has(key)) {
-    workItemDetailsCache.set(key, { details: null, fetchedAt: 0 })
-  }
+  const existed = markWorkItemDetailsRereadOwed(key)
   if (existed) {
     notifyWorkItemDetailsCache()
   }
+}
+
+// Dropping `pending` is the fence: a settle applies only while the entry still holds its own request.
+// Retire the pending read and owe one replacement read, keeping loaded details; an entry without details goes cold.
+function markWorkItemDetailsRereadOwed(key: string): boolean {
+  const prev = workItemDetailsCache.get(key)
+  if (!prev) {
+    return false
+  }
+  if (prev.details) {
+    workItemDetailsCache.set(key, {
+      details: prev.details,
+      fetchedAt: prev.fetchedAt,
+      rereadOwed: true,
+      viewed: prev.viewed
+    })
+  } else {
+    workItemDetailsCache.delete(key)
+  }
+  return true
 }
 
 // Without an exact key, invalidate matching repo/type/number entries across source preferences.
@@ -121,10 +140,7 @@ export function invalidateWorkItemDetailsCacheByMatch(args: {
     const [keyRepoId, keyRepoPath] = key.split('\0')
     const matches = args.repoId ? keyRepoId === args.repoId : keyRepoPath === args.repoPath
     if (matches) {
-      workItemDetailsCache.delete(key)
-      if (optimisticWorkItemComments.has(key)) {
-        workItemDetailsCache.set(key, { details: null, fetchedAt: 0 })
-      }
+      markWorkItemDetailsRereadOwed(key)
       removed = true
     }
   }
@@ -194,17 +210,30 @@ export function patchCachedPRReviewRequests(
   })
 }
 
-// An issue's saved body drops `pending` so a read (Refresh included) started before it settles superseded.
+// A user-started read (Refresh) retries its own superseded attempt; keyed by the request, so the mark ends with it.
+const userActionDetailsReads = new WeakSet<Promise<GitHubWorkItemDetails | null>>()
+export function markUserActionWorkItemDetailsRead(
+  read: Promise<GitHubWorkItemDetails | null>
+): void {
+  userActionDetailsReads.add(read)
+}
+
+// An issue's saved body drops `pending` so a read started before it settles superseded.
+// A retired ordinary read owes one replacement; a retired Refresh read is retried by its own loop.
 export function patchCachedWorkItemBody(cacheKey: string, body: string): void {
   const prev = workItemDetailsCache.get(cacheKey)
   if (!prev?.details) {
     return
   }
+  const supersedesRead = prev.details.item.type === 'issue'
+  const retiresOrdinaryRead =
+    supersedesRead && prev.pending !== undefined && !userActionDetailsReads.has(prev.pending)
   touchWorkItemDetailsCache(cacheKey, {
     ...prev,
     details: { ...prev.details, body },
     fetchedAt: Date.now(),
-    pending: prev.details.item.type === 'issue' ? undefined : prev.pending,
+    pending: supersedesRead ? undefined : prev.pending,
+    rereadOwed: retiresOrdinaryRead ? true : prev.rereadOwed,
     error: undefined
   })
 }
@@ -253,54 +282,4 @@ export function settleWorkItemComment(key: string, comment: PRComment): void {
         }
       : null
   })
-}
-
-export function beginWorkItemViewed(key: string, path: string, viewed: boolean) {
-  const entry = workItemDetailsCache.get(key)
-  if (!entry?.details) {
-    return null
-  }
-  const owner = entry.viewed ?? { requests: new Map<string, object>(), paths: EMPTY_VIEWED_PATHS }
-  if (owner.requests.has(path)) {
-    return null
-  }
-  const request = {}
-  owner.requests.set(path, request)
-  owner.paths = new Set(owner.requests.keys())
-  touchWorkItemDetailsCache(key, { ...entry, viewed: owner })
-  const previous = patchCachedPRFileViewedState(key, path, viewed ? 'VIEWED' : 'UNVIEWED')
-  const optimisticFile = workItemDetailsCache
-    .get(key)
-    ?.details?.files?.find((file) => file.path === path)
-  const ownsPath = () =>
-    workItemDetailsCache.get(key)?.viewed === owner && owner.requests.get(path) === request
-  let finished = false
-  return {
-    ownsPath,
-    rollback: () => {
-      if (
-        previous &&
-        ownsPath() &&
-        workItemDetailsCache.get(key)?.details?.files?.find((file) => file.path === path) ===
-          optimisticFile
-      ) {
-        patchCachedPRFileViewedState(key, path, previous)
-      }
-    },
-    finish: () => {
-      if (finished) {
-        return
-      }
-      finished = true
-      if (owner.requests.get(path) !== request) {
-        return
-      }
-      owner.requests.delete(path)
-      owner.paths = new Set(owner.requests.keys())
-      const current = workItemDetailsCache.get(key)
-      if (current?.viewed === owner) {
-        touchWorkItemDetailsCache(key, current)
-      }
-    }
-  }
 }

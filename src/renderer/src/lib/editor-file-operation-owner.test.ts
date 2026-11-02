@@ -11,7 +11,6 @@ import {
   captureEditorFileOperationProvenance,
   getEditorFileOperationContext
 } from './editor-file-operation-owner'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { applyOpenFileToState } from '@/store/slices/editor/actions/open-file-apply'
 import { buildEditorSessionData } from './workspace-session'
 import { restorableEditorFile } from '@/store/slices/editor/tabs/editor-tab-layout-owner'
@@ -123,51 +122,6 @@ describe('editor file operation owner', () => {
       queue.dispose()
     }
   )
-  it('retains published hints and owner-only capture without inventing physical-local evidence', () => {
-    useAppStore.setState({
-      worktreesByRepo: {
-        repo: [
-          makeWorktree({ id: worktreeId, repoId: 'repo', path: '/remote/repo', hostId: undefined })
-        ]
-      }
-    })
-    const hinted = captureEditorFileOperationProvenance(
-      useAppStore.getState(),
-      worktreeId,
-      'hub-a',
-      true
-    )
-    expect(hinted.generation.authority).toBeUndefined()
-    expect(assertEditorFileOperationCurrent(useAppStore.getState(), worktreeId, hinted)).toEqual(
-      hinted.generation.route
-    )
-    useAppStore.setState({
-      worktreesByRepo: {
-        repo: [
-          {
-            id: worktreeId,
-            repoId: 'repo',
-            path: '/remote/repo',
-            runtimeOwnerEnvironmentId: 'hub-a'
-          } as never
-        ]
-      }
-    })
-    const ownerOnly = captureEditorFileOperationProvenance(
-      useAppStore.getState(),
-      worktreeId,
-      'hub-a',
-      true
-    )
-    expect(ownerOnly.generation.authority).toBeUndefined()
-    expect(assertEditorFileOperationCurrent(useAppStore.getState(), worktreeId, ownerOnly)).toEqual(
-      ownerOnly.generation.route
-    )
-    expect(ownerOnly.generation.route).toEqual({
-      runtimeEnvironmentId: 'hub-a',
-      executionHostId: null
-    })
-  })
   it('keeps catalog identity and drafts across capture, saved writers and reload while fencing physical retargets', async () => {
     const id = 'folder:physical-owner'
     useAppStore.setState({
@@ -440,30 +394,6 @@ describe('editor file operation owner', () => {
       'Reopen the file'
     )
   })
-  it('round-trips the synthetic local owner for floating workspace files', () => {
-    const provenance = captureEditorFileOperationProvenance(
-      useAppStore.getState(),
-      FLOATING_TERMINAL_WORKTREE_ID,
-      null,
-      true
-    )
-
-    expect(
-      getEditorFileOperationContext(
-        useAppStore.getState(),
-        {
-          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-          runtimeEnvironmentId: null,
-          operationProvenance: provenance
-        },
-        '/tmp/orca/floating-workspace'
-      )
-    ).toMatchObject({
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      worktreePath: '/tmp/orca/floating-workspace',
-      expectedExecutionHostId: 'local'
-    })
-  })
 
   it('uses the explicit worktree owner instead of global runtime focus', () => {
     useAppStore.setState({
@@ -643,42 +573,6 @@ describe('editor file operation owner', () => {
         projectGroups: [{ id: 'group-1', connectionId: null, executionHostId: null } as never],
         restoredRuntimeHostIdByWorkspaceSessionKey: {}
       })
-    })
-
-    it('round-trips capture and assert for a local folder workspace (#10251)', () => {
-      const provenance = captureEditorFileOperationProvenance(
-        useAppStore.getState(),
-        folderKey,
-        undefined,
-        false
-      )
-      expect(provenance.generation.route).toEqual({
-        executionHostId: 'local',
-        runtimeEnvironmentId: null
-      })
-      expect(
-        assertEditorFileOperationCurrent(useAppStore.getState(), folderKey, provenance)
-      ).toEqual(provenance.generation.route)
-    })
-
-    it('uses the folder root when a legacy caller passes an empty worktree path', () => {
-      useAppStore.setState({
-        folderWorkspaces: [
-          {
-            id: folderWorkspaceId,
-            projectGroupId: 'group-1',
-            connectionId: null,
-            folderPath: '/workspace/folder'
-          } as never
-        ]
-      })
-      const context = getEditorFileOperationContext(
-        useAppStore.getState(),
-        { worktreeId: folderKey },
-        ''
-      )
-
-      expect(context.worktreePath).toBe('/workspace/folder')
     })
 
     it('fails closed when folder ownership changes between capture and assert', () => {

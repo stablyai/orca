@@ -1,5 +1,6 @@
 import { readHookAgentProcess } from './agent-process-presence'
 import { isInheritedHookStatus } from './agent-hook-presence-transition'
+import { readHookProcessAdmission } from './agent-hook-owner-presence'
 import { normalizeAgentStatusPayload, type AgentMainAgentStatus } from './agent-status-types'
 import type { AgentHookSource } from './agent-hook-relay'
 import {
@@ -7,7 +8,7 @@ import {
   isClaudeCompactCompletionConsumed,
   markClaudeCompactCompletionConsumed
 } from './claude-compact-completion'
-import { parseHookEnvelope } from './agent-hook-listener/hook-envelope'
+import { isProcessExitSessionEnd, parseHookEnvelope } from './agent-hook-listener/hook-envelope'
 import { readFirstString } from './agent-hook-listener/interactive-tool'
 import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
 import {
@@ -32,12 +33,6 @@ import {
   readPaneSessionContext
 } from './agent-hook-listener/pane-provider-session'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
-const CLAUDE_EXIT_SESSION_END_REASONS = new Set([
-  'prompt_input_exit',
-  'logout',
-  'other',
-  'bypass_permissions_disabled'
-])
 
 export function normalizeHookPayload(
   state: HookListenerState,
@@ -146,7 +141,14 @@ export function normalizeHookPayload(
     hasSeparateHookSessionAdmission(source) && options.bindingStatusByPaneKey
       ? options.bindingStatusByPaneKey.get(paneKey)
       : previousStatus
+  // A relay's provider view lags its committed rows; process evidence reads the committed one.
+  const processAdmission = readHookProcessAdmission(
+    state,
+    options.bindingStatusByPaneKey ?? state.lastStatusByPaneKey,
+    { paneKey, worktreeId, process: agentProcess }
+  )
   if (
+    processAdmission.refused ||
     isInheritedHookStatus(
       {
         paneKey,
@@ -157,7 +159,8 @@ export function normalizeHookPayload(
         agentPresence: agentProcess ? { agent: source, process: agentProcess } : undefined,
         payload: { agentType: source, state: 'working', prompt: '' }
       },
-      admissionStatus
+      admissionStatus,
+      processAdmission.verdict
     )
   ) {
     return null
@@ -198,15 +201,7 @@ export function normalizeHookPayload(
   const agentPresence = agentProcess
     ? { agent: source, process: agentProcess, sessionOwner: true as const }
     : undefined
-  const sessionEndReason = readString(hookPayloadRecord, 'reason')
-  if (
-    eventName === 'SessionEnd' &&
-    agentPresence &&
-    !readString(hookPayloadRecord, 'agent_id') &&
-    // Only known process-exit reasons prove session death; /clear, /resume and unknown reasons do not.
-    sessionEndReason !== undefined &&
-    CLAUDE_EXIT_SESSION_END_REASONS.has(sessionEndReason)
-  ) {
+  if (agentPresence && isProcessExitSessionEnd(eventName, hookPayloadRecord)) {
     const payload =
       previousStatus?.payload ??
       normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: source })

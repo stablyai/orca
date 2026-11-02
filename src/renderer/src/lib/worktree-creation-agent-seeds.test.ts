@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   setWebRuntimeTabProps: vi.fn()
 }))
 
-vi.mock('@/components/native-chat/native-chat-session-option-cache', () => ({
+vi.mock('../../../shared/native-chat/input/native-chat-session-option-cache', () => ({
   seedNativeChatAppliedSessionOptions: mocks.seedNativeChatAppliedSessionOptions
 }))
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({

@@ -29,7 +29,8 @@ export function PRReviewersPanel({
   repoPath,
   sourceContext,
   projectOrigin,
-  onReviewersRequested
+  onReviewersRequested,
+  onMutated
 }: {
   item: GitHubWorkItem
   loading: boolean
@@ -37,6 +38,7 @@ export function PRReviewersPanel({
   sourceContext?: TaskSourceContext | null
   projectOrigin?: GitHubItemDialogProjectOrigin
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
+  onMutated: () => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [reviewerInput, setReviewerInput] = useState('')
@@ -246,7 +248,8 @@ export function PRReviewersPanel({
     setLocalReviewRequests,
     setReviewerInput,
     patchWorkItem,
-    onReviewersRequested
+    onReviewersRequested,
+    onMutated
   }
 
   const handleRequestReview = async (requestedLogins?: string[]): Promise<void> => {

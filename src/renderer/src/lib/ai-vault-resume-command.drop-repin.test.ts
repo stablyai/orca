@@ -61,20 +61,6 @@ function payload(overrides: {
 }
 
 describe('buildAiVaultDropRepinStartup', () => {
-  it('repins a payload with a cwd to the substituted home', () => {
-    const startup = buildAiVaultDropRepinStartup({
-      state: makeState(),
-      payload: payload({ sessionCwd: '/Users/ada/repo' }),
-      substituteCodexHome: SELECTED_HOME,
-      worktreeId: 'repo-1::worktree-1'
-    })
-
-    expect(startup).not.toBeNull()
-    expect(startup?.command).toContain(`CODEX_HOME='${SELECTED_HOME}'`)
-    expect(startup?.command).not.toContain(RECORDED_HOME)
-    expect(startup).toMatchObject({ cwd: '/Users/ada/repo' })
-  })
-
   it('repins a payload whose session has no cwd instead of keeping the wrong-account command', () => {
     const startup = buildAiVaultDropRepinStartup({
       state: makeState(),

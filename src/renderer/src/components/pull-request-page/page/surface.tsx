@@ -116,6 +116,14 @@ function PullRequestPageItem({
     }
   }, [workItemId, workItemState, workItemLabels])
 
+  // Why: post-write rereads land in details, not the workItem prop; follow a changed details state so actions and header show what the host has (even after a failed write).
+  const detailsState = details?.item.state
+  useEffect(() => {
+    if (detailsState) {
+      setLocalState(detailsState)
+    }
+  }, [workItemId, detailsState])
+
   const handleUseWorkItem = useCallback((): void => {
     if (!workItem) {
       return

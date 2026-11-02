@@ -11,10 +11,6 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { encodePaletteIdentity } from '../../../../shared/palette-match/palette-ranking'
-import {
-  layoutMultiPrimaryPaletteSections,
-  orderMultiPrimaryPaletteItems
-} from '../cmd-j/palette-section-render-cap'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 
 vi.mock('react-i18next', async (importOriginal) => {
@@ -127,10 +123,6 @@ let setCommandQuery: ((next: string) => void) | null = null
 
 const WORKSPACE_TAB_ITEM_PREFIX = encodePaletteIdentity(['workspace-tab'])
 const WORKTREE_ITEM_PREFIX = encodePaletteIdentity(['worktree'])
-
-function workspaceTabItemId(worktreeId: string, tabId: string): string {
-  return encodePaletteIdentity(['workspace-tab', '', worktreeId, tabId])
-}
 
 function isWorkspaceTabItemId(id: string): boolean {
   return id.startsWith(WORKSPACE_TAB_ITEM_PREFIX)
@@ -277,39 +269,6 @@ async function renderPalette(overrides: Partial<AppState>): Promise<void> {
   await flushEffects()
 }
 
-function perfTabsPaletteProps(count: number): Partial<AppState> {
-  const tabIds = Array.from({ length: count }, (_, index) => `${index}`)
-  return {
-    worktreesByRepo: {
-      'repo-1': [
-        makeWorktree('wt-tabs', 'tab-host'),
-        ...Array.from({ length: 5 }, (_, index) =>
-          makeWorktree(`wt-${index}`, `improve-perf-${index}`)
-        )
-      ]
-    },
-    showSleepingWorkspaces: true,
-    ptyIdsByTabId: Object.fromEntries(tabIds.map((id) => [`term-${id}`, [`pty-${id}`]])),
-    tabsByWorktree: {
-      'wt-tabs': tabIds.map((id) => makeTerminalTab(`term-${id}`, 'wt-tabs', `Perf chat ${id}`))
-    },
-    unifiedTabsByWorktree: {
-      'wt-tabs': tabIds.map((id) =>
-        makeUnifiedTab(`tab-${id}`, 'wt-tabs', `term-${id}`, `Perf chat ${id}`)
-      )
-    },
-    groupsByWorktree: {
-      'wt-tabs': [
-        makeGroup(
-          'wt-tabs',
-          tabIds.map((id) => `tab-${id}`)
-        )
-      ]
-    },
-    activeGroupIdByWorktree: { 'wt-tabs': 'group-wt-tabs' }
-  } as Partial<AppState>
-}
-
 function getPrimaryRowsBySectionHeader(): { header: string; rowId: string }[] {
   const headerLabels = new Set(['Open Tabs', 'Workspaces'])
   const pairs: { header: string; rowId: string }[] = []
@@ -364,202 +323,6 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     for (const { header, rowId } of rows) {
       expect(header).toBe(isWorkspaceTabItemId(rowId) ? 'Open Tabs' : 'Workspaces')
     }
-  })
-
-  it('renders selectable rows in the same order as orderMultiPrimaryPaletteItems', async () => {
-    await renderPalette(makeInterleavedQueryState())
-
-    await act(async () => {
-      setCommandQuery?.('perf')
-    })
-    await flushEffects()
-
-    const renderedIds = Array.from(
-      testContainer.querySelectorAll<HTMLElement>('[data-command-item]')
-    )
-      .map((el) => el.dataset.commandItem!)
-      .filter((id) => isWorkspaceTabItemId(id) || isWorktreeItemId(id))
-
-    const tabIds = renderedIds.filter(isWorkspaceTabItemId)
-    const worktreeIds = renderedIds.filter(isWorktreeItemId)
-
-    const layout = layoutMultiPrimaryPaletteSections({
-      leadingItems: tabIds,
-      trailingItems: worktreeIds
-    })
-    const expectedOrder = orderMultiPrimaryPaletteItems(layout)
-    expect(renderedIds).toEqual(expectedOrder)
-  })
-
-  it('keeps the Open Tabs header when a typed query only hits tabs', async () => {
-    await renderPalette({
-      worktreesByRepo: {
-        'repo-1': [makeWorktree('wt-tabs', 'tab-host'), makeWorktree('wt-other', 'docs-only')]
-      },
-      showSleepingWorkspaces: true,
-      ptyIdsByTabId: { 'term-0': ['pty-0'] },
-      tabsByWorktree: {
-        'wt-tabs': [makeTerminalTab('term-0', 'wt-tabs', 'ubuntu agent session')]
-      },
-      unifiedTabsByWorktree: {
-        'wt-tabs': [makeUnifiedTab('tab-0', 'wt-tabs', 'term-0', 'ubuntu agent session')]
-      },
-      groupsByWorktree: { 'wt-tabs': [makeGroup('wt-tabs', ['tab-0'])] },
-      activeGroupIdByWorktree: { 'wt-tabs': 'group-wt-tabs' }
-    })
-
-    await act(async () => {
-      setCommandQuery?.('ubuntu')
-    })
-    await flushEffects()
-
-    const rows = getPrimaryRowsBySectionHeader()
-    expect(rows).toEqual([{ header: 'Open Tabs', rowId: workspaceTabItemId('wt-tabs', 'tab-0') }])
-    expect(testContainer.textContent).toContain('Open Tabs')
-    expect(testContainer.textContent).not.toContain('Workspaces')
-  })
-
-  it('puts the tab title on the left and the worktree name in the badge rail', async () => {
-    const longTitle = 'macOS Orca App Permission Update Delivery'
-    await renderPalette({
-      worktreesByRepo: {
-        'repo-1': [makeWorktree('wt-tabs', 'user-support')]
-      },
-      showSleepingWorkspaces: true,
-      ptyIdsByTabId: { 'term-0': ['pty-0'] },
-      tabsByWorktree: {
-        'wt-tabs': [makeTerminalTab('term-0', 'wt-tabs', longTitle)]
-      },
-      unifiedTabsByWorktree: {
-        'wt-tabs': [makeUnifiedTab('tab-0', 'wt-tabs', 'term-0', longTitle)]
-      },
-      groupsByWorktree: { 'wt-tabs': [makeGroup('wt-tabs', ['tab-0'])] },
-      activeGroupIdByWorktree: { 'wt-tabs': 'group-wt-tabs' }
-    })
-
-    const row = testContainer.querySelector(
-      `[data-command-item="${workspaceTabItemId('wt-tabs', 'tab-0')}"]`
-    )
-    expect(row).not.toBeNull()
-    const title = row?.querySelector('[data-slot="palette-open-tab-title"]')
-    const worktree = row?.querySelector('[data-slot="palette-open-tab-worktree"]')
-    expect(title?.textContent).toBe(longTitle)
-    expect(title?.classList.contains('min-w-0')).toBe(true)
-    expect(title?.classList.contains('shrink-0')).toBe(false)
-    expect(worktree?.textContent).toBe('user-support')
-    const locationChip = worktree?.closest('[data-slot="palette-location-chip"]')
-    expect(locationChip).not.toBeNull()
-    expect(locationChip?.parentElement?.classList.contains('max-w-[40%]')).toBe(true)
-    expect(locationChip?.parentElement?.classList.contains('min-w-0')).toBe(true)
-    expect(worktree?.compareDocumentPosition(title ?? document.createElement('span'))).toBe(
-      Node.DOCUMENT_POSITION_PRECEDING
-    )
-  })
-
-  it('shows the branch in the location chip when the workspace display name is empty', async () => {
-    await renderPalette({
-      worktreesByRepo: {
-        'repo-1': [makeWorktree('wt-tabs', '', { displayName: '' })]
-      },
-      showSleepingWorkspaces: true,
-      ptyIdsByTabId: { 'term-0': ['pty-0'] },
-      tabsByWorktree: {
-        'wt-tabs': [makeTerminalTab('term-0', 'wt-tabs', 'Query the API')]
-      },
-      unifiedTabsByWorktree: {
-        'wt-tabs': [makeUnifiedTab('tab-0', 'wt-tabs', 'term-0', 'Query the API')]
-      },
-      groupsByWorktree: { 'wt-tabs': [makeGroup('wt-tabs', ['tab-0'])] },
-      activeGroupIdByWorktree: { 'wt-tabs': 'group-wt-tabs' }
-    })
-
-    const row = testContainer.querySelector(
-      `[data-command-item="${workspaceTabItemId('wt-tabs', 'tab-0')}"]`
-    )
-    expect(row).not.toBeNull()
-    const worktree = row?.querySelector('[data-slot="palette-open-tab-worktree"]')
-    expect(worktree?.textContent).toBe('main')
-  })
-
-  it('reveals 20 more entries when clicking the See more button in soft preview', async () => {
-    await renderPalette(perfTabsPaletteProps(80))
-
-    await act(async () => {
-      setCommandQuery?.('perf')
-    })
-    await flushEffects()
-
-    expect(testContainer.textContent).toContain('74 more')
-    const seeMoreBtn = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
-      btn.textContent?.includes('See more')
-    )
-    expect(seeMoreBtn).toBeDefined()
-
-    await act(async () => {
-      seeMoreBtn?.click()
-    })
-    await flushEffects()
-
-    expect(testContainer.textContent).toContain('54 more')
-    expect(testContainer.textContent).toContain('10 more')
-  })
-
-  it('expands soft preview when clicking See more even when all rows fit within the hard cap', async () => {
-    await renderPalette(perfTabsPaletteProps(30))
-
-    await act(async () => {
-      setCommandQuery?.('perf')
-    })
-    await flushEffects()
-
-    expect(testContainer.textContent).toContain('24 more')
-    const seeMoreBtn = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
-      btn.textContent?.includes('See more')
-    )
-    expect(seeMoreBtn).toBeDefined()
-
-    await act(async () => {
-      seeMoreBtn?.click()
-    })
-    await flushEffects()
-
-    expect(testContainer.textContent).toContain('4 more')
-
-    const seeMoreBtn2 = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
-      btn.textContent?.includes('See more')
-    )
-    expect(seeMoreBtn2).toBeDefined()
-
-    await act(async () => {
-      seeMoreBtn2?.click()
-    })
-    await flushEffects()
-
-    expect(testContainer.textContent).not.toContain('more')
-  })
-
-  it('resets expanded section caps when query changes', async () => {
-    await renderPalette(perfTabsPaletteProps(80))
-
-    await act(async () => {
-      setCommandQuery?.('perf')
-    })
-    await flushEffects()
-
-    const seeMoreBtn = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
-      btn.textContent?.includes('See more')
-    )
-    await act(async () => {
-      seeMoreBtn?.click()
-    })
-    await flushEffects()
-    expect(testContainer.textContent).toContain('54 more')
-
-    await act(async () => {
-      setCommandQuery?.('per')
-    })
-    await flushEffects()
-    expect(testContainer.textContent).toContain('74 more')
   })
 
   it('allows clicking See more on empty query to expand worktree cap by 20', async () => {

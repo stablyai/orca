@@ -172,6 +172,8 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
   waitMoment: () => translate('components.native-chat.writeNotice.waitMoment', COPY.waitMoment),
   recordUnreadable: () =>
     translate('components.native-chat.writeNotice.recordUnreadable', COPY.recordUnreadable),
+  mailOwnerUnconfirmed: () =>
+    translate('components.native-chat.writeNotice.mailOwnerUnconfirmed', COPY.mailOwnerUnconfirmed),
   chatNotFound: () =>
     translate('components.native-chat.writeNotice.chatNotFound', COPY.chatNotFound),
   startNewChat: () =>

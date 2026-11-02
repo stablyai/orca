@@ -7,7 +7,62 @@ import { translate } from '@/i18n/i18n'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { GitHubItemDialogProjectOrigin } from './github-item-dialog-types'
-import { beginWorkItemViewed } from './work-item-details-cache'
+import {
+  EMPTY_VIEWED_PATHS,
+  patchCachedPRFileViewedState,
+  touchWorkItemDetailsCache,
+  workItemDetailsCache
+} from './work-item-details-cache'
+
+function beginWorkItemViewed(key: string, path: string, viewed: boolean) {
+  const entry = workItemDetailsCache.get(key)
+  if (!entry?.details) {
+    return null
+  }
+  const owner = entry.viewed ?? { requests: new Map<string, object>(), paths: EMPTY_VIEWED_PATHS }
+  if (owner.requests.has(path)) {
+    return null
+  }
+  const request = {}
+  owner.requests.set(path, request)
+  owner.paths = new Set(owner.requests.keys())
+  touchWorkItemDetailsCache(key, { ...entry, viewed: owner })
+  const previous = patchCachedPRFileViewedState(key, path, viewed ? 'VIEWED' : 'UNVIEWED')
+  const optimisticFile = workItemDetailsCache
+    .get(key)
+    ?.details?.files?.find((file) => file.path === path)
+  const ownsPath = () =>
+    workItemDetailsCache.get(key)?.viewed === owner && owner.requests.get(path) === request
+  let finished = false
+  return {
+    ownsPath,
+    rollback: () => {
+      if (
+        previous &&
+        ownsPath() &&
+        workItemDetailsCache.get(key)?.details?.files?.find((file) => file.path === path) ===
+          optimisticFile
+      ) {
+        patchCachedPRFileViewedState(key, path, previous)
+      }
+    },
+    finish: () => {
+      if (finished) {
+        return
+      }
+      finished = true
+      if (owner.requests.get(path) !== request) {
+        return
+      }
+      owner.requests.delete(path)
+      owner.paths = new Set(owner.requests.keys())
+      const current = workItemDetailsCache.get(key)
+      if (current?.viewed === owner) {
+        touchWorkItemDetailsCache(key, current)
+      }
+    }
+  }
+}
 
 export async function syncPRFileViewedState(args: {
   canUseDetailsRepoContext: boolean
