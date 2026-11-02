@@ -11,7 +11,7 @@ import {
   getRequiredStringFlagAllowingEmpty
 } from '../flags'
 import { RuntimeClientError } from '../runtime/types'
-import { getBrowserCommandTarget } from '../selectors'
+import { getBrowserCommandTarget } from './browser-command-target'
 
 function getOptionalCookieExpiry(flags: Map<string, string | boolean>): number | undefined {
   if (!flags.has('expires')) {

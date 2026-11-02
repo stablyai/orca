@@ -18,6 +18,9 @@ import {
   getBrowserJavaScriptDialog
 } from '../browser-javascript-dialogs'
 import { captureRemoteCliBrowserRevocation } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
+import { ExpectedPageUrlGuard, getRequestedPageUrl } from '../browser-expected-page-url'
+
+export type BrowserDialogAnswer = { accepted: boolean; browserPageId?: string; checkedUrl?: string }
 
 export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBridgeMouseCommands {
   async clipboardRead(worktreeId?: string, browserPageId?: string): Promise<unknown> {
@@ -39,12 +42,16 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
     })
   }
 
-  async dialogAccept(text?: string, worktreeId?: string, browserPageId?: string): Promise<void> {
-    this.answerDialog(true, text, worktreeId, browserPageId)
+  async dialogAccept(
+    text?: string,
+    worktreeId?: string,
+    browserPageId?: string
+  ): Promise<BrowserDialogAnswer> {
+    return this.answerDialog(true, text, worktreeId, browserPageId)
   }
 
-  async dialogDismiss(worktreeId?: string, browserPageId?: string): Promise<void> {
-    this.answerDialog(false, undefined, worktreeId, browserPageId)
+  async dialogDismiss(worktreeId?: string, browserPageId?: string): Promise<BrowserDialogAnswer> {
+    return this.answerDialog(false, undefined, worktreeId, browserPageId)
   }
 
   // Not queued: the page's queued commands wait on this answer.
@@ -53,16 +60,22 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
     text: string | undefined,
     worktreeId: string | undefined,
     browserPageId: string | undefined
-  ): void {
+  ): BrowserDialogAnswer {
     this.assertCommandAdmission()
     const assertNotRevoked = captureRemoteCliBrowserRevocation()
-    const { webContentsId } = this.resolveCommandTarget(worktreeId, browserPageId)
+    const target = this.resolveCommandTarget(worktreeId, browserPageId)
+    const { webContentsId } = target
     assertNotRevoked(webContentsId)
+    const expectedUrl = getRequestedPageUrl()
+    const guard =
+      expectedUrl === undefined ? null : new ExpectedPageUrlGuard(expectedUrl, target.browserPageId)
+    guard?.verify(this.livePageUrls(target))
     // Chrome answers an untouched prompt with its default text.
     const promptText = text ?? getBrowserJavaScriptDialog(webContentsId)?.defaultPromptText ?? ''
     if (!answerBrowserJavaScriptDialog(webContentsId, { accept, promptText })) {
       throw new BrowserError('browser_no_dialog', 'No JavaScript dialog is open on this page')
     }
+    return { accepted: accept, ...guard?.withReceipt({}) }
   }
 
   async storageLocalGet(

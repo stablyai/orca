@@ -1,5 +1,12 @@
+import type { BrowserClientHostCommandResult } from '../../shared/browser-client-host-protocol'
+import type { BrowserExpectedUrlMismatch } from '../../shared/browser-expected-url'
+
 export class BrowserClientPageCommandError extends Error {
-  constructor(message: string, options?: ErrorOptions) {
+  constructor(
+    message: string,
+    options?: ErrorOptions,
+    readonly expectedUrlMismatch?: BrowserExpectedUrlMismatch
+  ) {
     super(message, options)
   }
 }
@@ -11,6 +18,19 @@ export function browserClientPageCommandFailureCode(error: unknown, signal: Abor
   return signal.aborted
     ? 'browser_client_page_command_aborted'
     : 'browser_client_page_command_failed'
+}
+
+export function browserClientPageCommandFailure(
+  error: unknown,
+  signal: AbortSignal
+): BrowserClientHostCommandResult {
+  const mismatch =
+    error instanceof BrowserClientPageCommandError ? error.expectedUrlMismatch : undefined
+  return {
+    status: 'failed',
+    errorCode: browserClientPageCommandFailureCode(error, signal),
+    ...(mismatch ? { expectedUrlMismatch: mismatch } : {})
+  }
 }
 
 export function isBrowserClientPageCleanupFailure(error: unknown): boolean {

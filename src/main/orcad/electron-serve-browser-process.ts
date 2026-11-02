@@ -1,5 +1,8 @@
-import { BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY } from '../../shared/browser-runtime-capabilities'
-import { createServer, type AddressInfo } from 'node:net'
+import {
+  BROWSER_EXPECT_URL_RUNTIME_CAPABILITY,
+  BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY
+} from '../../shared/browser-runtime-capabilities'
+import { BROWSER_EXPECT_URL_UNSUPPORTED_CODE } from '../../shared/browser-expected-url'
 import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
 import { BrowserError } from '../browser/browser-error'
@@ -17,6 +20,7 @@ import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-
 import { sendOrcadSidecarRequest } from './orcad-sidecar-runtime-client'
 import { browserWaitRequestTimeoutMs } from '../../shared/browser-wait-timeout'
 import { electronServeEnvironment } from './electron-serve-browser-environment'
+import { reserveLoopbackPort } from './loopback-port-reservation'
 import {
   createElectronSidecarProfile,
   removeLeftoverElectronSidecarProfile,
@@ -38,33 +42,12 @@ const BrowserCloseResult = z.object({ closed: z.boolean() }).passthrough()
 const BrowserTabListResult = z.object({ tabs: z.array(ElectronSidecarTabSchema) }).passthrough()
 const RuntimeStatusResult = z.object({ capabilities: z.array(z.string()).optional() }).passthrough()
 
-async function reserveLoopbackPort(): Promise<number> {
-  const server = createServer()
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject)
-    server.listen(0, '127.0.0.1', () => {
-      server.removeListener('error', reject)
-      resolve()
-    })
-  })
-  const address = server.address() as AddressInfo
-  await new Promise<void>((resolve, reject) => {
-    server.close((error) => {
-      if (error) {
-        reject(error)
-      } else {
-        resolve()
-      }
-    })
-  })
-  return address.port
-}
-
 export class ElectronServeBrowserProcess {
   private child: ReturnType<typeof spawnProcess> | null = null
   private metadata: RuntimeMetadata | null = null
   private readonly tabs = new ElectronSidecarTabRegistry()
   private googleCookieClearSupported = false
+  private expectUrlSupported = false
   private sidecarDataPath: string | null = null
 
   constructor(
@@ -74,6 +57,7 @@ export class ElectronServeBrowserProcess {
 
   async start(signal?: AbortSignal): Promise<void> {
     this.googleCookieClearSupported = false
+    this.expectUrlSupported = false
     signal?.throwIfAborted()
     await removeLeftoverElectronSidecarProfile(this.orcadUserDataPath)
     const userDataPath = await createElectronSidecarProfile(this.orcadUserDataPath)
@@ -120,6 +104,9 @@ export class ElectronServeBrowserProcess {
           if (status.capabilities?.includes('browser.headless.v1')) {
             this.googleCookieClearSupported = status.capabilities.includes(
               BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY
+            )
+            this.expectUrlSupported = status.capabilities.includes(
+              BROWSER_EXPECT_URL_RUNTIME_CAPABILITY
             )
             this.metadata = metadata
             return
@@ -178,6 +165,7 @@ export class ElectronServeBrowserProcess {
     this.child = null
     this.metadata = null
     this.googleCookieClearSupported = false
+    this.expectUrlSupported = false
     this.sidecarDataPath = null
     this.tabs.clear()
     if (sidecarPid) {
@@ -210,6 +198,13 @@ export class ElectronServeBrowserProcess {
       )
     }
     const original = (args[0] ?? {}) as Record<string, unknown>
+    // The sidecar is the installed app, which can be older and would drop the field.
+    if (original.expectUrl !== undefined && !this.expectUrlSupported) {
+      throw new BrowserError(
+        BROWSER_EXPECT_URL_UNSUPPORTED_CODE,
+        'The installed Orca app that runs this server’s browser cannot check --expect-url. Update it or drop the flag.'
+      )
+    }
     const worktreeId =
       typeof original.worktree === 'string'
         ? (await host.resolveBrowserWorkspace(original.worktree)).id
@@ -269,7 +264,9 @@ export class ElectronServeBrowserProcess {
       ) {
         this.tabs.delete(targetPage)
       }
-      throw error
+      throw error instanceof BrowserError && error.data !== undefined
+        ? new BrowserError(error.code, error.message, this.tabs.rewriteResult(error.data))
+        : error
     }
     if (method === 'browserTabCreate') {
       const created = BrowserPageResult.parse(result)

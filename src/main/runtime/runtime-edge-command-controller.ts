@@ -1,4 +1,5 @@
 import type { BrowserScreencastResult } from '../../shared/runtime-types'
+import { runWithRequestedPageUrl } from '../browser/browser-expected-page-url'
 import type { RuntimeBrowserCommandHost } from './browser/browser-command-contracts'
 import type { RuntimeBrowserCommands } from './browser/browser-commands'
 import { RuntimeEmulatorCommands } from './orca-runtime-emulator'
@@ -128,12 +129,15 @@ function bindPrefixedMethods<T extends object>(
   return bound as Partial<PublicMethods<T>>
 }
 
-function bindNamedMethods<T extends object>(
+function bindBrowserMethods<T extends object>(
   instance: T,
   names: readonly (keyof T)[]
 ): Partial<PublicMethods<T>> {
   return Object.fromEntries(
-    names.map((name) => [name, (instance[name] as (...args: unknown[]) => unknown).bind(instance)])
+    names.map((name) => {
+      const method = (instance[name] as (...args: unknown[]) => unknown).bind(instance)
+      return [name, (...args: unknown[]) => runWithRequestedPageUrl(args[0], () => method(...args))]
+    })
   ) as Partial<PublicMethods<T>>
 }
 
@@ -160,7 +164,7 @@ export class RuntimeEdgeCommandController {
     this.emulator = new RuntimeEmulatorCommands(args.emulatorHost)
     this.surface = {
       ...bindPrefixedMethods(this.jira, 'jira'),
-      ...bindNamedMethods(this.browser, BROWSER_COMMAND_NAMES),
+      ...bindBrowserMethods(this.browser, BROWSER_COMMAND_NAMES),
       ...bindPrefixedMethods(this.emulator, 'emulator'),
       browserScreencast: (params, options) => this.screencasts.start(params, options)
     } as RuntimeEdgeCommandSurface

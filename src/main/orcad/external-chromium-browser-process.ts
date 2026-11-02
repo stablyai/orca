@@ -22,6 +22,12 @@ import { ExternalChromiumTabRegistry } from './external-chromium-tab-registry'
 import { runExternalChromiumPageInput } from './external-chromium-page-input'
 import { agentBrowserSnapshotArgs } from '../browser/agent-browser/agent-browser-snapshot-arguments'
 import { Snapshot } from '../../shared/rpc-contract/browser-observation-params'
+import { ExpectedPageUrlGuard } from '../browser/browser-expected-page-url'
+
+const AgentBrowserCurrentUrl = z.object({ url: z.string() })
+
+type PageCommandSession = Pick<ExternalChromiumBrowserSession, 'run' | 'runSteps'>
+
 const AgentBrowserSnapshot = z.object({
   refs: z
     .record(z.string(), z.object({ name: z.string().optional(), role: z.string().optional() }))
@@ -142,6 +148,40 @@ export class ExternalChromiumBrowserProcess {
 
     const page = await this.tabs.resolveTargetPage(host, params)
     await this.session.selectPage(page.agentPageId)
+    if (typeof params.expectUrl !== 'string') {
+      return this.runOnPage(this.session, page, method, params)
+    }
+    const guard = new ExpectedPageUrlGuard(params.expectUrl, page.publicPageId)
+    return guard.withReceipt(
+      await this.runOnPage(this.pageSessionRechecking(guard), page, method, params)
+    )
+  }
+
+  /** Every helper run rechecks; a read and a write sharing one batch share its check. */
+  private pageSessionRechecking(guard: ExpectedPageUrlGuard): PageCommandSession {
+    const verify = async (): Promise<void> => {
+      // Unlike `tab`, `get url` waits out a navigation still replacing the document.
+      const { url } = AgentBrowserCurrentUrl.parse(await this.session.run(['get', 'url']))
+      guard.verifyStep([url])
+    }
+    return {
+      run: async (...args) => {
+        await verify()
+        return this.session.run(...args)
+      },
+      runSteps: async (...args) => {
+        await verify()
+        return this.session.runSteps(...args)
+      }
+    }
+  }
+
+  private async runOnPage(
+    session: PageCommandSession,
+    page: PageRecord,
+    method: string,
+    params: Record<string, unknown>
+  ): Promise<unknown> {
     if (method === 'browserSnapshot') {
       return this.snapshot(page, params)
     }
@@ -162,22 +202,22 @@ export class ExternalChromiumBrowserProcess {
           `Unsupported browser URL: ${String(params.url ?? '')}`
         )
       }
-      return this.session.run(['open', url])
+      return session.run(['open', url])
     }
     if (method === 'browserEval') {
-      return this.session.run(agentBrowserEvalCommand(String(params.expression ?? '')))
+      return session.run(agentBrowserEvalCommand(String(params.expression ?? '')))
     }
     if (method === 'browserWait') {
       const { args, processTimeoutMs } = externalChromiumWaitCommand(params)
       await this.session.run(args, { timeoutMs: processTimeoutMs })
       return { waited: true }
     }
-    const input = await runExternalChromiumPageInput(this.session, method, params)
+    const input = await runExternalChromiumPageInput(session, method, params)
     if (input !== null) {
       return input
     }
     if (method === 'browserBack' || method === 'browserForward' || method === 'browserReload') {
-      await this.session.run([method.slice('browser'.length).toLowerCase()])
+      await session.run([method.slice('browser'.length).toLowerCase()])
       const tab = await this.tabs.describePage(page)
       return { url: tab.url, title: tab.title }
     }
@@ -193,7 +233,7 @@ export class ExternalChromiumBrowserProcess {
         `${method} is not supported by this browser provider.`
       )
     }
-    const result = await this.session.run(command, { cliArgv: method === 'browserExec' })
+    const result = await session.run(command, { cliArgv: method === 'browserExec' })
     return normalizeExternalChromiumCommandResult(method, params, result)
   }
 
