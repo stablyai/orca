@@ -4,7 +4,6 @@ import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { NativeChatSkillDiscovery } from './use-native-chat-skills'
 import {
   useNativeChatImageRuntimeContext,
   type NativeChatImageRuntimeContext
@@ -19,7 +18,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../s
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import type * as StructuredClient from '@/runtime/structured-agent-session-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { AgentSessionStatusEvent } from '../../../../shared/agent-session-wire'
+import type { AgentSessionStatusEvent } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { useNativeChatHandOff, type NativeChatHandOff } from './use-native-chat-hand-off'
 import {
@@ -48,6 +47,7 @@ vi.mock('@/components/agent-session-continuation/AgentSessionContinuationDialog'
 vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatSkillDiscovery: vi.fn() }))
 
 import {
+  type NativeChatSkillDiscovery,
   resetNativeChatSkillDiscoveryCacheForTests,
   useNativeChatSkills
 } from './use-native-chat-skills'

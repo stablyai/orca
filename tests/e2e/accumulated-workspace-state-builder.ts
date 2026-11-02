@@ -1,5 +1,5 @@
 import path from 'node:path'
-import type { SleepingAgentSessionRecord } from '../../src/shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../src/shared/agent-session/lifecycle/agent-session-resume'
 import type { Repo } from '../../src/shared/repo-types'
 import type {
   TerminalLayoutSnapshot,

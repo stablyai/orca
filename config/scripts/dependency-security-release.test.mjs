@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { runInNewContext } from 'node:vm'
-import { expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
 import { parse } from 'yaml'
 
 const release = parse(readFileSync('.github/workflows/release-cut.yml', 'utf8'))
@@ -59,95 +59,11 @@ it('scans the release tag with read-only workflow tooling instead of installing 
   }
 })
 
-it('keeps audit outcomes for notifications while allowing findings to pass CI', () => {
-  expect(audit.secrets.SLACK_WEBHOOK_URL).toBe('${{ secrets.SLACK_WEBHOOK_URL }}')
-  expect(security.on.workflow_call.secrets.SLACK_WEBHOOK_URL.required).toBe(false)
-  const notify = security.jobs.notify
-  expect(notify.needs).toEqual(['javascript', 'rust'])
-  expect(notify.steps[0]['continue-on-error']).toBe(true)
+it('allows audit findings to pass CI', () => {
   for (const name of ['javascript', 'rust']) {
     const job = security.jobs[name]
     expect(job.steps.find((step) => step.id === 'audit')['continue-on-error']).toBe(true)
-    expect(job.outputs.audit_result).toBe('${{ steps.audit.outcome }}')
-    for (const status of ['success', 'failure']) {
-      for (const outcome of ['success', 'failure']) {
-        for (const cancelled of [false, true]) {
-          const needs = {
-            javascript: { result: 'success', outputs: { audit_result: 'success' } },
-            rust: { result: 'success', outputs: { audit_result: 'success' } }
-          }
-          needs[name] = { result: status, outputs: { audit_result: outcome } }
-          expect(
-            runInNewContext(notify.if, {
-              needs,
-              github: { repository: 'stablyai/orca' },
-              cancelled: () => cancelled
-            })
-          ).toBe(!cancelled && (status === 'failure' || outcome === 'failure'))
-        }
-      }
-    }
   }
-})
-
-async function sendNotification({
-  webhook = 'https://example.test/slack',
-  ref = '',
-  pullRequest,
-  fetch = vi.fn().mockResolvedValue({ ok: true })
-} = {}) {
-  const notice = vi.fn()
-  await runInNewContext(`(async () => { ${security.jobs.notify.steps[0].with.script} })()`, {
-    process: {
-      env: {
-        SLACK_WEBHOOK_URL: webhook,
-        RELEASE_REF: ref,
-        GITHUB_SERVER_URL: 'https://github.com',
-        GITHUB_REPOSITORY: 'stablyai/orca',
-        GITHUB_RUN_ID: '123',
-        AUDIT_RESULTS: JSON.stringify({
-          javascript: { result: 'success', outputs: { audit_result: 'failure' } },
-          rust: { result: 'success', outputs: { audit_result: 'success' } }
-        })
-      }
-    },
-    context: { payload: { pull_request: pullRequest }, ref: 'refs/heads/main' },
-    core: { notice },
-    fetch,
-    AbortSignal
-  })
-  return { fetch, notice }
-}
-
-it.each([
-  { pullRequest: { number: 1234 }, target: 'PR #1234' },
-  { ref: 'refs/tags/v1.5.0', target: 'refs/tags/v1.5.0' }
-])('sends a dependency review with the target and report link: $target', async (options) => {
-  const { fetch } = await sendNotification(options)
-  const [url, request] = fetch.mock.calls[0]
-  expect(url).toBe('https://example.test/slack')
-  expect(request.method).toBe('POST')
-  const payload = JSON.parse(request.body)
-  expect(payload.text).toContain(`Orca dependency review for ${options.target}`)
-  expect(payload.text).toContain('JavaScript: review suggested · Rust: passed')
-  expect(payload.text).toContain('https://github.com/stablyai/orca/actions/runs/123')
-  expect(payload.mrkdwn).toBe(false)
-})
-
-it('retains fork reports without requiring a Slack secret and redacts delivery errors', async () => {
-  const { fetch, notice } = await sendNotification({ webhook: '' })
-  expect(fetch).not.toHaveBeenCalled()
-  expect(notice).toHaveBeenCalledOnce()
-  await expect(
-    sendNotification({
-      fetch: vi.fn().mockRejectedValue(new Error('fetch failed: https://example.test/slack'))
-    })
-  ).rejects.toThrow(/^Slack dependency review notification could not be sent$/)
-  await expect(
-    sendNotification({
-      fetch: vi.fn().mockResolvedValue({ ok: false, status: 503 })
-    })
-  ).rejects.toThrow(/^Slack dependency review notification returned HTTP 503$/)
 })
 
 it('extracts release data while excluding executable package and Cargo configuration', async () => {

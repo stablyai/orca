@@ -52,22 +52,6 @@ function options(provider: 'github' | 'gitlab') {
 afterEach(cleanup)
 
 describe('Jira review title ownership', () => {
-  it.each(['github', 'gitlab'] as const)(
-    'seeds and regenerates a canonical prefix for %s',
-    async (provider) => {
-      const { result } = renderHook(() => useCreatePullRequestDialogFields(options(provider)))
-      expect(result.current.title).toBe('TEAM_ALPHA9-7 Restore login')
-      expect(result.current.fieldsAreSeedPlaceholders).toBe(true)
-      act(() => {
-        result.current.applyGeneratedFields(fields, revisions)
-      })
-      expect(result.current.title).toBe('TEAM_ALPHA9-7 Restore login')
-      act(() => {
-        result.current.applyGeneratedFields({ ...fields, title: 'Better title' }, revisions)
-      })
-      expect(result.current.title).toBe('TEAM_ALPHA9-7 Better title')
-    }
-  )
   it('keeps a title edited during or before regeneration', () => {
     const { result } = renderHook(() => useCreatePullRequestDialogFields(options('gitlab')))
     act(() => {

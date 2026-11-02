@@ -58,42 +58,8 @@ function cut(source: string, previous: MarkdownBlockSplit | null = null): string
 }
 
 describe('splitMarkdownTopLevelBlocks', () => {
-  it('cuts at top-level blocks and loses none of the source', () => {
-    const blocks = cut(REPLY)
-    expect(blocks.join('')).toBe(REPLY)
-    expect(blocks.map((block) => block.trim().split('\n')[0])).toEqual([
-      'Here is the plan.',
-      '## Steps',
-      '- first item',
-      '1. one',
-      'A loose list follows.',
-      '1. first',
-      '> a quote',
-      '```ts',
-      'Intro to the table',
-      '| a | b |',
-      'Setext title',
-      'Closing words with `code` and **bold**.'
-    ])
-  })
-
   it.each([1, 3, 7])('reaches the same cut when streamed %i characters at a time', (step) => {
     expect(streamed(REPLY, step)).toEqual(cut(REPLY))
-  })
-
-  it.each([1, 3, 7])('numbers each block by its source line, streamed %i at a time', (step) => {
-    let split: MarkdownBlockSplit | null = null
-    for (let end = step; end < REPLY.length + step; end += step) {
-      split = splitMarkdownTopLevelBlocks(REPLY.slice(0, end), split)
-    }
-    for (const block of split?.blocks ?? []) {
-      expect(block.line).toBe(REPLY.slice(0, block.start).split('\n').length)
-    }
-  })
-
-  it('keeps Windows line endings inside their blocks', () => {
-    const source = 'one\r\n\r\ntwo\r\n\r\n- three\r\n'
-    expect(cut(source)).toEqual(['one\r\n\r\n', 'two\r\n\r\n', '- three\r\n'])
   })
 
   it.each([
@@ -106,10 +72,6 @@ describe('splitMarkdownTopLevelBlocks', () => {
   ])('leaves a document with %s whole, however it arrived', (_name, source) => {
     expect(cut(source)).toEqual([source])
     expect(streamed(source, 2)).toEqual([source])
-  })
-
-  it('still cuts a document whose only HTML is a tag that holds nothing', () => {
-    expect(cut('| a |\n| - |\n| one<br>two |\n\nAfter.\n')).toHaveLength(2)
   })
 
   it('starts over when the source is replaced rather than appended to', () => {

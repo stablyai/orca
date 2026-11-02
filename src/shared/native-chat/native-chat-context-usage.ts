@@ -1,6 +1,6 @@
-import { contextTokensFromUsage } from '../agent-session-context-usage'
-import type { NativeChatMessage } from '../native-chat-types'
-import { isNativeChatContextClear } from '../agent-session-context-clear'
+import { contextTokensFromUsage } from '../agent-session/agent-session-context-usage'
+import type { NativeChatMessage } from './native-chat-types'
+import { isNativeChatContextClear } from '../agent-session/agent-session-context-clear'
 
 export type NativeChatContextUsage = {
   usedTokens: number

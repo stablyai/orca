@@ -1,5 +1,5 @@
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { CodexCredentialAbsenceGrace } from './codex-credential-absence-grace'
 import type {
   CodexMirroredHomeStatus,
@@ -106,8 +106,10 @@ export abstract class CodexRuntimeHomeState {
     target: CodexAccountSelectionTarget,
     runtimeHomePath: string | null
   ): void
+  /** `pinnedWslDistro`: the distro a background poll gated, read as launch reads its named target. */
   abstract prepareForRateLimitFetch(
-    target?: CodexAccountSelectionTarget
+    target?: CodexAccountSelectionTarget,
+    pinnedWslDistro?: string
   ): CodexRateLimitHomeResolution
   abstract syncForCurrentSelection(
     target?: CodexAccountSelectionTarget,

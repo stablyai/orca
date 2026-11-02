@@ -129,6 +129,7 @@ it.each([
       showSessionRestoredBanner: note,
       reportRemoteRendererSerializerReady: callbacksReady,
       syncHiddenRendererPtyDelivery: vi.fn(),
+      catchUpMode2031: vi.fn(),
       handleRemoteOutputPauseChanged: vi.fn(),
       markHiddenOutputRestoreNeeded: vi.fn(),
       beginReattachLiveDataDeferralIfUnowned: vi.fn(),

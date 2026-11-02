@@ -4,10 +4,10 @@ import type {
   AgentMessageSource,
   AgentMessageSender
 } from '../../../shared/agent-session/agent-session-message-source'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { MessageRow, OrchestrationDb } from './db'
 import { agentMessageRelation } from './agent-message-relation'
-import { agentMessageSender, type SenderNameResolver } from './agent-message-sender'
+import { agentMessageSender, type SenderSnapshotResolver } from './agent-message-sender'
 import type { OrchestrationCliCommand } from './cli-command'
 import { formatMessagePointer } from './formatter'
 import type { OrchestrationPointerBatch } from './mailbox-pointer-eligibility'
@@ -22,7 +22,7 @@ export function structuredMailSource(input: {
   mailboxHandle: string
   dispatchId: string | null
   batch: readonly MailSourceMessage[]
-  senderName: SenderNameResolver
+  senderSnapshot: SenderSnapshotResolver
 }): AgentMessageSource {
   const groups = new Map<string, { message: MailSourceMessage; report: ReportFact }[]>()
   for (const message of input.batch) {
@@ -39,7 +39,7 @@ export function structuredMailSource(input: {
     const sender = agentMessageSender(
       address,
       input.db,
-      input.senderName,
+      input.senderSnapshot,
       reported?.kind === 'valid' ? reported.dispatchId : undefined
     )
     const relations = new Map<string, AgentMessageSender['relation']>()
@@ -92,7 +92,7 @@ export function structuredMailNotice(input: {
   dispatchId: string | null
   batch: OrchestrationPointerBatch
   cliCommand: OrchestrationCliCommand
-  senderName: SenderNameResolver
+  senderSnapshot: SenderSnapshotResolver
 }): AgentJournalMessageItem {
   const { messages, heldDeliveryId } = input.batch
   const text = formatMessagePointer(

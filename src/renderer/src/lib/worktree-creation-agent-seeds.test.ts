@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { resetHookCommandDelayedDeliveryForTests } from './hook-command-delayed-delivery'
@@ -9,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   setWebRuntimeTabProps: vi.fn()
 }))
 
-vi.mock('@/components/native-chat/native-chat-session-option-cache', () => ({
+vi.mock('../../../shared/native-chat/input/native-chat-session-option-cache', () => ({
   seedNativeChatAppliedSessionOptions: mocks.seedNativeChatAppliedSessionOptions
 }))
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
@@ -91,7 +92,7 @@ beforeEach(() => {
   useAppStore.setState({
     settings: {
       ...initialSettings,
-      experimentalNativeChat: true
+      nativeChatProviders: EVERY_AGENT_CHAT
     }
   })
 })

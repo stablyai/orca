@@ -146,7 +146,7 @@ describe('runtime link opens through staging and materialization', () => {
     ).toMatchObject({ remotePageId: 'actual-host-page', environmentId: ENV })
   })
 
-  it('creates a client split beside the source when no browser is visible', async () => {
+  it('reuses the other client group when no browser is visible', async () => {
     useAppStore.setState((state) => ({
       groupsByWorktree: {
         [WT]: state.groupsByWorktree[WT]!.map((group) => ({
@@ -175,9 +175,12 @@ describe('runtime link opens through staging and materialization', () => {
     expect(pendingCreates).toHaveLength(1)
     const provisional = pendingCreates[0]!.params.page!
     const staged = wrapperForRemotePage(provisional)!
-    expect([G1, G2]).not.toContain(staged.groupId)
+    expect(staged.groupId).toBe(G2)
+    expect(pendingCreates[0]!.params.targetGroupId).toBe(G2)
+    expect(useAppStore.getState().groupsByWorktree[WT]).toHaveLength(2)
     expect(useAppStore.getState().layoutByWorktree[WT]).toMatchObject({
-      first: { type: 'split', first: { groupId: G1 }, second: { groupId: staged.groupId } }
+      first: { type: 'leaf', groupId: G1 },
+      second: { type: 'leaf', groupId: G2 }
     })
     pendingCreates[0]!.resolve('split-host-page')
     expect(await creating).toMatchObject({ status: 'opened', result: { groupId: staged.groupId } })

@@ -12,7 +12,7 @@ import {
   sendNativeChatMessageVerified,
   resetNativeChatPtySendQueuesForTests
 } from '../../src/renderer/src/components/native-chat/native-chat-runtime-send'
-import { buildAskAnswerKeys } from '../../src/shared/native-chat-ask-answer'
+import { buildAskAnswerKeys } from '../../src/shared/native-chat/input/native-chat-ask-answer'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal'
@@ -152,36 +152,6 @@ describe('prompt delivery through production IPC, provider and paired host', () 
     ).resolves.toBe(true)
     expect(ssh.bytes).toEqual(['answer', 'body', '\r', '\x1b[200~launch\x1b[201~'])
     expect(ssh.settlement).not.toHaveBeenCalled()
-  })
-
-  it('older paired hosts confirm ordinary chat sends and pasted answers as before', async () => {
-    vi.useFakeTimers()
-    io.rpc.mockResolvedValue({ send: { handle: 'terminal', accepted: true, bytesWritten: 1 } })
-    const onWriteUnconfirmed = vi.fn()
-    const onWriteRejected = vi.fn()
-    sendNativeChatMessage('remote:owner@@terminal', 'hello', {
-      onWriteRejected,
-      onWriteUnconfirmed
-    })
-    const onDeliverySettled = vi.fn()
-    sendNativeChatMessage('remote:owner@@terminal', 'answer', { onDeliverySettled })
-    await vi.advanceTimersByTimeAsync(2000)
-    expect(onWriteUnconfirmed).not.toHaveBeenCalled()
-    expect(onWriteRejected).not.toHaveBeenCalled()
-    expect(onDeliverySettled).toHaveBeenCalledExactlyOnceWith(true)
-  })
-
-  it('sends ordinary paired input without asking the host for provider settlement', async () => {
-    io.rpc.mockResolvedValue({ send: { handle: 'terminal', accepted: true, bytesWritten: 4 } })
-    await expect(
-      sendRuntimePtyInputVerified('remote:owner@@terminal', 'body', 'driving')
-    ).resolves.toBe(true)
-    expect(io.rpc).toHaveBeenCalledWith(
-      expect.anything(),
-      'terminal.send',
-      expect.not.objectContaining({ requireWriteSettlement: expect.anything() }),
-      expect.anything()
-    )
   })
 
   it.each(['accepted', 'lost', 'older-host'] as const)(

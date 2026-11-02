@@ -25,6 +25,7 @@ export function createWebAppApi(): Partial<PreloadApi> {
           dockBadgeLabel: null
         }),
       getFeatureWallAssetBaseUrl: () => Promise.resolve('/'),
+      setWindowMaterialSuppressed: () => Promise.resolve(),
       relaunch: () => Promise.resolve(window.location.reload()),
       restart: () => Promise.resolve(window.location.reload()),
       reload: () => Promise.resolve(window.location.reload()),

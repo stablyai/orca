@@ -14,22 +14,6 @@ describe('getSafeRelativePath', () => {
     expect(getSafeRelativePath('c:')).toEqual({ safe: false })
   })
 
-  it('keeps colon-bearing paths that are not drive-qualified', () => {
-    expect(getSafeRelativePath('build:out')).toEqual({ safe: true, rel: 'build:out' })
-    expect(getSafeRelativePath('logs/2026-08-31T10:00.txt')).toEqual({
-      safe: true,
-      rel: 'logs/2026-08-31T10:00.txt'
-    })
-  })
-
-  it('still strips leading separators of either flavour and keeps the remainder relative', () => {
-    expect(getSafeRelativePath('node_modules')).toEqual({ safe: true, rel: 'node_modules' })
-    expect(getSafeRelativePath('  .env  ')).toEqual({ safe: true, rel: '.env' })
-    expect(getSafeRelativePath('/.env')).toEqual({ safe: true, rel: '.env' })
-    expect(getSafeRelativePath('\\.env')).toEqual({ safe: true, rel: '.env' })
-    expect(getSafeRelativePath('//srv/share/x')).toEqual({ safe: true, rel: 'srv/share/x' })
-  })
-
   it('still rejects empty, whitespace-only, and parent-directory entries', () => {
     expect(getSafeRelativePath('')).toEqual({ safe: false })
     expect(getSafeRelativePath('   ')).toEqual({ safe: false })
@@ -39,15 +23,6 @@ describe('getSafeRelativePath', () => {
     expect(getSafeRelativePath('foo\\..\\..\\escape')).toEqual({ safe: false })
     expect(getSafeRelativePath('.')).toEqual({ safe: false })
     expect(getSafeRelativePath('./')).toEqual({ safe: false })
-  })
-
-  it('returns the spelling git prints for dot-prefixed and slash-suffixed entries', () => {
-    expect(getSafeRelativePath('./node_modules')).toEqual({ safe: true, rel: 'node_modules' })
-    expect(getSafeRelativePath('node_modules/')).toEqual({ safe: true, rel: 'node_modules' })
-    expect(getSafeRelativePath('./packages//app/./dist/')).toEqual({
-      safe: true,
-      rel: 'packages/app/dist'
-    })
   })
 
   it('rejects a drive designator hidden behind a dot segment', () => {

@@ -49,6 +49,9 @@ async function commitDeviceToken(hostId: string, token: string): Promise<void> {
 const tokenCache = new Map<string, string>()
 
 export const loadHosts = async (): Promise<HostProfile[]> => (await loadHostListSnapshot()).profiles
+/** The last host list read this launch, or null before the first; for first-frame titles only. */
+export const peekHosts = (): HostProfile[] | null =>
+  hostListLoads.peekSettledHostList()?.profiles ?? null
 export const loadHostCatalog = async (): Promise<HostCatalogEntry[]> =>
   (await loadHostListSnapshot()).catalog
 

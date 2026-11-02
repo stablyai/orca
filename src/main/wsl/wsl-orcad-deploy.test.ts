@@ -24,7 +24,11 @@ const mocks = vi.hoisted(() => ({
   adoptRunning: vi.fn(),
   localVersion: vi.fn(),
   readRecord: vi.fn(),
+  removeFailed: vi.fn(),
   transaction: vi.fn(async (): Promise<unknown> => null)
+}))
+vi.mock('./wsl-orcad-failed-install-removal', () => ({
+  removeFailedFreshWslOrcadInstall: mocks.removeFailed
 }))
 vi.mock('../managed-server/activation/orcad-activation-transaction-store', () => ({
   readOrcadActivationTransaction: mocks.transaction
@@ -65,7 +69,8 @@ vi.mock('./wsl-orcad-active-probe', async (importOriginal) => ({
 }))
 vi.mock('../managed-server/lifecycle/orcad-managed-version-gc', () => ({
   provenLiveDaemonVersion: () => null,
-  pruneManagedOrcadVersions: mocks.prune
+  pruneManagedOrcadVersions: mocks.prune,
+  pruneSupersededOrcadCandidates: async () => {}
 }))
 vi.mock('../managed-server/lifecycle/orcad-managed-wake', () => ({
   wakeStoppedManagedOrcad: mocks.wake
@@ -376,6 +381,27 @@ describe('deployAndLaunchWslOrcad', () => {
       reason: 'terminals are running',
       forceable: true
     })
+    expect(mocks.probe).not.toHaveBeenCalled()
+  })
+
+  it('hands a failed first deploy to the fresh-install cleanup before reporting it', async () => {
+    const failed = {
+      outcome: 'installed-not-activated',
+      fullVersion: '1.5.0+ab',
+      code: 'orcad_activation_daemon_degraded',
+      reason: 'the candidate failed its readiness check',
+      startCheckFailed: true,
+      freshlyInstalled: true
+    }
+    mocks.deploy.mockResolvedValueOnce(failed)
+    await expect(launch()).resolves.toMatchObject({
+      outcome: 'deferred',
+      candidateVersion: '1.5.0+ab'
+    })
+    expect(mocks.removeFailed).toHaveBeenCalledWith(
+      expect.objectContaining({ remoteHome: '/home/u' }),
+      failed
+    )
     expect(mocks.probe).not.toHaveBeenCalled()
   })
 })

@@ -2,7 +2,7 @@
 
 // Refused creates publish no host session; bridge launch failures into tab/workspace rows until retry or closure.
 
-import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
+import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type {
@@ -10,12 +10,12 @@ import type {
   AgentSessionMutationResult,
   AgentSessionSendResult,
   AgentSessionStatusEvent
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-freshness'
-import { structuredAgentSessionAgentStatus } from '../../../../shared/structured-agent-session-agent-status'
+import { structuredAgentSessionAgentStatus } from '../../../../shared/agent-session/view/structured-agent-session-agent-status'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../../shared/tab-types'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
 import type { AppState } from '@/store/types'
@@ -79,12 +79,14 @@ const launchErrorMocks = vi.hoisted(() => {
   return { StructuredAgentSessionCreateRefusalError }
 })
 
-vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
-  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-errors', async () => ({
+  ...(await vi.importActual<typeof LaunchErrors>(
+    '@/lib/agent-session/launch/structured-agent-session-launch-errors'
+  )),
   ...launchErrorMocks
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-create-call', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-create-call', () => ({
   launchStructuredAgentSession: mocks.launch
 }))
 
@@ -106,7 +108,7 @@ import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structure
 import {
   retryStructuredAgentSessionLaunch,
   startStructuredAgentLaunch
-} from '@/lib/structured-agent-session-launch'
+} from '@/lib/agent-session/launch/structured-agent-session-launch'
 import { resetStructuredAgentLaunchRegistryForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { resetStructuredAgentLaunchPersistenceForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'

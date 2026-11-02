@@ -20,11 +20,11 @@ export function ClaudeRunningSessionSwitchSetting({
 }): React.JSX.Element {
   const title = translate(
     'accounts.claude.switchSessions.settingTitle',
-    'When you switch accounts while Claude is running'
+    'When you switch accounts while Claude is running in terminals'
   )
   const description = translate(
     'accounts.claude.switchSessions.settingDescription',
-    'Restarting continues each running conversation on the new account.'
+    'Restarting continues each terminal conversation on the new account.'
   )
   return (
     <SearchableSetting

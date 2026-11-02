@@ -11,7 +11,7 @@ import {
   type ServeUpdateHandoffState
 } from '../shared/serve-update-handoff'
 import { isSameUserDataPath } from '../shared/serve-user-data-path'
-import { getCanonicalUserDataPath } from './persistence'
+import { getCanonicalUserDataPath } from './persistence/loading-store/user-data-path'
 
 function getConfiguredHandoffPath(): string | null {
   const configuredPath = process.env[SERVE_UPDATE_HANDOFF_PATH_ENV]
