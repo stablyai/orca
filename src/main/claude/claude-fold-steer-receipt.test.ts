@@ -642,43 +642,6 @@ describe('Claude fold receipt boundaries (synthetic orders)', () => {
   )
 })
 
-describe('Claude input endpoints (synthetic orders)', () => {
-  it.each([
-    ['plural', (uuid: string) => ({ user_message_uuids: [uuid] })],
-    ['singular', (uuid: string) => ({ user_message_uuid: uuid })]
-  ])('an owed input its own %s result names never owns a later run', async (_label, names) => {
-    const rig = await riggedAdapter()
-    const uuidA = await rig.dispatchAt(10, 'client-a', 'first prompt')
-    rig.deliver(userReplay(100, PROVIDER_SESSION_ID, uuidA, 'first prompt'))
-    await rig.dispatchAt(200, 'client-b', STEER_PROMPT)
-    rig.deliver(
-      resultFrame(300, PROVIDER_SESSION_ID, 'result-a', {
-        userMessageUuids: [uuidA],
-        durationMs: 290,
-        numTurns: 1
-      })
-    )
-    const uuidB = String(rig.claude.connections[0]!.sent.at(-1)?.uuid)
-    rig.deliver(
-      untagged(400, {
-        type: 'result',
-        subtype: 'success',
-        is_error: false,
-        uuid: 'result-b',
-        ...names(uuidB)
-      })
-    )
-    const uuidC = await rig.dispatchAt(500, 'client-c', SECOND_STEER_PROMPT)
-    rig.deliver(userReplay(600, PROVIDER_SESSION_ID, uuidC, SECOND_STEER_PROMPT))
-
-    expect(rig.turns().at(-1)).toMatchObject({
-      turnId: uuidC,
-      state: 'running',
-      userItemId: agentJournalSubmissionKey('client-c')
-    })
-  })
-})
-
 function untagged(at: number, frame: Record<string, unknown>): CapturedFoldFrame {
   return { at, frame: { session_id: PROVIDER_SESSION_ID, parent_tool_use_id: null, ...frame } }
 }

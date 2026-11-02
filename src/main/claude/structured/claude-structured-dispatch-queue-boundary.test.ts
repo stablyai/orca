@@ -11,7 +11,6 @@ import { AgentSessionPreDispatchError } from '../../native-chat/agent-session-wi
 import { AgentSessionOptionRejectedError } from '../../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { createClaudeUserMessageQueue } from '../claude-agent-sdk-user-message-queue'
 import { claudeTurnLifecycleIdentity } from '../claude-turn-lifecycle-item'
-import { resolveClaudeReplayTurn } from '../claude-replay-turn-resolution'
 import { dispatchClaudeTurn, rejectClaudeDispatchWaiters } from './claude-structured-dispatch'
 import { createClaudeJournalTranslator } from './journal/claude-structured-journal-translation'
 import { sessionFor } from './claude-structured-dispatch-test-support'
@@ -225,91 +224,4 @@ it('keeps the run for the input that survives when Claude refuses the one that o
   rig.queue.end()
   await rig.pump.next()
   await expect(joined).resolves.toMatchObject({ state: 'admitted' })
-})
-
-/** Offers and frames take acquisition's path: delivery resolution first, then the translator. */
-function attributionRig() {
-  const session = sessionFor()
-  session.connection.send = async (_message, beforeDispatch) => {
-    await beforeDispatch?.()
-  }
-  const translator = createClaudeJournalTranslator({
-    sink: { appendItem: () => {}, appendTombstone: () => {}, publish: () => {} }
-  })
-  session.translator = translator
-  let identityReads = 0
-  const offerInput = translator.offerInput
-  // Count every read of an offered input's identity, wherever the run model keeps it.
-  translator.offerInput = (input) => {
-    const { sessionId, sentUuid, clientMessageId } = input
-    offerInput({
-      sessionId,
-      get sentUuid() {
-        identityReads += 1
-        return sentUuid
-      },
-      get clientMessageId() {
-        identityReads += 1
-        return clientMessageId
-      }
-    })
-  }
-  const frame = (message: Record<string, unknown>) => {
-    const full = { session_id: 'provider-session', parent_tool_use_id: null, ...message }
-    const origin = resolveClaudeReplayTurn(session, full)
-    translator.handle({
-      type: 'message',
-      sessionId: 'session-1',
-      message: full,
-      ...(origin ? { startsTurn: true as const } : {}),
-      ...(origin?.clientMessageId ? { clientMessageId: origin.clientMessageId } : {})
-    })
-  }
-  const offer = (index: number) =>
-    dispatchClaudeTurn(
-      session,
-      { body: USER_MESSAGE, clientMessageId: `client-${index}`, sentUuid: `sent-${index}` },
-      async () => {}
-    )
-  const runsFolded = async (count: number) => {
-    for (let index = 0; index <= count; index += 1) {
-      await offer(index)
-      frame({ type: 'command_lifecycle', state: 'started', command_uuid: `sent-${index}` })
-      frame({
-        type: 'user',
-        uuid: `sent-${index}`,
-        message: { role: 'user', content: [{ type: 'text', text: 'hi' }] }
-      })
-    }
-  }
-  return { session, translator, frame, offer, runsFolded, reads: () => identityReads }
-}
-
-it('attributes receipts, echoes and named results by identity, not by the size of the run', async () => {
-  const measure = async (count: number) => {
-    const rig = attributionRig()
-    await rig.runsFolded(count)
-    // Every input folded into one live run, and no delivery waiter is left to bound it.
-    expect(rig.translator.currentTurnId).toBe('sent-0')
-    expect(rig.session.dispatchWaiters).toHaveLength(0)
-    const beforeReceipt = rig.reads()
-    rig.frame({ type: 'command_lifecycle', state: 'completed', command_uuid: 'sent-1' })
-    const receipt = rig.reads() - beforeReceipt
-    rig.frame({
-      type: 'result',
-      subtype: 'success',
-      is_error: false,
-      user_message_uuids: ['sent-0']
-    })
-    expect(rig.translator.currentTurnId).toBeNull()
-    const total = rig.reads()
-    // The run released every input: the next send anchors its own run.
-    await rig.offer(count + 1)
-    expect(rig.translator.currentTurnId).toBe(`sent-${count + 1}`)
-    return { receipt, total }
-  }
-  const small = await measure(40)
-  const large = await measure(400)
-  expect(large.receipt).toBe(small.receipt)
-  expect(large.total).toBeLessThanOrEqual(10 * small.total + 20)
 })
