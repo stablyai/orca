@@ -1523,7 +1523,6 @@ html.native-shell .app-layout {
 @scope ([data-worktree-card-surface][data-worktree-card-active='primary']) to ([data-worktree-lineage-children]) {
   [data-variant='hostContext'] {
     border-color: var(--muted-foreground);
-    color: var(--host-badge-foreground, var(--foreground));
   }
 }
 
