@@ -226,10 +226,21 @@ ${PLUGIN_FRAME_FACADES_SCRIPT}  if (C.user) {
       onDidChange: function (fn) {
         var subscription = on(E.editorDocument, fn)
         var current = latest
-        if (current) Promise.resolve().then(function () { if (latest === current) fn(current) })
-        return subscription
+        var live = true
+        if (current) Promise.resolve().then(function () { if (live && latest === current) fn(current) })
+        return Object.freeze({ dispose: function () { live = false; subscription.dispose() } })
       },
-      applyEdit: function (edit) { return call(C.editor.applyEdit, edit) }
+      applyEdit: function (edit) {
+        var base = edit && edit.baseVersion
+        var content = edit && edit.content ? Object.freeze(Object.assign({}, edit.content)) : null
+        return call(C.editor.applyEdit, edit).then(function (result) {
+          // Accepted edits keep their version, so get() takes the content without a new version.
+          if (latest && content && latest.version === base) {
+            latest = Object.freeze(Object.assign({}, latest, { content: content }))
+          }
+          return result
+        })
+      }
     })
     window.addEventListener('keydown', function (event) {
       if (event.repeat || !(event.metaKey || event.ctrlKey)) return

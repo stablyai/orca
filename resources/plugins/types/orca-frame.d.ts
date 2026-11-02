@@ -42,6 +42,7 @@ declare module 'orca/frame' {
     data: string | ArrayBuffer | ArrayBufferView
   }
   export type EditorDocumentApi = {
+    /** The latest document, with your accepted edits' content at the same version. */
     get(): Promise<EditorDocument>
     /** Replays the current document, then each one Orca sends when the file changes outside. */
     onDidChange(handler: (document: EditorDocument) => void): Disposable

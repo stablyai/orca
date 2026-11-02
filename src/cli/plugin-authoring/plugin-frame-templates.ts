@@ -44,31 +44,49 @@ export function editor(input: PluginTemplateInput): PluginTemplate {
       textarea {
         box-sizing: border-box;
         width: 100%;
-        height: calc(100vh - 24px);
+        height: calc(100vh - 48px);
         color: inherit;
         background: transparent;
         border: 1px solid var(--orca-border);
         font: 13px ui-monospace, monospace;
       }
+      #notice {
+        margin: 4px 0 0;
+        min-height: 16px;
+        color: var(--orca-destructive);
+      }
     </style>
   </head>
   <body>
     <textarea id="text" spellcheck="false"></textarea>
+    <p id="notice" role="status"></p>
     <script>
       const text = document.getElementById('text')
+      const notice = document.getElementById('notice')
       let version = 0
+      // True while the textarea holds typing Orca has not accepted yet.
+      let dirty = false
       // Orca sends the document now and again whenever the file changes outside the editor.
       orca.document.onDidChange((doc) => {
         version = doc.version
         text.readOnly = doc.readOnly
-        if (doc.content.kind === 'text' && text.value !== doc.content.text) {
+        if (!dirty && doc.content.kind === 'text' && text.value !== doc.content.text) {
           text.value = doc.content.text
         }
       })
       text.addEventListener('input', () => {
-        void orca.document
-          .applyEdit({ baseVersion: version, content: { kind: 'text', text: text.value } })
-          .catch((error) => console.warn(error.code, error.message))
+        dirty = true
+        const sent = text.value
+        orca.document.applyEdit({ baseVersion: version, content: { kind: 'text', text: sent } }).then(
+          () => {
+            if (text.value === sent) dirty = false
+            notice.textContent = ''
+          },
+          (error) => {
+            // Your text stays; the next keystroke edits the latest document.
+            notice.textContent = 'Not saved: ' + error.message
+          }
+        )
       })
     </script>
   </body>
