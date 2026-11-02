@@ -43,7 +43,8 @@ function loadSources() {
     schema: 'src/shared/plugins/manifest/plugin-json-schema.ts',
     fieldDocs: 'src/shared/plugins/manifest/plugin-schema-field-docs.ts',
     cli: 'src/cli/specs/plugin.ts',
-    cliView: 'src/cli/specs/plugin-view.ts'
+    cliView: 'src/cli/specs/plugin-view.ts',
+    themeTokens: 'src/shared/plugins/artifacts/plugin-theme-token-reference-doc.ts'
   })
 }
 
@@ -246,6 +247,18 @@ function renderHostApi(sources, { frame, worker }) {
         ...frame
           .literalMembers('EditorDocumentApi')
           .map((m) => bullet({ ...m, text: `document.${m.text}` })),
+        ''
+      ],
+      [
+        '## Theme variables in frames',
+        '',
+        "HTML panels and custom editors get these CSS variables from Orca's active theme, plus a `light` or `dark` class on `<html>`. A theme change updates them in place and emits `theme` (`orca.on('theme', ...)`); the frame is not reloaded. Style from them, not fixed colours.",
+        '',
+        ...sources.themeTokens.pluginFrameThemeVariables().map(({ variable, paints }) => {
+          // Name the frame's own variables, not the app theme tokens behind them.
+          const role = paints.replace(/`--([\w-]+)`/g, '`--orca-$1`')
+          return `- ${code(variable)}${role ? `: ${role}` : ''}`
+        }),
         ''
       ],
       ['## Methods', '', ...methods, ''],

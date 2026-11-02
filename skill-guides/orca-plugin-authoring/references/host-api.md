@@ -42,6 +42,31 @@ Host API 1.2 (`"pluginApi": 1`). Call `host.call(method, params, { signal })`; a
 - `document.applyEdit(edit: EditorEdit)`: Rejects with `conflict`, `too_large` or `not_permitted` (read-only).
 - `document.session(options?: EditorSessionOptions<T>)`: Document sync in one call; resolves once theme, locale and the first document are in.
 
+## Theme variables in frames
+
+HTML panels and custom editors get these CSS variables from Orca's active theme, plus a `light` or `dark` class on `<html>`. A theme change updates them in place and emits `theme` (`orca.on('theme', ...)`); the frame is not reloaded. Style from them, not fixed colours.
+
+- `--orca-background`: App canvas
+- `--orca-foreground`: Body text
+- `--orca-card`: Cards and panels
+- `--orca-card-foreground`: Text on `--orca-card`
+- `--orca-popover`: Menus, popovers and dialogs
+- `--orca-popover-foreground`: Text on `--orca-popover`
+- `--orca-primary`: Primary buttons
+- `--orca-primary-foreground`: Text on `--orca-primary`
+- `--orca-secondary`: Secondary buttons
+- `--orca-secondary-foreground`: Text on `--orca-secondary`
+- `--orca-muted`: Quiet fills
+- `--orca-muted-foreground`: Secondary text
+- `--orca-accent`: Hover and selected fills
+- `--orca-accent-foreground`: Text on `--orca-accent`
+- `--orca-destructive`
+- `--orca-destructive-foreground`
+- `--orca-border`: Borders and separators
+- `--orca-input`: Input borders
+- `--orca-ring`: Focus rings
+- `--orca-radius`: Corner radius of cards and controls
+
 ## Methods
 
 - `workspace.readContext` (capability `workspace:read`; worker, panel, editor; since 1.0): Branch, name and terminal ids of the focused workspace, or null when none is focused.
