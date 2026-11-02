@@ -22,6 +22,7 @@ import {
   type AiVaultListResult
 } from '../../shared/ai-vault-types'
 import { aiVaultLocalScanKey, aiVaultLocalScanScopeKey } from '../../shared/ai-vault-local-scan-key'
+import { conditionalAiVaultListResult } from './session-list-fingerprint'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { managedOpenCodeAccountDataDirs } from '../opencode/opencode-managed-account-data-dirs'
 import { prepareOpenCodeWslReaders } from './scanners/opencode/reader-transport/opencode-wsl-runtime-preparation'
@@ -143,7 +144,12 @@ export async function listAiVaultSessions(
     cachedList.expiresAt > now &&
     aiVaultCachedDepthServes(cachedList.depth, depth, args?.scopePaths)
   ) {
-    return truncateAiVaultListResult(cachedList.result, depth, args?.scopePaths)
+    // A content-conditional caller still pays nothing when the cached body matches its fingerprint.
+    return conditionalAiVaultListResult(
+      truncateAiVaultListResult(cachedList.result, depth, args?.scopePaths),
+      args?.afterFingerprint,
+      false
+    )
   }
   // Capture before the coordinator's start microtask so intervening invalidation still rejects the result.
   const startGeneration = cacheGeneration
@@ -199,7 +205,11 @@ export async function listAiVaultSessions(
           }
         }
       }
-      return result
+      // Local scans answer content-conditional refreshes like runtime hosts: an unchanged
+      // scan skips the full session body and lets the caller reuse its previous list.
+      return args?.afterFingerprint === undefined
+        ? result
+        : conditionalAiVaultListResult(result, args.afterFingerprint, args.force === true)
     }
   })
 }

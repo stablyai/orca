@@ -221,7 +221,7 @@ export type AiVaultScanIssue = {
 } & Omit<AiVaultScanIssueText, 'message'>
 
 export type AiVaultListArgs = {
-  /** Opts a selected runtime-host refresh into content-conditional replies. */
+  /** Opts a refresh into content-conditional replies; local scans answer them too. */
   afterFingerprint?: string | null
   /** Opt-in promises this client starts IDE history in a new CLI conversation. */
   includeAntigravityIdeSessions?: boolean

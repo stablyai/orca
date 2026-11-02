@@ -1,8 +1,5 @@
 import type { AiVaultListArgs, AiVaultListResult } from '../../../../shared/ai-vault-types'
-import {
-  parseRoutableExecutionHostId,
-  type ExecutionHostScope
-} from '../../../../shared/execution-host'
+import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 import {
   aiVaultSessionResultCacheKey,
@@ -65,10 +62,8 @@ export async function refreshAiVaultSessionList(
   previous?: AiVaultConditionalSnapshot
 ): Promise<AiVaultListResult> {
   const args = aiVaultSessionListArgs(request, options)
-  if (
-    request.sessionLimit !== 'unlimited' &&
-    parseRoutableExecutionHostId(request.executionHostScope)?.kind === 'runtime'
-  ) {
+  if (request.sessionLimit !== 'unlimited') {
+    // Local scans answer content-conditional refreshes too; an unchanged reply skips the body.
     args.afterFingerprint = previous?.fingerprint ?? null
   }
   const result = await window.api.aiVault.listSessions(args)
