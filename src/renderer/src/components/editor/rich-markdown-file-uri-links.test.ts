@@ -76,3 +76,124 @@ it('does not turn pasted plain-text file URIs into links', () => {
   expect(target.view.dom.querySelector('a')).toBeNull()
   expect(target.getMarkdown()).toBe('see file:///repo/notes/guide.md now')
 })
+
+it.each([
+  [
+    '届出の対象：「サイト」（https://example.com/）のメッセージ機能）',
+    [{ href: 'https://example.com/', text: 'https://example.com/' }],
+    '届出の対象：「サイト」（[https://example.com/](https://example.com/)）のメッセージ機能）'
+  ],
+  [
+    '投稿はお願いします (https://github.com/stablyai/orca/pull/1078)。',
+    [
+      {
+        href: 'https://github.com/stablyai/orca/pull/1078',
+        text: 'https://github.com/stablyai/orca/pull/1078'
+      }
+    ],
+    '投稿はお願いします ([https://github.com/stablyai/orca/pull/1078](https://github.com/stablyai/orca/pull/1078))。'
+  ],
+  [
+    '投稿（https://github.com/stablyai/orca/pull/1078）。',
+    [
+      {
+        href: 'https://github.com/stablyai/orca/pull/1078',
+        text: 'https://github.com/stablyai/orca/pull/1078'
+      }
+    ],
+    '投稿（[https://github.com/stablyai/orca/pull/1078](https://github.com/stablyai/orca/pull/1078)）。'
+  ],
+  [
+    '「https://example.com/a」、https://example.com/b。',
+    [
+      { href: 'https://example.com/a', text: 'https://example.com/a' },
+      { href: 'https://example.com/b', text: 'https://example.com/b' }
+    ],
+    '「[https://example.com/a](https://example.com/a)」、[https://example.com/b](https://example.com/b)。'
+  ],
+  [
+    '詳細は「www.example.com/docs」、次へ',
+    [{ href: 'http://www.example.com/docs', text: 'www.example.com/docs' }],
+    '詳細は「[www.example.com/docs](http://www.example.com/docs)」、次へ'
+  ],
+  [
+    'https://ja.wikipedia.org/wiki/ジョン・スミス。',
+    [
+      {
+        href: 'https://ja.wikipedia.org/wiki/ジョン・スミス',
+        text: 'https://ja.wikipedia.org/wiki/ジョン・スミス'
+      }
+    ],
+    '[https://ja.wikipedia.org/wiki/ジョン・スミス](https://ja.wikipedia.org/wiki/ジョン・スミス)。'
+  ]
+])(
+  'stops bare URLs at CJK prose boundaries when opening, pasting, or typing: %s',
+  (line, links, serialized) => {
+    const readLinks = (editor: Editor) =>
+      Array.from(editor.view.dom.querySelectorAll('a'), (anchor) => ({
+        href: decodeURI(anchor.getAttribute('href') ?? ''),
+        text: anchor.textContent
+      }))
+
+    const opened = createEditor(line)
+    expect(readLinks(opened)).toEqual(links)
+    expect(opened.getText()).toBe(line)
+    expect(opened.getMarkdown()).toBe(serialized)
+
+    const pasted = createEditor('')
+    pasted.view.pasteText(line)
+    expect(readLinks(pasted)).toEqual(links)
+    expect(pasted.getText()).toBe(line)
+    expect(pasted.getMarkdown()).toBe(serialized)
+
+    const typed = createEditor('')
+    typed.view.dispatch(typed.state.tr.insertText(line))
+    expect(readLinks(typed)).toEqual(links)
+    expect(typed.getText()).toBe(line)
+    expect(typed.getMarkdown()).toBe(serialized)
+  }
+)
+
+it('preserves balanced ASCII parentheses inside a URL before a CJK bracket when opening markdown', () => {
+  const editor = createEditor('https://en.wikipedia.org/wiki/Foo_(bar)）')
+  const links = Array.from(editor.view.dom.querySelectorAll('a'), (anchor) => ({
+    href: anchor.getAttribute('href'),
+    text: anchor.textContent
+  }))
+  expect(links).toEqual([
+    {
+      href: 'https://en.wikipedia.org/wiki/Foo_(bar)',
+      text: 'https://en.wikipedia.org/wiki/Foo_(bar)'
+    }
+  ])
+  expect(editor.getText()).toBe('https://en.wikipedia.org/wiki/Foo_(bar)）')
+})
+
+it('autolinks a URL when a CJK closing bracket is typed and leaves subsequent prose unlinked', () => {
+  const editor = createEditor('')
+  editor.view.dispatch(editor.state.tr.insertText('届出の対象：「サイト」（https://example.com/'))
+  expect(editor.view.dom.querySelector('a')).toBeNull()
+
+  editor.view.dispatch(editor.state.tr.insertText('）'))
+  expect(
+    Array.from(editor.view.dom.querySelectorAll('a'), (anchor) => ({
+      href: anchor.getAttribute('href'),
+      text: anchor.textContent
+    }))
+  ).toEqual([{ href: 'https://example.com/', text: 'https://example.com/' }])
+
+  editor.view.dispatch(editor.state.tr.insertText('のメッセージ機能）'))
+  expect(
+    Array.from(editor.view.dom.querySelectorAll('a'), (anchor) => ({
+      href: anchor.getAttribute('href'),
+      text: anchor.textContent
+    }))
+  ).toEqual([{ href: 'https://example.com/', text: 'https://example.com/' }])
+  expect(editor.getText()).toBe('届出の対象：「サイト」（https://example.com/）のメッセージ機能）')
+})
+
+it('does not link bare schemes whose authority starts with CJK punctuation when opening markdown', () => {
+  const opened = createEditor('https://（ユーザー）@example.com')
+  expect(opened.view.dom.querySelector('a')).toBeNull()
+  expect(opened.getText()).toBe('https://（ユーザー）@example.com')
+})
