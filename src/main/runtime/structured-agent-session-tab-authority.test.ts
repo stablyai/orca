@@ -28,6 +28,7 @@ import {
 } from './structured-agent-session-tab-authority.test-support'
 import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { chatTabCommandsSettled } from './session-layout-apply.test-fixture'
+import { resolveChatTabActivation } from './agent-session/agent-session-tab-identity'
 import * as journalFactory from '../native-chat/agent-session-journal/journal-store-factory'
 import { discardStructuredWorkerSession } from './rpc/methods/orchestration-structured-worker-session'
 import { closeStructuredAgentSessionChild } from './agent-session/structured-agent-session-close'
@@ -606,6 +607,8 @@ it.each([false, true])(
         .filter((tab) => tab.type === 'agent-session' && tab.sessionId === B)
         .map((tab) => tab.id)
     ).toEqual([id])
+    // Session History and Reopen Closed Tab name the chat by its session; it opens in its own tab.
+    expect(resolveChatTabActivation(inventory.tabs, `agent-session:${B}`)).toBe(id)
     expect(
       fresh.profile
         .getWorkspaceSession('local')

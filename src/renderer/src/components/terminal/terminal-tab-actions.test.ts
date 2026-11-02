@@ -557,22 +557,27 @@ describe('closeTerminalTab', () => {
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
-  it('guards a pinned tab closed by its unified id (workspace overlay path)', () => {
+  it('finds a pinned tab by the terminal it holds, never by its own tab id', () => {
     const requestPinnedTabCloseConfirm = vi.fn()
+    const closeTab = vi.fn()
     const closeUnifiedTab = vi.fn()
     getStateMock.mockReturnValue(
       makePinnedTabState({
         confirmClosePinnedTab: true,
         requestPinnedTabCloseConfirm,
+        closeTab,
         closeUnifiedTab
       })
     )
 
-    // Overlay close supplies the unified ID, so pin detection must recognize it.
+    // Callers (the workspace overlay included) name the terminal; a tab id names no terminal.
     closeTerminalTab('unified-pinned-1')
-
+    expect(requestPinnedTabCloseConfirm).not.toHaveBeenCalled()
     expect(closeUnifiedTab).not.toHaveBeenCalled()
+
+    closeTerminalTab('pinned-entity-1')
     expect(requestPinnedTabCloseConfirm).toHaveBeenCalledTimes(1)
+    expect(closeUnifiedTab).not.toHaveBeenCalled()
   })
 
   it('closes a pinned tab immediately when the confirmation setting is off', () => {

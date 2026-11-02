@@ -359,4 +359,28 @@ describe('projectSessionTabs', () => {
     expect(resolveSessionTabRow(ws, `${api!.tabId!}::${apiSplit}`)?.leafId).toBe(apiSplit)
     expect(resolveSessionTabRow(ws, `${api!.tabId!}::not-a-pane`)).toBeNull()
   })
+
+  it('publishes a reopened chat under its own tab id and finds it by that id or its session', () => {
+    const { model } = workspace()
+    const reopened = build(
+      testContext(),
+      [
+        {
+          type: 'openAgentSessionTab',
+          workspace: WS,
+          sessionId: 'session-2',
+          agent: 'codex',
+          tabId: 'agent-chat-tab-v1-r'
+        }
+      ],
+      model
+    ).model.workspaces[WS]!
+    const row = projectSessionTabs(WS, reopened, views(), noFacts, false).tabs.find(
+      (tab) => tab.type === 'agent-session' && tab.sessionId === 'session-2'
+    )
+    expect(row?.id).toBe('agent-chat-tab-v1-r')
+    for (const rowId of ['agent-chat-tab-v1-r', 'agent-session:session-2']) {
+      expect(resolveSessionTabRow(reopened, rowId)?.tab.id, rowId).toBe('agent-chat-tab-v1-r')
+    }
+  })
 })

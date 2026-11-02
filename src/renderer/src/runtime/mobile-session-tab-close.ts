@@ -28,5 +28,8 @@ export function closeMobileSessionTabInStore(
     return true
   }
 
-  return store.closeUnifiedTab(unifiedTab?.id ?? tabId) !== null
+  // A terminal's tab closes by its own id; any other row already names its tab.
+  return (
+    store.closeUnifiedTab(unifiedTab?.contentType === 'terminal' ? unifiedTab.id : tabId) !== null
+  )
 }
