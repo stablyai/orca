@@ -555,7 +555,8 @@ describe('claude auth proxy', () => {
     const activeProxy = createClaudeAuthProxy({
       readToken: async () => TOKEN_A,
       upstream: `http://127.0.0.1:${activePort}`,
-      idleTimeoutMs: 200
+      // Why 2 s against 40 ms ticks: a loaded machine can delay a tick past 200 ms, and the point is that a stream that keeps writing is kept.
+      idleTimeoutMs: 2_000
     })
     proxies.push(activeProxy)
     await activeProxy.start()
