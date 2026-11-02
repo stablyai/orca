@@ -13,7 +13,7 @@ const StartOptions = z.looseObject({
         .looseObject({
           model: z.string().nullish(),
           effort: z.string().nullish(),
-          account: z.looseObject({ id: z.string() }).nullish()
+          account: z.looseObject({ id: z.string(), email: z.string().nullish() }).nullish()
         })
         .nullish()
     })
@@ -40,6 +40,7 @@ export function parseStartOptions(raw: string): {
   model?: string
   effort?: string
   account?: string
+  accountEmail?: string
 } {
   const parsed = StartOptions.safeParse(parseJson(raw))
   if (!parsed.success) {
@@ -50,7 +51,8 @@ export function parseStartOptions(raw: string): {
     agent: isTuiAgent(parsed.data.agent) ? parsed.data.agent : undefined,
     model: requested?.model ?? undefined,
     effort: requested?.effort ?? undefined,
-    account: requested?.account?.id
+    account: requested?.account?.id,
+    accountEmail: requested?.account?.email ?? undefined
   }
 }
 
