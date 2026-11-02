@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import type { NativeChatTurnJournal } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
@@ -62,6 +62,9 @@ export function useMobileNativeChatRowRenderer({
       resolveTurnRow
     ]
   )
+  // A finger on history freezes this callback. Read the scale at paint so a pinch still resizes those rows.
+  const fontScaleRef = useRef(fontScale)
+  fontScaleRef.current = fontScale
   return useCallback(
     ({ item, index }) => (
       <MobileNativeChatRow
@@ -69,7 +72,8 @@ export function useMobileNativeChatRowRenderer({
         message={item}
         index={index}
         lookups={lookups}
-        {...{ scope, fontScale, onOpenFile, structuredActivityUi, onToggleTurn }}
+        {...{ scope, onOpenFile, structuredActivityUi, onToggleTurn }}
+        fontScale={fontScaleRef.current}
       />
     ),
     [scope, rowKeyOf, lookups, fontScale, onOpenFile, structuredActivityUi, onToggleTurn]

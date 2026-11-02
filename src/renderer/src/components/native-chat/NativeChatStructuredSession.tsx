@@ -144,7 +144,8 @@ export function NativeChatStructuredSession(
   // Final read refusal replaces the pane because no existing action can succeed.
   const viewState = selectNativeChatViewState(session, { readRetries: readFailure?.final !== true })
   const paneActive = props.isVisible && props.isFocusedGroup
-  useNativeChatFontSize(viewState.kind === 'ready' && paneActive, rootRef)
+  const pinchActive = viewState.kind === 'ready' && props.isVisible
+  useNativeChatFontSize(props.isFocusedGroup, rootRef, pinchActive)
   const find = useNativeChatFind(paneActive, rootRef, composerRef, submits.messageListRef)
   const appearanceStyle = useNativeChatStoreAppearanceStyle()
   const imageRuntimeContext = useNativeChatImageRuntimeContext(props.tabId)

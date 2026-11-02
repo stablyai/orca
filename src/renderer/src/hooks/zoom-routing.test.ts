@@ -258,6 +258,19 @@ describe('registerZoomIpcBridge', () => {
     expect(zoom.setEditorFontZoomLevel).not.toHaveBeenCalled()
   })
 
+  it('does not zoom the app again after the chat view handled the pinch', async () => {
+    const zoom = await mountZoomBridge({
+      activeTabType: 'terminal',
+      activeElement: makeTarget({})
+    })
+    const { noteChatWheelPinch } = await import('@/components/native-chat/native-chat-wheel-pinch')
+    noteChatWheelPinch()
+    zoom.fire('in')
+    expect(zoom.applyUIZoom).not.toHaveBeenCalled()
+    expect(zoom.updateSettings).not.toHaveBeenCalled()
+    expect(zoom.setUI).not.toHaveBeenCalled()
+  })
+
   it('zooms the page, not the app, while focus is in its browser pane', async () => {
     const zoom = await mountZoomBridge({
       activeTabType: 'browser',
