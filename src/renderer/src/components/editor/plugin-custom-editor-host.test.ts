@@ -567,6 +567,11 @@ describe('custom editor document channel', () => {
       const silent = host.mergeOutsideChange('b', 'a')
       await vi.advanceTimersByTimeAsync(1_000)
       await expect(silent).resolves.toBeNull()
+      // A frame whose merge threw edits against the old version: refused, never the acknowledgement.
+      const failed = host.mergeOutsideChange('b2', 'a')
+      send(edit('a+typed', 1, 77))
+      await vi.advanceTimersByTimeAsync(1_000)
+      await expect(failed).resolves.toBeNull()
       const remounted = host.mergeOutsideChange('c', 'a')
       host.reset()
       await expect(remounted).resolves.toBeNull()

@@ -47,7 +47,10 @@ function ready(): void {
   countCustomEditorMergingView(FILE_ID, 1)
 }
 
+const afterSaved: (() => void)[] = []
+
 afterEach(() => {
+  afterSaved.splice(0).forEach((stop) => stop())
   useAppStore.setState(initialState, true)
   useCustomEditorOutsideMergeStore.setState({ views: {}, busy: {}, ancestors: {} })
 })
@@ -55,6 +58,13 @@ afterEach(() => {
 describe('custom editor outside merge', () => {
   it('stamps exactly the disk snapshot the acknowledged merge used, and advances the ancestor', async () => {
     ready()
+    // The tab's saved text moves to the disk text the merge used, as the panel hears after a save.
+    const saved: unknown[] = []
+    const onSaved = (event: Event): void => {
+      saved.push(event instanceof CustomEvent ? event.detail : null)
+    }
+    window.addEventListener('orca:editor-file-saved', onSaved)
+    afterSaved.push(() => window.removeEventListener('orca:editor-file-saved', onSaved))
     const host = { mergeOutsideChange: vi.fn().mockResolvedValue('a+mine+agent') }
     await expect(mergeOutsideChangeIntoEditor(FILE_ID, host, async () => 'a+agent')).resolves.toBe(
       true
@@ -63,6 +73,7 @@ describe('custom editor outside merge', () => {
     expect(tab()?.externalMutation).toBeUndefined()
     expect(tab()?.lastKnownDiskSignature).toBe(getDiskBaselineSignature('a+agent'))
     expect(useCustomEditorOutsideMergeStore.getState().ancestors[FILE_ID]?.text).toBe('a+agent')
+    expect(saved).toEqual([{ fileId: FILE_ID, content: 'a+agent', recordViewIds: [FILE_ID] }])
   })
 
   it('puts the conflict back for a write that landed while the merge ran', async () => {

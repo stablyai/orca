@@ -457,4 +457,32 @@ describe('orca.document.session', () => {
     const { posted } = await open({ debounceMs: 0 })
     expect(posted().some((message) => message.event === 'editor.merges')).toBe(false)
   })
+
+  it('moves nothing when a disk merge throws, so the next edit cannot acknowledge it', async () => {
+    const merge = vi.fn(() => {
+      throw new Error('cannot merge')
+    })
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const { session, fromHost, edits, replaced } = await open({ debounceMs: 0, merge })
+      fromHost({
+        ...doc(2, 'a+agent'),
+        payload: {
+          version: 2,
+          readOnly: false,
+          content: { kind: 'text', text: 'a+agent' },
+          ancestor: { kind: 'text', text: 'a' }
+        }
+      })
+      await settle()
+      expect(replaced).not.toHaveBeenCalled()
+      expect(session.value).toBe('a')
+      session.change('a+typed')
+      await settle()
+      // Still against the document before the merge: Orca refuses it and keeps its banner.
+      expect(edits().at(-1)).toMatchObject({ params: { baseVersion: 1 } })
+    } finally {
+      error.mockRestore()
+    }
+  })
 })

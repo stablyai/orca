@@ -297,18 +297,25 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
       var documents = on(E.editorDocument, function (next) {
         if (disposed || next.version === doc.version) return
-        doc = next
         // A disk change under the tab's unsaved edits: merge it with them and send the result.
+        // Nothing moves unless the merge succeeds, so a later edit never acknowledges a failed one.
         if (next.ancestor && merge) {
-          var mine = value
-          var outside = rebase(next)
-          value = merge(decode(next.ancestor), outside, mine)
+          var merged
+          try {
+            merged = merge(decode(next.ancestor), decode(next.content), value)
+          } catch (error) {
+            console.error(error)
+            return
+          }
+          rebase(next)
+          value = merged
           dirty = true
           generation += 1
           emitReplace(value)
           if (!inFlight) send().catch(function () {})
           return
         }
+        doc = next
         // Unaccepted work waits for its edit's conflict, where merge runs.
         if (dirty || inFlight) return
         if (sameContent(next.content, baseContent)) { baseVersion = next.version; return }

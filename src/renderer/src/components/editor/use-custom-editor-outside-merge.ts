@@ -9,6 +9,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 import { editorModelSiblingTabs, setEditorDiskBaseline } from './editor-save-disk-precondition'
 import type { CustomEditorHost } from './plugin-custom-editor-host-types'
+import { ORCA_EDITOR_FILE_SAVED_EVENT, type EditorFileSavedDetail } from './editor-autosave'
 
 /**
  * A write to the file on disk while a custom editor tab holds unsaved edits, merged by the editor
@@ -132,6 +133,13 @@ export async function mergeOutsideChangeIntoEditor(
     setEditorDiskBaseline(state, fileId, getDiskBaselineSignature(disk))
     state.setExternalMutation(fileId, null)
     recordCustomEditorAncestor(fileId, disk)
+    // The tab's saved text (what its dirty state compares to) is now this disk text, as after a
+    // save; otherwise typing back to the old ancestor would look clean while disk differs.
+    window.dispatchEvent(
+      new CustomEvent<EditorFileSavedDetail>(ORCA_EDITOR_FILE_SAVED_EVENT, {
+        detail: { fileId, content: disk, recordViewIds: [fileId] }
+      })
+    )
     // A write that landed after the snapshot is not merged yet: put the conflict back for it.
     const now = await readDisk(fileId).catch(() => null)
     if (now !== disk) {
