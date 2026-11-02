@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionTurnActivity } from '../../../shared/agent-session/agent-session-wire'
 import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'

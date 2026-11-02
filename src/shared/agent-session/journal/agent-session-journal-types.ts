@@ -1,8 +1,5 @@
-import type {
-  AgentJournalCursor,
-  AgentJournalItemIdentity
-} from '../../agent-session-journal-identity'
-import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
+import type { AgentJournalCursor, AgentJournalItemIdentity } from './agent-session-journal-identity'
+import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
 import type { AgentSessionProviderContextBoundary } from '../agent-session-provider-context'
 // Persist/republish plain JSON only. Append-only rows are upcast on read, never rewritten;
 // unreadable versions/kinds must refuse writes rather than be skipped or compacted away.

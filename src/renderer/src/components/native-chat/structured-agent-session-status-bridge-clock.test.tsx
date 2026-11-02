@@ -13,7 +13,7 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
 import { countActivityUnread } from '../activity/useActivityUnreadCount'
-import { savedStatusContracts } from '../../../../shared/agent-session-saved-status.test-fixture'
+import { savedStatusContracts } from '../../../../shared/agent-session/lifecycle/agent-session-saved-status.test-fixture'
 import { resolveAttention } from '../../../../shared/sidebar-list/smart-attention'
 import { agentVerdictStatusLine } from '@/lib/agent-verdict-status-line'
 

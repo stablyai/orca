@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import { createStructuredSessionSelectionController } from '../../../shared/structured-agent-session-selection-operations'
+import { createStructuredSessionSelectionController } from '../../../shared/agent-session/options/structured-agent-session-selection-operations'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION

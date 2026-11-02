@@ -2,7 +2,7 @@
 // may land after admission but before sink binding.
 
 import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { StructuredAgentSessionItemAppendOptions } from '../agent-session-wire/structured-agent-session-event-sink'
 import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'

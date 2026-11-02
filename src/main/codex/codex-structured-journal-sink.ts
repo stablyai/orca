@@ -2,7 +2,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalRowAttribution
 } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   StructuredAgentSessionItemAppendOptions,
   StructuredAgentSessionEventSink,

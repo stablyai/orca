@@ -1,6 +1,6 @@
 import type { AgentLaunchChoices } from '../../shared/agent-launch-choices'
 import { prepareStructuredAgentSessionCreateForWorktree } from './rpc/methods/structured-agent-session-create'
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { prepareAdoptedTranscript } from '../native-chat/agent-session-wire/structured-agent-session-adopted-import'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

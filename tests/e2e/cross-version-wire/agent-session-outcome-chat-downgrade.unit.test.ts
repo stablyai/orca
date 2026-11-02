@@ -8,7 +8,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../src/shared/agent-session/jo
 import type {
   AgentSessionJournalIdentity,
   AgentSessionJournalProviderHandle
-} from '../../../src/shared/agent-session-journal-identity'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import Database from '../../../src/main/sqlite/sync-database'
 import {

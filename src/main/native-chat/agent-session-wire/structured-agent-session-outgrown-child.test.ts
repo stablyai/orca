@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { acquiredAgentSessionAccount } from '../../../shared/agent-session-acquired-account'
+import { acquiredAgentSessionAccount } from '../../../shared/agent-session/lifecycle/agent-session-acquired-account'
 import {
   agentSessionAccountHome,
   type LegacyAgentSessionAccountHome

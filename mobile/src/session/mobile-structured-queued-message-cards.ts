@@ -14,7 +14,7 @@ import {
   queuedMessageCardNeedsAttention,
   queuedMessageReturnedNotice,
   type QueuedMessageCard
-} from '../../../src/shared/structured-agent-session-queued-cards'
+} from '../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import { agentMessageAttribution } from './mobile-agent-message-attribution'
 
 export type MobileQueuedMessageCard = QueuedMessageCard & {

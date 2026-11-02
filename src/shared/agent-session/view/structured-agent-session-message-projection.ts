@@ -1,4 +1,4 @@
-import type { AgentJournalCursor } from '../../agent-session-journal-identity'
+import type { AgentJournalCursor } from '../journal/agent-session-journal-identity'
 import type {
   AgentJournalMessageItem,
   AgentJournalRenderItem,

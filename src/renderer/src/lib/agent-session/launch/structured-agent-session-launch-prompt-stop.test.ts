@@ -30,7 +30,7 @@ import {
   getStructuredAgentSessionSendNotice,
   structuredAgentSessionSendOut
 } from '@/components/native-chat/structured-agent-session-pending-sends'
-import { structuredAgentSessionStopControl } from '../../../../../shared/structured-agent-session-stop-control'
+import { structuredAgentSessionStopControl } from '../../../../../shared/agent-session/view/structured-agent-session-stop-control'
 import {
   discardStructuredLaunchPrompts,
   hasStagedStructuredLaunchPrompt,

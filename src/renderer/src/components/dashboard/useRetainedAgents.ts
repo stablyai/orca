@@ -1,4 +1,4 @@
-import { agentEntrySessionStartedAt } from '../../../../shared/agent-session-start-time'
+import { agentEntrySessionStartedAt } from '../../../../shared/agent-session/lifecycle/agent-session-start-time'
 import { useEffect, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'

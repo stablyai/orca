@@ -8,11 +8,11 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../src/shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../../src/shared/agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../../../../src/shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import { agentSessionFailureFact } from '../../../../src/shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../src/shared/agent-session/failures/agent-session-failure-words'
-import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../../../src/shared/agent-session-goal-control-copy'
+import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../../../src/shared/agent-session/view/agent-session-goal-control-copy'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../../src/shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { projectStructuredAgentSessionMessages } from '../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import { selectStructuredAgentSettledTurns } from '../../../../src/shared/agent-session/view/structured-agent-session-turn-timing'

@@ -261,7 +261,7 @@ vi.mock('./use-native-chat-skills', () => ({
   useNativeChatSkills: () => ({ status: 'ready', skills: [], retry: () => {} })
 }))
 import { useStructuredAgentSessionQueuedEdit } from './use-structured-agent-session-queued-edit'
-import { projectQueuedMessageCards } from '../../../../shared/structured-agent-session-queued-cards'
+import { projectQueuedMessageCards } from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import { useNativeChatPickerState } from './use-native-chat-picker-state'
 import type {
   AgentSessionQueuedMessage,

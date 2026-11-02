@@ -1,6 +1,6 @@
 // Keep hook outcomes as visible rows using the hook's reason, consistently across agents.
 
-import type { AgentJournalPlainStatusItem } from './agent-session/journal/agent-session-journal-types'
+import type { AgentJournalPlainStatusItem } from './agent-session-journal-types'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from './agent-session-turn-notice'
 
 /** A Stop hook sent the agent back to work, so the reply before this row was an answer. */

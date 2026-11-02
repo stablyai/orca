@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { describe, expect, it, beforeEach } from 'vitest'
 import { isTerminalLeafId, parsePaneKey } from '../../shared/stable-pane-id'
 import {

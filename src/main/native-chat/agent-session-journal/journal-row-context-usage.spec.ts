@@ -11,7 +11,7 @@ import type { AgentSessionContextUsage } from '../../../shared/agent-session/age
 import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-identity'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { parseJournalRow } from './journal-row-schema'
 import {
   createTrackedJournalOpener,

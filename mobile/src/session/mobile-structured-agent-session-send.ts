@@ -1,5 +1,5 @@
 import type { AgentSessionSendResult } from '../../../src/shared/agent-session/agent-session-wire'
-import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSkillRef } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   structuredAgentSessionSendBody,

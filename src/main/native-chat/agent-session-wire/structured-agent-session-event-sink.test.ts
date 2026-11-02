@@ -7,7 +7,7 @@ import {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionTurnActivity } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {

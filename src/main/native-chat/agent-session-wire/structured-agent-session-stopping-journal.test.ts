@@ -10,7 +10,7 @@ import {
   type AgentJournalRenderItem,
   type AgentJournalStatusItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { structuredAgentSessionStopNoteIdentity } from './structured-agent-session-command-turn'

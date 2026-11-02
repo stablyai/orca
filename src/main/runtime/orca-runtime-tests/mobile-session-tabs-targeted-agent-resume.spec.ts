@@ -18,7 +18,7 @@ import type { PtyProcessInfo } from '../../providers/pty-provider-contract'
 import { deterministicAgentSessionUuid } from '../runtime-agent-launch-resolution'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../remote-runtime-terminal-create-identity'
 import type { RuntimePtyController } from '../runtime-pty-controller-contract'
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { AgentSessionRecordStore } from '../agent-session/records/agent-session-record-store'
 import {
   agentSessionLeaseFixture,

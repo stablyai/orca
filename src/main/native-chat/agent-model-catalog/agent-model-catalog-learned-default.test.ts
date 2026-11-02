@@ -1,5 +1,5 @@
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

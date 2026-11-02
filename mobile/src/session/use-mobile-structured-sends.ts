@@ -1,7 +1,7 @@
 // Project each local send until the host records its id; lost replies stay hidden unless their deadline expires first.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../src/shared/agent-session/view/structured-agent-session-message-projection'

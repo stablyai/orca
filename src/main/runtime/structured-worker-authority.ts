@@ -1,7 +1,7 @@
 /** Rehydrate worker identity from durable rows after restart; records, tab index and orchestration state decide custody.
  * Mail reaches agents at rest and starts them, so routing ignores process liveness. Resolve clear successors for every worker-level operation. */
 
-import type { AgentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { isOrcaSessionId, type OrcaSessionId } from '../../shared/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../shared/orchestration-session-caller-codes'
 import type { RuntimeTerminalState } from '../../shared/runtime-types'

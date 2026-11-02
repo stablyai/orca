@@ -5,7 +5,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalMessageItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { subagentFallbackText } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
 import { MAX_SUBAGENT_FIELD_CHARS } from '../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import {

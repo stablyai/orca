@@ -1,5 +1,5 @@
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
-import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { backgroundTaskJournalBody } from '../../shared/native-chat/input/native-chat-background-task-row'
 import { isBackgroundTaskBlock } from '../../shared/native-chat/native-chat-types'
 import type {

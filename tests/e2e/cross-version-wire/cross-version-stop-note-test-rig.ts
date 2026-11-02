@@ -22,7 +22,7 @@ import {
   type AgentJournalRenderItem,
   type AgentJournalTurnLifecycle
 } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import { isAdmissibleAgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-schemas'
 import type {
   AgentSessionHistoryPage,

@@ -1,4 +1,4 @@
-import type { AgentSessionOwnerObservation } from '../../agent-session-conversation-view'
+import type { AgentSessionOwnerObservation } from './agent-session-conversation-view'
 /**
  * Single-writer lease adjudication.
  *
@@ -11,7 +11,7 @@ import type { AgentSessionOwnerObservation } from '../../agent-session-conversat
  */
 
 import { nextAgentSessionFence } from './agent-session-next-fence'
-import type { AgentSessionDeathEvidence } from '../../agent-session-death-evidence'
+import type { AgentSessionDeathEvidence } from './agent-session-death-evidence'
 import type { AgentSessionHandoffStage, AgentSessionLease } from './agent-session-record'
 import type { AgentSessionOwnerVerdict } from '../failures/agent-session-wire-refusals'
 import type { AgentSessionRefusalDetailsByCode } from '../failures/agent-session-refusal-details'

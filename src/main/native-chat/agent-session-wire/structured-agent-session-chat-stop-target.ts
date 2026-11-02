@@ -7,7 +7,7 @@ import { isMainAgentWorking } from './structured-agent-session-turns-cancel'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { structuredAgentSessionStoppedTurnId } from './structured-agent-session-turn-stop-notes'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
-import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 
 /** close joins shutdown; starting ends startup; interrupt reaches live work; withdraw only settles queued sends. */
 export type ChatStopReach = 'close' | 'starting' | 'interrupt' | 'withdraw'

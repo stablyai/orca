@@ -1,4 +1,4 @@
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnOutcome } from '../../shared/agent-turn-outcome'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'

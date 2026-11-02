@@ -3,7 +3,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { nativeChatTurnMembership } from '../../../../shared/native-chat/transcript/native-chat-turn-membership'
 import {

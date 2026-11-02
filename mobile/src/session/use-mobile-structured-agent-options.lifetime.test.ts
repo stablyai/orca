@@ -1,4 +1,4 @@
-import * as selectionOperations from '../../../src/shared/structured-agent-session-selection-operations'
+import * as selectionOperations from '../../../src/shared/agent-session/options/structured-agent-session-selection-operations'
 import { createElement, StrictMode, useEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'

@@ -32,7 +32,7 @@ import { nativeChatMessageCopyText } from '../../../../../shared/native-chat-mes
 import {
   projectQueuedMessageCards,
   queuedMessageCardLine
-} from '../../../../../shared/structured-agent-session-queued-cards'
+} from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import {
   projectStructuredAgentSessionStatusSummary,
   projectStructuredItemToNativeChat

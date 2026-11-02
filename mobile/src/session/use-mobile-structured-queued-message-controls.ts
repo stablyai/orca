@@ -17,7 +17,7 @@ import type {
   AgentSessionQueuePause
 } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { AgentSessionSendResult } from '../../../src/shared/agent-session/agent-session-wire'
-import { queuedMessagesQueuePause } from '../../../src/shared/structured-agent-session-queued-cards'
+import { queuedMessagesQueuePause } from '../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import {
   mobileQueuedMessageCards,
   type MobileQueuedMessageCard

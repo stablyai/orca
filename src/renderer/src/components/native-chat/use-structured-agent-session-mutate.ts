@@ -1,6 +1,6 @@
 // Give each press its own operation ID; join pending targeted Stops only for older hosts. Command settlement survives provider changes; late pane presentation does not.
 
-import { AGENT_SESSION_GOAL_CONTROL_COPY as GOAL_COPY } from '../../../../shared/agent-session-goal-control-copy'
+import { AGENT_SESSION_GOAL_CONTROL_COPY as GOAL_COPY } from '../../../../shared/agent-session/view/agent-session-goal-control-copy'
 import { agentSessionGoalControlWords } from './agent-session-goal-control-words'
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
@@ -24,7 +24,7 @@ import { agentSessionWriteFailureText } from './agent-session-write-notice-text'
 import {
   joinStructuredAgentSessionStop,
   structuredAgentSessionStopIsJoinable
-} from '../../../../shared/structured-agent-session-stop-join'
+} from '../../../../shared/agent-session/requests/structured-agent-session-stop-join'
 
 export type StructuredAgentSessionWriteOutcome<T> =
   | { kind: 'done'; value: T }

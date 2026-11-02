@@ -2,7 +2,7 @@ import {
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../shared/protocol-version'
-import { STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES } from '../../shared/structured-agent-session-renderer-client-capabilities'
+import { STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES } from '../../shared/agent-session/structured-agent-session-renderer-client-capabilities'
 import {
   AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_RUNTIME_CAPABILITY,

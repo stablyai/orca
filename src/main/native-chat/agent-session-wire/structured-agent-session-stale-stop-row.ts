@@ -6,7 +6,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalStatusItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-death-evidence'
+import type { AgentSessionDeathEvidence } from '../../../shared/agent-session/lifecycle/agent-session-death-evidence'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session/agent-session-replaced-runtime'
 import { orcaStopRowBody } from './structured-agent-session-orca-stop-row'

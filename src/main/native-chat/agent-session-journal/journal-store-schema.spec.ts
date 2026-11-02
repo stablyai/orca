@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-identity'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type Database from '../../sqlite/sync-database'
 import { JOURNAL_DB_SCHEMA_VERSION } from './journal-database-schema'
 import { journalDatabasePath } from './journal-host-database'

@@ -13,7 +13,7 @@ import type { piOptionRefreshHost } from './structured-agent-session-option-refr
 import type {
   PiRefreshHarness,
   PiRefreshMount
-} from '../../../shared/structured-agent-session-option-refresh.test-fixture-contract'
+} from '../../../shared/agent-session/options/structured-agent-session-option-refresh.test-fixture-contract'
 
 const precise = ['off', 'minimal', 'low', 'high', 'xhigh'].map((value) => ({ value, label: value }))
 const effort = (view: PiRefreshHarness) => view.snapshot().find((entry) => entry.id === 'effort')

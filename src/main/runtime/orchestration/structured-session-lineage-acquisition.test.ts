@@ -1,7 +1,7 @@
 import '../rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { sessionRecord } from '../rpc/orchestration-session-caller-test-fixture'
 import {
   createLineageRunningSessionResolver,

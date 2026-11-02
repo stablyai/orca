@@ -1,5 +1,5 @@
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentSessionFailureRowWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { PROVIDER_FRAME_PAYLOAD_LIMITS } from '../../../native-chat/agent-session-journal/journal-payload-bounds'

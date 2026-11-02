@@ -1,8 +1,5 @@
-import { isAgentSessionConversationName } from './agent-session/agent-session-conversation-name'
-import type {
-  AgentSessionConversationName,
-  AgentSessionStatusEvent
-} from './agent-session/agent-session-wire'
+import { isAgentSessionConversationName } from './agent-session-conversation-name'
+import type { AgentSessionConversationName, AgentSessionStatusEvent } from './agent-session-wire'
 
 export type AgentSessionConversationNames = ReadonlyMap<string, AgentSessionConversationName>
 

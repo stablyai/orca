@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-death-evidence'
+import type { AgentSessionDeathEvidence } from '../../../shared/agent-session/lifecycle/agent-session-death-evidence'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture

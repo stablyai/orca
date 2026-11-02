@@ -9,7 +9,7 @@ import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection
 } from '../../shared/agent-session/failures/agent-session-failure-words'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentSessionCommandAdmission,
   StructuredAgentSessionCommandRun

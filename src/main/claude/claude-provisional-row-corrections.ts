@@ -6,8 +6,8 @@ import type {
   AgentJournalItemBody,
   AgentJournalProducerLinkage
 } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
-import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { StructuredAgentSessionItemAppendOptions } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { ClaudeSubagentLinkageSource } from './claude-subagent-linkage'
 
