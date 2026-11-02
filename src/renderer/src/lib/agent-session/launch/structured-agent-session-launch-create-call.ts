@@ -1,4 +1,3 @@
-import { SETUP_LINKED_CREATE_BUDGET_MS } from '@/components/native-chat/structured-agent-session-send-runtime'
 import { AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-create-capabilities'
 import type {
   AgentSessionAttachResult,
@@ -69,10 +68,6 @@ async function requireHostCreateSupport(
     )
   }
   if (support.kind === 'declined' || support.kind === 'workspace-unresolved') {
-    // A linked create's host answers support only after its setup succeeds.
-    if (intent.params.afterWorktreeSetup) {
-      return undefined
-    }
     abandonStructuredAgentSessionLaunchIntent(intent)
     throw new StructuredAgentSessionCreateRefusalError(
       'structured_agent_session_unsupported',
@@ -87,7 +82,9 @@ async function requireHostCreateSupport(
 /** Refuse paired hosts that would grant more access than requested; the chat permission gate owns the explanation. */
 const STRUCTURED_LAUNCH_HOST_PERMISSION_REFUSAL = 'structured_agent_session_host_permission'
 
-async function requireHostPermission(intent: StructuredAgentSessionLaunchIntent): Promise<void> {
+export async function requireHostPermission(
+  intent: StructuredAgentSessionLaunchIntent
+): Promise<void> {
   const permission =
     intent.target.kind === 'local'
       ? { kind: 'allowed' as const }
@@ -160,8 +157,7 @@ export async function launchStructuredAgentSession(
     result = await callStructuredAgentSession<AgentSessionMutationResult<AgentSessionAttachResult>>(
       intent.target,
       'agentSession.create',
-      params,
-      ...(params.afterWorktreeSetup ? [{ timeoutMs: SETUP_LINKED_CREATE_BUDGET_MS }] : [])
+      params
     )
   } catch (error) {
     const code = definitiveStructuredAgentSessionCreateErrorCode(error)
@@ -183,16 +179,10 @@ export async function launchStructuredAgentSession(
       result.refusal.createAttemptRefusedBeforeCommit === true &&
       refusal !== undefined &&
       isAgentSessionCreateAdmissionRefusal(refusal)
-    // Attempt proof cannot settle an earlier create whose reply was lost, nor can a linked
-    // create's later decline, which would otherwise open a terminal beside it.
-    const linkedDeclineAfterUnknown =
-      priorCreateOutcomeUnknown &&
-      params.afterWorktreeSetup === true &&
-      code === 'structured_agent_session_unsupported'
+    // Attempt proof cannot settle an earlier create whose reply was lost.
     if (
-      code !== 'agent_session_setup_not_completed' &&
       !attemptRefusedBeforeCommit &&
-      (!isDefinitiveAgentSessionCreateRefusal(code) || linkedDeclineAfterUnknown) &&
+      !isDefinitiveAgentSessionCreateRefusal(code) &&
       ownerVerdict !== 'exited'
     ) {
       // Keep the focus intent: the session may exist, and recovery still has to adopt it.

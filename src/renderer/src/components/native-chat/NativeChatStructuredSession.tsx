@@ -1,4 +1,5 @@
 import { NativeChatUsageLimitActionsProvider } from './NativeChatUsageLimitActions'
+import { structuredLaunchRefusalOf } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import { useNativeChatHandOff } from './use-native-chat-hand-off'
 import { cn } from '@/lib/utils'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './native-chat-appearance-style'
@@ -231,7 +232,7 @@ export function NativeChatStructuredSession(
     unavailable: controller.unavailable,
     agent: props.agent,
     wslDistro: continuation.view.wslDistro,
-    launchFailure: provisionalLaunch.lifecycle === 'failed' ? provisionalLaunch.failure : null,
+    launchFailure: structuredLaunchRefusalOf(provisionalLaunch),
     journalItems: controller.journalItems,
     submissions: controller.submissions,
     deliveryNotices

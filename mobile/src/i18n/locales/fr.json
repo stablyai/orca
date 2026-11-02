@@ -2518,7 +2518,6 @@
       "shrinkQueue": "Supprimez un message de la file, ou attendez qu'un message soit transmis, puis réessayez.",
       "startNewChat": "Démarrez un nouveau chat pour continuer.",
       "terminalAgentHoldsChat": "Ce chat est encore ouvert dans un agent de terminal.",
-      "setupNotCompleted": "La configuration ne s’est pas terminée correctement, donc l’agent n’a pas démarré. Corrigez ou relancez la configuration, puis démarrez l’agent dans cet espace de travail.",
       "tryAgain": "Réessayez.",
       "tryAgainComposerSend": "Renvoyez-le.",
       "turnActive": "L'agent est encore en train de répondre.",

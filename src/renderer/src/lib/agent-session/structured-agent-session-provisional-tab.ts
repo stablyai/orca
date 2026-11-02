@@ -33,6 +33,8 @@ import {
   opensAtAction
 } from './launch/structured-agent-session-action-launch'
 import { holdEmptyWorkspaceDefaultSurfaceForLaunch } from '../empty-workspace-default-surface-claims'
+import { adoptHostLaunchedTerminal } from './launch/structured-agent-session-host-launch-terminal'
+import { detachStructuredAgentLaunch } from './launch/structured-agent-session-launch'
 import type { OpenedAgentSessionTab } from '../structured-agent-session-tab-open-through-layout-owner'
 import {
   captureStructuredLaunchSurfaceAddress,
@@ -79,8 +81,8 @@ export type ProvisionalLaunchArgs = {
   deferPublication?: true
   /** Allow workspace reveal before host acquisition, when the launch has no session ID or owned chat tab yet. */
   beforeOpen?: (sessionId?: string) => boolean | void
-  /** The published tab, or null when the layout owner refuses or the launch ends without a chat. */
-  onTabOpenSettled?: (tabId: string | null, reason?: 'layout-refused') => void
+  /** The published tab, or null when the layout owner refuses (naming the refused chat) or the launch ends without a chat. */
+  onTabOpenSettled?: (tabId: string | null, reason?: 'layout-refused', sessionId?: string) => void
   /** The terminal the host's "no" opens; a caller without one gets a new agent tab's. */
   onHostDeclined?: (
     target: RuntimeClientTarget,
@@ -129,6 +131,27 @@ export function beginStructuredAgentSessionProvisionalLaunch(
     if (!owner || !worktreeId) {
       return open(beginLocalProvisionalLaunch(args))
     }
+    if (args.plan.hostLaunch) {
+      // The host asks itself whether it runs the chat, after Setup: the chat shows now, and gives
+      // way to the terminal the host starts instead.
+      const launch = open(
+        beginLocalProvisionalLaunch({
+          ...args,
+          target: { ...args.target, worktreeId, executionHostId: owner.executionHostId },
+          beforeOpen: undefined
+        })
+      )
+      if (!launch || launch.tab === null) {
+        return launch
+      }
+      const tab = launch.tab
+      return {
+        ...launch,
+        settlement: launch.settlement.then((settlement) =>
+          adoptHostLaunchedTerminal(args, worktreeId, tab, settlement)
+        )
+      }
+    }
     if (opensAtAction(args)) {
       const launch = open(
         beginLocalProvisionalLaunch({
@@ -164,8 +187,8 @@ export function beginStructuredAgentSessionProvisionalLaunch(
       worktreeId,
       executionHostId: owner.executionHostId,
       target: owner.target,
-      openAdmitted: (seedOptions) => {
-        const launch = open(
+      openAdmitted: (seedOptions) =>
+        open(
           beginLocalProvisionalLaunch({
             ...args,
             target: {
@@ -176,18 +199,7 @@ export function beginStructuredAgentSessionProvisionalLaunch(
             },
             beforeOpen: undefined
           })
-        )
-        const tab = launch?.tab
-        // A linked launch learns support only after its setup: the host's decline then replaces it.
-        return tab && args.plan.afterWorktreeSetup
-          ? {
-              ...launch,
-              settlement: launch.settlement.then((settlement) =>
-                openTerminalForDeclinedChat(args, worktreeId, owner, tab, settlement)
-              )
-            }
-          : launch
-      },
+        ),
       onHostDeclined: (target) => openDeclinedTerminal(args, worktreeId, target),
       ...(args.declinedOpensCallerSurface ? { declinedOpensCallerSurface: true as const } : {})
     })
@@ -240,8 +252,13 @@ function beginLocalProvisionalLaunch(
         retirePosition(tab.id)
       }
       if (shown === null) {
-        handle.cancel()
-        args.onTabOpenSettled?.(null, 'layout-refused')
+        // A host launch outlives a refused tab: a close would end the launch its Retry adopts.
+        if (args.plan.hostLaunch) {
+          detachStructuredAgentLaunch(handle.sessionId)
+        } else {
+          handle.cancel()
+        }
+        args.onTabOpenSettled?.(null, 'layout-refused', handle.sessionId)
       } else {
         args.onTabOpenSettled?.(shown)
       }

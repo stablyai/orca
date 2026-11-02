@@ -119,7 +119,7 @@ describe('automation creates: main provisions setup and default tabs', () => {
   })
 
   it.each([false, true])(
-    'links desktop chat to the retained setup result with preparation failure=%s',
+    "keeps the Setup run a desktop chat's host launch waits for, with preparation failure=%s",
     async (fails) => {
       loadHooksMock.mockReturnValue({
         scripts: { setup: 'pnpm worktree:setup' },
@@ -135,7 +135,6 @@ describe('automation creates: main provisions setup and default tabs', () => {
         setupDecision: 'run',
         promisedAgentChat: true
       })) as { worktree: { id: string } }
-      expect(result).toMatchObject({ chatAwaitsSetup: true })
       expect(result).not.toHaveProperty('setup')
       expect(result).not.toHaveProperty('defaultTabs')
       const run = runtime.getSetupRun(result.worktree.id)

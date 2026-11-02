@@ -16,6 +16,5 @@ export const START_REFUSAL_RESUMABLE: Record<AgentSessionWireRefusalCode, boolea
   agent_session_already_resolved: true,
   agent_session_identity_required: false,
   agent_session_journal_unreadable: true,
-  agent_session_setup_not_completed: false,
   agent_session_owner_restart_failed: true
 }

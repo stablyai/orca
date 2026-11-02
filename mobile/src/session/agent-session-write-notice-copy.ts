@@ -232,11 +232,6 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
   chatNotFound: () => translate('session.writeNotice.chatNotFound', "Orca can't find this chat."),
   startNewChat: () =>
     translate('session.writeNotice.startNewChat', 'Start a new chat to continue.'),
-  setupNotCompleted: () =>
-    translate(
-      'session.writeNotice.setupNotCompleted',
-      'Setup did not finish successfully, so the agent was not started. Fix or rerun setup, then start the agent in this workspace.'
-    ),
   tryAgain: () => translate('session.writeNotice.tryAgain', 'Try again.')
 }
 

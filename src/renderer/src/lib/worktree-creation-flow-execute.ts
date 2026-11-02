@@ -275,7 +275,6 @@ export async function executeWorktreeCreation(
         request: preparedRequest,
         agentLaunchRoute,
         worktreeId: worktree.id,
-        afterWorktreeSetup: result.chatAwaitsSetup,
         shouldActivateOnCompletion,
         activation,
         primaryTabId

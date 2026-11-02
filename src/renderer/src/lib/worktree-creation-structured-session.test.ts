@@ -38,12 +38,9 @@ const mocks = vi.hoisted(() => {
         cancel: () => void
       } | null
     >(),
-    activateAndRevealWorktree: vi.fn<(worktreeId: string, options?: unknown) => unknown>(),
-    toastError: vi.fn()
+    activateAndRevealWorktree: vi.fn<(worktreeId: string, options?: unknown) => unknown>()
   }
 })
-
-vi.mock('sonner', () => ({ toast: { error: mocks.toastError, info: vi.fn() } }))
 
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(vi.fn<() => unknown>(), {
@@ -58,7 +55,9 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/agent-session/structured-agent-session-provisional-tab', () => ({
-  beginStructuredAgentSessionProvisionalLaunch: mocks.beginStructuredAgentSessionProvisionalLaunch
+  beginStructuredAgentSessionProvisionalLaunch: mocks.beginStructuredAgentSessionProvisionalLaunch,
+  // No host to ask: this create keeps its shipped chat route.
+  structuredLaunchOwner: () => null
 }))
 
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({
@@ -166,20 +165,6 @@ describe('launchStructuredWorktreeSession', () => {
     }
   })
 
-  it('starts no terminal when the layout refuses a chat linked to required setup', async () => {
-    mocks.state.pendingWorktreeCreations = {
-      'creation-1': { phase: 'creating', heldChatMessage: 'Add a test', request }
-    }
-    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
-      args.onTabOpenSettled?.(null, 'layout-refused')
-      return launchHandle()
-    })
-
-    await launchStructuredWorktreeSession({ ...baseArgs, afterWorktreeSetup: true })
-    expect(mocks.launchAgentInNewTabWithOutcome).not.toHaveBeenCalled()
-    expect(mocks.toastError).toHaveBeenCalledOnce()
-  })
-
   it.each(['workspace', 'view'] as const)(
     'preserves %s navigation while waiting for the replacement chat',
     async (navigation) => {
@@ -190,6 +175,8 @@ describe('launchStructuredWorktreeSession', () => {
       })
 
       const completion = launchStructuredWorktreeSession(baseArgs)
+      // The host is asked whether it owns the new workspace's Setup before the chat opens.
+      await vi.waitFor(() => expect(openTab).toBeDefined())
       if (navigation === 'workspace') {
         mocks.state.activePendingCreationId = null
       } else {
@@ -206,6 +193,9 @@ describe('launchStructuredWorktreeSession', () => {
     mocks.beginStructuredAgentSessionProvisionalLaunch.mockReturnValue(launch)
 
     const completion = launchStructuredWorktreeSession(baseArgs)
+    await vi.waitFor(() =>
+      expect(mocks.beginStructuredAgentSessionProvisionalLaunch).toHaveBeenCalled()
+    )
     mocks.state.pendingWorktreeCreations = {}
     mocks.listener?.(mocks.state)
 

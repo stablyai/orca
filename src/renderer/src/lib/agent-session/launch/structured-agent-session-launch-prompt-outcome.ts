@@ -1,9 +1,6 @@
 import type { StructuredLaunchCaller } from './structured-agent-session-launch-callers'
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
-import {
-  SETUP_LINKED_CREATE_BUDGET_MS,
-  STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS
-} from '@/components/native-chat/structured-agent-session-send-runtime'
+import { STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS } from '@/components/native-chat/structured-agent-session-send-runtime'
 import {
   notifyStructuredLaunchListeners,
   type StructuredLaunchState
@@ -30,33 +27,28 @@ export function trackStructuredLaunchPromptOutcome(
   })
 }
 
-/** Confirmation checks share the opening message deadline after its send slot has settled; a create
- *  waiting on required setup has its own longer one. */
+/** Confirmation checks share the opening message deadline after its send slot has settled. */
 export function trackStructuredLaunchConfirmationDeadline(
   state: StructuredLaunchState,
   promise: Promise<StructuredAgentLaunchReceipt>
 ): void {
-  if (state.intent.createMessageSupport === false) {
+  // A host launch's text waits with its host's Setup; its reads answer whether it started.
+  if (state.intent.createMessageSupport === false || state.intent.hostLaunch) {
     return
   }
-  const deadline = setTimeout(
-    () => {
-      if (
-        state.promise !== promise ||
-        state.cancelled ||
-        state.callers.outcome !== 'pending' ||
-        state.intent.createMessageSupport === false
-      ) {
-        return
-      }
-      state.visibilityUnknown = true
-      state.callers.outcome = 'unknown'
-      notifyStructuredLaunchListeners()
-    },
-    state.intent.params.afterWorktreeSetup
-      ? SETUP_LINKED_CREATE_BUDGET_MS
-      : STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS
-  )
+  const deadline = setTimeout(() => {
+    if (
+      state.promise !== promise ||
+      state.cancelled ||
+      state.callers.outcome !== 'pending' ||
+      state.intent.createMessageSupport === false
+    ) {
+      return
+    }
+    state.visibilityUnknown = true
+    state.callers.outcome = 'unknown'
+    notifyStructuredLaunchListeners()
+  }, STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS)
   const clear = (): void => clearTimeout(deadline)
   void promise.then(clear, clear)
 }

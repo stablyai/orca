@@ -176,8 +176,6 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
     translate('components.native-chat.writeNotice.chatNotFound', COPY.chatNotFound),
   startNewChat: () =>
     translate('components.native-chat.writeNotice.startNewChat', COPY.startNewChat),
-  setupNotCompleted: () =>
-    translate('components.native-chat.writeNotice.setupNotCompleted', COPY.setupNotCompleted),
   tryAgain: () => translate('components.native-chat.writeNotice.tryAgain', COPY.tryAgain)
 }
 

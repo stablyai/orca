@@ -1,5 +1,4 @@
 import { nativeChatAntigravitySignInContent } from './native-chat-antigravity-settings'
-import { requiredSetupLaunchFailureText } from '@/lib/required-setup-launch-failure'
 import { translate } from '@/i18n/i18n'
 import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { agentSessionRefusalCauseParts } from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
@@ -44,17 +43,18 @@ function nativeChatLaunchNotice({
           'Chat connection could not be confirmed.'
         )
   const cause =
-    lifecycle === 'failed' && failure
-      ? failure.code === 'agent_session_setup_not_completed' && agentLabel
-        ? requiredSetupLaunchFailureText(agentLabel)
+    lifecycle !== 'failed' || !failure
+      ? ''
+      : failure.kind === 'not-started'
+        ? failure.causeText
         : (failure.causeText ??
           agentSessionWriteNoticeText(
             agentSessionRefusalCauseParts(failure, agentLabel ? { agentName: agentLabel } : {})
           ))
-      : ''
-  // An argument problem already says the start failed; the generic lead would repeat it.
+  // An argument problem, or a launch that never started, already says the start failed; the
+  // generic lead would repeat it.
   const saysStartFailure =
-    failure?.code === 'agent_session_setup_not_completed' ||
+    failure?.kind === 'not-started' ||
     (failure?.code === 'agent_session_operation_invalid' && failure.details?.argumentProblem)
   const signInContent = nativeChatAntigravitySignInContent(failure?.details?.reason, agentLabel)
   return {
@@ -107,21 +107,16 @@ export function structuredSessionNotices({
     onRetry: launch.retry,
     claudeSignIn
   })
-  // Setup's explanation says why the opening message came back; the send's own error would not.
-  const sessionErrorShown =
-    launch.failure?.code === 'agent_session_setup_not_completed' && launchNotice
-      ? null
-      : sessionError
   return [
     ...(hostPermission ? [hostPermission] : []),
     ...(availability ? [availability] : []),
-    ...(launchNotice && !sessionErrorShown ? [launchNotice] : []),
-    ...(sessionErrorShown
+    ...(launchNotice && !sessionError ? [launchNotice] : []),
+    ...(sessionError
       ? [
           {
             key: 'session',
             kind: 'error' as const,
-            text: sessionErrorShown,
+            text: sessionError,
             ...(launchNotice ? { action: launchNotice.action } : {})
           }
         ]

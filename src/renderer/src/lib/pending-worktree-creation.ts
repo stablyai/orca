@@ -139,6 +139,8 @@ export type PendingWorktreeCreation = {
   heldChatMessage?: string
   /** The launch owns the captured input until its replacement surface is published. */
   chatInputHandedOff?: boolean
+  /** The host launch this creation's chat handed off to; a Retry of the handoff adopts it again. */
+  hostLaunch?: { operationId: string; sessionId: string }
   request: WorktreeCreationRequest
 }
 

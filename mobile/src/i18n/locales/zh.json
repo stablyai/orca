@@ -2446,7 +2446,6 @@
       "shrinkQueue": "请删除一条排队的消息，或等待其送达，然后重试。",
       "startNewChat": "请开始新的聊天以继续。",
       "terminalAgentHoldsChat": "此聊天仍在终端智能体中打开。",
-      "setupNotCompleted": "设置脚本未成功完成，因此未启动代理。请修复或重新运行设置脚本，然后在此工作区中启动代理。",
       "tryAgain": "请重试。",
       "tryAgainComposerSend": "请重新发送。",
       "turnActive": "智能体仍在回复。",

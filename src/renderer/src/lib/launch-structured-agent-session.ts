@@ -1,4 +1,5 @@
 import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
+import type { StructuredHostLaunch } from './agent-session/launch/structured-agent-session-host-launch'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   createStructuredAgentSessionId,
@@ -52,6 +53,8 @@ export type StructuredAgentSessionLaunchIntent = {
   /** The saved selection create seeds, read when the intent is built. */
   explicitLaunchOptions?: Readonly<Record<string, string>>
   seedOptions?: Readonly<Record<string, string>>
+  /** The executing host accepted this launch and decides its surface; the window only reads it. */
+  hostLaunch?: StructuredHostLaunch
 }
 
 type LaunchSeed = Readonly<Record<string, string>> | undefined
@@ -95,13 +98,15 @@ export function createStructuredAgentSessionLaunchIntent(
   resumeFrom?: StructuredAgentSessionResumeSource,
   hostSeedOptions?: LaunchSeed,
   activate = true,
-  afterWorktreeSetup?: true
+  hostLaunch?: StructuredHostLaunch
 ): StructuredAgentSessionLaunchIntent {
   const owner = structuredAgentSessionOwnerTarget(
     worktreeId,
     executionHostId ?? resolveStructuredAgentSessionOwner(useAppStore.getState(), worktreeId)
   )
-  const sessionId = createStructuredAgentSessionId(agent, createBrowserUuid)
+  // A host launch names its chat once, so every retry of that request adopts the same one.
+  const sessionId =
+    hostLaunch?.sessionId ?? createStructuredAgentSessionId(agent, createBrowserUuid)
   if (activate) {
     recordWebSessionFocusIntent(
       structuredAgentSessionFocusOwner(owner.target),
@@ -111,15 +116,17 @@ export function createStructuredAgentSessionLaunchIntent(
       resolveWebSessionVisibleTabId(useAppStore.getState(), worktreeId)
     )
   }
-  return buildStructuredAgentSessionLaunchIntent(
-    worktreeId,
-    owner,
-    agent,
-    sessionId,
-    resumeFrom,
-    hostSeedOptions,
-    afterWorktreeSetup
-  )
+  return {
+    ...buildStructuredAgentSessionLaunchIntent(
+      worktreeId,
+      owner,
+      agent,
+      sessionId,
+      resumeFrom,
+      hostSeedOptions
+    ),
+    ...(hostLaunch ? { hostLaunch } : {})
+  }
 }
 
 function buildStructuredAgentSessionLaunchIntent(
@@ -128,8 +135,7 @@ function buildStructuredAgentSessionLaunchIntent(
   agent: TuiAgent,
   sessionId: string,
   resumeFrom: StructuredAgentSessionResumeSource | undefined,
-  hostSeedOptions: LaunchSeed,
-  afterWorktreeSetup?: true
+  hostSeedOptions: LaunchSeed
 ): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
   return {
@@ -142,7 +148,6 @@ function buildStructuredAgentSessionLaunchIntent(
       sessionId,
       worktree: toRuntimeWorktreeSelector(worktreeId),
       agent,
-      ...(afterWorktreeSetup ? { afterWorktreeSetup } : {}),
       ...(resumeFrom ? { resumeFrom } : {}),
       randomUuid: createBrowserUuid
     }),
@@ -150,7 +155,8 @@ function buildStructuredAgentSessionLaunchIntent(
   }
 }
 
-/** A definitive refusal consumed its operation id, but the provisional tab still owns its session. */
+/** A definitive refusal consumed its operation id, but the provisional tab still owns its session.
+ *  A host launch that ended is not run again: its chat's Retry is an ordinary create. */
 export function retryStructuredAgentSessionLaunchIntent(
   intent: StructuredAgentSessionLaunchIntent
 ): StructuredAgentSessionLaunchIntent {
@@ -161,8 +167,7 @@ export function retryStructuredAgentSessionLaunchIntent(
       intent.agent,
       intent.sessionId,
       intent.params.resumeFrom,
-      intent.seedOptions,
-      intent.params.afterWorktreeSetup
+      intent.seedOptions
     ),
     explicitLaunchOptions: intent.explicitLaunchOptions
   }
@@ -176,7 +181,8 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   clientOperationId: string
   payloadFingerprint: string
   expectedRuntimeFence: number | null
-  afterWorktreeSetup?: true
+  /** A host launch from before a reload: it is read again, never accepted again. */
+  hostLaunchOperationId?: string
   resumeFrom?: StructuredAgentSessionResumeSource
   /** A paired server's seed, kept with the launch so a reload shows what create runs. */
   explicitLaunchOptions?: Readonly<Record<string, string>>
@@ -204,7 +210,6 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       },
       worktree: toRuntimeWorktreeSelector(args.worktreeId),
       agent: args.agent,
-      ...(args.afterWorktreeSetup ? { afterWorktreeSetup: args.afterWorktreeSetup } : {}),
       ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
       ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
       ...(args.optionsMode ? { optionsMode: args.optionsMode } : {}),
@@ -215,6 +220,9 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       : { createMessageSupport: args.createMessageSupport }),
     ...(args.createMessageSupport === undefined ? {} : { createPrepared: true as const }),
     ...(args.explicitLaunchOptions ? { explicitLaunchOptions: args.explicitLaunchOptions } : {}),
+    ...(args.hostLaunchOperationId
+      ? { hostLaunch: { operationId: args.hostLaunchOperationId, sessionId: args.sessionId } }
+      : {}),
     ...(args.createMessageSupport !== undefined
       ? args.seedOptions
         ? { seedOptions: args.seedOptions }

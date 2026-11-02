@@ -36,7 +36,9 @@ export function restorePersistedStructuredLaunchState(
       clientOperationId: record.clientOperationId,
       payloadFingerprint: record.payloadFingerprint,
       expectedRuntimeFence: record.expectedRuntimeFence,
-      ...(record.afterWorktreeSetup ? { afterWorktreeSetup: record.afterWorktreeSetup } : {}),
+      ...(record.hostLaunchOperationId
+        ? { hostLaunchOperationId: record.hostLaunchOperationId }
+        : {}),
       ...(record.resumeFrom ? { resumeFrom: record.resumeFrom } : {}),
       ...(record.seedOptions ? { seedOptions: record.seedOptions } : {}),
       ...(record.firstMessage ? { firstMessage: record.firstMessage } : {}),

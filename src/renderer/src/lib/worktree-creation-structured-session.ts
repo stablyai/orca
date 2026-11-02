@@ -8,15 +8,21 @@ import {
   type WorktreeCreationRequest
 } from '@/lib/pending-worktree-creation'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
-import {
-  notifyExplicitChatFailure,
-  type StructuredLaunchTerminal
-} from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
+import type { StructuredLaunchTerminal } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import { buildWorktreeCreationStartupOpt } from '@/lib/worktree-creation-flow-startup'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import { mountCreatedWorktreeStartupTabsInBackground } from '@/lib/worktree-creation-background-mount'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import {
+  completeWorktreeCreation,
+  isCreatedWorkspaceInView
+} from '@/lib/worktree-creation-completion'
+import {
+  keepPendingChatAfterRefusedHandoff,
+  worktreeHostLaunch,
+  worktreeHostLaunchIdentity
+} from '@/lib/worktree-creation-host-launch'
 
 export type WorktreeCreationStructuredSessionResult = {
   accepted: boolean
@@ -26,7 +32,6 @@ export type WorktreeCreationStructuredSessionResult = {
 }
 
 type LaunchStructuredWorktreeSessionArgs = {
-  afterWorktreeSetup?: true
   creationId: string
   request: WorktreeCreationRequest
   /** Required: a non-structured route opens no session here, so the caller must have gated on it. */
@@ -74,6 +79,41 @@ function openBackgroundDeclinedTerminal(
   return tabId === null ? { opened: false } : { opened: true, tabId }
 }
 
+/** Hands a creation's chat into its existing workspace again, adopting the host launch it already
+ *  named; no workspace is created twice. */
+export async function retryWorktreeChatHandoff(
+  creationId: string,
+  worktreeId: string
+): Promise<void> {
+  const entry = useAppStore.getState().pendingWorktreeCreations[creationId]
+  if (!entry) {
+    return
+  }
+  const focusOnCompletion = isCreatedWorkspaceInView(creationId, worktreeId)
+  const session = await launchStructuredWorktreeSession({
+    creationId,
+    request: entry.request,
+    agentLaunchRoute: 'structured-native-chat',
+    worktreeId,
+    shouldActivateOnCompletion: focusOnCompletion,
+    activation: false,
+    primaryTabId: null
+  })
+  if (!session.cancelled) {
+    await completeWorktreeCreation({
+      creationId,
+      request: entry.request,
+      worktreeId,
+      structuredLaunchAccepted: session.accepted,
+      activation: session.activation,
+      primaryTabId: session.primaryTabId,
+      backendSpawned: false,
+      hostPlannedStartup: false,
+      focusOnCompletion
+    })
+  }
+}
+
 export async function launchStructuredWorktreeSession(
   args: LaunchStructuredWorktreeSessionArgs
 ): Promise<WorktreeCreationStructuredSessionResult> {
@@ -93,21 +133,37 @@ export async function launchStructuredWorktreeSession(
   useAppStore.getState().updatePendingWorktreeCreation(args.creationId, {
     chatInputHandedOff: true
   })
+  // A host that owns the new workspace's Setup wait decides chat or terminal itself, after Setup.
+  const hostLaunch = await worktreeHostLaunchIdentity({ ...args, agent })
+  if (isCancelled()) {
+    return { ...settled, cancelled: true, activation, primaryTabId }
+  }
   const pending = useAppStore.getState().pendingWorktreeCreations[args.creationId]
   const request = withPendingChatInput(pending, args.request)
+  const prompt = request.launchDraftPrompt ?? request.quickPrompt
   // Reuse composer-fixed route/delivery through retries; later host changes must not re-resolve this create.
   const plan = adoptAgentSessionLaunchVerdict({
-    ...(args.afterWorktreeSetup ? { afterWorktreeSetup: true } : {}),
+    ...(hostLaunch
+      ? {
+          hostLaunch: worktreeHostLaunch(
+            hostLaunch,
+            args.request,
+            prompt,
+            args.shouldActivateOnCompletion
+          )
+        }
+      : {}),
     route: args.agentLaunchRoute,
     // One create is one user action: a retry of it re-delivers the same request.
     requestId: args.creationId,
     agent,
-    prompt: request.launchDraftPrompt ?? request.quickPrompt,
+    prompt,
     ...(request.promptDelivery ? { promptDelivery: request.promptDelivery } : {}),
     // What the user left unsent in the chat shown while the worktree was created.
     draftFromScope: pendingCreationChatDraftScopeKey(args.creationId)
   })
   let layoutRefused = false
+  let refusedSessionId: string | undefined
   const abandoned = new AbortController()
   const tabOpen = Promise.withResolvers<string | null>()
   const stopWaiting = (): void => tabOpen.resolve(null)
@@ -130,8 +186,9 @@ export async function launchStructuredWorktreeSession(
               openBackgroundDeclinedTerminal(args, host, pending?.heldChatMessage)
           }),
       beforeOpen: () => !abandoned.signal.aborted && !isCancelled(),
-      onTabOpenSettled: (tabId, reason) => {
+      onTabOpenSettled: (tabId, reason, sessionId) => {
         layoutRefused = reason === 'layout-refused'
+        refusedSessionId = sessionId
         tabOpen.resolve(tabId)
       }
     })
@@ -151,10 +208,17 @@ export async function launchStructuredWorktreeSession(
         )
       }
       let recoveryProvidesSurface = false
-      // A linked launch has no setup answer here, so a refused layout starts no agent.
-      if (primaryTabId === null && layoutRefused && plan.afterWorktreeSetup) {
-        notifyExplicitChatFailure(agent)
-      } else if (primaryTabId === null && plan.prompt && layoutRefused) {
+      // The host still owns its launch: the creation keeps the input until a Retry adopts it here.
+      if (primaryTabId === null && layoutRefused && plan.hostLaunch) {
+        keepPendingChatAfterRefusedHandoff(
+          args.creationId,
+          args.worktreeId,
+          agent,
+          refusedSessionId
+        )
+        return { ...settled, cancelled: true, activation, primaryTabId }
+      }
+      if (primaryTabId === null && plan.prompt && layoutRefused) {
         const { launchAgentInNewTabWithOutcome } = await import('@/lib/launch-agent-in-new-tab')
         if (abandoned.signal.aborted || isCancelled()) {
           launch.cancel()

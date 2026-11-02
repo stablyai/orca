@@ -39,7 +39,8 @@ const REQUEST_REFUSALS: ReadonlySet<string> = new Set([
 export const AGENT_LAUNCH_ACCEPT_METHODS = [
   defineMethod({
     name: 'agent.launchAccept',
-    requires: agentLaunchFeatureRequirement,
+    // An accepted launch never reuses a terminal: it always starts an agent.
+    requires: () => agentLaunchFeatureRequirement({}),
     permission: 'workspace',
     params: AgentLaunchAccept,
     handler: (params, context): Promise<AgentLaunchAcceptResult> =>

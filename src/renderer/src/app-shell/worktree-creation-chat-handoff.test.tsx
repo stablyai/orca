@@ -24,7 +24,9 @@ const host = vi.hoisted(() => ({ createSupport: vi.fn() }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: vi.fn((_target: unknown, method: string) =>
     method === 'agentSession.createSupport' ? host.createSupport() : new Promise(() => undefined)
-  )
+  ),
+  // A host from before agent.launchAccept: the window keeps its own chat create.
+  structuredAgentSessionHostSupports: async () => false
 }))
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
@@ -125,7 +127,12 @@ describe('worktree creation chat handoff', () => {
           <WorkspaceShell />
         </TooltipProvider>
       )
-      const composer = await screen.findByRole('textbox', { name: 'Pending chat message' })
+      // The whole shell's first render, which a loaded machine can stretch past the default second.
+      const composer = await screen.findByRole(
+        'textbox',
+        { name: 'Pending chat message' },
+        { timeout: 5_000 }
+      )
       const sidebar = screen.getByRole('complementary', { name: 'Workspace tools' })
       expect(screen.getByRole('button', { name: 'Cancel worktree creation' })).toBeTruthy()
 

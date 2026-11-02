@@ -15,11 +15,32 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { StructuredAgentSessionCreateRefusalError } from './structured-agent-session-launch-errors'
 
-export type StructuredLaunchFailure = AgentSessionWriteRefusal & {
+export type StructuredLaunchRefusal = AgentSessionWriteRefusal & {
   /** Words that replace the refusal's generic cause: the host's sign-in guidance, or why this
    *  workspace can't run the chat. */
   causeText?: string
   owner?: AgentSessionConversationOwner
+}
+
+export type StructuredLaunchFailure =
+  | StructuredLaunchRefusal
+  /** A host's launch ended before any agent started, and these words say so whole (Setup did not
+   *  finish). */
+  | {
+      kind: 'not-started'
+      causeText: string
+      code?: undefined
+      details?: undefined
+      owner?: undefined
+    }
+
+/** A failed launch's refusal; a launch that never started (Setup did not finish) is none. */
+export function structuredLaunchRefusalOf(launch: {
+  lifecycle: string
+  failure?: StructuredLaunchFailure | null
+}): StructuredLaunchRefusal | null {
+  const failure = launch.lifecycle === 'failed' ? launch.failure : null
+  return failure && failure.kind !== 'not-started' ? failure : null
 }
 
 /** A WSL distro added as a host runs chat itself, so point there once this desktop can add one. */
@@ -57,7 +78,7 @@ export function structuredChatUnavailableText(reason?: string): string {
 }
 
 /** The host's refusal behind a failed launch; undefined when the failure carried none. */
-export function structuredLaunchFailure(error: unknown): StructuredLaunchFailure | undefined {
+export function structuredLaunchFailure(error: unknown): StructuredLaunchRefusal | undefined {
   if (error instanceof StructuredAgentSessionCreateRefusalError && error.hostReason) {
     return {
       kind: 'refused',

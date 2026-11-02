@@ -143,7 +143,6 @@ export const CreateIntentParams = z
     envelope: MutationEnvelope,
     worktree: Identifier('Invalid worktree selector'),
     agent: StructuredAgent,
-    afterWorktreeSetup: z.literal(true).optional(),
     resumeFrom: ResumeSource.optional(),
     ...CREATE_TAB_FIELDS,
     /** Both fields require `agentSession.create.message.v1` on the executing host. */

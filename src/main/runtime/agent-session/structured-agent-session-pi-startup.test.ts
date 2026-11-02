@@ -128,6 +128,9 @@ async function setup(
       options: options.explicit,
       atRest: true
     })
+    if ('refusal' in prepared) {
+      throw new Error(prepared.refusal.code)
+    }
     preparedParams = prepared.attachParams
     catalogModels = prepared.catalogModels
   }

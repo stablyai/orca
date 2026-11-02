@@ -9,6 +9,7 @@ import {
 } from '@/lib/launch-structured-agent-session'
 import {
   discardStructuredAgentSessionChatSends,
+  discardStructuredLaunchPrompts,
   stageStructuredLaunchPrompt
 } from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
 import {
@@ -26,6 +27,7 @@ import {
 } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import * as launchDraft from './structured-agent-session-launch-draft'
 import {
+  deleteStructuredLaunchStateIfCurrent,
   getStructuredAgentSessionLaunchLifecycle,
   getStructuredLaunchStateBySessionId,
   notifyStructuredLaunchListeners,
@@ -204,7 +206,7 @@ function structuredAgentLaunchState(
     options.resumeFrom,
     options.hostSeedOptions,
     options.activate,
-    options.afterWorktreeSetup
+    options.hostLaunch
   )
   intent.explicitLaunchOptions = options.launchOptions ? { ...options.launchOptions } : undefined
   intent.beforeCreate = options.beforeCreate
@@ -265,6 +267,21 @@ export function cancelStructuredAgentLaunch(worktreeId: string, sessionId: strin
   abandonStructuredAgentSessionLaunchIntent(state.intent)
   notifyStructuredLaunchListeners()
   return true
+}
+
+/** Ends this window's hold on a launch without telling its host, which keeps running it; a later
+ *  start of the same request adopts it. Its text stays with the caller that handed it over. */
+export function detachStructuredAgentLaunch(sessionId: string): void {
+  const state = getStructuredLaunchStateBySessionId(sessionId)
+  if (!state) {
+    return
+  }
+  state.cancelled = true
+  state.callers.outcome = 'cancelled'
+  discardStructuredLaunchPrompts(sessionId)
+  abandonStructuredAgentSessionLaunchIntent(state.intent)
+  deleteStructuredLaunchStateIfCurrent(state)
+  notifyStructuredLaunchListeners()
 }
 
 export function startStructuredAgentLaunch(

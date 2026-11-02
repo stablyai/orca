@@ -2446,7 +2446,6 @@
       "shrinkQueue": "請刪除一則排隊的訊息，或等待其送達，然後重試。",
       "startNewChat": "請開始新的聊天以繼續。",
       "terminalAgentHoldsChat": "此聊天仍在終端機代理程式中開啟。",
-      "setupNotCompleted": "設定指令碼未成功完成，因此未啟動代理程式。請修正或重新執行設定指令碼，然後在此工作區中啟動代理程式。",
       "tryAgain": "請重試。",
       "tryAgainComposerSend": "請重新傳送。",
       "turnActive": "代理程式仍在回覆。",

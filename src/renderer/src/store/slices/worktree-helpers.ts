@@ -199,6 +199,7 @@ export type WorktreeSlice = {
       worktreeId?: string
       heldChatMessage?: string
       chatInputHandedOff?: boolean
+      hostLaunch?: PendingWorktreeCreation['hostLaunch']
     }
   ) => void
   /** Drop pending/active creation; VM cleanup applies to cancellation/dismissal, never successful handoff. */

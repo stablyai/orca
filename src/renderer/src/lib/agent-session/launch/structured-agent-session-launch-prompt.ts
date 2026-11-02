@@ -114,11 +114,10 @@ function unstage(prompt: StagedStructuredLaunchPrompt): void {
 
 export function discardStructuredLaunchPrompts(sessionId: string): void {
   for (const prompt of staged.get(sessionId) ?? []) {
-    prompt.slot?.release()
+    unstage(prompt)
     prompt.discarded = true
     prompt.discard()
   }
-  staged.delete(sessionId)
 }
 
 /** The chat is closing or its launch was cancelled: nothing it was sending goes out any more. */
@@ -140,6 +139,15 @@ export function takeBackLegacyStructuredLaunchPrompts(sessionId: string): void {
   }
 }
 
+/** The host carried the launch's text itself, as its chat's first message or to its terminal:
+ *  none of it is sent from here or given back. */
+export function settleHostCarriedStructuredLaunchPrompts(sessionId: string): void {
+  for (const prompt of staged.get(sessionId) ?? []) {
+    prompt.delivery ??= Promise.resolve({ delivered: true, inComposer: false })
+    unstage(prompt)
+  }
+}
+
 export function prepareLegacyStructuredLaunchPrompts(sessionId: string): void {
   for (const prompt of staged.get(sessionId) ?? []) {
     prompt.slot?.legacy()
@@ -149,8 +157,7 @@ export function prepareLegacyStructuredLaunchPrompts(sessionId: string): void {
 /** Transfers the first staged prompt to create, retaining the sender's deadline and bubble. */
 export function prepareStructuredLaunchPromptForCreate(
   sessionId: string,
-  target: RuntimeClientTarget,
-  budgetMs?: number
+  target: RuntimeClientTarget
 ): StructuredAgentSessionFirstMessage | undefined {
   const prompt = [...(staged.get(sessionId) ?? [])].find(
     (candidate) => !candidate.discarded && !candidate.delivery
@@ -159,7 +166,7 @@ export function prepareStructuredLaunchPromptForCreate(
     return undefined
   }
   prompt.createOwned = true
-  const sent = prompt.slot?.create(target, budgetMs)
+  const sent = prompt.slot?.create(target)
   prompt.createSend = sent ?? undefined
   prompt.delivery = sent
     ? sent.outcome.then((outcome) => {

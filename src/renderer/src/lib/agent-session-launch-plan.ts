@@ -31,6 +31,7 @@ import {
 } from '@/lib/structured-agent-launch-settlement'
 import type { StructuredAgentLaunchOptions } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import type { StructuredHostLaunch } from '@/lib/agent-session/launch/structured-agent-session-host-launch'
 import { relearnHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { awaitLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
 
@@ -50,7 +51,7 @@ export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
 
 /** Carry the decided route and delivery fields in memory so post-create launches and same-session retries reuse them without re-resolving. */
 export type AgentSessionLaunchVerdict = {
-  afterWorktreeSetup?: true
+  hostLaunch?: StructuredHostLaunch
   route: AgentLaunchRoute
   requestedSurface?: AgentLaunchSurface
   requestId: AgentLaunchRequestId
@@ -94,7 +95,7 @@ export type AgentSessionLaunchPlan = Readonly<AgentSessionLaunchVerdict> & {
 
 function structuredLaunchOptions(verdict: AgentSessionLaunchVerdict): StructuredAgentLaunchOptions {
   return {
-    ...(verdict.afterWorktreeSetup ? { afterWorktreeSetup: true } : {}),
+    ...(verdict.hostLaunch ? { hostLaunch: verdict.hostLaunch } : {}),
     requestId: verdict.requestId,
     ...(verdict.prompt !== undefined ? { prompt: verdict.prompt } : {}),
     ...(verdict.promptDelivery ? { promptDelivery: verdict.promptDelivery } : {}),

@@ -10,25 +10,32 @@ const mocks = vi.hoisted(() => {
   const mainStarts: unknown[] = []
   return {
     createSupport: vi.fn(),
-    create: vi.fn((_params: unknown): Promise<unknown> => new Promise(() => undefined)),
+    // Whether the owning host accepts a new workspace's launch and owns its Setup wait.
+    hostAccepts: false,
+    hostLaunch: vi.fn(
+      (_method: string, _params: unknown): Promise<unknown> => new Promise(() => {})
+    ),
     mainStarts
   }
 })
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: vi.fn(async (_target: unknown, method: string, params: unknown) =>
-    method === 'agentSession.createSupport'
-      ? mocks.createSupport()
-      : method === 'agentSession.create'
-        ? mocks.create(params)
-        : new Promise(() => undefined)
-  )
+  callStructuredAgentSession: vi.fn(async (_target: unknown, method: string) =>
+    method === 'agentSession.createSupport' ? mocks.createSupport() : new Promise(() => undefined)
+  ),
+  structuredAgentSessionHostSupports: async () => mocks.hostAccepts
 }))
 
 import { useAppStore } from '@/store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { launchStructuredWorktreeSession } from './worktree-creation-structured-session'
+import { pendingCreationChatDraftScopeKey } from './pending-worktree-creation'
+import {
+  readNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey,
+  updateNativeChatComposerDraft
+} from '@/components/native-chat/native-chat-composer-draft-store'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them, and the first
 // terminals it starts for the window's new tabs.
@@ -39,6 +46,9 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
   return {
     ...client,
     callRuntimeRpc: (...args: Parameters<typeof client.callRuntimeRpc>) => {
+      if (args[1].startsWith('agent.launch')) {
+        return mocks.hostLaunch(args[1], args[2])
+      }
       if (args[1] !== 'terminal.create') {
         return client.callRuntimeRpc(...args)
       }
@@ -134,6 +144,8 @@ const REQUEST = {
 } as unknown as WorktreeCreationRequest
 
 afterEach(() => {
+  mocks.hostAccepts = false
+  mocks.hostLaunch.mockReset()
   mocks.mainStarts.length = 0
   vi.unstubAllGlobals()
   useAppStore.setState(initial, true)
@@ -226,57 +238,93 @@ describe('a background worktree create whose own machine declines the chat', () 
   })
 })
 
-describe('a linked background create whose own machine declines the chat before setup ends', () => {
+describe('a background create whose own machine owns its Setup and cannot run the chat', () => {
+  const TERMINAL_TAB = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
+
   it.each([
-    ['succeeds', 'structured_agent_session_unsupported', 1],
-    ['fails', 'agent_session_setup_not_completed', 0]
-  ] as const)(
-    'starts the agent terminal only once setup %s and the host still declines',
-    async (_setup, refusal, terminals) => {
-      mocks.createSupport.mockResolvedValue({ supported: false, reason: 'agent' })
-      const reply = Promise.withResolvers<unknown>()
-      mocks.create.mockReturnValueOnce(reply.promise)
-      seedThisMachine()
+    ['nothing else was typed', '', 0],
+    ['a follow-up was left unsent', 'Also run lint', 1]
+  ])("puts the host's terminal where the chat was when %s", async (_case, unsent, chatsLeft) => {
+    mocks.hostAccepts = true
+    const status = Promise.withResolvers<unknown>()
+    mocks.hostLaunch.mockImplementation(async (method) =>
+      method === 'agent.launchAccept' ? { state: 'running' } : status.promise
+    )
+    seedThisMachine()
+    updateNativeChatComposerDraft(
+      pendingCreationChatDraftScopeKey('creation-1'),
+      { text: unsent, images: [] },
+      'immediate'
+    )
 
-      await launchStructuredWorktreeSession({
-        afterWorktreeSetup: true,
-        creationId: 'creation-1',
-        request: REQUEST,
-        agentLaunchRoute: 'structured-native-chat',
-        worktreeId: LOCAL_CREATED.id,
-        shouldActivateOnCompletion: false,
-        activation: false,
-        primaryTabId: null
-      })
-
-      await vi.waitFor(() =>
-        expect(mocks.create).toHaveBeenCalledWith(
-          expect.objectContaining({ afterWorktreeSetup: true })
-        )
-      )
-      expect(useAppStore.getState().tabsByWorktree[LOCAL_CREATED.id] ?? []).toEqual([])
-      reply.resolve({ ok: false, refusal: { code: refusal, message: 'refused' } })
-
-      await vi.waitFor(() =>
-        expect(useAppStore.getState().tabsByWorktree[LOCAL_CREATED.id] ?? []).toHaveLength(
-          terminals
-        )
-      )
-      await new Promise((resolve) => setTimeout(resolve, 50))
-      const tabs = useAppStore.getState().tabsByWorktree[LOCAL_CREATED.id] ?? []
-      expect(tabs).toHaveLength(terminals)
-      const chats = (useAppStore.getState().unifiedTabsByWorktree[LOCAL_CREATED.id] ?? []).filter(
+    await launchStructuredWorktreeSession({
+      creationId: 'creation-1',
+      request: REQUEST,
+      agentLaunchRoute: 'structured-native-chat',
+      worktreeId: LOCAL_CREATED.id,
+      shouldActivateOnCompletion: false,
+      activation: false,
+      primaryTabId: null
+    })
+    await vi.waitFor(() =>
+      expect(mocks.hostLaunch).toHaveBeenCalledWith('agent.launchStatus', expect.anything())
+    )
+    const chatsNow = () =>
+      (useAppStore.getState().unifiedTabsByWorktree[LOCAL_CREATED.id] ?? []).filter(
         (candidate) => candidate.contentType === 'agent-session'
       )
-      if (terminals) {
-        expect(startupOf(tabs[0]!.id)).toMatchObject({
-          command: "claude --model opus 'fix the flaky test'"
-        })
-        // The terminal replaced the chat, so the opening message is not offered again.
-        expect(chats).toEqual([])
-      } else {
-        expect(chats).toHaveLength(1)
+    // Until Setup ends only the chat shows, and the window starts no terminal of its own.
+    expect(chatsNow()).toHaveLength(1)
+    expect(useAppStore.getState().tabsByWorktree[LOCAL_CREATED.id] ?? []).toEqual([])
+    const [, accepted] = mocks.hostLaunch.mock.calls[0]!
+    expect(accepted).toMatchObject({
+      presentation: 'background',
+      prompt: { text: 'fix the flaky test', delivery: 'submit' },
+      terminalStartup: {
+        command: "claude --model opus 'fix the flaky test'",
+        promptDelivery: 'draft'
       }
+    })
+
+    // The host's terminal reaches this window, then the host says that is what it started.
+    useAppStore.getState().createTab(LOCAL_CREATED.id, undefined, undefined, {
+      id: TERMINAL_TAB
+    })
+    status.resolve({
+      state: 'succeeded',
+      result: {
+        outcome: {
+          kind: 'terminal',
+          handle: 'term_1',
+          paneKey: `${TERMINAL_TAB}:3f2504e0-4f89-41d3-9a0c-0305e82c3301`
+        },
+        worktreeId: LOCAL_CREATED.id,
+        receipt: {
+          mode: 'terminal',
+          preferred: 'structured',
+          reason: 'structured_unsupported_on_host',
+          detail: ''
+        },
+        prompt: { delivery: 'draft', outcome: 'not-delivered' }
+      }
+    })
+
+    await vi.waitFor(() => expect(chatsNow()).toHaveLength(chatsLeft))
+    const state = useAppStore.getState()
+    expect(state.tabsByWorktree[LOCAL_CREATED.id]?.map((tab) => tab.id)).toEqual([TERMINAL_TAB])
+    expect(state.pendingStartupByTabId[TERMINAL_TAB]).toBeUndefined()
+    if (chatsLeft) {
+      // The chat keeps what was typed in it, right beside the terminal that replaced its start.
+      const chat = chatsNow()[0]!
+      const order = state.groupsByWorktree[LOCAL_CREATED.id]?.find(
+        (group) => group.id === chat.groupId
+      )?.tabOrder
+      expect(order?.indexOf(TERMINAL_TAB)).toBe((order?.indexOf(chat.id) ?? -2) + 1)
+      expect(
+        readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(chat.entityId)).text
+      ).toBe(unsent)
     }
-  )
+    expect(mocks.hostLaunch.mock.calls.map(([method]) => method)).not.toContain('agent.launch')
+    expect(state.activeWorktreeId).toBe(LOCAL_OTHER.id)
+  })
 })

@@ -19234,7 +19234,6 @@
         "recordUnreadable": "Orca bu sohbetin kayıtlı durumunu okuyamadı.",
         "chatNotFound": "Orca bu sohbeti bulamıyor.",
         "startNewChat": "Devam etmek için yeni bir sohbet başlatın.",
-        "setupNotCompleted": "Kurulum başarıyla tamamlanmadığı için aracı başlatılmadı. Kurulumu düzeltin veya yeniden çalıştırın, ardından bu çalışma alanında aracıyı başlatın.",
         "tryAgain": "Tekrar deneyin.",
         "agentStillWorking": "Ajan hâlâ çalışıyor.",
         "runClearWhenDone": "Tamamlandığında /clear komutunu çalıştırın.",

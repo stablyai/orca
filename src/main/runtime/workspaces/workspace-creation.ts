@@ -276,9 +276,6 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       },
       ...(lineageInput ? { lineage, workspaceLineage, warnings: lineageWarnings } : {}),
       ...(returnedSetup && !args.promisedAgentChat ? { setup: returnedSetup } : {}),
-      ...(args.promisedAgentChat && setupRun?.waitsForAgent
-        ? { chatAwaitsSetup: true as const }
-        : {}),
       ...(args.awaitTerminalProvisioning
         ? {
             setupReceipt: runtimeWorktreeSetupReceipt(

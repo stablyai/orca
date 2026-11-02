@@ -19,12 +19,6 @@ const record = {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('a persisted create opening message', () => {
-  it('reads old requests and accepts only a literal setup dependency', () => {
-    expect(validRecord(record)).toBe(true)
-    expect(validRecord({ ...record, afterWorktreeSetup: true })).toBe(true)
-    expect(validRecord({ ...record, afterWorktreeSetup: false })).toBe(false)
-  })
-
   it('loads the frozen user message in a browser without Node Buffer', () => {
     vi.stubGlobal('Buffer', undefined)
     expect(() => validRecord(record)).not.toThrow()

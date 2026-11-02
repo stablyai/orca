@@ -1,4 +1,3 @@
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
@@ -29,12 +28,7 @@ function markStructuredAgentSessionLaunchCancelledInternal(
   const record = getPersistedStructuredAgentLaunchRecord(sessionId)
   const surfaceAddress = state?.intent.surfaceAddress ?? record?.surfaceAddress
   const matchingState = state?.intent.worktreeId === worktreeId ? state : undefined
-  const matchingRecord =
-    !state && (!record?.surfaceAddress || record.surfaceAddress.worktreeId === worktreeId)
-      ? record
-      : undefined
-  const host =
-    matchingState?.intent.executionHostId ?? matchingRecord?.executionHostId ?? executionHostId
+  const host = matchingState?.intent.executionHostId ?? record?.executionHostId ?? executionHostId
   const target = matchingState?.intent.target ?? structuredAgentSessionTargetForHost(host)
   if (state?.intent.worktreeId === worktreeId) {
     // The launch's own owner outranks the caller's: it is the host the create was sent to.
@@ -53,17 +47,14 @@ function markStructuredAgentSessionLaunchCancelledInternal(
     state.callers.outcome = 'cancelled'
     // Tombstones remain durable authority; drop in-memory dead promises so bulk closes cannot retain them all session.
     deleteStructuredLaunchStateIfCurrent(state)
-  } else if (ORCA_LAYOUT_OWNER_IS_MAIN && !alreadyCancelled && host === LOCAL_EXECUTION_HOST_ID) {
+  } else if (
+    ORCA_LAYOUT_OWNER_IS_MAIN &&
+    !alreadyCancelled &&
+    executionHostId === LOCAL_EXECUTION_HOST_ID
+  ) {
     cancelStructuredAgentLaunchOnLocalHost(worktreeId, sessionId)
   } else if (!alreadyCancelled) {
-    markStructuredAgentLaunchCancellation(sessionId, host, alreadyCancelled)
-  }
-  const awaitsSetup =
-    matchingState?.intent.params.afterWorktreeSetup ?? matchingRecord?.afterWorktreeSetup
-  if (awaitsSetup && target && !alreadyCancelled) {
-    void callStructuredAgentSession(target, 'agentSession.close', { sessionId }).catch(
-      () => undefined
-    )
+    markStructuredAgentLaunchCancellation(sessionId, executionHostId, alreadyCancelled)
   }
   if ((!state || matchingState) && (!surfaceAddress || surfaceAddress.worktreeId === worktreeId)) {
     retireStructuredAgentSessionReadOwner(sessionId, target, host)

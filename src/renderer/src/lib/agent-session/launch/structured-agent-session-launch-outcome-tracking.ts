@@ -15,6 +15,7 @@ import {
 } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import type { StructuredAgentLaunchReceipt } from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
 import { structuredLaunchFailure } from './structured-agent-session-launch-failure'
+import { StructuredHostLaunchNotStartedError } from './structured-agent-session-host-launch'
 import {
   deleteStructuredLaunchStateIfCurrent,
   notifyStructuredLaunchListeners,
@@ -108,17 +109,16 @@ export function trackLaunchSettlement(
       }
       // The chat's Retry line owns the failed start's guidance.
       console.warn('[native-chat] structured launch failed', error)
-      const failure = structuredLaunchFailure(error)
+      const failure =
+        error instanceof StructuredHostLaunchNotStartedError
+          ? error.failure
+          : structuredLaunchFailure(error)
       if (failure) {
         state.failure = failure
       } else {
         delete state.failure
       }
       if (error instanceof StructuredAgentSessionCreateRefusalError) {
-        // Setup's answer is the host's own: nothing was created, whatever a deadline guessed.
-        if (error.code === 'agent_session_setup_not_completed') {
-          state.visibilityUnknown = false
-        }
         settleStructuredLaunchRefusal(state)
       } else if (!state.visibilityUnknown) {
         settleStructuredLaunchCallers(state.callers, 'failed')

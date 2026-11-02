@@ -4,7 +4,6 @@ import React from 'react'
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
-import { structuredSessionNotices } from '../native-chat/native-chat-structured-session-notices'
 import { AgentLaunchPaneNotice } from './AgentLaunchPaneNotice'
 import { TerminalErrorToast } from './TerminalErrorToast'
 import { agentLaunchPaneOutcomeForLeaf } from './agent-launch-pane-notice-text'
@@ -36,17 +35,6 @@ describe('localized startup failure surfaces', () => {
     }
   ] as const)('renders both real mappings with the shipped $language catalog', async (copy) => {
     await i18n.changeLanguage(await loadRendererUiLanguage(copy.language))
-    const nativeSetup = structuredSessionNotices({
-      launch: {
-        lifecycle: 'failed',
-        failure: { kind: 'refused', code: 'agent_session_setup_not_completed' },
-        retry: vi.fn()
-      },
-      agentLabel: 'Codex',
-      sessionError: null,
-      composerError: null
-    })
-    expect(nativeSetup[0]?.text).toBe(copy.setup)
     for (const [code, expected, refusal] of [
       [
         'agent_session_exited_during_start',

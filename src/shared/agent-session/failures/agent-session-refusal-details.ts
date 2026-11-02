@@ -152,7 +152,6 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'hostUnsupported'
   ],
   // Sent with no reason when starting the agent for an operation throws; older clients read it too.
-  agent_session_setup_not_completed: [],
   agent_session_owner_restart_failed: []
 } as const satisfies Record<AgentSessionWireRefusalCode, readonly string[]>
 
@@ -207,7 +206,6 @@ type AgentSessionRefusalFactsByCode = {
   agent_session_operation_capacity: NoFacts
   agent_session_journal_unreadable: NoFacts
   structured_agent_session_unsupported: NoFacts
-  agent_session_setup_not_completed: NoFacts
   agent_session_owner_restart_failed: NoFacts
 }
 

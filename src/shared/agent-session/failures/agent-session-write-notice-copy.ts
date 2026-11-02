@@ -95,8 +95,6 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   recordUnreadable: "Orca couldn't read this chat's saved state.",
   chatNotFound: "Orca can't find this chat.",
   startNewChat: START_NEW_CHAT,
-  setupNotCompleted:
-    'Setup did not finish successfully, so the agent was not started. Fix or rerun setup, then start the agent in this workspace.',
   tryAgain: 'Try again.'
 } as const
 

@@ -57,7 +57,6 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
   envelope: AgentSessionMutationEnvelope
   worktree: string
   agent: string
-  afterWorktreeSetup?: true
   resumeFrom?: StructuredAgentSessionResumeSource
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
@@ -70,7 +69,6 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
     fields: {
       worktree: params.worktree,
       agent: params.agent,
-      ...(params.afterWorktreeSetup ? { afterWorktreeSetup: true } : {}),
       resumeFrom: params.resumeFrom,
       tabId: params.tabId,
       firstMessage: params.firstMessage,

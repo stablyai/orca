@@ -183,14 +183,13 @@ describe('native-chat setup through renderer payload, RPC and execution host', (
 })
 
 it.each([false, true])(
-  'preserves a promised chat dependency when runner preparation fails=%s',
+  "keeps the Setup run a promised chat's host launch waits for when runner preparation fails=%s",
   async (fails) => {
     const { result, spawn, runtime } = await createFromRendererPayload({
       agent: 'codex',
       promised: true,
       ...(fails ? { preparationFails: true } : {})
     })
-    expect(result.chatAwaitsSetup).toBe(true)
     const run = runtime.getSetupRun(result.worktree.id)
     expect(run?.waitsForAgent).toBe(true)
     if (fails) {

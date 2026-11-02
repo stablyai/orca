@@ -77,6 +77,9 @@ describe('the create the seed options land in', () => {
       caller: { callerKey: 'orchestration:dispatch:ctx_1' },
       ...(options ? { options } : {})
     })
+    if ('refusal' in prepared) {
+      throw new Error(prepared.refusal.code)
+    }
     return prepared.attachParams
   }
 
@@ -132,6 +135,9 @@ describe('a new Claude chat seeded from a remembered model the saved listing no 
       agent: 'claude',
       caller: { callerKey: 'renderer:test' }
     })
+    if ('refusal' in prepared) {
+      throw new Error(prepared.refusal.code)
+    }
     expect(prepared.attachParams.options).toEqual({ model: 'claude-gone', effort: 'max' })
     expect(read).not.toHaveBeenCalled()
   })

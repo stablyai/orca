@@ -363,6 +363,9 @@ describe('committed adopting create RPC replay', () => {
       }
       sourceRoute.mockClear()
       const prepared = await prepareStructuredAgentSessionCreateForWorktree(direct)
+      if ('refusal' in prepared) {
+        throw new Error(prepared.refusal.code)
+      }
       expect(prepared.attachParams.adopt?.transcriptPath).toBe(await realpath(transcriptPath))
       expect(sourceRoute).toHaveBeenCalledOnce()
       sourceRoute.mockClear()

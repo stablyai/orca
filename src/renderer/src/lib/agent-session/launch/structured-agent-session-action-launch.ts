@@ -22,15 +22,8 @@ import {
 } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import {
-  readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey,
-  updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
-import {
-  nativeChatComposerHasAttachments,
-  nativeChatComposerHasUserContent
-} from '@/components/native-chat/native-chat-pending-attachment-cache'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
+import { nativeChatComposerHasUserContent } from '@/components/native-chat/native-chat-pending-attachment-cache'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 
 export function openDeclinedTerminal(
@@ -84,30 +77,10 @@ export async function openTerminalForDeclinedChat(
   ) {
     return settlement
   }
-  const source = () =>
-    (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).find(
-      (candidate) => candidate.id === tab.id && candidate.entityId === tab.entityId
-    )
-  const launchState = getStructuredLaunchStateBySessionId(tab.entityId)
-  if (!source() || launchState?.cancelled || args.hooks.signal?.aborted) {
+  const chat = declinedChat(args, worktreeId, tab)
+  if (!chat) {
     return settlement
   }
-  const scopeKey = structuredAgentSessionDraftScopeKey(tab.entityId)
-  // A linked launch's opening message comes back to the composer on refusal; the terminal carries it.
-  const opening = args.plan.afterWorktreeSetup ? args.plan.prompt?.trim() : undefined
-  const userTyped = (): boolean =>
-    nativeChatComposerHasUserContent(scopeKey) &&
-    !(
-      opening &&
-      readNativeChatComposerDraft(scopeKey).text.trim() === opening &&
-      !nativeChatComposerHasAttachments(scopeKey)
-    )
-  const typed = userTyped()
-  // Text the person left unsent stays in the chat rather than beside a terminal holding the prompt.
-  if (typed && args.plan.afterWorktreeSetup) {
-    return settlement
-  }
-  const attempt = launchState?.callers
   const terminal = await openDeclinedTerminal(args, worktreeId, target, false)
   const completed = terminal.completion
     ? await terminal.completion
@@ -118,14 +91,50 @@ export async function openTerminalForDeclinedChat(
   if (completed.outcome.status !== 'created') {
     return settlement
   }
-  if (opening && !userTyped()) {
-    // The terminal now holds the opening message; the chat must not offer to send it again.
-    updateNativeChatComposerDraft(scopeKey, { text: '', images: [] }, 'immediate')
+  return replaceDeclinedChat(args, worktreeId, tab, chat, completed.tabId, settlement)
+}
+
+export type DeclinedChat = NonNullable<ReturnType<typeof declinedChat>>
+
+/** The chat a declined launch reserved, while it still shows and is still this launch's; read
+ *  before its terminal opens. */
+export function declinedChat(
+  args: ProvisionalLaunchArgs,
+  worktreeId: string,
+  tab: OpenedAgentSessionTab
+) {
+  const source = () =>
+    (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).find(
+      (candidate) => candidate.id === tab.id && candidate.entityId === tab.entityId
+    )
+  const launchState = getStructuredLaunchStateBySessionId(tab.entityId)
+  if (!source() || launchState?.cancelled || args.hooks.signal?.aborted) {
+    return null
   }
+  const scopeKey = structuredAgentSessionDraftScopeKey(tab.entityId)
+  return {
+    source,
+    launchState,
+    attempt: launchState?.callers,
+    scopeKey,
+    typed: nativeChatComposerHasUserContent(scopeKey)
+  }
+}
+
+/** The terminal that answers a declined chat takes the chat's place; text left in the chat keeps
+ *  the chat open beside it. */
+export async function replaceDeclinedChat(
+  args: ProvisionalLaunchArgs,
+  worktreeId: string,
+  tab: OpenedAgentSessionTab,
+  { source, launchState, attempt, scopeKey, typed }: DeclinedChat,
+  terminalTabId: string | undefined,
+  settlement: StructuredAgentLaunchSettlement
+): Promise<StructuredAgentLaunchSettlement> {
   const state = useAppStore.getState()
   let current = source()
   let replacement = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
-    (candidate) => candidate.id === completed.tabId
+    (candidate) => candidate.id === terminalTabId
   )
   const ownsFailure = () =>
     launchState &&
@@ -171,7 +180,7 @@ export async function openTerminalForDeclinedChat(
   const placed = useAppStore.getState()
   current = source()
   replacement = (placed.unifiedTabsByWorktree[worktreeId] ?? []).find(
-    (candidate) => candidate.id === completed.tabId && candidate.entityId === replacementEntityId
+    (candidate) => candidate.id === terminalTabId && candidate.entityId === replacementEntityId
   )
   const group = (placed.groupsByWorktree[worktreeId] ?? []).find((g) => g.id === current?.groupId)
   if (
@@ -183,7 +192,7 @@ export async function openTerminalForDeclinedChat(
     !group.tabOrder.includes(current.id) ||
     group.tabOrder.indexOf(replacement.id) !== group.tabOrder.indexOf(current.id) + 1 ||
     typed ||
-    userTyped()
+    nativeChatComposerHasUserContent(scopeKey)
   ) {
     notifyHostDeclined(args.plan.agent, false)
     return settlement

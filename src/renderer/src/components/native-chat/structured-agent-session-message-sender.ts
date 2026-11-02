@@ -105,12 +105,8 @@ export type StructuredAgentSessionReservedSend = {
   legacy: () => void
   /** Sends it once the chat exists; null when the reservation was released or dropped meanwhile. */
   send: (target: RuntimeClientTarget) => StructuredAgentSessionSent | null
-  /** The same message, owned by create instead of a later send request; a create waiting on
-   *  required setup passes its own budget in place of what remains of the send's. */
-  create: (
-    target: RuntimeClientTarget,
-    budgetMs?: number
-  ) => StructuredAgentSessionCreateSend | null
+  /** The same message, owned by create instead of a later send request. */
+  create: (target: RuntimeClientTarget) => StructuredAgentSessionCreateSend | null
   release: () => void
 }
 
@@ -160,15 +156,14 @@ export function reserveStructuredAgentSessionSend(
       }
       return sending
     },
-    create: (target, budgetMs) => {
+    create: (target) => {
       const current = held()
       if (!current) {
         return null
       }
       sent = true
       clearTimeout(deadline)
-      const remaining =
-        budgetMs ?? STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS - (Date.now() - current.queuedAt)
+      const remaining = STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS - (Date.now() - current.queuedAt)
       if (remaining <= 0) {
         handBack(current, ['unreachable', ...agentSessionWriteNotDoneParts('composer-send')])
         settleReservation('returned')

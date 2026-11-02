@@ -159,7 +159,6 @@ export type AdoptProvisionedRootArgs = CreateWorktreeArgs & {
 }
 
 export type CreateWorktreeResult = {
-  chatAwaitsSetup?: true
   /** The catalog this create produced; additive, older hosts omit it. */
   catalogVersion?: WorktreeCatalogVersion
   worktree: Worktree & {

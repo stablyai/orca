@@ -19,15 +19,6 @@ export type RuntimeLongPollClass = 'ask' | 'browser-host' | 'wait'
 // One long-poll classifier owns admission, abort and keepalive (design §3.1).
 export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollClass | null {
   // Worker readiness plus prompt verification can take 90–110s; keep Unix and Windows pipe connections alive.
-  if (
-    request.method === 'agentSession.create' &&
-    typeof request.params === 'object' &&
-    request.params !== null &&
-    'afterWorktreeSetup' in request.params &&
-    request.params.afterWorktreeSetup === true
-  ) {
-    return 'wait'
-  }
   if (request.method === 'orchestration.workerStart') {
     return 'wait'
   }

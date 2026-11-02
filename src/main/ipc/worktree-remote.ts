@@ -1793,9 +1793,6 @@ async function performLocalWorktreeCreate(
         ? { lineage: worktreeLineage, parentWorktreeId: worktreeLineage.parentWorktreeId }
         : {})
     },
-    ...(args.promisedAgentChat && setupRun?.waitsForAgent
-      ? { chatAwaitsSetup: true as const }
-      : {}),
     ...(worktreeLineage ? { lineage: worktreeLineage } : {}),
     ...(workspaceLineage ? { workspaceLineage } : {}),
     ...(provisionedByHost

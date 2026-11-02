@@ -10,6 +10,8 @@ import { updateNativeChatComposerDraft } from '@/components/native-chat/native-c
 import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { executeWorktreeCreation } from '@/lib/worktree-creation-flow-execute'
+import { retryWorktreeChatHandoff } from '@/lib/worktree-creation-structured-session'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import {
   getInitialWorktreeCreationPhase,
   getWorktreeCreationIndeterminate
@@ -151,17 +153,34 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
   if (!entry) {
     return
   }
+  // A workspace whose chat handoff alone failed retries that handoff, into the same host launch;
+  // nothing is created twice.
+  const created =
+    entry.hostLaunch && entry.worktreeId
+      ? findWorktreeById(store.worktreesByRepo, entry.worktreeId)
+      : undefined
   store.updatePendingWorktreeCreation(creationId, {
     status: 'creating',
-    startedAt: Date.now(),
-    phase: getInitialWorktreeCreationPhase(entry.request),
     error: undefined,
-    provisioningLog: undefined,
-    checkoutProgress: undefined,
-    worktreeId: undefined
+    ...(created
+      ? {}
+      : {
+          startedAt: Date.now(),
+          phase: getInitialWorktreeCreationPhase(entry.request),
+          provisioningLog: undefined,
+          checkoutProgress: undefined,
+          worktreeId: undefined,
+          hostLaunch: undefined
+        })
   })
   store.setActivePendingWorktreeCreation(creationId)
   store.setActiveView('terminal')
   store.setSidebarOpen(true)
+  if (created) {
+    retryWorktreeChatHandoff(creationId, created.id).catch((error: unknown) => {
+      console.error('worktree create: chat handoff retry failed', creationId, error)
+    })
+    return
+  }
   startWorktreeCreation(creationId, entry.request)
 }

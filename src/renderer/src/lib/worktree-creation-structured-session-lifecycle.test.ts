@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { executeWorktreeCreation } from './worktree-creation-flow-execute'
+import { retryBackgroundWorktreeCreation } from './worktree-creation-flow'
 import {
   makeCreatedAgentWorktree,
   seedEmptyActivatableWorktree
@@ -12,6 +13,7 @@ import type { WorktreeCreationRequest } from './pending-worktree-creation'
 import type { StructuredLaunchAdmission } from './agent-session/launch/structured-agent-session-host-admission'
 import type * as admissionModule from './agent-session/launch/structured-agent-session-host-admission'
 import type * as launchModule from './agent-session/launch/structured-agent-session-launch-create-call'
+import type * as clientModule from '@/runtime/structured-agent-session-client'
 import {
   getStructuredLaunchStateBySessionId,
   resetStructuredAgentLaunchRegistryForTests
@@ -33,8 +35,23 @@ import { hasStagedStructuredLaunchPrompt } from './agent-session/launch/structur
 
 const mocks = vi.hoisted(() => ({
   admission: vi.fn<typeof admissionModule.admitStructuredLaunchOnHost>(),
-  createSession: vi.fn<typeof launchModule.launchStructuredAgentSession>()
+  createSession: vi.fn<typeof launchModule.launchStructuredAgentSession>(),
+  // Whether this machine's host accepts a new workspace's launch and owns its Setup wait.
+  hostAccepts: false,
+  hostLaunch: vi.fn((_method: string, _params: unknown): Promise<unknown> => new Promise(() => {}))
 }))
+vi.mock('@/runtime/structured-agent-session-client', async (original) => {
+  const client = await original<typeof clientModule>()
+  return {
+    ...client,
+    structuredAgentSessionHostSupports: (
+      ...args: Parameters<typeof client.structuredAgentSessionHostSupports>
+    ) =>
+      args[1] === 'agent.launch.accept.v1'
+        ? Promise.resolve(mocks.hostAccepts)
+        : client.structuredAgentSessionHostSupports(...args)
+  }
+})
 vi.mock('./agent-session/launch/structured-agent-session-host-admission', async (original) => ({
   ...(await original<typeof admissionModule>()),
   admitStructuredLaunchOnHost: mocks.admission
@@ -43,11 +60,18 @@ vi.mock('./agent-session/launch/structured-agent-session-launch-create-call', as
   ...(await original<typeof launchModule>()),
   launchStructuredAgentSession: mocks.createSession
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
-  (
+vi.mock('@/runtime/runtime-rpc-client', async (original) => {
+  const client = (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
-)
+  return {
+    ...client,
+    callRuntimeRpc: (...args: Parameters<typeof client.callRuntimeRpc>) =>
+      args[1].startsWith('agent.launch')
+        ? mocks.hostLaunch(args[1], args[2])
+        : client.callRuntimeRpc(...args)
+  }
+})
 vi.mock('@/runtime/runtime-layout-client', async (original) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -92,6 +116,10 @@ beforeEach(async () => {
   })
   mocks.admission.mockResolvedValue({ kind: 'admitted' })
   mocks.createSession.mockReturnValue(new Promise(() => {}))
+  mocks.hostAccepts = false
+  mocks.hostLaunch.mockImplementation(async (method) =>
+    method === 'agent.launchAccept' ? { state: 'running' } : new Promise(() => {})
+  )
   main = await drawTabsFromMain(useAppStore)
 })
 
@@ -236,4 +264,93 @@ describe('creation chat handoff', () => {
     expect(useAppStore.getState().unifiedTabsByWorktree[worktree.id] ?? []).toEqual([])
     expect(mocks.createSession).not.toHaveBeenCalled()
   })
+
+  const accepted = (): Record<string, unknown>[] =>
+    mocks.hostLaunch.mock.calls
+      .filter(([method]) => method === 'agent.launchAccept')
+      .map(([, params]) => params as Record<string, unknown>)
+
+  it.each([
+    ['an older host keeps its own chat create', false],
+    ['a host that owns Setup is handed the launch instead', true]
+  ])('%s', async (_case, hostAccepts) => {
+    mocks.hostAccepts = hostAccepts
+
+    await executeWorktreeCreation('creation-1', request)
+    await main.settle()
+
+    await vi.waitFor(() =>
+      expect(hostAccepts ? accepted() : mocks.createSession.mock.calls).toHaveLength(1)
+    )
+    expect(mocks.createSession).toHaveBeenCalledTimes(hostAccepts ? 0 : 1)
+    expect(accepted()).toHaveLength(hostAccepts ? 1 : 0)
+    // Only an older host is asked before Setup whether it runs the chat.
+    expect(mocks.admission).toHaveBeenCalledTimes(hostAccepts ? 0 : 1)
+    const chat = useAppStore.getState().getActiveTab(worktree.id)
+    expect(chat?.contentType).toBe('agent-session')
+    if (hostAccepts) {
+      expect(accepted()[0]).toMatchObject({
+        sessionId: chat?.entityId,
+        prompt: { text: 'Fix the flaky test', delivery: 'submit' },
+        presentation: 'focused'
+      })
+    } else {
+      expect(mocks.createSession.mock.calls[0]![0].hostLaunch).toBeUndefined()
+    }
+    expect(useAppStore.getState().pendingWorktreeCreations['creation-1']).toBeUndefined()
+  })
+
+  it.skipIf(!ORCA_LAYOUT_OWNER_IS_MAIN)(
+    "keeps a host launch's input when the layout refuses its chat, and Retry adopts that launch",
+    async () => {
+      mocks.hostAccepts = true
+      const text = 'Recover this first message'
+      const emptyRequest = { ...request, quickPrompt: '' }
+      const scope = pendingCreationChatDraftScopeKey('creation-1')
+      useAppStore.getState().updatePendingWorktreeCreation('creation-1', {
+        request: emptyRequest,
+        heldChatMessage: text
+      })
+      updateNativeChatComposerDraft(scope, { text: 'Unsent follow-up', images: [] }, 'immediate')
+      const createWorktree = vi.fn().mockResolvedValue({ worktree })
+      useAppStore.setState({ createWorktree })
+      layoutApplyTestTransport.answerWith((command) =>
+        command.type === 'openAgentSessionTab' ? { ok: false, code: 'tab_exists' } : 'apply'
+      )
+
+      await executeWorktreeCreation('creation-1', emptyRequest)
+      await main.settle()
+      const refused = useAppStore.getState().pendingWorktreeCreations['creation-1']
+      expect(refused).toMatchObject({
+        status: 'error',
+        heldChatMessage: text,
+        chatInputHandedOff: false,
+        worktreeId: worktree.id
+      })
+      expect(readNativeChatComposerDraft(scope).text).toBe('Unsent follow-up')
+      expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toEqual([])
+      const hostLaunch = refused?.hostLaunch
+      expect(hostLaunch).toBeDefined()
+
+      layoutApplyTestTransport.answerWith('apply')
+      retryBackgroundWorktreeCreation('creation-1')
+      await vi.waitFor(() =>
+        expect(useAppStore.getState().pendingWorktreeCreations['creation-1']).toBeUndefined()
+      )
+      await vi.waitFor(() => expect(accepted().length).toBeGreaterThan(0))
+      expect(createWorktree).toHaveBeenCalledOnce()
+      expect(mocks.createSession).not.toHaveBeenCalled()
+      for (const params of accepted()) {
+        expect(params).toMatchObject({
+          operationId: hostLaunch?.operationId,
+          sessionId: hostLaunch?.sessionId,
+          prompt: { text, delivery: 'submit' }
+        })
+      }
+      expect(useAppStore.getState().getActiveTab(worktree.id)?.entityId).toBe(hostLaunch?.sessionId)
+      expect(
+        readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(hostLaunch!.sessionId)).text
+      ).toBe('Unsent follow-up')
+    }
+  )
 })
