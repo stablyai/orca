@@ -123,7 +123,6 @@ function mountSection(area: 'staged' | 'unstaged') {
     isBranchMode: false,
     sideBySide: true,
     isDark: true,
-    settings: null,
     sectionHeight: undefined,
     loadSection: vi.fn(),
     retrySection: vi.fn(),
