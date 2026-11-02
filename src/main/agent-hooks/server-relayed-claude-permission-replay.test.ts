@@ -278,6 +278,73 @@ describe('a relayed request bound to its single in-flight call (recorded decline
     expect(row(pair.desktop).state).toBe('working')
   })
 
+  it('clears on reconnect right after the batch, with no later tool activity', async () => {
+    const pair = await startDeclinePair()
+    for (const raw of decline.slice(0, declineBatch)) {
+      await pair.post(raw)
+    }
+    pair.connected = false
+    await pair.post(decline[declineBatch])
+    pair.connected = true
+    pair.relay.replayCachedPayloadsForPanes()
+    expect(row(pair.desktop).state).toBe('working')
+    expect(pair.forwarded.at(-1)).toMatchObject({
+      isReplay: true,
+      hookEventName: 'PostToolBatch',
+      claudeBatchSettledRequests: [{ toolUseId: 'tool_use_id-1' }]
+    })
+  })
+
+  it('replays a cached question unchanged when a batch settles something else', async () => {
+    const pair = await startDeclinePair()
+    const [start, submit] = decline
+    const root = { session_id: start.session_id, prompt_id: submit.prompt_id }
+    const question = {
+      tool_name: 'AskUserQuestion',
+      tool_input: { questions: [{ question: 'Which?' }] }
+    }
+    await pair.post(start)
+    await pair.post(submit)
+    await pair.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'Q', ...question })
+    expect(await pair.post({ ...root, hook_event_name: 'PermissionRequest', ...question })).toBe(
+      'waiting'
+    )
+    pair.connected = false
+    await pair.post({
+      ...root,
+      hook_event_name: 'PostToolBatch',
+      tool_calls: [{ tool_use_id: 'other' }]
+    })
+    pair.connected = true
+    pair.relay.replayCachedPayloadsForPanes()
+    expect(row(pair.desktop)).toMatchObject({ state: 'waiting', toolName: 'AskUserQuestion' })
+  })
+
+  it('replays a child’s settled request as the lead it displaced, not as working forever or waiting', async () => {
+    const pair = await startDeclinePair()
+    const [start, submit] = decline
+    const root = { session_id: start.session_id, prompt_id: submit.prompt_id }
+    const owner = { agent_id: 'child-a', agent_type: 'general-purpose' }
+    const tool = { tool_name: 'Read', tool_input: { file_path: '/child' } }
+    await pair.post(start)
+    await pair.post(submit)
+    await pair.post({ ...root, hook_event_name: 'SubagentStart', ...owner })
+    await pair.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'C', ...tool, ...owner })
+    expect(
+      await pair.post({ ...root, hook_event_name: 'PermissionRequest', ...tool, ...owner })
+    ).toBe('waiting')
+    pair.connected = false
+    await pair.post({
+      ...root,
+      hook_event_name: 'PostToolBatch',
+      tool_calls: [{ tool_use_id: 'C' }],
+      ...owner
+    })
+    pair.connected = true
+    pair.relay.replayCachedPayloadsForPanes()
+    expect(row(pair.desktop)).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })
+  })
+
   it('lets a restarted relay settle the held wait after the recorded Notification arrives first', async () => {
     const pair = await startDeclinePair()
     for (const raw of decline.slice(0, declineBatch - 1)) {
@@ -288,28 +355,26 @@ describe('a relayed request bound to its single in-flight call (recorded decline
     expect(await pair.post(decline[declineBatch])).toBe('working')
   })
 
-  it('settles a held call listed after the 16th entry of a live batch', async () => {
+  it('settles a held call listed at position 257 of a live batch', async () => {
     const pair = await startDeclinePair()
     const [start, submit] = decline
     const root = { session_id: start.session_id, prompt_id: submit.prompt_id }
     await pair.post(start)
     await pair.post(submit)
-    const ids = Array.from({ length: 20 }, (_, i) => `call-${i}`)
-    for (const [i, id] of ids.entries()) {
-      await pair.post({
-        ...root,
-        hook_event_name: 'PreToolUse',
-        tool_name: 'Read',
-        tool_use_id: id,
-        tool_input: { file_path: `/f${i}` }
-      })
-    }
+    const ids = Array.from({ length: 300 }, (_, i) => `call-${i}`)
+    await pair.post({
+      ...root,
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Read',
+      tool_use_id: 'call-256',
+      tool_input: { file_path: '/f256' }
+    })
     expect(
       await pair.post({
         ...root,
         hook_event_name: 'PermissionRequest',
         tool_name: 'Read',
-        tool_input: { file_path: '/f18' }
+        tool_input: { file_path: '/f256' }
       })
     ).toBe('waiting')
     // Another owner's batch naming the same id is not this request's settlement.
@@ -318,7 +383,7 @@ describe('a relayed request bound to its single in-flight call (recorded decline
         ...root,
         hook_event_name: 'PostToolBatch',
         agent_id: 'child-a',
-        tool_calls: [{ tool_use_id: 'call-18' }]
+        tool_calls: [{ tool_use_id: 'call-256' }]
       })
     ).toBe('waiting')
     expect(
@@ -350,6 +415,11 @@ describe('a relayed request bound to its single in-flight call (recorded decline
       hook_event_name: 'PostToolBatch',
       tool_calls: [{ tool_use_id: 'T' }, { tool_use_id: 'U' }]
     })
+    // Its cached request was never named, so the relay keeps it and replays it unchanged.
+    pair.connected = true
+    pair.relay.replayCachedPayloadsForPanes()
+    expect(row(pair.desktop).state).toBe('waiting')
+    pair.connected = false
     await pair.post({
       ...root,
       hook_event_name: 'PreToolUse',

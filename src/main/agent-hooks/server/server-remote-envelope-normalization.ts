@@ -4,7 +4,6 @@ import {
   normalizeGrokPromptId
 } from '../../../shared/agent-hook-listener/listener-limits'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
-import { MAX_CLAUDE_BATCH_SETTLEMENT } from '../../../shared/agent-hook-listener/claude-permission-binding'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import { readClaudeSettledRequests } from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
 
@@ -81,7 +80,11 @@ function readRemoteClaudeSettlement(
   const settled = replay ? readClaudeSettledRequests(envelope.claudeSettledRequests) : undefined
   const batch =
     replay || envelope.hookEventName?.trim() === 'PostToolBatch'
-      ? readClaudeSettledRequests(envelope.claudeBatchSettledRequests, MAX_CLAUDE_BATCH_SETTLEMENT)
+      ? // A live batch is bounded by the hook body and frame limits; a replay carries only the 16-entry history.
+        readClaudeSettledRequests(
+          envelope.claudeBatchSettledRequests,
+          replay ? undefined : Number.MAX_SAFE_INTEGER
+        )
       : undefined
   return {
     ...(settled ? { claudeSettledRequests: settled } : {}),

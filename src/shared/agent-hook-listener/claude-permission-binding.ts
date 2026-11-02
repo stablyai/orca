@@ -2,7 +2,10 @@ import { createHash } from 'node:crypto'
 import { isRecord } from '../agent-status-child-work-value-guards'
 import { isAskUserQuestionTool } from '../agent-question-answered-intent'
 import type { ParsedAgentStatusPayload } from '../agent-status-types'
-import type { ClaudeSettledRequest } from './claude-settled-permission-requests'
+import {
+  readClaudeSettledId,
+  type ClaudeSettledRequest
+} from './claude-settled-permission-requests'
 import type { HookListenerState } from './listener-state'
 import { buildClaudeCachedLeadStatusPayload } from './providers/claude-lifecycle-events'
 import { setClaudeMainAgentTurnState } from './providers/claude-roster-state'
@@ -14,25 +17,24 @@ export type ClaudeInFlightCalls = {
   session?: string
   /** Only owners with an admitted unsettled call; an owner's map goes with its last call. */
   owners: Map<string, Map<string, string>>
+  /** Admitted calls of named (non-root) owners; the root has its own budget so they cannot starve it. */
   size: number
-  /** Owners with a call not recorded; their requests stay unbound until an end that covers them. */
+  /** Owners with a call not recorded; their requests stay unbound until an end that covers them. Root is exact. */
   lossy: Set<string>
-  /** A loss that no owner record could hold: every request stays unbound until the session/run/pane ends. */
-  degraded: boolean
+  /** A named owner's loss that the bounded loss set could not hold: named owners stay unbound until the session/run/pane ends. */
+  namedOwnersDegraded: boolean
   /** The pane's latest ordinary request, when it is bound. */
   bound?: { owner: string; toolUseId: string }
 }
 
 // Why bounds: a call can lose its settlement (crash, dropped hook), and hook-agent owners never report an end.
 const MAX_IN_FLIGHT_CALLS = 256
-const MAX_LOSSY_OWNERS = 64
-// Why a separate live bound: a batch must reach the receiver whole; 16 is only the reconnect history.
-export const MAX_CLAUDE_BATCH_SETTLEMENT = 256
+const MAX_LOSSY_NAMED_OWNERS = 64
 
 export type ClaudePermissionBinding = {
   /** The hook with the provider's missing tool_use_id filled from the one in-flight call it can be. */
   hookPayload?: Record<string, unknown>
-  /** Every call this batch settled, owner-scoped; the receiver decides whether it ends a held request. */
+  /** Every valid call id this batch settled (the owner is the batch's); the receiver decides what it ends. */
   settled?: ClaudeSettledRequest[]
   /** The batch's row, built only once the provider normalizer produced none of its own. */
   settlementPayload?: () => ParsedAgentStatusPayload | null
@@ -56,7 +58,7 @@ function digest(toolName: string | undefined, input: unknown): string | undefine
 }
 
 function retireOwner(table: ClaudeInFlightCalls, owner: string): void {
-  table.size -= table.owners.get(owner)?.size ?? 0
+  table.size -= owner ? (table.owners.get(owner)?.size ?? 0) : 0
   table.owners.delete(owner)
   table.lossy.delete(owner)
   if (table.bound?.owner === owner) {
@@ -95,18 +97,24 @@ export function retireClaudeInFlightOwnersMatching(
   }
 }
 
+/** Loss is the owner's own: the root's is exact, and a named owner past the bounded set degrades named owners only. */
 function recordLoss(table: ClaudeInFlightCalls, owner: string): void {
-  if (table.lossy.has(owner) || table.lossy.size < MAX_LOSSY_OWNERS) {
+  const named = table.lossy.size - (table.lossy.has('') ? 1 : 0)
+  if (!owner || table.lossy.has(owner) || named < MAX_LOSSY_NAMED_OWNERS) {
     table.lossy.add(owner)
   } else {
-    table.degraded = true
+    table.namedOwnersDegraded = true
   }
+}
+
+function canBind(table: ClaudeInFlightCalls, owner: string): boolean {
+  return !table.lossy.has(owner) && !(owner && table.namedOwnersDegraded)
 }
 
 function settle(table: ClaudeInFlightCalls, owner: string, toolUseId: string): boolean {
   const calls = table.owners.get(owner)
   if (calls?.delete(toolUseId)) {
-    table.size -= 1
+    table.size -= owner ? 1 : 0
     if (!calls.size) {
       table.owners.delete(owner)
     }
@@ -137,7 +145,13 @@ export function observeClaudePermissionBinding(
         event === 'SessionEnd' ||
         (session !== undefined && table.session !== undefined && session !== table.session)))
   ) {
-    table = { launchToken, owners: new Map(), size: 0, lossy: new Set(), degraded: false }
+    table = {
+      launchToken,
+      owners: new Map(),
+      size: 0,
+      lossy: new Set(),
+      namedOwnersDegraded: false
+    }
     state.claudeInFlightByPaneKey.set(paneKey, table)
   }
   if (owner === '' && session) {
@@ -155,15 +169,15 @@ export function observeClaudePermissionBinding(
   if (event === 'PreToolUse' && toolUseId) {
     const key = digest(toolName, raw.tool_input)
     const calls = table.owners.get(owner)
-    if (calls?.has(toolUseId) || table.degraded || table.lossy.has(owner)) {
+    if (calls?.has(toolUseId) || !canBind(table, owner)) {
       return {}
     }
-    if (!key || table.size >= MAX_IN_FLIGHT_CALLS) {
+    if (!key || (owner ? table.size : (calls?.size ?? 0)) >= MAX_IN_FLIGHT_CALLS) {
       recordLoss(table, owner)
       return {}
     }
     table.owners.set(owner, (calls ?? new Map<string, string>()).set(toolUseId, key))
-    table.size += 1
+    table.size += owner ? 1 : 0
     return {}
   }
   if ((event === 'PostToolUse' || event === 'PostToolUseFailure') && toolUseId) {
@@ -172,17 +186,12 @@ export function observeClaudePermissionBinding(
   }
   if (event === 'PostToolBatch') {
     const ids = (Array.isArray(raw.tool_calls) ? raw.tool_calls : []).flatMap((call: unknown) => {
-      const id = isRecord(call) ? readString(call, 'tool_use_id') : undefined
+      const id = isRecord(call) ? readClaudeSettledId(call.tool_use_id) : undefined
       return id ? [id] : []
     })
     const released = ids.filter((id) => settle(table, owner, id)).length > 0
-    const agentType = readString(raw, 'agent_type')
     // Whether the receiver still holds one of these is its decision; this host's table cannot know.
-    const settled = ids.slice(0, MAX_CLAUDE_BATCH_SETTLEMENT).map((id) => ({
-      toolUseId: id,
-      ...(owner ? { toolAgentId: owner } : {}),
-      ...(agentType ? { toolAgentType: agentType } : {})
-    }))
+    const settled = ids.map((toolUseId) => ({ toolUseId }))
     return settled.length
       ? {
           settled,
@@ -193,7 +202,7 @@ export function observeClaudePermissionBinding(
   if (event === 'PermissionRequest' && !isAskUserQuestionTool(toolName)) {
     const key = toolUseId ? undefined : digest(toolName, raw.tool_input)
     const candidates =
-      key && !table.degraded && !table.lossy.has(owner)
+      key && canBind(table, owner)
         ? [...(table.owners.get(owner) ?? [])].filter(([, input]) => input === key)
         : []
     // E+: exactly one equal in-flight call names the request; zero or several keep main's unbound path.

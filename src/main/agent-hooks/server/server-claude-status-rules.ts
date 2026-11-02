@@ -79,17 +79,22 @@ function endsBoundClaudePermission(
   if (!toolUseId) {
     return false
   }
-  // A replay carries the relay's recent batch settlements beside whatever row it restates.
-  const batch =
-    next.isReplay === true
-      ? isSameClaudeReplayRun(previous, next)
-        ? next.claudeBatchSettledRequests
-        : undefined
-      : next.hookEventName === 'PostToolBatch' && previous.connectionId === next.connectionId
-        ? next.claudeBatchSettledRequests
-        : undefined
-  if (batch?.some((request) => request.toolUseId === toolUseId && request.toolAgentId === owner)) {
-    return true
+  // A live batch lists its own calls; a replay carries the relay's recent batch settlements, each with its owner.
+  if (next.isReplay === true) {
+    if (
+      isSameClaudeReplayRun(previous, next) &&
+      next.claudeBatchSettledRequests?.some(
+        (request) => request.toolUseId === toolUseId && request.toolAgentId === owner
+      )
+    ) {
+      return true
+    }
+  } else if (next.hookEventName === 'PostToolBatch') {
+    return (
+      previous.connectionId === next.connectionId &&
+      owner === (next.toolAgentId?.trim() || undefined) &&
+      next.claudeBatchSettledRequests?.some((request) => request.toolUseId === toolUseId) === true
+    )
   }
   return (
     previous.connectionId === next.connectionId &&

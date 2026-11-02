@@ -104,24 +104,24 @@ describe('Claude permission binding', () => {
     h.ask(read(2), child)
     expect(h.batch(['C'], child)).toMatchObject({
       toolAgentId: child.agent_id,
-      claudeBatchSettledRequests: [
-        { toolUseId: 'C', toolAgentId: child.agent_id, toolAgentType: child.agent_type }
-      ],
+      claudeBatchSettledRequests: [{ toolUseId: 'C' }],
       payload: { state: 'working' }
     })
 
-    // A restarted host after an unrelated hook still forwards every call, the 20th included.
+    // A restarted host after an unrelated hook still forwards every valid call, position 257 included.
     const restarted = harness({ cold: true })
     restarted.send('Notification', { notification_type: 'permission_prompt' })
-    const ids = Array.from({ length: 20 }, (_, i) => `call-${i}`)
+    const ids = Array.from({ length: 300 }, (_, i) => `call-${i}`)
     expect(restarted.batch(ids)).toMatchObject({
       payload: { state: 'working' },
       claudeBatchSettledRequests: ids.map((toolUseId) => ({ toolUseId }))
     })
   })
 
-  it('keeps retained records and retirement work independent of completed history (N vs 10N), linear in current work, and bounded when saturated', () => {
-    // Test-side counters only: every element production code reads from these maps, sets and arrays.
+  it('keeps retained records and retirement work independent of completed history (N vs 10N) and linear in current and ended work', () => {
+    // Test-side counters only: elements production code reads from the owner map, each owner's call map,
+    // the loss set, the roster and the raw inventory array. Parsed task objects and the existing roster
+    // fold's own comparisons are not proxied, so this is a lower bound on that fold, not an exhaustive count.
     const visits = { count: 0 }
     const counted = <T extends object>(target: T): T =>
       new Proxy(target, {
@@ -158,6 +158,9 @@ describe('Claude permission binding', () => {
       if (!table) {
         throw new Error('no in-flight table')
       }
+      for (const [owner, calls] of table.owners) {
+        table.owners.set(owner, counted(calls))
+      }
       table.owners = counted(table.owners)
       table.lossy = counted(table.lossy)
       const roster = h.state.claudeSubagentRosterByPaneKey.get(pane)
@@ -166,6 +169,7 @@ describe('Claude permission binding', () => {
       }
       visits.count = 0
     }
+    // N current children with live calls; the complete inventory keeps the even ones and ends the rest.
     const liveWork = (h: ReturnType<typeof harness>, children: number) => {
       const ids = Array.from({ length: children }, (_, i) => `child-${i}`)
       for (const id of ids) {
@@ -176,8 +180,11 @@ describe('Claude permission binding', () => {
       h.pre('root-call', read(0))
       h.ask(read(0))
       h.batch(['root-call'])
-      const tasks = ids.map((id) => ({ id, type: 'subagent', status: 'running' }))
+      const surviving = ids.filter((_, i) => i % 2 === 0)
+      const tasks = surviving.map((id) => ({ id, type: 'subagent', status: 'running' }))
       h.send('Stop', { background_tasks: counted(tasks) })
+      const owners = [...(h.inFlight()?.owners.keys() ?? [])].sort()
+      expect(owners).toEqual([...surviving].sort())
       return visits.count
     }
 
@@ -192,41 +199,45 @@ describe('Claude permission binding', () => {
       h.send('Stop', { background_tasks: [] })
       h.send('UserPromptSubmit', { prompt: 'Again' })
       const retained = { owners: h.inFlight()?.owners.size, lossy: h.inFlight()?.lossy.size }
-      return { retained, visits: liveWork(h, 3) }
+      return { retained, visits: liveWork(h, 4) }
     })
-    expect(afterHistory[0]).toEqual({
-      retained: { owners: 0, lossy: 0 },
-      visits: afterHistory[0].visits
-    })
+    expect(afterHistory[0].retained).toEqual({ owners: 0, lossy: 0 })
     expect(afterHistory[1]).toEqual(afterHistory[0])
 
-    // Current roster and inventory: work grows with them, not faster.
-    const [small, large] = [5, 50].map((children) => liveWork(harness(), children))
+    // Ended and surviving children both grow tenfold; a retirement that rescanned every owner per ended
+    // child would grow about a hundredfold here.
+    const [small, large] = [10, 100].map((children) => liveWork(harness(), children))
     expect(large).toBeGreaterThan(small)
-    expect(large).toBeLessThanOrEqual(10 * small)
+    expect(large).toBeLessThanOrEqual(10 * small + 20)
+  })
 
-    // Saturated: many distinct owners that cannot be admitted leave bounded records and a lasting fallback.
+  it('keeps loss with its owner: named overflow never unbinds a fully observed root, and leaves bounded records', () => {
     const h = harness()
     for (let call = 0; call < 256; call++) {
-      h.pre(`root-${call}`, read(1000 + call))
+      h.pre(`helper-${call}`, read(1000 + call), { agent_id: `hook-agent-a${call}` })
     }
     for (let owner = 0; owner < 500; owner++) {
-      h.pre(`lost-${owner}`, read(owner), { agent_id: `hook-agent-${owner}` })
+      h.pre(`lost-${owner}`, read(owner), { agent_id: `hook-agent-b${owner}` })
     }
     expect({
       owners: h.inFlight()?.owners.size,
       lossy: h.inFlight()?.lossy.size,
-      degraded: h.inFlight()?.degraded
-    }).toEqual({ owners: 1, lossy: 64, degraded: true })
+      namedOwnersDegraded: h.inFlight()?.namedOwnersDegraded
+    }).toEqual({ owners: 256, lossy: 64, namedOwnersDegraded: true })
+    // The root lost nothing, so its own whole-input evidence still names T.
+    h.pre('T', read(0))
+    h.pre('U', read(100))
+    expect(h.ask(read(0))?.toolUseId).toBe('T')
+    // A named owner after the overflow cannot be shown complete, so it takes main's unbound path.
+    h.pre('C', read(5), child)
+    expect(h.ask(read(5), child)?.toolUseId).toBeUndefined()
+    // Only a covering end restores named binding: a root turn end does not, a session replacement does.
     h.send('Stop')
     h.send('UserPromptSubmit', { prompt: 'Again' })
-    h.pre('fresh', read(0))
-    // A root turn end does not cover the lost hook-agent calls, so binding stays off until the session ends.
-    expect(h.ask(read(0))?.toolUseId).toBeUndefined()
+    expect(h.inFlight()?.namedOwnersDegraded).toBe(true)
     h.send('SessionStart', { source: 'clear' })
-    h.send('UserPromptSubmit', { prompt: 'Cleared' })
-    h.pre('after-clear', read(0))
-    expect(h.ask(read(0))?.toolUseId).toBe('after-clear')
+    h.pre('C2', read(6), child)
+    expect(h.ask(read(6), child)?.toolUseId).toBe('C2')
   })
 
   it('preserves the recorded Codex decline Interrupt and next-turn approval contract', () => {

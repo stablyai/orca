@@ -697,18 +697,71 @@ describe('Claude requests bound to their single in-flight call', () => {
     })
   })
 
-  it('settles a held call listed after the 16th entry of a batch', async () => {
+  it('settles a held call listed at position 257 of a batch', async () => {
     await withClaudePane(async (post) => {
       await post(start)
       await post(submit)
-      const ids = Array.from({ length: 20 }, (_, i) => `call-${i}`)
-      for (const [i, id] of ids.entries()) {
-        await post(pre(id, { tool_name: 'Read', tool_input: { file_path: `/f${i}` } }))
-      }
-      expect(await post(ask({ tool_name: 'Read', tool_input: { file_path: '/f18' } }))).toBe(
+      const ids = Array.from({ length: 300 }, (_, i) => `call-${i}`)
+      // Only the held call is in flight; the batch also lists 299 others, as after a restart.
+      await post(pre('call-256', { tool_name: 'Read', tool_input: { file_path: '/f256' } }))
+      expect(await post(ask({ tool_name: 'Read', tool_input: { file_path: '/f256' } }))).toBe(
         'waiting'
       )
       expect(await post(batch(ids))).toBe('working')
+    })
+  })
+
+  it('keeps a fully observed root request waiting at a sibling’s completion after named owners overflow, as main does', async () => {
+    await withClaudePane(async (post) => {
+      const helper = (i: string) => ({ agent_id: `hook-agent-${i}` })
+      const file = (path: string) => ({ tool_name: 'Read', tool_input: { file_path: path } })
+      await post(start)
+      await post(submit)
+      // 256 helper calls stay in flight; 64 more helper owners cannot be recorded.
+      for (let i = 0; i < 256; i++) {
+        await post(pre(`a${i}`, file(`/a${i}`), helper(`a${i}`)))
+      }
+      for (let i = 0; i < 64; i++) {
+        await post(pre(`b${i}`, file(`/b${i}`), helper(`b${i}`)))
+      }
+      await post(done('a0', file('/a0'), helper('a0')))
+      // An earlier root request, declined and settled by its batch (main keeps showing it).
+      await post(pre('A', file('/a')))
+      expect(await post(ask(file('/a')))).toBe('waiting')
+      expect(await post(batch(['A']))).toBe('working')
+      await post(pre('Z', file('/z')))
+      // A 65th unrecordable helper owner overflows the bounded loss records.
+      await post(pre('b64', file('/b64'), helper('b64')))
+      await post(done('Z', file('/z')))
+      for (let i = 1; i < 256; i++) {
+        await post(done(`a${i}`, file(`/a${i}`), helper(`a${i}`)))
+      }
+      await post(pre('T', readAt(0)))
+      await post(pre('U', readAt(100)))
+      expect(await post(ask(readAt(0)))).toBe('waiting')
+      // T's prompt is open; U's completion must not clear it (main: waiting too).
+      expect(await post(done('U', readAt(100)))).toBe('waiting')
+      expect(await post(batch(['T', 'U']))).toBe('working')
+    })
+  })
+
+  it('takes main’s path for a named owner after the overflow, clearing at the same sibling completion main does', async () => {
+    await withClaudePane(async (post) => {
+      const helper = (i: number) => ({ agent_id: `hook-agent-${i}` })
+      await post(start)
+      await post(submit)
+      for (let i = 0; i < 256; i++) {
+        await post(pre(`a${i}`, readAt(1000 + i), helper(i)))
+      }
+      for (let i = 256; i < 321; i++) {
+        await post(pre(`b${i}`, readAt(1000 + i), helper(i)))
+      }
+      await post(hook('SubagentStart', child))
+      await post(pre('T', readAt(0), child))
+      await post(pre('U', readAt(100), child))
+      expect(await post(ask(readAt(0), child))).toBe('waiting')
+      // Unbound child request with an equal-preview sibling: main's same-agent preview release fires here too.
+      expect(await post(done('U', readAt(100), child))).toBe('working')
     })
   })
 

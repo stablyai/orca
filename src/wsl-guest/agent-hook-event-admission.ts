@@ -6,6 +6,7 @@ import type { HookListenerState } from '../shared/agent-hook-listener/listener-s
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../shared/agent-hook-relay'
 import {
+  isClaudeCachedRequestSettledByBatch,
   retainClaudeBatchSettledRequests,
   retainClaudeSettledRequests
 } from '../shared/agent-hook-listener/claude-settled-permission-requests'
@@ -58,8 +59,12 @@ export function applyRelayHookEvent(
   ) {
     return undefined
   }
-  if (incoming.hookEventName === 'PostToolBatch' && incoming.claudeBatchSettledRequests) {
-    // A batch settles calls without changing what the pane shows: forward it whole, never cache it as the row.
+  if (
+    incoming.hookEventName === 'PostToolBatch' &&
+    incoming.claudeBatchSettledRequests &&
+    !isClaudeCachedRequestSettledByBatch(previous, incoming)
+  ) {
+    // A batch that does not end the cached request changes nothing shown here: forward it whole, never cache it.
     const meta = host.metadata.get(incoming.paneKey)
     if (meta) {
       meta.claudeBatchSettledRequests = retainClaudeBatchSettledRequests(
