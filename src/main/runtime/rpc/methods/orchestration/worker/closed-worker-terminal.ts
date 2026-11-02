@@ -42,6 +42,8 @@ export function openClosedWorkerTerminal(
     }
     const held = await userTabHoldingSession(runtime, session)
     if (held) {
+      // An earlier uncertain resume is settled once its conversation reports.
+      uncertain.delete(resource.id)
       return { kind: 'terminal', handle: held }
     }
     const mutationId = uncertain.get(resource.id) ?? randomUUID()

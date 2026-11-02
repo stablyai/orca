@@ -132,6 +132,25 @@ describe('opening a terminal worker Orca closed', () => {
     expect(later).not.toBe(first)
   })
 
+  it('forgets an uncertain request once its conversation reports, so a later resume is a new one', async () => {
+    const { resource, resume, report } = await closedHelper()
+    const succeed = resume.getMockImplementation()!
+    resume.mockImplementationOnce(async (...args) => {
+      await succeed(...args)
+      return { ok: false, reason: 'create_failed' }
+    })
+    await expect(open(resource.terminal_handle)).rejects.toThrow()
+    report({ agentType: 'claude', providerSession: CONVERSATION })
+    expect(await open(resource.terminal_handle)).toEqual({
+      location: { kind: 'terminal', handle: 'term_reopened' }
+    })
+    vi.mocked(h.runtime.isTerminalRunningAgent).mockResolvedValue(false)
+    await open(resource.terminal_handle)
+    const [uncertainId, later] = resume.mock.calls.map(([, request]) => request.mutationId)
+    expect(resume).toHaveBeenCalledTimes(2)
+    expect(later).not.toBe(uncertainId)
+  })
+
   it('resumes again once the agent left the reopened terminal', async () => {
     const { resource, resume, report } = await closedHelper()
     await open(resource.terminal_handle)
