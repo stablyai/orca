@@ -14,8 +14,7 @@ export function publishClaudeTurnActivity(
     event.type === 'message'
       ? claudeProviderFrameActivity(claudeProviderFrameKind(event.message), event.message)
       : claudeProviderFrameActivity(event.kind, event.payload)
-  // Root work with something to show has an owner: the handed-over send, else the resumed provider.
-  if (event.type === 'message' && isRootClaudeFrame(event.message) && text) {
+  if (event.type === 'message' && event.startedSend && isRootClaudeFrame(event.message) && text) {
     turn.ensureOpen(
       event.message,
       claudeStreamTurnSource(event.message),

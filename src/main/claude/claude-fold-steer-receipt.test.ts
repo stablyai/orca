@@ -166,8 +166,7 @@ describe('Claude fold receipt for a mid-turn send (captured orders)', () => {
       turnId: first,
       state: 'completed',
       outcome: 'success',
-      // Owned from the handoff, not the echo at 2_094.
-      startedAt: T0 + FOLD_FRESH_SEND_AT.first,
+      startedAt: T0 + 2_094,
       completedAt: T0 + 23_048,
       durationMs: 22_845
     })
@@ -500,7 +499,7 @@ describe('Claude fold receipt boundaries (synthetic orders)', () => {
     expect(replayEventFor(rig.events, uuidB)).toMatchObject({ startsTurn: true })
   })
 
-  it('provider wake: an adopted replay during the live wake cycle folds into the run its handoff opened', async () => {
+  it('provider wake: an adopted replay during the live wake cycle folds into the wake turn', async () => {
     // Combine captured wake-cycle semantics (p3-background-wake) with a mid-cycle replay (p3-early-steer).
     const rig = await riggedAdapter()
     const uuidA = await rig.dispatchAt(10, 'client-a', 'first prompt')
@@ -517,8 +516,10 @@ describe('Claude fold receipt boundaries (synthetic orders)', () => {
     rig.deliver(assistantText(3_500, PROVIDER_SESSION_ID, 'provider-resumed-1', 'background done'))
     rig.deliver(userReplay(4_000, PROVIDER_SESSION_ID, uuidB, STEER_PROMPT))
 
-    // B was handed over with no run live, so the wake work that follows belongs to B's run.
-    expect([...new Set(rig.turns().map((turn) => turn.turnId))]).toEqual([uuidA, uuidB])
+    expect([...new Set(rig.turns().map((turn) => turn.turnId))]).toEqual([
+      uuidA,
+      'provider-resumed-1'
+    ])
     expect(replayEventFor(rig.events, uuidB)).not.toHaveProperty('startsTurn')
     expect(rig.settled).toHaveBeenCalledWith({
       sessionId: 'session-1',

@@ -67,7 +67,6 @@ export function rejectClaudeDispatchWaiters(
   // Release and report each waiter together to preserve host ownership.
   const report = (waiter: ClaudeDispatchWaiter): void => {
     if (waiter.clientMessageId) {
-      session.translator?.withdrawInput(waiter.clientMessageId)
       onSettledLate?.({
         clientMessageId: waiter.clientMessageId,
         state: 'rejected',
@@ -151,15 +150,6 @@ export async function dispatchClaudeTurn(
     ++session.dispatchSequence
     // Invalidate context reports requested before this send.
     session.translator?.markContextActivity()
-    // Checks passed and the queue yields next: Claude's work for this input belongs to its run now.
-    if (input.clientMessageId) {
-      session.translator?.offerInput({
-        sessionId: session.providerSessionId,
-        sentUuid,
-        clientMessageId: input.clientMessageId,
-        ...(input.requestedAt === undefined ? {} : { requestedAt: input.requestedAt })
-      })
-    }
     return waitForReplay(
       session,
       acceptsResult,
@@ -235,9 +225,6 @@ export async function dispatchClaudeTurn(
       forgetWaiter(session, waiter)
       forgetRetiredWaiter(session, waiter)
       waiter.resolve(null)
-      if (input.clientMessageId) {
-        session.translator?.withdrawInput(input.clientMessageId)
-      }
       // Proven unwritten frames are rejected; ambiguous writes remain unknown.
       return { state: 'rejected', ...claudeWriteFailureRejection(error) }
     }

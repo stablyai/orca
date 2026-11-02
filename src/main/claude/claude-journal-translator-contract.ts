@@ -9,7 +9,6 @@ import type { ClaudeContextReportPart, ClaudeContextReportTarget } from './claud
 import type { ClaudeJournalPrompts } from './structured/journal/claude-structured-journal-prompts'
 import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import type { ClaudeCommandStart } from './claude-command-turn'
-import type { ClaudeOfferedInput } from './claude-open-turn'
 
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
@@ -27,8 +26,6 @@ export type ClaudeJournalTranslatorDeps = {
   goalBackgroundWork?: () => ClaudeGoalBackgroundWork
   /** True when this acquisition's pending startup took a turnless failure result and will fail with it. */
   acceptStartupFailure?: (message: Record<string, unknown>) => boolean
-  /** Host clock for turn starts the translator stamps itself, matching frame receipt times. */
-  now?: () => number
 }
 
 export type ClaudeJournalTranslator = {
@@ -42,10 +39,6 @@ export type ClaudeJournalTranslator = {
   readonly currentTurnScope: () => AgentJournalTurnScope
   readonly commandTurnId: string | null
   beginCommand: (start: ClaudeCommandStart) => void
-  /** Called as Orca hands an input to Claude: it owns the run it starts or joins the live one. */
-  offerInput: (input: ClaudeOfferedInput) => void
-  /** Claude proved it never ran this input. */
-  withdrawInput: (clientMessageId: string) => void
   forgetCommand: (turnId: string) => void
   commandInterruptRequested: (turnId: string) => void
   /** Root work since cycle init makes the open turn eligible for folded sends. */

@@ -10,7 +10,6 @@ import {
 } from './structured/launch/claude-structured-provider-fallback'
 import { claudeTurnEndForResult } from './claude-turn-lifecycle-item'
 import { claudeFrameParentRef, isRootClaudeFrame } from './claude-turn-opening'
-import { claudeResultUserMessageUuids } from './claude-replay-turn-resolution'
 import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
 import type { ClaudeJournalTranslatorDeps } from './claude-journal-translator-contract'
 
@@ -65,8 +64,7 @@ export function journalClaudeResult(
   observedAt: number
 ): void {
   // Child results can report failures but must never settle the root turn.
-  const settlesTurn =
-    isRootClaudeFrame(message) && turn.settlesWithResult(claudeResultUserMessageUuids(message))
+  const settlesTurn = isRootClaudeFrame(message)
   const endedTurnScope = turn.turnScope
   const endedTurnIdentity = turn.identity
   const usageEvidence = turn.usageLimitEvidence

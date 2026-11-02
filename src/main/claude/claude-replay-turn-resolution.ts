@@ -170,7 +170,7 @@ function claudeReplayIsFoldReceipt(
   return replayUuid === waiter.sentUuid && session.translator?.openTurnInLiveProviderCycle === true
 }
 
-export function claudeResultUserMessageUuids(message: Record<string, unknown>): string[] {
+function claudeResultUserMessageUuids(message: Record<string, unknown>): string[] {
   const uuids = message.user_message_uuids
   return Array.isArray(uuids)
     ? uuids.filter((member): member is string => typeof member === 'string' && member.length > 0)

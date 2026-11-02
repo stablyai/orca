@@ -202,7 +202,7 @@ export function journalClaudeMessage(
   })
   if (sendEchoTurn) {
     ctx.turn.allowReopen()
-    // Handoff or earlier output opened this send's run; its echo confirms delivery into it.
+    // Output can open the send's turn before its echo confirms delivery.
     if (!clientMessageId || ctx.turn.userItemId !== agentJournalSubmissionKey(clientMessageId)) {
       ctx.turn.open(sendEchoTurn, observedAt)
     }

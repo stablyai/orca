@@ -1,15 +1,7 @@
-import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { expect, it, vi } from 'vitest'
-import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
-import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { AgentSessionPreDispatchError } from '../../native-chat/agent-session-wire/structured-agent-session-operation-settlement'
-import { AgentSessionOptionRejectedError } from '../../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { createClaudeUserMessageQueue } from '../claude-agent-sdk-user-message-queue'
-import { claudeTurnLifecycleIdentity } from '../claude-turn-lifecycle-item'
-import { dispatchClaudeTurn, rejectClaudeDispatchWaiters } from './claude-structured-dispatch'
-import { createClaudeJournalTranslator } from './journal/claude-structured-journal-translation'
+import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import { sessionFor } from './claude-structured-dispatch-test-support'
 import { USER_MESSAGE } from './claude-structured-session-test-support'
 
@@ -106,84 +98,3 @@ it.each(['exit', 'capacity'] as const)(
     expect(session.retiredDispatchWaiters).toEqual([])
   }
 )
-
-function handoffRig() {
-  const queue = createClaudeUserMessageQueue()
-  const session = sessionFor()
-  const rows = new Map<string, AgentJournalItemBody | 'tombstone'>()
-  const sink: StructuredAgentSessionEventSink = {
-    appendItem: (identity, body) => rows.set(agentJournalItemKey(identity), body),
-    appendTombstone: (identity) => rows.set(agentJournalItemKey(identity), 'tombstone'),
-    publish: () => {}
-  }
-  session.translator = createClaudeJournalTranslator({ sink })
-  session.connection.send = (message, beforeDispatch) =>
-    queue.push(message as unknown as SDKUserMessage, beforeDispatch)
-  const pump = queue.messages[Symbol.asyncIterator]()
-  const turnRow = (turnId: string) =>
-    rows.get(agentJournalItemKey(claudeTurnLifecycleIdentity('provider-session', turnId)))
-  const offer = (clientMessageId: string, beforeDispatch = async () => {}) =>
-    dispatchClaudeTurn(session, { body: USER_MESSAGE, clientMessageId }, beforeDispatch)
-  return { queue, session, pump, rows, turnRow, offer }
-}
-
-it('owns the run from the handoff and withdraws only an input Claude never ran', async () => {
-  const rig = handoffRig()
-  const refused = vi.fn()
-  const refusedOptions = rig.offer('options-refused', async () => {
-    throw new AgentSessionOptionRejectedError(new Error('model unavailable'))
-  })
-  const first = rig.offer('client-a')
-  const joined = rig.offer('client-b')
-
-  // Options refused before the handoff: nothing owns work for it.
-  await expect(rig.pump.next()).resolves.toMatchObject({ done: false })
-  await expect(refusedOptions).resolves.toMatchObject({ state: 'rejected' })
-  const opener = rig.session.dispatchWaiters[0]!.sentUuid
-  // Frames can arrive before the write resolves; the run already exists.
-  expect(rig.session.translator?.currentTurnId).toBe(opener)
-  expect(rig.turnRow(opener)).toMatchObject({ kind: 'turn', state: 'running' })
-  expect(rig.rows.size).toBe(1)
-
-  await rig.pump.next()
-  await expect(first).resolves.toMatchObject({ state: 'admitted' })
-  const follower = rig.session.dispatchWaiters[1]!.sentUuid
-  // A follow-up handed over while the run is live joins it; Claude refusing it leaves the run.
-  rejectClaudeDispatchWaiters(
-    rig.session,
-    [follower],
-    agentSessionFailureFact('cancelled'),
-    refused
-  )
-  expect(rig.session.translator?.currentTurnId).toBe(opener)
-  expect(rig.turnRow(opener)).toMatchObject({ state: 'running' })
-
-  // Claude refusing the opener before starting it retracts the unworked run: no duration, one refusal.
-  rejectClaudeDispatchWaiters(
-    rig.session,
-    [opener],
-    agentSessionFailureFact('providerRejected'),
-    refused
-  )
-  expect(rig.session.translator?.currentTurnId).toBeNull()
-  expect(rig.turnRow(opener)).toBe('tombstone')
-  expect(refused.mock.calls.map(([settlement]) => settlement)).toEqual([
-    expect.objectContaining({ clientMessageId: 'client-b', state: 'rejected', unrun: true }),
-    expect.objectContaining({ clientMessageId: 'client-a', state: 'rejected', unrun: true })
-  ])
-  rig.queue.end()
-  await rig.pump.next()
-  await expect(joined).resolves.toMatchObject({ state: 'admitted' })
-})
-
-it('keeps the run when a write may have reached Claude', async () => {
-  const rig = handoffRig()
-  const ambiguous = rig.offer('client-a')
-  await rig.pump.next()
-  const opener = rig.session.dispatchWaiters[0]!.sentUuid
-  // The SDK abandons the input stream after the frame was yielded.
-  await rig.pump.return?.()
-  await expect(ambiguous).resolves.toMatchObject({ state: 'unknown' })
-  expect(rig.session.translator?.currentTurnId).toBe(opener)
-  expect(rig.turnRow(opener)).toMatchObject({ state: 'running' })
-})

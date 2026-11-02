@@ -21,8 +21,7 @@ export function createClaudeSessionJournalTranslator(
   fallbackIdPrefix: string,
   failure: Parameters<typeof createClaudeJournalFailureHandler>[0],
   currentSession: () => ClaudeSession | null,
-  acceptStartupFailure: (message: Record<string, unknown>) => boolean,
-  now?: () => number
+  acceptStartupFailure: (message: Record<string, unknown>) => boolean
 ): ClaudeJournalTranslator | null {
   const { attempt } = failure
   return sink
@@ -44,8 +43,7 @@ export function createClaudeSessionJournalTranslator(
         onBackgroundTaskJournalFailure: createClaudeJournalFailureHandler(failure),
         bindPromptItemId: (itemId, promptKey) =>
           attempt.prompts.bindJournalItemId(itemId, promptKey),
-        acceptStartupFailure,
-        ...(now ? { now } : {})
+        acceptStartupFailure
       })
     : null
 }

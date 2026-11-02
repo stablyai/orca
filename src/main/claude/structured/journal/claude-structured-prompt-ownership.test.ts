@@ -243,15 +243,12 @@ describe('Claude live prompt ownership', () => {
 
   it('does not synthesize terminal lifecycle for ordinary Stop', async () => {
     const events: ClaudeStructuredSessionEvent[] = []
-    const claude = fakeClaude({ replayUuid: 'turn-1' })
-    const adapter = await acquired(claude, {}, events)
+    const adapter = await acquired(fakeClaude({ replayUuid: 'turn-1' }), {}, events)
     await startTurn(adapter)
-    // The run is owned from the handoff, under the uuid Orca wrote.
-    const turnId = String(claude.connections[0]!.sent[0]?.uuid)
 
-    await expect(adapter.cancelTurn({ sessionId: 'session-1', turnId, fence: 7 })).resolves.toEqual(
-      { cancelled: true }
-    )
+    await expect(
+      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
+    ).resolves.toEqual({ cancelled: true })
     expect(events.some((event) => event.type === 'prompt-cancelled')).toBe(false)
     expect(
       events.some((event) => event.type === 'message' && event.message.type === 'result')

@@ -79,10 +79,7 @@ describe('a requested stop of a structured Claude chat', () => {
       const turn = readAgentJournalTurn(item.body)
       return turn ? [turn] : []
     })
-    expect(turns.at(-1)).toMatchObject({
-      turnId: String(connection.sent[0]?.uuid),
-      state: 'interrupted'
-    })
+    expect(turns.at(-1)).toMatchObject({ turnId: 'turn-1', state: 'interrupted' })
     const ended = events.filter((event) => event.type === 'ended')
     expect(ended).toEqual([expect.objectContaining({ reason: 'claude session closed' })])
     expect(ended[0]).toMatchObject({ cause: 'requested-close' })
