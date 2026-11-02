@@ -19,6 +19,7 @@ import type {
 } from './agent-session-options-result'
 import { labelFromModelId } from '../../model-id-label'
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
+import { listingVerifiedModelIds } from './structured-agent-session-listing-verified-ids'
 import {
   decodeStructuredAgentSessionOptionValue,
   encodeStructuredAgentSessionOptionValue
@@ -95,29 +96,6 @@ export function settleStructuredAgentSessionBuiltinCatalog(
     : { ...state, catalogSource, listingInProgress }
 }
 
-function isListedModelRow(row: unknown): row is { id: string } {
-  return (
-    typeof row === 'object' &&
-    row !== null &&
-    'id' in row &&
-    typeof row.id === 'string' &&
-    'efforts' in row &&
-    Array.isArray(row.efforts)
-  )
-}
-
-/** The ids a finished listing names; undefined for one still running, failed, empty or malformed. */
-export function finishedListingIds(catalog: AgentSessionModelCatalogResult): string[] | undefined {
-  const rows: unknown = catalog.origin === 'unknown' ? null : catalog.models
-  return Array.isArray(rows) &&
-    rows.length > 0 &&
-    rows.every(isListedModelRow) &&
-    !catalog.listingInProgress &&
-    !catalog.unavailable
-    ? rows.map((row) => row.id)
-    : undefined
-}
-
 /** Install models only; no record writes or committed picks until an options result confirms them. */
 export function applyStructuredAgentSessionModelCatalog(
   state: StructuredAgentSessionOptionState,
@@ -146,10 +124,7 @@ export function applyStructuredAgentSessionModelCatalog(
   const namesDefault =
     options.newLaunch &&
     (catalog.listingNamesConfiguredModel ?? seed.hostListingNamesConfiguredModel === true)
-  // A running listing keeps what a finished one verified and its rows still show.
-  const verifiedModelIds = catalog.listingInProgress
-    ? state.verifiedModelIds?.filter((id) => models.some((model) => model.id === id))
-    : finishedListingIds(catalog)
+  const verifiedModelIds = listingVerifiedModelIds(state.verifiedModelIds, catalog, models)
   return {
     ...state,
     // Real-listing defaults are nameable but provisional, never confirmed picks.
