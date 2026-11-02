@@ -53,7 +53,8 @@ export async function savePtySpawnPaneBinding(
     await discardUnpersistedPtySpawn(state.provider, state.result, state.deps.runtime)
     if (
       err instanceof PaneOwnerContentionError ||
-      (err instanceof Error && err.message === refusal)
+      (err instanceof Error &&
+        (err.message === refusal || err.message === 'terminal_split_source_not_found'))
     ) {
       throw err
     }

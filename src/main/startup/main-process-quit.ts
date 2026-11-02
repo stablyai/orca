@@ -98,6 +98,8 @@ function installBeforeQuitHandler(): void {
     state.repoMaintenanceShutdown = awaitPackedRefsLockRelease()
     // Delay PTY cleanup until scrollback capture; exit events otherwise unmount the renderer callbacks.
     void stopClaudeAuthProxy()
+    state.stopClaudeSessionMover?.()
+    state.stopClaudeSessionMover = null
     state.rateLimits?.stop()
     // History GC is idempotent and rescheduled next launch; a vetoed quit costs only a deferred sweep.
     cancelHistoryGc()

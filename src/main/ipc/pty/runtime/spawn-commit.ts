@@ -1,3 +1,5 @@
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { runtimePaneBindRefusal } from './spawn-replacement'
 import '../spawn-outcome'
 import { provenSpawnResponse } from '../../../../shared/terminal/pty/lifecycle/terminal-spawn-response'
 import { isNativeWindowsLocalPtySpawn } from '../../../runtime/terminal-model-query-authority'
@@ -10,13 +12,14 @@ import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty
 import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/opencode-startup-prompt-owner'
 
 export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
-  return commitPtyWithOpenCodePromptIntent(ctx, () => {
+  return commitPtyWithOpenCodePromptIntent(ctx, async () => {
+    const replaced = ctx.replacedPaneOwner
     const args = ctx.args
     const startupCwdFallback = startupCwdFallbackOutcome(ctx.startupCwdFallback, ctx.result)
     // Fallback may follow an access error; only proven absence authorizes changing the saved folder.
     const correctStartupCwd = startupCwdFallback ? ctx.correctStartupCwd : undefined
     const ensure = ctx.result.agentSessionEnsure
-    return commitPtySpawn({
+    const outcome = await commitPtySpawn({
       state: ctx,
       nativeWindowsConptySpawn: isNativeWindowsLocalPtySpawn({
         connectionId: args.connectionId,
@@ -47,6 +50,20 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         ...(startupCwdFallback ? { startupCwdFallback } : {})
       }
     })
+    if (
+      outcome.kind === 'committed' &&
+      replaced &&
+      ctx.isClaudeLaunch &&
+      args.claudeAccountId !== undefined
+    ) {
+      const paneKey = replaced.pane
+        ? makePaneKey(replaced.pane.tabId, replaced.pane.leafId)
+        : 'none'
+      console.info(
+        `[claude-session-mover] replaced pty ${replaced.ptyId} with ${ctx.result.id} on account ${args.claudeAccountId} (pane ${paneKey})`
+      )
+    }
+    return outcome
   })
 }
 
@@ -77,7 +94,7 @@ function runtimeSpawnPaneBinding(
       origin: spawnCommitBindingOrigin(ctx.result, expectedSourceBinding)
     },
     absentOwner: ctx.args.paneSpawnOperation?.absentOwner,
-    refusal: 'terminal_split_source_not_found',
+    refusal: runtimePaneBindRefusal(ctx.replacedPaneOwner),
     failureLog: '[pty] failed to persist runtime PTY binding after spawn:'
   }
 }

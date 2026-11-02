@@ -10,6 +10,10 @@ type AccountsBlock = {
   }
   /** Claude only: whether the host switches accounts before a usage limit (absent from older hosts). */
   autoSwitchEnabled?: boolean
+  /** Claude only: what the host does with running sessions near a usage limit (absent from older hosts). */
+  sessionMover?: 'off' | 'ask' | 'move'
+  /** Claude only: the mover's last decision per live session. JSON carries the same records. */
+  sessionMoves?: readonly { ptyId: string; reason: string }[]
   /** Claude only: live sessions billed to each account (absent from older hosts). */
   assignedSessions?: readonly { accountId: string; count: number }[]
   /** Claude only: whether launches bill through the local auth proxy. */
@@ -59,6 +63,12 @@ export function formatAccountsBlock(label: string, block: AccountsBlock): string
   })
   if (block.autoSwitchEnabled !== undefined) {
     lines.push(`  auto-switch: ${block.autoSwitchEnabled ? 'on' : 'off'}`)
+  }
+  if (block.sessionMover !== undefined) {
+    lines.push(`  session-mover: ${block.sessionMover}`)
+  }
+  for (const move of block.sessionMoves ?? []) {
+    lines.push(`  session ${move.ptyId}: ${move.reason}`)
   }
   for (const assignment of block.paneAssignments ?? []) {
     lines.push(`  pane ${assignment.ptyId}: account ${assignment.accountId}`)

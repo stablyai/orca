@@ -98,5 +98,21 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
       'orca account auth-proxy --agent claude --on --environment build-box',
       'orca account auth-proxy --agent claude --status'
     ]
+  },
+  {
+    path: ['account', 'session-mover'],
+    summary: 'Choose whether running Claude sessions move to another account before a usage limit',
+    usage:
+      'orca account session-mover --agent claude (--off | --ask | --move) [--environment <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'agent', 'off', 'ask', 'move'],
+    notes: [
+      'Writes the host setting behind Settings › Accounts › Claude › "Move running sessions before a usage limit" (accounts.setClaudeSessionMover). Default ask.',
+      'move: a running session whose own account passes a line (5-hour 95 %, weekly or Fable-weekly 90 %) resumes between turns, in the same pane, on the account with the most room. ask: the desktop shows a notice instead; a headless server treats ask as move. off: never.',
+      'With --environment the setting is written on that paired Orca server, whose sessions it then governs. `orca account list --json` shows the last decision per live session under claude.sessionMoves.'
+    ],
+    examples: [
+      'orca account session-mover --agent claude --move',
+      'orca account session-mover --agent claude --move --environment macstudio'
+    ]
   }
 ]

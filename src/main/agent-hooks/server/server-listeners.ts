@@ -248,6 +248,12 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     return this.buildStatusChangeNotification().providerSessions
   }
 
+  /** Shell, cron, or owed-task work the child list does not show. Absent when the pane has no row. */
+  getClaudeRunningNonAgentTask(paneKey: string): boolean | undefined {
+    const running = this.state.lastStatusByPaneKey.get(paneKey)?.claudeRunningNonAgentTask
+    return typeof running === 'boolean' ? running : undefined
+  }
+
   getStatusSnapshotForPane(paneKey: string): AgentStatusIpcPayload[] {
     const legacy = this.state.lastStatusByPaneKey.get(paneKey)
     if (legacy) {
@@ -294,9 +300,16 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
         })
       }
       if (!enriched.providerSessionOnly) {
+        // Monitoring is the folded shell/cron signal; the flag covers the same work before that fold.
+        const { mainAgent, workingMode } = enriched.payload
+        const background =
+          workingMode === 'monitoring' || enriched.claudeRunningNonAgentTask === true
         statuses.push({
           paneKey,
           state: enriched.payload.state,
+          ...(mainAgent ? { mainAgentState: mainAgent.state } : {}),
+          ...(background ? { backgroundWork: true } : {}),
+          ...(enriched.turnEndedAt !== undefined ? { turnEndedAt: enriched.turnEndedAt } : {}),
           receivedAt: enriched.receivedAt,
           observedInCurrentRuntime:
             Boolean(enriched.structuredHost) || this.runtimeObservedStatusPaneKeys.has(paneKey)

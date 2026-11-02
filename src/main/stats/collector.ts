@@ -54,6 +54,20 @@ export class StatsCollector {
     return this.aggregates.totalAgentsSpawned
   }
 
+  /** A landed move counts under its strategy. A rebalance also increments `rebalances`. A failure does not count as a move. */
+  recordClaudeSessionMove(stat: {
+    strategy: 'resume' | 'proxy'
+    rebalance: boolean
+    failed: boolean
+  }): void {
+    const outcome = stat.failed ? 'failed' : stat.rebalance ? 'rebalance' : 'moved'
+    this.record({
+      type: 'claude_session_move',
+      at: Date.now(),
+      meta: { strategy: stat.strategy, outcome }
+    })
+  }
+
   /** Folds the event into aggregates; no consumer reads raw events, so they are not retained (#35544). */
   record(event: StatsEvent): void {
     this.updateAggregates(event)
@@ -163,6 +177,22 @@ export class StatsCollector {
       // onAgentStop already counts duration; do not add it twice.
       case 'agent_stop':
         break
+      case 'claude_session_move': {
+        const counts = this.aggregates.claudeSessionMoves
+        if (event.meta?.outcome === 'failed') {
+          counts.failures++
+          break
+        }
+        if (event.meta?.strategy === 'proxy') {
+          counts.proxy++
+        } else if (event.meta?.strategy === 'resume') {
+          counts.resume++
+        }
+        if (event.meta?.outcome === 'rebalance') {
+          counts.rebalances++
+        }
+        break
+      }
     }
   }
 

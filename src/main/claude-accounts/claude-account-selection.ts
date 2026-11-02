@@ -1,8 +1,12 @@
-import { claudeAuthProxyEnabled } from '../../shared/claude-account-switch-settings'
+import {
+  claudeAuthProxyEnabled,
+  type ClaudeSessionMoverSetting
+} from '../../shared/claude-account-switch-settings'
 import type {
   ClaudeManagedAccount,
   ClaudeManagedAccountSummary,
-  ClaudeRateLimitAccountsState
+  ClaudeRateLimitAccountsState,
+  ClaudeSessionMoveSummary
 } from '../../shared/managed-account-types'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { RateLimitService } from '../rate-limits/service'
@@ -37,6 +41,7 @@ export type ClaudeAccountSettings = Pick<
   | 'activeClaudeManagedAccountIdsByRuntime'
   | 'claudeAutoSwitchEnabled'
   | 'claudeAuthProxy'
+  | 'claudeSessionMover'
 >
 
 export type ClaudeAccountStore = {
@@ -67,6 +72,17 @@ export type ClaudeAccountUsage = Pick<
 >
 
 export class ClaudeAccountSelection {
+  private sessionMovesProvider: (() => ClaudeSessionMoveSummary[]) | null = null
+
+  setSessionMovesProvider(provider: (() => ClaudeSessionMoveSummary[]) | null): void {
+    this.sessionMovesProvider = provider
+  }
+
+  setSessionMover(setting: ClaudeSessionMoverSetting): ClaudeRateLimitAccountsState {
+    this.saveSettings({ claudeSessionMover: setting })
+    return this.list()
+  }
+
   constructor(
     private readonly store: ClaudeAccountStore,
     private readonly rateLimits: ClaudeAccountUsage,
@@ -112,6 +128,8 @@ export class ClaudeAccountSelection {
       autoSwitchEnabled: settings.claudeAutoSwitchEnabled === true,
       authProxy: claudeAuthProxyEnabled(settings) ? 'on' : 'off',
       ...(wslAuthProxy ? { wslAuthProxy } : {}),
+      sessionMover: settings.claudeSessionMover ?? 'ask',
+      sessionMoves: this.sessionMovesProvider?.() ?? [],
       assignedSessions,
       paneAccounts,
       ...(paneAssignments.length > 0 ? { paneAssignments } : {}),

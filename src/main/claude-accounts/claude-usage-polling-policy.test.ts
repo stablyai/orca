@@ -5,10 +5,21 @@ import {
 } from './claude-usage-polling-policy'
 
 describe('claude usage polling policy', () => {
-  it('polls only while auto-switch is on', () => {
-    expect(shouldPollClaudeUsage({ claudeAutoSwitchEnabled: false })).toBe(false)
-    expect(shouldPollClaudeUsage({ claudeAutoSwitchEnabled: true })).toBe(true)
-    expect(shouldPollClaudeUsage({})).toBe(false)
+  it('polls when auto-switch or the mover needs readings', () => {
+    expect(
+      shouldPollClaudeUsage({ claudeAutoSwitchEnabled: false, claudeSessionMover: 'off' })
+    ).toBe(false)
+    expect(
+      shouldPollClaudeUsage({ claudeAutoSwitchEnabled: true, claudeSessionMover: 'off' })
+    ).toBe(true)
+    expect(
+      shouldPollClaudeUsage({ claudeAutoSwitchEnabled: false, claudeSessionMover: 'move' })
+    ).toBe(true)
+    expect(
+      shouldPollClaudeUsage({ claudeAutoSwitchEnabled: false, claudeSessionMover: 'ask' })
+    ).toBe(true)
+    // Absent means 'ask', which on a headless host acts as 'move'.
+    expect(shouldPollClaudeUsage({})).toBe(true)
   })
 
   it('takes one viewer, releases it once, and ignores unrelated settings changes', () => {
@@ -17,24 +28,27 @@ describe('claude usage polling policy', () => {
       addUsageViewer: vi.fn(() => release),
       refreshIfStale: vi.fn(async () => undefined)
     }
-    let settings: { claudeAutoSwitchEnabled?: boolean } = { claudeAutoSwitchEnabled: false }
+    let settings: {
+      claudeAutoSwitchEnabled?: boolean
+      claudeSessionMover?: 'off' | 'ask' | 'move'
+    } = { claudeSessionMover: 'off' }
     const polling = createClaudeUsagePollingSwitch(rateLimits, () => settings)
 
     expect(polling.apply()).toBe(false)
     expect(rateLimits.addUsageViewer).not.toHaveBeenCalled()
 
-    settings = { claudeAutoSwitchEnabled: true }
-    expect(polling.apply({ claudeAutoSwitchEnabled: true })).toBe(true)
-    expect(polling.apply({ claudeAutoSwitchEnabled: true })).toBe(true)
+    settings = { claudeSessionMover: 'move' }
+    expect(polling.apply({ claudeSessionMover: 'move' })).toBe(true)
+    expect(polling.apply({ claudeSessionMover: 'move' })).toBe(true)
     expect(rateLimits.addUsageViewer).toHaveBeenCalledTimes(1)
     expect(rateLimits.refreshIfStale).toHaveBeenCalledTimes(1)
 
     expect(polling.apply({})).toBe(true)
     expect(release).not.toHaveBeenCalled()
 
-    settings = { claudeAutoSwitchEnabled: false }
-    expect(polling.apply({ claudeAutoSwitchEnabled: false })).toBe(false)
-    expect(polling.apply({ claudeAutoSwitchEnabled: false })).toBe(false)
+    settings = { claudeSessionMover: 'off', claudeAutoSwitchEnabled: false }
+    expect(polling.apply({ claudeSessionMover: 'off' })).toBe(false)
+    expect(polling.apply({ claudeSessionMover: 'off' })).toBe(false)
     expect(release).toHaveBeenCalledTimes(1)
   })
 })

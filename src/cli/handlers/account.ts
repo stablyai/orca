@@ -52,6 +52,7 @@ import {
 } from './account-selection'
 import type { AntigravityAccountState } from '../../shared/antigravity-account-types'
 import { setClaudeAutoSwitch } from './account-auto-switch'
+import { setClaudeSessionMover } from './account-session-mover'
 
 type AccountsListSnapshot = {
   opencode?: ManagedDataAccountsState
@@ -305,5 +306,6 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
     await removeAgentAccount(ctx)
   },
   'account auto-switch': setClaudeAutoSwitch,
-  'account auth-proxy': setClaudeAuthProxy
+  'account auth-proxy': setClaudeAuthProxy,
+  'account session-mover': setClaudeSessionMover
 }

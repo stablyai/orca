@@ -1,4 +1,5 @@
 import type { ClaudeAuthProxyStatus } from '../../../../shared/claude-auth-proxy-status'
+import type { ClaudeSessionMoverSetting } from '../../../../shared/claude-account-switch-settings'
 import type { ClaudeRateLimitAccountsState } from '../../../../shared/managed-account-types'
 import { claudeAuthProxyStatus as readClaudeAuthProxyStatus } from '../../../claude-accounts/claude-auth-proxy/claude-auth-proxy-host'
 import {
@@ -17,6 +18,10 @@ export class RuntimeClaudePolicyController {
 
   setAuthProxy(enabled: boolean): ClaudeRateLimitAccountsState {
     return this.claudeAccounts().setAuthProxy(enabled)
+  }
+
+  setSessionMover(setting: ClaudeSessionMoverSetting): ClaudeRateLimitAccountsState {
+    return this.claudeAccounts().setSessionMover(setting)
   }
 
   /** Live listener. Does not require the account service: the proxy is process-global. */

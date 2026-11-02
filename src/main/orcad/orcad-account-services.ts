@@ -11,6 +11,8 @@ import type {
 } from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { ClaudeStatusLineRateLimits } from '../../shared/claude-statusline-rate-limits'
 import { resolveTuiAgentLaunchEnv } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { translateMain } from '../i18n/main-i18n'
+import { dispatchClaudeRecentMoves } from '../claude-accounts/claude-session-move-mobile-notice'
 import { createProviderAccountServices } from '../providers/accounts/provider-account-services'
 import { createClaudeUsagePollingSwitch } from '../claude-accounts/claude-usage-polling-policy'
 import { createCodexRuntimeHomeLaunchPreparation } from '../codex/configuration/homes/codex-runtime-home-launch-preparation'
@@ -44,7 +46,10 @@ type OrcadAccountServices = {
   attachToRuntime: (
     runtime: Pick<
       OrcaRuntimeService,
-      'setAccountServices' | 'setCommitMessageAgentEnvironmentResolvers'
+      | 'setAccountServices'
+      | 'setCommitMessageAgentEnvironmentResolvers'
+      | 'ptyController'
+      | 'dispatchMobileNotification'
     >
   ) => void
 }
@@ -72,8 +77,22 @@ export function createOrcadAccountServices(args: {
     return null
   }
   const { store, clientCodexHomes } = args
+  let attachedRuntime: Pick<
+    OrcaRuntimeService,
+    'ptyController' | 'dispatchMobileNotification'
+  > | null = null
   const services = createProviderAccountServices(store, {
-    setClaudeStatusLineListener: args.setClaudeStatusLineListener
+    setClaudeStatusLineListener: args.setClaudeStatusLineListener,
+    sessionMover: {
+      headless: true,
+      getController: () => attachedRuntime?.ptyController ?? null,
+      onNotice: (notice) =>
+        dispatchClaudeRecentMoves(
+          attachedRuntime?.dispatchMobileNotification,
+          notice,
+          translateMain('accounts.claude.sessionMover.recentMoves', 'Recent moves')
+        )
+    }
   })
   // Headless auto-switch needs readings even without a window requesting them.
   const polling = createClaudeUsagePollingSwitch(services.rateLimits, () => store.getSettings())
@@ -85,6 +104,8 @@ export function createOrcadAccountServices(args: {
   args.registerCleanup(async () => {
     unsubscribePolling()
     await stopClaudeAuthProxy()
+    services.sessionMover?.stop()
+    attachedRuntime = null
     services.rateLimits.stop()
     args.setClaudeStatusLineListener(null)
   })
@@ -128,6 +149,7 @@ export function createOrcadAccountServices(args: {
     },
     listCodexSessionHomes: () => codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery(),
     attachToRuntime: (runtime) => {
+      attachedRuntime = runtime
       runtime.setAccountServices({
         claudeAccounts: services.claudeAccounts,
         codexAccounts: services.codexAccounts,

@@ -1,3 +1,8 @@
+import {
+  createProviderClaudeSessionMover,
+  type ProviderClaudeSessionMoverOptions,
+  type StartedClaudeSessionMover
+} from '../../provider-claude-session-mover'
 // Keep Electron imports out: both desktop and orcad bundle these account services.
 import { getClaudeAgentViewService } from '../../claude/agent-view/agent-view-service'
 import type { Store } from '../../persistence/loading-store/store'
@@ -32,6 +37,7 @@ import {
 import { resolveClaudeAccountHome } from '../../claude-accounts/claude-account-home-attribution'
 
 export type ProviderAccountServices = {
+  sessionMover: StartedClaudeSessionMover | null
   rateLimits: RateLimitService
   codexRuntimeHome: CodexRuntimeHomeService
   codexAccounts: CodexAccountService
@@ -42,6 +48,7 @@ export type ProviderAccountServices = {
 export function createProviderAccountServices(
   store: Store,
   options: {
+    sessionMover?: ProviderClaudeSessionMoverOptions
     codexAccountLifecycle?: ConstructorParameters<typeof CodexAccountService>[3]
     setClaudeStatusLineListener: (listener: (event: ClaudeStatusLineRateLimits) => void) => void
     onClaudeAutoSwitched?: (switched: ClaudeAutoSwitched) => void
@@ -193,6 +200,11 @@ export function createProviderAccountServices(
   rateLimits.setClaudeSystemDefaultCoverageResolver((accountId) =>
     claudeRuntimeAuth.router.coveredBySystemDefault(accountId)
   )
+  const sessionMover = createProviderClaudeSessionMover(
+    store,
+    { rateLimits, claudeAccounts, claudeRuntimeAuth },
+    options.sessionMover
+  )
   rateLimits.setInactiveCodexAccountsResolver(() => {
     const settings = store.getSettings()
     const activeIds = new Set(
@@ -213,5 +225,12 @@ export function createProviderAccountServices(
   })
   // Every host runs the poll timer; ticks fetch only while a window or remote reader watches.
   rateLimits.start({ fetchImmediately: false })
-  return { rateLimits, codexRuntimeHome, codexAccounts, claudeRuntimeAuth, claudeAccounts }
+  return {
+    sessionMover,
+    rateLimits,
+    codexRuntimeHome,
+    codexAccounts,
+    claudeRuntimeAuth,
+    claudeAccounts
+  }
 }

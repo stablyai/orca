@@ -137,6 +137,10 @@ export type ClaudeRateLimitAccountsState = {
    * is unreadable. Absent when this host has no WSL accounts.
    */
   wslAuthProxy?: 'on' | 'unsupported:wsl'
+  /** What this host does with a running session near a limit. Absent from older hosts; readers treat that as ask. */
+  sessionMover?: 'off' | 'ask' | 'move'
+  /** The mover's last decision per live session, newest first. */
+  sessionMoves?: ClaudeSessionMoveSummary[]
   /** Live sessions billed to each account. Absent from older hosts. */
   assignedSessions?: { accountId: string; count: number }[]
   /** Every live pane and the account it bills. */
@@ -160,6 +164,20 @@ export type ClaudePaneAccountSnapshot = {
   /** Email local-part, or `local@domain` when two accounts share a local-part. */
   label: string
   email: string
+}
+
+/** The session mover's last decision for a live Claude session. */
+export type ClaudeSessionMoveSummary = {
+  ptyId: string
+  paneKey: string | null
+  fromAccountId: string
+  toAccountId: string | null
+  window: 'session' | 'weekly' | 'fableWeekly' | null
+  percent: number | null
+  line: number | null
+  reason: string
+  at: number
+  strategy?: 'resume' | 'proxy'
 }
 
 /** Pushed when a pane's billed account changes, including when the pane is gone (`accountId` null). */

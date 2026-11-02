@@ -17,6 +17,7 @@ import { browserManager } from '../browser/browser-manager'
 import { prewarmStructuredAgentModelCatalogs } from '../runtime/agent-session/model-catalog/structured-agent-model-catalog-wiring'
 import { getRuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
 import { translateMain } from '../i18n/main-i18n'
+import { dispatchClaudeRecentMoves } from '../claude-accounts/claude-session-move-mobile-notice'
 import type {
   ClaudeAutoSwitchedEvent,
   ClaudePaneAssignedEvent
@@ -65,6 +66,54 @@ export function initializeMainProcessAccountServices(): void {
     startIndexHeal: startCodexSessionIndexHealInBackground
   })
   const services = createProviderAccountServices(store, {
+    sessionMover: {
+      headless: false,
+      getController: () => state.runtime?.ptyController ?? null,
+      onNotice: (notice) => {
+        dispatchClaudeRecentMoves(
+          state.runtime?.dispatchMobileNotification,
+          notice,
+          translateMain('accounts.claude.sessionMover.recentMoves', 'Recent moves')
+        )
+        if (notice.kind === 'skipped' || !store.getSettings().notifications.enabled) {
+          return
+        }
+        const body =
+          notice.kind === 'moved'
+            ? notice.balance
+              ? translateMain(
+                  'accounts.claude.sessionMover.rebalanceBody',
+                  '{{from}} continues on {{to}} to balance your accounts.',
+                  { from: notice.from.email, to: notice.to?.email ?? '' }
+                )
+              : notice.restartless
+                ? translateMain(
+                    'accounts.claude.sessionMover.movedRestartlessBody',
+                    '{{from}} is near its usage limit. The session continues on {{to}} without a restart.',
+                    { from: notice.from.email, to: notice.to?.email ?? '' }
+                  )
+                : translateMain(
+                    'accounts.claude.sessionMover.movedBody',
+                    '{{from}} is near its usage limit. The session continues on {{to}}.',
+                    { from: notice.from.email, to: notice.to?.email ?? '' }
+                  )
+            : notice.kind === 'ask'
+              ? translateMain(
+                  'accounts.claude.sessionMover.askBody',
+                  'A session on {{from}} is near its usage limit. Set "Move running sessions before a usage limit" to Move to move it automatically.',
+                  { from: notice.from.email }
+                )
+              : translateMain(
+                  'accounts.claude.sessionMover.failedBody',
+                  'A session on {{from}} could not be moved: {{detail}}',
+                  { from: notice.from.email, detail: notice.detail }
+                )
+        getRuntimeDesktopSurface().showNotification({
+          title: translateMain('accounts.claude.sessionMover.noticeTitle', 'Claude session mover'),
+          body
+        })
+      }
+    },
     codexAccountLifecycle: { onHostSystemDefaultSelected: state.codexSessionMigration.requestRun },
     setClaudeStatusLineListener: (listener) =>
       agentHookServer.setClaudeStatusLineListener(listener),
@@ -110,9 +159,13 @@ export function initializeMainProcessAccountServices(): void {
             : notice.accountId.slice(0, 8)
     }
   }
-  onClaudePaneAssigned((notice) => {
+  const stopPaneAssigned = onClaudePaneAssigned((notice) => {
     state.mainWindow?.webContents.send('claudeAccounts:paneAssigned', paneAssignedEvent(notice))
   })
+  state.stopClaudeSessionMover = () => {
+    stopPaneAssigned()
+    services.sessionMover?.stop()
+  }
   state.rateLimits = services.rateLimits
   state.codexRuntimeHome = services.codexRuntimeHome
   state.codexAccounts = services.codexAccounts

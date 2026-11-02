@@ -1,21 +1,28 @@
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { RateLimitService } from '../rate-limits/service'
 
-export type ClaudeUsagePollingSettings = Partial<Pick<GlobalSettings, 'claudeAutoSwitchEnabled'>>
+export type ClaudeUsagePollingSettings = Partial<
+  Pick<GlobalSettings, 'claudeAutoSwitchEnabled' | 'claudeSessionMover'>
+>
 
-export const CLAUDE_USAGE_POLLING_SETTING_KEYS = ['claudeAutoSwitchEnabled'] as const
+export const CLAUDE_USAGE_POLLING_SETTING_KEYS = [
+  'claudeAutoSwitchEnabled',
+  'claudeSessionMover'
+] as const
 
 type UsagePollingRateLimits = {
   addUsageViewer: RateLimitService['addUsageViewer']
   refreshIfStale: () => Promise<unknown>
 }
 
-/** Why: auto-switch decides on readings; without polling a headless host never has one to decide on. */
+/** Why: these features decide on readings; without polling a headless host never has one to decide on. */
 export function shouldPollClaudeUsage(settings: ClaudeUsagePollingSettings): boolean {
-  return settings.claudeAutoSwitchEnabled === true
+  return (
+    settings.claudeAutoSwitchEnabled === true || (settings.claudeSessionMover ?? 'ask') !== 'off'
+  )
 }
 
-/** Holds a usage viewer while auto-switch is on and releases it when auto-switch is off; idempotent. */
+/** Holds a usage viewer while a usage-driven feature needs readings and releases it when none does; idempotent. */
 export function createClaudeUsagePollingSwitch(
   rateLimits: UsagePollingRateLimits,
   getSettings: () => ClaudeUsagePollingSettings

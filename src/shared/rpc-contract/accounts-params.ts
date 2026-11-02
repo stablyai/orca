@@ -42,6 +42,10 @@ export const AssignClaudePaneParams = z.object({
   configDir: z.string().min(1).optional()
 })
 
+export const SetClaudeSessionMoverParams = z.object({
+  setting: z.enum(['off', 'ask', 'move'])
+})
+
 export const SetClaudeAutoSwitchParams = z.object({ enabled: z.boolean() })
 
 export const SelectAccountParams = z.object({

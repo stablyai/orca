@@ -20,6 +20,22 @@ function method(name: string) {
 }
 
 describe('account RPC methods', () => {
+  it('sets the Claude session-mover policy on the server that owns the accounts', async () => {
+    const state = { accounts: [], activeAccountId: null, sessionMover: 'move' }
+    const setClaudeSessionMover = vi.fn().mockReturnValue(state)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler only calls setClaudeSessionMover.
+    const runtime = { setClaudeSessionMover } as unknown as OrcaRuntimeService
+    const set = method('accounts.setClaudeSessionMover')
+    if (isStreamingMethod(set)) {
+      throw new Error('accounts.setClaudeSessionMover must be a request method')
+    }
+
+    expect(set.permission).toBe('accounts-admin')
+    expect(() => set.params?.parse({ setting: 'sometimes' })).toThrow()
+    await expect(set.handler({ setting: 'move' }, { runtime })).resolves.toEqual(state)
+    expect(setClaudeSessionMover).toHaveBeenCalledWith('move')
+  })
+
   it.each([
     {
       methodName: 'accounts.addCodexFromHome',

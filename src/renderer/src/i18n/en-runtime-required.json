@@ -1,6 +1,20 @@
 {
   "accounts": {
     "claude": {
+      "sessionMover": {
+        "handoff": {
+          "backgroundTask": "a background task was still running",
+          "continue": "Re-run what is still needed, then continue.",
+          "detailFallback": "its usage limit",
+          "ended": "The restart ended subagents of the previous process ({{known}}).",
+          "monitoring": "monitoring",
+          "more": "and {{count}} more",
+          "moved": "Orca moved this session from {{from}} to {{to}} because {{detail}}.",
+          "none": "none reported",
+          "subagent": "{{agentType}} {{id}} ({{state}})",
+          "subagentUntyped": "{{id}} ({{state}})"
+        }
+      },
       "switchSessions": {
         "body_one": "{{count}} Claude session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions wait for idle before restarting.",
         "body_other": "{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions wait for idle before restarting.",
