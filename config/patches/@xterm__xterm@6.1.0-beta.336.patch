@@ -1645,3 +1645,15 @@ index 8f0aeeed15d38aa8ab341577520db15d13788a52..1cd8d2bd124fe7f389ee0cfbfa11f1a1
    logLevel?: LogLevel;
    logger?: ILogger | null;
    macOptionIsMeta?: boolean;
+diff --git a/typings/xterm.d.ts b/typings/xterm.d.ts
+index c66a52e85ce563caa3e37f27cbddca9f1f2b4d3c..71810d0252a7808f1c4074236a9f31be58d8b3c9 100644
+--- a/typings/xterm.d.ts
++++ b/typings/xterm.d.ts
+@@ -161,6 +161,7 @@ declare module '@xterm/xterm' {
+      * starts with http(s)://.
+      */
+     linkHandler?: ILinkHandler | null;
++    linkUnderlines?: boolean;
+ 
+     /**
+      * What log level to use, this will log for all levels below and including

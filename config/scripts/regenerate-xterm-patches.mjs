@@ -356,7 +356,7 @@ function diffFolders(folderA, folderB) {
 
 /** The source of truth for the hand-written half: what the checkout itself holds. */
 function diffCheckoutSource(packageRoot) {
-  return run('git', [...CHECKOUT_DIFF_FLAGS, 'src/'], {
+  return run('git', [...CHECKOUT_DIFF_FLAGS, 'src/', 'typings/'], {
     cwd: packageRoot,
     env: pnpmDiffEnvironment(),
     maxBuffer: 64 * 1024 * 1024
