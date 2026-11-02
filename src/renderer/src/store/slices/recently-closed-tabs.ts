@@ -1,13 +1,11 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import {
   isWindowsAbsolutePathLike,
   relativePathInsideRoot
 } from '../../../../shared/cross-platform-path'
 import {
-  getRecentlyClosedTabPosition,
   restoreRecentlyClosedTabPosition,
   type RecentlyClosedTabPosition
 } from './recently-closed-tab-position'
@@ -69,42 +67,6 @@ export function pushRecentlyClosedTabKind(
       ...(map?.[worktreeId] ?? [])
     ].slice(0, MAX_RECENT_CLOSED_TAB_KINDS)
   }
-}
-
-type RecentlyClosedTerminalState = Pick<
-  AppState,
-  'recentlyClosedTerminalTabsByWorktree' | 'recentlyClosedTabKindsByWorktree'
->
-
-/** Reopen Closed Tab entries for closed terminal tabs, each where it stood, the last on top. */
-export function pushClosedTerminalTabs(
-  state: RecentlyClosedTerminalState & Parameters<typeof getRecentlyClosedTabPosition>[0],
-  closed: Iterable<{ tab: TerminalTab; worktreeId: string }>
-): RecentlyClosedTerminalState | null {
-  let next: RecentlyClosedTerminalState | null = null
-  for (const { tab, worktreeId } of closed) {
-    const position = getRecentlyClosedTabPosition(state, worktreeId, tab.id)
-    const prior = next ?? state
-    next = {
-      recentlyClosedTerminalTabsByWorktree: pushClosedTerminalTabSnapshot(
-        prior.recentlyClosedTerminalTabsByWorktree,
-        worktreeId,
-        {
-          ...(tab.startupCwd ? { startupCwd: tab.startupCwd } : {}),
-          ...(tab.shellOverride ? { shellOverride: tab.shellOverride } : {}),
-          ...(tab.customTitle ? { customTitle: tab.customTitle } : {}),
-          ...(tab.color ? { color: tab.color } : {}),
-          ...(position ? { position } : {})
-        }
-      ),
-      recentlyClosedTabKindsByWorktree: pushRecentlyClosedTabKind(
-        prior.recentlyClosedTabKindsByWorktree,
-        worktreeId,
-        'terminal'
-      )
-    }
-  }
-  return next
 }
 
 export function remapClosedTerminalTabSnapshotCwds(

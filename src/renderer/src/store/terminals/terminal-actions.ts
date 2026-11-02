@@ -94,10 +94,9 @@ export type TerminalActions = {
     }
   ) => TerminalTab
   openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
-  /** Synchronous retirement: provider teardown starts before state removal but is never awaited.
-   *  Several tabs close in one write. */
+  /** Synchronous retirement: provider teardown starts before state removal but is never awaited. */
   closeTab: (
-    tabId: string | readonly string[],
+    tabId: string,
     opts?: {
       recordInteraction?: boolean
       reason?: TerminalTabCloseReason

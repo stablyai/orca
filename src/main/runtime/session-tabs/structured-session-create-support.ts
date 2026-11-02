@@ -24,6 +24,9 @@ import { structuredLaunchSeedOptions } from '../../../shared/native-chat/input/n
 import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from '../agent-session/records/agent-session-record-store-slot'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../agent-session/structured-agent-session-host-refusal'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
+import { repairRestoredSwitchesAtStartup } from './restored-switch-plan'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
@@ -284,8 +287,31 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     await ensureStructuredAgentSessionHostUnlessRefused(() =>
       this.ensureStructuredAgentSessionHost()
     )
-    await this.refreshMobileSessionPtyRecords()
-    await getStructuredAgentSessionHost()?.reconcileRestartLeases()
+    const live = await this.refreshMobileSessionPtyRecords()
+    const host = getStructuredAgentSessionHost()
+    await host?.reconcileRestartLeases()
+    // Intended: the restart repair runs in this preparation, so no launch waits on it; a crashed
+    // switch shows its stopped terminal until the plan applies here, before any terminal of this
+    // load reconnects or a chat restores.
+    const repaired = await repairRestoredSwitchesAtStartup(
+      this.store,
+      host,
+      live,
+      (id) => this.workspaceSessions.tryGetHostId(id) === LOCAL_EXECUTION_HOST_ID
+    )
+    repaired.forEach((id) => this.windowRehydrateWorkspaces.add(id))
+  }
+
+  /** Workspaces whose saved tabs main changed under a window that already read them (a restart's
+   *  repair, or a switch the window applied but had not saved before it reloaded): the window
+   *  reads them again before it reconnects their terminals. Main's frames show their own. */
+  protected readonly windowRehydrateWorkspaces = new Set<string>()
+
+  async takeWindowRehydrateWorkspaces(): Promise<string[]> {
+    const replayed = await this.unsavedWindowSwitches.replay(this.store)
+    const ids = new Set([...this.windowRehydrateWorkspaces, ...replayed])
+    this.windowRehydrateWorkspaces.clear()
+    return ORCA_LAYOUT_OWNER_IS_MAIN ? [] : [...ids]
   }
 
   protected hasPersistedStructuredAgentSessionStore(): boolean {

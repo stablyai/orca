@@ -16,6 +16,7 @@ import type { WorkspaceLayout } from '../../../shared/workspace-layout/workspace
 import type { LayoutCommandRunOptions, WindowLayoutCommand } from '../runtime-layout-apply'
 import { OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal } from './pty-backed-session-publication'
 import { TerminalNotPlacedError } from './terminal-not-placed-error'
+import { UnsavedWindowSwitches } from './unsaved-window-switches'
 
 export type SwitchedTabContentRequest = {
   /** The tab, once decided; deciding without one finds the tab holding the source. */
@@ -45,6 +46,8 @@ export type SwitchSettlement =
   | { kind: 'unknown'; tabId: string }
 
 export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal {
+  protected readonly unsavedWindowSwitches = new UnsavedWindowSwitches()
+
   abstract applyLayoutCommand(
     command: WindowLayoutCommand,
     options?: LayoutCommandRunOptions
@@ -191,6 +194,13 @@ export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntime
     }
     const tabId = decided.tabId
     const current = await commit(tabId)
+    // A window's change can outlive its unsaved tabs (a reload): kept until a new page takes it.
+    const keep = this.unsavedWindowSwitches.keeping<SwitchSettlement>(
+      !ORCA_LAYOUT_OWNER_IS_MAIN && !!this.getAvailableAuthoritativeWindow(),
+      { workspace: workspaceId, tabId, expectSource: request.expectSource },
+      request.layout,
+      current
+    )
     const settled = (outcome: WindowTabContentOutcome): SwitchSettlement =>
       !outcome.retargeted
         ? {
@@ -202,19 +212,21 @@ export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntime
           ? { kind: 'superseded', tabId }
           : { kind: 'applied', tabId }
     try {
-      return settled(
-        await this.setSwitchedTabContent(
-          workspaceId,
-          { ...request, tabId, operation, ...(decided.page ? { page: decided.page } : {}) },
-          false,
-          late && ((outcome) => late(settled(outcome)))
+      return keep(
+        settled(
+          await this.setSwitchedTabContent(
+            workspaceId,
+            { ...request, tabId, operation, ...(decided.page ? { page: decided.page } : {}) },
+            false,
+            late && ((outcome) => late(keep(settled(outcome))))
+          )
         )
       )
     } catch (error) {
       if (error instanceof TerminalNotPlacedError) {
         return { kind: 'refused', committed: true }
       }
-      return { kind: 'unknown', tabId }
+      return keep({ kind: 'unknown', tabId })
     }
   }
 

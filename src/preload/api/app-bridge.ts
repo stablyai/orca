@@ -69,7 +69,7 @@ export const appApi = {
     ipcRenderer.invoke('app:awaitFirstWindowStartupServices'),
   awaitGitEnvironmentStartupBarrier: (): Promise<void> =>
     ipcRenderer.invoke('app:awaitGitEnvironmentStartupBarrier'),
-  prepareTerminalStartupRestoration: (): Promise<void> =>
+  prepareTerminalStartupRestoration: (): Promise<string[] | void> =>
     ipcRenderer.invoke('app:prepareTerminalStartupRestoration'),
   holdsStructuredAgentSessions: (): Promise<boolean> =>
     ipcRenderer.invoke('app:holdsStructuredAgentSessions'),

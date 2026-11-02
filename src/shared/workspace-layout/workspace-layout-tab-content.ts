@@ -138,30 +138,25 @@ export function setTabContent(
     return applied(model, { ...(found ? { tabId: found.tab.id } : {}), retargeted: Boolean(found) })
   }
   const { tab } = found.tab
-  // Kept: the tab's place (id, group order), pin and color. Reset: what described the old
-  // content (titles, transcript overlay), so a chat shows its conversation's name.
-  const kept = {
-    id: tab.id,
-    createdAt: tab.createdAt,
-    customTitle: null,
-    color: tab.color,
-    ...(tab.isPinned ? { isPinned: true } : {})
+  const content = command.content
+  if (content.kind === 'agent-session' && tab.kind === 'terminal') {
+    const switched = setTerminalTabsToChats(
+      model,
+      command.workspace,
+      [{ tabId: tab.id, terminalId: tab.entityId, ...content }],
+      context.now()
+    )
+    return applied(switched, { tabId: tab.id, retargeted: true })
   }
   let next: WorkspaceLayout = workspace
   if (tab.kind === 'terminal' && next.leaves) {
     const retired = leafIdsOf(tab)
     next = { ...next, leaves: filterRecord(next.leaves, (leafId) => !retired.includes(leafId)) }
   }
-  const content = command.content
   const replacement: LayoutTab =
     content.kind === 'agent-session'
-      ? ({
-          ...kept,
-          kind: 'agent-session',
-          entityId: content.sessionId,
-          agentSessionAgent: content.agent
-        } satisfies LayoutContentTab)
-      : terminalContent(next, kept, content)
+      ? chatContent(keptOf(tab), content)
+      : terminalContent(next, keptOf(tab), content)
   next = withPane(next, tab.id, replacement, content)
   // The conversation has one chat tab: one it already had elsewhere goes, never to Reopen.
   for (const duplicate of next.tabs.filter(
@@ -181,9 +176,98 @@ export function setTabContent(
   )
 }
 
+/** Kept: the tab's place (id, group order), pin and color. Reset: what described the old content
+ *  (titles, transcript overlay), so a chat shows its conversation's name. */
+function keptOf(
+  tab: LayoutTab
+): Pick<LayoutTerminalTab, 'id' | 'createdAt' | 'customTitle' | 'color' | 'isPinned'> {
+  return {
+    id: tab.id,
+    createdAt: tab.createdAt,
+    customTitle: null,
+    color: tab.color,
+    ...(tab.isPinned ? { isPinned: true } : {})
+  }
+}
+
+function chatContent(
+  kept: ReturnType<typeof keptOf>,
+  content: Extract<TabContent, { kind: 'agent-session' }>
+): LayoutContentTab {
+  return {
+    ...kept,
+    kind: 'agent-session',
+    entityId: content.sessionId,
+    agentSessionAgent: content.agent
+  }
+}
+
+/**
+ * `setTabContent` for many tabs of one workspace at once, in one pass: each tab still holding just
+ * its terminal takes its chat in place; any other tab showing one of these chats goes; the
+ * terminals' panes go and their ids are recorded closed. A tab holding anything else is left as it
+ * is. One switch is one item.
+ */
+export function setTerminalTabsToChats(
+  model: WorkspaceLayoutModel,
+  key: string,
+  items: readonly {
+    tabId: string
+    terminalId: string
+    sessionId: string
+    agent: AgentType
+  }[],
+  closedAt: number
+): WorkspaceLayoutModel {
+  let workspace = model.workspaces[key]
+  if (!workspace) {
+    return model
+  }
+  const byId = new Map(workspace.tabs.map((tab) => [tab.id, tab]))
+  const replacements = new Map<string, LayoutTab>()
+  const sessions = new Set<string>()
+  const retiredLeaves = new Set<string>()
+  const retiredTerminals: string[] = []
+  for (const item of items) {
+    const tab = byId.get(item.tabId)
+    if (
+      tab?.kind !== 'terminal' ||
+      sessions.has(item.sessionId) ||
+      !tabHoldsOnly(heldContentOf(tab), { kind: 'terminal', terminalId: item.terminalId })
+    ) {
+      continue
+    }
+    sessions.add(item.sessionId)
+    replacements.set(tab.id, chatContent(keptOf(tab), { kind: 'agent-session', ...item }))
+    leafIdsOf(tab).forEach((leafId) => retiredLeaves.add(leafId))
+    retiredTerminals.push(tab.entityId)
+  }
+  if (replacements.size === 0) {
+    return model
+  }
+  // The conversation has one chat tab: one it already had elsewhere goes, never to Reopen.
+  const duplicates = workspace.tabs.filter(
+    (tab) => !replacements.has(tab.id) && tab.kind === 'agent-session' && sessions.has(tab.entityId)
+  )
+  workspace = {
+    ...workspace,
+    tabs: workspace.tabs.map((tab) => replacements.get(tab.id) ?? tab),
+    ...(workspace.leaves
+      ? { leaves: filterRecord(workspace.leaves, (leafId) => !retiredLeaves.has(leafId)) }
+      : {})
+  }
+  for (const duplicate of duplicates) {
+    workspace = removeTabFromWorkspace(workspace, duplicate.id)
+  }
+  return recordClosedTerminalTabs(withWorkspace(model, key, workspace), key, retiredTerminals, {
+    reason: 'cleanup',
+    closedAt
+  })
+}
+
 function terminalContent(
   workspace: WorkspaceLayout,
-  kept: Pick<LayoutTerminalTab, 'id' | 'createdAt' | 'customTitle' | 'color' | 'isPinned'>,
+  kept: ReturnType<typeof keptOf>,
   content: Extract<TabContent, { kind: 'terminal' }>
 ): LayoutTerminalTab {
   const parked = parkedTabOf(workspace, kept.id, content.terminalId)

@@ -39,7 +39,6 @@ import {
   noteFrameStoppedSwitchSource,
   type FrameStoppedSwitchSourceRow
 } from '@/components/terminal-pane/stopped-switch-sources'
-import { recoverRestoredSwitchedTabs } from '@/lib/restored-switch-recovery'
 import { framesDrawWorkspace } from '../workspace-layout-frame-drawn-workspaces'
 import { drawnChatLabelChanges, type DrawnChatLabel } from './frame-drawn-chat-tabs'
 
@@ -67,8 +66,6 @@ export type StructuredSessionSnapshotApplyOptions = {
   onDrawnChatLabel?: (change: DrawnChatLabel) => void
   /** Collects main's stopped-source facts from the applied rows; noted after the store patch. */
   onStoppedSwitchSource?: (worktreeId: string, row: FrameStoppedSwitchSourceRow) => void
-  /** Collects terminals a restart's recovered switch retired; their records go after the patch. */
-  onRecoveredSwitchTerminal?: (terminalId: string) => void
 }
 
 export function applyStructuredSessionTabSnapshots(
@@ -79,7 +76,6 @@ export function applyStructuredSessionTabSnapshots(
   const acceptedAgentSessions: { worktreeId: string; sessionId: string }[] = []
   const drawnChatLabels: DrawnChatLabel[] = []
   const stoppedSources: [string, FrameStoppedSwitchSourceRow][] = []
-  const recoveredTerminals: string[] = []
   const settleStructuredSessionMirror = applyWebSessionTabsStorePatch(
     (state, changedAgentPaneKeys) =>
       applyLocalStructuredSessionTabSnapshots(
@@ -96,8 +92,7 @@ export function applyStructuredSessionTabSnapshots(
           // Switch point: main places the listed chats' tabs; its frames draw them.
           framesDraw: ORCA_LAYOUT_OWNER_IS_MAIN ? framesDrawWorkspace(state) : undefined,
           onDrawnChatLabel: (change) => drawnChatLabels.push(change),
-          onStoppedSwitchSource: (worktreeId, row) => stoppedSources.push([worktreeId, row]),
-          onRecoveredSwitchTerminal: (terminalId) => recoveredTerminals.push(terminalId)
+          onStoppedSwitchSource: (worktreeId, row) => stoppedSources.push([worktreeId, row])
         },
         changedAgentPaneKeys
       ),
@@ -109,14 +104,6 @@ export function applyStructuredSessionTabSnapshots(
   settleStructuredSessionMirror()
   for (const [worktreeId, row] of stoppedSources) {
     noteFrameStoppedSwitchSource(worktreeId, row)
-  }
-  // No tab holds these terminals now, nor did a process this run: only their records go, all in
-  // one write, never into Reopen Closed Tab.
-  if (recoveredTerminals.length > 0) {
-    useAppStore.getState().closeTab(recoveredTerminals, {
-      reason: 'cleanup',
-      localPtyTeardownOwnedExternally: true
-    })
   }
   const { setTabLabel } = useAppStore.getState()
   for (const { tabId, label } of drawnChatLabels) {
@@ -189,13 +176,6 @@ export function applyLocalStructuredSessionTabSnapshots<
       continue
     }
     const effectiveSnapshot = suppressCancelledStructuredSessionTabs(snapshot, { kind: 'local' })
-    // Once per load, on the first admitted authoritative inventory: a restored tab the chat's
-    // record names takes that chat before the rows apply (see `recoverRestoredSwitchedTabs`).
-    if (options.authoritative && !ORCA_LAYOUT_OWNER_IS_MAIN) {
-      const recovered = recoverRestoredSwitchedTabs(next, effectiveSnapshot)
-      next = recovered.state
-      recovered.retiredTerminalIds.forEach((id) => options.onRecoveredSwitchTerminal?.(id))
-    }
     // One pass over the rows: a frame without main's stopped fact costs that feature nothing more.
     for (const tab of effectiveSnapshot.tabs) {
       if (tab.type === 'agent-session') {

@@ -4,8 +4,8 @@ import { restoreLocalStructuredChatsAtStartup } from '@/runtime/local-structured
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-pane/codex-detached-pane-restart-scheduler'
 import { useAppStore } from '../store'
-import { captureRestoredSwitchCandidates } from '@/lib/restored-switch-recovery'
 import { reconcileHydratedWorkspaceTabModels } from './reconcile-hydrated-workspace-tab-models'
+import { rehydrateRepairedWorkspaces } from './startup-repaired-workspaces'
 import { useStartupActions } from './use-app-startup-actions'
 import { waitForNativeChatDraftsAtStartup } from './native-chat-draft-startup'
 import { WORKTREE_REFRESH_CONCURRENCY } from '../store/slices/worktrees'
@@ -196,8 +196,6 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
               ...sessionHydrationOptions
             })
             actions.hydrateTabsSession(sessionRead.session, sessionHydrationOptions)
-            // This load's restored terminal tabs: a crashed switch's source among them takes its chat.
-            captureRestoredSwitchCandidates(useAppStore.getState().unifiedTabsByWorktree)
             actions.hydrateEditorSession(sessionRead.session, sessionHydrationOptions)
             actions.hydrateBrowserSession(sessionRead.session, sessionHydrationOptions)
             reconcileHydratedWorkspaceTabModels(
@@ -208,12 +206,14 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           restoreStructuredLaunchSurfaces()
           // Discovery must not wait for terminal or SSH restoration.
           const startupWorktreeRefresh = refreshStartupWorktrees(actions, () => cancelled)
-          await timeRendererStartupStep('prepare-terminal-startup-restoration', () =>
-            window.api.app.prepareTerminalStartupRestoration()
+          const repairedWorkspaces = await timeRendererStartupStep(
+            'prepare-terminal-startup-restoration',
+            () => window.api.app.prepareTerminalStartupRestoration()
           )
           if (cancelled) {
             return
           }
+          await rehydrateRepairedWorkspaces(repairedWorkspaces, actions, sessionHydrationOptions)
           // Prune after catalogs hydrate or valid visits disappear; seed missing active-workspace recency (docs/cmd-j-empty-query-ordering.md).
           timeRendererStartupSyncStep('visit-timestamp-prune', () => {
             actions.pruneLastVisitedTimestamps()

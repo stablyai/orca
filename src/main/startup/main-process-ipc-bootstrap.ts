@@ -32,6 +32,7 @@ export function registerMainProcessIpcHandlers(): void {
       state.managedWslCliStartupBarrierReady
     ])
     await state.runtime?.prepareStructuredAgentSessionStartupRestoration()
+    return (await state.runtime?.takeWindowRehydrateWorkspaces()) ?? []
   })
   // Only hosts holding a saved/new structured chat have local rows for the renderer to mirror.
   ipcMain.handle('app:holdsStructuredAgentSessions', () => structuredAgentSessionsHeld())

@@ -139,6 +139,98 @@ it('re-issuing a switch whose first answer was lost adopts the terminal it start
   ).toEqual([TAB_ID, lost.tabId].sort())
 })
 
+// A restart after a crash between the commit (the chat left its saved tabs) and the tab's own
+// write: the switch's terminal was saved as an ordinary tab before it started, so it shows, live or
+// stopped, while the stale chat tab retires; the conversation stays.
+it.each([
+  ['still running', true],
+  ['stopped', false]
+])('a restart after a cut switch to the terminal shows its terminal: %s', async (_name, live) => {
+  await savedTranscript(rig)
+  const { runtime, session, setSession } = setupMainOwnedWorkspace()
+  vi.spyOn(runtime, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
+    id: WORKTREE_ID,
+    path: rig.root,
+    connectionId: null,
+    repo: null,
+    folderWorkspace: null
+  })
+  const owners = new ClaimedAgentPtyOwnerRegistry()
+  runtime.setPtyController({
+    spawn: async (args: Parameters<NonNullable<RuntimePtyController['spawn']>>[0]) => {
+      const ensured = await owners.ensure({
+        claim: args.agentSessionEnsure!.claim,
+        surface: args.agentSessionEnsure!.surface,
+        spawn: async () => ({ ptyId: 'switch-pty' })
+      })
+      return { id: ensured.owner.ptyId, agentSessionEnsure: ensured }
+    },
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: async () => null
+  })
+  const { cliForkSource: source } = await cliTranscript.prepareStructuredChatCliTranscript(
+    await cliTranscript.resolveStructuredChatCliSource(
+      { sessionId: id, workspaceId: WORKTREE_ID },
+      false
+    ),
+    async () => {
+      throw new Error('unused')
+    },
+    false
+  )
+  const terminal = await runtime.spawnSwitchTerminal(WORKTREE_ID, { agent: 'codex', source })
+  // The commit hid the chat; its saved tab still holds it, as the cut left it.
+  await rig.host.setSessionTabVisibility(id, false)
+  const saved = session()
+  const groups = saved.tabGroups?.[WORKTREE_ID] ?? []
+  setSession({
+    ...saved,
+    unifiedTabs: {
+      ...saved.unifiedTabs,
+      [WORKTREE_ID]: [
+        ...(saved.unifiedTabs?.[WORKTREE_ID] ?? []),
+        {
+          id: 'chat-T',
+          entityId: id,
+          groupId: groups[0]!.id,
+          worktreeId: WORKTREE_ID,
+          contentType: 'agent-session',
+          label: 'Codex',
+          customLabel: null,
+          color: null,
+          sortOrder: 9,
+          createdAt: 1
+        }
+      ]
+    },
+    tabGroups: {
+      ...saved.tabGroups,
+      [WORKTREE_ID]: groups.map((group, index) =>
+        index === 0 ? { ...group, tabOrder: [...group.tabOrder, 'chat-T'] } : group
+      )
+    }
+  })
+  const internals = runtime as unknown as {
+    hasPersistedStructuredAgentSessionStore: () => boolean
+    ensureStructuredAgentSessionHost: () => Promise<unknown>
+    refreshMobileSessionPtyRecords: () => Promise<Set<string> | null>
+  }
+  vi.spyOn(internals, 'hasPersistedStructuredAgentSessionStore').mockReturnValue(true)
+  vi.spyOn(internals, 'ensureStructuredAgentSessionHost').mockResolvedValue(rig.host)
+  vi.spyOn(internals, 'refreshMobileSessionPtyRecords').mockResolvedValue(
+    new Set(live ? [terminal.ptyId!] : [])
+  )
+  await runtime.restoreStructuredAgentSessionTabs()
+  const tabs = session().unifiedTabs?.[WORKTREE_ID] ?? []
+  expect(tabs.some((tab) => tab.contentType === 'agent-session' && tab.entityId === id)).toBe(false)
+  expect(tabs.find((tab) => tab.id === terminal.tabId)).toMatchObject({ contentType: 'terminal' })
+  expect(
+    session().tabGroups?.[WORKTREE_ID]?.some((group) => group.tabOrder.includes(terminal.tabId!))
+  ).toBe(true)
+  expect(rig.store.getRecord(id)).toBeDefined()
+})
+
 async function switchRig(opts: Parameters<typeof executionOwnerRig>[1] = {}) {
   await savedTranscript(rig)
   vi.spyOn(cliTranscript, 'nativeConversationContent').mockReturnValue('saved')

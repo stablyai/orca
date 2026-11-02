@@ -46,8 +46,9 @@ export type AppApi = {
   awaitFirstWindowStartupServices: () => Promise<void>
   /** Waits for shell PATH and managed WSL CLI registration, independently of PTY startup. */
   awaitGitEnvironmentStartupBarrier: () => Promise<void>
-  /** Restore durable PTY ownership before renderer adoption. */
-  prepareTerminalStartupRestoration: () => Promise<void>
+  /** Restore durable PTY ownership before renderer adoption. Answers the workspaces whose saved
+   *  tabs main changed since this window read them; it reads those again. */
+  prepareTerminalStartupRestoration: () => Promise<string[] | void>
   /** Whether this machine's runtime holds a structured chat, saved or live. */
   holdsStructuredAgentSessions: () => Promise<boolean>
   onStructuredAgentSessionsHeldChanged: (callback: (held: boolean) => void) => () => void
