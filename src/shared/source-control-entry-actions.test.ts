@@ -61,5 +61,13 @@ describe('canOpenWorkingTreeStatusEntry', () => {
     expect(canOpenWorkingTreeStatusEntry(entry({ area: 'staged', status: 'modified' }))).toBe(true)
     expect(canOpenWorkingTreeStatusEntry(entry({ status: 'deleted' }))).toBe(false)
     expect(canOpenWorkingTreeStatusEntry(entry({ area: 'staged', status: 'deleted' }))).toBe(false)
+    expect(
+      canOpenWorkingTreeStatusEntry(
+        entry({
+          path: 'vendor/lib',
+          submodule: { commitChanged: true, trackedChanges: false, untrackedChanges: false }
+        })
+      )
+    ).toBe(false)
   })
 })
