@@ -1,5 +1,6 @@
 import { randomInt } from 'node:crypto'
 import type { Store } from '../persistence/loading-store/store'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import { resolveConsent } from './consent'
 import type {
   ChatUiLaunchTipCohort,
@@ -53,7 +54,7 @@ export function ensureChatUiLaunchTipCohort(store: Store): ChatUiLaunchTipCohort
             ? 'treatment'
             : 'treatment-live-switch'
     const targeting =
-      cohort === 'control' ? undefined : assignTargeting(store.getChatUiLaunchTipVariant())
+      cohort === 'control' ? undefined : assignTargeting(settings.agentDefaultSurface)
     store.updateSettings({
       telemetry: {
         ...telemetry,
@@ -80,10 +81,10 @@ export function isChatUiLaunchTipDeferredForConsent(): boolean {
 }
 
 function assignTargeting(
-  variant: ReturnType<Store['getChatUiLaunchTipVariant']>
+  defaultSurface: GlobalSettings['agentDefaultSurface']
 ): ChatUiLaunchTipTargeting {
   if (randomInt(2) === 0) {
     return { mode: 'all' }
   }
-  return { mode: 'not-switched', eligible: variant === 'chat-ui-off' }
+  return { mode: 'not-switched', eligible: defaultSurface !== 'chat' }
 }

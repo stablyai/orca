@@ -94,29 +94,58 @@ describe('ensureChatUiLaunchTipCohort', () => {
     expect(store.updateSettings).toHaveBeenCalledTimes(1)
   })
 
-  it.each(['chat-ui-off', 'chat-ui-on'] as const)(
-    'splits the %s card treatment equally and freezes eligibility across restarts',
-    (variant) => {
+  it.each([
+    { variant: 'chat-ui-off', surface: 'terminal' },
+    { variant: 'chat-ui-off', surface: 'chat' },
+    { variant: 'chat-ui-on', surface: 'terminal' },
+    { variant: 'chat-ui-on', surface: 'chat' },
+    { variant: 'chat-ui-on', surface: undefined }
+  ] as const)(
+    'targets the current $surface default for the frozen $variant audience and preserves enrollment',
+    ({ variant, surface }) => {
       for (const draw of [0, 1]) {
         vi.mocked(crypto.randomInt)
           .mockReset()
           .mockImplementationOnce(() => 8)
           .mockImplementationOnce(() => draw)
-        const store = makeStore({}, variant, [], { agentDefaultSurface: 'terminal' })
+        const store = makeStore({}, variant, [], { agentDefaultSurface: surface })
         expect(ensureChatUiLaunchTipCohort(store)).toBe('treatment')
         expect(crypto.randomInt).toHaveBeenNthCalledWith(1, 10)
         expect(crypto.randomInt).toHaveBeenNthCalledWith(2, 2)
         const targeting = store.getSettings().telemetry?.chatUiLaunchTipTargeting
         expect(targeting).toEqual(
-          draw === 0
-            ? { mode: 'all' }
-            : { mode: 'not-switched', eligible: variant === 'chat-ui-off' }
+          draw === 0 ? { mode: 'all' } : { mode: 'not-switched', eligible: surface !== 'chat' }
         )
-        store.getSettings().agentDefaultSurface = 'chat'
+        store.getSettings().agentDefaultSurface = surface === 'chat' ? 'terminal' : 'chat'
         expect(ensureChatUiLaunchTipCohort(store)).toBe('treatment')
         expect(store.getSettings().telemetry?.chatUiLaunchTipTargeting).toEqual(targeting)
+        expect(store.getChatUiLaunchTipVariant()).toBe(variant)
         expect(store.updateSettings).toHaveBeenCalledTimes(1)
       }
+    }
+  )
+
+  it.each([
+    { variant: 'chat-ui-off', before: 'terminal', atEnrollment: 'chat', eligible: false },
+    { variant: 'chat-ui-on', before: 'chat', atEnrollment: 'terminal', eligible: true }
+  ] as const)(
+    'uses the $atEnrollment default after consent delays enrollment for $variant',
+    ({ variant, before, atEnrollment, eligible }) => {
+      vi.mocked(crypto.randomInt)
+        .mockImplementationOnce(() => 8)
+        .mockImplementationOnce(() => 1)
+      const store = makeStore({ optedIn: null }, variant, [], { agentDefaultSurface: before })
+      expect(ensureChatUiLaunchTipCohort(store)).toBeUndefined()
+      expect(crypto.randomInt).not.toHaveBeenCalled()
+
+      store.getSettings().agentDefaultSurface = atEnrollment
+      store.getSettings().telemetry!.optedIn = true
+      expect(ensureChatUiLaunchTipCohort(store)).toBe('treatment')
+      expect(store.getSettings().telemetry?.chatUiLaunchTipTargeting).toEqual({
+        mode: 'not-switched',
+        eligible
+      })
+      expect(store.getChatUiLaunchTipVariant()).toBe(variant)
     }
   )
 

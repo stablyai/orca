@@ -110,8 +110,9 @@ describe('deferred PostHog client start', () => {
     'captures $cohort with local eligibility $eligible through real initialization',
     ({ draw, cohort, eligible }) => {
       vi.mocked(store.getChatUiLaunchTipVariant).mockReturnValue(
-        eligible ? 'chat-ui-off' : 'chat-ui-on'
+        eligible ? 'chat-ui-on' : 'chat-ui-off'
       )
+      settings.agentDefaultSurface = eligible ? 'terminal' : 'chat'
       vi.mocked(crypto.randomInt)
         .mockImplementationOnce(() => draw)
         .mockImplementationOnce(() => 1)
