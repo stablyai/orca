@@ -680,6 +680,34 @@
           "minLength": 1,
           "maxLength": 256,
           "pattern": "^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"
+        },
+        "replaces": {
+          "description": "Built-in Orca action this worker command runs in place of, from its shortcut, the palette or a menu. To also run Orca’s own, the command calls `commands.run` with the action (`workspace:write`); that never reaches a replacement. If the worker fails or takes over 2 s, Orca runs its own. The person sees it before approving and can turn it off in Settings; when two plugins replace one action, the one installed first does.",
+          "x-orca-since": "1.4.248",
+          "examples": [
+            "view.tasks"
+          ],
+          "enum": [
+            "worktree.history.back",
+            "worktree.history.forward",
+            "sidebar.left.toggle",
+            "sidebar.sleepingWorkspaces.toggle",
+            "floatingWorkspace.maximize",
+            "tab.rename",
+            "workspace.rename",
+            "workspace.openBoard",
+            "view.tasks",
+            "sidebar.right.toggle",
+            "sidebar.explorer.toggle",
+            "sidebar.search.toggle",
+            "sidebar.sourceControl.toggle",
+            "sidebar.checks.toggle",
+            "sidebar.ports.toggle"
+          ],
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"
         }
       },
       "required": [
@@ -1088,7 +1116,7 @@
           ]
         },
         "priority": {
-          "description": "`default` (the default) opens matching files in this editor; `option` only offers it in the view toggle, so files open in Source. Files Orca opens itself (such as `.json`, `.ts`, `.md`, `.csv`, `.yaml`, lockfiles and `.env` files) always behave as `option`.",
+          "description": "`default` (the default) opens matching files in this editor; `option` only offers it in the view toggle, so files open in Source. Files Orca opens itself (such as `.json`, `.ts`, `.md`, `.csv`, `.yaml`, lockfiles and `.env` files) always behave as `option`; a longer suffix such as `.sketch.json` is not one of them and opens by default.",
           "x-orca-since": "1.4.245",
           "examples": [
             "default"

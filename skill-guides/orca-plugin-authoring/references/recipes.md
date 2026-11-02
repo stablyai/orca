@@ -153,3 +153,12 @@ maxLines })` (`terminal:read`) for its output; `agent.launch({ workspaceId, agen
 (`agent:launch`); `workspace.open({ workspaceId })`, `editor.open({ workspaceId, path })` (a path
 inside it) and `commands.run({ action })` (a built-in `contributes.commands[].action`, never a plugin's
 replacement) need `workspace:write` and the desktop app. Panels get none.
+
+## Replacing one of Orca's own actions
+
+Give a worker command `"replaces": "view.tasks"` (any action a declarative `action` may name;
+`engines.orca` `>=1.4.248`) and register it with `orca.commands.register`. Orca runs it when that
+action fires from its shortcut, the palette or a menu, and its own action when the worker fails or
+takes over 2 s. To wrap Orca's own, call `orca.host.call('commands.run', { action: 'view.tasks' })`
+(`workspace:write`) from the command: it always runs the built-in. The person can switch the
+replacement back on the plugin's page.

@@ -10,6 +10,7 @@ import {
   PLUGIN_SCHEMA_SINCE_V1
 } from '../manifest/plugin-schema-field-docs'
 import { PLUGIN_STATUS_BAR_SINCE } from '../contributions/plugin-status-bar-item-contribution'
+import { PLUGIN_COMMAND_REPLACES_SINCE } from '../contributions/plugin-command-contribution'
 
 /** The newest "since" this build's schemas cite: everything up to it is readable here. */
 export const PLUGIN_SCHEMA_NEWEST_SINCE = [
@@ -22,7 +23,8 @@ export const PLUGIN_SCHEMA_NEWEST_SINCE = [
   PLUGIN_EDITOR_FRAME_SINCE,
   PLUGIN_STATUS_BAR_SINCE,
   PLUGIN_HOOKS_SINCE,
-  PLUGIN_HOST_ACTIONS_SINCE
+  PLUGIN_HOST_ACTIONS_SINCE,
+  PLUGIN_COMMAND_REPLACES_SINCE
 ].reduce((newest, version) => (satisfiesOrcaEngineRange(version, `>=${newest}`) ? version : newest))
 
 /**
