@@ -20,7 +20,8 @@ import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLifecycleMutationInput } from './journal-row-builders'
 import type { JournalRowsRead } from './journal-read-row'
 import type { JournalReducerState } from './journal-reducer'
-import type { JournalRowWriter } from './journal-row-writer'
+import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-writer'
+import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import type { JournalWriteBody } from './journal-write-queue'
 
@@ -29,6 +30,8 @@ export type AgentSessionJournalOptions = {
   database: JournalHostDatabase
   now?: () => number
   mintEpoch?: () => string
+  /** Saves a person's Stop of limited work in the same commit as the rows that reveal it. */
+  withdrawStoppedCut?: (cut: UsageLimitContinueIdentity) => JournalOperationReceipt | undefined
 }
 
 export type JournalReadSince =

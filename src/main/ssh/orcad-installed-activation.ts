@@ -97,11 +97,12 @@ export async function activateInstalledOrcad(
   lock: OrcadActivationLockControl
 ): Promise<OrcadDeployResult> {
   const now = options.now ?? ((): Date => new Date())
-  const notActivated = (code: string, reason: string): Outcome => ({
+  const notActivated = (code: string, reason: string, startCheckFailed?: true): Outcome => ({
     outcome: 'installed-not-activated',
     fullVersion,
     code,
-    reason
+    reason,
+    ...(startCheckFailed ? { startCheckFailed } : {})
   })
   const record = await readOrcadActivationRecord(options)
   const planFor = (
@@ -138,7 +139,7 @@ export async function activateInstalledOrcad(
     asksCandidate
   )
   if ('failure' in preflight) {
-    return notActivated('orcad_candidate_preflight_failed', preflight.failure)
+    return notActivated('orcad_candidate_preflight_failed', preflight.failure, true)
   }
   const { hostDaemonProtocols } = preflight
   plan = planFor(census, hostDaemonProtocols)
@@ -306,7 +307,7 @@ export async function activateInstalledOrcad(
     const located =
       `${reason} Candidate stderr is at ` +
       `${joinRemotePath(options.host, remoteDir, ORCAD_LOG_FILENAME)}. ${restored}`
-    return notActivated(code, await withOrcadLogTail(options, remoteDir, located))
+    return notActivated(code, await withOrcadLogTail(options, remoteDir, located), true)
   }
 
   const recordAfter = withActivatedVersion(record, fullVersion, snapshot, now(), options.appVersion)

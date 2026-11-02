@@ -8,6 +8,7 @@ import { useAppStore } from '@/store'
 import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-source-lookup'
 import {
   WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE,
+  markUserActionWorkItemDetailsRead,
   touchWorkItemDetailsCache,
   workItemDetailsCache,
   withWorkItemDetailsItem
@@ -126,6 +127,9 @@ export function startWorkItemDetailsFetch(
   options: FetchAcceptance = {}
 ) {
   const inflight = Promise.resolve().then(load)
+  if (options.userAction) {
+    markUserActionWorkItemDetailsRead(inflight)
+  }
   const previous = workItemDetailsCache.get(key)
   touchWorkItemDetailsCache(key, {
     details: previous?.details ?? null,

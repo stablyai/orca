@@ -19,7 +19,10 @@ import {
   type AgentSessionWriteKind,
   type AgentSessionWriteRefusal
 } from './agent-session-write-failure'
-import { agentSessionRefusalReasonWords } from './agent-session-refusal-reason-words'
+import {
+  agentSessionRefusalReasonWords,
+  type AgentSessionRefusalHolder
+} from './agent-session-refusal-reason-words'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../tui-agent-display-names'
 
 const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> = {
@@ -79,7 +82,7 @@ function causeParts(
 
 /** The notice a named reason has of its own; undefined leaves the code's words. */
 function reasonParts(
-  failure: AgentSessionWriteRefusal,
+  failure: AgentSessionWriteRefusal & AgentSessionRefusalHolder,
   write: AgentSessionWriteKind,
   context: AgentSessionFailureWordsContext
 ): AgentSessionWriteNoticePart[] | undefined {
@@ -164,9 +167,10 @@ function reasonParts(
   return step && !retried ? [...said, step] : said
 }
 
-/** Cause for a failed start already showing Retry; empty without a reason carrying its own wording. */
+/** Cause for a failed start already showing Retry; empty without a reason carrying its own wording.
+ *  A failed start's refusal keeps the holder it named, which tells a chat from a terminal. */
 export function agentSessionRefusalCauseParts(
-  failure: AgentSessionWriteFailure,
+  failure: AgentSessionWriteFailure & AgentSessionRefusalHolder,
   context: { agentName?: string } = {}
 ): AgentSessionWriteNoticePart[] {
   const parts =

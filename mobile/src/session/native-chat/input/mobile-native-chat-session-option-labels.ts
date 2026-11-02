@@ -3,7 +3,7 @@ import type { SessionOptionDescriptor } from '../../../../../src/shared/native-c
 import {
   nativeChatSessionChoiceLabel,
   selectedNativeChatChoice
-} from '../../../../../src/shared/native-chat-session-option-labels'
+} from '../../../../../src/shared/native-chat/input/native-chat-session-option-labels'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 
 /** The value a drill-in row shows beside its label; desktop lists the choices in place instead. */

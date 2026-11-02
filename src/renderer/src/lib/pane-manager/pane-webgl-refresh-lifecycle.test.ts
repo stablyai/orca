@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPaneInternal } from './pane-manager-types'
-import { disposePane } from './pane-lifecycle'
 
 import { disposeWebgl } from './pane-webgl-renderer'
 import {
@@ -9,7 +8,7 @@ import {
 } from './terminal-scroll-intent-rebuild'
 
 function createPane(
-  overrides: Partial<Pick<ManagedPaneInternal, 'pendingWebglRefreshRafId' | 'webglAddon'>> = {}
+  overrides: Partial<Pick<ManagedPaneInternal, 'webglAddon'>> = {}
 ): ManagedPaneInternal {
   const leafId = '11111111-1111-4111-8111-111111111111' as never
   return {
@@ -109,21 +108,5 @@ describe('pane WebGL refresh lifecycle', () => {
     expect(dispose).toHaveBeenCalledTimes(1)
     expect(canvas).toEqual({ width: 0, height: 0 })
     expect(pane.webglAddon).toBeNull()
-  })
-
-  it('cancels a pending WebGL refresh when the pane is disposed', () => {
-    const cancelAnimationFrame = vi.fn()
-    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame)
-    const pane = createPane({
-      pendingWebglRefreshRafId: 31,
-      webglAddon: null
-    })
-    const panes = new Map([[pane.id, pane]])
-
-    disposePane(pane, panes)
-
-    expect(cancelAnimationFrame).toHaveBeenCalledWith(31)
-    expect(pane.pendingWebglRefreshRafId).toBeNull()
-    expect(panes.has(pane.id)).toBe(false)
   })
 })

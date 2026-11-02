@@ -27,7 +27,7 @@ import {
   isRootClaudeFrame
 } from '../../claude-turn-opening'
 import { ClaudeOpenTurn } from '../../claude-open-turn'
-import { claudeCommandCurrentTurn, observeClaudeCommandFrame } from '../../claude-command-turn'
+import { absorbClaudeCommandFrame, claudeCommandCurrentTurn } from '../../claude-command-turn'
 import { ClaudeContextFacts } from '../../claude-context-facts'
 import { claudeSessionStateEndsTurn } from '../../claude-session-state-turn-over'
 import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
@@ -205,7 +205,7 @@ export function createClaudeJournalTranslator(
           }
         }
       }
-      if (event.type === 'message' && observeClaudeCommandFrame(turn.command, event.message)) {
+      if (event.type === 'message' && absorbClaudeCommandFrame(messageContext, event.message)) {
         return
       }
       if (event.type === 'message' && handleStream(event.message, event.observedAt ?? Date.now())) {
@@ -231,7 +231,7 @@ export function createClaudeJournalTranslator(
         journalClaudeResult(resultContext, event.message, event.observedAt ?? Date.now())
       } else if (event.type === 'message') {
         backgroundTasks.observe(event.message, event.observedAt ?? Date.now())
-        messageContext.usageLimits.observe(event.message)
+        messageContext.usageLimits.observe(event.message, turn.command?.rejections)
         const kind = claudeProviderFrameKind(event.message)
         if (
           !journalClaudeMessage(

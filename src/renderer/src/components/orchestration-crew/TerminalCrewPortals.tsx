@@ -54,6 +54,7 @@ function TerminalCrewPortal({
     <LazyOrchestrationCrewPanel
       target={target}
       party={party}
+      surface="terminal"
       isVisible={
         controller.isRendererVisible &&
         (controller.expandedPaneId === null || controller.expandedPaneId === pane.id) &&

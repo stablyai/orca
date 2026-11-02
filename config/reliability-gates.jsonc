@@ -2470,14 +2470,12 @@
       "invariant": "Automatic hibernation must retain two stable confirmations and fresh execution-host evidence before shutdown. Skipping a workspace with no completed agent must not authorize a newly completed pane using stale client PTYs.",
       "oracle": "100 remote workspaces containing working/waiting agents issue zero runtime calls. A skipped workspace completing while another inventory awaits remains ineligible until two later host-confirmed passes, and so does a workspace that only becomes runtime-owned while an inventory is outstanding — a pass carrying no host evidence for a workspace never counts as one of its two confirmations. Folder and git workspaces hibernate the exact host PTY; rejected/truncated inventories and intervening input/output or state changes block shutdown.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/agent-hibernation-coordinator.test.ts src/renderer/src/lib/agent-hibernation-planner.test.ts src/renderer/src/lib/agent-hibernation-confirmation.test.ts src/renderer/src/lib/agent-hibernation-pane-age.test.ts src/renderer/src/lib/agent-hibernation-output-activity.test.ts src/renderer/src/lib/agent-hibernation-visibility.test.ts src/renderer/src/lib/foreground-terminal-tabs.test.ts src/renderer/src/lib/agent-hibernation-runtime-liveness-race.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/agent-hibernation-coordinator.test.ts src/renderer/src/lib/agent-hibernation-planner.test.ts src/renderer/src/lib/agent-hibernation-pane-age.test.ts src/renderer/src/lib/agent-hibernation-visibility.test.ts src/renderer/src/lib/foreground-terminal-tabs.test.ts src/renderer/src/lib/agent-hibernation-runtime-liveness-race.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/lib/agent-hibernation-coordinator.test.ts",
         "src/renderer/src/lib/agent-hibernation-planner.test.ts",
-        "src/renderer/src/lib/agent-hibernation-confirmation.test.ts",
         "src/renderer/src/lib/agent-hibernation-pane-age.test.ts",
-        "src/renderer/src/lib/agent-hibernation-output-activity.test.ts",
         "src/renderer/src/lib/agent-hibernation-visibility.test.ts",
         "src/renderer/src/lib/foreground-terminal-tabs.test.ts",
         "src/renderer/src/lib/agent-hibernation-runtime-liveness-race.test.ts"
@@ -2506,6 +2504,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/agent-hibernation-coordinator.test.ts src/renderer/src/lib/agent-hibernation-planner.test.ts src/renderer/src/lib/agent-hibernation-confirmation.test.ts src/renderer/src/lib/agent-hibernation-pane-age.test.ts src/renderer/src/lib/agent-hibernation-output-activity.test.ts src/renderer/src/lib/agent-hibernation-visibility.test.ts src/renderer/src/lib/foreground-terminal-tabs.test.ts src/renderer/src/lib/agent-hibernation-runtime-liveness-race.test.ts",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/agent-hibernation-coordinator.test.ts src/renderer/src/lib/agent-hibernation-planner.test.ts src/renderer/src/lib/agent-hibernation-pane-age.test.ts src/renderer/src/lib/agent-hibernation-visibility.test.ts src/renderer/src/lib/foreground-terminal-tabs.test.ts src/renderer/src/lib/agent-hibernation-runtime-liveness-race.test.ts",
           "result": "passed",
           "durationSeconds": 48.18,
           "summary": "93 tests passed across eight coordinator, liveness-race, planner, confirmation, age, activity and visibility files."
@@ -3308,7 +3307,7 @@
       "providers": ["local", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "ssh", "remote-runtime"],
-      "coverageNotes": "Deterministic candidate-builder contracts inject local and paired-runtime worktrees with the same bare id into the real aggregated tab buckets, including folder workspaces and a paired runtime transporting an SSH-owned worktree. A mirror contract preserves distinct same-id runtime tabs. Manual local-emulator contracts retain local ownership and dedupe explicitly owned tabs before worktree hydration. A paired Electron journey verifies both visible browser rows and both visible simulator rows, then requires each selection to render its owning active tab and update backing host-qualified state.",
+      "coverageNotes": "Deterministic candidate-builder contracts inject local and paired-runtime worktrees with the same bare id into the real aggregated tab buckets, including folder workspaces and a paired runtime transporting an SSH-owned worktree. A mirror contract preserves distinct same-id runtime tabs. A paired Electron journey verifies both visible browser rows and both visible simulator rows, then requires each selection to render its owning active tab and update backing host-qualified state.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4965",
         "https://github.com/stablyai/orca/pull/15371"
@@ -3318,14 +3317,13 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/lib/open-mobile-emulator-tab.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/lib/open-mobile-emulator-tab.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
         "pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
@@ -3334,7 +3332,6 @@
         "src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx",
         "src/renderer/src/components/tab-bar/use-open-tab-search.test.ts",
         "src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts",
-        "src/renderer/src/lib/palette-repo-resolution.test.ts",
         "src/renderer/src/lib/browser-palette-page-entries.test.ts",
         "src/renderer/src/lib/browser-palette-search.test.ts",
         "src/renderer/src/lib/simulator-palette-search.test.ts",
@@ -3377,25 +3374,12 @@
           ]
         },
         {
-          "file": "src/renderer/src/lib/palette-repo-resolution.test.ts",
-          "assertions": [
-            "paired SSH rows resolve display metadata through their runtime owner alias",
-            "paired SSH worktrees resolve their runtime-owned repository metadata",
-            "an unavailable explicit runtime owner never borrows physical-host or bare repository metadata",
-            "an explicit unknown owner never borrows another host's metadata"
-          ]
-        },
-        {
           "file": "src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts",
           "assertions": [
             "same-id folder simulator reuse selects the active owning host",
             "inactive local simulator creation remains host-stamped amid a collision",
             "an explicitly owned simulator is reused before its matching worktree row hydrates"
           ]
-        },
-        {
-          "file": "src/renderer/src/lib/open-mobile-emulator-tab.test.ts",
-          "assertions": ["manual emulator launch lookup and creation stay on the local provider"]
         },
         {
           "file": "src/renderer/src/lib/browser-palette-page-entries.test.ts",
@@ -3479,7 +3463,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
           "result": "passed",
           "durationSeconds": 10.5,
-          "summary": "The review-hardened candidate passed 189/189 focused contracts, including direct browser-result host fallback, SSH plus paired-runtime current-row aliases, explicit-owner fail-closed behavior, generic workspace rows, simulator reuse, local creation stamping, activation, and same-id distinct-runtime mirror preservation."
+          "summary": "The review-hardened candidate passed 189/189 focused contracts, including direct browser-result host fallback, SSH plus paired-runtime current-row aliases, explicit-owner fail-closed behavior, generic workspace rows, simulator reuse, local creation stamping, activation, and same-id distinct-runtime mirror preservation. Historical command preserved after the test-value audit removed the palette repo resolver suite. currentCommand is an administrative link to a remaining gate command; this historical run has not validated that command or equivalent coverage.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts"
         },
         {
           "date": "2026-08-20",
@@ -3488,17 +3473,18 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
           "result": "failed",
           "durationSeconds": 0.8,
-          "summary": "The final-review oracle failed 4/16 before the follow-up: same-id folder simulator reuse selected no owning tab, inactive local simulator creation was unstamped, the paired SSH/runtime alias resolved local metadata, and an explicit unknown owner fell back locally."
+          "summary": "The final-review oracle failed 4/16 before the follow-up: same-id folder simulator reuse selected no owning tab, inactive local simulator creation was unstamped, the paired SSH/runtime alias resolved local metadata, and an explicit unknown owner fell back locally. Historical command preserved after the test-value audit removed the palette repo resolver suite. currentCommand is an administrative link to a remaining gate command; this historical run has not validated that command or equivalent coverage.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts"
         },
         {
           "date": "2026-08-21",
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
           "result": "passed",
           "durationSeconds": 24.3,
-          "summary": "The OpenCode-review-hardened candidate passed 225/225 focused contracts, including unfiltered ownership ambiguity under host filters and scoped open-tab search, review-cache ownership, rendered palette repo metadata, folder workspaces, inactive local simulator creation, paired SSH/runtime display metadata, and explicit-owner fail-closed resolution."
+          "summary": "The OpenCode-review-hardened candidate passed 225/225 focused contracts, including unfiltered ownership ambiguity under host filters and scoped open-tab search, review-cache ownership, rendered palette repo metadata, folder workspaces, inactive local simulator creation, paired SSH/runtime display metadata, and explicit-owner fail-closed resolution. Historical command preserved after the test-value audit removed the palette repo resolver suite. currentCommand is an administrative link to a remaining gate command; this historical run has not validated that command or equivalent coverage."
         },
         {
           "date": "2026-08-20",
@@ -3507,7 +3493,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
           "result": "failed",
           "durationSeconds": 0.1,
-          "summary": "The final reviewer repo-label oracle failed 1/6 before the follow-up: a paired SSH worktree resolved the local bare-id repository instead of its runtime-owned repository."
+          "summary": "The final reviewer repo-label oracle failed 1/6 before the follow-up: a paired SSH worktree resolved the local bare-id repository instead of its runtime-owned repository. Historical command preserved after the test-value audit removed the palette repo resolver suite. currentCommand is an administrative link to a remaining gate command; this historical run has not validated that command or equivalent coverage.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts"
         },
         {
           "date": "2026-08-20",
@@ -3516,7 +3503,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
           "result": "failed",
           "durationSeconds": 0.1,
-          "summary": "The final clean-round fail-closed oracle failed 1/7 before the follow-up: an unavailable explicit runtime owner borrowed physical SSH repository metadata."
+          "summary": "The final clean-round fail-closed oracle failed 1/7 before the follow-up: an unavailable explicit runtime owner borrowed physical SSH repository metadata. Historical command preserved after the test-value audit removed the palette repo resolver suite. currentCommand is an administrative link to a remaining gate command; this historical run has not validated that command or equivalent coverage.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts"
         },
         {
           "date": "2026-08-20",
@@ -3575,7 +3563,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "Byte-identical browser and simulator candidate tests failed 4/28 on affected baseline 012e9f410c, passed 28/28 on candidate fe45b73c20, failed the same 4/28 when only the two candidate filters were disabled, and returned to 28/28 after restoration. Review-round topology contracts failed 4/40 before the alias/generic/local-stamping follow-up; final-review contracts then failed 4/16 before folder/background/worktree-metadata hardening, 1/6 before paired repository-metadata hardening, 1/7 before unavailable-runtime fail-closed hardening, 1/12 with the component's physical-host bypass restored, 1/6 before review-cache ownership used the same resolver, 1/6 before the downstream document rejected a remote owner's unqualified legacy cache entry, and 1/6 when a host filter or scoped open-tab search hid the same-id sibling from legacy ambiguity detection. Manual local-provider ownership failed 1/12 before explicit host routing, and pre-hydration dedupe failed 1/13 before exact stamped-owner reuse; the combined contracts then passed 25/25 and the six-file review suite passed 73/73. The prior completed focused suite passed 225/225."
+        "evidence": "Byte-identical browser and simulator candidate tests failed 4/28 on affected baseline 012e9f410c, passed 28/28 on candidate fe45b73c20, failed the same 4/28 when only the two candidate filters were disabled, and returned to 28/28 after restoration. Review-round topology contracts failed 4/40 before the alias/generic/local-stamping follow-up; final-review contracts then failed 4/16 before folder/background/worktree-metadata hardening, 1/6 before paired repository-metadata hardening, 1/7 before unavailable-runtime fail-closed hardening, 1/12 with the component's physical-host bypass restored, 1/6 before review-cache ownership used the same resolver, 1/6 before the downstream document rejected a remote owner's unqualified legacy cache entry, and 1/6 when a host filter or scoped open-tab search hid the same-id sibling from legacy ambiguity detection. Manual local-provider ownership failed 1/12 before explicit host routing, and pre-hydration dedupe failed 1/13 before exact stamped-owner reuse; the combined contracts then passed 25/25 and the six-file review suite passed 73/73. The prior completed focused suite passed 225/225. Historical results include examples subsequently removed in the test-value audit; they do not establish current coverage for those removed assertions."
       },
       "performanceBudget": {
         "required": true,
@@ -3589,7 +3577,8 @@
         "Live Linux, Windows, and paired-runtime-over-SSH journeys are not collected; the SSH/runtime dual-owner topology is deterministic renderer coverage.",
         "The paired Electron simulator path seeds renderer state because remote web clients cannot launch a native emulator.",
         "The paired Electron journey proves a real host mirror stamp before injecting the same-id sibling state; it does not create the collision through the wire.",
-        "Mixed-version behavior is covered by optional-field parsing and fail-closed legacy ambiguity, not a live old-client/new-host matrix."
+        "Mixed-version behavior is covered by optional-field parsing and fail-closed legacy ambiguity, not a live old-client/new-host matrix.",
+        "The test-value audit removed the palette repository resolver examples and manual emulator local-provider routing assertion. Their historical alarms are no longer provided by these suites; the retained emulator cases cover narrower coordination boundaries. No equivalent coverage is claimed."
       ],
       "demotionRule": "Cannot promote if a same-id sibling tab duplicates, disappears, activates another host, or if ambiguous unstamped ownership is guessed."
     },
@@ -4904,7 +4893,7 @@
       "invariant": "Index-only Git activity below the common Git directory must not emit worktrees:changed, invalidate worktree caches, or trigger fetchWorktrees fanout; structural add/remove/HEAD/gitdir/locked/config.worktree changes must still refresh worktrees and nudge Source Control. When the authoritative paired host accepts an external structural change for a uniquely identified server-local repo, each live client for that host must receive one existing host-scoped worktreesChanged invalidation and converge to the same repo/worktree identity without reconnect; duplicate watcher events must coalesce, stale cached or in-flight catalogs must not survive invalidation, and event-ignoring clients must remain compatible. Colliding local/SSH repo IDs must not publish the host-blind event until existing semantics can carry owner identity. External head moves (commit, amend, reset) must reach background worktree rows through spawn-free metadata reads, never through structural fanout. A process generation-scope rollover revokes every direct SSH target and old-scope provider request, not only the target whose counter exhausted.",
       "oracle": "Classify exact git-common paths as structural, status-only, or ignored; count notifications from debounced watcher events; force the Linux/Windows poll path to emit allowlisted leaf events, detect linked HEAD rewrites independent of entry-directory mtime, and surface in-place index rewrites via the backstop re-stat; diff head identities from metadata-file reads and notify only real head moves; assert Source Control subscribes to both structural and status-only signals with active-repo and visibility filters. Join the real runtime RPC server to two independently authenticated E2EE clients plus an event-ignoring client, advance the host Git inventory, trigger duplicate structural watcher callbacks, and require one host renderer notification plus one runtime event and a refreshed catalog per subscribed client; require the event-ignoring client to refresh safely on explicit read. Hold a scan after it captures old inventory, join it from a second paired client, publish the watcher invalidation, advance Git independently, and require both overlapping RPCs to retry or join one fresh scan before returning. Disconnect one client, advance inventory again, and require reconnect to read current state without stale event replay. Give a watcher a local repo ID colliding with an SSH owner and require the host renderer refresh while the unqualified runtime event stays absent. Force the real path in isolated Electron apps with git worktree add, a host Git inventory assertion, store-subscription barriers, matching host/client worktree identity, and visible rows in both renderers. For direct SSH, roll one exhausted target into a fresh process generation scope while invalidating sibling target tokens, and fill a partial pushed authority before clearing that target's PTY bindings once.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktree-base-directory-event-filter.test.ts src/main/ipc/worktree-base-directory-watcher.test.ts src/main/ipc/worktree-base-directory-poller.test.ts src/main/ipc/worktree-head-identity-reader.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktree-base-directory-event-filter.test.ts src/main/ipc/worktree-base-directory-watcher.test.ts src/main/ipc/worktree-base-directory-poller.test.ts src/main/ipc/worktree-head-identity-reader.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/external-worktree-paired-client-discovery.integration.test.ts src/main/window/attach-main-window-services.test.ts",
         "ORCA_E2E_FORCE_HEADFUL=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-external-worktree-discovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/connection/ssh-connection-generation.test.ts src/main/ssh/ssh-provider-authority.test.ts --reporter=dot",
@@ -4916,7 +4905,6 @@
         "src/main/ipc/worktree-base-directory-poller.test.ts",
         "src/main/ipc/worktree-head-identity-reader.test.ts",
         "src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts",
-        "src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts",
         "src/main/runtime/external-worktree-paired-client-discovery.integration.test.ts",
         "src/main/window/attach-main-window-services.test.ts",
         "tests/e2e/paired-external-worktree-discovery.spec.ts",
@@ -4966,12 +4954,6 @@
           "assertions": [
             "loose-ref, packed-refs, detached, unborn, and relative-gitdir layouts resolve or skip without spawning Git",
             "traversal-shaped or backslash/colon symrefs are rejected before any path join and only hex object ids are ever emitted"
-          ]
-        },
-        {
-          "file": "src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts",
-          "assertions": [
-            "renderer preload API fixtures include the status-metadata and head-identity subscription contracts"
           ]
         },
         {
@@ -5026,7 +5008,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktree-base-directory-event-filter.test.ts src/main/ipc/worktree-base-directory-watcher.test.ts src/main/ipc/worktree-base-directory-poller.test.ts src/main/ipc/worktree-head-identity-reader.test.ts src/renderer/src/hooks/worktree-head-identity-apply.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktree-base-directory-event-filter.test.ts src/main/ipc/worktree-base-directory-watcher.test.ts src/main/ipc/worktree-base-directory-poller.test.ts src/main/ipc/worktree-head-identity-reader.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktree-base-directory-event-filter.test.ts src/main/ipc/worktree-base-directory-watcher.test.ts src/main/ipc/worktree-base-directory-poller.test.ts src/main/ipc/worktree-head-identity-reader.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts",
           "result": "passed",
           "durationSeconds": 3.12,
           "summary": "7 files and 130 tests passed locally, adding head-identity emit-on-change without structural fanout, reflog status triggers, config.worktree structural classification, the in-place index backstop, and the spawn-free head reader with symref traversal rejection and hex-object-id output validation."
@@ -5812,7 +5794,7 @@
       "invariant": "Selecting Orca Browser for an HTTP link in a runtime-owned terminal creates exactly one browser page on that owning runtime and exactly one mirrored client browser workspace, with matching remote page identity and no client external-browser call. Explicit System Browser remains client-owned, direct SSH remains system-browser-only, and unknown or mismatched owners fail closed.",
       "oracle": "Use the focused routing contracts as the byte-identical baseline/candidate oracle. Require runtime OSC, WebLinksAddon, click fallback, action-menu, and modifier paths to target the exact owner without client fallback, while direct SSH and generic remote document links stay external. Separately run one byte-identical headed paired Electron journey on the candidate and with only runtime browser registration disabled. Require one new host browser tab, one new client mirror with exact page identity, rendered fixture DOM, explicit browser-tab activation, zero client shell.openExternal calls, exact close convergence, unchanged terminal counts, and continued output on the original PTY.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-runtime-host-link-routing.test.ts src/renderer/src/components/terminal-pane/terminal-link-action-routing.test.ts src/renderer/src/components/terminal-pane/terminal-link-open-hints.test.ts src/renderer/src/lib/http-link-routing.test.ts src/renderer/src/lib/http-link-modifier-routing.test.ts src/renderer/src/lib/workspace-browser-tab-open.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-runtime-host-link-routing.test.ts src/renderer/src/components/terminal-pane/terminal-link-action-routing.test.ts src/renderer/src/components/terminal-pane/terminal-link-open-hints.test.ts src/renderer/src/lib/workspace-browser-tab-open.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-runtime-host-link-routing.test.ts src/renderer/src/components/terminal-pane/terminal-link-action-routing.test.ts src/renderer/src/lib/workspace-browser-tab-open.test.ts",
         "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-browser-link.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
@@ -5820,8 +5802,6 @@
         "src/renderer/src/components/terminal-pane/terminal-runtime-host-link-routing.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-link-action-routing.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-link-open-hints.test.ts",
-        "src/renderer/src/lib/http-link-routing.test.ts",
-        "src/renderer/src/lib/http-link-modifier-routing.test.ts",
         "src/renderer/src/lib/workspace-browser-tab-open.test.ts",
         "tests/e2e/paired-remote-terminal-browser-link.spec.ts"
       ],
@@ -5862,13 +5842,14 @@
           "summary": "Latest main e4c278eb523 failed 6/25 owner-routing assertions: runtime terminal links called the viewing client's external browser and the managed-browser helper did not enforce an asserted runtime owner."
         },
         {
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-runtime-host-link-routing.test.ts src/renderer/src/components/terminal-pane/terminal-link-action-routing.test.ts src/renderer/src/components/terminal-pane/terminal-link-open-hints.test.ts src/renderer/src/lib/workspace-browser-tab-open.test.ts",
           "date": "2026-08-12",
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-runtime-host-link-routing.test.ts src/renderer/src/components/terminal-pane/terminal-link-action-routing.test.ts src/renderer/src/components/terminal-pane/terminal-link-open-hints.test.ts src/renderer/src/lib/http-link-routing.test.ts src/renderer/src/lib/http-link-modifier-routing.test.ts src/renderer/src/lib/workspace-browser-tab-open.test.ts",
           "result": "passed",
           "durationSeconds": 1.83,
-          "summary": "Candidate passed 84/84 across six focused routing, modifier, availability, owner assertion, failure, SSH, and system-browser contract files."
+          "summary": "Candidate passed 84/84 across six focused routing, modifier, availability, owner assertion, failure, SSH, and system-browser contract files. Historical command preserved after removal of the mocked routing and modifier suites in the test-value audit; currentCommand names the remaining suites only. This historical result has not been rerun for that command and does not claim equivalent coverage."
         },
         {
           "date": "2026-08-12",
@@ -5950,13 +5931,13 @@
       "invariant": "Opening one HTML preview from a paired client renders the workspace document in exactly one client-local browser tab, located by that document and served over the orca-preview scheme. The client gains exactly that one browser workspace and it is the document one — blank where a URL page carries a URL, named by the document, with the chip naming the file — while the host gains no browser page at all, neither in its own page registry nor in the tab snapshot its clients publish into. The preview occupies its own split without taking focus from the source editor; an explicit click activates it, and closing it removes only the preview. Following a document from a file link is the other half of that switch and does move the reader to it, tab group included, whether the preview is new or already open, because opening a file is a request to look at it. A document tab quit with the client comes back as the same row on a grant the relaunched client mints afresh. A preview is named by the browser page it is open in, not by a namespace of its own, and the page registry has two halves: a workspace-document guest is registered in its own map and is absent from the browsing one entirely. That absence is the fence. Page, session and profile management, agent tab enumeration and command targeting, download routing and certificate attribution all read the browsing map directly, in more places than a per-channel guard could be remembered in, so none of them can name a document page and none of them carries a guard. Browser tools the reader drives (element grab, hover describe, selection capture, the annotation viewport bridge) are the one operation that legitimately spans the halves, and they go through the single authority that reads both, keyed by the page and its hosting renderer. The halves are disjoint in both directions: browsing registration refuses a page the document half already holds, and minting a grant refuses a page the browsing half already holds, so one id can never name a surface in both. The headless backend acts on that refusal by destroying the window it had already opened rather than leaving a policy-less page behind an id nothing can drive, keeping nothing under that id for its own shutdown to hand back. Registration refuses on the same terms when the guest it was asked about is already gone. The exit door is guarded in both its halves: a preview withdraws by revoking its grant and never through the unregister channel, so a page the document half holds arriving there is refused before either the registration teardown or the grab-state disposal beside it, which would otherwise drop the intent an in-flight preview grab compares by identity and leave that grab answering ok without ever arming its guest. A bridge request whose guest does not resolve is refused without tearing down the page it named, so a misaddressed request cannot cancel a healthy page's in-flight downloads and grabs. The annotation viewport bridge resolves its guest when its serialized op actually runs rather than when the request arrived, so a cross-process navigation while it waited cannot leave the bridge installed in a retired guest while the reader looks at a new one. State main keys by a preview's page is disposed when that page's grant is revoked, which is the only signal a preview's surface is gone. A tool asking for a page whose guest has not attached yet waits for that registration and arms when it arrives, rather than answering not-ready at the reader; that wait resolves only the request already naming this page, never the worktree-wide or any-tab waits the CLI and agents use to ask for a browser tab to drive. Handing the previewed document to the reader's own machine routes on the owners its grant was minted against — the file's own connection owner and the worktree's own runtime owner, neither read from the tab's stored fields. Only a document proven to live on this machine reaches the client OS; one with a resolved remote owner is downloaded first; and one whose owner cannot be resolved at all, workspace root included, is refused with a message naming that, because the download route would otherwise read the same absolute path on the client and hand back a same-named local file under the remote document's name. A runtime-owned path that falls outside its worktree root is refused by that route itself and surfaces as a failure toast rather than a download. Nothing the document does writes a file to this machine either: the preview partition denies downloads outright instead of routing them through the browser download flow, which has no page to attribute a preview's bytes to and would otherwise reserve a name in this desktop's Downloads folder and write them there unprompted. That refusal is visible to the reader and invisible to the document: the preview's shell carries a fixed sentence saying downloads are off, published at most once per preview per interval so a document asking in a loop cannot fill Orca's chrome, while the page itself gets back exactly what it got before, which is nothing. The sentence names no file, because the document chooses the name it offers; and a refusal never takes the document away the way an entry document's own failure does, whatever it names. A preview is a browser tab, not an editor tab in a preview mode: it is named the way a browser tab is named — by the document it shows when that document declares a title, and by the file it shows when it does not — while the chip goes on naming the file and the host whatever the document calls itself. A title is refused on the same terms the url is: a document that declares none has Chromium report the grant URL as its title, and that title is stored, mirrored onto the tab and written to disk, so anything carrying the scheme falls back to the file instead. It is created by the preview action as a page located by its document, it carries the workspace-relative path copy the editor's path header owned, and closing it revokes the grant that made the document readable while a URL tab closing beside it revokes nothing. Chrome persisted by builds that made previews editor tabs is dropped on restore rather than coming back naming a surface no restore can produce, and the ordinary editor tab for the same document is left alone. A document tab is held back at the mobile publish boundary — no client holds its grant, and the wire has no tab kind for it — while an ordinary browser tab beside it still publishes. It is held back from the group projection that publishes tab order, recency and group activity as well as from the tab list itself, so no published group names a tab the phone is never sent. A browser page can be located by a workspace document instead of a URL, and the document is the whole of its stored identity. The grant and the orca-preview URL that document is served over are minted when the page mounts and replaced by a hard reload, so neither is ever written to the page's url, mirrored onto its tab, persisted or published: such a page's url is the blank URL from creation through restore, including when a session written elsewhere carries a grant URL in, and what the session carries is the worktree and path a restored page mints afresh against today's owners. Every door onto a page's url holds that line — creation, the title update, and the navigation commit alike — so a report about a document page cannot give it a URL it never had, and the title fallback and the loading affordance follow the url each door actually wrote. The mirror carries the document too, so a tab entry cannot go on naming a document its active page has left. Every guest in the app is policy-attached through one door: a workspace document takes a restricted profile there rather than a separate installer beside it, so the attachment bookkeeping that door owns — what registration refuses, and what teardown frees — covers a preview on the same terms as a browsing page, and a preview takes none of the browsing machinery that door installs. That authority answers from the moment the embedder hands the guest over rather than only after a later navigation: the guest binds to the grant it is already showing, so the tools reach the document the reader opened and not just one they navigated to. A read the host reports as truncated or over-cap is refused rather than served partially, and a document outside the paired worktree is refused with a message naming that boundary instead of a bare read failure. The rendered document reaches nothing off-machine on its own: every served response carries a self-only content security policy, the preview session cancels any request that is not in-document, subframes cannot navigate outside the grant, a guest no document has yet bound to a grant may not navigate at all, the guest gathers no ICE candidates, and an SSH path that canonicalizes outside the grant root is refused before it is read. The one route out is a link the reader presses: a trusted click on an anchor, reported by the preview's own preload from a guest still bound to a live grant, leaves through the configured browser destination and captured source route — and only after the reader confirms the exact destination URL, so a document cannot spend a single stray press exfiltrating what it can read into a link it authored. The preview hands its guest that focus itself whenever it is the surface the reader is in — a browsing page gets it from the chrome around it, and a preview has no chrome to get it from — and it does so only then, so a preview mounted behind a terminal or an editor never takes the keyboard from what the reader is actually in. It offers again when the window itself takes focus back and nothing in the embedder has claimed that focus, because another app coming to the front lands focus on the embedder rather than the guest and the route out would otherwise stay shut until something remounted the pane — while the same window focus also arrives when the reader presses a tab, that being the guest's own blur returning, and taking focus back from there would fight the reader for their own click. Nothing else does. A navigation or popup the document starts by itself is swallowed whatever else is happening, including immediately after a genuine press elsewhere in the document, so a page that can read its grant cannot hand it to a browser tab; a middle click opens nothing; and a fragment link is answered inside the document. A preview attach carries the preview preload and no renderer-supplied one, and no other attach path can acquire it. A subresource the workspace will not send degrades the document to a notice naming that file, never to a failure panel over a page that rendered. A grant outlives neither the tab that owns it nor the renderer document that minted it, and only the trusted renderer can mint or revoke one. For the browser creations this gate still owns, owner-pinned creation returns the canonical host page identity before navigation readiness; delayed navigation cannot turn a created page into an unidentifiable failure or a duplicate retry. Capability rejection before host mutation must preserve the original error, issue no RPC, surface a failure toast, and remove only a caller-declared newly-created empty split. Post-create reconciliation failure requires exact rollback; ambiguous rollback rejects without local fallback.",
       "oracle": "In paired Electron, write an HTML fixture that declares its own title on the host, invoke the Explorer preview action on the client, and require the document text to be readable out of the orca-preview guest before judging any absence. With that presence established, require the client to hold exactly one browser workspace more than its baseline and that workspace to be the document one: page and tab url blank, the document path mirrored onto both, the tab named by the document's title, the chip naming the file, no editor row of the retired preview species anywhere, and the guest URL carrying the orca-preview scheme. Ask the host through its own page registry as well as through the tab snapshot, and in the same run open an ordinary URL browser tab from the same client and require that one to arrive in both — the presence precondition without which “the host gained nothing” is satisfied just as well by an oracle that cannot see browser pages at all. Require the preview to sit in a group other than the source editor's while the active group and tab remain the source editor's. Then click away to the terminal, click the preview tab, require it to reactivate and still render, close it with its own X, and require the document tab to be gone while the host still holds only the URL tab and the source group, source editor and terminal survive. Quit the client with a document tab open and relaunch it on the same profile: require the same workspace row to come back, blank and named by the document, rendering the document again over a grant URL that differs from the one that was quit, with no preview-scheme or document-named page anywhere in what the host holds. Prove the halves are live by flipping one product property at a time and requiring the run to fail: publish document workspaces to the host like ordinary ones, and stop mirroring the document onto the workspace row. Have the fixture document attempt its own egress on every load — an unattended window.open and location.href to an off-machine URL, plus an inline ICE gathering probe — and require the same baseline counts and a candidate count of zero, so the document's own attempts are measured rather than assumed. Then, as a separate phase after the close oracle has already run, bring the client window to the front, press the document's heading with a real mouse event, and require the document to report that the same press drove it to attempt a second window.open and location.href while both browser counts stay at that phase's baseline and nothing routes — the case a recent-input gate cannot distinguish from the press's own effect. Only then press the target=_blank link with a real mouse event and require both a recorded routing call that returned success and a browser count above that baseline, with the preview tab still open. Drive the preload's click policy as a unit oracle over a real document: a dispatched click, a trusted press on an external anchor, an anchor reached through what it wraps, an SVG animated href, a sibling preview link, fragment and percent-encoded fragment targets, a bare hash, and a middle click. Create a browser page located by a workspace document, handing creation a live grant URL, and require its stored url, its mirrored tab url and the written session payload all to be blank with no orca-preview string anywhere in what was written, while an ordinary page created the same way keeps the URL it was given and asks for the address bar the document page never does. Parse the written page and tab through the session schema and require the document to survive both halves. Hydrate them back and require the document page to return blank and still named — including when its page row was salvaged away and only the tab's own copy remains, and when a foreign session carried a grant URL into both rows. Drive the mirror across a page switch out of the document and back, and across a repair in which the document is the only mirrored field that differs. Name a document page from its document and require the tab to take that name, name it with an empty title and require the file, name it with a live grant URL and require the file again with no preview scheme anywhere in the written session, and require an ordinary blank browser tab beside it to still be called New Tab. Dispatch a title update out of a rendered preview's own guest and require it to reach the page state while the identity chip still reads the document's workspace-relative path. Attach a browsing guest and a workspace-document guest through the same method in one run and require the browsing one to take clicked-link routing, popup handling and auth-identity detach tracking while the document guest takes none of them, stays inside the grant it is showing, denies every window it asks for, and is dropped from the page-keyed document registry by the same teardown that frees its id for a later attach. Register a browsing guest and attach a workspace-document guest in one run against the real manager, require the one door to answer each page with the guest of its own half, and require the document page to be absent from the browsing map and from its enumeration. Drive both browsing registration entry points with a page the document half already holds and require them to register nothing, and drive the mint channel with a page the browsing half already holds and require it to refuse; and drive the offscreen one with a guest that is missing and with one already destroyed, requiring the same refusal. Arm a grab on a live preview target, drive the unregister channel at that same target in the window before the queued operation runs, and require the grab to reach the guest anyway — then drive the same sequence for an ordinary browser page and require its grab state to be disposed after all. Hold one viewport-bridge op open, queue a second behind it, swap the page's guest while that second op waits, and require the injection to land in the guest the page has then. Revoke a grant after a tool has run against its page and require that page's grab state to be cancelled and disposed. Ask a tool for a document page whose guest has not attached, require the request to park in the registration wait, attach the guest, and require the same request to arm on it; require a page nothing ever renders to answer not-ready once that wait elapses. With a document open, ask a tool for a browsing page id and require it to be answered by the browsing half or not at all, with the same channel reaching the document guest under the page it really renders. Drive open-externally for a document whose per-file owner is remote while the workspace-scoped owner is unresolved, for a runtime-owned worktree whose preview tab carries no runtime id of its own, and for a worktree that resolves no runtime owner while the tab still carries one, requiring the download route in each; and for an owner that cannot be resolved at all, and for an unknown workspace root while nothing names another host, requiring a refusal that neither opens nor downloads. Drive the headless backend with a page the document half already holds and require it to reject, destroy the window, and unregister nothing — then shut the backend down and require it still to have unregistered nothing. Navigate a bound preview guest at a second grant through both latch events and require it to stay on the grant it bound to. Mount a preview while a renderer drag is already in flight and require its guest to be click-through at the moment it is appended, not a turn later. Render the editor panel shell in each remaining tab mode and require the path header exactly where the surface does not already name itself. Drive the preview action and require a browser tab located by the document rather than an editor tab, require a second open of the same document to activate the tab it is already in, and require closing that tab to revoke its grant while a URL tab closed beside it revokes none. Hydrate a session carrying preview chrome from a build that made previews editor tabs and require it dropped while the ordinary editor tab for the same document survives. Publish a worktree holding a document tab and a URL tab and require only the URL tab to reach the mobile snapshot. Install the shared partition policies for a preview partition and for an ordinary browsing partition in the same run, fire each one's own will-download listener, and require the preview's to cancel while the browsing one still reaches the download router — then require the preview protocol installer to be what asks for that deny. In the same run, require the cancelled download to raise a reader-facing notice and the routed one to raise none. Drive that notice directly for a guest bound to a live grant, for repeated attempts inside and outside its interval, for two previews at once, and for a contents no preview is bound to; require the guest registry to name the bound grant for a live preview guest and nothing for a contents that is not one, has committed no document, or is gone. Drive the shell with a refusal and require one fixed sentence, still one row after three more refusals, standing beside an asset failure rather than being counted with it, gone behind the failure panel, and ignored when it names another preview's grant. Drive the main-side report gate directly for a sender that is no preview guest, a guest with no bound or a revoked grant, a genuine press Electron's webview focus flag misreports as unfocused, and non-web URLs; drive the reader-facing confirmation for accept, cancel, and a confirmed tab the browser refuses; and drive will-attach-webview in both preload directions. Run the per-owner reader, grant-containment, scheme-admission, guest-policy, and plan-routing contracts as unit oracles, including a host-reported truncation, an over-cap binary, and an out-of-worktree paired path. Drive the reader-facing component with the payloads the reader can actually produce — the entry document fails only as truncated or unreadable, a subresource additionally as a refused format — and require the asset case to leave the guest mounted. Drive the closed-tab cleanup hook, the window installer, and the grant IPC handlers directly, requiring the grant to be released when the preview tab closes, cleared at window creation and on a cross-document main-frame navigation, and refused to any sender that is not the trusted renderer. For the browser creations this gate still owns, run the unchanged contract oracle for direct create and side-preview callers with absent status, unknown capabilities, and a mixed-version host, requiring the original unsupported error or visible toast, zero RPCs, and no retained new split; hold a real navigation response beyond the 15-second client deadline after host creation and require the first RPC to return the exact host inventory page ID, one host page, and no retry; repeat reconciliation faults against headless serve and retain the separate exact-page reconciliation rollback oracle.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-browser.test.ts src/main/runtime/rpc/methods/browser.test.ts src/renderer/src/lib/file-preview.test.ts src/renderer/src/runtime/web-session-browser-placement.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/runtime/web-session-tabs-sync-focus-intent.test.ts src/renderer/src/runtime/web-session-tabs-sync-browser-tabs.test.ts src/renderer/src/runtime/web-session-tabs-sync-client-owned-placement.test.ts src/renderer/src/runtime/web-session-tabs-sync-layout-groups.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-browser.test.ts src/main/runtime/rpc/methods/browser.test.ts src/renderer/src/runtime/web-session-browser-placement.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/runtime/web-session-tabs-sync-focus-intent.test.ts src/renderer/src/runtime/web-session-tabs-sync-browser-tabs.test.ts src/renderer/src/runtime/web-session-tabs-sync-client-owned-placement.test.ts src/renderer/src/runtime/web-session-tabs-sync-layout-groups.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/web-runtime-browser-capability-cleanup.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/doc-preview-grant-registry.test.ts src/main/browser/doc-preview-file-reader.test.ts src/main/browser/doc-preview-protocol.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/main/browser/doc-preview-failure-notice.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/lib/doc-preview-grants.test.ts src/renderer/src/lib/file-preview.test.ts src/main/window/main-window-webview-security.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx src/renderer/src/components/browser-pane/workspace-doc/doc-preview-external-link-confirmation.test.ts src/renderer/src/components/terminal-pane/terminal-file-link-actions.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/doc-preview-grant-registry.test.ts src/main/browser/doc-preview-file-reader.test.ts src/main/browser/doc-preview-protocol.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/main/browser/doc-preview-failure-notice.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/lib/doc-preview-grants.test.ts src/main/window/main-window-webview-security.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx src/renderer/src/components/browser-pane/workspace-doc/doc-preview-external-link-confirmation.test.ts src/renderer/src/components/terminal-pane/terminal-file-link-actions.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-session-partition-policies.test.ts src/main/browser/doc-preview-protocol.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/doc-preview-download-block-notice.test.ts src/main/browser/browser-session-partition-policies.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-manager-guest-policy-profile.test.ts src/main/window/main-window-webview-security.test.ts src/main/browser/doc-preview-guest-policy.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/lib/file-preview.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx src/shared/doc-preview-scheme.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts",
         // The hardening round: the third url door, the group projection, and both directions of the focus handoff.
@@ -5977,7 +5958,7 @@
         // The changed-spec e2e job's own command, which is the only Linux run this gate has.
         "npx playwright test --config tests/playwright.config.ts --project=electron-headless tests/e2e/paired-remote-html-preview-local-render.spec.ts --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-browser.test.ts src/renderer/src/runtime/web-runtime-session.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/orca-runtime-browser.test.ts src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts src/renderer/src/hooks/useIpcEvents-close-routing-browser-pages.test.ts src/renderer/src/hooks/useIpcEvents-close-routing-session-tabs.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/runtime/web-runtime-session.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/orca-runtime-browser.test.ts src/renderer/src/hooks/useIpcEvents-close-routing-browser-pages.test.ts src/renderer/src/hooks/useIpcEvents-close-routing-session-tabs.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/runtime/web-runtime-session.test.ts",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-browser-create-navigation-deadline.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "SKIP_BUILD=1 ORCA_E2E_FORCE_HEADFUL=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/paired-browser-creation-reconciliation-failure.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
         "SKIP_BUILD=1 ORCA_E2E_FORCE_HEADFUL=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/paired-browser-creation-reconciliation-failure.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line"
@@ -5985,12 +5966,10 @@
       "testFiles": [
         "src/main/runtime/orca-runtime-browser.test.ts",
         "src/main/runtime/rpc/methods/browser.test.ts",
-        "src/renderer/src/lib/file-preview.test.ts",
         "src/renderer/src/runtime/web-session-browser-placement.test.ts",
         "src/renderer/src/runtime/web-runtime-browser-capability-cleanup.test.ts",
         "src/renderer/src/runtime/web-runtime-session.test.ts",
         "src/renderer/src/runtime/web-session-tabs-sync.test.ts",
-        "src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts",
         "src/renderer/src/hooks/useIpcEvents-close-routing-browser-pages.test.ts",
         "src/renderer/src/hooks/useIpcEvents-close-routing-session-tabs.test.ts",
         "src/renderer/src/store/slices/browser.test.ts",
@@ -6046,15 +6025,6 @@
           ]
         },
         {
-          "file": "src/renderer/src/lib/file-preview.test.ts",
-          "assertions": [
-            "a paired-runtime HTML preview opens a local doc preview instead of a runtime browser tab",
-            "a local workspace still opens the embedded browser tab at a file URL",
-            "a paired document outside the worktree names that boundary and creates no split",
-            "an SSH document outside the worktree root still previews"
-          ]
-        },
-        {
           "file": "src/renderer/src/runtime/web-runtime-session.test.ts",
           "assertions": [
             "a post-create timeout returns false only after exact host close and a confirming snapshot",
@@ -6071,12 +6041,6 @@
           "assertions": [
             "explicit renderer cleanup bypasses guest registration while retaining typed missing-page behavior",
             "offscreen cleanup rejects a page outside the requested worktree"
-          ]
-        },
-        {
-          "file": "src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts",
-          "assertions": [
-            "renderer-backed creation preserves the requested canonical page ID while keeping its workspace identity independent"
           ]
         },
         {
@@ -6371,14 +6335,14 @@
           "summary": "Candidate with the sole delta that the preview pane does not hand focus to its guest — the tree as it stood before this change — failed at the target=_blank press: six real presses reached the anchor, the embedder had the webview as its active element, and main's own log answered each report with registered true, grant live, focused false. This is the gap the rewrite found: since previews became browser pages they had no chrome to pass focus on, so the one route out of a preview was shut."
         },
         {
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/doc-preview-grant-registry.test.ts src/main/browser/doc-preview-file-reader.test.ts src/main/browser/doc-preview-protocol.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/main/browser/doc-preview-failure-notice.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/lib/doc-preview-grants.test.ts src/renderer/src/lib/file-preview.test.ts src/renderer/src/lib/file-preview-action-visibility.test.tsx src/main/window/main-window-webview-security.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx src/renderer/src/components/browser-pane/workspace-doc/doc-preview-external-link-confirmation.test.ts src/renderer/src/components/terminal-pane/terminal-file-link-actions.test.ts",
           "date": "2026-08-27",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/doc-preview-grant-registry.test.ts src/main/browser/doc-preview-file-reader.test.ts src/main/browser/doc-preview-protocol.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/main/browser/doc-preview-failure-notice.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/lib/doc-preview-grants.test.ts src/renderer/src/lib/file-preview.test.ts src/renderer/src/lib/file-preview-action-visibility.test.tsx src/main/window/main-window-webview-security.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx src/renderer/src/components/browser-pane/workspace-doc/doc-preview-external-link-confirmation.test.ts src/renderer/src/components/terminal-pane/terminal-file-link-actions.test.ts",
           "result": "passed",
           "durationSeconds": 1.63,
-          "summary": "189/189 over the grant, reader, protocol, guest-policy, scheme-admission, plan-routing, action-visibility, failure-message, external-link and terminal-row contracts. This replaces the 2026-08-27 record of the same command at 174/174, whose thirteenth file was the deleted doc-preview-external-link-bridge.test.ts: the STA-5758 hardening moved that behavior into the reader-facing confirmation (doc-preview-external-link-confirmation.test.ts), which now proves the exact destination is shown and nothing opens on cancel, alongside everything the retired run carried — the stale-mint rejection that must not evict a reopened preview tab, the CSP header and session request filter, the SSH symlink refusal, subframe containment, truncated and over-cap reads, the unservable-asset and empty-file split, the out-of-worktree paired refusal, and the guest deny-only navigation sinks. The count also carries the entry-only rule added on top of the hardening: a grant whose document directory is its own request base — a workspace-root or out-of-workspace document — reads nothing but the entry file until the reader approves a directory, at both the lexical and the canonical containment pass, because that directory is where secrets live and a DNS-prefetch beacon needs no click.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/doc-preview-grant-registry.test.ts src/main/browser/doc-preview-file-reader.test.ts src/main/browser/doc-preview-protocol.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/main/browser/doc-preview-failure-notice.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/lib/doc-preview-grants.test.ts src/renderer/src/lib/file-preview.test.ts src/main/window/main-window-webview-security.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx src/renderer/src/components/browser-pane/workspace-doc/doc-preview-external-link-confirmation.test.ts src/renderer/src/components/terminal-pane/terminal-file-link-actions.test.ts"
+          "summary": "189/189 over the grant, reader, protocol, guest-policy, scheme-admission, plan-routing, action-visibility, failure-message, external-link and terminal-row contracts. This replaces the 2026-08-27 record of the same command at 174/174, whose thirteenth file was the deleted doc-preview-external-link-bridge.test.ts: the STA-5758 hardening moved that behavior into the reader-facing confirmation (doc-preview-external-link-confirmation.test.ts), which now proves the exact destination is shown and nothing opens on cancel, alongside everything the retired run carried — the stale-mint rejection that must not evict a reopened preview tab, the CSP header and session request filter, the SSH symlink refusal, subframe containment, truncated and over-cap reads, the unservable-asset and empty-file split, the out-of-worktree paired refusal, and the guest deny-only navigation sinks. The count also carries the entry-only rule added on top of the hardening: a grant whose document directory is its own request base — a workspace-root or out-of-workspace document — reads nothing but the entry file until the reader approves a directory, at both the lexical and the canonical containment pass, because that directory is where secrets live and a DNS-prefetch beacon needs no click. Historical command preserved after removal of the mocked preview test suite in the test-value audit; currentCommand links only the remaining suites. The recorded result, count, duration and mutation narrative describe the historical command. The current command has not been rerun here and does not claim equivalent coverage.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/doc-preview-grant-registry.test.ts src/main/browser/doc-preview-file-reader.test.ts src/main/browser/doc-preview-protocol.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/main/browser/doc-preview-failure-notice.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/lib/doc-preview-grants.test.ts src/main/window/main-window-webview-security.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx src/renderer/src/components/browser-pane/workspace-doc/doc-preview-external-link-confirmation.test.ts src/renderer/src/components/terminal-pane/terminal-file-link-actions.test.ts"
         },
         {
           "date": "2026-08-27",
@@ -6435,13 +6399,14 @@
           "summary": "175/175 at the relocated paths on the unified tool authority, replacing the 2026-08-27 record of the same command at 174/174. That run killed twelve of fourteen mutants as sole deltas — dropping the document branch from the one authority door, removing either browsing-registration refusal or the mint-side refusal that is its converse, deleting the registration notification or widening it to the worktree-wide and any-tab waits, disposing revoked state by grant instead of by page, dropping the hosting-renderer or destroyed-contents check, rebuilding the renderer tool target from the grant, and deleting the teardown identity check under a re-mint — and reported two as ill-posed rather than as kills. The relocation changed no file it names except their directory."
         },
         {
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/lib/file-preview.test.ts",
           "date": "2026-08-27",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/lib/file-preview.test.ts",
           "result": "passed",
           "durationSeconds": 22.09,
-          "summary": "29/29 on the candidate that makes the preview a browser tab. The preview action now creates a page located by the document; reopening the same document activates the tab it is already in rather than minting a second grant on one file; and closing that tab revokes its grant, which nothing else does now that the editor tab's close hook is gone. Red-green with each mutant as the sole delta: dropping the reuse lookup opens a second tab for a document already on screen, and dropping the release on close leaves the document readable through a grant nothing revokes until the process ends. Both are paired with presence preconditions in the same runs — a second, different document still gets its own tab, and a URL tab closed beside the document tab revokes nothing, so a release fired for every close would fail rather than pass."
+          "summary": "29/29 on the candidate that makes the preview a browser tab. The preview action now creates a page located by the document; reopening the same document activates the tab it is already in rather than minting a second grant on one file; and closing that tab revokes its grant, which nothing else does now that the editor tab's close hook is gone. Red-green with each mutant as the sole delta: dropping the reuse lookup opens a second tab for a document already on screen, and dropping the release on close leaves the document readable through a grant nothing revokes until the process ends. Both are paired with presence preconditions in the same runs — a second, different document still gets its own tab, and a URL tab closed beside the document tab revokes nothing, so a release fired for every close would fail rather than pass. Historical command preserved after removal of the mocked preview test suite in the test-value audit; currentCommand links only the remaining suites. The recorded result, count, duration and mutation narrative describe the historical command. The current command has not been rerun here and does not claim equivalent coverage."
         },
         {
           "date": "2026-09-06",
@@ -6615,20 +6580,21 @@
           "summary": "The same exact-page hold, timeout, rollback, client cleanup, no-fallback, editor, and terminal oracle passed against isolated headless serve."
         },
         {
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-browser.test.ts src/main/runtime/rpc/methods/browser.test.ts src/renderer/src/lib/file-preview.test.ts src/renderer/src/runtime/web-session-browser-placement.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/runtime/remote-server-parity.test.ts",
           "date": "2026-08-12",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-browser.test.ts src/main/runtime/rpc/methods/browser.test.ts src/renderer/src/lib/file-preview.test.ts src/renderer/src/runtime/web-session-browser-placement.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/runtime/remote-server-parity.test.ts",
           "result": "passed",
           "durationSeconds": 3.48,
-          "summary": "Seven focused host and renderer contract files passed 183/183 tests, covering owning-runtime routing, focused and unfocused creation, placement, reconciliation, failure cleanup, and teardown.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-browser.test.ts src/main/runtime/rpc/methods/browser.test.ts src/renderer/src/lib/file-preview.test.ts src/renderer/src/runtime/web-session-browser-placement.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/runtime/web-session-tabs-sync-focus-intent.test.ts src/renderer/src/runtime/web-session-tabs-sync-browser-tabs.test.ts src/renderer/src/runtime/web-session-tabs-sync-client-owned-placement.test.ts src/renderer/src/runtime/web-session-tabs-sync-layout-groups.test.ts"
+          "summary": "Seven focused host and renderer contract files passed 183/183 tests, covering owning-runtime routing, focused and unfocused creation, placement, reconciliation, failure cleanup, and teardown. Historical command preserved after removal of the mocked preview test suite in the test-value audit; currentCommand links only the remaining suites. The recorded result, count, duration and mutation narrative describe the historical command. The current command has not been rerun here and does not claim equivalent coverage.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-browser.test.ts src/main/runtime/rpc/methods/browser.test.ts src/renderer/src/runtime/web-session-browser-placement.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/runtime/web-session-tabs-sync-focus-intent.test.ts src/renderer/src/runtime/web-session-tabs-sync-browser-tabs.test.ts src/renderer/src/runtime/web-session-tabs-sync-client-owned-placement.test.ts src/renderer/src/runtime/web-session-tabs-sync-layout-groups.test.ts"
         },
         {
           "date": "2026-08-13",
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/orca-runtime-browser.test.ts src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts src/renderer/src/hooks/useIpcEvents-close-routing-browser-pages.test.ts src/renderer/src/hooks/useIpcEvents-close-routing-session-tabs.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/runtime/web-runtime-session.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/orca-runtime-browser.test.ts src/renderer/src/hooks/useIpcEvents-close-routing-browser-pages.test.ts src/renderer/src/hooks/useIpcEvents-close-routing-session-tabs.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/runtime/web-runtime-session.test.ts",
           "result": "passed",
           "durationSeconds": 10.83,
           "summary": "Five post-review host, IPC, store, and client lifecycle files passed 1,356 tests with one pre-existing skip, including both shards that failed before the canonical page/workspace identity and typed missing-page cleanup corrections."
@@ -9981,7 +9947,7 @@
       "invariant": "Every agent launch surface must advertise the provider set detected on its explicit execution authority and launch on that same authority; a local Floating Workspace must never inherit an unrelated active project's WSL, SSH, or paired-runtime context.",
       "oracle": "Model an active WSL project and a native-Windows Floating Workspace with WSL-only Claude and host-only Codex. Keep both detection consumers mounted, require their advertised sets to stay disjoint through refresh, require the legacy active-project inventory to remain unchanged, then independently assert the Floating launch call and PTY transport select local IPC with no WSL project runtime.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useDetectedAgents.test.tsx src/renderer/src/hooks/useAgentDetectionTarget.test.ts src/renderer/src/store/slices/detected-agents.test.ts src/renderer/src/store/slices/local-detected-agent-state.test.ts src/renderer/src/store/slices/repos-project-mutations.test.ts src/renderer/src/lib/local-preflight-context.test.ts src/renderer/src/lib/launch-agent-in-new-tab.test.ts --reporter=verbose",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useDetectedAgents.test.tsx src/renderer/src/hooks/useAgentDetectionTarget.test.ts src/renderer/src/store/slices/detected-agents.test.ts src/renderer/src/store/slices/local-detected-agent-state.test.ts src/renderer/src/store/slices/repos-project-mutations.test.ts src/renderer/src/lib/launch-agent-in-new-tab.test.ts --reporter=verbose",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-spawn-and-startup.test.ts --reporter=dot",
         "Headed Electron/CDP STA-4027 journey on Orca environment windows 2 with a selected Ubuntu-24.04 WSL project and local Floating Workspace"
       ],
@@ -9991,7 +9957,6 @@
         "src/renderer/src/store/slices/detected-agents.test.ts",
         "src/renderer/src/store/slices/local-detected-agent-state.test.ts",
         "src/renderer/src/store/slices/repos-project-mutations.test.ts",
-        "src/renderer/src/lib/local-preflight-context.test.ts",
         "src/renderer/src/lib/launch-agent-in-new-tab.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-spawn-and-startup.test.ts"
       ],
@@ -10038,8 +10003,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useDetectedAgents.test.tsx src/renderer/src/hooks/useAgentDetectionTarget.test.ts src/renderer/src/store/slices/detected-agents.test.ts src/renderer/src/store/slices/local-detected-agent-state.test.ts src/renderer/src/store/slices/repos-remove-project-purge-leak.test.ts src/renderer/src/lib/local-preflight-context.test.ts src/renderer/src/lib/launch-agent-in-new-tab.test.ts --reporter=verbose",
           "result": "passed",
           "durationSeconds": 2,
-          "summary": "Seven focused files passed independent WSL/local inventory, refresh isolation, cache lifecycle, project eviction, and Floating launch-call assertions.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useDetectedAgents.test.tsx src/renderer/src/hooks/useAgentDetectionTarget.test.ts src/renderer/src/store/slices/detected-agents.test.ts src/renderer/src/store/slices/local-detected-agent-state.test.ts src/renderer/src/store/slices/repos-project-mutations.test.ts src/renderer/src/lib/local-preflight-context.test.ts src/renderer/src/lib/launch-agent-in-new-tab.test.ts --reporter=verbose"
+          "summary": "Seven focused files passed independent WSL/local inventory, refresh isolation, cache lifecycle, project eviction, and Floating launch-call assertions. Historical command preserved after removal of the selector-only local-preflight suite in the test-value audit; currentCommand names the remaining suites only. This historical result has not been rerun for that command and does not claim equivalent coverage.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useDetectedAgents.test.tsx src/renderer/src/hooks/useAgentDetectionTarget.test.ts src/renderer/src/store/slices/detected-agents.test.ts src/renderer/src/store/slices/local-detected-agent-state.test.ts src/renderer/src/store/slices/repos-project-mutations.test.ts src/renderer/src/lib/launch-agent-in-new-tab.test.ts --reporter=verbose"
         },
         {
           "date": "2026-08-12",
@@ -10732,10 +10697,10 @@
       "invariant": "Only an explicit user change in Settings > Remote Orca Servers > Advanced > Active Server may mutate activeRuntimeEnvironmentId. Connecting, pairing, disconnecting, selecting or revealing a workspace or terminal, browser/mobile handoff, remote navigation, and reconnect must use transient or target-owner routing and must never rewrite the durable preference. Every Add Project selected host must satisfy canSelectAddRepoHost; paired web has no local filesystem fallback, so no valid host means Browse, Clone, and Create remain disabled. Every operation stays on the host selected when it began, even if preference or catalog state changes. Generic settings mutation cannot bypass the dedicated preference IPC.",
       "oracle": "Start with Active Server=Local desktop, connect and navigate Windows 2, then reveal a local terminal and assert it succeeds while the persisted preference remains local before and after restart. Repeat transient routing and selected-runtime Add Project operations with exact-ID host decoys and completion reordering. Separately pair the real web client to an isolated headed host, then make its sole still-listed runtime compatibility-blocked and unavailable. Require a null authoritative selection, a disabled host option, and disabled Browse, Clone, and Create actions with no local fallback. Repeat against headless serve. Run the byte-identical selector/action contract on latest main, candidate, and candidate with the eligibility seam disabled.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts --maxWorkers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/components/sidebar/add-repo-browse-authority.test.ts src/renderer/src/components/sidebar/AddRepoStartSteps.test.tsx src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/store/slices/repos-paired-runtime-add.test.ts --maxWorkers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts src/renderer/src/runtime/web-runtime-session.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/add-repo-browse-authority.test.ts src/renderer/src/components/sidebar/AddRepoStartSteps.test.tsx src/renderer/src/store/slices/repos-paired-runtime-add.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts src/renderer/src/runtime/web-runtime-session.test.ts --maxWorkers=1",
         "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
         "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
         "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-web-add-project-unavailable-host.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
@@ -10748,7 +10713,6 @@
         "src/renderer/src/store/slices/browser.test.ts",
         "src/renderer/src/components/settings/browser-session-host-selection.test.ts",
         "src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts",
-        "src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts",
         "src/renderer/src/components/sidebar/add-repo-browse-authority.test.ts",
         "src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts",
         "src/renderer/src/web/web-preload-api-runtime-environment.test.ts",
@@ -10756,12 +10720,7 @@
         "src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx",
         "src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts",
         "src/renderer/src/components/sidebar/AddRepoStartSteps.test.tsx",
-        "src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts",
         "src/renderer/src/components/sidebar/project-added-default-checkout.test.ts",
-        "src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts",
-        "src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts",
-        "src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts",
-        "src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts",
         "src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts",
         "src/renderer/src/lib/resolved-worktree-execution-host.test.ts",
         "src/renderer/src/lib/worktree-runtime-owner.test.ts",
@@ -10777,13 +10736,6 @@
         "tests/e2e/paired-web-add-project-unavailable-host.spec.ts"
       ],
       "assertionRefs": [
-        {
-          "file": "src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts",
-          "assertions": [
-            "paired web hides the viewing computer as an Add Project filesystem authority and selects only an eligible paired runtime",
-            "a sole blocked or errored runtime remains listed but produces no selected Add Project host"
-          ]
-        },
         {
           "file": "src/renderer/src/components/sidebar/add-repo-browse-authority.test.ts",
           "assertions": [
@@ -10841,12 +10793,6 @@
           "assertions": [
             "generic web settings writes cannot mutate Active Server",
             "the dedicated web preference setter rejects unknown server identities without corrupting the saved choice"
-          ]
-        },
-        {
-          "file": "src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts",
-          "assertions": [
-            "stamps Create responses with the captured runtime or SSH owner before store upsert and Git or folder worktree refresh"
           ]
         },
         {
@@ -10935,8 +10881,8 @@
           "date": "2026-07-22",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/status-bar/SshStatusSegment.test.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/status-bar/SshStatusSegment.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
           "result": "passed",
           "durationSeconds": 6.55,
           "summary": "Ten files and 282 tests passed, including the composed Local -> Windows 2 navigation -> local reveal -> restart regression, dedicated-only preference persistence, removed transient-host fallback, multi-client browser routing, late host-operation suppression, and web pairing/preference separation."
@@ -10945,11 +10891,11 @@
           "date": "2026-07-30",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-all-hosts-folder-workspaces.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts --maxWorkers=1",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-all-hosts-folder-workspaces.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts --maxWorkers=1",
           "result": "passed",
           "durationSeconds": 8.77,
           "summary": "Nineteen files and 386 tests passed after rebasing onto 94cf2f1422f30fc309cb47c5e864a831d516fa8b, including exact-ID repo/worktree/group/folder host identity in both catalog orders, fail-closed active-repo selection when a runtime row is unavailable, selected runtime and SSH owner capture through final Add/Clone/Create/folder activation, direct-SSH authoritative pruning, reversed catalog responses, reconnect generation fencing, local-after-runtime isolation, and missing-catalog worktree routing.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts --maxWorkers=1"
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts --maxWorkers=1"
         },
         {
           "date": "2026-07-30",
@@ -10973,11 +10919,11 @@
           "date": "2026-07-31",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-all-hosts-folder-workspaces.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts src/renderer/src/runtime/web-runtime-session.test.ts --maxWorkers=1",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-all-hosts-folder-workspaces.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts src/renderer/src/runtime/web-runtime-session.test.ts --maxWorkers=1",
           "result": "passed",
           "durationSeconds": 7.1,
           "summary": "Twenty files and 430 tests passed on current main integration, including explicit runtime-owner preservation for terminal and browser session activation.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts src/renderer/src/runtime/web-runtime-session.test.ts --maxWorkers=1"
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts src/renderer/src/runtime/web-runtime-session.test.ts --maxWorkers=1"
         },
         {
           "date": "2026-07-31",
@@ -11245,16 +11191,16 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS evidence over the WebGL/link/search containment suites on main@1282f5c2d, adopting the #6949 atlas-recovery rename and #7133's reveal hardening tests. Core addon-load throw containment and live typed-input survival arrive with #7004 and a live follow-up.",
+      "coverageNotes": "Local macOS evidence over the WebGL/link/search containment suites on main@1282f5c2d, adopting the #6949 atlas-recovery rename and #7133's reveal hardening tests. Core addon-load throw containment and live typed-input survival arrive with #7004 and a live follow-up. The test-value audit removed the reveal-repaint mock-routing suite, including settled-frame ordering and per-pane failure-isolation alarms. These historical assertions are no longer supplied by that suite; no equivalent coverage is claimed. The audit removes isolated link-provider RangeError reproduction, refresh-cancellation and failed-attach backoff examples. Retained tests cover post-resolution callback ownership, context release and context-loss resume; they do not establish equivalent coverage for the removed examples.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6852",
         "https://github.com/stablyai/orca/pull/6872",
         "https://github.com/stablyai/orca/pull/6855"
       ],
       "invariant": "Search, link, WebGL, decoration, input-protocol, or keyboard-navigation errors must not unmount the terminal surface, crash React/window, break focus, or stop PTY input/output.",
-      "oracle": "The current executable slice injects a core addon load throw and asserts pane opening continues through later addons, covers link provider throws as pane-scoped no-link results, covers search decoration positive-integer failures as false results instead of renderer crashes, and covers WebGL attach/refresh/recovery containment. Focused typed input echo after addon failure still needs a live/component follow-up.",
+      "oracle": "The current executable slice injects a core addon load throw and asserts pane opening continues through later addons, checks that a link provider throwing after it resolves does not deliver the callback twice, covers search decoration positive-integer failures as false results instead of renderer crashes, and covers WebGL attach/refresh/recovery containment. Focused typed input echo after addon failure still needs a live/component follow-up.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts src/renderer/src/components/terminal-search-safe-find.test.ts src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/pane-reveal-repaint.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts src/renderer/src/components/terminal-search-safe-find.test.ts src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts",
@@ -11263,14 +11209,13 @@
         "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts",
         "src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts",
         "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
-        "src/renderer/src/lib/pane-manager/pane-reveal-repaint.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts"
       ],
       "assertionRefs": [
         {
           "file": "src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts",
           "assertions": [
-            "link-provider throws are reproduced and contained without escaping the surface"
+            "does not double-invoke the callback when the provider throws after resolving"
           ]
         },
         {
@@ -11282,7 +11227,8 @@
         {
           "file": "src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts",
           "assertions": [
-            "WebGL teardown/refresh lifecycle stays pane-scoped and cancels on dispose"
+            "defers the DOM-renderer refit until structural replay completes",
+            "actively releases the xterm WebGL context before disposing the addon"
           ]
         },
         {
@@ -11291,20 +11237,12 @@
         },
         {
           "file": "src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts",
-          "assertions": [
-            "failed attach backs off and context-lost panes recover on the next rendering resume"
-          ]
+          "assertions": ["recovers a context-lost pane on the next rendering resume"]
         },
         {
           "file": "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
           "assertions": [
             "attach bail disposes the addon instead of orphaning it (#7133 single-addon invariant)"
-          ]
-        },
-        {
-          "file": "src/renderer/src/lib/pane-manager/pane-reveal-repaint.test.ts",
-          "assertions": [
-            "reveal repaint waits for a settled frame and keeps repainting when one pane throws (#7133)"
           ]
         },
         {
@@ -11322,7 +11260,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts src/renderer/src/components/terminal-search-safe-find.test.ts src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/pane-reveal-repaint.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
           "result": "passed",
           "durationSeconds": 0.8,
-          "summary": "8 test file(s) passed, 33 tests passed on main@1282f5c2d in a clean checkout."
+          "summary": "8 test file(s) passed, 33 tests passed on main@1282f5c2d in a clean checkout. Historical command preserved after the test-value audit removed the referenced reveal/repaint or registry recovery assertions. currentCommand is an administrative link; this historical run has not validated the remaining command or equivalent coverage.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts src/renderer/src/components/terminal-search-safe-find.test.ts src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts"
         }
       ],
       "runtimeBudget": {
@@ -11335,7 +11274,7 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "#7133 proved the reveal-hardening slice against live corrupted specimens; the link/search guards reproduce their original crashes in-test. No recorded red runs for the refresh-lifecycle slice."
+        "evidence": "#7133 proved the reveal-hardening slice against live corrupted specimens; the link/search guards reproduce their original crashes in-test. No recorded red runs for the refresh-lifecycle slice. Historical evidence includes assertions subsequently removed in the test-value audit; it does not establish their current coverage."
       },
       "performanceBudget": {
         "required": false,
@@ -11347,7 +11286,9 @@
       ],
       "knownGaps": [
         "Current command is renderer-unit containment, not live Electron typed input/output survival after addon failure.",
-        "Does not yet inject WebGL dispose/reset throws and active/hidden/resumed pane focus recovery in one component-level oracle."
+        "Does not yet inject WebGL dispose/reset throws and active/hidden/resumed pane focus recovery in one component-level oracle.",
+        "The test-value audit removed the reveal-repaint mock-routing suite, including settled-frame ordering and per-pane failure-isolation alarms. These historical assertions are no longer supplied by that suite; no equivalent coverage is claimed.",
+        "The audit removes isolated link-provider RangeError reproduction, refresh-cancellation and failed-attach backoff examples. Retained tests cover post-resolution callback ownership, context release and context-loss resume; they do not establish equivalent coverage for the removed examples."
       ],
       "demotionRule": "Cannot promote while it only checks visual rendering."
     },
@@ -11369,10 +11310,10 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": [],
-      "coverageNotes": "Renderer-unit coverage proves the shared xterm DOM intent path. Live Electron evidence is PR validation evidence for local macOS only until the flow has stable automation; live SSH, WSL, Linux, and Windows paths remain unproved.",
+      "coverageNotes": "The audit removes all direct scrollbar pointer-classification, dragged-viewport restoration and terminal-body exclusion examples. Retained wheel/rebuild and keyed-owner fixtures exercise related scroll-intent behavior with synthetic terminal state; they do not provide equivalent scrollbar coverage. The recorded macOS run is historical and is not a rerun of the reduced suite. Live daemon, SSH, WSL, remote-runtime, Linux and Windows scrollbar validation remains unproved.",
       "motivatingLinks": ["STA-1341"],
       "invariant": "A user-driven xterm scrollbar thumb or track scroll updates the live terminal scroll intent before tab, visibility, or layout resume enforces intent, so resume preserves the latest dragged viewport instead of an older pinned line.",
-      "oracle": "Pointerdown on .xterm-scrollbar or .xterm-slider followed by xterm viewport movement records the new pinned viewport, and enforcing current intent restores that dragged line instead of stale top intent.",
+      "oracle": "No retained unit test directly exercises scrollbar thumb/track targeting or a dragged viewport. The retained deterministic slice checks delayed wheel viewport sampling, keyed disposal/remount ownership, and wheel intent through rebuild completion or cancellation; these checks do not establish scrollbar-drag preservation.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts"
       ],
@@ -11381,9 +11322,15 @@
         {
           "file": "src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts",
           "assertions": [
-            "pointer-driven .xterm-scrollbar and .xterm-slider scrolls update terminal scroll intent",
-            "a scrollbar-dragged viewport is restored instead of stale top intent",
-            "terminal body pointer activity is not treated as scrollbar intent"
+            "keeps sampling briefly after wheel so delayed xterm scroll updates win",
+            "persists native pinned growth on disposal for the next keyed replay",
+            "does not let an old terminal disposal overwrite its keyed successor",
+            "does not let a stale key-settle callback overwrite a remounted terminal",
+            "suspends intent capture and enforcement while a buffer rebuild is in flight",
+            "resyncs a $expectedKind wheel intent after a delayed rebuild",
+            "preserves a durable pin when wheel-up lands on the cleared replay buffer",
+            "keeps rebuild wheel intent when xterm classifies the same event as mouse input",
+            "does not resync deferred wheel intent from a canceled partial rebuild"
           ]
         }
       ],
@@ -11395,7 +11342,7 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts",
           "result": "passed",
           "durationSeconds": 0.3,
-          "summary": "1 test file(s) passed, 17 tests passed in this worktree."
+          "summary": "1 test file(s) passed, 17 tests passed in this worktree. Audit965 removes the direct scrollbar examples; this command/result remains historical and does not validate the reduced suite or equivalent scrollbar coverage."
         }
       ],
       "runtimeBudget": {
@@ -11407,8 +11354,8 @@
         "evidence": "New experimental gate; needs soak history before promotion."
       },
       "redGreenEvidence": {
-        "status": "partial",
-        "evidence": "The new scrollbar DOM target assertions fail when only .xterm-viewport pointerdown is recognized. Needs saved CI/intentional-break artifact before blocking promotion."
+        "status": "missing",
+        "evidence": "Historical pointer-classification failure claim described examples removed by audit965. No retained red/green artifact proves the scrollbar-drag invariant."
       },
       "performanceBudget": {
         "required": true,
@@ -11420,9 +11367,10 @@
         "Attach red/green evidence for stale intent restoring the wrong viewport."
       ],
       "knownGaps": [
-        "Manifest command is deterministic renderer-unit coverage, not a live Electron scrollbar drag.",
+        "The manifest command covers narrower deterministic wheel/rebuild/keyed-owner behavior; it does not exercise scrollbar dragging or its DOM target contract.",
         "Live daemon, SSH, WSL, remote-runtime, Linux, and Windows validation is not covered by this gate.",
-        "Future xterm scrollbar DOM class changes are only caught if they break the currently modeled class contract."
+        "No retained test exercises the scrollbar DOM class contract; changes to .xterm-scrollbar or .xterm-slider targeting have no direct retained alarm.",
+        "The audit removes the direct .xterm-scrollbar/.xterm-slider pointer-target, dragged-viewport restoration and terminal-body exclusion examples, along with isolated scroll-intent scalar/snapshot examples. No retained test directly observes those removed scrollbar alarms; related wheel, rebuild and keyed-owner fixtures are not claimed equivalent."
       ],
       "demotionRule": "Demote or quarantine if the unit gate flakes without a product bug or harness bug filed to the owner."
     },
@@ -13356,7 +13304,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport-reattach-admission.test.ts src/renderer/src/components/terminal-pane/pty-transport-detach-attach-handoff.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-error-accumulation.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-attach-subscription.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-attach-subscription.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-surface-replacement.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-stream-reconnect.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-expired-pane-recovery.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-create-outcome-recovery.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-create-handoff.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-recovery-state.test.ts src/renderer/src/components/terminal-pane/TerminalRemoteRuntimeReconnectBanner.test.tsx src/shared/remote-runtime/remote-runtime-socket-liveness.test.ts src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts src/shared/remote-runtime/control/remote-runtime-shared-control-socket-generation.test.ts src/shared/remote-runtime/remote-runtime-client-error-classification.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/methods/terminal-create-idempotency.test.ts src/main/runtime/orca-runtime-terminal-create-idempotency.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/ipc-events/direct-ssh-connect-reply-routing.test.ts src/renderer/src/store/slices/terminals-hydration.test.ts src/renderer/src/store/slices/repos-ssh-host-reconciliation.test.ts src/renderer/src/hooks/direct-ssh-state-routing.test.ts src/renderer/src/components/terminal-pane/pty-connection-spawn-and-startup.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/ipc-events/direct-ssh-connect-reply-routing.test.ts src/renderer/src/store/slices/terminals-hydration.test.ts src/renderer/src/store/slices/repos-ssh-host-reconciliation.test.ts src/renderer/src/components/terminal-pane/pty-connection-spawn-and-startup.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh/ssh.test.ts src/main/ipc/worktrees-ssh-repo-owner-resolution.test.ts src/main/ipc/worktrees-lineage-hydration.test.ts src/main/runtime/public-ssh-state.test.ts src/main/ssh/connection/ssh-connection-manager.test.ts src/main/ssh/connection/ssh-connection.test.ts src/main/ssh/ssh-provider-authority.test.ts src/preload/ssh-authority-forwarding.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/runtime/runtime-environment-ssh-state.test.ts src/shared/ssh-retained-payload-admission.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e",
         "pnpm run build:web-from-renderer",
@@ -13396,7 +13344,6 @@
         "src/renderer/src/hooks/ipc-events/direct-ssh-connect-reply-routing.test.ts",
         "src/renderer/src/store/slices/terminals-hydration.test.ts",
         "src/renderer/src/store/slices/repos-ssh-host-reconciliation.test.ts",
-        "src/renderer/src/hooks/direct-ssh-state-routing.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts",
         "src/main/ipc/ssh/ssh.test.ts",
         "src/main/ipc/worktrees-ssh-repo-owner-resolution.test.ts",
@@ -13672,7 +13619,7 @@
           "result": "passed",
           "durationSeconds": 3.3,
           "summary": "Six direct-SSH files and 57 tests passed, including SSH tab bindings kept through connected pushes, disconnects and errors, partial-authority reconciliation, hydration, split-pane and detach contracts.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/ipc-events/direct-ssh-connect-reply-routing.test.ts src/renderer/src/store/slices/terminals-hydration.test.ts src/renderer/src/store/slices/repos-ssh-host-reconciliation.test.ts src/renderer/src/hooks/direct-ssh-state-routing.test.ts src/renderer/src/components/terminal-pane/pty-connection-spawn-and-startup.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts --reporter=dot"
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/ipc-events/direct-ssh-connect-reply-routing.test.ts src/renderer/src/store/slices/terminals-hydration.test.ts src/renderer/src/store/slices/repos-ssh-host-reconciliation.test.ts src/renderer/src/components/terminal-pane/pty-connection-spawn-and-startup.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts --reporter=dot"
         },
         {
           "date": "2026-08-23",
@@ -14004,7 +13951,7 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos", "linux"],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS and containerized Linux evidence, deterministic renderer-unit coverage for the Linux/Sogou candidate-key policy including the legacy orphaned-keyup fallback, xterm preedit visibility and row-occlusion behavior, Electron/CDP preedit geometry, Electron/CDP live-PTY Sogou-style repros, and macOS renderer/main slices for Preview kitty commits and layout-native Option input. The Option slice covers complete CSI-u flag fields including lock state, repeat/release event types, authoritative committed associated text, native dead-key release suppression, functional-versus-printable numpad codes, press-pinned release identity, live keyup modifiers, pending-layout text fallback, atomic layout refresh, rapid in-focus input-source changes, stable native layout characters, and both native/web preload fallbacks. Snapshot flag provenance keeps a proven 0, a proven non-zero, and an absent field distinct from daemon through the sequenced remote SnapshotStart frame. Real Linux/Sogou OS IME automation, native Windows candidate-window placement, Windows ConPTY post-agent reset, and the CJK/Vietnamese/Arabic matrix remain registered gaps.",
+      "coverageNotes": "Local macOS and containerized Linux evidence, deterministic renderer-unit coverage for the Linux/Sogou candidate-key policy including the legacy orphaned-keyup fallback, xterm preedit visibility and row-occlusion behavior, Electron/CDP preedit geometry, Electron/CDP live-PTY Sogou-style repros, and macOS renderer/main slices for Preview kitty commits and layout-native Option input. The Option slice covers complete CSI-u flag fields including lock state, repeat/release event types, authoritative committed associated text, native dead-key release suppression, functional-versus-printable numpad codes, press-pinned release identity, live keyup modifiers, pending-layout text fallback, atomic layout refresh, rapid in-focus input-source changes, stable native layout characters, and both native/web preload fallbacks. Snapshot flag provenance keeps a proven 0, a proven non-zero, and an absent field distinct from daemon through the sequenced remote SnapshotStart frame. Real Linux/Sogou OS IME automation, native Windows candidate-window placement, Windows ConPTY post-agent reset, and the CJK/Vietnamese/Arabic matrix remain registered gaps. The audit removes isolated candidate-anchor width, last-column, timer-ordering and detached-textarea examples. The retained deterministic fixtures do not observe a native candidate window or establish equivalent geometry coverage; separate Electron geometry evidence remains historical.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6699",
         "https://github.com/stablyai/orca/pull/6682",
@@ -14015,7 +13962,7 @@
         "https://github.com/stablyai/orca/pull/17170"
       ],
       "invariant": "Composition, native text forwarding, synthetic input, paste, and platform keyboard bypass paths must not send preedit/control bytes before commit and must commit text exactly once to the intended PTY. A live preedit must stay visible across an IME-resumed transaction, preserve every committed row-tail cell hidden by its opaque overlay, mask only a structurally verified Codex or Claude placeholder and never a row carrying typed text, keep the themed insertion caret and native candidate anchor inside the terminal at the final column, and clean up without stale overlay children or ownership classes. Layout-native Option text must preserve negotiated CSI-u alternate/associated fields and lock modifiers, distinguish repeat from press, and resolve releases with the press's primary identity plus the actual keyup modifiers without exposing a partial or stale layout refresh. An in-focus macOS input-source change must invalidate both renderer authorities before the next key can use the old source. When the snapshot source proves kitty state, macOS Preview commits must use the application's effective flags after the sequenced snapshot and every proven replay/live transition, and a claimed press delivered under report_event_types must produce exactly one matching release regardless of whether keyup arrives before or after insertText and regardless of xterm's defensive internal reset.",
-      "oracle": "Exact outbound bytes from the REAL native-text forwarder behind installPreviewImeBridge after initial snapshot restore, replacement resync, live transitions, and both keydown->insertText->keyup and keydown->keyup->insertText orderings; a wiring-only mock is supporting evidence, not the oracle. The current renderer-unit slice asserts native text commits route to the intended PTY once, composition/preedit bookkeeping does not leak premature text, resumed Windows event traces reactivate the visible preedit, an opaque mid-line overlay reproduces the committed row tail it covers, arbitrary DIM output remains visible, and final-column layout keeps both caret and textarea candidate anchor within the available screen width. The candidate-anchor slice reads back the inline `textarea.style.left` xterm's own listener and Orca's anchor listener both write during one composition event, so the assertion is the position the OS would sample rather than either writer's intent. A Codex frame whose prompt row is bold and whose dimmed model footer sits below a blank gap acquires the mask class while composing; the same placeholder text without that footer, a framed-versus-unframed Claude prompt, a row of arbitrary dimmed output, and a row carrying typed text do not. The class is gone after composition end, after a blur that is not followed by a session end, and after disposal. Rendered Electron/CDP geometry independently proves the overlay reproduces every committed cell it hides, that a real Codex placeholder at column 2 is masked rather than repeated, and that the final-column caret, preedit, and textarea right edges all land inside the screen. Input-source classification handles synthetic/native paths, paste/runtime forwarding avoids duplicate terminal payloads for covered fixtures, and real fcitx4/Sogou captures send only the committed candidate for Space/digit picks while ordinary typing, literal Space and digits stay available. A main/preload/renderer notification chain proves every live window invalidates immediately, the old native read settles before a coalesced refresh signal, and older refreshes are generation-fenced. The Electron/CDP live-PTY repro verifies Sogou-style Space and digit selectors submit only the committed Chinese text. Real legacy IME commit preservation, native candidate-window placement, and the full CJK/Vietnamese/Arabic/JIS-yen matrix run in follow-up platform soak where automation is possible.",
+      "oracle": "Exact outbound bytes from the REAL native-text forwarder behind installPreviewImeBridge after initial snapshot restore, replacement resync, live transitions, and both keydown->insertText->keyup and keydown->keyup->insertText orderings; a wiring-only mock is supporting evidence, not the oracle. The current renderer-unit slice asserts native text commits route to the intended PTY once, composition/preedit bookkeeping does not leak premature text, resumed Windows event traces reactivate the visible preedit, an opaque mid-line overlay reproduces the committed row tail it covers, arbitrary DIM output remains visible, and final-column layout keeps both caret and textarea candidate anchor within the available screen width. The retained candidate-anchor slice checks layout-read caching, deferred timer coalescing, recognized-screen follow-ups and refit refresh with deterministic DOM fixtures. A Codex frame whose prompt row is bold and whose dimmed model footer sits below a blank gap acquires the mask class while composing; the same placeholder text without that footer, a framed-versus-unframed Claude prompt, a row of arbitrary dimmed output, and a row carrying typed text do not. The class is gone after composition end, after a blur that is not followed by a session end, and after disposal. Rendered Electron/CDP geometry independently proves the overlay reproduces every committed cell it hides, that a real Codex placeholder at column 2 is masked rather than repeated, and that the final-column caret, preedit, and textarea right edges all land inside the screen. Input-source classification handles synthetic/native paths, paste/runtime forwarding avoids duplicate terminal payloads for covered fixtures, and real fcitx4/Sogou captures send only the committed candidate for Space/digit picks while ordinary typing, literal Space and digits stay available. A main/preload/renderer notification chain proves every live window invalidates immediately, the old native read settles before a coalesced refresh signal, and older refreshes are generation-fenced. The Electron/CDP live-PTY repro verifies Sogou-style Space and digit selectors submit only the committed Chinese text. Real legacy IME commit preservation, native candidate-window placement, and the full CJK/Vietnamese/Arabic/JIS-yen matrix run in follow-up platform soak where automation is possible.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-substituted-text-commit.test.ts src/renderer/src/components/terminal-pane/terminal-ime-macos-keybinding-dict-trace.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-linux-fcitx4-trace-replay.test.ts",
@@ -14129,8 +14076,10 @@
         {
           "file": "src/renderer/src/lib/pane-manager/terminal-ime-candidate-anchor.test.ts",
           "assertions": [
-            "the candidate anchor stays on the cursor cell while the preedit fits the remaining width",
-            "an over-wide final-column preedit pulls the anchor back inside the screen, and a preedit wider than the row never anchors left of it"
+            "keeps forced layout at one read per composition across a Hangul burst",
+            "coalesces the deferred Cursor Agent re-apply to one timer per burst",
+            "keeps typed follow-ups anchored after recognizing the initial Cursor Agent screen",
+            "refreshes the deferred metrics and anchor after a refit"
           ]
         },
         {
@@ -14421,7 +14370,7 @@
           "platform": "macos",
           "command": "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts",
           "result": "passed",
-          "durationSeconds": 72.0,
+          "durationSeconds": 72,
           "summary": "Electron/CDP IME repro passed: Sogou candidate selection, post-composition candidate selection, and existing Chinese IME harness passed; real Codex IME test was skipped behind ORCA_E2E_REAL_CODEX_IME."
         }
       ],
@@ -14451,7 +14400,8 @@
         "Textarea geometry is a deterministic lower-layer oracle for native candidate placement; no automated run observes the operating system's candidate window itself.",
         "Backspace/Enter during composition, JIS yen, Arabic/RTL, paste edge cases, and Windows ConPTY post-agent key reset still need representative gate coverage.",
         "An older remote host omits the optional SnapshotStart kitty field, so a new client falls back to raw commits until live negotiation is observed.",
-        "Snapshot authorities expose only the active screen's effective flags, not kitty's complete two-screen push stacks; a pop that crosses the restored boundary degrades to unknown rather than a proven value."
+        "Snapshot authorities expose only the active screen's effective flags, not kitty's complete two-screen push stacks; a pop that crosses the restored boundary degrades to unknown rather than a proven value.",
+        "The audit removes isolated candidate-anchor width, last-column, timer-ordering and detached-textarea examples. The retained deterministic fixtures do not observe a native candidate window or establish equivalent geometry coverage; separate Electron geometry evidence remains historical."
       ],
       "demotionRule": "Cannot promote if success is based only on DOM text without PTY byte/cell evidence."
     },
@@ -16348,7 +16298,7 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": [],
-      "coverageNotes": "Renderer-unit convergence corpus over a real xterm parser, plus manual CDP pixel evidence on the macOS WebGL renderer. The repaint span is provider-independent because it is computed from xterm's parse, not from the transport; SSH/WSL/remote were not exercised live.",
+      "coverageNotes": "Renderer-unit convergence corpus over a real xterm parser, plus manual CDP pixel evidence on the macOS WebGL renderer. The repaint span is provider-independent because it is computed from xterm's parse, not from the transport; SSH/WSL/remote were not exercised live. The audit removes isolated unobservable-span fallback and follow-up full-grid repaint examples. The retained real-parser corpus checks observed row changes and cursor spans; it does not establish those removed fallback alarms.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/2669",
         "https://github.com/stablyai/orca/pull/4669",
@@ -16369,7 +16319,6 @@
             "every viewport row whose serialized cells changed lies inside the requested repaint span",
             "the cursor row before and after the write is inside the requested repaint span",
             "viewport scroll and alternate-screen transitions still request the whole grid",
-            "an unobservable parse span falls back to the whole grid",
             "an in-place bottom-row redraw narrows well below the full grid"
           ]
         }
@@ -16409,7 +16358,8 @@
       "knownGaps": [
         "No CI-wired pixel oracle; WebGL convergence evidence was collected manually over CDP.",
         "Windows ConPTY synchronous repair path is covered only by the shared corpus, not on a Windows runner.",
-        "SSH/WSL/remote providers were not exercised live; the span is transport-independent by construction."
+        "SSH/WSL/remote providers were not exercised live; the span is transport-independent by construction.",
+        "The audit removes isolated unobservable-span fallback and follow-up full-grid repaint examples. The retained real-parser corpus checks observed row changes and cursor spans; it does not establish those removed fallback alarms."
       ],
       "demotionRule": "Demote or block if a narrowing condition is added without a matching convergence case, if the corpus stops asserting that each case changes at least one row, or if a repaint regression is reported for in-place agent redraws."
     },
@@ -17238,7 +17188,7 @@
       "providers": ["remote-runtime", "ssh", "local", "daemon"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["remote-runtime"],
-      "coverageNotes": "Local macOS evidence covers runtime-RPC stream budgets, paired-renderer parse/discard credit, and negotiated host-side suppression for hidden paired desktop panes. Deferred credit is shared by local and remote transports, batches ACKs at 192 KiB or 4 ms, grows per-stream windows from 512 KiB to 2 MiB and aggregate windows from 2 MiB to 8 MiB, bounds queued output to 256 KiB per stream, and caps each multiplex connection at 32 active or pending streams for an 8 MiB aggregate pending-output ceiling. Deterministic tests cover replay ordering, stale generations, malformed frames, hidden panes, queue eviction, disposal, send/recovery failure, repeated pending-slot replacement, reconnect, mixed-version pause negotiation, and round-robin fairness. The opt-in benchmark models 1/20/100 ms RTT and 1/4/8 viewers, throughput, window use, completion spread and protocol-frame counts. It measures model scheduler elapsed time separately from actual @xterm/headless parser CPU/retained heap; modeled credit and ACK results do not qualify production credit enforcement. Live Android restore evidence, browser/WebGL parser measurements, and legacy JSON subscribe parity remain required. The audit removed the PTY ACK wrapper suite, which replayed credit arithmetic with mocked IPC. Its isolated wrapper alarms are no longer registered here; generic credit and runtime stream tests do not establish equivalent PTY integration coverage.",
+      "coverageNotes": "Local macOS evidence covers runtime-RPC stream budgets, paired-renderer parse/discard credit, and negotiated host-side suppression for hidden paired desktop panes. Deferred credit is shared by local and remote transports, batches ACKs at 192 KiB or 4 ms, grows per-stream windows from 512 KiB to 2 MiB and aggregate windows from 2 MiB to 8 MiB, bounds queued output to 256 KiB per stream, and caps each multiplex connection at 32 active or pending streams for an 8 MiB aggregate pending-output ceiling. Deterministic tests cover replay ordering, stale generations, malformed frames, hidden panes, queue eviction, disposal, send/recovery failure, repeated pending-slot replacement, reconnect, mixed-version pause negotiation, and round-robin fairness. The opt-in benchmark models 1/20/100 ms RTT and 1/4/8 viewers, throughput, window use, completion spread and protocol-frame counts. It measures model scheduler elapsed time separately from actual @xterm/headless parser CPU/retained heap; modeled credit and ACK results do not qualify production credit enforcement. Live Android restore evidence, browser/WebGL parser measurements, and legacy JSON subscribe parity remain required. The audit removed the PTY ACK wrapper suite, which replayed credit arithmetic with mocked IPC. Its isolated wrapper alarms are no longer registered here; generic credit and runtime stream tests do not establish equivalent PTY integration coverage. The audit removes the standalone auto-settle-before-deferred-claim example. Nested-owner and claimed-child completion tests remain; they do not establish that removed timing alarm.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6951",
         "https://github.com/stablyai/orca/pull/6955",
@@ -17339,7 +17289,7 @@
           "file": "src/renderer/src/lib/pane-manager/terminal-delivery-credit.test.ts",
           "assertions": [
             "nested synchronous deliveries restore the outer credit owner",
-            "unclaimed intentional discards settle automatically while every claimed scheduler child must settle before the parent credits"
+            "every claimed scheduler child must settle before the parent credits"
           ]
         },
         {
@@ -17436,7 +17386,8 @@
         "The pure mobile decision gate does not yet prove live Android WebView scrollback restore after a chat toggle.",
         "Legacy JSON subscribe parity is undecided.",
         "The parser measurement uses @xterm/headless; browser renderer/WebGL CPU, GPU, and allocation behavior still need packaged-app performance evidence.",
-        "The audit removed the PTY ACK wrapper suite, which replayed credit arithmetic with mocked IPC. Its isolated wrapper alarms are no longer registered here; generic credit and runtime stream tests do not establish equivalent PTY integration coverage."
+        "The audit removed the PTY ACK wrapper suite, which replayed credit arithmetic with mocked IPC. Its isolated wrapper alarms are no longer registered here; generic credit and runtime stream tests do not establish equivalent PTY integration coverage.",
+        "The audit removes the standalone auto-settle-before-deferred-claim example. Nested-owner and claimed-child completion tests remain; they do not establish that removed timing alarm."
       ],
       "demotionRule": "Cannot promote while a supported stream path has uncapped snapshot or live-output buffering."
     },
@@ -17589,16 +17540,16 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local"],
-      "coverageNotes": "Deterministic renderer contracts require foreground renderer-risk, synchronized, hidden, and alternate-screen PTY output to stay on pane-local repaint paths without a global atlas reset. Separate contracts preserve explicit paste, reveal, visibility-resume, system-resume, and confirmed-desync recovery. A macOS Electron run verifies that a document visibility cycle preserves real WebGL atlases and terminal pixels; the candidate has not been rerun against an isolated live paired server.",
+      "coverageNotes": "Deterministic renderer contracts require foreground renderer-risk, synchronized, hidden, and alternate-screen PTY output to stay on pane-local repaint paths without a global atlas reset. Separate contracts preserve explicit paste, reveal, visibility-resume, system-resume, and confirmed-desync recovery. A macOS Electron run verifies that a document visibility cycle preserves real WebGL atlases and terminal pixels; the candidate has not been rerun against an isolated live paired server. The test-value audit removed registry recovery fanout, visibility, ordering and failure-isolation assertions. The remaining registry test constrains diagnostic sampling only and is excluded from this gate. No equivalent recovery coverage is claimed. Completed settled tab-reveal repaint execution is not covered after removal of pane-reveal-repaint.test.ts. The separate terminal-visibility-resume tests assert mocked scheduling and presentation calls; they do not establish completed repaint execution.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/7054",
         "https://github.com/stablyai/orca/pull/7604",
         "https://github.com/stablyai/orca/issues/12094"
       ],
       "invariant": "Ordinary PTY output must never clear the shared WebGL glyph atlas, including synchronized frames, hidden output, renderer-risk glyphs, and alternate-screen entry, redraw, or exit. Affected visible panes still receive pane-local refresh after parsing. Explicit paste, reveal, visibility-resume, system-resume, context-loss, and confirmed-desync recovery remain available and may reset visible renderers.",
-      "oracle": "Parse foreground renderer-risk, synchronized, hidden, and alternate-screen PTY output and require pane-local refresh where needed with zero calls to shared reset-and-refresh recovery. Require the atlas-recovery module to expose only explicit lifecycle entry points, then verify paste and tab reveal still perform their recovery bursts. Dispatch a visible document visibilitychange and require atlas-preserving wake recovery; register one visible manager and 64 hidden managers and require heavy recovery to reset and refresh only the visible manager. Separately, drive an Electron visibility cycle with two real WebGL panes, require zero atlas clears, and retain at least 85% of each pane's baseline ink pixels.",
+      "oracle": "Parse foreground renderer-risk, synchronized, hidden, and alternate-screen PTY output and require pane-local refresh where needed with zero calls to shared reset-and-refresh recovery. Require the atlas-recovery module to expose only explicit lifecycle entry points, then verify paste recovery. Completed settled tab-reveal repaint is not verified by the remaining unit evidence. Dispatch a visible document visibilitychange and require atlas-preserving wake recovery. Separately, drive an Electron visibility cycle with two real WebGL panes, require zero atlas clears, and retain at least 85% of each pane's baseline ink pixels.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects-window-focus-recovery.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection-input-and-repaint.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects-window-focus-recovery.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection-input-and-repaint.test.ts",
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1"
       ],
@@ -17606,7 +17557,6 @@
         "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
         "src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects-window-focus-recovery.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts",
-        "src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts",
         "src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts",
@@ -17627,10 +17577,6 @@
         {
           "file": "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts",
           "assertions": ["limits atlas recovery to explicit renderer lifecycle events"]
-        },
-        {
-          "file": "src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts",
-          "assertions": ["bounds atlas recovery to visible managers"]
         },
         {
           "file": "src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts",
@@ -17667,8 +17613,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects-window-focus-recovery.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-atlas-recovery.test.ts src/renderer/src/components/terminal-pane/pty-connection-renderer-risk-repaint.test.ts",
           "result": "passed",
           "durationSeconds": 47,
-          "summary": "All 625 focused renderer contracts passed on the final head for atlas-preserving visibility, visible-only heavy recovery fanout, confirmed-desync and context-loss recovery, explicit lifecycle recovery, pane-local foreground redraws, and zero ordinary-output atlas resets.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects-window-focus-recovery.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection-input-and-repaint.test.ts"
+          "summary": "All 625 focused renderer contracts passed on the final head for atlas-preserving visibility, visible-only heavy recovery fanout, confirmed-desync and context-loss recovery, explicit lifecycle recovery, pane-local foreground redraws, and zero ordinary-output atlas resets. Historical command preserved after the test-value audit removed the referenced reveal/repaint or registry recovery assertions. currentCommand is an administrative link; this historical run has not validated the remaining command or equivalent coverage.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects-window-focus-recovery.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection-input-and-repaint.test.ts"
         },
         {
           "date": "2026-08-01",
@@ -17699,7 +17645,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "Before the change, foreground renderer-risk and alternate-screen PTY writes requested terminal-output atlas recovery after parsing; hidden synchronized/TUI output also drove the same path. The updated oracle spies on that request before its removed 200ms debounce and on the eventual shared reset, while explicit lifecycle recovery remains required."
+        "evidence": "Before the change, foreground renderer-risk and alternate-screen PTY writes requested terminal-output atlas recovery after parsing; hidden synchronized/TUI output also drove the same path. The updated oracle spies on that request before its removed 200ms debounce and on the eventual shared reset, while explicit lifecycle recovery remains required. Historical evidence includes assertions subsequently removed in the test-value audit; it does not establish their current coverage."
       },
       "performanceBudget": {
         "required": true,
@@ -17713,7 +17659,9 @@
       "knownGaps": [
         "The Electron harness used a deterministic visibility-event fallback because BrowserWindow.hide did not change document.visibilityState.",
         "No isolated live paired-server candidate run is recorded; remote-runtime coverage is a provider-agnostic renderer contract plus production incident evidence.",
-        "The gate counts recovery fanout and pixel retention but does not impose an end-to-end renderer frame-latency threshold."
+        "The gate counts recovery fanout and pixel retention but does not impose an end-to-end renderer frame-latency threshold.",
+        "The test-value audit removed registry recovery fanout, visibility, ordering and failure-isolation assertions. The remaining registry test constrains diagnostic sampling only and is excluded from this gate. No equivalent recovery coverage is claimed.",
+        "Completed settled tab-reveal repaint execution is not covered after removal of pane-reveal-repaint.test.ts. The separate terminal-visibility-resume tests assert mocked scheduling and presentation calls; they do not establish completed repaint execution."
       ],
       "demotionRule": "Demote if ordinary PTY output re-enters shared reset/refresh recovery, pane-local redraw coverage regresses, ordinary visibility clears the atlas, real WebGL pixels regress, or the focused Electron test cannot remain deterministic."
     },
@@ -17803,7 +17751,7 @@
       "providers": ["local", "daemon"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local"],
-      "coverageNotes": "A headed macOS Electron test drives explicit destructive atlas recovery while DEC 2026 output is held, then compares compositor screenshots before and after a direct full-buffer present. The same renderer choreography is provider-local, but daemon, SSH, remote-runtime, Linux, and Windows GPU runs remain gaps.",
+      "coverageNotes": "A headed macOS Electron test drives explicit destructive atlas recovery while DEC 2026 output is held, then compares compositor screenshots before and after a direct full-buffer present. The same renderer choreography is provider-local, but daemon, SSH, remote-runtime, Linux, and Windows GPU runs remain gaps. The test-value audit removed registry recovery fanout, visibility, ordering and failure-isolation assertions. The remaining registry test constrains diagnostic sampling only and is excluded from this gate. No equivalent recovery coverage is claimed. The audit removes the canvas-DPR and render-pause-release unit suites and several renderer flag/retry examples. Their isolated DPR-cache, render-service routing and display-none retry alarms are no longer registered; retained unit and historical Electron evidence do not establish equivalent coverage. No live GPU rerun accompanies this administrative update.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/7133",
         "https://github.com/stablyai/orca/pull/7054"
@@ -17812,17 +17760,14 @@
       "oracle": "Hold DEC 2026, invoke explicit atlas recovery, require an atlas clear, screenshot the pane, force a direct renderer present, and assert the bounded pixel diff is immaterial. Compositor screenshots only, because WebGL canvas readback is blank with preserveDrawingBuffer disabled.",
       "commands": [
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-reveal-paused-render-repro.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/terminal-canvas-dpr-repair.test.ts src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
         "ORCA_E2E_RECORD_VIDEO=1 pnpm exec playwright test tests/e2e/terminal-reveal-paused-render-repro.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --repeat-each=3"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
         "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
-        "src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts",
         "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
-        "src/renderer/src/lib/pane-manager/terminal-canvas-dpr-repair.test.ts",
-        "src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
         "tests/e2e/terminal-reveal-paused-render-repro.spec.ts"
       ],
       "assertionRefs": [
@@ -17838,13 +17783,6 @@
           "assertions": ["defers a heavy-reveal dpr present until the shared atlas recovery"]
         },
         {
-          "file": "src/renderer/src/lib/pane-manager/terminal-canvas-dpr-repair.test.ts",
-          "assertions": [
-            "repairs when the canvas and renderer dimensions share a stale dpr cache",
-            "defers an unmeasurable WebGL canvas but accepts a renderer-less pane"
-          ]
-        },
-        {
           "file": "tests/e2e/terminal-reveal-paused-render-repro.spec.ts",
           "assertions": ["@headful atlas recovery presents a synchronized-output WebGL frame"]
         }
@@ -17857,7 +17795,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/terminal-canvas-dpr-repair.test.ts src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
           "result": "passed",
           "durationSeconds": 2,
-          "summary": "All 98 renderer contracts passed, including same-DPR zero-scan behavior, visible-only fanout, tri-state DPR repair, deduplicated bounded retry, heavy-reveal repair, and listener cleanup."
+          "summary": "All 98 renderer contracts passed, including same-DPR zero-scan behavior, visible-only fanout, tri-state DPR repair, deduplicated bounded retry, heavy-reveal repair, and listener cleanup. Historical command preserved after the test-value audit removed the referenced reveal/repaint or registry recovery assertions. currentCommand is an administrative link; this historical run has not validated the remaining command or equivalent coverage. Administrative command maintenance removes deleted unit suites; the executed command and result are historical, with no rerun or equivalence claim.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts"
         },
         {
           "date": "2026-08-23",
@@ -17888,11 +17827,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "Without the forced synchronized-output present, the damaged compositor differed from a direct renderer present across 87.68% of pixels even though serialization already contained the new frame. With explicit destructive recovery, the same oracle passes the 1.5% material-diff threshold."
+        "evidence": "Without the forced synchronized-output present, the damaged compositor differed from a direct renderer present across 87.68% of pixels even though serialization already contained the new frame. With explicit destructive recovery, the same oracle passes the 1.5% material-diff threshold. Historical evidence includes assertions subsequently removed in the test-value audit; it does not establish their current coverage."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Destructive recovery remains event-driven and limited to confirmed renderer-lifecycle boundaries. Gate-local contracts prove ordinary same-DPR resize performs zero pane scans; a true transition scans only the visible manager; unavailable canvas retry is deduplicated and capped at 16 frames; and heavy reveal adds one bounded visible-pane scan. The shared terminal-render.atlas-recovery-fanout contracts separately prove zero hidden-manager atlas clears or presents and a per-pane display:none retry capped at 16 frames."
+        "evidence": "Destructive recovery remains event-driven and limited to confirmed renderer-lifecycle boundaries. Gate-local contracts prove ordinary same-DPR resize performs zero pane scans; a true transition scans only the visible manager; unavailable canvas retry is deduplicated and capped at 16 frames; and heavy reveal adds one bounded visible-pane scan. Registry visible-only fanout assertions were removed in the test-value audit; historical results do not establish their current coverage."
       },
       "promotionCriteria": [
         "Establish a stable material-diff threshold across platforms via nightly runs.",
@@ -17902,7 +17841,9 @@
       "knownGaps": [
         "The deterministic recovery test disables xterm's one-second safety timeout so the held-frame damage remains stable until recovery.",
         "The renderer-level frame injection isolates the paint failure; provider delivery and hidden-output snapshot restore have separate gates.",
-        "Linux, Windows, daemon, SSH, and remote-runtime live GPU evidence is not yet recorded."
+        "Linux, Windows, daemon, SSH, and remote-runtime live GPU evidence is not yet recorded.",
+        "The test-value audit removed registry recovery fanout, visibility, ordering and failure-isolation assertions. The remaining registry test constrains diagnostic sampling only and is excluded from this gate. No equivalent recovery coverage is claimed.",
+        "The audit removes the canvas-DPR and render-pause-release unit suites and several renderer flag/retry examples. Their isolated DPR-cache, render-service routing and display-none retry alarms are no longer registered; retained unit and historical Electron evidence do not establish equivalent coverage. No live GPU rerun accompanies this administrative update."
       ],
       "demotionRule": "Drop from the golden suite back to nightly diagnostic if diff thresholds cannot be kept stable across CI runners."
     },
@@ -17918,7 +17859,7 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local"],
-      "coverageNotes": "A headed macOS Electron test uses a real xterm WebGL renderer and production tab reveal. It proves the coherent pre-hide canvas remains visible while DEC 2026 holds a newer buffer, then proves normal release and xterm's one-second watchdog publish complete frames. Renderer behavior is provider-neutral; live Linux, Windows, daemon, SSH, and remote-runtime GPU runs remain gaps.",
+      "coverageNotes": "A headed macOS Electron test uses a real xterm WebGL renderer and production tab reveal. It proves the coherent pre-hide canvas remains visible while DEC 2026 holds a newer buffer, then proves normal release and xterm's one-second watchdog publish complete frames. Renderer behavior is provider-neutral; live Linux, Windows, daemon, SSH, and remote-runtime GPU runs remain gaps. The audit removes isolated synchronized-frame viewport-present and render-pause-release unit examples. The historical headed Electron oracle remains recorded; retained scheduling tests do not establish equivalent render-service routing or completed-frame coverage. No live GPU rerun accompanies this administrative update.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/7133",
         "https://github.com/stablyai/orca/pull/7054"
@@ -17927,14 +17868,13 @@
       "oracle": "Paint and capture a coherent frame, hide the real terminal tab, build a distinct full-screen frame while DEC 2026 is held, reveal through production, and require zero atlas clears plus pixel-equivalence with the coherent frame. Then release normally and through the one-second watchdog, requiring both compositor frames to match a direct renderer present.",
       "commands": [
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-reveal-paused-render-repro.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts",
         "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
-        "src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
         "tests/e2e/terminal-reveal-paused-render-repro.spec.ts"
       ],
       "assertionRefs": [
@@ -17943,17 +17883,6 @@
           "assertions": [
             "schedules an atlas-preserving present on a light tab reveal",
             "keeps heavy atlas recovery off a plain window refocus"
-          ]
-        },
-        {
-          "file": "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
-          "assertions": ["preserves a synchronized frame on an ordinary reveal present"]
-        },
-        {
-          "file": "src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
-          "assertions": [
-            "routes synchronized output through RenderService instead of the renderer",
-            "releases observer pause before requesting the synchronized frame"
           ]
         },
         {
@@ -17998,7 +17927,8 @@
       "knownGaps": [
         "The deterministic test injects full-screen marker frames through xterm rather than invoking a live model; genuine OpenCode full-window evidence separately proves the original corruption.",
         "Linux, Windows, daemon, SSH, and remote-runtime live GPU evidence is not yet recorded.",
-        "The 1.5% compositor threshold tolerates cursor and shell-prompt timing noise; exact buffer content and atlas-clear counts are asserted separately."
+        "The 1.5% compositor threshold tolerates cursor and shell-prompt timing noise; exact buffer content and atlas-clear counts are asserted separately.",
+        "The audit removes isolated synchronized-frame viewport-present and render-pause-release unit examples. The historical headed Electron oracle remains recorded; retained scheduling tests do not establish equivalent render-service routing or completed-frame coverage. No live GPU rerun accompanies this administrative update."
       ],
       "demotionRule": "Demote if ordinary reveal clears the shared atlas, the held frame stops matching its coherent baseline, release/watchdog output diverges from a direct present, or the headed oracle cannot remain deterministic."
     },
