@@ -29,11 +29,13 @@ vi.mock('electron', () => ({
 
 vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer: () => false }))
 vi.mock('./detached-terminal-window', () => ({ isDetachedTerminalRenderer }))
+vi.mock('../persistence/loading-store/store', () => ({ Store: vi.fn() }))
 vi.mock('./clipboard-remote-file-copy', () => ({
   cleanupExpiredRemoteClipboardFiles: vi.fn(async () => undefined),
   scheduleLegacyRemoteClipboardFileCleanup: vi.fn()
 }))
 
+import { Store } from '../persistence/loading-store/store'
 import {
   registerClipboardHandlers,
   setTrustedClipboardRendererWebContentsId
@@ -55,7 +57,7 @@ describe('detached terminal clipboard access', () => {
     isDetachedTerminalRenderer.mockReturnValue(true)
     clipboardReadText.mockReturnValue('terminal clipboard text')
     setTrustedClipboardRendererWebContentsId(17)
-    registerClipboardHandlers({} as never)
+    registerClipboardHandlers(new Store())
   })
 
   it('pastes and copies terminal text through a companion window', async () => {
