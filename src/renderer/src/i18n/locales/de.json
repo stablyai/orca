@@ -613,7 +613,7 @@
         "inheritFont": "Wie IDE-Schrift",
         "fontPreviewLabel": "Vorschau der Chat-Schrift",
         "fontPreview": "Der schnelle braune Fuchs springt über den faulen Hund.",
-        "title": "Chat",
+        "title": "Chat-Oberfläche",
         "textSize": "Textgröße",
         "textSizeDescription": "Nachrichten, Werkzeugaktivitäten und das Nachrichtenfeld. {{increase}} / {{decrease}} in einem Chat ändern diese Einstellung ebenfalls.",
         "codeTextSize": "Code-Textgröße",
@@ -23103,6 +23103,8 @@
     "arguments": "Argumente",
     "argumentsHint": "Gilt nur für CLI-Starts.",
     "launchChat": "Chat starten",
-    "launchTerminal": "Terminal starten"
+    "launchTerminal": "Terminal starten",
+    "promptPlaceholder": "Prompt hinzufügen (optional): / für Skills, @ für Dateien",
+    "promptPlaceholderFilesOnly": "Prompt hinzufügen (optional): @ für Dateien"
   }
 }

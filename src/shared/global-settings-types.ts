@@ -496,6 +496,4 @@ export type GlobalSettings = GlobalSettingsBase & {
   aiVaultSearch?: AiVaultSearchSettings
 }
 
-// Retain one import entry point while keeping feature shapes separate from the max-lines-limited settings module.
-export type { GhosttyImportPreview, GhosttyImportSource } from './ghostty-import-preview'
 export type { OrcaWorkspaceLayout } from './orca-workspace-layout'

@@ -173,7 +173,7 @@
         "inheritFont": "与 IDE 字体相同",
         "fontPreviewLabel": "聊天字体预览",
         "fontPreview": "这段文字用于预览聊天字体。",
-        "title": "聊天",
+        "title": "聊天界面",
         "textSize": "文字大小",
         "textSizeDescription": "消息、工具活动和消息输入框。在聊天中按 {{increase}} / {{decrease}} 也会更改此设置。",
         "codeTextSize": "代码文字大小",
@@ -22303,7 +22303,9 @@
     "toggleArguments": "切换参数显示",
     "argumentsTerminalHint": "仅适用于终端（CLI）启动",
     "searchAgentModels": "搜索 {{agent}} 模型…",
-    "legacyModelCount": "{{total}} 个模型"
+    "legacyModelCount": "{{total}} 个模型",
+    "promptPlaceholder": "添加提示词（可选）：/ 选择技能，@ 选择文件",
+    "promptPlaceholderFilesOnly": "添加提示词（可选）：@ 选择文件"
   },
   "wslMove": {
     "entry": {

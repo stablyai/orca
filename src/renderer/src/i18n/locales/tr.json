@@ -605,7 +605,7 @@
         "inheritFont": "IDE yazı tipiyle aynı",
         "fontPreviewLabel": "Sohbet yazı tipi önizlemesi",
         "fontPreview": "Pijamalı hasta yağız şoföre çabucak güvendi.",
-        "title": "Sohbet",
+        "title": "Sohbet arayüzü",
         "textSize": "Metin boyutu",
         "textSizeDescription": "Mesajlar, araç etkinlikleri ve mesaj kutusu. Sohbet içindeki {{increase}} / {{decrease}} kısayolları da bu ayarı değiştirir.",
         "codeTextSize": "Kod metni boyutu",
@@ -23086,6 +23086,8 @@
     "arguments": "Argümanlar",
     "argumentsHint": "Yalnızca CLI başlatmaları için geçerlidir.",
     "launchChat": "Sohbet başlat",
-    "launchTerminal": "Terminal başlat"
+    "launchTerminal": "Terminal başlat",
+    "promptPlaceholder": "İstem ekleyin (isteğe bağlı): beceriler için /, dosyalar için @",
+    "promptPlaceholderFilesOnly": "İstem ekleyin (isteğe bağlı): dosyalar için @"
   }
 }
