@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { agentReferenceDeliveryText } from '../../../../shared/orchestration-agent-reference.test-fixture'
-import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
+import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import { nativeChatPastedTextToken } from './native-chat-pasted-text-reference'
 import { emptyCrew, type OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
 import { createRef } from 'react'
@@ -44,9 +44,6 @@ vi.mock('./native-chat-runtime-send', () => ({
   submitNativeChatPrompt: vi.fn()
 }))
 vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
-vi.mock('@/lib/worker-terminal-takeover-report', () => ({
-  reportStructuredSessionUserInput: vi.fn()
-}))
 afterEach(() => {
   cleanup()
   crewRows.length = 0
