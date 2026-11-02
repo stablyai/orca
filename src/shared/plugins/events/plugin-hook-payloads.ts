@@ -91,6 +91,40 @@ export const agentPromptBeforeHookPayloadSchema = z.object({
   inputKind: z.enum(['driving', 'orchestration', 'launch'])
 })
 
+const agentToolCall = {
+  /** The agent CLI whose hook reported the call, e.g. `claude` or `codex`. */
+  agent: z.string().min(1).max(64),
+  workspaceId: z.string().min(1).max(2048).nullable(),
+  terminalId: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH).optional(),
+  /** The tool's name as the agent reports it, e.g. `Bash` or `Write`. */
+  tool: z.string().min(1).max(256),
+  /** The tool's arguments as the agent reports them. */
+  input: z.unknown(),
+  /** The agent's id for this call, when it reports one. */
+  callId: z.string().min(1).max(256).optional()
+}
+
+export const agentToolBeforeHookPayloadSchema = z.object(agentToolCall)
+
+export const agentToolAfterHookPayloadSchema = z.object({
+  ...agentToolCall,
+  /** The tool's result as the agent reports it, when it does. */
+  output: z.unknown().optional()
+})
+
+export const editorSaveBeforeHookPayloadSchema = z.object({
+  /** The editor tab's workspace; null for a file outside any workspace. */
+  workspaceId: z.string().min(1).max(2048).nullable(),
+  /** Relative to the workspace root (or the absolute path outside one). */
+  path: z
+    .string()
+    .min(1)
+    .max(32 * 1024),
+  /** The editor's language, e.g. `typescript`, when it has one. */
+  languageId: z.string().min(1).max(128).optional(),
+  text: z.string().max(TERMINAL_INPUT_MAX_BYTES)
+})
+
 export const PLUGIN_HOOK_SPECS = {
   'terminal.send': {
     payload: terminalSendHookPayloadSchema,
@@ -131,6 +165,30 @@ export const PLUGIN_HOOK_SPECS = {
     deadlineMs: PLUGIN_HOOK_DEFAULT_DEADLINE_MS,
     summary:
       'Orca is about to submit a prompt to an agent in a terminal: a launch prompt, an orchestration dispatch, an issue or task prompt, or `orca terminal send` to an agent. A prompt a person submits is never hooked, and writes to one terminal stay in order while it decides. Rewrite `prompt` with `next`, or return `{ deny }` to refuse it.'
+  },
+  'agent.tool.before': {
+    payload: agentToolBeforeHookPayloadSchema,
+    result: denyResultSchema,
+    mutable: ['input'],
+    deadlineMs: PLUGIN_HOOK_DEFAULT_DEADLINE_MS,
+    summary:
+      'An agent in an Orca terminal is about to run a tool. Claude Code waits for the answer: return `{ deny }` to refuse the call (the agent sees the reason) or change `input` with `next`; the person is still asked as usual. Other agents only report the call, so their results are ignored. Agents on SSH or WSL hosts are not hooked yet.'
+  },
+  'agent.tool.after': {
+    payload: agentToolAfterHookPayloadSchema,
+    result: null,
+    mutable: [],
+    deadlineMs: PLUGIN_HOOK_DEFAULT_DEADLINE_MS,
+    summary:
+      'An agent in an Orca terminal finished a tool call (successfully or not). Observe only: Orca does not wait for it.'
+  },
+  'editor.save.before': {
+    payload: editorSaveBeforeHookPayloadSchema,
+    result: denyResultSchema,
+    mutable: ['text'],
+    deadlineMs: PLUGIN_HOOK_DEFAULT_DEADLINE_MS,
+    summary:
+      'The person is about to save a text file from an Orca editor tab (an explicit save, not autosave). Change `text` with `next` (format on save) or return `{ deny }` to refuse the save, which shows your reason. Edits made while the hook ran stay unsaved.'
   }
 } satisfies Record<PluginHookName, PluginHookSpec>
 

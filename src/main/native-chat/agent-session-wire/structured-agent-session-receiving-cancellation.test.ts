@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { acquiredAgentSessionAccount } from '../../../shared/agent-session-acquired-account'
+import { acquiredAgentSessionAccount } from '../../../shared/agent-session/lifecycle/agent-session-acquired-account'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { REST_TEST_CALLER } from './structured-agent-session-rest-test-rig'

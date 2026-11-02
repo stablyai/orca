@@ -11,7 +11,7 @@ import {
 } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { StructuredAgentSessionLinkageJournal } from '../../native-chat/agent-session-wire/structured-agent-session-journal-views'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import { blockOf } from '../claude-background-task-row-test-support'
 import {

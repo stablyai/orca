@@ -1,4 +1,4 @@
-/** Default writes preserve queue and per-send PTY lookup; only opted-in sends use submission settlement. */
+/** Default writes preserve queue, completion timing and per-send PTY lookup; only opted-in sends use submission settlement. */
 
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -38,6 +38,42 @@ describe('agent prompt writer: default path', () => {
       target.sendTerminalAgentPrompt(HANDLE, 'hello', { inputKind: 'driving' })
     ).resolves.toMatchObject({ accepted: true })
     expect(submit).not.toHaveBeenCalled()
+  })
+
+  it('settles its receipt after the write without waiting for a timer', async () => {
+    vi.useFakeTimers()
+    try {
+      const target = dispatchRuntime()
+      let started!: () => void
+      const writing = new Promise<void>((resolve) => {
+        started = resolve
+      })
+      let release!: (value: { submits: number }) => void
+      const written = new Promise<{ submits: number }>((resolve) => {
+        release = resolve
+      })
+      Object.defineProperty(target, 'writeTerminalAgentPrompt', {
+        value: () => {
+          started()
+          return written
+        }
+      })
+      let settled = false
+      const receipt = target
+        .sendTerminalAgentPrompt(HANDLE, 'hello', { inputKind: 'driving' })
+        .then((result) => {
+          settled = true
+          return result
+        })
+
+      await writing
+      await vi.advanceTimersByTimeAsync(0)
+      expect(settled).toBe(false)
+      release({ submits: 1 })
+      await expect(receipt).resolves.toMatchObject({ handle: HANDLE, accepted: true })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('writes a queued leaf prompt to the PTY the leaf names when its turn comes', async () => {
