@@ -14,6 +14,7 @@ function makeBaseline(overrides: Partial<PersistedUIWriteBaseline> = {}): Persis
     rightSidebarWidth: 350,
     markdownTocPanelWidth: 240,
     combinedDiffFileTreeWidth: 256,
+    tabWidthsById: {},
     groupBy: 'repo',
     sortBy: 'recent',
     projectOrderBy: 'manual',

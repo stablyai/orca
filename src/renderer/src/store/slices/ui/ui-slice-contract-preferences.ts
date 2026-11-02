@@ -65,6 +65,9 @@ export type UISlicePreferences = {
   setExplorerDisplayRootForWorktree: (worktreeId: string, value: string) => void
   setShowDotfilesForWorktree: (worktreeId: string, showDotfiles: boolean) => void
   toggleShowDotfilesForWorktree: (worktreeId: string) => void
+  tabWidthsById: Record<string, number>
+  /** null restores the default width. */
+  setTabWidth: (tabId: string, width: number | null) => void
   filterRepoIds: readonly string[]
   setFilterRepoIds: (ids: readonly string[]) => void
   /** Agents-view scope filters, independent from workspace navigation filters. */

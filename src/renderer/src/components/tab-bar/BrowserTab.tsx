@@ -26,6 +26,7 @@ import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { translate } from '@/i18n/i18n'
 import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
+import { TabStripSlotResizeHandle } from './TabStripSlotResizeHandle'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from './tab-context-menu-opening'
@@ -267,6 +268,7 @@ export default function BrowserTab({
               {tabRoot}
             </TabHoverCard>
           )}
+          <TabStripSlotResizeHandle tabId={tab.id} />
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent

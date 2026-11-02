@@ -14,6 +14,7 @@ import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentag
 import { normalizeStatusBarUsageMode } from '../../../shared/status-bar-usage-mode'
 import { clampMarkdownTocPanelWidth } from '../../../shared/markdown-toc-panel-width'
 import { clampCombinedDiffFileTreeWidth } from '../../../shared/combined-diff-file-tree-width'
+import { normalizeTabWidthsById } from '../../../shared/tab-strip-width'
 import {
   normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds,
@@ -157,6 +158,9 @@ export function updatePersistedUI(
     ),
     combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
       sanitizedUpdates.combinedDiffFileTreeWidth ?? operations.state.ui?.combinedDiffFileTreeWidth
+    ),
+    tabWidthsById: normalizeTabWidthsById(
+      sanitizedUpdates.tabWidthsById ?? operations.state.ui?.tabWidthsById
     ),
     visibleWorkspaceHostIds: nextVisibleWorkspaceHostIds,
     // Paired clients may write only visible hosts; derive scope so all-hosts cannot override them.

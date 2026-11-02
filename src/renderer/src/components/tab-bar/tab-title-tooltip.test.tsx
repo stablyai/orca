@@ -99,8 +99,16 @@ vi.mock('../../store', () => ({
     selector: (state: {
       unreadTerminalTabs: Record<string, boolean>
       agentStatusByPaneKey: Record<string, never>
+      tabWidthsById: Record<string, number>
+      setTabWidth: () => void
     }) => unknown
-  ) => selector({ unreadTerminalTabs: {}, agentStatusByPaneKey: {} })
+  ) =>
+    selector({
+      unreadTerminalTabs: {},
+      agentStatusByPaneKey: {},
+      tabWidthsById: {},
+      setTabWidth: vi.fn()
+    })
 }))
 
 vi.mock('@/store', () => ({
@@ -114,6 +122,8 @@ vi.mock('@/store', () => ({
       browserAudiblePageIds: Record<string, never>
       browserAudioMutedTabIds: Record<string, never>
       setBrowserTabAudioMuted: () => void
+      tabWidthsById: Record<string, number>
+      setTabWidth: () => void
     }) => unknown
   ) =>
     selector({
@@ -124,7 +134,9 @@ vi.mock('@/store', () => ({
       browserPagesByWorkspace: {},
       browserAudiblePageIds: {},
       browserAudioMutedTabIds: {},
-      setBrowserTabAudioMuted: vi.fn()
+      setBrowserTabAudioMuted: vi.fn(),
+      tabWidthsById: {},
+      setTabWidth: vi.fn()
     })
 }))
 

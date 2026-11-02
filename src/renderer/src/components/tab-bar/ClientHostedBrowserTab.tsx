@@ -14,6 +14,7 @@ import {
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
+import { TabStripSlotResizeHandle } from './TabStripSlotResizeHandle'
 
 /** Paired-client pages have no unified tab: expose presence and close without persisted ordering, pinning or drag actions. */
 export default function ClientHostedBrowserTab({
@@ -91,6 +92,7 @@ export default function ClientHostedBrowserTab({
           </button>
         </div>
       </TabHoverCard>
+      <TabStripSlotResizeHandle tabId={row.browserPageId} />
     </div>
   )
 }

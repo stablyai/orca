@@ -9,6 +9,8 @@ type UseSidebarResizeOptions = {
   renderedExtraWidth?: number
   setWidth: (width: number) => void
   onDraftWidthChange?: (width: number) => void
+  /** Drag origin when the rendered width can differ from `width`, e.g. a flex item shrunk by its siblings. */
+  getStartWidth?: () => number
 }
 
 type UseSidebarResizeResult<T extends HTMLElement> = {
@@ -56,7 +58,8 @@ export function useSidebarResize<T extends HTMLElement>({
   deltaSign,
   renderedExtraWidth = 0,
   setWidth,
-  onDraftWidthChange
+  onDraftWidthChange,
+  getStartWidth
 }: UseSidebarResizeOptions): UseSidebarResizeResult<T> {
   const containerRef = useRef<T | null>(null)
   const isResizingRef = useRef(false)
@@ -122,7 +125,7 @@ export function useSidebarResize<T extends HTMLElement>({
     const finalWidth = draftWidthRef.current
     applyRenderedWidth(finalWidth)
     onDraftWidthChange?.(finalWidth)
-    if (finalWidth !== width) {
+    if (finalWidth !== width && finalWidth !== startWidthRef.current) {
       setWidth(finalWidth)
     }
   }, [applyRenderedWidth, onDraftWidthChange, resetDocumentStyles, setWidth, width])
@@ -184,10 +187,11 @@ export function useSidebarResize<T extends HTMLElement>({
       event.preventDefault()
       isResizingRef.current = true
       setIsResizing(true)
+      const startWidth = clampSidebarResizeWidth(getStartWidth?.() ?? width, minWidth, maxWidth)
       startXRef.current = event.clientX
-      startWidthRef.current = width
-      draftWidthRef.current = width
-      onDraftWidthChange?.(width)
+      startWidthRef.current = startWidth
+      draftWidthRef.current = startWidth
+      onDraftWidthChange?.(startWidth)
       document.body.style.cursor = 'col-resize'
       document.body.style.userSelect = 'none'
 
@@ -203,7 +207,7 @@ export function useSidebarResize<T extends HTMLElement>({
         overlayRef.current = overlay
       }
     },
-    [onDraftWidthChange, width]
+    [getStartWidth, maxWidth, minWidth, onDraftWidthChange, width]
   )
 
   return { containerRef, isResizing, onResizeStart }

@@ -2,7 +2,6 @@ import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks, Smartphone } from 'lucide-react'
-import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
 import { basename } from '@/lib/path'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
@@ -31,6 +30,8 @@ import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
 import { translate } from '@/i18n/i18n'
 import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
+import { TabStripSlotResizeHandle } from './TabStripSlotResizeHandle'
+import { TabRenameInput } from './TabRenameInput'
 import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from './tab-context-menu-opening'
@@ -285,22 +286,14 @@ export default function EditorFileTab({
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
       <span className="mr-1 flex min-w-0 flex-1 items-baseline gap-1">
         {isRenaming ? (
-          <Input
+          <TabRenameInput
             ref={setRenameInputElement}
-            density="compact"
-            data-tab-rename-input="true"
             aria-label={translate(
               'auto.components.tab.bar.EditorFileTab.3da7445c84',
               'Rename file {{value0}}',
               { value0: basename(file.filePath) }
             )}
             defaultValue={basename(file.filePath)}
-            className="mr-1 min-w-0 flex-1"
-            spellCheck={false}
-            onPointerDown={(e) => e.stopPropagation()}
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-            onDoubleClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => {
               // IME candidate confirmation must not commit the rename.
               if (isImeCompositionKeyDown(e)) {
@@ -392,6 +385,7 @@ export default function EditorFileTab({
               {tabRoot}
             </TabHoverCard>
           )}
+          <TabStripSlotResizeHandle tabId={file.tabId ?? file.id} />
         </div>
       </ContextMenuTrigger>
 

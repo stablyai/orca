@@ -22163,6 +22163,10 @@
       "open": "{{review}}: Open"
     }
   },
+  "tabResizeHandle": {
+    "label": "Resize tab",
+    "hint": "Drag to resize. Double-click to reset."
+  },
   "tabHoverCard": {
     "browser": "Browser",
     "editor": "Editor",

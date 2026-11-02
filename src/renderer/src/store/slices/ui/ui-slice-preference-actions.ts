@@ -1,6 +1,7 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { workspaceHostScopeForVisibleHosts } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { createAgentsViewPreferenceActions } from './ui-slice-agents-view-preference-actions'
+import { withTabWidth } from '../../../../../shared/tab-strip-width'
 import {
   DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
   DEFAULT_SHOW_SLEEPING_WORKSPACES,
@@ -150,6 +151,15 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
           next[worktreeId] = false
         }
         return { showDotfilesByWorktree: next }
+      }),
+
+    tabWidthsById: {},
+    setTabWidth: (tabId, width) =>
+      set((s) => {
+        if ((s.tabWidthsById[tabId] ?? null) === width) {
+          return s
+        }
+        return { tabWidthsById: withTabWidth(s.tabWidthsById, tabId, width) }
       }),
 
     filterRepoIds: [],
