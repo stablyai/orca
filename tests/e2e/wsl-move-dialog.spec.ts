@@ -411,7 +411,7 @@ test('moves projects through preview, blockers, progress and result', async ({},
 })
 
 // oxlint-disable-next-line no-empty-pattern -- Playwright passes fixtures before testInfo.
-test('with the internal gate closed, no move entry shows and main refuses', async ({}, testInfo) => {
+test('with the internal gate closed, saved hosts remain but moves are refused', async ({}, testInfo) => {
   // The gated-off launch still boots a full app before main is asked to refuse.
   test.setTimeout(180_000)
   const desktop = await launch(testInfo, false)
@@ -429,8 +429,15 @@ test('with the internal gate closed, no move entry shows and main refuses', asyn
     await expect(page.getByText('No saved servers', { exact: true })).toBeVisible({
       timeout: 30_000
     })
-    await expect(page.locator('[data-settings-section="wsl-hosts"]')).toHaveCount(0)
-    await expect(page.getByText('Move projects from this distro…')).toHaveCount(0)
+    const wslHosts = page.locator('[data-settings-section="wsl-hosts"]')
+    await expect(wslHosts).toBeVisible()
+    await expect(wslHosts.getByText(`${DISTRO} (WSL)`, { exact: true })).toBeVisible()
+    await expect(wslHosts.getByRole('button', { name: 'Add WSL distro' })).toHaveCount(0)
+    await wslHosts.getByRole('button', { name: `More actions for ${DISTRO} (WSL)` }).click()
+    await expect(page.getByRole('menuitem', { name: 'Remove…' })).toBeVisible()
+    await expect(
+      page.getByRole('menuitem', { name: 'Move projects from this distro…' })
+    ).toHaveCount(0)
     await expect(page.getByTestId('wsl-move-dialog')).toHaveCount(0)
   } finally {
     await desktop.dispose()
