@@ -24,7 +24,9 @@ export class RuntimeFileCommands {
   readonly statRuntimeFile: RuntimeFileAccess['statRuntimeFile']
   readonly readMobileFile: RuntimeFileReads['readMobileFile']
   readonly readFileExplorerPreview: RuntimeFileReads['readFileExplorerPreview']
+  readonly readChatImagePreview: RuntimeFileReads['readChatImagePreview']
   readonly readDocPreviewFile: RuntimeFileReads['readDocPreviewFile']
+  readonly readDocPreviewChunk: RuntimeFileReads['readDocPreviewChunk']
   readonly readFileExplorerChunk: RuntimeFileReads['readFileExplorerChunk']
   readonly writeFileExplorerFile: RuntimeFileMutations['writeFileExplorerFile']
   readonly writeFileExplorerFileBase64: RuntimeFileMutations['writeFileExplorerFileBase64']
@@ -33,6 +35,7 @@ export class RuntimeFileCommands {
   readonly createFileExplorerDir: RuntimeFileMutations['createFileExplorerDir']
   readonly createFileExplorerDirNoClobber: RuntimeFileMutations['createFileExplorerDirNoClobber']
   readonly commitFileExplorerUpload: RuntimeFileMutations['commitFileExplorerUpload']
+  readonly replaceFileExplorerFileWithUpload: RuntimeFileMutations['replaceFileExplorerFileWithUpload']
   readonly renameFileExplorerPath: RuntimeFileMutations['renameFileExplorerPath']
   readonly copyFileExplorerPath: RuntimeFileMutations['copyFileExplorerPath']
   readonly deleteFileExplorerPath: RuntimeFileMutations['deleteFileExplorerPath']
@@ -60,7 +63,9 @@ export class RuntimeFileCommands {
     this.statRuntimeFile = this.access.statRuntimeFile.bind(this.access)
     this.readMobileFile = this.reads.readMobileFile.bind(this.reads)
     this.readFileExplorerPreview = this.reads.readFileExplorerPreview.bind(this.reads)
+    this.readChatImagePreview = this.reads.readChatImagePreview.bind(this.reads)
     this.readDocPreviewFile = this.reads.readDocPreviewFile.bind(this.reads)
+    this.readDocPreviewChunk = this.reads.readDocPreviewChunk.bind(this.reads)
     this.readFileExplorerChunk = this.reads.readFileExplorerChunk.bind(this.reads)
     this.writeFileExplorerFile = this.mutations.writeFileExplorerFile.bind(this.mutations)
     this.writeFileExplorerFileBase64 = this.mutations.writeFileExplorerFileBase64.bind(
@@ -75,6 +80,9 @@ export class RuntimeFileCommands {
       this.mutations
     )
     this.commitFileExplorerUpload = this.mutations.commitFileExplorerUpload.bind(this.mutations)
+    this.replaceFileExplorerFileWithUpload = this.mutations.replaceFileExplorerFileWithUpload.bind(
+      this.mutations
+    )
     this.renameFileExplorerPath = this.mutations.renameFileExplorerPath.bind(this.mutations)
     this.copyFileExplorerPath = this.mutations.copyFileExplorerPath.bind(this.mutations)
     this.deleteFileExplorerPath = this.mutations.deleteFileExplorerPath.bind(this.mutations)

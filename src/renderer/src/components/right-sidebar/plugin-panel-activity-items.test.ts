@@ -6,8 +6,8 @@ import { getPluginPanelActivityItems, resolvePluginPanelIcon } from './plugin-pa
 const panel: ActivePluginPanel = {
   id: 'dashboard',
   title: 'Dashboard',
-  tabKey: 'plugin:orca-samples.demo/dashboard',
-  pluginKey: 'orca-samples.demo',
+  tabKey: 'plugin:samples.demo/dashboard',
+  pluginKey: 'samples.demo',
   pluginName: 'Demo'
 }
 

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 
 export type CodexGoalJournalState = {
   thread: string

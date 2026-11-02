@@ -97,17 +97,11 @@ export function LinearProjectOverviewContent({
                 <Progress value={Math.max(0, Math.min(100, progress))} />
                 {typeof presentation.scope === 'number' ? (
                   <div className="mt-2 text-xs text-muted-foreground">
-                    {presentation.scope === 1
-                      ? translate(
-                          'auto.components.linear.project.view.surfaces.scopedIssueCount_one',
-                          '{{count}} scoped issue',
-                          { count: presentation.scope }
-                        )
-                      : translate(
-                          'auto.components.linear.project.view.surfaces.scopedIssueCount_other',
-                          '{{count}} scoped issues',
-                          { count: presentation.scope }
-                        )}
+                    {translate(
+                      'auto.components.linear.project.view.surfaces.scopedIssueCount',
+                      '{{count}} scoped issues',
+                      { count: presentation.scope, defaultValue_one: '{{count}} scoped issue' }
+                    )}
                   </div>
                 ) : null}
               </section>

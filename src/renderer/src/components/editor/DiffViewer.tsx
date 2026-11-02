@@ -3,7 +3,8 @@ import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
-import { computeDiffEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
+import { monacoTypographyOptions } from '@/lib/editor-typography'
+import { useEditorTypography } from '@/hooks/use-editor-typography'
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
@@ -29,7 +30,12 @@ import { buildDiffEditorHideUnchangedOptions } from './diff-editor-hide-unchange
 import { useDiffEditorRegistration } from './diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
 import { monacoFindOptions } from './monaco-find-options'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { usePluginSyntaxLanguage } from './use-plugin-syntax-language'
+import {
+  PLUGIN_SYNTAX_EDITOR_OPTIONS,
+  applyModelLanguage
+} from '@/lib/monaco-languages/plugin-syntax-editor-options'
+import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 
 export default function DiffViewer({
   modelKey,
@@ -37,7 +43,7 @@ export default function DiffViewer({
   modifiedModelKey,
   originalContent,
   modifiedContent,
-  language,
+  language: coreLanguage,
   filePath,
   relativePath,
   sideBySide,
@@ -52,11 +58,14 @@ export default function DiffViewer({
   largeDiffRenderLimit,
   largeDiffSaveContentAvailable
 }: DiffViewerProps): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
-  const isDark = useDocumentDarkTheme()
-  const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
+  const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap)
+  const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace)
+  const diffCollapseUnchangedRegions = useAppStore((s) => s.settings?.diffCollapseUnchangedRegions)
+  const monacoTheme = useMonacoTheme()
+  const diffTypography = useEditorTypography('diff')
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
+  const language = usePluginSyntaxLanguage(filePath, coreLanguage)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
   const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
@@ -68,9 +77,6 @@ export default function DiffViewer({
     () => (allDiffComments ?? []).filter((c) => c.filePath === relativePath && isDiffComment(c)),
     [allDiffComments, relativePath]
   )
-  const terminalFontSize = settings?.terminalFontSize ?? 13,
-    diffEditorFontSize = computeDiffEditorFontSize(terminalFontSize, editorFontZoomLevel)
-  const diffWordWrap = settings?.diffWordWrap
 
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const { registerDiffEditor, unregisterDiffEditor } = useDiffEditorRegistration()
@@ -82,6 +88,10 @@ export default function DiffViewer({
     diffWordWrapRef.current = diffWordWrap
   }, [diffWordWrap])
   const [modifiedEditor, setModifiedEditor] = useState<editor.ICodeEditor | null>(null)
+  useEffect(() => {
+    const models = diffEditorRef.current?.getModel()
+    applyModelLanguage([models?.original, models?.modified], language)
+  }, [modifiedEditor, language])
 
   const renderLimit = useMemo(
     () => largeDiffRenderLimit ?? getLargeDiffRenderLimit({ originalContent, modifiedContent }),
@@ -310,6 +320,37 @@ export default function DiffViewer({
     }
   }, [diffWordWrap, sideBySide])
 
+  // Why: @monaco-editor/react calls updateOptions whenever this object's identity changes.
+  const editorOptions = useMemo<editor.IDiffEditorConstructionOptions>(
+    () => ({
+      dropIntoEditor: { enabled: false },
+      readOnly: !editable,
+      originalEditable: false,
+      renderSideBySide: sideBySide,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
+      ...monacoTypographyOptions(diffTypography),
+      lineNumbers: 'on',
+      ...buildDiffEditorWordWrapOptions(diffWordWrap),
+      ...buildDiffEditorWhitespaceOptions(diffShowWhitespace),
+      ...buildDiffEditorHideUnchangedOptions(diffCollapseUnchangedRegions),
+      automaticLayout: true,
+      renderOverviewRuler: true,
+      scrollbar: diffEditorScrollbarOptions,
+      padding: { top: 0 },
+      find: monacoFindOptions
+    }),
+    [
+      editable,
+      sideBySide,
+      diffTypography,
+      diffWordWrap,
+      diffShowWhitespace,
+      diffCollapseUnchangedRegions
+    ]
+  )
+
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <div className="flex-1 min-h-0 relative">
@@ -327,35 +368,19 @@ export default function DiffViewer({
         ) : (
           <DiffEditor
             height="100%"
+            // Why: the overview ruler column is unpainted; it shows this surface, not the app's.
+            className="code-editor-backdrop"
             language={language}
             original={originalContent}
             modified={modifiedContent}
-            theme={isDark ? 'vs-dark' : 'vs'}
+            theme={monacoTheme}
             onMount={handleMount}
             // Tab-owned models preserve modified undo across Changes-mode HEAD rotations.
             originalModelPath={currentDiffModelPaths.originalModelPath}
             modifiedModelPath={currentDiffModelPaths.modifiedModelPath}
             keepCurrentOriginalModel
             keepCurrentModifiedModel
-            options={{
-              dropIntoEditor: { enabled: false },
-              readOnly: !editable,
-              originalEditable: false,
-              renderSideBySide: sideBySide,
-              minimap: { enabled: false },
-              scrollBeyondLastLine: false,
-              fontSize: diffEditorFontSize,
-              fontFamily: resolveEditorFontFamily(settings),
-              lineNumbers: 'on',
-              ...buildDiffEditorWordWrapOptions(settings?.diffWordWrap),
-              ...buildDiffEditorWhitespaceOptions(settings?.diffShowWhitespace),
-              ...buildDiffEditorHideUnchangedOptions(settings?.diffCollapseUnchangedRegions),
-              automaticLayout: true,
-              renderOverviewRuler: true,
-              scrollbar: diffEditorScrollbarOptions,
-              padding: { top: 0 },
-              find: monacoFindOptions
-            }}
+            options={editorOptions}
           />
         )}
       </div>

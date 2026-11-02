@@ -47,9 +47,14 @@ export function getAntigravityAccountService(
     )
   }
   const env = getAppEnvironment()
-  service ??= new AntigravityAccountService(
-    createEncryptedAntigravityAccountStore(getAntigravityAccountVaultPath()),
-    reportingCredentialChanges(createAntigravityHostCredentialBackend(env.getPath('home')))
-  )
+  if (!service) {
+    const backend = reportingCredentialChanges(
+      createAntigravityHostCredentialBackend(env.getPath('home'))
+    )
+    service = new AntigravityAccountService(
+      createEncryptedAntigravityAccountStore(getAntigravityAccountVaultPath(), backend.parse),
+      backend
+    )
+  }
   return service
 }

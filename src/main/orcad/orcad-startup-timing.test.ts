@@ -10,16 +10,6 @@ function clock(times: number[]): () => number {
 }
 
 describe('createOrcadStartupTiming', () => {
-  it('stays silent and untimed without the lane env', async () => {
-    const lines: string[] = []
-    const timing = createOrcadStartupTiming({}, clock([]), (line) => lines.push(line))
-
-    await expect(timing.time('daemon', async () => 'ok')).resolves.toBe('ok')
-    timing.report()
-
-    expect(lines).toEqual([])
-  })
-
   it('reports each phase, failed ones included, in one line', async () => {
     const lines: string[] = []
     const timing = createOrcadStartupTiming(

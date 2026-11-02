@@ -333,8 +333,8 @@ jobs:
           node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/wsl/wsl-orcad-real-distro-lane.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'launch.log')
           if ($global:LASTEXITCODE -ne 0) { throw "launch phase failed: $global:LASTEXITCODE" }
       # A new process: the holders must have kept both distros Running since phase 1 exited.
-      - name: 'Phase 2: holders survive, chat, reconnect, teardown'
-        timeout-minutes: 8
+      - name: 'Phase 2: holders survive, chat, mid-reply stop and Continue, teardown'
+        timeout-minutes: 11
         env:
           ORCA_RUN_WSL_ORCAD_LANE: '1'
           ORCA_WSL_ORCAD_LANE_PHASE: survive

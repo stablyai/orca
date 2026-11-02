@@ -21,6 +21,8 @@ Orca can drive agents on remote machines over SSH — useful for long-running bu
 
 Dirty add/edit forms ignore outside clicks so an accidental click away does not discard your fields; use Escape, Cancel, or × to discard.
 
+Orca won't add a second target for a machine already in Orca. When it imports `~/.ssh/config` (on launch, from **Add all**, or from Settings), it asks OpenSSH (`ssh -G`) where each new alias connects: host, port, user, and jump host or proxy command. It skips an alias that resolves to the same place as a saved target, and the picker shows that alias as **In Orca**. A different port, user, `ProxyJump`, or `ProxyCommand` stays a separate target. Hostnames are compared case-insensitively; SSH usernames keep their case. An alias without `HostName` connects to its own name, so it matches an IP target only if you set `HostName` to that IP. Orca doesn't look names up in DNS. If `ssh -G` isn't available, aliases are matched by name only.
+
 ## Host key verification
 
 Orca checks built-in SSH connections against your effective OpenSSH `known_hosts` files and keys it previously saved. Existing matches connect silently. With the default policy, Orca accepts and remembers a host on first contact and shows its fingerprint; `StrictHostKeyChecking yes` rejects unknown hosts, while `no` / `off` accepts without saving a trust record.

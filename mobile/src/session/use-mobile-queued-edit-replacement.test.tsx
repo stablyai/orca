@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
-import { agentSessionSendBodyFingerprint } from '../../../src/shared/structured-agent-session-send-mutation'
+import { agentSessionSendBodyFingerprint } from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import { queuedMessageWithEdit } from '../../../src/shared/queued-message-edit'
 import { queuedMessageUpdateDecision } from '../../../src/main/native-chat/agent-session-journal/queued-message-update'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
@@ -24,6 +24,10 @@ import {
   withText,
   readOrHoldReply
 } from './mobile-queued-edit-hook.test-fixture'
+import { insertDictationText } from '../dictation/mobile-dictation-text-insertion'
+
+// What the composer hands the editor for words said into a field that was never focused.
+const spoken = (text: string) => (draft: string) => insertDictationText(draft, text, null).text
 
 describe('mobile queued replacement contracts', () => {
   const { state, Harness, mount, sendRequest, append, notice, resolved, requestedFingerprint } =
@@ -268,7 +272,7 @@ describe('mobile queued replacement contracts', () => {
     })
     const voice = state.hook!.queued.editor!.insertDictation!
     act(() => {
-      voice('newer')
+      voice(spoken('newer'))
     })
     await act(async () => {
       finish!(
@@ -309,7 +313,7 @@ describe('mobile queued replacement contracts', () => {
       }))
     )
     act(() => {
-      voice('newer')
+      voice(spoken('newer'))
       state.listener?.(batchEvent([]))
     })
     expect(state.bottomText).toBe('occupied\n\nsubmitted newer newer')

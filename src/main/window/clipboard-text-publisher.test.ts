@@ -5,7 +5,8 @@ import {
   CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS,
   CLIPBOARD_TEXT_WRITE_MAX_BYTES
 } from '../../shared/clipboard-text'
-import { createClipboardTextPublisher } from './clipboard-text-publisher'
+import { CLIPBOARD_IMAGE_MAX_BASE64_CHARS } from '../../shared/clipboard-image'
+import { createClipboardPublisher } from './clipboard-text-publisher'
 
 vi.mock('electron', () => ({ app: {}, clipboard: {} }))
 
@@ -13,8 +14,8 @@ const ok: ProcessResult = { code: 0, signal: null, stdout: '', stderr: '', timed
 const run = vi.fn(async (_spec: ProcessSpec): Promise<ProcessResult> => ok)
 const write = vi.fn()
 const clearCache = vi.fn()
-function writer(wayland = true, validate = assertClipboardTextWriteWithinLimitWithYield) {
-  return createClipboardTextPublisher({
+function publisher(wayland = true, validate = assertClipboardTextWriteWithinLimitWithYield) {
+  return createClipboardPublisher({
     isWayland: () => wayland,
     helperPath: () => '/bundle/bin/orca-wayland-clipboard',
     run,
@@ -22,6 +23,9 @@ function writer(wayland = true, validate = assertClipboardTextWriteWithinLimitWi
     clearCache,
     validate
   })
+}
+function writer(wayland = true, validate = assertClipboardTextWriteWithinLimitWithYield) {
+  return publisher(wayland, validate).publishText
 }
 
 describe('terminal clipboard writes', () => {
@@ -181,6 +185,45 @@ describe('terminal clipboard writes', () => {
     expect(run.mock.calls.map(([spec]) => spec.input)).toEqual(['first', 'second'])
     expect(clearCache).toHaveBeenCalledTimes(1)
   })
+
+  it.each([
+    { label: 'count', count: 32, bytes: 1 },
+    { label: 'retained bytes', count: 1, bytes: CLIPBOARD_IMAGE_MAX_BASE64_CHARS * 2 }
+  ])(
+    'bounds other clipboard operations by $label and releases capacity after failure',
+    async ({ count, bytes }) => {
+      const copy = publisher(false)
+      let release: () => void = () => undefined
+      const gate = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      const publications: number[] = []
+      const first = copy.publish(bytes, async () => {
+        await gate
+        throw new Error('file helper failed')
+      })
+      const rejected = expect(first).rejects.toThrow('file helper failed')
+      const queued = Array.from({ length: count - 1 }, (_, index) =>
+        copy.publish(bytes, () => {
+          publications.push(index)
+          return index
+        })
+      )
+      await expect(copy.publish(bytes, () => publications.push(-1))).rejects.toThrow(
+        'Too many pending clipboard writes'
+      )
+      expect(publications).toEqual([])
+      const text = copy.publishText('after failed file', 'ordinary')
+      release()
+      await rejected
+      await Promise.all(queued)
+      await text
+      expect(publications).toHaveLength(count - 1)
+      expect(publications).not.toContain(-1)
+      expect(write).toHaveBeenLastCalledWith('after failed file', 'ordinary')
+      await expect(copy.publish(bytes, () => 'after flood')).resolves.toBe('after flood')
+    }
+  )
 
   it('bounds requests queued behind a stalled helper', async () => {
     let release: (value: typeof ok) => void = () => undefined

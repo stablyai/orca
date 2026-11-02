@@ -1,4 +1,4 @@
-// C10 real WSL2/systemd-on/off contract: C4 deploy, C5 RPC bridge, C6 loss/recovery, E1 deferred/forced/idle updates, then a separate survive process proves holder adoption, git/folder chat and cleanup. wsl-orcad-e2e.yml imports/runs both phases.
+// C10 real WSL2/systemd-on/off contract: C4 deploy, C5 RPC bridge, C6 loss/recovery, E1 deferred/forced/idle updates, then a separate survive process proves holder adoption, git/folder chat, a mid-reply distro stop resumed by Start and Continue, and cleanup. wsl-orcad-e2e.yml imports/runs both phases.
 // Run: ORCA_RUN_WSL_ORCAD_LANE=1 ORCA_WSL_ORCAD_LANE_PHASE=launch|survive pnpm test <this file>
 import { createHash, randomBytes } from 'node:crypto'
 import { appendFileSync, cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -29,7 +29,8 @@ import { WslOrcadBridgeActivity } from './wsl-orcad-bridge-activity'
 import { listenWslOrcadStdioBridge } from './wsl-orcad-stdio-bridge'
 import { createWslDistroHolder, type WslDistroHolder } from './wsl-distro-holder'
 import { proveWslStructuredChat } from './wsl-orcad-structured-chat-contract'
-import { WSL_CHAT_GUEST_BIN } from './wsl-orcad-chat-provider-fixture'
+import { createLaneWslHost, proveWslMidTurnStopAndContinue } from './wsl-orcad-midturn-stop-lane'
+import { reinstallWslGuestCli, WSL_CHAT_GUEST_BIN } from './wsl-orcad-chat-provider-fixture'
 import {
   WSL_CHAT_WINDOWS_DECOY,
   WSL_CHAT_WINDOWS_DECOY_AGENTS,
@@ -341,7 +342,10 @@ async function proveDetachedSession(
         'date +%s%N > lane-file; git add lane-file; pwd'
     )
   ).trim()
-  await rpc(connection, 'git.commit', { worktree: `path:${repoPath}`, message: 'lane commit' })
+  await rpc(connection, 'git.commit', {
+    worktree: `path:${repoPath}`,
+    message: 'lane commit'
+  })
   const hookSock = (await guest(distro, `cat "$HOME/${LOGIN_ENV_TAG}" 2>/dev/null || true`)).trim()
   expect(hookSock, `${distro}: SSH_AUTH_SOCK seen by orcad's git`).toBe(LOGIN_ENV_SOCK)
   const created = await rpc<{ terminal: { handle: string } }>(connection, 'terminal.create', {
@@ -627,6 +631,81 @@ async function launchPhase(distro: string, systemd: boolean): Promise<Receipt> {
   return result
 }
 
+/** Mid-turn holder exits are unverifiable until the process is gone; wait for the proven exit. */
+async function releaseHolder(distro: string) {
+  const released = await holder.release(distro)
+  await waitFor(
+    `the ${distro} holder to exit`,
+    async () => ((await holder.holderState(distro)) === 'exited' ? true : null),
+    10_000,
+    250
+  )
+  return released
+}
+
+/** verify-7's device script, with Start through the production host service and connector. */
+async function proveMidTurnStop(distro: string) {
+  // Hand the distro from the lane's own bridge and holder to the host service's.
+  await manager.close(distro)
+  await releaseHolder(distro)
+  // The service deploys the packaged template; point it at what this distro runs, so Add
+  // neither updates nor defers.
+  const packaged = process.env.ORCA_ORCAD_TEMPLATE_PATH
+  const running = templates.get(wslDistroHolderKey(distro))
+  if (running) {
+    process.env.ORCA_ORCAD_TEMPLATE_PATH = running
+  }
+  const host = createLaneWslHost(USER_DATA)
+  try {
+    const added = await host.service.add({ distro, startIfStopped: true })
+    if (!added.ok) {
+      throw new Error(`Adding ${distro} as a WSL host failed: ${JSON.stringify(added)}`)
+    }
+    const current = (): WslOrcadConnection => {
+      const connection = host.connector.get(distro)
+      if (!connection) {
+        throw new Error(`${distro} has no host connection`)
+      }
+      return connection
+    }
+    const chat = {
+      rpc: <T>(method: string, params?: unknown) => rpc<T>(current(), method, params),
+      guest: (command: string) => guest(distro, command)
+    }
+    const { pid } = current()
+    if (pid === null) {
+      throw new Error(`${distro} host connection has no runtime PID`)
+    }
+    // The chat contract's Windows-decoy probe deleted the guest claude; install it again.
+    const install = await reinstallWslGuestCli({ ...chat, runtimePid: pid }, 'claude')
+    const repo = `${install.home}/wsl-orcad-lane-repo`
+    return await proveWslMidTurnStopAndContinue(
+      {
+        ...chat,
+        distro,
+        environmentId: added.environmentId,
+        host,
+        pairing: () => pairedConnection(current()),
+        terminate: async () => {
+          const terminated = await wslExe(['--terminate', distro])
+          expect(terminated.code, terminated.output).toBe(0)
+        },
+        runningDistros
+      },
+      { root: install.root, worktree: `path:${repo}`, cwd: repo }
+    )
+  } finally {
+    await host.connector.disconnect(distro).catch(() => {})
+    await host.connector.releaseHolder(distro).catch(() => {})
+    await host.service.dispose()
+    if (packaged === undefined) {
+      delete process.env.ORCA_ORCAD_TEMPLATE_PATH
+    } else {
+      process.env.ORCA_ORCAD_TEMPLATE_PATH = packaged
+    }
+  }
+}
+
 async function survivePhase(): Promise<void> {
   const state: LaunchState = JSON.parse(readFileSync(STATE_FILE, 'utf8'))
   for (const [key, dir] of Object.entries(state.templates ?? {})) {
@@ -672,6 +751,7 @@ async function survivePhase(): Promise<void> {
       }
     })
   }
+  receipt.midTurnStop = await proveMidTurnStop(PLAIN)
 
   // Teardown: bridges closed, holders released, distros terminated.
   await manager.dispose()
@@ -681,14 +761,7 @@ async function survivePhase(): Promise<void> {
   const released: Receipt = {}
   receipt.released = released
   for (const { name } of DISTROS) {
-    // Mid-exit unreadable command lines are unverifiable; wait for proven holder exit.
-    released[name] = await holder.release(name)
-    await waitFor(
-      `the ${name} holder to exit`,
-      async () => ((await holder.holderState(name)) === 'exited' ? true : null),
-      10_000,
-      250
-    )
+    released[name] = await releaseHolder(name)
   }
   // The systemd distro stops while the plain one still runs, so the interop entry is shared.
   if (SYSTEMD) {

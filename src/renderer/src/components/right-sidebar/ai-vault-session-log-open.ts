@@ -6,10 +6,11 @@ import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { translate } from '@/i18n/i18n'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import { canOpenAiVaultSessionLogInOrca } from './ai-vault-session-path-actions'
+import { aiVaultSessionLogFilePath } from '../../../../shared/ai-vault-session-log-resource'
+import { canUseLocalAiVaultSessionPathActions } from './ai-vault-session-path-actions'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
-type AiVaultLogSession = Pick<AiVaultSession, 'filePath' | 'executionHostId'>
+type AiVaultLogSession = Pick<AiVaultSession, 'agent' | 'filePath' | 'executionHostId'>
 
 function worktreeStillExists(state: AppState, worktreeId: string): boolean {
   if (findWorktreeById(selectWorktreesByRepo(state) ?? {}, worktreeId)) {
@@ -36,9 +37,9 @@ function focusEditorContent(): void {
 
 /** Open a local log read-only via external-file openFile; preserve existing writable authority and never redirect to a remote host. */
 export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): Promise<void> {
-  const filePath = session.filePath?.trim()
+  const filePath = aiVaultSessionLogFilePath(session)
   // Silently reject unavailable paths; UI gating should already withhold them.
-  if (!filePath || !canOpenAiVaultSessionLogInOrca(session)) {
+  if (!filePath || !canUseLocalAiVaultSessionPathActions(session.executionHostId)) {
     return
   }
   const state = useAppStore.getState()

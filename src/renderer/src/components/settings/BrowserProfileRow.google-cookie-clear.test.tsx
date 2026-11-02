@@ -228,9 +228,9 @@ it('places one Google section after the rows and clears the current Active profi
 
 it('captures the selected Host and Active profile at press through delayed capture/confirmation, cancel and repeat', async () => {
   selectServer()
-  store.setState({
-    defaultBrowserSessionProfileIdByHostId: { 'runtime:server': 'private' }
-  })
+  store.setState((s) => ({
+    settings: { ...s.settings!, browserDefaultProfileIdByHostId: { 'runtime:server': 'private' } }
+  }))
   mount(<SessionSection />)
   const button = screen.getByRole('button', { name: 'Clear Google cookies…' })
   await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false))
@@ -242,7 +242,7 @@ it('captures the selected Host and Active profile at press through delayed captu
   fireEvent.click(button)
   expect(mocks.target).toHaveBeenLastCalledWith({ profileId: 'private', environmentId: 'server' })
   await act(async () => {
-    store.setState({ browserSessionHostIdOverride: 'local', defaultBrowserSessionProfileId: null })
+    store.setState({ browserSessionHostIdOverride: 'local' })
     captured.resolve({
       ...local,
       profileId: 'private',

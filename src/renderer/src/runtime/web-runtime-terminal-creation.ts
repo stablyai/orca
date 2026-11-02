@@ -61,7 +61,7 @@ export async function createWebRuntimeAgentSessionTerminal(
     agent: args.agent,
     submit: args.submitPrompt,
     forcePaste: args.forcePromptPaste
-  })
+  }).catch(() => false)
   return { outcome: created.outcome, promptDelivered }
 }
 
@@ -71,7 +71,7 @@ export async function createWebRuntimeAgentSessionTerminalWithLaunchDraft(
     agent: TuiAgent
     launchDraft: string
   }
-): Promise<WebRuntimeTerminalCreateOutcome> {
+): Promise<{ outcome: WebRuntimeTerminalCreateOutcome; promptDelivered: boolean }> {
   const created = await createWebRuntimeSessionTerminalResult(args)
   if (created.outcome.status !== 'failed' && created.hostTabId) {
     seedNativeChatLaunchDraftForAgentTab({
@@ -80,5 +80,8 @@ export async function createWebRuntimeAgentSessionTerminalWithLaunchDraft(
       text: args.launchDraft
     })
   }
-  return created.outcome
+  return {
+    outcome: created.outcome,
+    promptDelivered: created.outcome.status === 'created'
+  }
 }

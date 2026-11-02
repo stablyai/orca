@@ -2,7 +2,7 @@ import React, { useCallback } from 'react'
 import { ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
-import { HoverCard, HoverCardContent } from '@/components/ui/hover-card'
+import { HoverCardContent } from '@/components/ui/hover-card'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
@@ -29,7 +29,7 @@ import { useWorktreeCardSecondaryDetails } from '../sidebar/use-worktree-card-se
 import { useWorkspaceReferenceLinkActions } from '../sidebar/use-workspace-reference-link-actions'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { ActivityThreadHoverCardSummary } from './activity-thread-hover-card-summary'
-import { ActivityThreadHoverCardTrigger } from './activity-thread-hover-card-trigger'
+import { ActivityThreadHoverCardRoot } from './activity-thread-hover-card-root'
 import type { AgentPaneThread } from './activity-thread-types'
 
 export type ActivityThreadHoverCardProps = {
@@ -59,21 +59,17 @@ export function ActivityThreadHoverCard({
     useWorkspaceReferenceLinkActions(thread.worktree.id, detailsHoverControl)
 
   return (
-    <HoverCard
+    <ActivityThreadHoverCardRoot
       open={open}
       onOpenChange={detailsHoverControl.handleHoverOpenChange}
       openDelay={openDelay}
       closeDelay={closeDelay}
+      enabled={!suppressed}
+      trigger={children}
     >
       <span className="contents" onClick={(event) => event.stopPropagation()}>
         <LinkActionPopover {...linkActionPopoverProps} />
       </span>
-      <ActivityThreadHoverCardTrigger
-        open={open}
-        onOpenChange={detailsHoverControl.handleHoverOpenChange}
-      >
-        {children}
-      </ActivityThreadHoverCardTrigger>
       {open ? (
         <ActivityThreadHoverCardContent
           thread={thread}
@@ -84,7 +80,7 @@ export function ActivityThreadHoverCard({
           canJumpToWorkspace={canJumpToWorkspace}
         />
       ) : null}
-    </HoverCard>
+    </ActivityThreadHoverCardRoot>
   )
 }
 
@@ -234,10 +230,9 @@ function ActivityThreadHoverCardContent({
           }
           canJumpToWorkspace={canJumpToWorkspace}
         />
-
-        {/* GitHub / GitLab Issue */}
         <WorktreeCardIssueDetailSection
           issue={secondary.hoverIssue}
+          workspaceId={thread.worktree.id}
           onManageLinks={dismissAndRun(foundation.handleManageLinks)}
           issueMenuOpen={detailsHoverControl.issueMenuOpen}
           onIssueMenuOpenChange={detailsHoverControl.handleIssueMenuOpenChange}
@@ -288,6 +283,7 @@ function ActivityThreadHoverCardContent({
                         'View on Linear'
                       )}
                       href={secondary.hoverLinearIssue.url}
+                      workspaceId={thread.worktree.id}
                     >
                       <ExternalLink className="size-3" />
                     </MetadataActionIcon>
@@ -334,6 +330,7 @@ function ActivityThreadHoverCardContent({
                     'View on Jira'
                   )}
                   href={secondary.hoverJiraIssue.url}
+                  workspaceId={thread.worktree.id}
                 >
                   <ExternalLink className="size-3" />
                 </MetadataActionIcon>

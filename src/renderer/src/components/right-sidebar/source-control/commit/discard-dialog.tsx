@@ -88,17 +88,11 @@ export function SourceControlDiscardDialog({
         </DialogHeader>
         {pendingDiscard?.kind === 'area' ? (
           <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs text-muted-foreground">
-            {pendingDiscard.paths.length === 1
-              ? translate(
-                  'auto.components.right.sidebar.source.control.discard.dialog.fileCount_one',
-                  '{{count}} file',
-                  { count: pendingDiscard.paths.length }
-                )
-              : translate(
-                  'auto.components.right.sidebar.source.control.discard.dialog.fileCount_other',
-                  '{{count}} files',
-                  { count: pendingDiscard.paths.length }
-                )}
+            {translate(
+              'auto.components.right.sidebar.source.control.discard.dialog.fileCount',
+              '{{count}} files',
+              { count: pendingDiscard.paths.length, defaultValue_one: '{{count}} file' }
+            )}
           </div>
         ) : pendingDiscard?.kind === 'entry' ? (
           <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs">

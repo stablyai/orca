@@ -30,6 +30,7 @@ import {
 } from '../ipc/preflight-remote-windows-terminal-capabilities'
 import { invalidateWslGuestEnvironment } from '../wsl/wsl-guest-environment'
 import { prunePreflightWslCache } from '../preflight-wsl-cache'
+import { assertWslDistroRunningForExec } from '../wsl/wsl-background-exec-gate'
 import {
   detectInstalledAgents,
   type InstalledAgentDetectionOptions
@@ -255,6 +256,10 @@ async function executePreflightCheck(
   context: PreflightRuntimeContext | undefined,
   wslTarget: WslPreflightTarget | null
 ): Promise<PreflightStatus> {
+  if (wslTarget) {
+    // Mounts and polls must not start a stopped distro (E9); window focus and retry clicks wake it.
+    await assertWslDistroRunningForExec(wslTarget.distro)
+  }
   if (process.platform === 'win32' && !wslTarget) {
     await mergePersistedWindowsPathAsync(process.env, { forceRefresh: force })
   } else if (process.platform !== 'win32') {

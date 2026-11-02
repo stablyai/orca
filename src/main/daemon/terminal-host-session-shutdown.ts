@@ -8,15 +8,29 @@ async function disposeLiveSession(session: Session): Promise<void> {
     await session.forceKillAndDisposeSubprocess()
     return
   }
+  await shutdownOwnedTerminalProcess({
+    pid: session.pid,
+    isAlive: () => session.isAlive,
+    terminateOwnedTree: () => session.terminateOwnedTree(),
+    close: () => session.forceKillAndDisposeSubprocess()
+  })
+}
+
+export async function shutdownOwnedTerminalProcess(owner: {
+  pid: number
+  isAlive: () => boolean
+  terminateOwnedTree: Session['terminateOwnedTree']
+  close: () => Promise<void>
+}): Promise<void> {
   try {
-    await killWithDescendantSweep(session.pid, () => {}, {
-      ownsRoot: () => session.isAlive,
-      terminateOwnedTree: () => session.terminateOwnedTree(),
+    await killWithDescendantSweep(owner.pid, () => {}, {
+      ownsRoot: owner.isAlive,
+      terminateOwnedTree: owner.terminateOwnedTree,
       terminateDescendants: terminateShutdownDescendants,
       awaitEscalation: true
     })
   } finally {
-    await session.forceKillAndDisposeSubprocess()
+    await owner.close()
   }
 }
 

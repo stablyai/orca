@@ -11,6 +11,18 @@ export type TabCreateMenuOptionKind =
   | 'new-terminal'
   | 'new-terminal-shell'
   | 'open-markdown'
+  | 'new-plugin-file'
+
+/** A plugin's new-file type, as the + menu offers it. */
+export type TabCreateMenuPluginNewFile = {
+  key: string
+  pluginKey: string
+  pluginName: string
+  id: string
+  title: string
+  extension: string
+  iconUrl?: string
+}
 
 export type TabCreateMenuOption = {
   id: string
@@ -18,6 +30,7 @@ export type TabCreateMenuOption = {
   keywords: readonly string[]
   label: string
   shell?: BuiltInWindowsTerminalShell
+  pluginNewFile?: TabCreateMenuPluginNewFile
 }
 
 export type TabCreateMenuOptionsContext = {
@@ -166,6 +179,34 @@ export function buildTabCreateMenuOptions(
   }
 
   return options
+}
+
+/** Puts a plugin's new files right after New Markdown, and only where it is offered: they
+ *  create files the same way. */
+export function withPluginNewFileMenuOptions(
+  options: readonly TabCreateMenuOption[],
+  newFiles: readonly TabCreateMenuPluginNewFile[]
+): TabCreateMenuOption[] {
+  const markdownIndex = options.findIndex((option) => option.kind === 'new-markdown')
+  if (markdownIndex === -1 || newFiles.length === 0) {
+    return [...options]
+  }
+  const pluginOptions = newFiles.map((newFile): TabCreateMenuOption => ({
+    id: `new-plugin-file:${newFile.key}`,
+    kind: 'new-plugin-file',
+    label: newFile.title,
+    pluginNewFile: newFile,
+    keywords: [
+      newFile.extension,
+      newFile.pluginName,
+      translate('auto.components.tab.bar.tab.create.menu.options.6d8b6b4117', 'new file')
+    ]
+  }))
+  return [
+    ...options.slice(0, markdownIndex + 1),
+    ...pluginOptions,
+    ...options.slice(markdownIndex + 1)
+  ]
 }
 
 export function findMatchingTabCreateMenuOptions(

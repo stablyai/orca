@@ -11,3 +11,11 @@ config/tsconfig.node.json src/renderer/src/components/native-chat/native-chat-co
 config/tsconfig.node.json src/renderer/src/components/native-chat/native-chat-resolution-receipt.ts
 config/tsconfig.node.json src/renderer/src/components/native-chat/structured-agent-question-projection.ts
 tests/e2e/capture-opencode-tui-repro.mjs src/cli/cmd/tui/ui/spinner
+tests/e2e/cross-version-wire/released-chat-writers.ts src/shared/agent-session-failure-words.ts
+tests/e2e/cross-version-wire/released-chat-writers.ts src/shared/agent-session-failure.ts
+config/scripts/pr-code-change-scope.mjs src/shared/agent-session-mutation-envelope
+config/scripts/pr-code-change-scope.mjs src/shared/agent-session-provider-handle
+config/scripts/pr-code-change-scope.mjs src/shared/agent-session-record
+config/scripts/pr-code-change-scope.mjs src/shared/agent-session-resume-marker
+config/scripts/pr-code-change-scope.mjs src/shared/agent-session-turn-record
+tests/e2e/cross-version-wire/released-chat-writers.ts src/main/claude/claude-structured-journal-translation.ts

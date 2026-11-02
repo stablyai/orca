@@ -179,10 +179,10 @@ describe('run-electron-vite-dev web client prepare', () => {
         }
       })
 
+      const trackedPids = trackPidFile(pidFile)
+
       expect(existsSync(viteFile)).toBe(false)
       expect(stderr).toContain('Web client bundle missing; skipping pairing web build.')
-
-      const trackedPids = trackPidFile(pidFile)
 
       await stopWrapperAndTrackedPids(wrapper, trackedPids)
     } finally {
@@ -230,11 +230,12 @@ describe('run-electron-vite-dev web client prepare', () => {
         }
       })
 
-      // The pairing build runs beside electron-vite instead of before it.
-      await waitFor(() => existsSync(viteFile))
-      expect(readFileSync(viteFile, 'utf8')).toContain('build')
-
+      // Track before the build wait: a timeout there would otherwise orphan the fake CLI tree.
       const trackedPids = trackPidFile(pidFile)
+
+      // The pairing build runs beside electron-vite instead of before it.
+      await waitFor(() => existsSync(viteFile), 20_000)
+      expect(readFileSync(viteFile, 'utf8')).toContain('build')
 
       await stopWrapperAndTrackedPids(wrapper, trackedPids)
     } finally {

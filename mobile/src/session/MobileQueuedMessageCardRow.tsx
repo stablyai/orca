@@ -10,7 +10,7 @@ import {
   Send,
   Trash2
 } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { queuedMessageCardSteers } from '../../../src/shared/structured-agent-session-queued-cards'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
@@ -18,6 +18,7 @@ import type { MobileQueuedMessageInlineEditor } from './use-mobile-structured-qu
 import { MobileQueuedMessageComposer } from './MobileQueuedMessageComposer'
 import { MobileQueuedCardText } from './MobileQueuedCardText'
 import { queuedMessageStyles as styles } from './native-chat/input/mobile-native-chat-queued-message-styles'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 type QueuedMessageCardRowProps = {
   dragHandle?: ReactNode
@@ -26,6 +27,8 @@ type QueuedMessageCardRowProps = {
   busy: boolean
   editBlocked: boolean
   steerHeld: boolean
+  /** Steer only into a running turn; an idle agent's card reads Send. */
+  agentWorking: boolean
   onSend: () => void
   onDelete: () => void
   onMore: () => void
@@ -58,15 +61,18 @@ function QueuedMessageCardContents({
   busy,
   editBlocked,
   steerHeld,
+  agentWorking,
   onSend,
   onDelete,
   onMore,
   dragHandle
 }: Omit<QueuedMessageCardRowProps, 'editor' | 'onEditorLayout'>): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(false)
   const returned = card.state === 'returned'
-  const steers = queuedMessageCardSteers(card)
+  const steers = agentWorking && queuedMessageCardSteers(card)
+  const count = card.images?.length ?? 0
   return (
     <View testID="queued-card-row" style={[styles.card, styles.divided]}>
       <View style={styles.row}>
@@ -98,7 +104,11 @@ function QueuedMessageCardContents({
             <View
               style={styles.actions}
               accessible
-              accessibilityLabel={`${card.images.length} images`}
+              accessibilityLabel={
+                count === 1
+                  ? t('session.queuedMessageCardRow.images_one', '{{count}} image', { count })
+                  : t('session.queuedMessageCardRow.images_other', '{{count}} images', { count })
+              }
             >
               <ImageIcon size={12} color={colors.textMuted} strokeWidth={2} />
               <Text style={styles.caption}>{card.images.length}</Text>
@@ -110,10 +120,13 @@ function QueuedMessageCardContents({
               accessibilityState={{ disabled: busy || steerHeld }}
               accessibilityLabel={
                 returned
-                  ? 'Send this message again'
+                  ? t('session.queuedMessageCardRow.sendAgainHint', 'Send this message again')
                   : steers
-                    ? 'Submit without interrupting the model'
-                    : 'Send this message'
+                    ? t(
+                        'session.queuedMessageCardRow.steerHint',
+                        'Submit without interrupting the model'
+                      )
+                    : t('session.queuedMessageCardRow.sendHint', 'Send this message')
               }
               style={({ pressed }) => [
                 styles.textAction,
@@ -128,13 +141,20 @@ function QueuedMessageCardContents({
               ) : (
                 <Send size={12} color={colors.textPrimary} strokeWidth={2} />
               )}
-              <Text style={styles.actionLabel}>{steers ? 'Steer' : 'Send'}</Text>
+              <Text style={styles.actionLabel}>
+                {steers
+                  ? t('session.queuedMessageCardRow.steer', 'Steer')
+                  : t('session.queuedMessageCardRow.send', 'Send')}
+              </Text>
             </Pressable>
           )}
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ disabled: busy }}
-            accessibilityLabel="Delete this queued message"
+            accessibilityLabel={t(
+              'session.queuedMessageCardRow.deleteHint',
+              'Delete this queued message'
+            )}
             style={({ pressed }) => [
               styles.iconAction,
               card.command && styles.lastIconAction,
@@ -150,7 +170,7 @@ function QueuedMessageCardContents({
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ disabled: editBlocked }}
-              accessibilityLabel="More actions"
+              accessibilityLabel={t('session.queuedMessageCardRow.moreActions', 'More actions')}
               style={({ pressed }) => [
                 styles.iconAction,
                 styles.lastIconAction,
@@ -169,9 +189,13 @@ function QueuedMessageCardContents({
         <View style={styles.expandedBody}>
           {expanded ? (
             <Pressable
+              style={({ pressed }) => pressed && pressedStyle}
               accessibilityRole="button"
               accessibilityState={{ expanded: true }}
-              accessibilityHint="Shows less of the message"
+              accessibilityHint={t(
+                'session.queuedMessageCardRow.showLessHint',
+                'Shows less of the message'
+              )}
               onPress={() => setExpanded(false)}
             >
               <Text style={styles.bodyText}>{card.line}</Text>

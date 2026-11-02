@@ -1,72 +1,27 @@
-// Use production Git paths from a fresh profile for official marketplace discovery and Phase 1 language/VM/keybinding setup.
+// Use production Git paths from a fresh profile for official marketplace discovery and Phase 1 language and VM recipe setup.
 
-import { execFile } from 'node:child_process'
 import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { promisify } from 'node:util'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from '@stablyai/playwright-test'
 import { createRestartSession } from './helpers/orca-restart'
+import { commitRepository, configureFixtureGit } from './helpers/plugin-git-fixture'
+import {
+  FIXTURE_LANGUAGE_PLUGIN,
+  writeFixtureLanguagePlugin
+} from './helpers/plugin-language-pack-fixture'
 
-const execFileAsync = promisify(execFile)
-const SSH_SHIM = join(
-  process.cwd(),
-  'src',
-  'main',
-  'plugins',
-  'plugin-private-marketplace-ssh-shim.cjs'
-)
 const FIXTURE_REPOSITORIES = [
   'orca-plugins',
-  'orca-portuguese',
-  'orca-multipass-recipes',
-  'orca-navigation-shortcuts'
+  FIXTURE_LANGUAGE_PLUGIN.repository,
+  'orca-multipass-recipes'
 ]
 
 type MarketplaceFixture = {
   root: string
   home: string
   gitEnvironment: Record<string, string>
-}
-
-function isolatedGitProcessEnv(gitEnvironment: Record<string, string>): NodeJS.ProcessEnv {
-  return {
-    ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_'))),
-    ...gitEnvironment
-  }
-}
-
-async function runGit(
-  cwd: string,
-  args: string[],
-  gitEnvironment: Record<string, string>
-): Promise<void> {
-  await execFileAsync('git', args, { cwd, env: isolatedGitProcessEnv(gitEnvironment) })
-}
-
-async function commitRepository(
-  repository: string,
-  gitEnvironment: Record<string, string>
-): Promise<void> {
-  await runGit(repository, ['init', '--quiet'], gitEnvironment)
-  await runGit(repository, ['checkout', '--quiet', '-b', 'main'], gitEnvironment)
-  await runGit(repository, ['add', '--all'], gitEnvironment)
-  await runGit(
-    repository,
-    [
-      '-c',
-      'user.name=Orca Test',
-      '-c',
-      'user.email=orca-test@example.invalid',
-      'commit',
-      '--quiet',
-      '-m',
-      'fixture'
-    ],
-    gitEnvironment
-  )
-  await runGit(repository, ['tag', 'v1.0.0'], gitEnvironment)
 }
 
 async function copyLaunchPlugin(
@@ -82,62 +37,20 @@ async function copyLaunchPlugin(
   await commitRepository(repository, gitEnvironment)
 }
 
-async function configureFixtureGit(
-  home: string,
-  repositories: string
-): Promise<Record<string, string>> {
-  const hooksDirectory = join(home, 'hooks')
-  const configPath = join(home, '.gitconfig')
-  await mkdir(hooksDirectory, { recursive: true })
-  const gitEnvironment: Record<string, string> = {
-    GIT_CONFIG_GLOBAL: configPath,
-    GIT_CONFIG_NOSYSTEM: '1',
-    GIT_TERMINAL_PROMPT: '0'
-  }
-  // Why SSH: plugin downloads refuse the file transport even behind an insteadOf rewrite, so the
-  // fixture repositories are served through the same GIT_SSH_COMMAND shim the unit tests use.
-  gitEnvironment.GIT_SSH_COMMAND = `"${process.execPath.replaceAll('\\', '/')}" "${SSH_SHIM.replaceAll('\\', '/')}"`
-  gitEnvironment.GIT_SSH_VARIANT = 'ssh'
-  gitEnvironment.ORCA_TEST_SSH_REPOSITORIES = JSON.stringify(
-    Object.fromEntries(
-      FIXTURE_REPOSITORIES.map((name) => [`/${name}.git`, join(repositories, `${name}.git`)])
-    )
-  )
-  const entries = [
-    ['url.ssh://git@fixtures.invalid/.insteadOf', 'https://github.com/stablyai/'],
-    ['commit.gpgSign', 'false'],
-    ['tag.gpgSign', 'false'],
-    ['core.hooksPath', hooksDirectory]
-  ] as const
-  for (const [key, value] of entries) {
-    await runGit(home, ['config', '--file', configPath, key, value], gitEnvironment)
-  }
-  return gitEnvironment
-}
-
 async function createMarketplaceFixture(): Promise<MarketplaceFixture> {
   const root = await mkdtemp(join(tmpdir(), 'orca-marketplace-e2e-'))
   const repositories = join(root, 'repositories')
   const home = join(root, 'home')
   await mkdir(repositories, { recursive: true })
   await mkdir(home, { recursive: true })
-  const gitEnvironment = await configureFixtureGit(home, repositories)
-  await copyLaunchPlugin(
-    repositories,
-    'orca-portuguese',
-    'stablyai.orca-portuguese',
-    gitEnvironment
-  )
+  const gitEnvironment = await configureFixtureGit(home, repositories, FIXTURE_REPOSITORIES)
+  const languageRepository = join(repositories, `${FIXTURE_LANGUAGE_PLUGIN.repository}.git`)
+  await writeFixtureLanguagePlugin(languageRepository)
+  await commitRepository(languageRepository, gitEnvironment)
   await copyLaunchPlugin(
     repositories,
     'orca-multipass-recipes',
     'stablyai.orca-multipass-recipes',
-    gitEnvironment
-  )
-  await copyLaunchPlugin(
-    repositories,
-    'orca-navigation-shortcuts',
-    'stablyai.orca-navigation-shortcuts',
     gitEnvironment
   )
 
@@ -150,9 +63,8 @@ async function createMarketplaceFixture(): Promise<MarketplaceFixture> {
         name: 'Orca Plugins',
         owner: 'stablyai',
         plugins: [
-          ['stablyai.orca-portuguese', 'orca-portuguese', 'languages'],
-          ['stablyai.orca-multipass-recipes', 'orca-multipass-recipes', 'vm-recipes'],
-          ['stablyai.orca-navigation-shortcuts', 'orca-navigation-shortcuts', 'keybindings']
+          [FIXTURE_LANGUAGE_PLUGIN.pluginKey, FIXTURE_LANGUAGE_PLUGIN.repository, 'languages'],
+          ['stablyai.orca-multipass-recipes', 'orca-multipass-recipes', 'vm-recipes']
         ].map(([id, repository, category]) => ({
           id,
           source: {
@@ -188,41 +100,52 @@ async function openPluginSettings(page: Page): Promise<void> {
   await expect(page.locator('[data-settings-section="plugins"]')).toBeVisible()
 }
 
+async function backToPluginList(page: Page): Promise<void> {
+  await page.getByRole('article').getByRole('button', { name: 'Plugins', exact: true }).click()
+  await expect(page.getByRole('article')).toBeHidden()
+}
+
+/** Installs from the plugin's page: one click for content only, else the inline consent. */
 async function installMarketplacePluginThroughUi(
   page: Page,
   pluginKey: string,
   pluginName: string,
-  consentDialogName: string
+  { runsInstructions }: { runsInstructions: boolean }
 ): Promise<void> {
-  const listing = page.locator(`[data-marketplace-plugin-key="${pluginKey}"]`)
+  const listing = page.locator(`[data-plugin-key="${pluginKey}"]`)
   await expect(listing).toBeVisible()
-  await listing.getByRole('button', { name: 'Install' }).click()
-  const preview = page.getByRole('dialog', { name: pluginName })
-  await expect(preview).toContainText('Official · stablyai')
-  await preview.getByRole('button', { name: 'Install plugin' }).click()
-  const consent = page.getByRole('dialog', { name: consentDialogName })
-  await expect(consent).toBeVisible()
-  await consent.getByRole('button', { name: 'Enable plugin' }).click()
-  await expect(consent).toBeHidden()
-}
-
-async function enableInstalledPluginThroughUi(
-  page: Page,
-  pluginKey: string,
-  consentDialogName: string
-): Promise<void> {
-  await page.getByRole('tab', { name: /^Installed/ }).click()
-  const plugin = page.locator(`[data-plugin-key="${pluginKey}"]`)
-  await expect(plugin).toBeVisible()
-  await plugin.getByRole('button', { name: 'Review & enable' }).click()
-  const consent = page.getByRole('dialog', { name: consentDialogName })
-  await expect(consent).toBeVisible()
-  await consent.getByRole('button', { name: 'Enable plugin' }).click()
-  await expect(consent).toBeHidden()
+  // Why the page: an older catalog vouches for no profile, so the card asks for review first.
+  await listing.getByRole('button', { name: /^Review and install / }).click()
+  await expect(page.locator('#plugin-detail-heading')).toContainText(pluginName)
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  if (runsInstructions) {
+    const consent = page.locator('[data-plugin-consent]')
+    await expect(consent).toContainText('Official · stablyai')
+    // Why the page: the one decision sits beside the name, above the consent it grants.
+    await page
+      .getByRole('article')
+      .getByRole('button', { name: /^Install & enable/ })
+      .click()
+    // Why a second step: recipe command lines are read from the installed files, so they are
+    // reviewed on the page after install instead of approved unseen.
+    const review = page.locator('[data-plugin-consent]')
+    await page
+      .getByRole('article')
+      .getByRole('button', { name: /^Enable plugin/ })
+      .click()
+    await expect(review).toBeHidden()
+  } else {
+    await page.getByRole('button', { name: new RegExp(`^Install .*${pluginName}$`) }).click()
+    await expect(
+      page.getByRole('button', { name: new RegExp(`^More actions for .*${pluginName}$`) })
+    ).toBeVisible()
+  }
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await backToPluginList(page)
 }
 
 async function applyInstalledLanguage(page: Page): Promise<void> {
-  const languageId = 'plugin:stablyai.orca-portuguese/pt-BR'
+  const languageId = `plugin:${FIXTURE_LANGUAGE_PLUGIN.pluginKey}/${FIXTURE_LANGUAGE_PLUGIN.locale}`
   await page.evaluate(() => {
     const state = window.__store?.getState()
     if (!state) {
@@ -233,7 +156,12 @@ async function applyInstalledLanguage(page: Page): Promise<void> {
   await expect(page.locator('[data-settings-section="appearance"]')).toBeVisible()
   await page.evaluate(() => window.__store?.setState({ settingsSearchQuery: 'Language' }))
   await page.getByRole('combobox', { name: 'Language' }).click()
-  await page.getByRole('option', { name: 'pt-BR — stablyai.orca-portuguese', exact: true }).click()
+  await page
+    .getByRole('option', {
+      name: `${FIXTURE_LANGUAGE_PLUGIN.locale} — ${FIXTURE_LANGUAGE_PLUGIN.pluginKey}`,
+      exact: true
+    })
+    .click()
   await expect
     .poll(() => page.evaluate(() => window.__store?.getState().settings?.uiLanguage))
     .toBe(languageId)
@@ -242,9 +170,8 @@ async function applyInstalledLanguage(page: Page): Promise<void> {
 async function runMarketplaceJourney(page: Page): Promise<void> {
   const startedAt = Date.now()
   await openPluginSettings(page)
-  const pluginSystem = page.getByRole('switch', { name: 'Plugin system' })
-  await pluginSystem.click()
-  await expect(pluginSystem).toBeChecked()
+  // Plugins are on by default, so the page never offers a turn-on action.
+  await expect(page.getByRole('button', { name: 'Turn on plugins' })).toHaveCount(0)
   await expect
     .poll(
       () =>
@@ -257,31 +184,22 @@ async function runMarketplaceJourney(page: Page): Promise<void> {
     .toMatchObject({
       sources: [expect.objectContaining({ official: true, stale: false })],
       listings: expect.arrayContaining([
-        expect.objectContaining({ pluginKey: 'stablyai.orca-portuguese', official: true }),
-        expect.objectContaining({ pluginKey: 'stablyai.orca-multipass-recipes', official: true }),
-        expect.objectContaining({
-          pluginKey: 'stablyai.orca-navigation-shortcuts',
-          official: true
-        })
+        expect.objectContaining({ pluginKey: FIXTURE_LANGUAGE_PLUGIN.pluginKey, official: true }),
+        expect.objectContaining({ pluginKey: 'stablyai.orca-multipass-recipes', official: true })
       ])
     })
 
   await installMarketplacePluginThroughUi(
     page,
-    'stablyai.orca-portuguese',
-    'Português do Brasil',
-    'Review plugin'
+    FIXTURE_LANGUAGE_PLUGIN.pluginKey,
+    FIXTURE_LANGUAGE_PLUGIN.name,
+    { runsInstructions: false }
   )
   await installMarketplacePluginThroughUi(
     page,
     'stablyai.orca-multipass-recipes',
     'Multipass VM Recipes',
-    'Review plugin content'
-  )
-  await enableInstalledPluginThroughUi(
-    page,
-    'stablyai.orca-navigation-shortcuts',
-    'Review plugin content'
+    { runsInstructions: true }
   )
 
   await applyInstalledLanguage(page)

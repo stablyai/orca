@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { AgentHookServer } from './server'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
 import { buildRuntimeMobileAgentStatus } from '../runtime/runtime-mobile-agent-status-builder'
-import { getAgentResumeArgv } from '../../shared/agent-session-resume'
+import { getAgentResumeArgv } from '../../shared/agent-resume-argv'
 import type { probeAgentProcessPresence } from '../../shared/agent-process-presence-probe'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))

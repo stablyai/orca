@@ -31,17 +31,15 @@ export function SessionUnsavedConversationNotice({
       </div>
       <div className="rounded-md border border-dashed border-border/70 bg-foreground/[0.04] px-2.5 py-2 text-[11px] leading-4 text-muted-foreground">
         {recoverable
-          ? aiVaultSessionRecoverableSignalCount(session) === 1
-            ? translate(
-                'auto.components.right.sidebar.AiVaultSessionDetails.recoverableEmptyDetailCount_one',
-                'This session has no saved conversation, but {{count}} recoverable item survives.',
-                { count: aiVaultSessionRecoverableSignalCount(session) }
-              )
-            : translate(
-                'auto.components.right.sidebar.AiVaultSessionDetails.recoverableEmptyDetailCount_other',
-                'This session has no saved conversation, but {{count}} recoverable items survive.',
-                { count: aiVaultSessionRecoverableSignalCount(session) }
-              )
+          ? translate(
+              'auto.components.right.sidebar.AiVaultSessionDetails.recoverableEmptyDetailCount',
+              'This session has no saved conversation, but {{count}} recoverable items survive.',
+              {
+                count: aiVaultSessionRecoverableSignalCount(session),
+                defaultValue_one:
+                  'This session has no saved conversation, but {{count}} recoverable item survives.'
+              }
+            )
           : translate(
               'auto.components.right.sidebar.AiVaultSessionDetails.emptyConversationDetail',
               'This session has no saved conversation and cannot be resumed.'
@@ -74,32 +72,20 @@ function SessionRecoverableSignalLines({
     <ul className="mt-1.5 space-y-0.5 text-[11px] leading-4 text-foreground/80">
       {queuedMessageCount > 0 ? (
         <li>
-          {queuedMessageCount === 1
-            ? translate(
-                'auto.components.right.sidebar.AiVaultSessionDetails.queuedMessageCount_one',
-                '{{count}} queued message',
-                { count: queuedMessageCount }
-              )
-            : translate(
-                'auto.components.right.sidebar.AiVaultSessionDetails.queuedMessageCount_other',
-                '{{count}} queued messages',
-                { count: queuedMessageCount }
-              )}
+          {translate(
+            'auto.components.right.sidebar.AiVaultSessionDetails.queuedMessageCount',
+            '{{count}} queued messages',
+            { count: queuedMessageCount, defaultValue_one: '{{count}} queued message' }
+          )}
         </li>
       ) : null}
       {subagentTranscriptCount > 0 ? (
         <li>
-          {subagentTranscriptCount === 1
-            ? translate(
-                'auto.components.right.sidebar.AiVaultSessionDetails.subagentTranscriptCount_one',
-                '{{count}} subagent transcript',
-                { count: subagentTranscriptCount }
-              )
-            : translate(
-                'auto.components.right.sidebar.AiVaultSessionDetails.subagentTranscriptCount_other',
-                '{{count}} subagent transcripts',
-                { count: subagentTranscriptCount }
-              )}
+          {translate(
+            'auto.components.right.sidebar.AiVaultSessionDetails.subagentTranscriptCount',
+            '{{count}} subagent transcripts',
+            { count: subagentTranscriptCount, defaultValue_one: '{{count}} subagent transcript' }
+          )}
         </li>
       ) : null}
     </ul>

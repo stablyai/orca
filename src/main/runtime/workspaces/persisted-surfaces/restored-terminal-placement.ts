@@ -162,7 +162,13 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends OrcaRunti
         const pane = parsePaneKey(paneKey)
         if (pty && pane) {
           // This claim has no graph standing; a later window graph wins.
-          recordPtySurface(pty, pane.tabId, paneKey, SURFACE_CLAIM_WITHOUT_STANDING)
+          recordPtySurface(
+            this.terminalIdentity,
+            pty,
+            pane.tabId,
+            paneKey,
+            SURFACE_CLAIM_WITHOUT_STANDING
+          )
           followExportedPaneKeys(this.ptysById.values(), (record) => this.paneOfPty(record).paneKey)
         }
       }

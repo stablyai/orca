@@ -30,29 +30,17 @@ function formatGitLabApprovalSummary(approvalState: GitLabMRApprovalState): stri
   }
   const required = approvalState.approvalsRequired
   if (typeof required === 'number') {
-    return count === 1
-      ? translate(
-          'auto.components.GitLabItemDialog.approvalsRemainingOfRequired_one',
-          '{{count}} approval remaining of {{required}} required',
-          { count, required }
-        )
-      : translate(
-          'auto.components.GitLabItemDialog.approvalsRemainingOfRequired_other',
-          '{{count}} approvals remaining of {{required}} required',
-          { count, required }
-        )
+    return translate(
+      'auto.components.GitLabItemDialog.approvalsRemainingOfRequired',
+      '{{count}} approvals remaining of {{required}} required',
+      { count, required, defaultValue_one: '{{count}} approval remaining of {{required}} required' }
+    )
   }
-  return count === 1
-    ? translate(
-        'auto.components.GitLabItemDialog.approvalsRemaining_one',
-        '{{count}} approval remaining',
-        { count }
-      )
-    : translate(
-        'auto.components.GitLabItemDialog.approvalsRemaining_other',
-        '{{count}} approvals remaining',
-        { count }
-      )
+  return translate(
+    'auto.components.GitLabItemDialog.approvalsRemaining',
+    '{{count}} approvals remaining',
+    { count, defaultValue_one: '{{count}} approval remaining' }
+  )
 }
 
 export function GitLabDescriptionTab({ item, state, detailsEditing, reviewActions }: Props) {

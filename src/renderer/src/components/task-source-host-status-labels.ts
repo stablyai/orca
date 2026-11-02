@@ -129,55 +129,32 @@ export function getAvailabilityLabel(
   if (unavailableHosts.length === 1) {
     return unavailableHosts[0].statusLabel
   }
-  return unavailableHosts.length === 1
-    ? translate(
-        'auto.components.taskSourceContextSummary.unavailableCount_one',
-        '{{count}} unavailable',
-        { count: unavailableHosts.length }
-      )
-    : translate(
-        'auto.components.taskSourceContextSummary.unavailableCount_other',
-        '{{count}} unavailable',
-        { count: unavailableHosts.length }
-      )
+  return translate(
+    'auto.components.taskSourceContextSummary.unavailableCount',
+    '{{count}} unavailable',
+    { count: unavailableHosts.length, defaultValue_one: '{{count}} unavailable' }
+  )
 }
 
 export function sourceHostCountLabel(count: number): string {
-  return count === 1
-    ? translate(
-        'auto.components.taskSourceContextSummary.sourceHostCount_one',
-        '{{count}} source host',
-        { count }
-      )
-    : translate(
-        'auto.components.taskSourceContextSummary.sourceHostCount_other',
-        '{{count}} source hosts',
-        { count }
-      )
+  return translate(
+    'auto.components.taskSourceContextSummary.sourceHostCount',
+    '{{count}} source hosts',
+    { count, defaultValue_one: '{{count}} source host' }
+  )
 }
 
 export function projectCountLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.taskSourceContextSummary.projectCount_one', '{{count}} project', {
-        count
-      })
-    : translate(
-        'auto.components.taskSourceContextSummary.projectCount_other',
-        '{{count}} projects',
-        { count }
-      )
+  return translate('auto.components.taskSourceContextSummary.projectCount', '{{count}} projects', {
+    count,
+    defaultValue_one: '{{count}} project'
+  })
 }
 
 export function selectedProjectCountLabel(count: number): string {
-  return count === 1
-    ? translate(
-        'auto.components.taskSourceContextSummary.selectedProjectCount_one',
-        '{{count}} selected project',
-        { count }
-      )
-    : translate(
-        'auto.components.taskSourceContextSummary.selectedProjectCount_other',
-        '{{count}} selected projects',
-        { count }
-      )
+  return translate(
+    'auto.components.taskSourceContextSummary.selectedProjectCount',
+    '{{count}} selected projects',
+    { count, defaultValue_one: '{{count}} selected project' }
+  )
 }

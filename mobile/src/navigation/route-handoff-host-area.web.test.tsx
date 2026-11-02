@@ -36,7 +36,8 @@ const ROUTES: MobileWebPageRoute[] = [
   {
     pathname: '/h/[hostId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics'],
-    canOwnHostArea: true
+    canOwnHostArea: true,
+    canOwnHostAreaAcrossLayouts: true
   },
   {
     pathname: '/h/[hostId]/tasks',
@@ -160,18 +161,11 @@ describe('a worktree row in the host-area page', () => {
     expect(page.navigations()).toEqual([])
   })
 
-  it('is still handed to the shell from a phone host page, whose grants do not cover it', () => {
+  it('keeps a workspace in the same declaring host document on a narrow viewport too', () => {
     const page = mountPage('/h/host-1', false)
     page.handoff.push('/h/host-1/session/wt-1')
-    expect(router.push).not.toHaveBeenCalled()
-    expect(page.navigations()).toEqual([
-      {
-        v: BRIDGE_PROTOCOL_VERSION,
-        type: 'notify',
-        name: 'navigate',
-        href: '/h/host-1/session/wt-1'
-      }
-    ])
+    expect(router.push).toHaveBeenCalledWith('/h/host-1/session/wt-1', undefined)
+    expect(page.navigations()).toEqual([])
   })
 })
 
@@ -188,10 +182,12 @@ describe('a session page opened on its own, leaving for the host route', () => {
     expect(routeViewOf(ROUTES, '/h/host-1', true).ownsHostArea).toBe(true)
   })
 
-  it('keeps it in this document on a phone, as before', () => {
+  it('returns a narrow detail document to the same shell-owned host area', () => {
     const page = mountPage('/h/host-1/session/wt-1', false)
     page.handoff.replace(hop)
-    expect(router.replace).toHaveBeenCalledWith(hop, undefined)
-    expect(page.navigations()).toEqual([])
+    expect(router.replace).not.toHaveBeenCalled()
+    expect(page.navigations()).toEqual([
+      { v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: 'navigate', href: hop, replace: true }
+    ])
   })
 })

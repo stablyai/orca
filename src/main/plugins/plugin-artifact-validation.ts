@@ -1,8 +1,15 @@
 import { createReadStream } from 'node:fs'
 import { realpath, stat } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
-import type { PluginManifest } from '../../shared/plugins/plugin-manifest'
-import { parsePluginVmRecipeArtifact } from '../../shared/plugins/plugin-vm-recipe-artifact'
+import type { PluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
+import {
+  PLUGIN_SYNTAX_CONFIGURATION_MAX_BYTES,
+  PLUGIN_SYNTAX_GRAMMAR_MAX_BYTES
+} from '../../shared/plugins/artifacts/plugin-syntax-artifact'
+import { parsePluginVmRecipeArtifact } from '../../shared/plugins/artifacts/plugin-vm-recipe-artifact'
+import { PLUGIN_IMAGE_RULES } from '../../shared/plugins/images/plugin-image-fields'
+import { PLUGIN_NEW_FILE_TEMPLATE_MAX_BYTES } from '../../shared/plugins/contributions/plugin-new-file-contribution'
+import { validatePluginImageArtifacts } from './plugin-image-artifact-validation'
 
 export type PluginArtifactValidationResult = { ok: true } | { ok: false; error: string }
 
@@ -11,9 +18,10 @@ export const PLUGIN_WORKER_ENTRY_MAX_BYTES = 50 * 1024 * 1024
 const PLUGIN_ICON_MAX_BYTES = 2 * 1024 * 1024
 export const PLUGIN_LANGUAGE_PACK_MAX_BYTES = 5 * 1024 * 1024
 export const PLUGIN_VM_RECIPE_MAX_BYTES = 256 * 1024
-const PLUGIN_AGENT_PROFILE_MAX_BYTES = 1024 * 1024
 // Why 16 KiB: a theme is a few dozen tokens or palette slots.
 export const PLUGIN_THEME_MAX_BYTES = 16 * 1024
+// Why larger: an icon theme maps up to 512 file names and extensions.
+export const PLUGIN_ICON_THEME_MAX_BYTES = 64 * 1024
 
 type DeclaredArtifact =
   | { label: string; path: string; kind: 'file'; maxBytes: number }
@@ -27,25 +35,69 @@ function declaredArtifactPaths(manifest: PluginManifest): DeclaredArtifact[] {
   const c = manifest.contributes
   return [
     ...declaredFile('icon', manifest.icon, PLUGIN_ICON_MAX_BYTES),
+    ...(manifest.manifestVersion === 2
+      ? [
+          ...declaredFile('cover', manifest.cover?.path, PLUGIN_IMAGE_RULES.cover.maxBytes),
+          ...(manifest.screenshots ?? []).flatMap((shot) =>
+            declaredFile('screenshot', shot.path, PLUGIN_IMAGE_RULES.screenshot.maxBytes)
+          )
+        ]
+      : []),
     ...declaredFile('worker entry', manifest.main, PLUGIN_WORKER_ENTRY_MAX_BYTES),
     ...c.panels.flatMap((panel) =>
       declaredFile(`panel "${panel.id}" entry`, panel.entry, PLUGIN_PANEL_ENTRY_MAX_BYTES)
     ),
+    ...c.customEditors.flatMap((editor) => [
+      ...declaredFile(
+        `custom editor "${editor.id}" entry`,
+        editor.entry,
+        PLUGIN_PANEL_ENTRY_MAX_BYTES
+      ),
+      ...declaredFile(
+        `custom editor "${editor.id}" icon`,
+        editor.icon,
+        PLUGIN_IMAGE_RULES.icon.maxBytes
+      )
+    ]),
+    ...c.newFiles.flatMap((newFile) => [
+      ...declaredFile(
+        `new file "${newFile.id}" template`,
+        newFile.template,
+        PLUGIN_NEW_FILE_TEMPLATE_MAX_BYTES
+      ),
+      ...declaredFile(
+        `new file "${newFile.id}" icon`,
+        newFile.icon,
+        PLUGIN_IMAGE_RULES.icon.maxBytes
+      )
+    ]),
     ...c.languagePacks.flatMap((pack) =>
       declaredFile(`language pack "${pack.locale}"`, pack.path, PLUGIN_LANGUAGE_PACK_MAX_BYTES)
     ),
     ...c.vmRecipes.flatMap((recipe) =>
       declaredFile('VM recipe', recipe.path, PLUGIN_VM_RECIPE_MAX_BYTES)
     ),
-    ...c.agents.flatMap((agent) =>
-      declaredFile('agent profile', agent.path, PLUGIN_AGENT_PROFILE_MAX_BYTES)
-    ),
     ...c.themes.flatMap((theme) =>
       declaredFile(`theme "${theme.id}"`, theme.path, PLUGIN_THEME_MAX_BYTES)
     ),
     ...c.terminalThemes.flatMap((theme) =>
       declaredFile(`terminal theme "${theme.id}"`, theme.path, PLUGIN_THEME_MAX_BYTES)
-    )
+    ),
+    ...c.iconThemes.flatMap((theme) =>
+      declaredFile(`icon theme "${theme.id}"`, theme.path, PLUGIN_ICON_THEME_MAX_BYTES)
+    ),
+    ...c.syntaxes.flatMap((syntax) => [
+      ...declaredFile(
+        `syntax "${syntax.id}" grammar`,
+        syntax.path,
+        PLUGIN_SYNTAX_GRAMMAR_MAX_BYTES
+      ),
+      ...declaredFile(
+        `syntax "${syntax.id}" configuration`,
+        syntax.configuration,
+        PLUGIN_SYNTAX_CONFIGURATION_MAX_BYTES
+      )
+    ])
   ]
 }
 
@@ -63,6 +115,14 @@ export async function readContainedPluginArtifactText(
   relativePath: string,
   maxBytes: number
 ): Promise<string> {
+  return (await readContainedPluginArtifactBytes(rootDir, relativePath, maxBytes)).toString('utf8')
+}
+
+export async function readContainedPluginArtifactBytes(
+  rootDir: string,
+  relativePath: string,
+  maxBytes: number
+): Promise<Buffer> {
   const artifact = await resolveContainedPluginArtifact(rootDir, relativePath, maxBytes)
   const chunks: Buffer[] = []
   let totalBytes = 0
@@ -74,7 +134,7 @@ export async function readContainedPluginArtifactText(
     }
     chunks.push(bytes)
   }
-  return Buffer.concat(chunks, totalBytes).toString('utf8')
+  return Buffer.concat(chunks, totalBytes)
 }
 
 async function resolvePathFromRealRoot(
@@ -150,6 +210,14 @@ export async function validatePluginInstallContent(
   rootDir: string,
   manifest: PluginManifest
 ): Promise<PluginArtifactValidationResult> {
+  const images = await validatePluginImageArtifacts(
+    rootDir,
+    manifest,
+    readContainedPluginArtifactBytes
+  )
+  if (!images.ok) {
+    return images
+  }
   const vmRecipeIds = new Set<string>()
   for (const contribution of manifest.contributes.vmRecipes) {
     try {
@@ -171,5 +239,35 @@ export async function validatePluginInstallContent(
       }
     }
   }
+  for (const newFile of manifest.contributes.newFiles) {
+    if (newFile.template === undefined) {
+      continue
+    }
+    try {
+      await readPluginNewFileTemplate(rootDir, newFile.template)
+    } catch (error) {
+      return {
+        ok: false,
+        error: `new file "${newFile.id}" template ${newFile.template}: ${error instanceof Error ? error.message : String(error)}`
+      }
+    }
+  }
   return { ok: true }
+}
+
+/** A new-file template's text; refuses bytes that are not UTF-8 so a file never starts garbled. */
+export async function readPluginNewFileTemplate(
+  rootDir: string,
+  relativePath: string
+): Promise<string> {
+  const bytes = await readContainedPluginArtifactBytes(
+    rootDir,
+    relativePath,
+    PLUGIN_NEW_FILE_TEMPLATE_MAX_BYTES
+  )
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+  } catch {
+    throw new Error('is not UTF-8 text')
+  }
 }

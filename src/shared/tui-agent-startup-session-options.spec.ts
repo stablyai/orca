@@ -19,7 +19,7 @@ describe('tui agent startup session options', () => {
       agentArgs: '-m gpt-5.5 -c model_reasoning_effort=low'
     })
     expect(plan?.launchCommand).toBe(
-      "codex '-m' 'custom-codex-model' '-c' 'model_reasoning_effort=high'"
+      "codex '-c' 'disable_paste_burst=true' '-m' 'custom-codex-model' '-c' 'model_reasoning_effort=high'"
     )
     expect(plan?.launchConfig).toMatchObject({ agentCommand: 'codex', agentArgs: '' })
     expect(plan?.sessionOptions).toEqual({ model: 'custom-codex-model', effort: 'high' })
@@ -118,7 +118,7 @@ describe('tui agent startup session options', () => {
       sessionOptionsOverrideAgentArgs: true
     })
     expect(plan?.launchCommand).toBe(
-      "codex '-m' 'gpt-5.5' '-c' 'model_reasoning_effort=high' 'resume' 'thread-1'"
+      "codex '-c' 'disable_paste_burst=true' '-m' 'gpt-5.5' '-c' 'model_reasoning_effort=high' 'resume' 'thread-1'"
     )
     expect(plan?.launchConfig).toMatchObject({ agentCommand: 'codex', agentArgs: '' })
     expect(plan?.sessionOptions).toEqual({ model: 'gpt-5.5', effort: 'high' })

@@ -4,12 +4,15 @@ import {
   createCloseWithBulkActions
 } from './mobile-bulk-close-sheet-actions'
 import type { RpcSuccess } from '../transport/types'
-import { BULK_TAB_CLOSE_COPY } from '../../../src/shared/bulk-tab-close-confirmation'
+import { mobileBulkTabCloseCopy } from './mobile-bulk-tab-close-copy'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
 import type { MobileSessionCloseActionsModel } from './use-mobile-session-close-actions'
 
 export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel) {
+  const t = useMobileTranslation()
+  const copy = mobileBulkTabCloseCopy(t)
   const {
     worktreeId,
     client,
@@ -38,9 +41,9 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
   }
   const bulkCloseConfirm = {
     visible: answerBulkClose !== null,
-    title: BULK_TAB_CLOSE_COPY.title.others,
-    message: BULK_TAB_CLOSE_COPY.description,
-    confirmLabel: BULK_TAB_CLOSE_COPY.confirm,
+    title: copy.title.others,
+    message: copy.description,
+    confirmLabel: copy.confirm,
     destructive: true,
     onConfirm: () => resolveBulkCloseConfirm(true),
     onCancel: () => resolveBulkCloseConfirm(false)

@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import { requestMobileCommitMessage } from './mobile-commit-message-ai'
 import { getStageablePaths, type MobileGitStatusResult } from './mobile-git-status'
 import { getMobilePrEligibilityReadiness } from './mobile-open-pr-prefill'
@@ -12,6 +13,8 @@ import {
 } from './mobile-hosted-review-git-preparation'
 import { applyMobileHostedReviewRemotePrerequisite } from './mobile-hosted-review-remote-prerequisite'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+
+export { mobileHostedReviewCreateIntentProgressMessage } from './hosted-review-copy'
 
 export type MobileHostedReviewCreateIntentProgress =
   | 'fast_forwarding'
@@ -43,34 +46,13 @@ export type MobileHostedReviewCreateIntentOutcome =
 type PrepareInput = {
   branch: string
   title: string
+  /** The base the user picked; eligibility judges the branch against it. */
+  base?: string
   status: MobileGitStatusResult | null
   commitMessage?: string
   // The live composer text, so a message typed during generation is not overwritten.
   readCommitMessage?: () => string
   onProgress?: (progress: MobileHostedReviewCreateIntentProgress) => void
-}
-
-export function mobileHostedReviewCreateIntentProgressMessage(
-  progress: MobileHostedReviewCreateIntentProgress
-): string {
-  switch (progress) {
-    case 'fast_forwarding':
-      return 'Updating branch...'
-    case 'staging':
-      return 'Staging changes...'
-    case 'generating_commit_message':
-      return 'Generating commit message...'
-    case 'committing':
-      return 'Committing changes...'
-    case 'publishing':
-      return 'Publishing branch...'
-    case 'pushing':
-      return 'Pushing commits...'
-    case 'force_pushing':
-      return 'Force pushing with lease...'
-    case 'creating_review':
-      return 'Creating review...'
-  }
 }
 
 function hasUnresolvedConflicts(status: MobileGitStatusResult | null): boolean {
@@ -80,13 +62,13 @@ function hasUnresolvedConflicts(status: MobileGitStatusResult | null): boolean {
 async function resolvePrefillFromStatus(
   client: RpcOperationSender,
   worktreeId: string,
-  branch: string,
-  title: string,
+  input: Pick<PrepareInput, 'branch' | 'title' | 'base'>,
   status: MobileGitStatusResult | null
 ): Promise<MobilePrPrefill> {
   return resolveMobilePrPrefill(client, worktreeId, {
-    branch,
-    title,
+    branch: input.branch,
+    title: input.title,
+    ...(input.base ? { base: input.base } : {}),
     ...getMobilePrEligibilityReadiness(status)
   })
 }
@@ -106,7 +88,10 @@ async function ensureLocalChangesCommitted(
   if (hasUnresolvedConflicts(currentStatus)) {
     return {
       ok: false,
-      error: 'Resolve conflicts before creating a pull request.',
+      error: translate(
+        'sourceControl.hostedReviewCreateIntent.resolveConflicts',
+        'Resolve conflicts before creating a pull request.'
+      ),
       committed: false,
       status: currentStatus
     }
@@ -132,7 +117,10 @@ async function ensureLocalChangesCommitted(
     if (!mobileHostedReviewBranchStillMatches(input.branch, currentStatus)) {
       return {
         ok: false,
-        error: 'Branch changed while preparing the pull request.',
+        error: translate(
+          'sourceControl.hostedReviewCreateIntent.branchChanged',
+          'Branch changed while preparing the pull request.'
+        ),
         committed: false,
         status: currentStatus
       }
@@ -143,7 +131,10 @@ async function ensureLocalChangesCommitted(
   if (!hasStagedChanges) {
     return {
       ok: false,
-      error: 'Resolve or stage changes before creating a pull request.',
+      error: translate(
+        'sourceControl.hostedReviewCreateIntent.resolveOrStageChanges',
+        'Resolve or stage changes before creating a pull request.'
+      ),
       committed: false,
       status: currentStatus
     }
@@ -156,7 +147,10 @@ async function ensureLocalChangesCommitted(
     if (!generated.success) {
       return {
         ok: false,
-        error: 'Could not generate a commit message. Add one in Source Control, then retry.',
+        error: translate(
+          'sourceControl.hostedReviewCreateIntent.generateMessageFailed',
+          'Could not generate a commit message. Add one in Source Control, then retry.'
+        ),
         committed: false,
         status: currentStatus
       }
@@ -164,7 +158,10 @@ async function ensureLocalChangesCommitted(
     if (input.readCommitMessage?.().trim()) {
       return {
         ok: false,
-        error: 'Review the commit message, then retry Create PR.',
+        error: translate(
+          'sourceControl.hostedReviewCreateIntent.reviewCommitMessage',
+          'Review the commit message, then retry Create PR.'
+        ),
         committed: false,
         status: currentStatus
       }
@@ -202,7 +199,10 @@ async function ensureLocalChangesCommitted(
   if (!mobileHostedReviewBranchStillMatches(input.branch, currentStatus)) {
     return {
       ok: false,
-      error: 'Branch changed while preparing the pull request.',
+      error: translate(
+        'sourceControl.hostedReviewCreateIntent.branchChanged',
+        'Branch changed while preparing the pull request.'
+      ),
       committed: true,
       status: currentStatus
     }
@@ -221,7 +221,10 @@ export async function prepareMobileHostedReviewCreateIntent(
     return {
       ok: false,
       error: initialStatus.ok
-        ? 'Branch changed while preparing the pull request.'
+        ? translate(
+            'sourceControl.hostedReviewCreateIntent.branchChanged',
+            'Branch changed while preparing the pull request.'
+          )
         : initialStatus.error,
       status: currentStatus
     }
@@ -242,7 +245,10 @@ export async function prepareMobileHostedReviewCreateIntent(
     if (!mobileHostedReviewBranchStillMatches(input.branch, currentStatus)) {
       return {
         ok: false,
-        error: 'Branch changed while preparing the pull request.',
+        error: translate(
+          'sourceControl.hostedReviewCreateIntent.branchChanged',
+          'Branch changed while preparing the pull request.'
+        ),
         status: currentStatus
       }
     }
@@ -254,13 +260,7 @@ export async function prepareMobileHostedReviewCreateIntent(
   }
   currentStatus = committed.status
 
-  let prefill = await resolvePrefillFromStatus(
-    client,
-    worktreeId,
-    input.branch,
-    input.title,
-    currentStatus
-  )
+  let prefill = await resolvePrefillFromStatus(client, worktreeId, input, currentStatus)
   for (let attempts = 0; attempts < 2; attempts++) {
     const remote = await applyMobileHostedReviewRemotePrerequisite(client, worktreeId, prefill, {
       ...input,
@@ -285,18 +285,15 @@ export async function prepareMobileHostedReviewCreateIntent(
     if (!mobileHostedReviewBranchStillMatches(input.branch, currentStatus)) {
       return {
         ok: false,
-        error: 'Branch changed while preparing the pull request.',
+        error: translate(
+          'sourceControl.hostedReviewCreateIntent.branchChanged',
+          'Branch changed while preparing the pull request.'
+        ),
         committed: committed.committed,
         status: currentStatus
       }
     }
-    prefill = await resolvePrefillFromStatus(
-      client,
-      worktreeId,
-      input.branch,
-      input.title,
-      currentStatus
-    )
+    prefill = await resolvePrefillFromStatus(client, worktreeId, input, currentStatus)
   }
 
   return { ok: true, prefill, status: currentStatus, committed: committed.committed }

@@ -97,14 +97,20 @@ export type TaskPageUnresolvedSourceRepo = {
 
 /** Surface fetched both-null sources as unresolved; null means unfetched, and a non-null source can have genuine zero results. */
 export function selectTaskPageUnresolvedSourceRepos(
-  repos: readonly { id: string; displayName?: string; path: string }[],
+  repos: readonly (TaskPageRepoCacheInput & { displayName?: string })[],
   sourceState: readonly TaskPageRepoSourceState[]
 ): TaskPageUnresolvedSourceRepo[] {
-  const stateByRepoId = new Map(sourceState.map((state) => [state.repoId, state]))
+  const stateBySourceKey = new Map(sourceState.map((state) => [state.sourceKey, state]))
   const unresolved: TaskPageUnresolvedSourceRepo[] = []
   for (const repo of repos) {
-    const state = stateByRepoId.get(repo.id)
-    if (state?.sources && !state.sources.issues && !state.sources.prs && !state.error) {
+    const state = stateBySourceKey.get(`${repo.id}::${taskPageRepoCacheScope(repo)}`)
+    if (
+      state?.sources &&
+      !state.sources.ineligible &&
+      !state.sources.issues &&
+      !state.sources.prs &&
+      !state.error
+    ) {
       unresolved.push({
         repoId: repo.id,
         sourceKey: state.sourceKey,

@@ -36,4 +36,6 @@ export type WslMoveUseLocallyResult =
       unsavedWorkspaceIds?: string[]
       /** `superseded`: the newest move of the distro, which has to come back first. */
       newerMove?: { repoIds: string[]; folderWorkspaceIds: string[] }
+      /** Refused after the host's terminals were put to sleep; opening the project there resumes them. */
+      hostTerminalsAsleep?: true
     }

@@ -2,6 +2,7 @@
 import { Buffer } from 'buffer'
 
 import type { RpcClient } from '../transport/rpc-client'
+import type { MobileDictationMeter } from './mobile-dictation-meter'
 
 export type DictationStatus = 'idle' | 'starting' | 'recording' | 'processing' | 'error'
 
@@ -17,10 +18,13 @@ export type UseMobileDictationResult = {
   isStarting: boolean
   isRecording: boolean
   isProcessing: boolean
+  // Empty until a newer host reports words; older hosts never do.
+  transcriptSoFar: string
   error: string | null
   start: () => Promise<void>
   stop: () => Promise<void>
   cancel: () => Promise<void>
+  meter: MobileDictationMeter
 }
 
 export const DICTATION_FINISH_TIMEOUT_MS = 75_000

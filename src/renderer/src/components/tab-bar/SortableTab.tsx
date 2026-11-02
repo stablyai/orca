@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
+import { useCallback, useEffect } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { X, Minimize2, Pin } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-title-decoration'
-import { getAgentLabel } from '@/lib/agent-catalog'
-import { basename } from '@/lib/path'
 import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -26,7 +25,9 @@ import { translate } from '@/i18n/i18n'
 import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import { useTabContextMenuOpening } from './tab-context-menu-opening'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
+import { terminalTabProgramName } from './terminal-tab-program-name'
 import {
   isTerminalTabActivityLive,
   terminalTabHasUnreadActivity
@@ -138,9 +139,12 @@ export default function SortableTab({
   })
 
   // Why: no transform/transition/opacity so tabs stay anchored during drag, only the insertion bar moves (see TabBar.tsx).
-  const menu = useSortableTabContextMenu()
-  const { open: menuOpen, onOpenChange: setMenuOpen } = menu
-  const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
+  const {
+    open: menuOpen,
+    openingId,
+    onOpenChange: setMenuOpen,
+    onComplete
+  } = useSortableTabContextMenu()
   const {
     isEditing,
     renameValue,
@@ -188,10 +192,11 @@ export default function SortableTab({
   const dragListeners = isEditing ? undefined : listeners
   const handleActivate = useCallback(() => onActivate(tab.id), [onActivate, tab.id])
   // Why: defer activation to pointer-up so a drag doesn't switch tabs or steal focus mid-gesture (tab-strip-pointer-activation).
-  const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
+  const { onPointerDown, retirePendingActivation } = useTabStripPointerActivation({
     onActivate: handleActivate,
     disabled: isEditing
   })
+  const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(tab.id, isActive)
   const tabTitle = tab.customTitle ?? tab.title
   const tabRoot = (
@@ -206,7 +211,7 @@ export default function SortableTab({
       data-agent-activity-status={activityStatus}
       {...attributes}
       {...dragListeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onDoubleClick={(e) => {
         if (isEditing) {
           return
@@ -215,7 +220,7 @@ export default function SortableTab({
         handleRenameOpen()
       }}
       onPointerDown={(e) => {
-        onTabPointerDown(
+        onPointerDown(
           e,
           dragListeners?.onPointerDown as ((event: React.PointerEvent<Element>) => void) | undefined
         )
@@ -257,6 +262,7 @@ export default function SortableTab({
       {isEditing ? (
         <Input
           ref={setRenameInputElement}
+          density="compact"
           data-tab-rename-input="true"
           value={renameValue}
           aria-label={translate(
@@ -279,8 +285,7 @@ export default function SortableTab({
           onClick={(event) => event.stopPropagation()}
           onDoubleClick={(event) => event.stopPropagation()}
           onAuxClick={(event) => event.stopPropagation()}
-          // Why: base Input's min-w-0 lets flex shrink it to ~0 in a saturated tab bar; force a usable minimum width.
-          className="mr-1 h-5 min-w-[72px] flex-1 px-1 py-0 text-xs"
+          className="mr-1 min-w-0 flex-1"
           spellCheck={false}
         />
       ) : (
@@ -348,67 +353,59 @@ export default function SortableTab({
   )
 
   return (
-    <>
-      <div
-        ref={renameOwnerRef}
-        {...slotProps}
-        onContextMenuCapture={(event) => {
-          // The hover card is portalled: React still routes its events through this slot.
-          if (event.target instanceof Node && event.currentTarget.contains(event.target)) {
-            event.preventDefault()
-            window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
-            setMenuPoint({ x: event.clientX, y: event.clientY })
-            setMenuOpen(true)
-          }
-        }}
-      >
-        {isEditing || menuOpen ? (
-          tabRoot
-        ) : (
-          <TabHoverCard
-            title={displayTitle}
-            programName={
-              tabAgent
-                ? getAgentLabel(tabAgent)
-                : shellForIcon
-                  ? basename(shellForIcon)
-                  : translate('tabHoverCard.terminal', 'Terminal')
+    <ContextMenu open={menuOpen} onOpenChange={handleMenuOpenChange} modal={false}>
+      <ContextMenuTrigger asChild>
+        <div
+          ref={renameOwnerRef}
+          {...slotProps}
+          onContextMenu={(event) => {
+            // The hover card is portalled: React still routes its events through this slot.
+            if (event.target instanceof Node && event.currentTarget.contains(event.target)) {
+              window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
+              handleMenuOpenChange(true)
             }
-            icon={
-              <TerminalTabLeadingIcon
-                agent={tabAgent}
-                activityStatus={activityStatus}
-                shell={shellForIcon}
-                showUnreadActivity={false}
-                isActive
-                progress={programProgress}
-              />
-            }
-            alert={
-              naming
-                ? (dismiss) => <NativeChatNamingErrorBlock naming={naming} onDismiss={dismiss} />
-                : undefined
-            }
-          >
-            {tabRoot}
-          </TabHoverCard>
-        )}
-      </div>
+          }}
+        >
+          {isEditing || menuOpen ? (
+            tabRoot
+          ) : (
+            <TabHoverCard
+              title={displayTitle}
+              programName={terminalTabProgramName(tabAgent, shellForIcon)}
+              icon={
+                <TerminalTabLeadingIcon
+                  agent={tabAgent}
+                  activityStatus={activityStatus}
+                  shell={shellForIcon}
+                  showUnreadActivity={false}
+                  isActive
+                  progress={programProgress}
+                />
+              }
+              alert={
+                naming
+                  ? (dismiss) => <NativeChatNamingErrorBlock naming={naming} onDismiss={dismiss} />
+                  : undefined
+              }
+            >
+              {tabRoot}
+            </TabHoverCard>
+          )}
+        </div>
+      </ContextMenuTrigger>
 
       <SortableTabContextMenu
-        sessionSwitchOpening={menu.openingId}
-        onSessionSwitchComplete={menu.onComplete}
+        open={menuOpen}
+        sessionSwitchOpening={openingId}
+        onSessionSwitchComplete={onComplete}
         tab={tab}
         unifiedTabId={unifiedTabId}
         groupId={groupId}
         isActive={isActive}
-        open={menuOpen}
-        point={menuPoint}
         tabCount={tabCount}
         hasTabsToRight={hasTabsToRight}
         hasTabsToLeft={hasTabsToLeft}
         isPinned={isPinned}
-        onOpenChange={setMenuOpen}
         onActivate={onActivate}
         onClose={onClose}
         onCloseOthers={onCloseOthers}
@@ -426,6 +423,6 @@ export default function SortableTab({
         detachedWindow={detachedWindow}
       />
       {naming ? <NativeChatNamingFailedDialog naming={naming} chatName={displayTitle} /> : null}
-    </>
+    </ContextMenu>
   )
 }

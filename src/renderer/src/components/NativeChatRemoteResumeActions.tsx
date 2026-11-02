@@ -45,17 +45,11 @@ export function NativeChatRemoteResumeActions({
         disabled={busy || startedHere.length === 0}
         onClick={() => resume(startedHere)}
       >
-        {startedHere.length === 1
-          ? translate(
-              'auto.components.NativeChatResumeOnRestartModal.serverResumeHereCount_one',
-              'Resume {{count}} chat started here',
-              { count: startedHere.length }
-            )
-          : translate(
-              'auto.components.NativeChatResumeOnRestartModal.serverResumeHereCount_other',
-              'Resume {{count}} chats started here',
-              { count: startedHere.length }
-            )}
+        {translate(
+          'auto.components.NativeChatResumeOnRestartModal.serverResumeHereCount',
+          'Resume {{count}} chats started here',
+          { count: startedHere.length, defaultValue_one: 'Resume {{count}} chat started here' }
+        )}
       </Button>
     </>
   )

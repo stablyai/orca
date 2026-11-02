@@ -1,4 +1,5 @@
 import type { MrStateFilter, SmartNameMode } from './mobile-composer-source-types'
+import { translate } from '../i18n/mobile-i18n'
 
 // Lucide has no brand icons; provider modes use TaskProviderLogo SVGs.
 export type SmartModeIcon =
@@ -12,13 +13,31 @@ export type SmartModeOption = {
 }
 
 export const SMART_MODE_OPTIONS: readonly SmartModeOption[] = [
-  { id: 'smart', label: 'Smart', icon: { type: 'lucide', name: 'sparkles' } },
+  {
+    id: 'smart',
+    get label() {
+      return translate('tasks.smartSourceModes.smart', 'Smart')
+    },
+    icon: { type: 'lucide', name: 'sparkles' }
+  },
   { id: 'github', label: 'GitHub', icon: { type: 'provider', provider: 'github' } },
   { id: 'linear', label: 'Linear', icon: { type: 'provider', provider: 'linear' } },
   { id: 'jira', label: 'Jira', icon: { type: 'provider', provider: 'jira' } },
   { id: 'gitlab', label: 'GitLab', icon: { type: 'provider', provider: 'gitlab' } },
-  { id: 'branches', label: 'Branch', icon: { type: 'lucide', name: 'git-branch' } },
-  { id: 'text', label: 'Name', icon: { type: 'lucide', name: 'case-sensitive' } }
+  {
+    id: 'branches',
+    get label() {
+      return translate('tasks.smartSourceModes.branch', 'Branch')
+    },
+    icon: { type: 'lucide', name: 'git-branch' }
+  },
+  {
+    id: 'text',
+    get label() {
+      return translate('tasks.smartSourceModes.name', 'Name')
+    },
+    icon: { type: 'lucide', name: 'case-sensitive' }
+  }
 ]
 
 export type SmartModeAvailabilityInput = {
@@ -75,10 +94,30 @@ export function normalizeSmartMode(
 export type MrStateFilterOption = { id: MrStateFilter; label: string }
 
 export const MR_STATE_FILTER_OPTIONS: readonly MrStateFilterOption[] = [
-  { id: 'opened', label: 'Open' },
-  { id: 'merged', label: 'Merged' },
-  { id: 'closed', label: 'Closed' },
-  { id: 'all', label: 'All' }
+  {
+    id: 'opened',
+    get label() {
+      return translate('tasks.smartSourceModes.openState', 'Open')
+    }
+  },
+  {
+    id: 'merged',
+    get label() {
+      return translate('tasks.smartSourceModes.mergedState', 'Merged')
+    }
+  },
+  {
+    id: 'closed',
+    get label() {
+      return translate('tasks.smartSourceModes.closedState', 'Closed')
+    }
+  },
+  {
+    id: 'all',
+    get label() {
+      return translate('tasks.smartSourceModes.allStates', 'All')
+    }
+  }
 ]
 
 export const DEFAULT_MR_STATE_FILTER: MrStateFilter = 'opened'

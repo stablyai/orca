@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState, type SetStateAction } from 'rea
 import { useWorktreeGitOwnerTarget } from '../worktree-git-owner-target'
 import { useWorktreeGitCopyHostId } from '@/lib/worktree-git-copy'
 import { useAppStore, type AppState } from '@/store'
-import { useActiveWorktree, useRepoById } from '@/store/selectors'
+import { useActiveWorktree, selectReviewRepositoryForWorkspace } from '@/store/selectors'
 import { useChecksPanelTerminalWorktree } from '../use-checks-panel-terminal-worktree'
 import { getConnectionId } from '@/lib/connection-context'
 import { readDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
@@ -42,7 +42,7 @@ export function useChecksPanelControllerState() {
     isPanelVisible
   })
   const activeWorktreeId = activeWorktree?.id ?? null
-  const repo = useRepoById(activeWorktree?.repoId ?? null)
+  const repo = useAppStore((s) => selectReviewRepositoryForWorkspace(s, activeWorktree))
   const activeConnectionId = activeWorktreeId
     ? (getConnectionId(activeWorktreeId) ?? repo?.connectionId ?? null)
     : null

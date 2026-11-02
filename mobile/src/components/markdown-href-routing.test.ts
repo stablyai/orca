@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { routeMarkdownHref } from './markdown-href-routing'
-import { createNativeChatFileHref } from '../../../src/shared/native-chat-href-routing'
+import { createNativeChatFileHref } from '../../../src/shared/native-chat/native-chat-href-routing'
 
 describe('routeMarkdownHref', () => {
   it('routes web and mail links to the system handler', () => {

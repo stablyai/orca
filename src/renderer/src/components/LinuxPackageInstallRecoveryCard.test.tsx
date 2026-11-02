@@ -8,6 +8,7 @@ const { toastSuccess } = vi.hoisted(() => ({ toastSuccess: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { success: toastSuccess } }))
 
 import { LinuxPackageInstallRecoveryCard } from './LinuxPackageInstallRecoveryCard'
+import { UPDATER_FAILURE_COPY } from '../../../shared/updater-failure-copy'
 
 const RELEASE_URL = 'https://github.com/stablyai/orca/releases/tag/v1.4.200'
 const DIAGNOSTIC = 'pkexec: no polkit authentication agent found'
@@ -516,7 +517,7 @@ describe('LinuxPackageInstallRecoveryCard without a usable command', () => {
 
     expect(screen.queryByRole('button', { name: 'Copy Install Command' })).toBeNull()
     expect(button('Show Package').dataset.variant).toBe('default')
-    expect(footnoteText()).toBe(NO_PACKAGE_MANAGER.message)
+    expect(footnoteText()).toBe(UPDATER_FAILURE_COPY.linuxPackageNoPackageManager)
     expect(screen.getByText(/Quit Orca before finishing the update/)).toBeTruthy()
 
     fireEvent.click(button('Download Manually'))
@@ -534,7 +535,7 @@ describe('LinuxPackageInstallRecoveryCard without a usable command', () => {
     fireEvent.click(button('Copy Install Command'))
     await flushActions()
 
-    expect(footnoteText()).toBe('No sudo binary is available on this machine.')
+    expect(footnoteText()).toBe(UPDATER_FAILURE_COPY.linuxPackageNoSudo)
     expect(button('Show Package').dataset.variant).toBe('default')
     expect(button('Download Manually')).toBeTruthy()
   })

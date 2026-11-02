@@ -1,7 +1,7 @@
 /** Synthetic plugin tags must map to real locale tags, never undefined/OS fallback; stub ICU support to test logic independently of installed locale data. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getIntlLocale, i18n, setRendererPluginLanguagePacks } from './i18n'
-import { pluginLanguageResourceId } from '../../../shared/plugins/plugin-language-pack-artifact'
+import { pluginLanguageResourceId } from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import { DEFAULT_LOCALE } from './supported-languages'
 
 const PACK_ID = 'plugin:smwbev.russian/ru-RU' as const
@@ -11,7 +11,8 @@ const PACK = {
   resourceLanguage: PACK_RESOURCE,
   pluginKey: 'smwbev.russian',
   locale: 'ru-RU',
-  catalog: {}
+  catalog: {},
+  coverage: 100
 }
 
 type Packs = Parameters<typeof setRendererPluginLanguagePacks>[0]

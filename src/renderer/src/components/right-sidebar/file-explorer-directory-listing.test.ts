@@ -17,8 +17,10 @@ vi.mock('./file-explorer-operation-owner', () => ({
 import {
   keepOpenedDirectoryLinks,
   clearFailedOpenedDirectoryLink,
+  canFollowFolderLink,
   readFileExplorerDirectory
 } from './file-explorer-directory-listing'
+import { fileExplorerListingToDirCache } from './file-explorer-dir-pages'
 import type { DirCache, TreeNode } from './file-explorer-types'
 
 describe('readFileExplorerDirectory', () => {
@@ -54,6 +56,55 @@ it('forwards the WSL wake flag of a user act to the directory read', async () =>
   await readFileExplorerDirectory('wt-1', '/w', '/w', { wakeWslDistro: true })
   expect(readRuntimeDirectory).toHaveBeenLastCalledWith(expect.anything(), '/w', {
     wakeWslDistro: true
+  })
+})
+
+describe('outside-project folder links', () => {
+  it('marks a folder listed through a project link and its rows as outside the project', async () => {
+    readRuntimeDirectory.mockImplementation(
+      async (_context: unknown, _path: string, options: { access?: unknown }) => {
+        if (!options.access) {
+          throw new Error('Access denied: path resolves outside allowed directories.')
+        }
+        return [{ name: 'notes.md', isDirectory: false, isSymlink: false }]
+      }
+    )
+
+    const listing = await readFileExplorerDirectory('wt-1', '/w', '/w/linked', {
+      followProjectFolderLink: true
+    })
+    const cache = fileExplorerListingToDirCache(listing, '/w/linked', 0, '/w')
+
+    expect(cache.outsideProject).toBe(true)
+    expect(cache.children).toEqual([
+      expect.objectContaining({ path: '/w/linked/notes.md', outsideProject: true })
+    ])
+    readRuntimeDirectory.mockReset()
+  })
+
+  it('follows links only on a gesture, a listed link row, or under an outside listing', () => {
+    const cache: Record<string, DirCache> = {
+      '/w': {
+        children: [
+          { name: 'src', path: '/w/src', relativePath: 'src', isDirectory: true, depth: 0 },
+          {
+            name: 'docs',
+            path: '/w/docs',
+            relativePath: 'docs',
+            isDirectory: true,
+            isSymlink: true,
+            depth: 0
+          }
+        ]
+      },
+      '/w/linked': { children: [], outsideProject: true }
+    }
+
+    expect(canFollowFolderLink(cache, '/w/src', false)).toBe(false)
+    expect(canFollowFolderLink(cache, '/w/src', true)).toBe(true)
+    expect(canFollowFolderLink(cache, '/w/docs', false)).toBe(true)
+    expect(canFollowFolderLink(cache, '/w/linked', false)).toBe(true)
+    expect(canFollowFolderLink(cache, '/w/linked/guides', false)).toBe(true)
   })
 })
 

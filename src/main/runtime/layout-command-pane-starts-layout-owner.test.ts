@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   isPaneSleepRecord,
   type SleepingAgentSessionRecord as SleepingRecord
-} from '../../shared/agent-session-resume'
+} from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { RuntimeMobileSessionTerminalTab } from '../../shared/runtime-types'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../shared/runtime-session-contracts'
 import type { RestoredPaneTrigger } from './terminal/recovery/restored-pane-start'
@@ -36,7 +36,7 @@ class StatusRuntime extends OrcaRuntimeService {
       .materializePendingMobileSessionTerminal(worktreeId, tab, trigger)
       .then((created) => {
         if (this.startsNoTerminal && created.tab.ptyId) {
-          this.ptysById.delete(created.tab.ptyId)
+          this.terminalIdentity.removePty(created.tab.ptyId)
         }
         return created
       })
@@ -50,7 +50,7 @@ class StatusRuntime extends OrcaRuntimeService {
   loseContactWith(ptyId: string): void {
     const pty = this.ptysById.get(ptyId)
     if (pty) {
-      pty.connected = false
+      this.terminalIdentity.setPtyConnected(pty, false)
     }
     this.markPtyLivenessUnverifiable(ptyId, 'host out of contact')
   }

@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { notifyTerminalTypingDiscardedBeforeBind } from '../terminal-input-not-sent-notice'
 import { terminalShowsReplayedHistory } from '../replayed-history-terminals'
 import { isWebTerminalSurfaceTabId } from '../../../../../shared/terminal-surface-id'
 import { shouldRetainDisposedPaneSpawn } from './disposed-spawn-retention'
@@ -79,6 +80,7 @@ function terminalShowsOutput(terminal: ConnectPanePtySession['pane']['terminal']
 export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPtyTransportOptions {
   const holdsInput = holdsInputUntilConnect(session)
   return {
+    onDrivingInputAttempt: (ptyId) => session.noteTerminalInputForPty(ptyId),
     terminalKittyKeyboardProtocol:
       session.pane.terminal.options.vtExtensions?.kittyKeyboard === true,
     cwd: session.deps.cwd,
@@ -103,6 +105,7 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
     ...(session.deps.onPreconnectInput
       ? { onPreconnectInput: session.deps.onPreconnectInput }
       : {}),
+    onTypingDiscardedBeforeBind: () => notifyTerminalTypingDiscardedBeforeBind(session.deps.tabId),
     env: session.paneEnv,
     ...(session.paneStartup?.envToDelete ? { envToDelete: session.paneStartup.envToDelete } : {}),
     command: session.shouldDeliverStartupViaTerminalPaste

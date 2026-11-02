@@ -1,3 +1,8 @@
+import type {
+  AutomationCreateInput,
+  AutomationUpdateInput
+} from '../../../../shared/automations-types'
+import { AUTOMATION_SURFACE_RUNTIME_CAPABILITY } from '../../../../shared/automation-runtime-capabilities'
 import { getRuntimeEnvironmentStatus } from '@/runtime/runtime-rpc-client'
 import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import {
@@ -149,6 +154,13 @@ export async function assertAutomationCreateIdempotencySupported(
   )
 }
 
+function extraAgentArgsHostUpdateRequired(): string {
+  return translate(
+    'automations.extraAgentArgs.hostUpdateRequired',
+    EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED
+  )
+}
+
 /** Older hosts strip the field and would run without it, so nonempty extras need the capability. */
 export async function assertExtraAgentArgsSupported(
   authority: AutomationAuthorityRef,
@@ -160,7 +172,7 @@ export async function assertExtraAgentArgsSupported(
   await assertAuthorityCapability(
     authority,
     AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY,
-    EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED
+    extraAgentArgsHostUpdateRequired()
   )
 }
 
@@ -174,7 +186,7 @@ export async function assertEnvironmentSupportsExtraAgentArgs(
   }
   const status = await getRuntimeEnvironmentStatus(environmentId, REQUEST_TIMEOUT_MS)
   if (!status.capabilities?.includes(AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY)) {
-    throw new AutomationHostScopeUnsupportedError(EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED)
+    throw new AutomationHostScopeUnsupportedError(extraAgentArgsHostUpdateRequired())
   }
 }
 
@@ -182,4 +194,36 @@ export {
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
   AUTOMATION_LIST_HOST_SCOPE_UPDATE_REQUIRED_MESSAGE,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
+}
+
+/** Old hosts keep their terminal contract; an explicit chat must refuse before a move creates anything. */
+export async function prepareAutomationLaunchSetup<
+  T extends AutomationCreateInput | AutomationUpdateInput
+>(
+  authority: AutomationAuthorityRef,
+  input: T
+): Promise<Omit<T, 'launchSetupPatch'> & Pick<AutomationCreateInput, 'launchSetupPatch'>> {
+  const { launchSetupPatch, ...legacy } = input
+  if (launchSetupPatch === undefined) {
+    await assertExtraAgentArgsSupported(authority, input.extraAgentArgs)
+    return input
+  }
+  if (input.extraAgentArgs !== undefined) {
+    throw new Error('Save automation arguments through one launch setup change.')
+  }
+  if (authority.kind === 'desktop') {
+    return input
+  }
+  const status = await sharedCapabilityProbe(authority, capabilityProbeKey(authority))
+  if (status.capabilities?.includes(AUTOMATION_SURFACE_RUNTIME_CAPABILITY)) {
+    return input
+  }
+  if (launchSetupPatch.surface === 'chat') {
+    throw new AutomationHostScopeUnsupportedError(
+      'Update Orca on this host to run automations in Chat.'
+    )
+  }
+  const extraAgentArgs = launchSetupPatch.arguments?.value
+  await assertExtraAgentArgsSupported(authority, extraAgentArgs)
+  return { ...legacy, ...(extraAgentArgs !== undefined ? { extraAgentArgs } : {}) }
 }

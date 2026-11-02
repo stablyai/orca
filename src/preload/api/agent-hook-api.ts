@@ -9,24 +9,31 @@ export type HooksApi = {
     hasHooks: boolean
     hooks: OrcaHooks | null
     mayNeedUpdate: boolean
-    /** A background check refused because the repo's WSL distro is stopped. */
-    unavailable?: 'wsl-distro-stopped'
+    /** A background check refused because the repo's WSL distro is stopped or didn't answer. */
+    unavailable?: 'wsl-distro-stopped' | 'wsl-distro-unverifiable'
   }>
   inspectSetupScriptImports: (args: {
     repoId: string
     hostId?: ExecutionHostId
   }) => Promise<SetupScriptImportCandidate[]>
-  readIssueCommand: (args: { repoId: string; hostId?: ExecutionHostId }) => Promise<{
+  /** `wakeWslDistro`: a launch, a user act that may start the repo's stopped WSL distro. */
+  readIssueCommand: (args: {
+    repoId: string
+    hostId?: ExecutionHostId
+    wakeWslDistro?: boolean
+  }) => Promise<{
     status?: 'ok' | 'error'
     localContent: string | null
     sharedContent: string | null
     effectiveContent: string | null
     localFilePath: string
     source: 'local' | 'shared' | 'none'
+    refusedWslDistro?: string
   }>
   writeIssueCommand: (args: {
     repoId: string
     content: string
     hostId?: ExecutionHostId
+    wakeWslDistro?: boolean
   }) => Promise<void>
 }

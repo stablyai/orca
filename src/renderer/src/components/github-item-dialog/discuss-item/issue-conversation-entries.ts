@@ -60,13 +60,3 @@ export function getTimelineTargetLabel(target: GitHubIssueTimelineTarget): strin
         })
   return target.title ? `${reference} ${target.title}` : reference
 }
-
-export function getTimelineStateReasonLabel(reason: string | null | undefined): string | null {
-  if (reason === 'completed') {
-    return translate('auto.components.GitHubItemDialog.timeline.completed', 'as completed')
-  }
-  if (reason === 'not_planned') {
-    return translate('auto.components.GitHubItemDialog.timeline.notPlanned', 'as not planned')
-  }
-  return null
-}

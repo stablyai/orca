@@ -13,6 +13,7 @@ import { OrchestrationDb } from '../../../../orchestration/db'
 import type { RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
+import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import * as FailedStartTeardown from './failed-worker-start-teardown'
 
 vi.mock('../../../../../git/worktree', () => ({
@@ -58,7 +59,8 @@ type PromptContractHarness = {
 }
 
 async function createPromptContractHarness(
-  outcome: 'accepted' | 'swallowed'
+  outcome: 'accepted' | 'swallowed',
+  agent: TuiAgent = 'codex'
 ): Promise<PromptContractHarness> {
   let composerReady = false
   let submittedTurns = 0
@@ -85,7 +87,7 @@ async function createPromptContractHarness(
       startedTurns += 1
       runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
     }
-  }, 'codex')
+  }, agent)
   const { runtime, handle } = fixture
   runtime.onPtyData('pty-prompt', '\x1b]0;Codex idle\x07', Date.now())
 
@@ -151,7 +153,7 @@ async function createPromptContractHarness(
         from: 'term_coord',
         worktree: 'new-child',
         name: `prompt-contract-${outcome}`,
-        agent: 'codex'
+        agent
       }
     },
     requestId: `${REQUEST_ID}_${outcome}`,
@@ -185,6 +187,25 @@ describe('orchestration worker-start prompt contract', () => {
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
+
+  it.each(['pi', 'codex', 'claude', 'opencode'] as const)(
+    'returns the %s agent_readiness failure receipt promptly on recorded end',
+    async (agent) => {
+      vi.useFakeTimers()
+      const harness = await createPromptContractHarness('accepted', agent)
+      harness.runtime.onPtyExit('pty-prompt', 137, undefined, { providerExitObserved: true })
+      const send = vi.spyOn(harness.runtime, 'sendTerminalAgentPrompt')
+      const receipt = vi.fn()
+      void harness.dispatcher.dispatch(harness.request).then(receipt)
+      await vi.waitFor(() => expect(receipt).toHaveBeenCalledOnce())
+      expect(receipt.mock.calls[0][0]).toMatchObject({
+        ok: true,
+        result: { state: 'failed', failedStage: 'agent_readiness', lastError: 'terminal_exited' }
+      })
+      expect(send).not.toHaveBeenCalled()
+      expect(harness.writes).toEqual([])
+    }
+  )
 
   it('durably accepts exactly one submitted and started turn', async () => {
     vi.useFakeTimers()
@@ -297,6 +318,8 @@ describe('orchestration worker-start prompt contract', () => {
         result: { state: 'ready', stage: 'settled', workerOutcome: outcome }
       })
       expect(response.ok && response.result).not.toHaveProperty('lastError')
+      // Its report is already mail to act on, so the receipt does not say to stop.
+      expect(response.ok && response.result).not.toHaveProperty('next')
       expect(teardown).not.toHaveBeenCalled()
       expect(harness.db.getTask(harness.taskId)?.status).toBe(
         outcome === 'succeeded' ? 'completed' : 'failed'
@@ -323,28 +346,6 @@ describe('orchestration worker-start prompt contract', () => {
     })
     expect(harness.submittedTurns()).toBe(1)
     expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('keeps a worker question answerable after turn observation times out', async () => {
-    vi.useFakeTimers()
-    const harness = await createPromptContractHarness('swallowed')
-    let questionId = ''
-    vi.spyOn(harness.runtime, 'observeTerminalAgentPrompt').mockImplementation(
-      async (_handle, prompt) => {
-        const dispatch = harness.db.findActiveDispatchForAssignee(harness.handle)!
-        questionId = harness.db.createQuestion({
-          runId: dispatch.run_id!,
-          dispatchId: dispatch.id,
-          askerHandle: harness.handle,
-          question: 'Which target should I use?'
-        }).question.message_id
-        return prompt
-      }
-    )
-    const pending = harness.dispatcher.dispatch(harness.request)
-    await vi.runAllTimersAsync()
-    expect(await pending).toMatchObject({ ok: true, result: { state: 'outcome_unknown' } })
-    expect(harness.db.getQuestion(questionId)?.status).toBe('pending')
   })
 
   it('reports a swallowed Enter as start_unknown while keeping the worker reportable', async () => {

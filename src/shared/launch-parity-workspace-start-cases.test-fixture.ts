@@ -116,7 +116,7 @@ export const WORKSPACE_START_LAUNCH_CASES: WindowLaunchCase[] = [
     { kind: 'work-item', agent: 'codex', delivery: 'submit-after-ready', text: BOB },
     {
       command:
-        "codex '-c' 'check_for_update_on_startup=false' '--dangerously-bypass-approvals-and-sandbox'",
+        "codex '-c' 'check_for_update_on_startup=false' '-c' 'disable_paste_burst=true' '--dangerously-bypass-approvals-and-sandbox'",
       agentCommand: POSIX_CODEX,
       shellReady: false
     },

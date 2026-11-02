@@ -6,6 +6,7 @@
  */
 import type { RemoteCommandChannel } from '../managed-server/install/remote-install-transport'
 import type { WslOrcadWatch } from './wsl-orcad-watch'
+import { noteWslDistroMayHaveStopped } from '../wsl-background-distro-gate'
 
 export type WslOrcadBridgeChannelEvents = {
   opened(): void
@@ -47,7 +48,8 @@ export class WslOrcadBridgeActivity {
 
   constructor(private readonly now: () => number = () => performance.now()) {}
 
-  events(environmentId: string): WslOrcadBridgeChannelEvents {
+  /** `onExit`: the filtered signal that orcad (or its distro) went away, never a normal close. */
+  events(environmentId: string, onExit?: () => void): WslOrcadBridgeChannelEvents {
     const key = environmentId
     return {
       opened: () => this.live.set(key, (this.live.get(key) ?? 0) + 1),
@@ -65,6 +67,7 @@ export class WslOrcadBridgeActivity {
           byGuest && (last === undefined || this.now() - last >= WSL_ORCAD_BRIDGE_EXIT_COOLDOWN_MS)
         if (exit) {
           this.lastExitAt.set(key, this.now())
+          onExit?.()
         }
         for (const listener of Array.from(this.listeners.get(key) ?? [])) {
           listener(exit ? 'exit' : 'idle')
@@ -128,4 +131,16 @@ export async function probeThenWatchWslOrcadBridges(
   }
   probed.close()
   return activity.watch(environmentId)
+}
+
+/**
+ * The connector's bridge events: the guest ending the last bridge (the filtered exit, never a
+ * normal one-shot or WebSocket close) is the first sign the distro may have stopped (E9), so later
+ * dials and reachability re-read rather than trust a cached "running".
+ */
+export function wslHostBridgeEvents(
+  activity: WslOrcadBridgeActivity,
+  bridge: { environmentId: string; distro: string }
+): WslOrcadBridgeChannelEvents {
+  return activity.events(bridge.environmentId, () => noteWslDistroMayHaveStopped(bridge.distro))
 }

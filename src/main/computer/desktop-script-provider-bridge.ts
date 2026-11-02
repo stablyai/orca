@@ -158,6 +158,9 @@ function runBridgeProcess(
 
 export function mapBridgeError(message: string): RuntimeClientError {
   const text = message.trim() || 'desktop provider failed'
+  if (/text_input_incomplete/i.test(text)) {
+    return new RuntimeClientError('action_timeout', text)
+  }
   if (/appNotFound|app not found/i.test(text)) {
     return new RuntimeClientError('app_not_found', text)
   }

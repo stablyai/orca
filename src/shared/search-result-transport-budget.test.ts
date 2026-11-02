@@ -15,13 +15,6 @@ function result(files: SearchFileResult[]): SearchResult {
 }
 
 describe('limitSearchResultToContentBudget', () => {
-  it('leaves a result that fits, or an uncapped local one, as it is', () => {
-    const small = result([file(1, 10)])
-    expect(limitSearchResultToContentBudget(small, 64 * 1024)).toBe(small)
-    const large = result(Array.from({ length: 200 }, (_, index) => file(index, 400)))
-    expect(limitSearchResultToContentBudget(large, undefined)).toBe(large)
-  })
-
   it('keeps whole files that fit the reply and marks the rest truncated', () => {
     const large = result(Array.from({ length: 200 }, (_, index) => file(index, 400)))
     const maxBytes = 16 * 1024

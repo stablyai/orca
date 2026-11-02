@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+// @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
 import type { RefObject } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -274,6 +275,34 @@ describe('/resume in the native chat composer', () => {
       expect(mocks.sendNativeChatTypedCommand).not.toHaveBeenCalled()
       expect(mocks.openHistory).not.toHaveBeenCalled()
       expect(mocks.setDraft).not.toHaveBeenCalledWith('')
+    }
+  )
+
+  it.each([undefined, [], [{ name: 'fast', kind: 'command' as const }]])(
+    'saves typed provider commands with inventory %j through the inline composer',
+    (inventory) => {
+      for (const text of ['/fast', '/permissions']) {
+        mocks.draft = text
+        const editor: QueuedMessageInlineEditor = {
+          messageId: 'queued-provider',
+          draftScopeKey: 'queued-edit:provider',
+          text,
+          change: vi.fn(),
+          acquiring: false,
+          saving: false,
+          canSave: true,
+          imagesCapable: true,
+          save: vi.fn(),
+          cancel: vi.fn()
+        }
+        const { transport } = renderStructuredChat(editor)
+        transport.sessionCommands = inventory
+        act(() => mocks.fieldProps?.onSend?.())
+        expect(editor.save).toHaveBeenCalledOnce()
+        expect(transport.send).not.toHaveBeenCalled()
+        expect(transport.dispatchCommand).not.toHaveBeenCalled()
+        cleanup()
+      }
     }
   )
 

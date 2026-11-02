@@ -1,3 +1,5 @@
+import { captureSourceControlActionSelection } from '../../../../../../shared/source-control-ai-operation-policy'
+import type { SelectedSourceControlActionRecipe } from '../../../../../../shared/source-control-action-selection'
 import { useSavedSourceControlActionStart } from '../../use-saved-source-control-action-start'
 import type { SourceControlAgentActionDialogProps } from '../../SourceControlAgentActionDialog'
 import { useCallback, useMemo, useState } from 'react'
@@ -108,7 +110,7 @@ export function useSourceControlAi({
   }, [activeRepo, settings, sourceControlAiDiscoveryHostKey])
 
   const getLaunchActionRecipe = useCallback(
-    (actionId: SourceControlLaunchActionId): SourceControlActionRecipe =>
+    (actionId: SourceControlLaunchActionId): SelectedSourceControlActionRecipe =>
       resolveSourceControlActionRecipe({ settings, repo: activeRepo, actionId }),
     [activeRepo, settings]
   )
@@ -171,7 +173,11 @@ export function useSourceControlAi({
     worktreePath,
     onAdmitted: async (recoveryContext, signal) => {
       const editor = {
-        initialRecipe: getLaunchActionRecipe('resolveConflicts'),
+        initialSelection: captureSourceControlActionSelection({
+          settings,
+          repo: activeRepo,
+          actionId: 'resolveConflicts'
+        }),
         recoveryContext,
         baseCommandInput: resolveConflictsPrompt,
         worktreeId: activeWorktreeId,
@@ -181,7 +187,7 @@ export function useSourceControlAi({
         launchPlatform: activeSourceControlLaunchPlatform
       }
       await savedStart.start({
-        recipe: editor.initialRecipe,
+        selection: editor.initialSelection,
         basePrompt: resolveConflictsPrompt,
         ...editor,
         actionId: 'resolveConflicts',

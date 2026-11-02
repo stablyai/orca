@@ -35,6 +35,7 @@ const STATIC_TITLE_COPY = {
     translate('keybindings.title.workspaceSelectByIndex', 'Select Workspace 1–9'),
   'voice.dictation': () => translate('keybindings.title.voiceDictation', 'Dictation'),
   'view.tasks': () => translate('keybindings.title.viewTasks', 'Open Tasks'),
+  'view.plugins': () => translate('keybindings.title.viewPlugins', 'Open Plugins'),
   'sidebar.left.toggle': () => translate('keybindings.title.sidebarLeftToggle', 'Toggle Sidebar'),
   'sidebar.right.toggle': () =>
     translate('keybindings.title.sidebarRightToggle', 'Toggle Right Sidebar'),
@@ -67,6 +68,8 @@ const STATIC_TITLE_COPY = {
     translate('keybindings.title.tabMoveToNewWindow', 'Move terminal tab to new window'),
   'tab.newAgent': () => translate('keybindings.title.tabNewAgent', 'New agent tab (default agent)'),
   'tab.newBrowser': () => translate('keybindings.title.tabNewBrowser', 'New browser tab'),
+  'tab.newBrowserSplitRight': () =>
+    translate('keybindings.title.tabNewBrowserSplitRight', 'New browser tab in right split'),
   'tab.newSimulator': () =>
     translate('keybindings.title.tabNewSimulator', 'New mobile emulator tab'),
   'tab.newMarkdown': () => translate('keybindings.title.tabNewMarkdown', 'New markdown tab'),

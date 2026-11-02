@@ -17,20 +17,22 @@ export async function readCollection<T>(
   key: string,
   workspaceId: LinearWorkspaceSelection | null | undefined,
   load: (entry: LinearClientForWorkspace) => Promise<LinearCollectionResult<T>>,
-  force = false
+  force = false,
+  signal?: AbortSignal
 ): Promise<LinearCollectionResult<T>> {
   return coalesce(
     key,
     async () => {
-      const entries = getClients(workspaceId)
+      const entries = getClients(workspaceId, signal)
       if (entries.length === 0) {
         return { items: [] }
       }
 
       const results = await Promise.all(
         entries.map(async (entry) => {
-          await acquire()
+          await acquire(signal)
           try {
+            signal?.throwIfAborted()
             return await load(entry)
           } catch (error) {
             if (isAuthError(error)) {
@@ -56,7 +58,8 @@ export async function readCollection<T>(
         hasMore: results.some((result) => result.hasMore)
       }
     },
-    force
+    force,
+    signal
   )
 }
 

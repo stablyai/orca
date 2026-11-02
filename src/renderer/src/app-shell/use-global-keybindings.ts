@@ -18,7 +18,7 @@ import {
 import { usePluginCommands } from '@/store/plugin-panels'
 import { useAppStore } from '../store'
 import { keybindingMatchesAction, type KeybindingActionId } from '../../../shared/keybindings'
-import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../../shared/plugins/plugin-command-actions'
+import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../../shared/plugins/contributions/plugin-command-actions'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -217,6 +217,9 @@ export function useGlobalKeybindings(args: {
         matchShortcut('sidebar.childWorkspaces.toggle') &&
         handlers.get('sidebar.childWorkspaces.toggle')?.()
       ) {
+        return
+      }
+      if (matchShortcut('view.plugins') && handlers.get('view.plugins')?.()) {
         return
       }
       for (const actionId of PLUGIN_COMMAND_ALIAS_ACTION_IDS) {

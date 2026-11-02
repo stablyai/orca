@@ -70,6 +70,44 @@ export const VERIFY_CHECKS = [
     inputs: ['src/renderer/src/', LOCALES]
   },
   {
+    name: 'mobile localization',
+    args: ['config/scripts/verify-mobile-localization.mjs'],
+    inputs: [
+      'mobile/app/',
+      'mobile/src/',
+      'mobile/web-entry/',
+      'mobile/app.json',
+      'mobile/locales/',
+      'src/shared/ui-locale',
+      'config/scripts/verify-mobile-localization',
+      'config/scripts/verify-localization-',
+      'config/scripts/generate-runtime-required-english-catalog',
+      'config/scripts/localization-surfaces'
+    ]
+  },
+  {
+    name: 'mobile localization coverage',
+    args: [
+      'config/scripts/audit-localization-coverage.mjs',
+      '--check',
+      '--source-root',
+      'mobile/app',
+      '--source-root',
+      'mobile/src',
+      '--source-root',
+      'mobile/web-entry',
+      '--allowlist',
+      'config/mobile-localization-coverage-allowlist.json'
+    ],
+    inputs: [
+      'mobile/app/',
+      'mobile/src/',
+      'mobile/web-entry/',
+      'config/mobile-localization-coverage-allowlist.json',
+      'config/scripts/audit-localization-coverage'
+    ]
+  },
+  {
     // CI's own predicate, so local and CI select this check identically.
     name: 'localization extraction',
     args: ['config/scripts/verify-localization-extraction.mjs'],
@@ -105,6 +143,14 @@ export const VERIFY_CHECKS = [
     name: 'readme local links',
     args: ['config/scripts/check-readme-local-links.mjs'],
     inputs: ['README.md', 'docs/readme/']
+  },
+  {
+    // Compiles Tailwind (~1.5s), so it runs only for inputs that can change the emitted CSS.
+    name: 'compiled :has() restyle scope',
+    args: ['config/scripts/check-has-restyle-scope.mjs'],
+    inputs: ['electron.vite.config.ts'],
+    matches: (files) =>
+      files.some((file) => /^src\/(?:renderer\/.*\.(?:css|tsx?)|shared\/.*\.css)$/.test(file))
   },
   {
     name: 'import boundaries',

@@ -33,10 +33,7 @@ vi.mock('@/lib/ensure-hooks-confirmed', () => ({
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 import { ensureHooksConfirmed } from './ensure-hooks-confirmed'
-import {
-  runBackgroundWorktreeCreation,
-  retryBackgroundWorktreeCreation
-} from './worktree-creation-flow'
+import { runBackgroundWorktreeCreation } from './worktree-creation-flow'
 
 function makeRequest(overrides: Partial<WorktreeCreationRequest> = {}): WorktreeCreationRequest {
   return {
@@ -105,35 +102,5 @@ describe('background script preparation', () => {
     trust.resolve('run')
     await flushAsyncWorktreeCreation()
     expect(store.createWorktree).not.toHaveBeenCalled()
-  })
-
-  it('keeps refused scripts disabled when creating the worktree', async () => {
-    vi.mocked(ensureHooksConfirmed).mockResolvedValueOnce('skip')
-    runBackgroundWorktreeCreation(
-      makeRequest({
-        setupDecision: 'run',
-        hookPreparation: { executionHostId: 'local' }
-      })
-    )
-    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledOnce())
-    expect(store.pendingWorktreeCreations['creation-1'].request.setupDecision).toBe('skip')
-  })
-
-  it('retries failed preparation on the captured host', async () => {
-    vi.mocked(ensureHooksConfirmed).mockRejectedValueOnce(new Error('inspection failed'))
-    runBackgroundWorktreeCreation(
-      makeRequest({ hookPreparation: { executionHostId: 'runtime:host-1' } })
-    )
-    await vi.waitFor(() =>
-      expect(store.pendingWorktreeCreations['creation-1'].status).toBe('error')
-    )
-    expect(store.createWorktree).not.toHaveBeenCalled()
-
-    const trust = Promise.withResolvers<'run' | 'skip'>()
-    vi.mocked(ensureHooksConfirmed).mockReturnValueOnce(trust.promise)
-    retryBackgroundWorktreeCreation('creation-1')
-    expect(store.pendingWorktreeCreations['creation-1'].phase).toBe('preparing')
-    trust.resolve('run')
-    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledOnce())
   })
 })

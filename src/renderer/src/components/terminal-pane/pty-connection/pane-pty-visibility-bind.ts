@@ -72,7 +72,7 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
         return false
       }
     }
-    session.bindProcessExitState(ptyId, replacementPtyId)
+    session.bindProcessExitState(ptyId, options.replacePtyId)
     if (session.activePanePtyBinding && session.activePanePtyBinding !== ptyId) {
       session.reportPanePtyVisibility(session.activePanePtyBinding, false)
     }
@@ -159,6 +159,7 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
       return
     }
     session.remotePtyIncarnationId = incarnationId ?? null
+    session.noteBoundProcessIncarnation(incarnationId)
     // Handle rotation replaces store identity within the same pane/session generation, without fresh-spawn exit semantics.
     session.bindActivePanePty(ptyId, { replacePtyId: replacedPtyId })
   }

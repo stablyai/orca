@@ -1,13 +1,8 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { ipcMain } from 'electron'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 import { noteWslHostUserAction } from '../wsl/wsl-host-user-actions'
-import {
-  WSL_HOST_STATUS_CHANNEL,
-  type WslHostAddResult,
-  type WslHostCapability,
-  type WslHostStatus
-} from '../../shared/wsl-host-types'
-import type { Store } from '../persistence'
+import type { WslHostAddResult, WslHostCapability } from '../../shared/wsl-host-types'
+import type { Store } from '../persistence/loading-store/store'
 import { createWslHostConnector } from '../wsl/wsl-host-connector'
 import { releaseUnwantedWslHolders, wslHolderKeepPolicy } from '../wsl/wsl-orphan-holder-release'
 import {
@@ -19,12 +14,19 @@ import { WslHostService } from '../wsl/wsl-host-service'
 import { WslHostVisibleWorkByWindow } from './wsl-host-visible-work-windows'
 import type { WslHostAutomationWake } from '../wsl/wsl-host-automation-wake'
 import { createWslHostAutomationWake } from './wsl-host-automation-wake-wiring'
+import { wslHostsAcceptNewWork, wslHostsServing } from '../wsl/wsl-host-gate'
 import {
-  WSL_HOSTS_NEW_WORK_PAUSED_MESSAGE,
-  wslHostsGateOpen,
-  wslHostsServing
-} from '../wsl/wsl-host-gate'
-import { getWslHostService, setWslHostService } from '../wsl/wsl-host-service-instance'
+  publishWslHostStatus,
+  pushWslHostCapabilityOnNewWorkChange
+} from './wsl-host-window-broadcast'
+import { wslHostAddRefusal } from '../wsl/wsl-host-add-admission'
+import {
+  getWslHostService,
+  setWslHostPhoneGate,
+  setWslHostService
+} from '../wsl/wsl-host-service-instance'
+import { WslHostPhoneGate } from '../wsl/wsl-host-phone-reach'
+import { readWslHostRecordsQuietly } from '../wsl/wsl-host-connection-record'
 import { retireRemovedRuntimeEnvironment } from './runtime-environments/runtime-environment-removal-cleanup'
 import { getRuntimeEnvironmentStatus } from './runtime-environments/runtime-environment-status-probe'
 import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
@@ -40,6 +42,7 @@ import {
 } from '../wsl/wsl-orcad-host-account-push'
 import { wslOrcadHostSupports } from '../wsl/wsl-orcad-host-environments'
 import { wslHostConnectOptions } from '../wsl/wsl-host-connect-request'
+import { wireWslNodeRuntimePrefetch } from '../wsl/wsl-node-runtime-prefetch'
 
 export const WSL_HOST_HANDLER_CHANNELS = [
   'wslHosts:listDistros',
@@ -51,18 +54,6 @@ export const WSL_HOST_HANDLER_CHANNELS = [
   'wslHosts:focusHost',
   'wslHosts:getCapability'
 ] as const
-
-function publish(status: WslHostStatus): void {
-  for (const window of BrowserWindow.getAllWindows()) {
-    if (!window.isDestroyed()) {
-      try {
-        window.webContents.send(WSL_HOST_STATUS_CHANNEL, status)
-      } catch {
-        /* A renderer can close during publication. */
-      }
-    }
-  }
-}
 
 function wslHostRuntimeAccess(getUserDataPath: () => string): WslHostRuntimeAccess {
   return {
@@ -131,11 +122,14 @@ function createService(args: WslHostHandlerArgs): WslHostService | null {
     console.warn('[wsl-hosts] Could not check WSL host records against their pairings:', error)
   }
   let automationWake: WslHostAutomationWake | null = null
+  const runGate = {
+    isEnabled: () => args.store.getSettings().experimentalWslHosts === true,
+    hasServerFiles: fake ? () => fake.serverFiles !== 'missing' : hasOrcadTemplate
+  }
   const created = new WslHostService({
     userDataPath: args.getUserDataPath,
-    isEnabled: () => args.store.getSettings().experimentalWslHosts === true,
-    hasServerFiles: fake ? () => fake.serverFiles !== 'missing' : hasOrcadTemplate,
-    publish,
+    ...runGate,
+    publish: publishWslHostStatus,
     pairingChanged: (environmentId) => void args.invalidateTransport(environmentId),
     ready: (environmentId) => {
       void getRuntimeEnvironmentStatus(args.getUserDataPath(), environmentId, undefined, {
@@ -160,16 +154,23 @@ function createService(args: WslHostHandlerArgs): WslHostService | null {
   const onChange = created.handleConnectionChange.bind(created)
   const isKnownDistro = (distro: string): boolean => created.isKnownDistro(distro)
   const runtime = wslHostRuntimeAccess(args.getUserDataPath)
-  created.attach(
-    fake
-      ? createFakeWslHostConnector(fake, onChange, { isKnownDistro, runtime })
-      : createWslHostConnector({
-          userDataPath: args.getUserDataPath(),
-          onChange,
-          hasUserVisibleWork: (distro) => created.hasUserVisibleWork(distro),
-          isKnownDistro,
-          runtime
-        })
+  const connector = fake
+    ? createFakeWslHostConnector(fake, onChange, { isKnownDistro, runtime })
+    : createWslHostConnector({
+        userDataPath: args.getUserDataPath(),
+        onChange,
+        hasUserVisibleWork: (distro) => created.hasUserVisibleWork(distro),
+        isKnownDistro,
+        runtime
+      })
+  created.attach(connector)
+  setWslHostPhoneGate(
+    new WslHostPhoneGate({
+      statuses: () => created.getStatuses(),
+      records: () => readWslHostRecordsQuietly(args.getUserDataPath()),
+      connector,
+      ...runGate
+    })
   )
   automationWake = createWslHostAutomationWake(args.getUserDataPath, created)
   return created
@@ -181,6 +182,9 @@ function startService(args: WslHostHandlerArgs): WslHostService | null {
     return null
   }
   setWslHostService(created)
+  if (process.platform === 'win32' && !readFakeWslHostsConfig() && created.hasServerFiles()) {
+    wireWslNodeRuntimePrefetch({ store: args.store, userDataPath: args.getUserDataPath() })
+  }
   args.store.onSettingsChanged((updates, settings) => {
     if (changesWslHostAccounts(updates)) {
       for (const status of created.getStatuses()) {
@@ -238,9 +242,9 @@ export function registerWslHostHandlers(args: WslHostHandlerArgs): void {
       _event,
       request: { distro: string; startIfStopped?: boolean }
     ): Promise<WslHostAddResult> => {
-      // Serve-only keeps saved hosts working but admits none.
-      if (!wslHostsGateOpen()) {
-        return { ok: false, kind: 'disabled', message: WSL_HOSTS_NEW_WORK_PAUSED_MESSAGE }
+      // Serve-only, or a block learned this run, keeps saved hosts working but admits none.
+      if (!wslHostsAcceptNewWork()) {
+        return wslHostAddRefusal('disabled', 'newWorkPaused')
       }
       const result = await wsl.add(request)
       if (result.ok) {
@@ -264,10 +268,12 @@ export function registerWslHostHandlers(args: WslHostHandlerArgs): void {
       request: { environmentId: string; intent?: unknown; withdrawPendingRemoval?: unknown }
     ) => wsl.connect(request.environmentId, wslHostConnectOptions(request))
   )
-  ipcMain.handle('wslHosts:getCapability', (): WslHostCapability => ({
+  const capability = (): WslHostCapability => ({
     serverFiles: wsl.hasServerFiles(),
-    acceptsNewWork: wslHostsGateOpen()
-  }))
+    acceptsNewWork: wslHostsAcceptNewWork()
+  })
+  ipcMain.handle('wslHosts:getCapability', capability)
+  pushWslHostCapabilityOnNewWorkChange(capability)
   ipcMain.handle('wslHosts:getStatuses', () => wsl.getStatuses())
   const visibleWork = new WslHostVisibleWorkByWindow()
   ipcMain.handle('wslHosts:setVisibleWork', (event, request: { environmentIds: string[] }) => {
@@ -284,7 +290,7 @@ export function registerWslHostHandlers(args: WslHostHandlerArgs): void {
     }
     wsl.setVisibleWork(visibleWork.report(windowId, ids))
   })
-  // The user switched to a workspace on this host: the focus entry that may boot its distro.
+  // The user switched to a workspace on this host: connects a running distro, never boots it (E9).
   ipcMain.handle('wslHosts:focusHost', (_event, request: { environmentId: string | null }) => {
     // null: the user is on a workspace that isn't on a WSL host.
     wsl.focusHost(typeof request?.environmentId === 'string' ? request.environmentId : null)

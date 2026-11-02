@@ -1,3 +1,4 @@
+// @protected-copy: agent Allow/Deny approval prompt.
 import { translate } from '@/i18n/i18n'
 import {
   NATIVE_CHAT_APPROVAL_COPY as COPY,

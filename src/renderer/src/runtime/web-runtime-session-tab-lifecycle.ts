@@ -45,6 +45,7 @@ export async function activateWebRuntimeSessionTab(args: {
   leafId?: string | null
   /** The local tab visible at the gesture; later navigation away cancels the deferred focus. */
   expectedCurrentLocalTabId?: string | null
+  expectedPairingRevision?: number
 }): Promise<boolean> {
   // COMPAT(legacy-relay-bridge, revisit 2027-01-15): an older relay runs a pane in this tab, and
   // activating that pane on the managed server would start a second shell there that no tab shows.

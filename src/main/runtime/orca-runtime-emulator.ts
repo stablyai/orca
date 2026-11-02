@@ -1,6 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import { EmulatorError } from '../emulator/emulator-errors'
+import { emulatorFailureText } from '../../shared/emulator-failure-copy'
 import {
   inspectEmulatorAvailability,
   type EmulatorAvailability
@@ -8,7 +9,8 @@ import {
 import { resolveDefaultAttachDevice } from '../emulator/emulator-default-attach-device'
 import { setConfiguredAndroidSdkPath } from '../emulator/android/android-sdk-host-discovery'
 import type { EmulatorGesturePoint } from '../emulator/emulator-gesture-sender'
-import type { EmulatorSessionInfo } from '../emulator/emulator-types'
+import { assertWorktreeInputNotShadowedByDeviceHub } from '../emulator/emulator-pane-input-check'
+import type { EmulatorActiveSession, EmulatorSessionInfo } from '../emulator/emulator-types'
 import type { SimulatorDevice } from '../emulator/simctl-simulator-devices'
 import type { EmulatorDevice } from '../emulator/backends/emulator-backend'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -34,7 +36,7 @@ export class RuntimeEmulatorCommands {
   private requireEmulatorBridge(): EmulatorBridge {
     const bridge = this.host.getEmulatorBridge()
     if (!bridge) {
-      throw new EmulatorError('emulator_no_active', 'No emulator session is active')
+      throw new EmulatorError('emulator_no_active', emulatorFailureText('noSession'))
     }
     setConfiguredAndroidSdkPath(this.host.getSettings().androidSdkPath ?? null)
     return bridge
@@ -103,6 +105,13 @@ export class RuntimeEmulatorCommands {
     return RuntimeEmulatorCommands.OK
   }
 
+  // Pane touches skip main, so the pane asks whether the active simulator still accepts input.
+  async emulatorCheckInput(params: { worktree?: string }): Promise<{ ok: true }> {
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
+    await assertWorktreeInputNotShadowedByDeviceHub(this.requireEmulatorBridge(), worktreeId)
+    return RuntimeEmulatorCommands.OK
+  }
+
   async emulatorExec(params: {
     command: string
     device?: string
@@ -125,7 +134,7 @@ export class RuntimeEmulatorCommands {
   }): Promise<{ attached: boolean; info?: EmulatorSessionInfo }> {
     const settings = this.host.getSettings()
     if (settings.mobileEmulatorEnabled === false) {
-      throw new EmulatorError('emulator_disabled', 'Mobile Emulator is disabled in Settings.')
+      throw new EmulatorError('emulator_disabled', emulatorFailureText('disabled'))
     }
     const bridge = this.requireEmulatorBridge()
     let device = params.device ?? settings.mobileEmulatorDefaultDeviceUdid ?? undefined
@@ -133,10 +142,7 @@ export class RuntimeEmulatorCommands {
       device = await resolveDefaultAttachDevice(bridge)
     }
     if (!device) {
-      throw new EmulatorError(
-        'emulator_device_not_found',
-        'No emulator device specified. Choose a default device in Settings > Mobile Emulator or pass a device.'
-      )
+      throw new EmulatorError('emulator_device_not_found', emulatorFailureText('noDeviceSpecified'))
     }
     const worktreeId = await this.resolveWorktreeId(params.worktree)
     if (worktreeId) {
@@ -158,19 +164,13 @@ export class RuntimeEmulatorCommands {
       try {
         const currentWorktreeId = await this.resolveWorktreeId(params.worktree)
         if (currentWorktreeId !== worktreeId) {
-          throw new EmulatorError(
-            'emulator_no_active',
-            'The workspace changed while the emulator was starting. Reattach the emulator.'
-          )
+          throw new EmulatorError('emulator_no_active', emulatorFailureText('workspaceChanged'))
         }
       } catch (error) {
         // Workspaces can disappear during slow Android boots; release their lease.
         await lease.release({ cleanupIfUnused: true }).catch(() => {})
         if (error instanceof Error && error.message === 'selector_not_found') {
-          throw new EmulatorError(
-            'emulator_no_active',
-            'The workspace changed while the emulator was starting. Reattach the emulator.'
-          )
+          throw new EmulatorError('emulator_no_active', emulatorFailureText('workspaceChanged'))
         }
         throw error
       }
@@ -186,9 +186,12 @@ export class RuntimeEmulatorCommands {
     return { attached: true, info }
   }
 
-  async emulatorList(_params: { worktree?: string } = {}): Promise<unknown> {
+  async emulatorList(
+    params: { worktree?: string } = {}
+  ): Promise<{ sessions: EmulatorActiveSession[] }> {
     const bridge = this.requireEmulatorBridge()
-    return bridge.listRunningHelpers()
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
+    return { sessions: await bridge.listActiveSessions(worktreeId) }
   }
 
   async emulatorUnregisterActive(params: { worktree?: string }): Promise<{ ok: true }> {

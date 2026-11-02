@@ -1,3 +1,4 @@
+import { textGenerationCopyText } from '@/lib/text-generation-error-copy'
 import { useCallback, useEffect } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
 import {
@@ -101,11 +102,8 @@ export function useSourceControlCommitMessageGeneration({
       ) {
         const command = resolvedCommitMessageAi.value.params.customAgentCommand?.trim() ?? ''
         if (!command) {
-          setGenerateErrors((prev) => ({
-            ...prev,
-            [activeWorktreeId]:
-              'Custom command is empty. Add one in Settings -> Git -> Source Control AI.'
-          }))
+          const message = textGenerationCopyText('sourceControlCustomCommandEmpty')
+          setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: message }))
           return
         }
       }

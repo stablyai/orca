@@ -256,6 +256,9 @@ export async function watchFileExplorerInWatcherProcess(
   onTerminalError: (error: Error) => void = () => undefined,
   signal?: AbortSignal
 ): Promise<() => Promise<void>> {
+  if (signal?.aborted) {
+    throw createRuntimeRootAbortError()
+  }
   const existingRoot = runtimeRootWatches.get(rootPath)
   if (existingRoot?.closed) {
     if (!existingRoot.closePromise) {
@@ -263,9 +266,6 @@ export async function watchFileExplorerInWatcherProcess(
     }
     // Join the prior generation's physical release before reusing its native root.
     await existingRoot.closePromise
-    if (signal?.aborted) {
-      throw createRuntimeRootAbortError()
-    }
     return watchFileExplorerInWatcherProcess(rootPath, callback, onTerminalError, signal)
   }
   const root = existingRoot ?? createRuntimeRootWatch(rootPath)

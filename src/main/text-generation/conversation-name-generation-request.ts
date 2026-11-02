@@ -1,11 +1,9 @@
 import {
-  buildConversationNamePrompt,
-  clampConversationNameFirstPrompt,
+  renderConversationNamePrompt,
   sanitizeGeneratedConversationName,
   type ConversationNameContext
 } from '../../shared/conversation-name-generation'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
-import { renderSourceControlActionCommandTemplate } from '../../shared/source-control-ai-actions'
 import { captureAgentGenerationFailureOutput } from './agent-failure-output'
 import { runGenerationRequest } from './agent-generation-request'
 import type {
@@ -22,20 +20,11 @@ export async function generateConversationName(input: {
   shouldExecute?: () => boolean
 }): Promise<GenerateConversationNameResult> {
   const { context, params } = input
-  const firstPrompt = clampConversationNameFirstPrompt(context.firstPrompt)
-  const basePrompt = buildConversationNamePrompt({ firstPrompt })
-  const prompt =
-    params.commandInputTemplate !== undefined
-      ? renderSourceControlActionCommandTemplate(params.commandInputTemplate, {
-          basePrompt,
-          firstPrompt
-        })
-      : buildConversationNamePrompt({ firstPrompt }, params.customPrompt ?? '')
+  const prompt = renderConversationNamePrompt(context, params)
 
   const result = await runGenerationRequest({
     ...input,
     prompt,
-    emptyResultName: 'chat name',
     operation: 'conversation-name'
   })
   if (!result.success) {

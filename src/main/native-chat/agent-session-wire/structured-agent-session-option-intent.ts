@@ -1,9 +1,14 @@
-import { refuse, type AgentSessionOptionResult } from '../../../shared/agent-session-wire'
+import {
+  IN_PROCESS_OPTIONS_READER,
+  type StructuredAgentSessionOptionsReader
+} from './structured-agent-session-resting-options'
+import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionOptionResult } from '../../../shared/agent-session/agent-session-wire'
 import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
   agentChatPermissionModes
 } from '../../../shared/agent-chat-permission-mode'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 import {
@@ -11,7 +16,7 @@ import {
   structuredAgentSessionPickReply
 } from './structured-agent-session-pick-reply'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import { pickAgentSessionOption } from '../../runtime/agent-session-record-options'
+import { pickAgentSessionOption } from '../../runtime/agent-session/records/agent-session-record-options'
 
 function acceptsOptionPick(
   agents: Pick<StructuredAgentRegistry, 'definition'>,
@@ -56,7 +61,8 @@ export async function recordStructuredAgentSessionOptionIntent(
     adapter?: Pick<StructuredAgentSessionAdapter, 'projectOptions'>
   } & Parameters<typeof savedAgentSessionCatalogModels>[0],
   ctx: Pick<AgentSessionTurnContext, 'sessionId' | 'fence' | 'publish' | 'now'>,
-  input: { key: string; value: string }
+  input: { key: string; value: string },
+  reader: StructuredAgentSessionOptionsReader = IN_PROCESS_OPTIONS_READER
 ): Promise<TurnOutcome<AgentSessionOptionResult>> {
   const { sessionId, fence } = ctx
   const record = deps.store.getRecord(sessionId)
@@ -69,6 +75,9 @@ export async function recordStructuredAgentSessionOptionIntent(
         `${record?.provider ?? 'This session'} has no session option named ${input.key}`
       )
     }
+  }
+  if (!reader.readsWithoutModel && input.key === 'model' && input.value === '') {
+    return { ok: true, value: { key: input.key, value: input.value, options: {} } }
   }
   let options: Readonly<Record<string, string>>
   if (input.key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {

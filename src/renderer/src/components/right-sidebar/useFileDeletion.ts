@@ -263,14 +263,14 @@ export function useFileDeletion({
               // Count selected children even when ancestor roots subsume their deletes.
               title: hasLocalDelete
                 ? translate(
-                    'auto.components.right.sidebar.useFileDeletion.deleteItems_other',
+                    'auto.components.right.sidebar.useFileDeletion.deleteItems',
                     'Delete {{count}} items?',
-                    { count: nodes.length }
+                    { count: nodes.length, defaultValue_one: 'Delete {{count}} item?' }
                   )
                 : translate(
-                    'auto.components.right.sidebar.useFileDeletion.permanentlyDeleteItems_other',
+                    'auto.components.right.sidebar.useFileDeletion.permanentlyDeleteItems',
                     'Permanently delete {{count}} items?',
-                    { count: nodes.length }
+                    { count: nodes.length, defaultValue_one: 'Permanently delete {{count}} item?' }
                   ),
               description: !hasLocalDelete
                 ? translate(

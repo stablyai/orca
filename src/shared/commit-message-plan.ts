@@ -1,3 +1,7 @@
+import {
+  textGenerationFailure,
+  type TextGenerationFailureFields
+} from './text-generation-failure-copy'
 import { findOptionOccurrence } from './command-option-occurrence'
 import { planAgentBinary } from './agent-command-plan'
 export { planAgentBinary } from './agent-command-plan'
@@ -36,6 +40,8 @@ export type CommitMessagePlan = {
   args: string[]
   /** Non-null when the prompt should be piped via stdin. */
   stdinPayload: string | null
+  /** Execution-host-owned prompt attachment, materialized only when starting the process. */
+  promptFile?: { content: string; argIndex: number }
   /** Human-readable label used in error prefixes (e.g. "Claude failed: ..."). */
   label: string
   /** Leading command assignments, applied on the execution host. */
@@ -45,7 +51,7 @@ export type CommitMessagePlan = {
 
 export type CommitMessagePlanResult =
   | { ok: true; plan: CommitMessagePlan }
-  | { ok: false; error: string }
+  | ({ ok: false } & TextGenerationFailureFields)
 
 const DEFAULT_SINGLETON_OPTIONS: readonly (readonly string[])[] = [['--model']]
 const ANTIGRAVITY_FORMAT_OPTIONS = [
@@ -137,7 +143,7 @@ function applySingletonOptionOverrides(args: {
 function insertAdditionalAgentArgs(args: {
   baseArgs: string[]
   agentArgs: string[]
-  promptDelivery: 'argv' | 'stdin'
+  promptDelivery: 'argv' | 'stdin' | 'file'
   prompt: string
 }): string[] {
   if (!args.agentArgs.length) {
@@ -167,10 +173,7 @@ export function planCommitMessageGeneration(
   if (isCustomAgentId(input.agentId)) {
     const command = input.customAgentCommand?.trim() ?? ''
     if (!command) {
-      return {
-        ok: false,
-        error: 'Custom command is empty. Add one in Settings → Git → AI Commit Messages.'
-      }
+      return { ok: false, ...textGenerationFailure('planCustomCommandEmpty') }
     }
     const planned = planCustomCommand(command, prompt, input.backslash)
     if (!planned.ok) {
@@ -200,28 +203,35 @@ export function planCommitMessageGeneration(
 
   const spec = getCommitMessageAgentSpec(input.agentId)
   if (!spec) {
-    return { ok: false, error: `Agent "${input.agentId}" does not support AI commit messages.` }
+    return { ok: false, ...textGenerationFailure('planAgentUnsupported', { agent: input.agentId }) }
   }
   const model = getCommitMessageModel(input.agentId, input.model)
   if (!model) {
-    return { ok: false, error: `Model "${input.model}" is not available for ${spec.label}.` }
+    return {
+      ok: false,
+      ...textGenerationFailure('planModelUnavailable', { model: input.model, label: spec.label })
+    }
   }
   if (input.thinkingLevel) {
     if (!model.thinkingLevels && spec.modelSource !== 'dynamic') {
       return {
         ok: false,
-        error: `Model "${model.label}" does not support a thinking effort level.`
+        ...textGenerationFailure('planModelWithoutThinking', { model: model.label })
       }
     }
     if (model.thinkingLevels && !model.thinkingLevels.some((l) => l.id === input.thinkingLevel)) {
       return {
         ok: false,
-        error: `Thinking level "${input.thinkingLevel}" is not valid for ${model.label}.`
+        ...textGenerationFailure('planThinkingLevelInvalid', {
+          level: input.thinkingLevel,
+          model: model.label
+        })
       }
     }
   }
 
-  const argvPrompt = spec.promptDelivery === 'argv' ? prompt : ''
+  const argvPrompt =
+    spec.promptDelivery === 'file' ? '@{prompt-file}' : spec.promptDelivery === 'argv' ? prompt : ''
   const agentArgs = planAdditionalAgentArgs(input.agentArgs, input.backslash)
   if (!agentArgs.ok) {
     return agentArgs
@@ -287,6 +297,14 @@ export function planCommitMessageGeneration(
           : spec.promptDelivery === 'stdin'
             ? prompt
             : null,
+      ...(spec.promptDelivery === 'file'
+        ? {
+            promptFile: {
+              content: prompt,
+              argIndex: merged.prefixArgs.length + merged.generatedArgs.length - 1
+            }
+          }
+        : {}),
       label: spec.label,
       ...(formatOption?.value === 'json' ? { outputFormat: 'opencode-json' as const } : {}),
       ...(kimiFormatOption?.value === 'stream-json'

@@ -48,7 +48,6 @@ export type MonacoEditorMountParams = {
     lastSyncedContentRef: MutableRefObject<string>
     contentSyncModeRef: MutableRefObject<MonacoContentSyncMode>
     isApplyingProgrammaticContentRef: MutableRefObject<boolean>
-    isApplyingLargePasteRef: MutableRefObject<boolean>
   }
   decorations: {
     markdownDocLinkDecorationsRef: MutableRefObject<MarkdownDocLinkDecorationController | null>

@@ -29,17 +29,20 @@ export async function writeIssueRelation(params: {
   operation: 'add' | 'remove'
   workspaceId: string
   signal?: AbortSignal
+  beforeInvoke?: () => void
 }): Promise<LinearIssueRelationWriteResult> {
   const entry = getClients(params.workspaceId)[0]
   if (!entry) {
     throw new LinearWriteFailure('failed', 'Not connected to Linear')
   }
-  await acquire()
+  await acquire(params.signal)
   try {
+    params.signal?.throwIfAborted()
     const client = params.signal
       ? createLinearClient({ apiKey: entry.apiKey, signal: params.signal })
       : entry.client
     const existing = await findExistingRelation(client, params)
+    params.signal?.throwIfAborted()
     if (params.operation === 'add' && existing) {
       return result(params, existing, true)
     }
@@ -47,9 +50,13 @@ export async function writeIssueRelation(params: {
       return result(params, absentRelation(params), true)
     }
     if (params.operation === 'remove' && existing) {
+      params.beforeInvoke?.()
+      params.signal?.throwIfAborted()
       await deleteLinearIssueRelation(client, existing.id)
       return result(params, existing, false)
     }
+    params.beforeInvoke?.()
+    params.signal?.throwIfAborted()
     const created = await createLinearIssueRelation(client, relationCreateInput(params))
     return result(params, normalizeRelation(created, params.issue.id), false)
   } catch (error) {
@@ -68,9 +75,11 @@ async function findExistingRelation(
     issue: { id: string; identifier: string }
     relatedIssue: { id: string }
     relationship: LinearIssueRelationship
+    signal?: AbortSignal
   }
 ): Promise<LinearIssueRelationWriteResult['relation'] | null> {
   for (const direction of relationDirections(params.relationship)) {
+    params.signal?.throwIfAborted()
     const scan = await findRelationInDirection(client, params, direction)
     if (scan.relation) {
       return scan.relation
@@ -97,6 +106,7 @@ async function findRelationInDirection(
     issue: { id: string }
     relatedIssue: { id: string }
     relationship: LinearIssueRelationship
+    signal?: AbortSignal
   },
   direction: RelationDirection
 ): Promise<{ relation: LinearIssueRelationWriteResult['relation'] | null; hasMore: boolean }> {
@@ -104,6 +114,7 @@ async function findRelationInDirection(
   let inspected = 0
 
   while (inspected < RELATION_WRITE_READ_CAP) {
+    params.signal?.throwIfAborted()
     const first = Math.min(LINEAR_ISSUE_API_PAGE_SIZE_MAX, RELATION_WRITE_READ_CAP - inspected)
     const raw = await client.client.rawRequest<RawRelationsResponse, Record<string, unknown>>(
       direction === 'outbound' ? RELATIONS_QUERY : INVERSE_RELATIONS_QUERY,

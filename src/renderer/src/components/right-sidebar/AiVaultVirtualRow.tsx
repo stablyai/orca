@@ -163,7 +163,7 @@ export function AiVaultVirtualRow({
         }
   const canOpenLocalSessionPaths =
     row.type === 'session' && canUseLocalAiVaultSessionPathActions(row.session.executionHostId)
-  // Synthetic SQLite/OpenCode identities have no single View Log file; Reveal/CWD retain their local-path gate.
+  // File viewing needs a conversation resource; Reveal/CWD retain their own path semantics.
   const canOpenLogInOrca = row.type === 'session' && canOpenAiVaultSessionLogInOrca(row.session)
   const searchResumeAllowed = searchHit ? canResumeAiVaultSearchHit(searchHit) : true
   const searchPathAllowed = searchHit ? hasAiVaultSearchHitPath(searchHit) : true

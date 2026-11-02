@@ -10,60 +10,36 @@ export type RestartContinuationOutcome = {
 }
 
 function continuedCountText(count: number): string {
-  return count === 1
-    ? translate(
-        'auto.components.NativeChatResumeOnRestartModal.continuedCount_one',
-        'Resumed {{count}} chat',
-        { count }
-      )
-    : translate(
-        'auto.components.NativeChatResumeOnRestartModal.continuedCount_other',
-        'Resumed {{count}} chats',
-        { count }
-      )
+  return translate(
+    'auto.components.NativeChatResumeOnRestartModal.continuedCount',
+    'Resumed {{count}} chats',
+    { count, defaultValue_one: 'Resumed {{count}} chat' }
+  )
 }
 
 function refusedCountText(count: number): string {
-  return count === 1
-    ? translate(
-        'auto.components.NativeChatResumeOnRestartModal.notContinuedCount_one',
-        '{{count}} chat couldn’t be resumed',
-        { count }
-      )
-    : translate(
-        'auto.components.NativeChatResumeOnRestartModal.notContinuedCount_other',
-        '{{count}} chats couldn’t be resumed',
-        { count }
-      )
+  return translate(
+    'auto.components.NativeChatResumeOnRestartModal.notContinuedCount',
+    '{{count}} chats couldn’t be resumed',
+    { count, defaultValue_one: '{{count}} chat couldn’t be resumed' }
+  )
 }
 
 function unconfirmedCountText(count: number): string {
-  return count === 1
-    ? translate(
-        'auto.components.NativeChatResumeOnRestartModal.notConfirmedCount_one',
-        'Couldn’t confirm {{count}} chat was resumed',
-        { count }
-      )
-    : translate(
-        'auto.components.NativeChatResumeOnRestartModal.notConfirmedCount_other',
-        'Couldn’t confirm {{count}} chats were resumed',
-        { count }
-      )
+  return translate(
+    'auto.components.NativeChatResumeOnRestartModal.notConfirmedCount',
+    'Couldn’t confirm {{count}} chats were resumed',
+    { count, defaultValue_one: 'Couldn’t confirm {{count}} chat was resumed' }
+  )
 }
 
 /** Beneath a refused count, so it cannot read as the same chat restated. */
 function otherUnconfirmedCountText(count: number): string {
-  return count === 1
-    ? translate(
-        'auto.components.NativeChatResumeOnRestartModal.notConfirmedOtherCount_one',
-        'Couldn’t confirm {{count}} other chat was resumed',
-        { count }
-      )
-    : translate(
-        'auto.components.NativeChatResumeOnRestartModal.notConfirmedOtherCount_other',
-        'Couldn’t confirm {{count}} other chats were resumed',
-        { count }
-      )
+  return translate(
+    'auto.components.NativeChatResumeOnRestartModal.notConfirmedOtherCount',
+    'Couldn’t confirm {{count}} other chats were resumed',
+    { count, defaultValue_one: 'Couldn’t confirm {{count}} other chat was resumed' }
+  )
 }
 
 /** A string description renders inline, so a second line needs its own block. */

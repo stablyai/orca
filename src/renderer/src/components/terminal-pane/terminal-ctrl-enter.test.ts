@@ -1,9 +1,34 @@
 import { describe, expect, it } from 'vitest'
+import { normalizeTerminalTitle } from '../../../../shared/agent-title-status'
 import { hasCtrlEnterCsiUAuthorityForPane } from './terminal-ctrl-enter'
 
 const PANE_KEY = 'tab:pane'
 
 describe('hasCtrlEnterCsiUAuthorityForPane', () => {
+  it('does not route input using an agent mentioned only in task text', () => {
+    const state = { paneForegroundAgentByPaneKey: {} }
+    expect(hasCtrlEnterCsiUAuthorityForPane(state, PANE_KEY, '⠋ fix the grok launcher')).toBe(false)
+    expect(hasCtrlEnterCsiUAuthorityForPane(state, PANE_KEY, '⠋ Grok')).toBe(true)
+    expect(
+      hasCtrlEnterCsiUAuthorityForPane(state, PANE_KEY, 'Fix Codex terminal behavior… - grok')
+    ).toBe(true)
+  })
+
+  it.each([
+    ['. | Droid', false],
+    ['tmux | Droid', true],
+    ['⠋ - Codex: fix parser - grok', true],
+    ['⠋ Codex: fix parser - grok', false],
+    ['tmux | ⠋ fix | a | b | c | d | e | f | g | Grok', false],
+    ['✦ session | Thinking - grok', false]
+  ])('uses raw and stored structural input authority for %j', (raw, expected) => {
+    for (const title of [raw, normalizeTerminalTitle(raw)]) {
+      expect(
+        hasCtrlEnterCsiUAuthorityForPane({ paneForegroundAgentByPaneKey: {} }, PANE_KEY, title)
+      ).toBe(expected)
+    }
+  })
+
   it.each([
     { agent: 'dsb' as const, routingTrusted: true, shellForeground: false },
     { agent: 'dsb' as const, routingConfirmationPending: true, shellForeground: false }

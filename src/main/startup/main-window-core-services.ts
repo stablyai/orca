@@ -117,7 +117,17 @@ export function attachMainWindowCoreServices(
     },
     state.pluginService ?? undefined,
     state.pluginMarketplaceService && state.pluginMarketplaceInstaller
-      ? { marketplace: state.pluginMarketplaceService, installer: state.pluginMarketplaceInstaller }
+      ? {
+          marketplace: state.pluginMarketplaceService,
+          installer: state.pluginMarketplaceInstaller,
+          ...(state.pluginAutoUpdater ? { autoUpdater: state.pluginAutoUpdater } : {}),
+          ...(state.pluginInstallStatsService
+            ? { installStats: state.pluginInstallStatsService }
+            : {}),
+          ...(state.pluginUpdateReviewNotices
+            ? { reviewNotices: state.pluginUpdateReviewNotices }
+            : {})
+        }
       : undefined
   )
   automations.setWebContents(window.webContents)

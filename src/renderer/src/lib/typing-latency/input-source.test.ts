@@ -10,11 +10,17 @@ describe('createInputSourceTally', () => {
     tally.addObservation({
       attribution: 'single-input',
       source: 'direct',
-      text: 'a',
       inputToDispatchMs: 1,
       dispatchToParseMs: 3,
       parseToPaintMs: 4,
       inputToPaintMs: 8,
+      eventToHandlerMs: null,
+      eventToPaintMs: null,
+      dispatchToArrivalMs: null,
+      arrivalToWriteMs: null,
+      writeToParseMs: null,
+      startedAt: 0,
+      paintedAt: 8,
       outputBytes: 20,
       outputWrites: 1
     })

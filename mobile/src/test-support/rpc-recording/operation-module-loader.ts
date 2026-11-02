@@ -63,6 +63,13 @@ export function operationModuleLoader(
         }
       )
     }
+    if (name.endsWith('.json')) {
+      // Catalogs and other data modules carry no behavior; hand over their parsed value.
+      return {
+        __esModule: true,
+        default: JSON.parse(readFileSync(resolve(dirname(base), name), 'utf8'))
+      }
+    }
     const file = pathFor(resolve(dirname(base), name))
     if (file === sharedModulePath) {
       return deliveryAmbiguity

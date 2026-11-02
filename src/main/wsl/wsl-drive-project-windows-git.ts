@@ -119,7 +119,7 @@ function isWindowsDrivePath(path: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(path)
 }
 
-async function windowsGitAvailable(
+export async function windowsGitAvailable(
   run: WindowsGitRunner,
   cwd: string | undefined
 ): Promise<boolean> {
@@ -138,7 +138,7 @@ async function windowsGitAvailable(
  * Linked worktrees whose recorded link is a Linux path, i.e. WSL Git wrote it. Read from the link
  * files themselves: Windows Git may print a Linux path as a drive path under the current drive.
  */
-async function wslAuthoredWorktreePaths(
+export async function wslAuthoredWorktreePaths(
   deps: Pick<WslDriveProjectDeps, 'runWindowsGit' | 'readWorktreeLinks'>,
   repoPath: string
 ): Promise<string[]> {

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
+// @vitest-environment happy-dom
+import { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft,
@@ -10,16 +11,13 @@ import {
 import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
 import { createRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
+import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
 
 vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
-vi.mock('@/lib/worker-terminal-takeover-report', () => ({
-  reportStructuredSessionUserInput: vi.fn()
-}))
 
 const ATTACHMENT = { id: 'a1', path: '/tmp/shot.png' } as NativeChatComposerImageAttachment
 
@@ -101,8 +99,37 @@ it.each([10, 100])(
     expect(structuredTransport.onError).toHaveBeenCalledTimes(2)
     expect(structuredTransport.onError).toHaveBeenNthCalledWith(1, null, undefined)
     expect(structuredTransport.onError).toHaveBeenNthCalledWith(2, null, undefined)
-    expect(kinds).toBeGreaterThanOrEqual(count)
-    expect(names).toBeGreaterThanOrEqual(count)
+    expect({ kinds, names }).toEqual({ kinds: 0, names: 0 })
+  }
+)
+
+it.each([
+  undefined,
+  [],
+  [
+    { name: 'fast', kind: 'command' as const },
+    { name: 'permissions', kind: 'command' as const }
+  ]
+])(
+  'sends provider commands with attachments under inventory %j and retains refused drafts',
+  async (inventory) => {
+    for (const text of ['/fast', '/permissions']) {
+      for (const accepted of [true, false]) {
+        clearNativeChatComposerDraftsForTests()
+        const { send, structuredTransport, setDraft } = harness('codex')
+        structuredTransport.sessionCommands = inventory
+        vi.mocked(structuredTransport.send).mockReturnValue(accepted)
+        updateNativeChatComposerDraft('tab-1:pane', { text, images: [ATTACHMENT] }, 'immediate')
+        await send(text)
+        expect(structuredTransport.send).toHaveBeenCalledExactlyOnceWith(text, [ATTACHMENT])
+        if (accepted) {
+          expect(setDraft).toHaveBeenCalledWith('')
+        } else {
+          expect(setDraft).not.toHaveBeenCalled()
+          expect(readNativeChatComposerDraft('tab-1:pane').text).toBe(text)
+        }
+      }
+    }
   }
 )
 
@@ -110,8 +137,7 @@ it.each([10, 100])(
 describe('attachment guard follows what the host claims', () => {
   it.each([
     ['claude', '/clear'],
-    ['claude', '/model'],
-    ['codex', '/permissions']
+    ['claude', '/model']
   ] as const)('refuses attachments on the host-claimed %s command %s', (agent, text) => {
     const { send, structuredTransport } = harness(agent)
     send(text)
@@ -119,21 +145,6 @@ describe('attachment guard follows what the host claims', () => {
       'Remove attachments before using a chat-session command.'
     )
     expect(structuredTransport.send).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['claude', '/init'],
-    ['claude', '/review'],
-    ['codex', '/goal ship the fix']
-  ] as const)('sends %s attachments along with the passed-through %s', async (agent, text) => {
-    const { send, structuredTransport } = harness(agent)
-    send(text)
-    await vi.waitFor(() =>
-      expect(structuredTransport.send).toHaveBeenCalledWith(text, [ATTACHMENT])
-    )
-    expect(structuredTransport.onError).not.toHaveBeenCalledWith(
-      'Remove attachments before using a chat-session command.'
-    )
   })
 
   it('refuses attachments on /goal where the host sets the goal, since no message is sent', () => {
@@ -176,19 +187,6 @@ describe('reports the sends that bring the latest into view', () => {
     await vi.waitFor(() => expect(structuredTransport.onError).toHaveBeenCalledTimes(2))
     expect(structuredTransport.send).toHaveBeenCalledWith('hello', [])
     expect(onSubmitted).toHaveBeenCalledOnce()
-  })
-
-  it('reports nothing for a host command chat sessions do not run', async () => {
-    const onSubmitted = vi.fn()
-    const { send, structuredTransport } = harness('codex', undefined, onSubmitted)
-    send('/permissions', [])
-    await vi.waitFor(() =>
-      expect(structuredTransport.onError).toHaveBeenCalledWith(
-        expect.stringContaining('not available in chat sessions'),
-        undefined
-      )
-    )
-    expect(onSubmitted).not.toHaveBeenCalled()
   })
 })
 

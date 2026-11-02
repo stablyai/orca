@@ -1,4 +1,4 @@
-FROM node:24.22.1-alpine@sha256:feb76650b7195319268c59cb2d419c732d6c499b13bf5296f16ab59eb1f0a4f3 AS build
+FROM node:24.22.2-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85 AS build
 WORKDIR /app
 ENV PATH="/opt/pnpm/node_modules/.bin:$PATH"
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
@@ -19,10 +19,12 @@ RUN pnpm --filter @orca-cloud/postgres-schema build && pnpm --filter @orca-cloud
   && pnpm --filter @orca-cloud/connector-contract build && pnpm --filter @orca-cloud/cloud-database build \
   && pnpm --filter @orca-cloud/connector build
 
-FROM node:24.22.1-alpine@sha256:feb76650b7195319268c59cb2d419c732d6c499b13bf5296f16ab59eb1f0a4f3 AS runtime
+FROM node:24.22.2-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85 AS runtime
 ENV NODE_ENV=production
 ENV PORT=8080
 WORKDIR /app
+# Pull Alpine security fixes published after the base image was built.
+RUN apk upgrade --no-cache
 COPY --from=build /opt/pnpm /opt/pnpm
 ENV PATH="/opt/pnpm/node_modules/.bin:$PATH"
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./

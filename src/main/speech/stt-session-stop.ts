@@ -92,7 +92,7 @@ export async function stopSttDictation(
   state.stopInFlight = { worker, owner, promise: stopPromise }
   state.stopping = true
   try {
-    worker.postMessage({ type: 'stop' })
+    worker.postMessage({ type: options.discard ? 'discard' : 'stop' })
     await stopPromise
   } finally {
     state.stopping = false

@@ -5,6 +5,9 @@ import type {
   HostedReviewProvider
 } from '../../../../shared/hosted-review'
 import { translate } from '@/i18n/i18n'
+import { isStackedReviewFailureReason } from '../../../../shared/stacked-hosted-review-failure-copy'
+import { stackedFailureMessage } from './stacked-review-create-failure-copy'
+import { authRequiredDetail } from './hosted-review-sign-in-copy'
 import {
   localizedHostedReviewCopy,
   resolveSupportedHostedReviewCopyProvider,
@@ -19,67 +22,18 @@ type FailedCreateResult =
 /** `detail` follows "Create PR failed:"; `message` stands alone. */
 type CreateFailureCopy = { kind: 'detail' | 'message'; text: string }
 
-// Commands and variable names stay untranslated.
-const SIGN_IN_COMMANDS = { github: 'gh auth login', gitlab: 'glab auth login' } as const
-const SIGN_IN_VARIABLES = {
-  'azure-devops': 'ORCA_AZURE_DEVOPS_TOKEN',
-  gitea: 'ORCA_GITEA_TOKEN'
-} as const
-
-function authRequiredDetail(
-  provider: SupportedHostedReviewCopyProvider,
-  copy: LocalizedHostedReviewCopy
-): string {
-  if (provider === 'bitbucket') {
-    return translate(
-      'sourceControl.createReviewFailure.authRequiredBitbucket',
-      'Bitbucket is not authenticated. Next step: connect Bitbucket in Settings > Integrations, or set ORCA_BITBUCKET_* in this environment.'
-    )
-  }
-  if (provider === 'github' || provider === 'gitlab') {
-    return translate(
-      'sourceControl.createReviewFailure.authRequiredCommand',
-      '{{providerName}} is not authenticated. Next step: run {{command}} in this environment.',
-      { providerName: copy.providerName, command: SIGN_IN_COMMANDS[provider] }
-    )
-  }
-  return translate(
-    'sourceControl.createReviewFailure.authRequiredVariable',
-    '{{providerName}} is not authenticated. Next step: set {{variable}} in this environment.',
-    { providerName: copy.providerName, variable: SIGN_IN_VARIABLES[provider] }
-  )
-}
-
-/** Short sign-in step for space-constrained surfaces like the Create PR dropdown hint. */
-export function hostedReviewSignInHint(provider: HostedReviewProvider | undefined): string {
-  const supported = resolveSupportedHostedReviewCopyProvider(provider)
-  if (supported === 'bitbucket') {
-    return translate(
-      'sourceControl.createReviewFailure.signInHintBitbucket',
-      'Connect Bitbucket in Settings > Integrations'
-    )
-  }
-  if (supported === 'github' || supported === 'gitlab') {
-    return translate(
-      'sourceControl.createReviewFailure.signInHintCommand',
-      'Run {{command}} in this environment',
-      { command: SIGN_IN_COMMANDS[supported] }
-    )
-  }
-  return translate(
-    'sourceControl.createReviewFailure.signInHintVariable',
-    'Set {{variable}} in this environment',
-    { variable: SIGN_IN_VARIABLES[supported] }
-  )
-}
-
 // Returns undefined for a reason from a newer host that this build does not know.
 function createFailureCopy(
   reason: CreateHostedReviewFailureReason,
   provider: SupportedHostedReviewCopyProvider,
   copy: LocalizedHostedReviewCopy,
-  base: string | undefined
+  base: string | undefined,
+  head?: string
 ): CreateFailureCopy | undefined {
+  if (isStackedReviewFailureReason(reason)) {
+    const text = stackedFailureMessage(reason, base, head)
+    return text === undefined ? undefined : { kind: 'message', text }
+  }
   const vars = {
     reviewLabel: copy.reviewLabel,
     shortLabel: copy.shortLabel,
@@ -189,6 +143,13 @@ function createFailureCopy(
           vars
         )
       )
+    case 'base_head_title_required':
+      return detail(
+        translate(
+          'sourceControl.createReviewFailure.baseHeadTitleRequired',
+          'base branch, head branch, and title are required.'
+        )
+      )
     case 'rejected':
       return detail(
         translate(
@@ -250,11 +211,12 @@ function createFailureCopy(
 function failureCopyFor(
   reason: CreateHostedReviewFailureReason,
   provider: HostedReviewProvider,
-  base?: string
+  base?: string,
+  head?: string
 ): { copy: CreateFailureCopy; shortLabel: string } | null {
   const supported = resolveSupportedHostedReviewCopyProvider(provider)
   const labels = localizedHostedReviewCopy(supported)
-  const copy = createFailureCopy(reason, supported, labels, base)
+  const copy = createFailureCopy(reason, supported, labels, base, head)
   return copy ? { copy, shortLabel: labels.shortLabel } : null
 }
 
@@ -262,9 +224,10 @@ function failureCopyFor(
 export function hostedReviewCreateFailureMessage(
   reason: CreateHostedReviewFailureReason,
   provider: HostedReviewProvider,
-  base?: string
+  base?: string,
+  head?: string
 ): string | null {
-  const resolved = failureCopyFor(reason, provider, base)
+  const resolved = failureCopyFor(reason, provider, base, head)
   if (!resolved) {
     return null
   }
@@ -278,6 +241,10 @@ export function hostedReviewCreateFailureMessage(
   )
 }
 
+function failedHead(result: FailedCreateResult): string | undefined {
+  return 'head' in result ? result.head : undefined
+}
+
 // Hosts that send no reason only have the English sentence to strip.
 const ENGLISH_CREATE_FAILED_PREFIX = /^Create (?:PR|MR) failed:\s*/i
 
@@ -288,7 +255,7 @@ export function localizedCreateFailure(
 ): string {
   return (
     (result.reason
-      ? hostedReviewCreateFailureMessage(result.reason, provider, result.base)
+      ? hostedReviewCreateFailureMessage(result.reason, provider, result.base, failedHead(result))
       : null) ?? result.error
   )
 }
@@ -299,7 +266,8 @@ export function localizedCreateFailureDetail(
   provider: HostedReviewProvider
 ): string {
   return (
-    (result.reason ? failureCopyFor(result.reason, provider, result.base)?.copy.text : null) ??
-    result.error.replace(ENGLISH_CREATE_FAILED_PREFIX, '')
+    (result.reason
+      ? failureCopyFor(result.reason, provider, result.base, failedHead(result))?.copy.text
+      : null) ?? result.error.replace(ENGLISH_CREATE_FAILED_PREFIX, '')
   )
 }

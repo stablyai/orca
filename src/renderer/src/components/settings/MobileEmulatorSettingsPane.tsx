@@ -14,7 +14,9 @@ import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSwitchRow } from './SettingsFormControls'
 import { getMobileEmulatorSearchEntries } from './mobile-emulator-search'
 import { translate } from '@/i18n/i18n'
+import { emulatorErrorText, emulatorMessageText } from '@/lib/emulator-error-copy'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { simulatorRuntimeLabel } from '@/lib/simulator-runtime-label'
 
 type SimulatorDeviceRow = {
   name: string
@@ -24,14 +26,15 @@ type SimulatorDeviceRow = {
   isAvailable?: boolean
 }
 
-type EmulatorAvailability = {
+type CodedMessage = { message?: string; messageCode?: unknown; messageParams?: unknown }
+
+type EmulatorAvailability = CodedMessage & {
   platform: string
   available: boolean
   devices: SimulatorDeviceRow[]
-  simctl: { ok: boolean; message?: string }
-  serveSim: { ok: boolean; message?: string }
-  android: { sdkFound: boolean; sdkPath?: string; message: string }
-  message: string
+  simctl: { ok: boolean } & CodedMessage
+  serveSim: { ok: boolean } & CodedMessage
+  android: { sdkFound: boolean; sdkPath?: string } & CodedMessage
 }
 
 type MobileEmulatorSettingsPaneProps = {
@@ -73,7 +76,9 @@ function statusBadgeClassName(availability: EmulatorAvailability | null, enabled
 
 function deviceLabel(device: SimulatorDeviceRow): string {
   const state = device.state.trim()
-  const name = device.name.replace(SIMULATOR_STATE_SUFFIX_RE, '').trim()
+  const runtime = simulatorRuntimeLabel(device.runtime)
+  const bareName = device.name.replace(SIMULATOR_STATE_SUFFIX_RE, '').trim()
+  const name = runtime ? `${bareName} · ${runtime}` : bareName
   if (device.isAvailable === false) {
     return `${name} (Unavailable)`
   }
@@ -116,7 +121,8 @@ function availabilityDetail(availability: EmulatorAvailability | null): string {
           { value0: availability.devices.length }
         )
   }
-  return availability.simctl.message || availability.serveSim.message || availability.message
+  const source = [availability.simctl, availability.serveSim].find((check) => check.message)
+  return emulatorMessageText(source ?? availability)
 }
 
 export function MobileEmulatorSettingsPane({
@@ -145,7 +151,13 @@ export function MobileEmulatorSettingsPane({
         simctl: { ok: false },
         serveSim: { ok: false },
         android: { sdkFound: false, message: '' },
-        message: error instanceof Error ? error.message : 'Could not check emulator availability.'
+        message: emulatorErrorText(
+          error,
+          translate(
+            'emulator.settings.availabilityCheckFailed',
+            'Could not check emulator availability.'
+          )
+        )
       })
     } finally {
       setRefreshing(false)

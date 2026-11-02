@@ -3,7 +3,8 @@ import { Check, Download, LoaderCircle, PackageCheck, RefreshCw, Settings, X } f
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { Trans } from 'react-i18next'
+import { i18n, translate } from '@/i18n/i18n'
 import { getDetectedSetupScriptTextareaRows } from '@/lib/script-textarea-rows'
 
 type DismissButtonProps = {
@@ -68,11 +69,15 @@ export function DetectedSetupPreview({
       />
       {provenance ? (
         <p className="mt-1.5 text-[11px] text-muted-foreground">
-          {translate(
-            'auto.components.sidebar.SetupScriptPromptCardViews.d02e6a42b1',
-            'Detected from'
-          )}{' '}
-          <code className="rounded bg-muted px-1 py-0.5">{provenance}</code>
+          <Trans
+            i18n={i18n}
+            defaults={translate(
+              'auto.components.sidebar.SetupScriptPromptCardViews.detectedFromSource',
+              'Detected from <source>{{source}}</source>'
+            )}
+            values={{ source: provenance }}
+            components={{ source: <code className="rounded bg-muted px-1 py-0.5" /> }}
+          />
         </p>
       ) : null}
     </div>
@@ -153,19 +158,14 @@ export function SetupScriptPromptBody({
   }
   if (sharedSetupIgnored) {
     return (
-      <>
-        {translate(
-          'auto.components.sidebar.SetupScriptPromptCardViews.bb879db364',
-          'This repo ignores shared'
-        )}{' '}
-        <code>
-          {translate('auto.components.sidebar.SetupScriptPromptCardViews.8f6be51aa1', 'orca.yaml')}
-        </code>{' '}
-        {translate(
-          'auto.components.sidebar.SetupScriptPromptCardViews.660cdc17f8',
-          'setup scripts. Add a local command, or change the source in Settings.'
+      <Trans
+        i18n={i18n}
+        defaults={translate(
+          'auto.components.sidebar.SetupScriptPromptCardViews.ignoresSharedSetup',
+          'This repo ignores shared <yaml>orca.yaml</yaml> setup scripts. Add a local command, or change the source in Settings.'
         )}
-      </>
+        components={{ yaml: <code /> }}
+      />
     )
   }
   if (isPackageManagerSuggestion) {
@@ -180,17 +180,15 @@ export function SetupScriptPromptBody({
   }
   if (candidateSource) {
     return (
-      <>
-        {translate(
-          'auto.components.sidebar.SetupScriptPromptCardViews.b56d1322f7',
-          'Found a setup command in'
-        )}{' '}
-        <span className="break-words">{candidateSource}</span>
-        {translate(
-          'auto.components.sidebar.SetupScriptPromptCardViews.8349e3fa4c',
-          '. Save it to run for new worktrees.'
+      <Trans
+        i18n={i18n}
+        defaults={translate(
+          'auto.components.sidebar.SetupScriptPromptCardViews.foundSetupCommandIn',
+          'Found a setup command in <source>{{source}}</source>. Save it to run for new worktrees.'
         )}
-      </>
+        values={{ source: candidateSource }}
+        components={{ source: <span className="break-words" /> }}
+      />
     )
   }
   return (

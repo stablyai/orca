@@ -1,5 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native'
 import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session-state'
+import { translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export type MobileDictationStatusFlags = Pick<
   UseMobileDictationResult,
@@ -8,11 +10,11 @@ export type MobileDictationStatusFlags = Pick<
 
 export function mobileDictationStatusTitle(dictation: MobileDictationStatusFlags): string | null {
   return dictation.isRecording
-    ? 'Listening'
+    ? translate('session.terminalLiveInputStatus.listening', 'Listening')
     : dictation.isProcessing
-      ? 'Processing'
+      ? translate('session.terminalLiveInputStatus.processing', 'Processing')
       : dictation.isStarting
-        ? 'Starting mic'
+        ? translate('session.terminalLiveInputStatus.startingMic', 'Starting mic')
         : null
 }
 
@@ -22,6 +24,7 @@ export function MobileDictationStatusAnnouncement({
 }: {
   dictation: MobileDictationStatusFlags
 }): React.JSX.Element {
+  useMobileTranslation()
   return (
     <View style={styles.hidden} pointerEvents="none" accessibilityLiveRegion="polite">
       <Text>{mobileDictationStatusTitle(dictation) ?? ''}</Text>

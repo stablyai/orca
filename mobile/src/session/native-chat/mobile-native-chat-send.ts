@@ -1,4 +1,3 @@
-import { reportWorkerTerminalUserInput } from '../../terminal/worker-terminal-takeover-report'
 import type { RpcClient } from '../../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../../transport/stable-logical-rpc-client'
@@ -27,6 +26,9 @@ type MobileNativeChatSendArgs = {
 
 // Unknown delivery must not be called definite failure; structured queued drafts render as cards, not transcript echoes.
 export type MobileNativeChatSendOutcome = 'accepted' | 'rejected' | 'unknown' | 'queued'
+
+/** How one send goes: `alternate` does the other thing than the host's follow-up setting. */
+export type MobileNativeChatSendIntent = { alternate?: true }
 
 export type MobileNativeChatWriteOutcome = Exclude<MobileNativeChatSendOutcome, 'queued'>
 
@@ -74,7 +76,6 @@ export async function sendMobileNativeChatMessageWithOutcome(
     if (nativeChatTerminalWrite.interpret(response) !== true) {
       return 'rejected'
     }
-    reportWorkerTerminalUserInput(args.client, args.terminal)
     return 'accepted'
   } catch (error) {
     // Cutover cannot prove whether the desktop received the frame; report unknown and never retry automatically.

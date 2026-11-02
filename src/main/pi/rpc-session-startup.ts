@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
-import type {
-  AgentSessionOptionsResult,
-  AgentSessionSlashCommand
-} from '../../shared/agent-session-wire'
+import {
+  providerDiagnostic,
+  withProviderDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
+import type { AgentSessionOptionsResult } from '../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionSlashCommand } from '../../shared/agent-session/agent-session-wire'
 import {
   AgentSessionAcquisitionRefusal,
   type StructuredAgentSessionAcquireInput

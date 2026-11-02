@@ -7,6 +7,7 @@ import { extractIpcErrorMessage } from './rich-markdown-ipc-error-message'
 import { insertRichMarkdownImageFromPath } from './rich-markdown-image-insert'
 import { captureRichMarkdownImageInsertionTarget } from './rich-markdown-image-insertion-target'
 import { showRichMarkdownImageInsertionCanceled } from './rich-markdown-image-insertion-feedback'
+import { translate } from '@/i18n/i18n'
 
 export type RichMarkdownImagePasteArgs = {
   editor: Editor | null
@@ -62,7 +63,15 @@ export function handleRichMarkdownImagePaste({
       })
     })
     .catch((err) => {
-      toast.error(extractIpcErrorMessage(err, 'Failed to insert image.'))
+      toast.error(
+        extractIpcErrorMessage(
+          err,
+          translate(
+            'auto.components.editor.useLocalImagePick.175cb8b8ce',
+            'Failed to insert image.'
+          )
+        )
+      )
     })
     .finally(target.dispose)
 

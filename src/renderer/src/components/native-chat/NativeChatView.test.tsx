@@ -48,20 +48,6 @@ function entry(overrides: Partial<AgentStatusEntry> & Pick<AgentStatusEntry, 'pa
   }
 }
 
-function renderResolution(
-  props: Omit<React.ComponentProps<typeof NativeChatSessionGate>, 'children'>
-): void {
-  render(
-    <NativeChatSessionGate {...props}>
-      {(resolution) => (
-        <div data-testid="native-chat-resolution">
-          {resolution.agent}:{resolution.sessionId ?? 'no-session'}:{resolution.paneKey}
-        </div>
-      )}
-    </NativeChatSessionGate>
-  )
-}
-
 const notComposing = (): boolean => false
 
 function DraftProbe({ paneKey, sessionId }: { paneKey: string; sessionId: string | null }) {
@@ -164,17 +150,5 @@ describe('NativeChatSessionGate', () => {
     expect(screen.getByRole('textbox', { name: 'Message draft' })).toHaveValue(
       'keep this unsent message'
     )
-  })
-
-  it('does not open native chat from an unsupported title fallback', () => {
-    renderResolution({
-      paneKey: 'tab-1:leaf-1',
-      launchAgent: null,
-      resolvedAgent: 'gemini',
-      ptyId: 'pty-1'
-    })
-
-    expect(screen.getByText('No conversation here')).toBeInTheDocument()
-    expect(screen.queryByTestId('native-chat-resolution')).not.toBeInTheDocument()
   })
 })

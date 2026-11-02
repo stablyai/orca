@@ -8,7 +8,7 @@ import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { AgentStartedTelemetry } from '../../lib/worktree-startup-payload'
@@ -25,6 +25,7 @@ import type {
 } from '../slices/terminal-tab-retirement'
 import type {
   AccountRestartAgent,
+  TerminalCreationExecutionFacts,
   AutomaticAgentResumeClaim,
   CodexRestartNotice,
   HydrateWorkspaceSessionOptions
@@ -73,6 +74,7 @@ export type TerminalActions = {
     options?: {
       pendingActivationSpawn?: boolean
       initialPtyId?: string
+      executionFacts?: TerminalCreationExecutionFacts
       /** Stable leaf identity: an already-live pane's, or a host launch's pane before its process. */
       initialLeafId?: string
       /** Published atomically with the tab so its first mount cannot spawn a bare shell. */
@@ -104,6 +106,8 @@ export type TerminalActions = {
       reason?: TerminalTabCloseReason
       captureRecentlyClosed?: boolean
       remoteCloseOwnedByHost?: boolean
+      /** See closeUnifiedTab. */
+      preserveWorktreeSelection?: boolean
       localPtyTeardownOwnedExternally?: boolean
       precomputedRetirementPlan?: TerminalTabRetirementPlan
     }

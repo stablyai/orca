@@ -5,8 +5,11 @@ import {
   coordinatorRunRow
 } from '../runtime-orchestration-db.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
+import { mkdir } from 'node:fs/promises'
+import { RuntimeLineageError } from '../runtime-worktree-lineage-resolution'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
+  addWorktree,
   MOCK_GIT_WORKTREES,
   OrcaRuntimeService,
   computeWorktreePathMock,
@@ -93,6 +96,8 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
     const workerLeafId = '77777777-7777-4777-8777-777777777777'
     const workerHandle = runtime.preAllocateHandleForPty('pty-worker')
+    // Fixed before the sync so its `now` is never older than this timestamp.
+    const staleCompletedAt = new Date(Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1).toISOString()
     const orchestrationDb = makeRuntimeOrchestrationDb()
     vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
     vi.spyOn(orchestrationDb, 'getActiveDispatchForTerminal').mockImplementation(() => undefined)
@@ -104,7 +109,7 @@ describe('OrcaRuntimeService', () => {
               task_id: 'task-stale',
               assignee_handle: workerHandle,
               status: 'completed',
-              completed_at: new Date(Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1).toISOString()
+              completed_at: staleCompletedAt
             })
           : undefined
     )
@@ -134,6 +139,47 @@ describe('OrcaRuntimeService', () => {
     })
 
     expect(result.agentOrchestrationByPaneKey).toBeUndefined()
+  })
+
+  it('refuses ambiguous cwd lineage for an initialized saved parent before creation effects', async () => {
+    const metadata: Record<string, WorktreeMeta> = {
+      ...store.getAllWorktreeMeta(),
+      [TEST_WORKTREE_ID]: makeWorktreeMeta({
+        ...store.getWorktreeMeta(TEST_WORKTREE_ID),
+        instanceId: 'parent-instance',
+        hostId: 'local'
+      })
+    }
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metadata,
+      getWorktreeMeta: (id: string) => metadata[id]
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    vi.mocked(mkdir).mockClear()
+    const setMeta = vi.spyOn(runtimeStore, 'setWorktreeMeta')
+    const createTerminal = vi.spyOn(runtime, 'createTerminal')
+    const choices = [`id:${TEST_WORKTREE_ID}`, `id:${TEST_WORKTREE_ID}::workspace:sibling`]
+    vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
+    const creation = runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'ambiguous-child',
+      startupAgent: 'codex',
+      lineage: {
+        cwdParentWorktree: choices[0],
+        cwdParentAmbiguous: true,
+        callerTerminalHandle: 'term_stale'
+      }
+    })
+    await expect(creation).rejects.toBeInstanceOf(RuntimeLineageError)
+    await expect(creation).rejects.toMatchObject({
+      code: 'LINEAGE_PARENT_AMBIGUOUS',
+      message: expect.stringContaining('or start codex')
+    })
+    expect(addWorktree).not.toHaveBeenCalled()
+    expect(mkdir).not.toHaveBeenCalled()
+    expect(setMeta).not.toHaveBeenCalled()
+    expect(createTerminal).not.toHaveBeenCalled()
   })
 
   it('falls back to cwd lineage when the caller terminal handle is stale', async () => {

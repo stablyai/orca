@@ -1,4 +1,5 @@
 import type { RemoteServerUpdaterSnapshot } from '../../../shared/remote-server-update'
+import { updaterMessageText } from '@/lib/updater-message-copy'
 
 type PollingTransport = {
   getUpdaterStatus: (environmentId: string) => Promise<RemoteServerUpdaterSnapshot>
@@ -23,7 +24,7 @@ export async function pollRemoteServerUpdater(
   while (now() < deadline) {
     const snapshot = await transport.getUpdaterStatus(environmentId)
     if (snapshot.status.state === 'error') {
-      throw new Error(snapshot.status.message)
+      throw new Error(updaterMessageText(snapshot.status))
     }
     onSnapshot(snapshot)
     if (accept(snapshot)) {

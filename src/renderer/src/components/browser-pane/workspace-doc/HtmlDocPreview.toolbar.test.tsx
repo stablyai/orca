@@ -86,7 +86,8 @@ vi.mock('@/lib/connection-context', () => ({
 }))
 
 vi.mock('@/lib/connection-owner-resolution', () => ({
-  getConnectionIdForFileFromState: () => 'ssh-1'
+  getConnectionIdForFileFromState: () => 'ssh-1',
+  getConnectionIdFromState: () => 'ssh-1'
 }))
 
 vi.mock('@/components/terminal-pane/terminal-remote-file-download-open', () => ({

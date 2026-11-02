@@ -108,14 +108,17 @@ export function renderSettingsPage(context: SettingsRenderContext): React.JSX.El
           ref={interactions.setContentScrollNode}
           className={cn(
             'min-h-0 flex-1',
-            view.isFocusedShortcutsPane ? 'overflow-hidden' : 'overflow-y-auto scrollbar-sleek'
+            // Why a stable gutter: pages that start or stop scrolling must not shift sideways.
+            view.isFocusedShortcutsPane
+              ? 'overflow-hidden'
+              : 'overflow-y-auto scrollbar-sleek [scrollbar-gutter:stable]'
           )}
         >
           <div
             className={cn(
               'mx-auto flex w-full flex-col gap-10 px-8 pt-10',
               view.isFocusedShortcutsPane ? 'h-full pb-6' : 'pb-24',
-              view.isFocusedSetupGuidePane ? 'max-w-6xl' : 'max-w-4xl'
+              view.isFocusedSetupGuidePane || view.isWidePluginsPane ? 'max-w-6xl' : 'max-w-4xl'
             )}
           >
             {navigation.visibleNavSections.length === 0 ? (

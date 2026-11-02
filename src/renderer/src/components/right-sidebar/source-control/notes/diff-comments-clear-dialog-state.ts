@@ -46,37 +46,15 @@ export function formatPendingDiffCommentsClearDescription(
     return ''
   }
   if (pending.kind === 'all') {
-    return count === 1
-      ? translate(
-          'auto.components.right.sidebar.SourceControl.clearNotesFromWorkspace_one',
-          'Clear {{count}} note from this workspace?',
-          {
-            count
-          }
-        )
-      : translate(
-          'auto.components.right.sidebar.SourceControl.clearNotesFromWorkspace_other',
-          'Clear {{count}} notes from this workspace?',
-          {
-            count
-          }
-        )
+    return translate(
+      'auto.components.right.sidebar.SourceControl.clearNotesFromWorkspace',
+      'Clear {{count}} notes from this workspace?',
+      { count, defaultValue_one: 'Clear {{count}} note from this workspace?' }
+    )
   }
-  return count === 1
-    ? translate(
-        'auto.components.right.sidebar.SourceControl.clearNotesFromFile_one',
-        'Clear {{count}} note from {{path}}?',
-        {
-          count,
-          path: pending.filePath
-        }
-      )
-    : translate(
-        'auto.components.right.sidebar.SourceControl.clearNotesFromFile_other',
-        'Clear {{count}} notes from {{path}}?',
-        {
-          count,
-          path: pending.filePath
-        }
-      )
+  return translate(
+    'auto.components.right.sidebar.SourceControl.clearNotesFromFile',
+    'Clear {{count}} notes from {{path}}?',
+    { count, path: pending.filePath, defaultValue_one: 'Clear {{count}} note from {{path}}?' }
+  )
 }

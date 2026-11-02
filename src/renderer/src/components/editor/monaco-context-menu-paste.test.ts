@@ -22,7 +22,7 @@ function makeEditor(state: FakeEditorState = {}) {
   } = state
   let focused = hasTextFocus
   const trigger = vi.fn()
-  const model = hasModel ? ({} as object) : null
+  let model: object | null = hasModel ? {} : null
   // Chunked paste rechecks model/container identity, so fixture instances must remain stable.
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -53,6 +53,9 @@ function makeEditor(state: FakeEditorState = {}) {
   return {
     editor,
     trigger,
+    replaceModel: () => {
+      model = {}
+    },
     setFocused: (next: boolean) => {
       focused = next
     }
@@ -214,5 +217,24 @@ describe('runOrcaContextMenuPaste', () => {
     expect(outcome).toEqual({ status: 'pasted', mode: 'chunked' })
     expect(handle.trigger).not.toHaveBeenCalled()
     expect(handle.editor.executeEdits).toHaveBeenCalled()
+  })
+  it.each([
+    { mode: 'native', text: 'late clipboard' },
+    { mode: 'chunked', text: 'x'.repeat(128 * 1024) }
+  ])('rejects $mode paste when clipboard IPC replaces the editor model', async ({ text }) => {
+    const handle = makeEditor()
+    const deps = makeDeps({
+      editor: handle,
+      readClipboardText: vi.fn(async () => {
+        handle.replaceModel()
+        return text
+      })
+    })
+    await expect(runOrcaContextMenuPaste(deps)).resolves.toEqual({
+      status: 'noop',
+      reason: 'target-lost'
+    })
+    expect(handle.trigger).not.toHaveBeenCalled()
+    expect(handle.editor.executeEdits).not.toHaveBeenCalled()
   })
 })

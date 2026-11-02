@@ -26,13 +26,10 @@ function statusLabel(config: LoadedMcpConfigInspection): string {
   if (config.servers.length === 0) {
     return translate('settings.mcp.noServers', 'No servers')
   }
-  return config.servers.length === 1
-    ? translate('settings.mcp.serverCount_one', '{{count}} server', {
-        count: config.servers.length
-      })
-    : translate('settings.mcp.serverCount_other', '{{count}} servers', {
-        count: config.servers.length
-      })
+  return translate('settings.mcp.serverCount', '{{count}} servers', {
+    count: config.servers.length,
+    defaultValue_one: '{{count}} server'
+  })
 }
 
 function statusClassName(config: LoadedMcpConfigInspection): string {

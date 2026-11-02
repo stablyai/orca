@@ -6,11 +6,11 @@ import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-comm
 import { registerPtyHandlers } from './pty/register-handlers'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
-import { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 
 vi.mock('electron', () => import('./pty/pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty/pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -64,7 +64,7 @@ describe('a pane restore of a conversation a native chat continues', () => {
       claimStatus: 'released',
       ownerProcess: null,
       reservedSpawnToken: null,
-      deathEvidence: { kind: 'exit-observed', detail: 'closed', observedAt: 1 }
+      deathEvidence: { kind: 'kill-delivered', detail: 'writer terminated', observedAt: 1 }
     })
   )
   const C = 'provider-session-alpha-1'

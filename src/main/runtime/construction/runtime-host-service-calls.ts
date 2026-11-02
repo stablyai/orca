@@ -58,10 +58,10 @@ export type HasExactPersistedTerminalSurfaceIdentityResult = ReturnType<
   HasExactPersistedTerminalSurfaceIdentity['hasExactPersistedTerminalSurfaceIdentity']
 >
 export type HasExactTerminalSurfaceIdentityArgs = Parameters<
-  AutomationOperations['hasExactTerminalSurfaceIdentity']
+  HasExactPersistedTerminalSurfaceIdentity['hasExactTerminalSurfaceIdentity']
 >
 export type HasExactTerminalSurfaceIdentityResult = ReturnType<
-  AutomationOperations['hasExactTerminalSurfaceIdentity']
+  HasExactPersistedTerminalSurfaceIdentity['hasExactTerminalSurfaceIdentity']
 >
 export type AdoptLegacyWorkerTerminalArgs = Parameters<
   HasExactPersistedTerminalSurfaceIdentity['adoptLegacyWorkerTerminal']

@@ -14,6 +14,7 @@ import { MarkdownTemplatePicker } from '../components/editor/MarkdownTemplatePic
 import RecentTabSwitcher from '../components/tab-bar/RecentTabSwitcher'
 import { SkillFreshnessUpdateDialog } from '../components/skills/SkillFreshnessUpdateDialog'
 import { StarNagCard } from '../components/StarNagCard'
+import { CodexSharedSettingsNoticeCard } from '../components/CodexSharedSettingsNoticeCard'
 import { NativeChatResumeOnRestartModal } from '../components/NativeChatResumeRuntimeModal'
 import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagAgentValueMomentObserver'
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
@@ -302,6 +303,9 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
         </Suspense>
         <OverlayBoundary boundaryId="overlay.star-nag" resetKey={activeView}>
           <StarNagCard />
+        </OverlayBoundary>
+        <OverlayBoundary boundaryId="overlay.codex-shared-settings-notice" resetKey={activeView}>
+          <CodexSharedSettingsNoticeCard />
         </OverlayBoundary>
       </NotificationCardStack>
       <OverlayBoundary boundaryId="overlay.native-chat-resume-on-restart" resetKey={activeView}>

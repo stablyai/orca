@@ -4,7 +4,7 @@ import type { LinkActionRequest } from '@/components/link-actions/link-action-re
 import { openDetectedFilePath } from '@/components/terminal-pane/terminal-file-open-routing'
 import { isTerminalLinkActionActivation } from '@/components/terminal-pane/terminal-link-activation'
 import { useAppStore } from '../../store'
-import { routeNativeChatHref } from '../../../../shared/native-chat-href-routing'
+import { routeNativeChatHref } from '../../../../shared/native-chat/native-chat-href-routing'
 import { resolveNativeChatFileLink, type NativeChatFileLinkContext } from './native-chat-file-link'
 import { nativeChatPlainLinkClickBehavior } from './native-chat-link-click-behavior'
 import { showFileLinkUnresolvedToast } from './native-chat-file-link-toasts'

@@ -94,17 +94,11 @@ export function ExternalAutomationManagers({
           </div>
         </div>
         <Badge variant="outline">
-          {automationCount === 1
-            ? translate(
-                'auto.components.automations.ExternalAutomationManagers.automationCount_one',
-                '{{count}} automation',
-                { count: automationCount }
-              )
-            : translate(
-                'auto.components.automations.ExternalAutomationManagers.automationCount_other',
-                '{{count}} automations',
-                { count: automationCount }
-              )}
+          {translate(
+            'auto.components.automations.ExternalAutomationManagers.automationCount',
+            '{{count}} automations',
+            { count: automationCount, defaultValue_one: '{{count}} automation' }
+          )}
         </Badge>
       </div>
       <div className="divide-y divide-border/50">

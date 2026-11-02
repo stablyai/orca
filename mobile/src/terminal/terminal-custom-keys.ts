@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { persistMirrored } from '../storage/mirrored-storage-keys'
+import { persistMirrored, subscribeMirroredKey } from '../storage/mirrored-storage-keys'
 
 const CUSTOM_ACCESSORY_KEYS_STORAGE_KEY = 'orca:custom-accessory-keys'
 
@@ -8,6 +8,7 @@ export type CustomKey = {
   label: string
   bytes: string
   enter: boolean
+  visible?: boolean
 }
 
 function isCustomKey(value: unknown): value is CustomKey {
@@ -21,13 +22,12 @@ function isCustomKey(value: unknown): value is CustomKey {
     'bytes' in value &&
     typeof value.bytes === 'string' &&
     'enter' in value &&
-    typeof value.enter === 'boolean'
+    typeof value.enter === 'boolean' &&
+    (!('visible' in value) || typeof value.visible === 'boolean')
   )
 }
 
-// Propagate read failures so writes cannot invent an empty baseline; malformed stored keys may be replaced.
-async function readStoredCustomKeys(): Promise<CustomKey[]> {
-  const raw = await AsyncStorage.getItem(CUSTOM_ACCESSORY_KEYS_STORAGE_KEY)
+function parseStoredCustomKeys(raw: string | null): CustomKey[] {
   try {
     const parsed: unknown = JSON.parse(raw ?? '[]')
     return Array.isArray(parsed) ? parsed.filter(isCustomKey) : []
@@ -36,8 +36,20 @@ async function readStoredCustomKeys(): Promise<CustomKey[]> {
   }
 }
 
-export function loadCustomKeys(): Promise<CustomKey[]> {
-  return readStoredCustomKeys().catch(() => [])
+// Propagate read failures so writes cannot invent an empty baseline; malformed stored keys may be replaced.
+async function readStoredCustomKeys(): Promise<CustomKey[]> {
+  return parseStoredCustomKeys(await AsyncStorage.getItem(CUSTOM_ACCESSORY_KEYS_STORAGE_KEY))
+}
+
+// Accepted writes only; a read racing queued Settings writes can return an intermediate list.
+export function subscribeStoredCustomKeys(listener: (keys: CustomKey[]) => void): () => void {
+  return subscribeMirroredKey(CUSTOM_ACCESSORY_KEYS_STORAGE_KEY, (raw) =>
+    listener(parseStoredCustomKeys(raw))
+  )
+}
+
+export function loadCustomKeys(fallback: CustomKey[] = []): Promise<CustomKey[]> {
+  return readStoredCustomKeys().catch(() => fallback)
 }
 
 function writeCustomKeys(keys: CustomKey[]): Promise<void> {

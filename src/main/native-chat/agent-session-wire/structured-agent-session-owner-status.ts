@@ -1,4 +1,4 @@
-import type { AgentSessionHandoffStatus } from '../../../shared/agent-session-wire'
+import type { AgentSessionHandoffStatus } from '../../../shared/agent-session/view/agent-session-handoff-status'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 
 /** Legacy clients gate activation on owner; report ownership even for stopped/starting children. */

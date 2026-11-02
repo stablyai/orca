@@ -1,4 +1,5 @@
-import type { WslHostStatus } from '../../../../shared/wsl-host-types'
+import { selectWslHostsServing } from '@/components/sidebar/use-wsl-hosts-enabled'
+import type { WslHostCapability, WslHostStatus } from '../../../../shared/wsl-host-types'
 import { isWslHostRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { workspaceOwnerHostId } from '../../lib/workspace-row-owner-host'
@@ -8,8 +9,8 @@ import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 /**
  * The WSL hosts with visible work: the active workspace's, and those of workspaces focused earlier
- * in this window that still have tabs (their panes stay mounted). Saved tabs alone never count, so
- * a launch boots only the focused host (E9).
+ * in this window that still have tabs (their panes stay mounted). Saved tabs alone never count, and
+ * a launch boots none: the focused host connects only if its distro already runs (E9).
  */
 export function selectWslHostsWithVisibleWork(
   state: AppState,
@@ -50,16 +51,21 @@ export function registerWslHostIpcBridge(unsubs: (() => void)[]): void {
     return
   }
   const apply = (status: WslHostStatus): void => useAppStore.getState().applyWslHostStatus(status)
+  const applyCapability = ({ serverFiles, acceptsNewWork }: WslHostCapability): void => {
+    const state = useAppStore.getState()
+    state.setWslHostServerFiles(serverFiles)
+    state.setWslHostsAcceptNewWork(acceptsNewWork !== false)
+  }
   // A preload from before the capability call leaves it unknown, which the UI treats as present.
   if (typeof api.getCapability === 'function') {
     void api
       .getCapability()
-      .then(({ serverFiles, acceptsNewWork }) => {
-        const state = useAppStore.getState()
-        state.setWslHostServerFiles(serverFiles)
-        state.setWslHostsAcceptNewWork(acceptsNewWork !== false)
-      })
+      .then(applyCapability)
       .catch((error) => console.error('Failed to read WSL host capability:', error))
+  }
+  // A block learned mid-run hides the offer and the add/move entry points without a relaunch.
+  if (typeof api.onCapabilityChanged === 'function') {
+    unsubs.push(api.onCapabilityChanged(applyCapability))
   }
   let stopped = false
   unsubs.push(api.onStatusChanged(apply), () => {
@@ -79,8 +85,8 @@ export function registerWslHostIpcBridge(unsubs: (() => void)[]): void {
   let focusEntry = ''
   const focusedThisSession = new Set<string>()
   const report = (state: AppState): void => {
-    if (state.settings?.experimentalWslHosts !== true) {
-      // Focus while WSL hosts are off is not an act on a host; turning them on re-reports.
+    if (!selectWslHostsServing(state)) {
+      // With no host to serve, focus is not an act on one; turning WSL hosts on re-reports.
       inputs = []
       focusEntry = ''
       return
@@ -103,7 +109,7 @@ export function registerWslHostIpcBridge(unsubs: (() => void)[]): void {
     }
     const [focusedHost] = selectWslHostsWithVisibleWork(state)
     const entry = focusedHost ? `${state.activeWorktreeId}\0${focusedHost}` : ''
-    // Switching to a workspace on a WSL host (or launch restoring one) is the user acting on it.
+    // A switch or launch restore onto a WSL host: main connects a running distro, never boots one.
     if (entry !== focusEntry) {
       focusEntry = entry
       if (typeof api.focusHost === 'function') {

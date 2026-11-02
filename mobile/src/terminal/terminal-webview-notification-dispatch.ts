@@ -1,5 +1,6 @@
 import { parseTerminalKittyKeyboardFlags } from '../../../src/shared/terminal-kitty-keyboard-flags'
 import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-location'
+import { translate } from '../i18n/mobile-i18n'
 import {
   parseTerminalKeyboardAvoidanceMetrics,
   type TerminalSelectionEvents
@@ -20,7 +21,10 @@ export function dispatchTerminalWebViewNotification(
     const tag = typeof msg.tag === 'string' ? msg.tag : '[fit]'
     console.log(tag, msg.payload)
   } else if (msg.type === 'error') {
-    const message = typeof msg.message === 'string' ? msg.message : 'Unknown terminal error'
+    const message =
+      typeof msg.message === 'string'
+        ? msg.message
+        : translate('terminal.webviewNotificationDispatch.unknownError', 'Unknown terminal error')
     handlers.reportEngineError(message, msg.fatal !== false)
   } else if (msg.type === 'set-select-mode') {
     handlers.onSelectionMode?.(!!msg.enabled)
@@ -60,6 +64,8 @@ export function dispatchTerminalWebViewNotification(
         handlers.onTerminalInput?.(bytes)
       }
     }
+  } else if (msg.type === 'terminal-interaction') {
+    handlers.onTerminalInteraction?.()
   } else if (msg.type === 'terminal-tap') {
     handlers.onTerminalTap?.()
   } else if (msg.type === 'terminal-file-tap') {

@@ -2,14 +2,14 @@ import { usableJournalHistoryOrigin } from '../native-chat/agent-session-journal
 import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
-} from '../../shared/agent-session-journal-item-key'
-import type { AgentJournalPosition } from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalPosition } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentJournalItemPosition,
   compareAgentJournalPositions
-} from '../../shared/agent-session-journal-position'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
-import { isRootAgentJournalItem } from '../../shared/agent-session-journal-producer'
+} from '../../shared/agent-session/journal/agent-session-journal-position'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent-session-journal-producer'
 import type { StructuredAgentSessionHistoryJournal } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 
 const TURN_LIFECYCLE_RECORD_PREFIX = 'turn-lifecycle:'

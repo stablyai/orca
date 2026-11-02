@@ -190,7 +190,7 @@ describe('Claude background task status', () => {
     expect(typeof monitoring?.turnCompletedAt).toBe('number')
   })
 
-  it('stamps a lead that ends into a working subagent, which carries no monitoring mode', () => {
+  it('holds the finish of a lead that ends into a working subagent, unless the lead failed', () => {
     const state = createHookListenerState()
 
     claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'delegate' })
@@ -199,10 +199,79 @@ describe('Claude background task status', () => {
       hook_event_name: 'Stop',
       background_tasks: [{ id: 'child-1', type: 'subagent', status: 'running' }]
     })
-
-    // Child work keeps the spinner, but the ended lead still needs a notification stamp.
     expect(childWorking).toMatchObject({ state: 'working', workingMode: undefined })
-    expect(typeof childWorking?.turnCompletedAt).toBe('number')
+    expect(childWorking?.turnCompletedAt).toBeUndefined()
+
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'again' })
+    const failed = claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'StopFailure',
+      background_tasks: [{ id: 'child-1', type: 'subagent', status: 'running' }]
+    })
+    expect(failed).toMatchObject({ state: 'working', workingMode: undefined })
+    expect(typeof failed?.turnCompletedAt).toBe('number')
+  })
+
+  it('holds a coordinator waiting on workers in the background, even across a listener restart', () => {
+    const wait = {
+      id: 'wait-1',
+      type: 'shell',
+      status: 'running',
+      description: 'Wait for next worker message',
+      command:
+        '/usr/local/bin/orca orchestration check --wait --types worker_done --json 2>/dev/null'
+    }
+    const launched = createHookListenerState()
+    claudeEvent(launched, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'run' })
+    claudeEvent(launched, SOURCE_PANE, {
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: wait.command, run_in_background: true },
+      tool_response: { backgroundTaskId: 'wait-1' }
+    })
+    // Only the dev server is still listed; the ended wait's notification is still owed.
+    const owed = claudeEvent(launched, SOURCE_PANE, {
+      hook_event_name: 'Stop',
+      background_tasks: [RUNNING_SHELL]
+    })
+    expect(owed).toMatchObject({ state: 'working', workingMode: undefined })
+    expect(owed?.turnCompletedAt).toBeUndefined()
+
+    const restarted = createHookListenerState()
+    claudeEvent(restarted, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'run' })
+    const listed = claudeEvent(restarted, SOURCE_PANE, {
+      hook_event_name: 'Stop',
+      background_tasks: [wait]
+    })
+    expect(listed).toMatchObject({ state: 'working', workingMode: undefined })
+    expect(listed?.turnCompletedAt).toBeUndefined()
+    // Only listed, it may be a subagent's wait, whose result never reaches this agent.
+    expect(
+      claudeEvent(restarted, SOURCE_PANE, { hook_event_name: 'Stop', background_tasks: [] })?.state
+    ).toBe('done')
+  })
+
+  it('does not stamp a wake-up turn that ends with only a monitor that will wake it again', () => {
+    const state = createHookListenerState()
+
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'watch' })
+    claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'sleep 15', run_in_background: true },
+      tool_response: { backgroundTaskId: RUNNING_SHELL.id }
+    })
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'Stop', background_tasks: [RUNNING_SHELL] })
+    claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'UserPromptSubmit',
+      prompt: `<task-notification>\n<task-id>${RUNNING_SHELL.id}</task-id>\n<event>tick</event>`
+    })
+    const wakeEnd = claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'Stop',
+      background_tasks: [RUNNING_SHELL]
+    })
+
+    expect(wakeEnd).toMatchObject({ state: 'working', workingMode: 'monitoring' })
+    expect(wakeEnd?.turnCompletedAt).toBeUndefined()
   })
 
   it('does not stamp a turn that is still running in the foreground', () => {

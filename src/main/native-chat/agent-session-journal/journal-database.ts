@@ -1,9 +1,11 @@
 // Read user_version before persistent pragmas/DDL: even enabling WAL mutates newer databases.
 
+import { ensureJournalOutcomeTables } from './journal-outcome-format'
 import Database from '../../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
 import {
   createAgentSessionRecordTablesSql,
+  AGENT_SESSION_CLEAR_SUCCESSOR_INDEX_SQL,
   createJournalTablesSql,
   JOURNAL_DB_OLDEST_RELEASED_VERSION,
   JOURNAL_DB_SCHEMA_VERSION
@@ -72,6 +74,8 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
     // Additive tables must exist on every writable open, even when version migration returns early.
     ensureQueuedMessagesTable(probe)
     ensureCommandReceiptsTable(probe)
+    ensureJournalOutcomeTables(probe)
+    probe.exec(AGENT_SESSION_CLEAR_SUCCESSOR_INDEX_SQL)
     ensureAgentSessionAttachmentClaimTables(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true

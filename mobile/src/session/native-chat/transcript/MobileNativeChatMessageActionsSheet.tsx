@@ -1,15 +1,17 @@
 import { useRef, useState } from 'react'
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Copy, TextSelect, X } from 'lucide-react-native'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { ActionSheetContent } from '../../../components/ActionSheetModal'
 import { BottomDrawer } from '../../../components/BottomDrawer'
 import { useClipboardWriter } from '../../../platform/clipboard'
 import { useWindowSafeAreaInsets } from '../../../layout/side-safe-area'
-import { colors, spacing, typography } from '../../../theme/mobile-theme'
+import { colors, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { nativeChatMessageCopyText } from '../../../../../src/shared/native-chat-message-copy-text'
+import { translate } from '../../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import { mobileNativeChatDisplayCopyText } from './mobile-native-chat-display-copy'
 
 type Props = {
   message: NativeChatMessage
@@ -20,13 +22,14 @@ export function MobileNativeChatMessageActionsSheet({
   message,
   onClose
 }: Props): React.JSX.Element {
+  const t = useMobileTranslation()
   const clipboard = useClipboardWriter()
   const [sheetVisible, setSheetVisible] = useState(true)
   const [selecting, setSelecting] = useState(false)
   // Wait for the drawer to unmount before presenting another native modal.
   const selectRequested = useRef(false)
   // Streaming updates must not reset an active native text selection.
-  const [text] = useState(() => nativeChatMessageCopyText(message))
+  const [text] = useState(() => mobileNativeChatDisplayCopyText(message))
   const closeSheet = () => setSheetVisible(false)
 
   return (
@@ -41,20 +44,27 @@ export function MobileNativeChatMessageActionsSheet({
           onClose={closeSheet}
           actions={[
             {
-              label: 'Copy message',
+              id: 'copyMessage',
+              label: t('chat.messageActionsSheet.copyMessage', 'Copy message'),
               icon: Copy,
               disabled: text.length === 0,
               onPress: () => {
                 void clipboard.writeText(text).catch((error: unknown) => {
                   Alert.alert(
-                    'Copy failed',
-                    error instanceof Error ? error.message : 'The clipboard rejected the text.'
+                    translate('chat.messageActionsSheet.copyFailed', 'Copy failed'),
+                    error instanceof Error
+                      ? error.message
+                      : translate(
+                          'chat.messageActionsSheet.clipboardRejected',
+                          'The clipboard rejected the text.'
+                        )
                   )
                 })
               }
             },
             {
-              label: 'Select text',
+              id: 'selectText',
+              label: t('chat.messageActionsSheet.selectText', 'Select text'),
               icon: TextSelect,
               disabled: text.length === 0,
               onPress: () => {
@@ -77,6 +87,7 @@ function SelectTextScreen({
   onClose: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const insets = useWindowSafeAreaInsets()
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
@@ -92,13 +103,15 @@ function SelectTextScreen({
         ]}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>Select text</Text>
+          <Text style={styles.title}>
+            {t('chat.messageActionsSheet.selectText', 'Select text')}
+          </Text>
           <Pressable
             onPress={onClose}
             hitSlop={12}
-            accessibilityLabel="Close"
+            accessibilityLabel={t('common.close', 'Close')}
             accessibilityRole="button"
-            style={styles.close}
+            style={({ pressed }) => [styles.close, pressed && pressedStyle]}
           >
             <X size={20} color={colors.textSecondary} />
           </Pressable>

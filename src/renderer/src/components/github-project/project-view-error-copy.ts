@@ -136,17 +136,15 @@ function typeCopy(
             'projectViews.error.tooLargeUnknownCount',
             "This view has too many items to render in Orca. Narrow the view's filter on GitHub."
           )
-        : context.totalCount === 1
-          ? translate(
-              'projectViews.error.tooLargeCount_one',
-              "This view has {{count}} item — too large to render in Orca. Narrow the view's filter on GitHub.",
-              { count: context.totalCount }
-            )
-          : translate(
-              'projectViews.error.tooLargeCount_other',
-              "This view has {{count}} items — too large to render in Orca. Narrow the view's filter on GitHub.",
-              { count: context.totalCount }
-            )
+        : translate(
+            'projectViews.error.tooLargeCount',
+            "This view has {{count}} items — too large to render in Orca. Narrow the view's filter on GitHub.",
+            {
+              count: context.totalCount,
+              defaultValue_one:
+                "This view has {{count}} item — too large to render in Orca. Narrow the view's filter on GitHub."
+            }
+          )
     case 'unsupported_layout':
       // Older hosts may still reject roadmaps; keep the explanation independent of the requested layout.
       return translate(

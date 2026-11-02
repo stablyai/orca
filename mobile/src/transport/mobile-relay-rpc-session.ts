@@ -17,7 +17,11 @@ import { isRpcResponse } from './rpc-response-shape'
 import { RelayDialStageTracker, type RelayDialStageSource } from './relay-dial-stage'
 import { RelayPendingRequests } from './relay-pending-requests'
 import { MobileRelayConnectWaiters } from './mobile-relay-connect-waiters'
-import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
+import {
+  DECISIVE_PROBE_TIMEOUT_MS,
+  livenessProbeFrame,
+  RpcSessionLivenessWatchdog
+} from './rpc-session-liveness-watchdog'
 import { settleMobileRuntimeCapabilities } from './mobile-runtime-capability-negotiation'
 import type { RelayHostCloseReason } from '../../../src/shared/relay-host-close-reason'
 import type { RpcClient } from './rpc-client'
@@ -26,8 +30,6 @@ import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
 const RELAY_PROBE_TIMEOUT_MS = 4_000
 const RELAY_MISSED_PROBE_LIMIT = 2
 const RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
-// Use one decisive post-background probe, allowing radio wake/TCP retransmit latency before redial.
-const RELAY_RESUME_PROBE_MS = 4_000
 let relayRpcSessionSequence = 0
 
 export type MobileRelayRpcSession = RpcClient &
@@ -37,8 +39,6 @@ export type MobileRelayRpcSession = RpcClient &
     getResumeExpiresAt(): number | null
     getResumeConfirmation(): DeviceResumeConfirmed | null
     getFailure(): Error | null
-    // One decisive probe for a relay retained through a real background stay.
-    probeAfterBackground(): void
   }
 
 export function connectMobileRelayRpcSession(args: {
@@ -133,9 +133,16 @@ export function connectMobileRelayRpcSession(args: {
       stateListeners.add(listener)
       return () => stateListeners.delete(listener)
     },
-    notifyForeground: (reason) => {
-      if (state === 'connected' && reason !== 'network-change') {
-        livenessWatchdog.probeNow(livenessIdentity)
+    notifyForeground: (reason = 'focus') => {
+      if (state === 'connected') {
+        if (reason === 'app-resume') {
+          livenessWatchdog.probeAfterBackground(livenessIdentity)
+        } else {
+          livenessWatchdog.probeNow(
+            livenessIdentity,
+            reason === 'network-change' ? DECISIVE_PROBE_TIMEOUT_MS : null
+          )
+        }
       }
     },
     close() {
@@ -156,8 +163,7 @@ export function connectMobileRelayRpcSession(args: {
     getResumeExpiresAt: () => resumeExpiresAt,
     getResumeConfirmation: () => resumeConfirmation,
     getFailure: () => failure,
-    probeAfterBackground: () =>
-      state === 'connected' && livenessWatchdog.probeNow(livenessIdentity, RELAY_RESUME_PROBE_MS)
+    probeLivenessNow: () => state === 'connected' && livenessWatchdog.probeCurrentDecisively()
   }
   const connectWaiters = new MobileRelayConnectWaiters(client)
   const livenessWatchdog = new RpcSessionLivenessWatchdog({
@@ -166,9 +172,7 @@ export function connectMobileRelayRpcSession(args: {
     probeTimeoutMs: RELAY_PROBE_TIMEOUT_MS,
     missedProbeLimit: RELAY_MISSED_PROBE_LIMIT,
     voluntaryProbeMinIntervalMs: RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS,
-    sendProbe: () =>
-      state === 'connected' &&
-      sendFrame({ id: pending.nextId(), method: 'status.get', params: undefined }),
+    sendProbe: () => state === 'connected' && sendFrame(livenessProbeFrame(pending.nextId())),
     onTimeout: (evidence) => {
       args.onLog?.({
         id: `relay-liveness-${logSessionId}-${++logSequence}`,

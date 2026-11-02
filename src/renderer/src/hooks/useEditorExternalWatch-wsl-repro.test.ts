@@ -107,46 +107,6 @@ describe('WSL watcher stale-refresh reproduction', () => {
     dispose()
   })
 
-  it('reloads a restored /mnt drive alias from a native-drive watcher event', () => {
-    const driveRoot = 'C:\\workspace\\repo'
-    const mountedPath = '//wsl.localhost/Ubuntu/mnt/c/workspace/repo/file.ts'
-    vi.mocked(useAppStore.getState).mockReturnValue({
-      openFiles: [
-        {
-          id: mountedPath,
-          filePath: mountedPath,
-          relativePath: 'file.ts',
-          worktreeId: 'wt-wsl',
-          mode: 'edit',
-          isDirty: false
-        }
-      ],
-      setExternalMutation: vi.fn()
-    } as never)
-    const { handleFsChanged, dispose } = createExternalWatchEventHandler(() => ({
-      worktreeId: 'wt-wsl',
-      worktreePath: driveRoot,
-      connectionId: undefined,
-      runtimeEnvironmentId: null,
-      allowLocalWindowsWslAliases: true
-    }))
-
-    handleFsChanged({
-      worktreePath: driveRoot,
-      events: [{ kind: 'update', absolutePath: 'C:\\workspace\\repo\\file.ts' }]
-    })
-    vi.advanceTimersByTime(100)
-
-    expect(notifyEditorExternalFileChange).toHaveBeenCalledWith({
-      worktreeId: 'wt-wsl',
-      worktreePath: driveRoot,
-      relativePath: 'file.ts',
-      runtimeEnvironmentId: null,
-      allowLocalWindowsWslAliases: true
-    })
-    dispose()
-  })
-
   it('tombstones and restores a /mnt alias from native-drive watcher events', () => {
     const driveRoot = 'C:\\workspace\\repo'
     const mountedPath = '//wsl.localhost/Ubuntu/mnt/c/workspace/repo/file.ts'

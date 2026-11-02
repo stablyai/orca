@@ -3,12 +3,15 @@ import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
-import { readHookEndpoint } from './helpers/agent-hook-endpoint'
 import {
-  enableNativeChatSetting,
-  toggleTerminalTabToChatView
-} from './helpers/native-chat-transcript-fixture'
+  waitForActivePaneHookDescriptor,
+  waitForActivePanePtyId,
+  waitForActiveTerminalManager,
+  waitForPaneIdentitySnapshot
+} from './helpers/terminal'
+import { waitForPtyShellEcho } from './terminal-pty-readiness'
+import { readHookEndpoint } from './helpers/agent-hook-endpoint'
+import { toggleTerminalTabToChatView } from './helpers/native-chat-transcript-fixture'
 
 test('ZCode native chat reads ordered visible history and follows new messages', async ({
   orcaPage,
@@ -49,9 +52,12 @@ test('ZCode native chat reads ordered visible history and follows new messages',
     insert('answer', 'assistant', 'The stored conversation now opens in native chat.', 2)
     insert('question', 'user', 'Show my saved ZCode conversation.', 0)
     insert('hidden', 'user', 'HIDDEN BOOKKEEPING MUST NOT RENDER', 1, true)
+    const boundPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
     const descriptor = await waitForActivePaneHookDescriptor(orcaPage)
+    expect(descriptor.paneKey).toBe(`${boundPane.tabId}:${boundPane.activeLeafId}`)
     const [tabId] = descriptor.paneKey.split(':')
-    await enableNativeChatSetting(orcaPage)
     const endpoint = await readHookEndpoint(electronApp)
     const response = await fetch(`http://127.0.0.1:${endpoint.port}/hook/zcode`, {
       method: 'POST',
@@ -99,6 +105,11 @@ test('ZCode native chat reads ordered visible history and follows new messages',
       timeout: 15_000
     })
     await orcaPage.screenshot({ path: testInfo.outputPath('03-live-update.png') })
+    const finalPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    expect(finalPane.tabId).toBe(boundPane.tabId)
+    expect(finalPane.activeLeafId).toBe(boundPane.activeLeafId)
+    expect(finalPane.ptyIdsByLeafId).toEqual(boundPane.ptyIdsByLeafId)
+    await expect(chat).toBeVisible()
   } finally {
     db.close()
   }

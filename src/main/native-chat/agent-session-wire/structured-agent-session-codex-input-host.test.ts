@@ -1,3 +1,4 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import './structured-agent-session-codex-input-admission.spec'
 import {
   continuingStructuredAgentSessionInput,
@@ -6,16 +7,18 @@ import {
 } from './structured-agent-session-handing-over'
 import { measureCodexInputWork } from './structured-agent-session-codex-input-perf-test-support'
 import { registerCodexInputFinalization } from './structured-agent-session-codex-input-finalization.spec'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
 import { codexStructuredPermissionPolicy } from '../../../shared/codex-permission-policy'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
-import { agentSessionSendSubmission as submission } from '../../../shared/agent-session-wire'
-import { AGENT_JOURNAL_THREAD_SCOPE as turnScope } from '../../../shared/agent-session-journal-types'
+import {
+  type AgentSessionSubscribeEvent,
+  agentSessionSendSubmission as submission
+} from '../../../shared/agent-session/agent-session-wire'
+import { AGENT_JOURNAL_THREAD_SCOPE as turnScope } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 import {
   closeTestJournalHostDatabase,
@@ -25,15 +28,15 @@ import { journalDatabasePath } from '../agent-session-journal/journal-host-datab
 import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { CodexAppServerTimeoutError } from '../../codex/codex-app-server-session'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { CodexAppServerTimeoutError } from '../../codex/app-server/codex-app-server-session'
 import {
   THREAD_ID as THREAD,
   adapterFor,
   fakeCodex
 } from '../../codex/codex-structured-session-adapter-fixture'
 import { codexTurnLifecycleFake } from '../../codex/codex-turn-lifecycle-fake'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { CodexStructuredSessionAdapter } from '../../codex/codex-structured-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { createRestTestRig } from './structured-agent-session-rest-test-rig'
@@ -162,7 +165,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
-  closeTestJournalHostDatabase(root)
+  await closeTestJournalHostDatabase(root)
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
   await rm(root, { recursive: true, force: true })
 })
@@ -759,7 +762,7 @@ async function assertInputRecoveredAfterSnapshot(id: string): Promise<void> {
     probeOwner: async () => ({ outcome: 'pid-absent' })
   })
   try {
-    await restarted.restoreReadableSessions()
+    await openTestChats(restarted)
     const recovered = await restarted.journalSnapshot(SESSION)
     const reopened = restarted.collaboratorsForTests().sessions.get(SESSION)!.journal
     expect(reopened).not.toBe(journal)
@@ -772,7 +775,7 @@ async function assertInputRecoveredAfterSnapshot(id: string): Promise<void> {
   } finally {
     await restarted.flushAllStreamedEvents()
     await restartedAdapter.closeAll()
-    closeTestJournalHostDatabase(snapshotRoot)
+    await closeTestJournalHostDatabase(snapshotRoot)
   }
 }
 
@@ -782,6 +785,13 @@ export function codexInputFinalizationFixture() {
     adapter,
     codex,
     config,
+    database: () => openTestJournalHostDatabase(root).db,
+    rewindTo: (itemId: string, expectedEpoch: string) =>
+      host.rewind(CALLER, {
+        envelope: envelope('agentSession.rewind', { itemId, expectedEpoch }),
+        itemId,
+        expectedEpoch
+      }),
     turns,
     permissionSend,
     began,

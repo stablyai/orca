@@ -3,7 +3,7 @@ import { CodexAppServerRequestError } from './app-server/codex-app-server-reques
 import {
   CodexAppServerTimeoutError,
   CodexAppServerUnsupportedError
-} from './codex-app-server-session'
+} from './app-server/codex-app-server-session'
 import {
   acquiredCodexAdapter,
   codexTurnLifecycleRig,

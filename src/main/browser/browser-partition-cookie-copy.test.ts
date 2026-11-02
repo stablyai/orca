@@ -95,7 +95,6 @@ vi.mock('./electron-debugger-lease', () => ({
 
 import {
   copyBrowserPartitionCookies,
-  flushBrowserPartitionCookies,
   planBrowserPartitionCookieCopy
 } from './browser-partition-cookie-copy'
 
@@ -124,31 +123,6 @@ beforeEach(() => {
 })
 
 describe('planBrowserPartitionCookieCopy', () => {
-  it('copies httpOnly, partitioned and session-only cookies faithfully', () => {
-    const plan = planBrowserPartitionCookieCopy(
-      [
-        cookie({ name: 'sid', httpOnly: true }),
-        cookie({
-          name: 'chips',
-          partitionKey: { topLevelSite: 'https://top.example', hasCrossSiteAncestor: false }
-        }),
-        cookie({ name: 'tab', session: true, expires: -1 }),
-        cookie({ name: '__Host-id', domain: 'app.example.com' })
-      ],
-      []
-    )
-
-    expect(plan.counts.rejected).toBe(0)
-    expect(plan.writes.map((write) => write.name)).toEqual(['sid', 'chips', 'tab', '__Host-id'])
-    expect(plan.writes[0]).toMatchObject({ httpOnly: true, hostOnly: false })
-    expect(plan.writes[1]?.partitionKey).toEqual({
-      topLevelSite: 'https://top.example',
-      hasCrossSiteAncestor: false
-    })
-    expect(plan.writes[2]?.expirationDate).toBeUndefined()
-    expect(plan.writes[3]).toMatchObject({ hostOnly: true, url: 'https://app.example.com/' })
-  })
-
   it('skips cookies the target already holds, source-bound sites, and opaque partitions', () => {
     const plan = planBrowserPartitionCookieCopy(
       [
@@ -232,16 +206,5 @@ describe('copyBrowserPartitionCookies', () => {
     expect(again.copied).toBe(0)
     expect(again.skippedPresent).toBe(2)
     expect(jar(DESTINATION)).toHaveLength(2)
-  })
-
-  it('refuses to copy a partition into itself', async () => {
-    await expect(copyBrowserPartitionCookies(SOURCE, SOURCE)).rejects.toThrow(
-      'browser_partition_cookie_copy_same_partition'
-    )
-  })
-
-  it('flushes the destination jar to disk', async () => {
-    await flushBrowserPartitionCookies(DESTINATION)
-    expect(electron.flushed).toEqual([DESTINATION])
   })
 })

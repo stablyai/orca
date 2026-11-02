@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { RpcClient } from '../transport/rpc-client'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
-import {
-  interpretOrThrowRefusalMessage,
-  refusedRpcMessageOrFallback
-} from '../transport/rpc-refusal-message'
+import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import type { RpcResponse } from '../transport/types'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import { quickCommandsRead } from './mobile-session-read-operations'
@@ -28,6 +26,11 @@ type QuickCommandsState = {
   error: string | null
   // Serialize optimistic writes and adopt the host’s canonical result.
   persist: (mutation: TerminalQuickCommandMutation) => Promise<boolean>
+}
+
+type QuickCommandError = {
+  kind: 'loadFailed' | 'saveFailed'
+  message?: string
 }
 
 type PendingMutation = {
@@ -66,10 +69,11 @@ async function loadQuickCommandsWithCutoverRetry(
 }
 
 export function useQuickCommands({ client, enabled }: Args): QuickCommandsState {
+  const t = useMobileTranslation()
   const [commands, setCommands] = useState<TerminalQuickCommand[]>([])
   const [loading, setLoading] = useState(false)
   const [ready, setReady] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<QuickCommandError | null>(null)
   const commandsRef = useRef<TerminalQuickCommand[]>([])
   const operationIdRef = useRef(0)
   const mutationContextRef = useRef<MutationContext | null>(null)
@@ -129,11 +133,14 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
         try {
           next = parseNormalizedTerminalQuickCommands(quickCommandsRead.interpret(response))
         } catch (err) {
-          setError(refusedRpcMessageOrFallback(err, 'Failed to load quick commands'))
+          setError({
+            kind: 'loadFailed',
+            message: refusedRpcMessageOrFallback(err, '') || undefined
+          })
           return
         }
         if (!next) {
-          setError('Failed to load quick commands')
+          setError({ kind: 'loadFailed' })
           return
         }
         mutationContext.confirmed = next
@@ -146,7 +153,7 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
           operationId === operationIdRef.current &&
           mutationContextRef.current === mutationContext
         ) {
-          setError(err instanceof Error ? err.message : 'Failed to load quick commands')
+          setError({ kind: 'loadFailed', message: err instanceof Error ? err.message : undefined })
         }
       } finally {
         if (
@@ -184,25 +191,34 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
 
       const send = async (): Promise<boolean> => {
         let succeeded = false
-        let failureMessage: string | null = null
+        let failureMessage: QuickCommandError | null = null
         try {
           const response = await quickCommandsWrite.request(client, {
             mutation: commandMutation
           })
           let confirmed
-          confirmed = interpretOrThrowRefusalMessage(
-            () => parseNormalizedTerminalQuickCommands(quickCommandsWrite.interpret(response)),
-            'Failed to save quick command'
-          )
+          try {
+            confirmed = parseNormalizedTerminalQuickCommands(quickCommandsWrite.interpret(response))
+          } catch (err) {
+            failureMessage = {
+              kind: 'saveFailed',
+              message: refusedRpcMessageOrFallback(err, '') || undefined
+            }
+            return false
+          }
           if (!confirmed) {
             // An invalid payload is not an empty list: adopting it could erase host commands on the next write.
-            throw new Error('Failed to save quick command')
+            failureMessage = { kind: 'saveFailed' }
+            return false
           }
           mutationContext.confirmed = confirmed
           succeeded = true
           return true
         } catch (err) {
-          failureMessage = err instanceof Error ? err.message : 'Failed to save quick command'
+          failureMessage = {
+            kind: 'saveFailed',
+            message: err instanceof Error ? err.message : undefined
+          }
           return false
         } finally {
           mutationContext.pending = mutationContext.pending.filter(
@@ -234,5 +250,13 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
     [client, loading, ready]
   )
 
-  return { commands, loading, ready, error, persist }
+  const errorMessage =
+    error === null
+      ? null
+      : (error.message ??
+        (error.kind === 'loadFailed'
+          ? t('session.useQuickCommands.loadFailed', 'Failed to load quick commands')
+          : t('session.useQuickCommands.saveFailed', 'Failed to save quick command')))
+
+  return { commands, loading, ready, error: errorMessage, persist }
 }

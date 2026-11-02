@@ -623,7 +623,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         protocolVersion: GET_SIZE_PROTOCOL_VERSION - 1
       })
       try {
-        await expect(rig.adapter.attach(sessionId)).resolves.toBeUndefined()
+        await expect(rig.adapter.attach(sessionId)).resolves.toMatchObject({ id: sessionId })
         expect(rig.request).not.toHaveBeenCalledWith('getSize', expect.anything())
         expect(rig.request).toHaveBeenCalledWith('listSessions', undefined)
         expect(rig.request).toHaveBeenCalledWith(
@@ -647,7 +647,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         getSizeError: new Error('Unknown request type: getSize')
       })
       try {
-        await expect(rig.adapter.attach(sessionId)).resolves.toBeUndefined()
+        await expect(rig.adapter.attach(sessionId)).resolves.toMatchObject({ id: sessionId })
         expect(rig.request).toHaveBeenCalledWith('listSessions', undefined)
         expect(rig.request).toHaveBeenCalledWith(
           'createOrAttach',

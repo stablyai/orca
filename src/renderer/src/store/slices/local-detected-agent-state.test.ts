@@ -101,6 +101,84 @@ describe('local detected agent context lifecycle', () => {
     expect(store.getState().detectedAgentIds).toEqual(['codex'])
   })
 
+  it('sends a refresh click as a wake instead of joining a background refresh', async () => {
+    const store = createTestStore([makeRepo('repo-1')])
+    let finishBackground: (value: unknown) => void = () => {}
+    refreshAgents.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishBackground = resolve
+      })
+    )
+
+    const background = store.getState().refreshDetectedAgents()
+    // The background call may be refused for a stopped WSL distro; the click must reach main itself.
+    const click = store.getState().refreshDetectedAgents(undefined, { wakeWslDistro: true })
+    const again = store.getState().refreshDetectedAgents()
+
+    expect(refreshAgents).toHaveBeenCalledTimes(2)
+    expect(refreshAgents).toHaveBeenLastCalledWith(expect.objectContaining({ wakeWslDistro: true }))
+    finishBackground({ agents: ['claude'], pathSource: 'process_env', pathFailureReason: 'none' })
+    await Promise.all([background, click, again])
+  })
+
+  it('retries a refused list as a wake when an agent picker opens, without joining a background probe', async () => {
+    const store = createTestStore([makeRepo('repo-1')])
+    detectAgents.mockRejectedValueOnce(new Error("WSL distro 'Ubuntu' is not running."))
+    await store.getState().ensureDetectedAgents()
+    expect(store.getState().readLocalAgentInventory().state).toBe('failed')
+
+    let finishBackground: (ids: string[]) => void = () => {}
+    detectAgents
+      .mockReturnValueOnce(
+        new Promise<string[]>((resolve) => {
+          finishBackground = resolve
+        })
+      )
+      .mockResolvedValueOnce(['codex'])
+    const background = store.getState().ensureDetectedAgents()
+    const picker = store.getState().ensureDetectedAgentsForPicker()
+
+    expect(detectAgents).toHaveBeenCalledTimes(3)
+    expect(detectAgents).toHaveBeenLastCalledWith(expect.objectContaining({ wakeWslDistro: true }))
+    await expect(picker).resolves.toEqual(['codex'])
+    // The background probe settles later but no longer owns the context.
+    finishBackground([])
+    await background
+    expect(store.getState().readLocalAgentInventory()).toEqual({
+      ids: ['codex'],
+      state: 'successful'
+    })
+    // A known list is reused: opening the picker again probes nothing.
+    await store.getState().ensureDetectedAgentsForPicker()
+    expect(detectAgents).toHaveBeenCalledTimes(3)
+  })
+
+  it('marks only an E9 refusal as refused, so a picker never retries real failures', async () => {
+    const store = createTestStore([makeRepo('repo-1')])
+    detectAgents.mockRejectedValueOnce(
+      new Error(
+        "Error invoking remote method 'preflight:detectAgents': WslDistroStoppedError: WSL distro 'Ubuntu' is not running. Retry, or open a terminal in it, to start it."
+      )
+    )
+    await store.getState().ensureDetectedAgents()
+    expect(store.getState().isLocalAgentInventoryRefused()).toBe(true)
+
+    detectAgents.mockRejectedValueOnce(new Error('wsl.exe timed out'))
+    await store.getState().ensureDetectedAgents()
+    expect(store.getState().readLocalAgentInventory().state).toBe('failed')
+    expect(store.getState().isLocalAgentInventoryRefused()).toBe(false)
+  })
+
+  it('forgets a refusal when the local inventory is cleared', async () => {
+    const store = createTestStore([makeRepo('repo-1')])
+    detectAgents.mockRejectedValueOnce(new Error("WSL distro 'Ubuntu' is not running."))
+    await store.getState().ensureDetectedAgents()
+    expect(store.getState().isLocalAgentInventoryRefused()).toBe(true)
+
+    store.getState().clearLocalDetectedAgents()
+    expect(store.getState().isLocalAgentInventoryRefused()).toBe(false)
+  })
+
   it('re-detects re-enabled agents and prevents pre-change requests from restoring caches', async () => {
     const store = createTestStore([])
     let finishOld: (ids: string[]) => void = () => {}

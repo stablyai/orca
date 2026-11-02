@@ -1,4 +1,4 @@
-import { CodexAppServerTimeoutError } from './codex-app-server-session'
+import { CodexAppServerTimeoutError } from './app-server/codex-app-server-session'
 import {
   boundedTimeout,
   terminateCodexBackgroundTerminals,

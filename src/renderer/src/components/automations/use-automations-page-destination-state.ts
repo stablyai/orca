@@ -4,7 +4,9 @@ import type {
   StableAutomationCatalogRef
 } from '../../../../shared/automation-owner-ref'
 import {
-  getWorktreeExecutionHostId,
+  getRepoExecutionHostId,
+  normalizeExecutionHostId,
+  toSshExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../../shared/execution-host'
 import {
@@ -30,6 +32,12 @@ import {
   automationRuntimePairingRevision,
   groupReposByAutomationAuthority
 } from './automation-authority-identity'
+import { resolveIndexedWorktreeOwner } from '@/lib/worktree-runtime-owner-index'
+import {
+  createRepoRowExecutionHostLookup,
+  resolveWorktreeExecutionHost
+} from '../../../../shared/worktree-execution-host-resolution'
+import { automationWorktreesForRepo } from './automation-list-row-identity'
 import { getDefaultWorktree } from './automation-draft-model'
 import type { AutomationsPageListState } from './use-automations-page-list-state'
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
@@ -52,8 +60,6 @@ export function useAutomationsPageDestinationState({
     repos,
     worktreesByRepo,
     activeWorktreeId,
-    repoMap,
-    worktreeMap,
     runtimeEnvironments,
     fetchRuntimeEnvironmentRepos
   } = store
@@ -77,14 +83,26 @@ export function useAutomationsPageDestinationState({
     }
   }, [hostCatalog.resolution.entry, runtimeEnvironments])
   const repoTables = useMemo(() => groupReposByAutomationAuthority(repos), [repos])
-  const activeWorkspaceHostStableKey = useMemo(() => {
-    const worktree = activeWorktreeId ? worktreeMap.get(activeWorktreeId) : null
-    return worktree
-      ? automationCreateHostStableKey(
-          getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId))
-        )
+  const activeWorkspaceOwner = useMemo(() => {
+    const indexed = activeWorktreeId
+      ? resolveIndexedWorktreeOwner(worktreesByRepo, activeWorktreeId)
       : null
-  }, [activeWorktreeId, repoMap, worktreeMap])
+    if (indexed?.kind !== 'resolved') {
+      return null
+    }
+    const worktree = indexed.owner
+    const resolved = resolveWorktreeExecutionHost(createRepoRowExecutionHostLookup(repos), worktree)
+    return resolved.kind === 'resolved'
+      ? {
+          worktree,
+          hostId: worktree.runtimeOwnerEnvironmentId
+            ? toRuntimeExecutionHostId(worktree.runtimeOwnerEnvironmentId)
+            : resolved.hostId,
+          repo: resolved.owner
+        }
+      : null
+  }, [activeWorktreeId, repos, worktreesByRepo])
+  const activeWorkspaceHostStableKey = automationCreateHostStableKey(activeWorkspaceOwner?.hostId)
   const createDestination = useAutomationCreateDestination({
     open: createOpen && editingAutomationId === null,
     catalog: hostCatalog.catalog,
@@ -100,9 +118,17 @@ export function useAutomationsPageDestinationState({
     createDestination.control.resolution.authority.kind === 'runtime'
       ? createDestination.control.resolution.authority.environmentId
       : null
-  const createDestinationHostId = createDestinationRuntimeEnvironmentId
-    ? toRuntimeExecutionHostId(createDestinationRuntimeEnvironmentId)
-    : undefined
+  const createResolution = createDestination.control.resolution
+  const createDestinationHostId =
+    normalizeExecutionHostId(
+      createResolution.status !== 'ready'
+        ? undefined
+        : createResolution.authority.kind === 'runtime'
+          ? toRuntimeExecutionHostId(createResolution.authority.environmentId)
+          : createResolution.destination.selector.kind === 'ssh'
+            ? toSshExecutionHostId(createResolution.destination.selector.targetId)
+            : 'local'
+    ) ?? undefined
   useEffect(() => {
     if (createDestinationRuntimeEnvironmentId) {
       void fetchRuntimeEnvironmentRepos(createDestinationRuntimeEnvironmentId)
@@ -120,8 +146,19 @@ export function useAutomationsPageDestinationState({
     [automationHostTarget, capturedAutomationOwners]
   )
   const automationHostTargetFor = useCallback(
-    (row: { key: string }): AutomationHostTarget | null => automationHostTargetForRowKey(row.key),
-    [automationHostTargetForRowKey]
+    (row: {
+      key: string
+      catalogRef?: StableAutomationCatalogRef | null
+    }): AutomationHostTarget | null => {
+      const authority = row.catalogRef?.authority
+      if (!capturedAutomationOwner(capturedAutomationOwners, row.key).owner && authority) {
+        return authority.kind === 'runtime'
+          ? { kind: 'environment', environmentId: authority.environmentId }
+          : { kind: 'local' }
+      }
+      return automationHostTargetForRowKey(row.key)
+    },
+    [automationHostTargetForRowKey, capturedAutomationOwners]
   )
   const automationAuthorityForRow = useCallback(
     (row: { catalogRef?: StableAutomationCatalogRef | null }): AutomationAuthorityRef => {
@@ -187,22 +224,24 @@ export function useAutomationsPageDestinationState({
   )
 
   const getDefaultTarget = useCallback(() => {
-    const activeWorktree = activeWorktreeId ? worktreeMap.get(activeWorktreeId) : null
-    const activeRepo = activeWorktree ? (repoMap.get(activeWorktree.repoId) ?? null) : null
-    const eligibleActiveRepo =
-      activeRepo && editorProjects.some((project) => project.id === activeRepo.id)
-        ? activeRepo
-        : null
+    const activeRepo = activeWorkspaceOwner?.repo
+    const activeHostId = activeWorkspaceOwner?.hostId
+    const eligibleActiveRepo = activeRepo
+      ? editorProjects.find(
+          (project) =>
+            project.id === activeRepo.id && getRepoExecutionHostId(project) === activeHostId
+        )
+      : null
     const fallbackRepo = eligibleActiveRepo ?? editorProjects[0] ?? null
-    const fallbackWorktrees = fallbackRepo ? (worktreesByRepo[fallbackRepo.id] ?? []) : []
-    const targetWorktree =
-      getDefaultWorktree(fallbackWorktrees) ??
-      (activeWorktree && activeWorktree.repoId === fallbackRepo?.id ? activeWorktree : null)
+    const fallbackWorktrees = fallbackRepo
+      ? automationWorktreesForRepo(worktreesByRepo[fallbackRepo.id] ?? [], fallbackRepo, repos)
+      : []
+    const targetWorktree = getDefaultWorktree(fallbackWorktrees)
     return {
       projectId: fallbackRepo?.id ?? targetWorktree?.repoId ?? '',
       workspaceId: targetWorktree?.id ?? ''
     }
-  }, [activeWorktreeId, editorProjects, repoMap, worktreeMap, worktreesByRepo])
+  }, [activeWorkspaceOwner, editorProjects, repos, worktreesByRepo])
 
   return {
     automationHostTarget,

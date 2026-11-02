@@ -105,6 +105,13 @@ export const LAYOUT_APPLY_METHODS = [
     permission: 'workspace',
     params: LayoutReopenHeldPanesParams,
     handler: async (params, { runtime }) => runtime.reopenHeldTerminalPanes(params.panes)
+  }),
+  // The user's Start on panes held for a stopped WSL distro; main's frames show their start.
+  defineMethod({
+    name: 'layout.startWslHeldPanes',
+    permission: 'workspace',
+    params: LayoutReopenHeldPanesParams,
+    handler: async (params, { runtime }) => runtime.startWslHeldTerminalPanes(params.panes)
   })
 ]
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import * as agentView from '../claude/agent-view-service'
+import * as agentView from '../claude/agent-view/agent-view-service'
 import { createGlobalSettingsFixture } from '../../shared/global-settings-test-fixture'
 import { setupPtyIpcSuite } from './pty/pty-ipc-test-harness'
 import { createDaemonActiveProviderFixtures } from './pty/pty-ipc-daemon-provider-fixtures'

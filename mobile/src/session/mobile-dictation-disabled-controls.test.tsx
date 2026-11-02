@@ -1,7 +1,11 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
-vi.mock('react-native', () => ({ Pressable: 'Pressable', ActivityIndicator: 'ActivityIndicator' }))
+vi.mock('react-native', () => ({
+  Pressable: 'Pressable',
+  ActivityIndicator: 'ActivityIndicator',
+  StyleSheet: { create: <T,>(styles: T) => styles }
+}))
 vi.mock('lucide-react-native', () => ({ ImagePlus: 'ImagePlus', Mic: 'Mic' }))
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 

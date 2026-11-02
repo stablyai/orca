@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import { resolveCreatePrIntentRemoteStep } from '../../../src/shared/source-control-create-review-intent'
 import type { MobileGitStatusResult } from './mobile-git-status'
 import type { MobileHostedReviewCreateIntentProgress } from './mobile-hosted-review-create-intent'
@@ -50,19 +51,32 @@ export async function applyMobileHostedReviewRemotePrerequisite(
       result = await pushMobileHostedReviewBranch(
         client,
         { worktree, publish: true },
-        'Failed to publish branch'
+        translate(
+          'sourceControl.hostedReviewRemotePrerequisite.publishFailed',
+          'Failed to publish branch'
+        )
       )
       break
     case 'push':
       input.onProgress?.('pushing')
-      result = await pushMobileHostedReviewBranch(client, { worktree }, 'Failed to push commits')
+      result = await pushMobileHostedReviewBranch(
+        client,
+        { worktree },
+        translate(
+          'sourceControl.hostedReviewRemotePrerequisite.pushFailed',
+          'Failed to push commits'
+        )
+      )
       break
     case 'force_push':
       input.onProgress?.('force_pushing')
       result = await pushMobileHostedReviewBranch(
         client,
         { worktree, forceWithLease: true },
-        'Failed to force push with lease'
+        translate(
+          'sourceControl.hostedReviewRemotePrerequisite.forcePushFailed',
+          'Failed to force push with lease'
+        )
       )
       break
     case 'fast_forward':

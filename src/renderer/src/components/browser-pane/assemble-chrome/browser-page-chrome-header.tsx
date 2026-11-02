@@ -121,6 +121,8 @@ export function BrowserPageChromeHeader({
         worktreeId={worktreeId}
         activeGroupId={annotationSend.activeGroupId}
         browserAnnotationsPrompt={annotationSend.browserAnnotationsPrompt}
+        includePageDetails={annotationSend.includePageDetails}
+        handleIncludePageDetailsChange={annotationSend.handleIncludePageDetailsChange}
         handleBrowserAnnotationsSentToAgent={annotationSend.handleBrowserAnnotationsSentToAgent}
         handleBrowserAnnotationsHandedOff={annotationSend.handleBrowserAnnotationsHandedOff}
         handleCopyBrowserAnnotations={annotationSend.handleCopyBrowserAnnotations}

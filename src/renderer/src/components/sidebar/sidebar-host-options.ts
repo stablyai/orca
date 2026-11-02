@@ -204,13 +204,10 @@ export function getSidebarHostVisibilityLabel(
   if (checkedRows.length === 0) {
     return translate('auto.components.sidebar.sidebarHostOptions.hosts', 'Hosts')
   }
-  return translate(
-    'auto.components.sidebar.sidebarHostOptions.visibleHosts_other',
-    '{{count}} hosts',
-    {
-      count: checkedRows.length
-    }
-  )
+  return translate('auto.components.sidebar.sidebarHostOptions.visibleHosts', '{{count}} hosts', {
+    count: checkedRows.length,
+    defaultValue_one: '{{count}} host'
+  })
 }
 
 export function getSidebarHostHealthLabel(

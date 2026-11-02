@@ -3,8 +3,9 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 // Electron floor preserves Linux environ/getenv UAF fix (43.7.0, #20081) and webview reinsert fix (43.7.4, electron#53989).
-// 43.7.8 fixes iframe find-in-page looping (electron#54199); 43.8.1 blocks compromised eMudhra TLS intermediates (GHSA-jr5w-w6x2-84p9).
-const MINIMUM_ELECTRON_VERSION = '43.8.1'
+// 43.7.8 fixes iframe find-in-page looping (electron#54199); 43.8.1 blocks compromised eMudhra TLS intermediates (GHSA-jr5w-w6x2-84p9);
+// 43.8.4 closes File System Access blocklist bypasses and malformed-asar handling (electron#54677, #55331, #55179).
+const MINIMUM_ELECTRON_VERSION = '43.8.4'
 
 function parseVersion(specifier: string): [number, number, number] {
   const match = /(\d+)\.(\d+)\.(\d+)/.exec(specifier)

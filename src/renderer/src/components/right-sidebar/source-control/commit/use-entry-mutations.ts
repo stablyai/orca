@@ -1,16 +1,22 @@
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { ConflictResolution } from '../../../../../../shared/source-control-entry-actions'
+import { editorFileHoldKey, pathMutationHoldKeys } from '@/components/editor/editor-autosave-holds'
 import {
   notifyEditorExternalFileChange,
+  requestEditorFileSave,
   requestEditorSaveQuiesce
 } from '@/components/editor/editor-autosave'
 import { getConnectionId } from '@/lib/connection-context'
 import { basename } from '@/lib/path'
+import { useAppStore } from '@/store'
 import {
   bulkDiscardRuntimeGitPaths,
   bulkUnstageRuntimeGitPaths,
   discardRuntimeGitPath,
+  resolveRuntimeGitConflict,
   stageRuntimeGitPath,
   unstageRuntimeGitPath
 } from '@/runtime/runtime-git-working-tree-client'
@@ -90,6 +96,58 @@ export function useSourceControlEntryMutations({
           : unstageRuntimeGitPath
       ),
     [runEntryMutation]
+  )
+
+  const resolvingConflictKeysRef = useRef(new Set<string>())
+  const handleResolveConflict = useCallback(
+    (entry: GitStatusEntry, resolution: ConflictResolution): Promise<void> => {
+      // One resolution per file at a time: a second click could stage before an earlier delete lands.
+      const resolvingKey = `${activeWorktreeId}\0${entry.path}`
+      if (
+        !activeWorktreeId ||
+        !worktreePath ||
+        !entry.conflictKind ||
+        resolvingConflictKeysRef.current.has(resolvingKey)
+      ) {
+        return Promise.resolve()
+      }
+      // Staging drops Git's u record; tracking keeps the row's Resolved locally continuity.
+      useAppStore.getState().trackConflictPath(activeWorktreeId, entry.path, entry.conflictKind)
+      const editorTarget = {
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        relativePath: entry.path,
+        runtimeEnvironmentId:
+          activeRepoTarget?.kind === 'environment' ? activeRepoTarget.environmentId : null
+      }
+      const resolve = async (context: RuntimeGitContext, filePath: string): Promise<void> => {
+        if (resolution !== 'keep_deletion') {
+          // Same view match as autosave holds: every workspace's view of this physical file, not another host's.
+          const current = useAppStore.getState()
+          const keys = pathMutationHoldKeys(current, editorTarget)
+          const dirtyFiles = current.openFiles.filter(
+            (file) => file.isDirty && keys.has(editorFileHoldKey(current, file))
+          )
+          // Stage what the user sees: an unsaved resolution must reach disk before git add reads it.
+          await Promise.all(dirtyFiles.map((file) => requestEditorFileSave({ fileId: file.id })))
+          await resolveRuntimeGitConflict(context, filePath, resolution)
+          return
+        }
+        // Hold autosave so an open tab cannot recreate the file the host removes.
+        const releaseAutoSave = await requestEditorSaveQuiesce(editorTarget)
+        try {
+          await resolveRuntimeGitConflict(context, filePath, resolution)
+          notifyEditorExternalFileChange(editorTarget)
+        } finally {
+          releaseAutoSave()
+        }
+      }
+      resolvingConflictKeysRef.current.add(resolvingKey)
+      return runEntryMutation('stage', entry.path, resolve).finally(() => {
+        resolvingConflictKeysRef.current.delete(resolvingKey)
+      })
+    },
+    [activeRepoTarget, activeWorktreeId, runEntryMutation, worktreePath]
   )
 
   // Throw for bulk callers to aggregate; per-row callers report their own failures.
@@ -191,5 +249,11 @@ export function useSourceControlEntryMutations({
     [activeRepoTarget, activeWorktreeId, worktreePath]
   )
 
-  return { handleStage, handleUnstage, discardSingle, discardMany }
+  return {
+    handleStage,
+    handleUnstage,
+    handleResolveConflict,
+    discardSingle,
+    discardMany
+  }
 }

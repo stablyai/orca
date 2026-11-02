@@ -4,7 +4,12 @@ import type { WslHostAddResult } from '../../shared/wsl-host-types'
 import { OrcadHostUnsupportedError } from '../orcad/orcad-host-unavailable'
 import type { WslHostConnector } from './wsl-host-service'
 import { WslOrcadLaunchDeferredError } from './wsl-orcad-connection-errors'
-import { WslDistroVersion1Error, wslUnsupportedDistroFixMessage } from './wsl-distro-unsupported'
+import {
+  WslDistroNotRegisteredError,
+  WslDistroVersion1Error,
+  wslUnsupportedDistroFixMessage
+} from './wsl-distro-unsupported'
+import { wslHostAddRefusal } from './wsl-host-add-admission'
 import { RemoteNodeRuntimeSelfTestError } from '../ssh/orcad-remote-node-runtime-report'
 import type { WslOrcadConnection } from './wsl-orcad-connection'
 
@@ -30,6 +35,12 @@ export async function connectForWslHostAdd(
     if (error instanceof WslOrcadLaunchDeferredError) {
       return { ok: false, kind: 'deferred', message: error.launch.reason }
     }
+    if (error instanceof WslDistroVersion1Error) {
+      return wslHostAddRefusal('unsupported-wsl1', 'wsl1', { distro: error.distro })
+    }
+    if (error instanceof WslDistroNotRegisteredError) {
+      return wslHostAddRefusal('unsupported-distro', 'notRegistered', { distro: error.distro })
+    }
     return {
       ok: false,
       kind: connectFailureKind(error),
@@ -46,9 +57,6 @@ export async function connectForWslHostAdd(
 
 /** A distro Orca can't run in reads apart from a connect that may work on retry. */
 function connectFailureKind(error: unknown): WslHostAddRefusal['kind'] {
-  if (error instanceof WslDistroVersion1Error) {
-    return 'unsupported-wsl1'
-  }
   return error instanceof OrcadHostUnsupportedError ||
     error instanceof RemoteNodeRuntimeSelfTestError
     ? 'unsupported-distro'

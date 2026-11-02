@@ -1,3 +1,4 @@
+import type { ActionArgumentChoices } from '../../../../../../shared/source-control-action-argument-choices'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type {
   RepoSourceControlAiOverrides,
@@ -22,7 +23,9 @@ export type RepositorySourceControlAiActionRowsProps = {
   ) => void
   onActionLaunchPreferencesChange: (
     actionId: SourceControlActionId,
-    value: SourceControlActionLaunchPreferences | undefined
+    value: SourceControlActionLaunchPreferences | undefined,
+    userArgs?: string,
+    argumentChoices?: ActionArgumentChoices | null
   ) => void
   onActionTemplateChange: (actionId: SourceControlActionId, value: string) => void
   onActionAgentArgsChange: (

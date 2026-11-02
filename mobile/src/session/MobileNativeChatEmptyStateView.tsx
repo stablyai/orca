@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native'
 import type { NativeChatEmptyStateCopy } from '../../../src/shared/native-chat/native-chat-empty-state'
-import { styles } from './mobile-native-chat-view-styles'
+import { styles } from './native-chat/mobile-native-chat-view-styles'
 
 export function MobileNativeChatEmptyStateView({ copy }: { copy: NativeChatEmptyStateCopy }) {
   return (

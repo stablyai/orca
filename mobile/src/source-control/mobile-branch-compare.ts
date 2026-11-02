@@ -1,4 +1,5 @@
 import { compareFileNames } from '../../../src/shared/file-name-sort'
+import { translate } from '../i18n/mobile-i18n'
 import type {
   MobileGitBranchChangeEntry,
   MobileGitBranchCompareReply,
@@ -11,7 +12,7 @@ export type MobileGitBranchCompareResult = MobileGitBranchCompareReply
 export type MobileBranchCompareSection<
   TEntry extends MobileGitBranchChangeEntry = MobileGitBranchChangeEntry
 > = {
-  title: 'Committed on Branch'
+  title: string
   data: TEntry[]
 }
 
@@ -24,23 +25,9 @@ export function buildMobileBranchCompareSection<TEntry extends MobileGitBranchCh
   const data = [...entries]
   data.sort((a, b) => compareFileNames(a.path, b.path))
   return {
-    title: 'Committed on Branch',
+    title: translate('sourceControl.branchCompare.sectionTitle', 'Committed on Branch'),
     data
   }
-}
-
-export function formatMobileBranchCompareSummary(
-  summary: MobileGitBranchCompareSummary
-): string | null {
-  if (summary.status !== 'ready') {
-    return summary.errorMessage ?? null
-  }
-  const parts = [`${summary.changedFiles} ${summary.changedFiles === 1 ? 'file' : 'files'}`]
-  if (summary.commitsAhead !== undefined) {
-    parts.push(`${summary.commitsAhead} ${summary.commitsAhead === 1 ? 'commit' : 'commits'}`)
-  }
-  parts.push(`vs ${summary.baseRef}`)
-  return parts.join(' - ')
 }
 
 export function canOpenMobileBranchCompareDiff(summary: MobileGitBranchCompareSummary): boolean {

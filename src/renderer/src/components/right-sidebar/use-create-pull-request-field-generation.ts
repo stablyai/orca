@@ -1,3 +1,4 @@
+import { textGenerationErrorText } from '@/lib/text-generation-error-copy'
 import { translate } from '@/i18n/i18n'
 import { useCallback, useEffect, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -103,10 +104,17 @@ export function useCreatePullRequestFieldGeneration({
       'Create PR in progress...'
     )
   } else if (!resolvedPullRequestAi?.ok) {
-    generateDisabledReason =
-      resolvedPullRequestAi?.error ?? 'Enable Source Control AI in Settings -> Git.'
+    generateDisabledReason = resolvedPullRequestAi
+      ? textGenerationErrorText(resolvedPullRequestAi)
+      : translate(
+          'sourceControl.textGeneration.enableSourceControlAi',
+          'Enable Source Control AI in Settings -> Git.'
+        )
   } else if (!base.trim()) {
-    generateDisabledReason = 'Choose a base branch before generating.'
+    generateDisabledReason = translate(
+      'sourceControl.textGeneration.chooseBaseBranch',
+      'Choose a base branch before generating.'
+    )
   }
   const generateDisabled = !effectiveGenerating && Boolean(generateDisabledReason)
 

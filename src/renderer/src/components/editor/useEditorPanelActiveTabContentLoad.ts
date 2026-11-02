@@ -155,10 +155,10 @@ export function useEditorPanelActiveTabContentLoad({
         )
       }
       if (isChangesMode && needsDiffRead(fileToLoad.id)) {
-        void loadDiffContent(fileToLoad)
+        void loadDiffContent(fileToLoad, load)
       }
     } else if (isReloadableSingleFileDiffTab(fileToLoad) && needsDiffRead(fileToLoad.id)) {
-      void loadDiffContent(fileToLoad)
+      void loadDiffContent(fileToLoad, load)
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [

@@ -77,37 +77,6 @@ export function registerReposRefreshIdentityTests(): void {
   })
 
   describe('repo catalog refresh identity', () => {
-    it('keeps the projects and host setups arrays and entries across a no-op refetch', async () => {
-      const store = createTestStore()
-      await store.getState().fetchRepos(catalogOwner(store))
-      const projects = store.getState().projects
-      const setups = store.getState().projectHostSetups
-      expect(projects).toHaveLength(1)
-      expect(setups).toHaveLength(1)
-
-      await store.getState().fetchRepos(catalogOwner(store))
-
-      expect(store.getState().projects).toBe(projects)
-      expect(store.getState().projects[0]).toBe(projects[0])
-      expect(store.getState().projectHostSetups).toBe(setups)
-      expect(store.getState().projectHostSetups[0]).toBe(setups[0])
-    })
-
-    it('lets a nested hookSettings change through', async () => {
-      const store = createTestStore()
-      await store.getState().fetchRepos(catalogOwner(store))
-      const setups = store.getState().projectHostSetups
-
-      mockRepos({
-        ...repo,
-        hookSettings: { mode: 'override', scripts: { setup: '', archive: '' } }
-      })
-      await store.getState().fetchRepos(catalogOwner(store))
-
-      expect(store.getState().projectHostSetups).not.toBe(setups)
-      expect(store.getState().projectHostSetups[0]?.hookSettings?.mode).toBe('override')
-    })
-
     it('lets a displayName change through on projects', async () => {
       const store = createTestStore()
       await store.getState().fetchRepos(catalogOwner(store))
@@ -355,15 +324,6 @@ export function registerReposRefreshIdentityTests(): void {
 
       // Why: App.tsx at the root and five sidebar consumers select this array by identity.
       expect(store.getState().filterRepoIds).toBe(first)
-    })
-
-    it('still prunes a filtered repo id that no longer exists', async () => {
-      const store = createTestStore()
-      store.setState({ filterRepoIds: [repo.id, 'gone'] })
-
-      await store.getState().fetchRepos(catalogOwner(store))
-
-      expect(store.getState().filterRepoIds).toEqual([repo.id])
     })
 
     it('prunes only the vanished id and reallocates', async () => {

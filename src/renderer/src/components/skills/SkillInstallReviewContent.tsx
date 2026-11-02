@@ -1,3 +1,4 @@
+// @protected-copy: skill install trust review.
 import type { ReactNode } from 'react'
 import { AlertTriangle, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -78,17 +79,11 @@ export function SkillInstallOutcome({ result }: { result: SkillInstallResult }):
         <div>
           <p className="text-sm font-medium">{skillInstallResultLabel(result)}</p>
           <p className="text-xs text-muted-foreground">
-            {result.placements.length === 1
-              ? translate(
-                  'auto.components.skills.SkillInstallReviewContent.placementsChecked_one',
-                  '{{count}} placement checked.',
-                  { count: result.placements.length }
-                )
-              : translate(
-                  'auto.components.skills.SkillInstallReviewContent.placementsChecked_other',
-                  '{{count}} placements checked.',
-                  { count: result.placements.length }
-                )}
+            {translate(
+              'auto.components.skills.SkillInstallReviewContent.placementsChecked',
+              '{{count}} placements checked.',
+              { count: result.placements.length, defaultValue_one: '{{count}} placement checked.' }
+            )}
           </p>
         </div>
       </div>

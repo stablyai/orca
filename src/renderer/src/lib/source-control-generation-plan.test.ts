@@ -15,6 +15,16 @@ describe('planSourceControlCommitMessageGeneration', () => {
     ).toEqual({ ok: false, error: 'Command input is empty.' })
   })
 
+  it('describes OMP file delivery in dry-run plans', () => {
+    const result = planSourceControlCommitMessageGeneration({
+      agentId: 'omp',
+      model: 'gpt-5.5',
+      thinkingLevel: 'low'
+    })
+
+    expect(result.ok && result.delivery).toContain('temporary file attachment')
+  })
+
   it('expands linkedIssue when validating commit and pull-request recipes', () => {
     for (const actionId of ['commitMessage', 'pullRequest'] as const) {
       // Why: `{prompt}` puts the rendered template in argv, so commandLabel shows it.

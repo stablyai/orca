@@ -172,7 +172,11 @@ describe('host exit authority over queued renderer graphs', () => {
     runtime.onPtyExit(PTY, code, FIRST, { providerExitObserved: true })
     graph(runtime)
     expect(runtime.capture().connected).toBeUndefined()
-    expect(runtime.getPtyLivenessVerdict(PTY)).toEqual({ status: 'exited' })
+    expect(runtime.getPtyLivenessVerdict(PTY)).toEqual({
+      status: 'exited',
+      incarnationId: FIRST,
+      cause: { kind: 'unknown', reason: code < 0 ? 'stop_unverified' : 'cause_unreported' }
+    })
   })
 
   it('admits a new renderer pane without inventing a host verdict', () => {
@@ -246,6 +250,10 @@ describe('host exit authority over queued renderer graphs', () => {
     }
     expect(runtime.verdictCount).toBe(256)
     expect(runtime.getPtyLivenessVerdict(`${PTY}-0`)).toBeNull()
-    expect(runtime.getPtyLivenessVerdict(`${PTY}-999`)).toEqual({ status: 'exited' })
+    expect(runtime.getPtyLivenessVerdict(`${PTY}-999`)).toEqual({
+      status: 'exited',
+      incarnationId: undefined,
+      cause: { kind: 'unknown', reason: 'cause_unreported' }
+    })
   })
 })

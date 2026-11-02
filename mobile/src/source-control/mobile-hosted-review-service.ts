@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import type { MobileHostedReviewEligibilityReply } from './hosted-review-reply-schema'
 import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import type { RpcSendParams } from '../transport/rpc-params-contract'
@@ -71,6 +72,7 @@ export async function resolveMobileHostedReviewPrefill(
   args: {
     branch: string | undefined
     title: string
+    base?: string
     hasUncommittedChanges?: boolean
     hasUpstream?: boolean
     ahead?: number
@@ -89,6 +91,7 @@ export async function resolveMobileHostedReviewPrefill(
   try {
     const eligibility = await fetchMobileHostedReviewEligibility(client, worktreeId, {
       branch: args.branch,
+      ...(args.base ? { base: args.base } : {}),
       hasUncommittedChanges: args.hasUncommittedChanges,
       hasUpstream: args.hasUpstream,
       ahead: args.ahead,
@@ -161,25 +164,23 @@ export type MobileHostedReviewCreateOutcome =
   | { ok: true; url: string; number?: number; existing?: boolean; linkError?: string }
   | { ok: false; error: string }
 
-const PUSH_BEFORE_CREATE_ERROR = 'Push failed. Resolve the push error, then try again.'
-
 // The form intentionally uses one actionable fallback for all push failures.
 async function pushMobileBranchBeforeCreate(
   client: RpcOperationSender,
   worktreeId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const pushed = await pushMobileHostedReviewBranch(
-    client,
-    { worktree: `id:${worktreeId}` },
-    PUSH_BEFORE_CREATE_ERROR
+  const error = translate(
+    'sourceControl.hostedReviewService.pushBeforeCreateFailed',
+    'Push failed. Resolve the push error, then try again.'
   )
-  return pushed.ok ? { ok: true } : { ok: false, error: PUSH_BEFORE_CREATE_ERROR }
+  const pushed = await pushMobileHostedReviewBranch(client, { worktree: `id:${worktreeId}` }, error)
+  return pushed.ok ? { ok: true } : { ok: false, error }
 }
 
 function formatMobileHostedReviewCreateError(
   result: MobileHostedReviewCreateReply,
   pushed: boolean,
-  shortLabel: string
+  provider: MobileHostedReviewCreateInput['provider']
 ): string {
   if (result.ok) {
     return ''
@@ -187,8 +188,15 @@ function formatMobileHostedReviewCreateError(
   if (!pushed) {
     return result.error
   }
-  const prefix = new RegExp(`^Create ${shortLabel} failed:\\s*`, 'i')
-  return `Push succeeded, but ${shortLabel} creation failed: ${result.error.replace(prefix, '')}`
+  const prefix = provider === 'gitlab' ? /^Create MR failed:\s*/i : /^Create PR failed:\s*/i
+  return translate(
+    'sourceControl.hostedReviewCreate.pushSucceeded',
+    'Push succeeded, but {{shortLabel}} creation failed: {{error}}',
+    {
+      shortLabel: hostedReviewCopy(provider).shortLabel,
+      error: result.error.replace(prefix, '')
+    }
+  )
 }
 
 async function finishMobileHostedReviewCreateSuccess(
@@ -236,7 +244,13 @@ export async function createMobileHostedReview(
     } catch (error) {
       return {
         ok: false,
-        error: refusedRpcMessageOrFallback(error, 'Failed to create pull request')
+        error: refusedRpcMessageOrFallback(
+          error,
+          translate(
+            'sourceControl.hostedReviewService.createFailed',
+            'Failed to create pull request'
+          )
+        )
       }
     }
     if (result.ok) {
@@ -262,17 +276,20 @@ export async function createMobileHostedReview(
     return {
       ok: false,
       error:
-        formatMobileHostedReviewCreateError(
-          result,
-          pushed,
-          hostedReviewCopy(input.provider).shortLabel
-        ) || 'Failed to create pull request'
+        formatMobileHostedReviewCreateError(result, pushed, input.provider) ||
+        translate('sourceControl.hostedReviewService.createFailed', 'Failed to create pull request')
     }
   } catch (err) {
     // Inline creation must display transport errors instead of leaking rejected promises.
     return {
       ok: false,
-      error: err instanceof Error ? err.message : 'Failed to create pull request'
+      error:
+        err instanceof Error
+          ? err.message
+          : translate(
+              'sourceControl.hostedReviewService.createFailed',
+              'Failed to create pull request'
+            )
     }
   }
 }

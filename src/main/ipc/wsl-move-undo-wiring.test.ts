@@ -247,7 +247,10 @@ describe("undo's stop of the host's terminals", () => {
       ].filter((terminal) => worktree === null || terminal.worktreeId === worktree)
       return { ok: true, result: { terminals, truncated: false } }
     })
-    expect(await createWslMoveUndoPorts(store, '/user-data').stopHostCopies(move)).toBe('stopped')
+    expect(await createWslMoveUndoPorts(store, '/user-data').stopHostCopies(move)).toEqual({
+      outcome: 'stopped',
+      slept: true
+    })
     const slept = rpc.call.mock.calls
       .filter(([, , method]) => method === 'worktree.sleep')
       .map(([, , , params]) => params)
