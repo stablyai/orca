@@ -24672,6 +24672,8 @@
       "tabOpenQuickCommandsMenu": "Toggle Quick Commands menu",
       "editorFind": "Find in editor",
       "editorReplace": "Replace in editor",
+      "editorToggleChanges": "Toggle Changes",
+      "editorCycleViewMode": "Cycle Editor View",
       "fileExplorerUndo": "Undo file operation",
       "fileExplorerRedo": "Redo file operation",
       "fileExplorerCopyPath": "Copy file path",
