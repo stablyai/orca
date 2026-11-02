@@ -1,6 +1,6 @@
 const DAY_MS = 24 * 60 * 60 * 1000
 
-export const UPDATE_DELAY_DAY_OPTIONS = [0, 1, 3, 7, 14, 30] as const
+export const UPDATE_DELAY_DAY_OPTIONS: readonly number[] = [0, 1, 3, 7, 14, 30]
 const MAX_UPDATE_DELAY_DAYS = 90
 
 /** Settings may come from older/hand-edited profiles; anything invalid means no delay. */

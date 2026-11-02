@@ -71,7 +71,7 @@ export function UpdateDelaySetting(): React.JSX.Element {
   const descriptionId = useId()
   const title = getUpdateDelayTitle()
   const description = getUpdateDelayDescription()
-  const options = (UPDATE_DELAY_DAY_OPTIONS as readonly number[]).includes(delayDays)
+  const options = UPDATE_DELAY_DAY_OPTIONS.includes(delayDays)
     ? UPDATE_DELAY_DAY_OPTIONS
     : [...UPDATE_DELAY_DAY_OPTIONS, delayDays].sort((a, b) => a - b)
 
@@ -186,7 +186,7 @@ export function DelayedUpdatePanel({
           <Progress
             value={percent}
             getValueLabel={() => availableLabel}
-            className="h-1 bg-muted [&>[data-slot=progress-indicator]]:bg-muted-foreground"
+            className="h-1"
             aria-label={translate(
               'settings.updateDelay.progress',
               'Time until Orca {{version}} is available',

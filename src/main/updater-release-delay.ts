@@ -36,10 +36,10 @@ export function applyReleaseDelay(
   const held = candidates.find(
     (entry) => compareVersions(entry.version, currentVersion) > 0 && !isOldEnough(entry)
   )
-  const datedTags = allTags.filter((entry) => entry.releasedAt !== null)
-  const oldestFeedDate = datedTags.length
-    ? Math.min(...datedTags.map((entry) => entry.releasedAt as number))
-    : null
+  const feedDates = allTags.flatMap((entry) =>
+    entry.releasedAt === null ? [] : [entry.releasedAt]
+  )
+  const oldestFeedDate = feedDates.length ? Math.min(...feedDates) : null
   return {
     eligible: candidates.filter(isOldEnough),
     releaseDelay: {

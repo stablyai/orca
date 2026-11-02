@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
 import { updaterMainWindow } from './updater-test-main-window'
 
@@ -28,6 +28,7 @@ warmUpdaterModule()
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const RELEASED_AT = Date.parse('2026-11-01T00:00:00Z')
+const NOW = RELEASED_AT + 2 * DAY_MS
 
 function heldResult(): unknown {
   return {
@@ -43,8 +44,14 @@ function heldResult(): unknown {
 describe('updater update delay', () => {
   beforeEach(() => {
     resetUpdaterMocks()
+    // Fake only Date so a fixed "last checked" time suppresses the startup check while vi.waitFor keeps real timers.
+    vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
     appMock.getVersion.mockReturnValue('1.4.1')
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('reports a held release without launching a check or falling back to latest stable', async () => {
@@ -53,7 +60,7 @@ describe('updater update delay', () => {
     const sendMock = vi.fn()
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
     setupAutoUpdater(updaterMainWindow(sendMock), {
-      getLastUpdateCheckAt: () => Date.now(),
+      getLastUpdateCheckAt: () => NOW,
       getUpdateDelayDays: () => 7
     })
 
@@ -84,7 +91,7 @@ describe('updater update delay', () => {
     fetchNewerReleaseTagsMock.mockResolvedValue(['v1.4.3'])
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
     setupAutoUpdater(updaterMainWindow(vi.fn()), {
-      getLastUpdateCheckAt: () => Date.now(),
+      getLastUpdateCheckAt: () => NOW,
       getUpdateDelayDays: () => 7
     })
 
