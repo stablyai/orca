@@ -1,6 +1,6 @@
 import type { PtyTransport } from './pty-transport-types'
 import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
-import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status-types'
 import type {
   TerminalResidentBinding,
   TerminalResidentPresentation,
@@ -13,7 +13,6 @@ import type { createTerminalForegroundPolicy } from './pty-connection/pane-agent
 import type { createTerminalNotificationPolicy } from './pty-connection/terminal-notification-policy'
 import type { createTerminalCompletionPolicy } from './pty-connection/terminal-completion-policy'
 import type { createTerminalCommandCodeStatusPolicy } from './terminal-command-code-status-policy'
-import type { createTerminalResidentStatusObserver } from './terminal-resident-status-observer'
 import type { TerminalResidentPresentations } from './terminal-resident-presentations'
 
 export type TerminalResidentPolicyContext = {
@@ -36,8 +35,6 @@ export type TerminalResidentPolicyContext = {
   acceptedInputGeneration: number
   readonly commandContext: {
     ordinal: number
-    inputGeneration: number
-    entry: AgentStatusEntry | undefined
   } | null
   isLive: () => boolean
   getPtyId: () => string | null
@@ -56,5 +53,4 @@ export type TerminalResidentPolicyContext = {
   readonly notification: ReturnType<typeof createTerminalNotificationPolicy>
   readonly completion: ReturnType<typeof createTerminalCompletionPolicy>
   readonly commandCode: ReturnType<typeof createTerminalCommandCodeStatusPolicy>
-  readonly onAgentStatus: ReturnType<typeof createTerminalResidentStatusObserver>
 }

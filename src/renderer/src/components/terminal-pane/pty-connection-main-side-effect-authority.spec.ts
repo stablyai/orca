@@ -40,7 +40,7 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
     return buildPaneConnectionDeps(() => mockStoreState, overrides)
   }
 
-  // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
+  // Why: activeRuntimeEnvironmentId exercises the remote-runtime path whose reported status comes from the execution host.
   function enableActiveRuntimeEnvironment(environmentId = 'env-1'): void {
     mockStoreState = buildActiveRuntimeEnvironmentState(mockStoreState, environmentId)
   }

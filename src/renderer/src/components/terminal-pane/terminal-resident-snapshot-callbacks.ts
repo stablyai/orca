@@ -1,7 +1,7 @@
 import type { TerminalResidentPolicyContext } from './terminal-resident-policy-context'
 import { useAppStore } from '@/store'
 import { detectAgentStatusFromTitle } from '../../../../shared/agent-detection'
-import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import type { TerminalFactSubject } from './terminal-fact-subject'
 import type {
@@ -55,17 +55,18 @@ export function createTerminalResidentSnapshotCallbacks(
       case 'command-finished':
         if (
           effect.commandOrdinal === current.commandOrdinal &&
-          context.commandContext?.ordinal === effect.commandOrdinal &&
-          context.commandContext.inputGeneration === context.acceptedInputGeneration
+          context.commandContext?.ordinal === effect.commandOrdinal
         ) {
           const command = context.commandContext
+          // Input before D belongs to the finishing command; later input invalidates settlement.
+          const generation = context.acceptedInputGeneration
           context.foreground.finishCapturedCommand(
             fact.exitCode,
             useAppStore.getState().agentStatusByPaneKey[binding.paneKey],
             () =>
               context.isLive() &&
               context.commandContext === command &&
-              context.acceptedInputGeneration === command.inputGeneration
+              context.acceptedInputGeneration === generation
           )
         } else if (!context.commandContext && effect.commandOrdinal === current.commandOrdinal) {
           const generation = context.acceptedInputGeneration
@@ -94,7 +95,10 @@ export function createTerminalResidentSnapshotCallbacks(
         onAgentExited()
         return
       case 'agent-status':
-        context.onAgentStatus(fact.payload, effect.observedAt)
+        // Program reports never become hook completions; legacy live facts retain their old route.
+        if (!fact.fromProgramStatus && !fact.removesProgramStatusRow) {
+          callbacks.onAgentStatus(fact.payload)
+        }
         return
       case 'command-code-working':
         context.commandCode.onCommandCodeWorking(fact.prompt)
@@ -114,15 +118,19 @@ export function createTerminalResidentSnapshotCallbacks(
       return
     }
     const title = current.title
+    const hostOwnsReports = Boolean(
+      binding.runtimeEnvironmentId || isRemoteRuntimePtyId(getPtyId() ?? '')
+    )
     if (first) {
-      const status =
-        current.inBandStatus ??
-        (current.program?.payload
-          ? {
-              payload: current.program.payload,
-              observedAt: current.program.observedAt
-            }
-          : null)
+      const status = hostOwnsReports
+        ? null
+        : (current.inBandStatus ??
+          (current.program?.payload
+            ? {
+                payload: current.program.payload,
+                observedAt: current.program.observedAt
+              }
+            : null))
       // Live companions retain their completion identity; only history may mark it handled.
       if (
         !liveEffects.some(
@@ -143,12 +151,6 @@ export function createTerminalResidentSnapshotCallbacks(
           status: status ? { ...status.payload, stateStartedAt: status.observedAt } : null
         })
       }
-      if (current.program?.payload) {
-        context.onAgentStatus(current.program.payload, current.program.observedAt, true)
-      }
-      if (current.inBandStatus) {
-        context.onAgentStatus(current.inBandStatus.payload, current.inBandStatus.observedAt, true)
-      }
       if (
         !liveEffects.some(
           ({ fact }) => fact.kind === 'command-code-working' || fact.kind === 'command-code-done'
@@ -163,15 +165,6 @@ export function createTerminalResidentSnapshotCallbacks(
     } else if (complete && !title && context.currentTitle !== null) {
       showTitle(neutralTitle())
       context.currentTitle = null
-    }
-    if (getPtyId() && (binding.runtimeEnvironmentId || parseRemoteRuntimePtyId(getPtyId() ?? ''))) {
-      const state = useAppStore.getState()
-      if (
-        current.program ||
-        (complete && state.agentStatusByPaneKey[binding.paneKey]?.programStatus)
-      ) {
-        state.setAgentProgramStatus(binding.paneKey, current.program?.facet ?? null)
-      }
     }
     if (current.mode2031 !== 'unknown') {
       context.presentation?.setMode2031(current.mode2031 === 'subscribed')

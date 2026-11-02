@@ -16,14 +16,12 @@ import {
 import { createTerminalResidentSnapshotCallbacks } from './terminal-resident-snapshot-callbacks'
 import { TerminalResidentLegacySource } from './terminal-resident-legacy-source'
 import { TerminalResidentPresentations } from './terminal-resident-presentations'
-import { createTerminalResidentStatusObserver } from './terminal-resident-status-observer'
 import { registerRendererOwnedAgentStatusPane } from './renderer-owned-agent-status-registry'
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 import { createTerminalOwnerPolicy } from './pty-connection/terminal-owner-policy'
 import { createTerminalShellInputPolicy } from './pty-connection/terminal-shell-input-policy'
 
-import { useAppStore } from '@/store'
 import { resolveInitialTerminalResidentOwner } from './terminal-resident-binding'
 
 import type { AgentType } from '../../../../shared/agent-status-types'
@@ -59,11 +57,7 @@ export function createTerminalResidentPolicy(
   let acceptedInputGeneration = 0
   let commandContext: TerminalResidentPolicyContext['commandContext'] = null
   const captureCommand = (ordinal: number) => {
-    commandContext = {
-      ordinal,
-      inputGeneration: acceptedInputGeneration,
-      entry: useAppStore.getState().agentStatusByPaneKey[binding.paneKey]
-    }
+    commandContext = { ordinal }
   }
   const getPtyId = () => (isLive() ? (identity?.ptyId ?? transport?.getPtyId() ?? null) : null)
   const clearSuppressedTitleSideEffects = () => owner.clearSuppressedTitleSideEffects()
@@ -149,9 +143,6 @@ export function createTerminalResidentPolicy(
     },
     get commandCode() {
       return commandCode
-    },
-    get onAgentStatus() {
-      return onAgentStatus
     }
   }
   const titleEffects = createTerminalResidentTitleEffects(context)
@@ -264,14 +255,6 @@ export function createTerminalResidentPolicy(
   if (initialIdentity) {
     bindPty(initialIdentity.ptyId, initialIdentity.incarnationId, initialIdentity.runtimeId)
   }
-  const onAgentStatus = createTerminalResidentStatusObserver({
-    binding,
-    getPtyId,
-    readTitle: () => currentTitle,
-    shellInput,
-    notification,
-    completion
-  })
   const callbacks = createTerminalResidentStatusCallbacks(context, attention, titleEffects)
   const { applyEffect, restoreCurrent } = createTerminalResidentSnapshotCallbacks(
     context,

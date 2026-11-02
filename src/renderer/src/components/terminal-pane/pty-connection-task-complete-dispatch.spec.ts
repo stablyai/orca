@@ -15,6 +15,7 @@ import {
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
 import {
+  createLiveReportStatusHandler,
   createInitialStoreState,
   buildActiveRuntimeEnvironmentState
 } from './pty-connection-test-store-fixtures'
@@ -38,7 +39,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
     return buildPaneConnectionDeps(() => mockStoreState, overrides)
   }
 
-  // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
+  // A runtime-bound pane keeps live report notifications separate from host-owned status.
   function enableActiveRuntimeEnvironment(environmentId = 'env-1'): void {
     mockStoreState = buildActiveRuntimeEnvironmentState(mockStoreState, environmentId)
   }
@@ -165,14 +166,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
 
       connectPanePty(...mockPanePtyArgs(pane, manager, deps))
 
-      const statusHandler = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: {
-            state: 'done'
-            prompt: string
-            agentType: 'codex'
-            lastAssistantMessage: string
-          }) => void)
-        | undefined
+      const statusHandler = createLiveReportStatusHandler(createdTransportOptions[0])
       if (!statusHandler) {
         throw new Error('Expected onAgentStatus to be registered')
       }
@@ -280,18 +274,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
         agentType: 'pi'
       })
 
-      expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
-        makePaneKey('tab-1', LEAF_1),
-        {
-          state: 'working',
-          prompt: 'fix the remote title',
-          agentType: 'omp',
-          observation: expect.objectContaining({ origin: 'osc', kind: 'snapshot' })
-        },
-        'OMP: tmp',
-        undefined,
-        { connectionId: null }
-      )
+      expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
 
       mockStoreState.tabsByWorktree = {
         'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
@@ -302,18 +285,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
         agentType: 'pi'
       })
 
-      expect(mockStoreState.setAgentStatus).toHaveBeenLastCalledWith(
-        makePaneKey('tab-1', LEAF_1),
-        {
-          state: 'working',
-          prompt: 'keep the remote title',
-          agentType: 'omp',
-          observation: expect.objectContaining({ origin: 'osc', kind: 'snapshot' })
-        },
-        'OMP: tmp',
-        undefined,
-        { connectionId: null }
-      )
+      expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
     })
 
     it('keeps GPU rendering enabled for OMP titles whose cwd is Gemini', async () => {

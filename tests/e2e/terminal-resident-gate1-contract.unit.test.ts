@@ -33,8 +33,8 @@ vi.mock('../../src/renderer/src/components/terminal-pane/use-notification-dispat
 
 const paneKey = makePaneKey('tab-1', LEAF_1)
 let epoch = 0
-function hostRead(foreground: 'pi' | null): RuntimeTerminalProcessInspection {
-  const foregroundPgid = foreground ? 200 : 300
+function hostRead(foreground: 'pi' | 'shell' | null): RuntimeTerminalProcessInspection {
+  const foregroundPgid = foreground === 'shell' ? 100 : foreground ? 200 : 300
   const root = {
     pid: 100,
     ppid: 1,
@@ -57,7 +57,19 @@ function hostRead(foreground: 'pi' | null): RuntimeTerminalProcessInspection {
     },
     [
       root,
-      { ...root, pid: 200, ppid: 100, pgid: 200, stat: 'S', command: 'pi', startTime: 'pi-start' },
+      ...(foreground === 'shell'
+        ? []
+        : [
+            {
+              ...root,
+              pid: 200,
+              ppid: 100,
+              pgid: 200,
+              stat: 'S',
+              command: 'pi',
+              startTime: 'pi-start'
+            }
+          ]),
       ...(foreground
         ? []
         : [
@@ -76,7 +88,7 @@ function hostRead(foreground: 'pi' | null): RuntimeTerminalProcessInspection {
   expect(evidence.verdict).toBe('live')
   return {
     foregroundProcess: evidence.verdict === 'live' ? evidence.processName : null,
-    hasChildProcesses: true,
+    hasChildProcesses: foreground !== 'shell',
     foregroundProcessEvidence: evidence
   }
 }
@@ -345,3 +357,81 @@ it.each(['absent', 'partial'] as const)(
     expect(read).toHaveBeenCalledTimes(2)
   }
 )
+
+it('settles an interactive command after pre-D input but fences input accepted after D', async () => {
+  const owner = resident()
+  owner.policy.legacySource.byteSource = true
+  owner.policy.observeLegacyData('\x1b]133;C\x07Claude prompt')
+  await vi.advanceTimersByTimeAsync(350)
+  owner.policy.acceptInput('prompt\r/exit\r')
+  read.mockResolvedValue({ foregroundProcess: 'zsh', hasChildProcesses: false })
+  const finish = vi.spyOn(owner.policy.foreground, 'finishCapturedCommand')
+  owner.policy.observeLegacyData('\x1b]133;D;0\x07')
+  expect(finish).toHaveBeenCalledOnce()
+  const fence = finish.mock.calls[0]?.[2]
+  expect(fence?.()).toBe(true)
+  owner.policy.acceptInput('next command\r')
+  expect(fence?.()).toBe(false)
+})
+
+it.each([
+  'confirmed',
+  'post-D input',
+  'successor command',
+  'successor row',
+  'ended E',
+  'live agent'
+] as const)('retains the D-receipt fence through the actual process read: %s', async (scenario) => {
+  const owner = resident()
+  owner.policy.legacySource.byteSource = true
+  owner.policy.attachPresentation({
+    paneId: 1,
+    isVisible: () => true,
+    showTitle: vi.fn(),
+    resetInputModes: vi.fn(),
+    setFocusReportSuppression: vi.fn(),
+    clearFocusReportSuppression: vi.fn(),
+    markBracketedPasteInterrupted: vi.fn(),
+    onAgentExited: vi.fn(),
+    setMode2031: vi.fn()
+  })
+  state.agentStatusByPaneKey[paneKey] = {
+    paneKey,
+    agentType: 'pi',
+    state: 'working',
+    prompt: 'original',
+    updatedAt: Date.now(),
+    stateStartedAt: Date.now(),
+    stateHistory: []
+  }
+  owner.policy.observeLegacyData('\x1b]133;C\x07Pi prompt')
+  await vi.advanceTimersByTimeAsync(350)
+  owner.policy.acceptInput('prompt\r/exit\r')
+  const pending = Promise.withResolvers<RuntimeTerminalProcessInspection>()
+  read.mockReturnValue(pending.promise)
+  owner.policy.observeLegacyData('\x1b]133;D;0\x07\x1b]133;A\x07')
+  await vi.advanceTimersByTimeAsync(350)
+  if (scenario === 'post-D input') {
+    owner.policy.acceptInput('next\r')
+  }
+  if (scenario === 'successor command') {
+    owner.policy.observeLegacyData('\x1b]133;C\x07next')
+  }
+  if (scenario === 'successor row') {
+    state.agentStatusByPaneKey[paneKey] = {
+      ...state.agentStatusByPaneKey[paneKey],
+      prompt: 'next',
+      updatedAt: Date.now() + 1
+    }
+  }
+  if (scenario === 'ended E') {
+    end?.()
+  }
+  pending.resolve(hostRead(scenario === 'live agent' ? 'pi' : 'shell'))
+  await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+  if (scenario === 'confirmed') {
+    expect(state.dropAgentStatus).toHaveBeenCalledWith(paneKey)
+  } else {
+    expect(state.dropAgentStatus).not.toHaveBeenCalled()
+  }
+})

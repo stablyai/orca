@@ -31,7 +31,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
     return buildPaneConnectionDeps(() => mockStoreState, overrides)
   }
 
-  // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
+  // Why: activeRuntimeEnvironmentId exercises the remote-runtime path whose reported status comes from the execution host.
   function enableActiveRuntimeEnvironment(environmentId = 'env-1'): void {
     mockStoreState = buildActiveRuntimeEnvironmentState(mockStoreState, environmentId)
   }
@@ -95,10 +95,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       })
       expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Pi ready')
       expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'Pi ready')
-      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
-        state: 'done',
-        agentType: 'pi'
-      })
+      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toBeUndefined()
     })
 
     it('drives runtime title, tab title, and renderer policy from one title decision', async () => {
@@ -141,7 +138,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
         title: string,
         raw: string
       ) => void
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The captured onAgentStatus forwarder accepts this working Pi payload and dispatches the same admitted policy; both loop branches verify the resulting Pi status row.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The captured onAgentStatus forwarder accepts this working Pi payload and dispatches the same admitted policy; both loop branches verify that transport reports cannot mint a client status row.
       const status = createdTransportOptions[0]?.onAgentStatus as (payload: {
         state: 'working'
         prompt: string
@@ -161,7 +158,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
         title('✦ Gemini CLI', '✦ Gemini CLI')
         expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(1, false)
         status({ state: 'working', prompt: '', agentType: 'pi' })
-        expect(mockStoreState.agentStatusByPaneKey[paneKey]?.agentType).toBe('pi')
+        expect(mockStoreState.agentStatusByPaneKey[paneKey]).toBeUndefined()
       }
     })
 
@@ -410,11 +407,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       })
       expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Pi ready')
       expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'Pi ready')
-      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
-        state: 'done',
-        agentType: 'pi',
-        terminalTitle: 'Pi ready'
-      })
+      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toBeUndefined()
     })
 
     it('does not infer shell ownership from prompts typed inside an existing Pi session', async () => {
@@ -505,11 +498,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
         onDispatch: expect.any(Function)
       })
       expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Pi ready')
-      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
-        state: 'done',
-        agentType: 'pi',
-        terminalTitle: 'Pi ready'
-      })
+      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toBeUndefined()
     })
 
     it('skips manual agent inference for large paste chunks', async () => {
@@ -541,11 +530,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
         agentType: 'pi'
       })
 
-      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
-        state: 'done',
-        agentType: 'pi',
-        terminalTitle: 'Pi ready'
-      })
+      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toBeUndefined()
     })
   })
 }

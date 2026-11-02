@@ -13,6 +13,7 @@ import {
 } from './pty-connection-test-pane-fixtures'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
 import {
+  createLiveReportStatusHandler,
   createInitialStoreState,
   buildActiveRuntimeEnvironmentState
 } from './pty-connection-test-store-fixtures'
@@ -33,7 +34,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
     return buildPaneConnectionDeps(() => mockStoreState, overrides)
   }
 
-  // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
+  // A runtime-bound pane keeps live report notifications separate from host-owned status.
   function enableActiveRuntimeEnvironment(environmentId = 'env-1'): void {
     mockStoreState = buildActiveRuntimeEnvironmentState(mockStoreState, environmentId)
   }
@@ -96,14 +97,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
 
       connectPanePty(pane as never, manager as never, deps as never)
 
-      const statusHandler = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: {
-            state: 'working' | 'done'
-            prompt: string
-            agentType: 'codex'
-            lastAssistantMessage?: string
-          }) => void)
-        | undefined
+      const statusHandler = createLiveReportStatusHandler(createdTransportOptions[0])
       const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
       if (!statusHandler || !bellHandler) {
         throw new Error('Expected hook status and bell handlers to be registered')
@@ -167,14 +161,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
 
       connectPanePty(pane as never, manager as never, deps as never)
 
-      const statusHandler = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: {
-            state: 'working' | 'done'
-            prompt: string
-            agentType: 'codex'
-            lastAssistantMessage?: string
-          }) => void)
-        | undefined
+      const statusHandler = createLiveReportStatusHandler(createdTransportOptions[0])
       const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
       if (!statusHandler || !bellHandler) {
         throw new Error('Expected hook status and bell handlers to be registered')
@@ -227,14 +214,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
 
       connectPanePty(pane as never, manager as never, deps as never)
 
-      const statusHandler = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: {
-            state: 'working' | 'done'
-            prompt: string
-            agentType: 'codex'
-            lastAssistantMessage?: string
-          }) => void)
-        | undefined
+      const statusHandler = createLiveReportStatusHandler(createdTransportOptions[0])
       const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
       const workingHandler = createdTransportOptions[0]?.onAgentBecameWorking as
         | (() => void)

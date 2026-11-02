@@ -1,9 +1,14 @@
+import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { TerminalResidentPolicyContext } from './terminal-resident-policy-context'
 import { useAppStore } from '@/store'
 import { isClaudeIdleEdge, idleEdgeSettledAtRest } from '@/lib/agent-idle-edge'
 import { parseTerminalGitHubPRUrl } from '../../../../shared/terminal-github-pr-link-detector'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import type { createTerminalResidentTitleEffects } from './terminal-resident-title-effects'
+import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
+import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-title-owner'
 
 export function createTerminalResidentAttentionCallbacks(context: TerminalResidentPolicyContext) {
   const {
@@ -111,9 +116,46 @@ export function createTerminalResidentStatusCallbacks(
     onAgentExited,
     onCommandStarted: context.foreground.handleCommandStarted,
     onCommandFinished: context.foreground.handleCommandFinished,
+    onAgentStatus: (payload: ParsedAgentStatusPayload): void => {
+      const ptyId = context.getPtyId()
+      if (
+        !context.isLive() ||
+        !ptyId ||
+        (!binding.runtimeEnvironmentId && !parseRemoteRuntimePtyId(ptyId))
+      ) {
+        return
+      }
+      const state = useAppStore.getState()
+      if (
+        !resolveLiveAgentStatusConnectionRouting({
+          state,
+          paneKey: binding.paneKey,
+          ptyId,
+          expectedConnectionId: getConnectionIdFromState(state, binding.worktreeId)
+        })
+      ) {
+        return
+      }
+      if (
+        payload.state === 'working' &&
+        context.notification.syncAgentTaskCompleteTrackingEnabled()
+      ) {
+        context.notification.requiresFreshWorkingForAgentTaskCompleteNotification = false
+      }
+      const agentType = resolveCompatibleAgentTypeForOwner(
+        payload.agentType,
+        context.shellInput.getAuthoritativePaneAgent()
+      )
+      // Live reports arbitrate attention; only the host may publish their status or clocks.
+      context.completion.observeHookStatus(
+        agentType === payload.agentType ? payload : { ...payload, agentType }
+      )
+      if (payload.state === 'working' && context.notification.pendingTerminalBellNotification) {
+        context.notification.scheduleTerminalBellNotification()
+      }
+    },
     onCommandCodeWorking: context.commandCode.onCommandCodeWorking,
     onCommandCodeDone: context.commandCode.onCommandCodeDone,
-    onAgentStatus: context.onAgentStatus,
     onMode2031Subscribe: () => context.presentation?.setMode2031(true),
     onMode2031Unsubscribe: () => context.presentation?.setMode2031(false)
   }

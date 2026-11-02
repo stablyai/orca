@@ -19,6 +19,7 @@ import {
 } from './pty-connection-test-pane-fixtures'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
 import {
+  createLiveReportStatusHandler,
   createInitialStoreState,
   buildActiveRuntimeEnvironmentState
 } from './pty-connection-test-store-fixtures'
@@ -39,7 +40,7 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
     return buildPaneConnectionDeps(() => mockStoreState, overrides)
   }
 
-  // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
+  // A runtime-bound pane keeps live report notifications separate from host-owned status.
   function enableActiveRuntimeEnvironment(environmentId = 'env-1'): void {
     mockStoreState = buildActiveRuntimeEnvironmentState(mockStoreState, environmentId)
   }
@@ -97,14 +98,7 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
         | ((title: string) => void)
         | undefined
-      const statusHandler = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: {
-            state: 'done'
-            prompt: string
-            agentType: 'claude'
-            lastAssistantMessage: string
-          }) => void)
-        | undefined
+      const statusHandler = createLiveReportStatusHandler(createdTransportOptions[0])
       if (!idleHandler || !statusHandler) {
         throw new Error('Expected idle and hook status handlers to be registered')
       }
@@ -157,14 +151,7 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
         | ((title: string) => void)
         | undefined
-      const statusHandler = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: {
-            state: 'done'
-            prompt: string
-            agentType: 'claude'
-            lastAssistantMessage: string
-          }) => void)
-        | undefined
+      const statusHandler = createLiveReportStatusHandler(createdTransportOptions[0])
       if (!titleHandler || !idleHandler || !statusHandler) {
         throw new Error('Expected title, idle, and hook status handlers to be registered')
       }
@@ -225,6 +212,16 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
         }
       }
       const paneKey = makePaneKey('tab-1', LEAF_1)
+      // The host owns the active row that defers title effects; live reports only notify.
+      mockStoreState.agentStatusByPaneKey[paneKey] = {
+        paneKey,
+        state: 'working',
+        prompt: 'finish the implementation',
+        agentType: 'claude',
+        updatedAt: Date.now(),
+        stateStartedAt: Date.now(),
+        stateHistory: []
+      }
       const pane = createPane(1)
       const manager = createManager(1)
       const deps = createDeps()
@@ -234,14 +231,7 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
         | ((title: string) => void)
         | undefined
-      const statusHandler = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: {
-            state: 'working' | 'done'
-            prompt: string
-            agentType: 'claude'
-            lastAssistantMessage?: string
-          }) => void)
-        | undefined
+      const statusHandler = createLiveReportStatusHandler(createdTransportOptions[0])
       if (!idleHandler || !statusHandler) {
         throw new Error('Expected idle and hook status handlers to be registered')
       }

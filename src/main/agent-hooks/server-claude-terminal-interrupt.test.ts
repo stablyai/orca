@@ -85,6 +85,14 @@ describe('Claude native title confirms an Escape interruption', () => {
             if (event.title.startsWith('✳') && row()?.mainAgent?.outcome === 'cancellation') {
               expect(row()).toMatchObject({ state: 'done', interrupted: true })
               expect(row().turnCompletedAt).toBeUndefined()
+              server.ingestTerminalStatus({
+                paneKey: PANE,
+                connectionId: null,
+                fromProgramStatus: true,
+                payload: { state: 'done', agentType: 'claude', prompt: '', sessionBoundary: true }
+              })
+              expect(row()).toMatchObject({ state: 'done', interrupted: true })
+
               return
             }
           } else {
@@ -122,6 +130,19 @@ describe('Claude native title confirms an Escape interruption', () => {
       workingMode: 'monitoring',
       mainAgent: { state: 'done', outcome: 'cancellation' }
     })
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      tabId: 'tab-1',
+      connectionId: null,
+      fromProgramStatus: true,
+      payload: { state: 'done', agentType: 'claude', prompt: '', sessionBoundary: true }
+    })
+    expect(row()).toMatchObject({
+      state: 'working',
+      workingMode: 'monitoring',
+      mainAgent: { state: 'done', outcome: 'cancellation' }
+    })
+
     await startTurn('<task-notification>Background shell finished</task-notification>')
     await hook({ hook_event_name: 'Stop', background_tasks: [] })
     expect(row()).toMatchObject({ state: 'done', mainAgent: { state: 'done' } })

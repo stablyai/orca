@@ -248,7 +248,12 @@ export function createTerminalNotificationPolicy(services: TerminalNotificationS
         return
       }
       const entry = useAppStore.getState().agentStatusByPaneKey[services.paneKey]
-      if (canDispatchAgentNotificationAfterGrace(entry, options)) {
+      const report = options.agentStatusSnapshot
+      // A live report carries its own detail even when it cannot publish a status row.
+      const hasQuietedReportDetail =
+        options.allowDoneDetailAfterGrace === true &&
+        Boolean(report?.lastAssistantMessage || report?.toolName || report?.toolInput)
+      if (canDispatchAgentNotificationAfterGrace(entry, options) || hasQuietedReportDetail) {
         dispatch()
       }
     }
