@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import React, { act, type ComponentProps } from 'react'
+import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import { MobilePRSidebar } from '@orca/test-mobile/components/MobilePRSidebar'
@@ -9,14 +9,14 @@ import {
 } from '@orca/test-mobile/mobile-web-shell/bridge-host-test-fakes'
 import { createStableLogicalRpcClient } from '@orca/test-mobile/transport/stable-logical-rpc-client'
 import type { HostConnectionInputs } from '@orca/test-mobile/transport/client-context-connection-metrics'
-import type { TextField } from '@orca/test-mobile/components/composer-input/TextField'
 import { RuntimeGitHubRepositoryQueryCommands } from '@orca/test-host/main/runtime/runtime-github-repository-query-commands'
 import { GITHUB_REPO_WORK_ITEM_METHODS } from '@orca/test-host/main/runtime/rpc/methods/github-repo-work-item-methods'
 import type { OrcaRuntimeService } from '@orca/test-host/main/runtime/orca-runtime'
 import { eraseRpcMethods } from '@orca/test-host/main/runtime/rpc/core'
 import type { GitHubWorkItemDetails } from '@orca/test-host/shared/github/work-item-types'
 import type { Repo } from '@orca/test-host/shared/repo-types'
-type SearchField = { value?: string; onChangeText?: (text: string) => void }
+// Typed here: the field's own props name native types this Node-checked program must not load.
+type SearchField = { value?: string; placeholder?: string; onChangeText?: (text: string) => void }
 const io = vi.hoisted(
   (): {
     gh: ReturnType<typeof vi.fn>
@@ -123,7 +123,7 @@ vi.mock('../../components/nav-bar/SheetHeader', () => ({
   )
 }))
 vi.mock('../../components/composer-input/TextField', () => ({
-  TextField: (props: ComponentProps<typeof TextField>) => {
+  TextField: (props: SearchField) => {
     io.search = props
     return <input readOnly value={props.value} placeholder={props.placeholder} />
   }
