@@ -21,8 +21,8 @@ export const REQUIRED_SCHEDULES = [
   'reject-peer-pending'
 ] as const
 
-// The sibling timeout (their default 30-second deadline, as the goldens record) and the disconnect both end these
-// before their replies arrive.
+// The sibling timeout (their default 30-second deadline, as the goldens record), the disconnect and the client
+// cutover all end these before their replies arrive.
 const SIBLING_INTERRUPTION_LATE_REPLIES: Readonly<Record<string, readonly string[]>> = {
   'settings-workspace-context-fulfilled': ['preflight.check#1', 'linear.status#1', 'jira.status#1'],
   'settings-task-hydration-fulfilled': ['preflight.check#1', 'linear.status#1', 'jira.status#1']
@@ -73,7 +73,9 @@ export function siblingSchedules(
     steps: [
       ...prefix,
       ...steps,
-      ...(schedule === 'timeout' || schedule === 'disconnect' ? interruptedSuffix : suffix),
+      ...(schedule === 'timeout' || schedule === 'disconnect' || schedule === 'client-cutover'
+        ? interruptedSuffix
+        : suffix),
       { checkpoint: 'settled' }
     ]
   }))
