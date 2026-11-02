@@ -219,12 +219,12 @@ function crew(managedBy: Agent[], managing: Agent[], talkingWith: Agent[]) {
 }
 
 // A terminal pane with placeholder output and a CLI prompt in its bottom quarter, which the card must leave clear.
-function pane(value: OrchestrationCrewSnapshot, height = 'h-130') {
+function pane(value: OrchestrationCrewSnapshot, size = 'h-130') {
   return defineFixture({
     width: 900,
     render: () => (
       <div
-        className={`pane relative ${height} overflow-hidden rounded-md border border-border bg-background p-4`}
+        className={`pane relative ${size} overflow-hidden rounded-md border border-border bg-background p-4`}
       >
         <div className="grid max-w-md gap-3 pt-6">
           {Array.from({ length: 14 }, (_, index) => (
@@ -297,9 +297,9 @@ function nativeChat(value: OrchestrationCrewSnapshot, height = 'h-130') {
   })
 }
 
-function expanded(value: OrchestrationCrewSnapshot, host = pane, height?: string) {
+function expanded(value: OrchestrationCrewSnapshot, host = pane, size?: string) {
   return {
-    ...host(value, height),
+    ...host(value, size),
     interact: (frame: HTMLElement) =>
       frame.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()
   }
@@ -334,3 +334,6 @@ export const tenWorkersShortPaneExpanded = expanded(tenWorkers, pane, 'h-80')
 export const tenWorkersShortChatExpanded = expanded(tenWorkers, nativeChat, 'h-80')
 // A terminal split dragged to its 50px minimum: no room for rows, but the collapse button stays reachable.
 export const twoWorkersMinimumPaneExpanded = expanded(twoWorkers, pane, 'h-[50px]')
+// Narrow splits: the title truncates so the whole collapse button stays inside the card.
+export const twoWorkersNarrowPaneExpanded = expanded(twoWorkers, pane, 'h-80 w-[100px]')
+export const twoWorkersMinimumWidthPaneExpanded = expanded(twoWorkers, pane, 'h-80 w-[50px]')

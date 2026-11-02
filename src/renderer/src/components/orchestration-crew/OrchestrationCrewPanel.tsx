@@ -232,8 +232,9 @@ export function CrewPanelContent({
               : 'max-h-[calc(100%-var(--orca-pane-title-height)-var(--spacing)*4)]'
           )}
         >
-          <div className="flex h-9 shrink-0 items-center justify-between border-b border-border px-2">
-            <span className="text-xs font-medium">{title}</span>
+          {/* The collapse button keeps its room in the narrowest panes: the title truncates and the side padding shrinks first. */}
+          <div className="flex h-9 shrink-0 items-center justify-between border-b border-border px-[clamp(0px,calc((100%-var(--spacing)*6)/2),calc(var(--spacing)*2))]">
+            <span className="min-w-0 truncate text-xs font-medium">{title}</span>
             <IconButton
               ref={collapse}
               label={translate(
