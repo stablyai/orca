@@ -337,7 +337,7 @@ function boundedPreviewValue(value: unknown, depth: number, seen: WeakSet<object
       break
     }
     result[sliceAtCodeUnitLimit(key, MAX_PREVIEW_STRING_INPUT)] = boundedPreviewValue(
-      Reflect.get(value, key),
+      Object.getOwnPropertyDescriptor(value, key)?.value,
       depth + 1,
       seen
     )
