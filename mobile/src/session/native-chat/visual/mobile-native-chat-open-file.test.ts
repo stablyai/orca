@@ -56,6 +56,31 @@ function worktreeFileResolution(relativePath: string) {
 }
 
 describe('openMobileNativeChatFileTap', () => {
+  it.each([
+    { relativePath: null, exists: true, worktree: 'wt-1' },
+    { relativePath: 'docs', exists: true, worktree: 'wt-2' },
+    { relativePath: '', exists: false, worktree: 'wt-2' },
+    { relativePath: '', exists: true, worktree: '' }
+  ])('refuses a directory without a confirmed workspace root: %j', async (resolved) => {
+    const sendRequest = vi.fn(async () =>
+      ok({
+        ...resolved,
+        absolutePath: '/repo-b/docs',
+        isDirectory: true
+      })
+    )
+    const options = { ...baseOptions({ sendRequest }), openWorkspace: vi.fn() }
+
+    openMobileNativeChatFileTap({ ...options, pathText: '/repo-b/docs' })
+    await settle()
+
+    expect(options.onOpenFailed).toHaveBeenCalledTimes(1)
+    expect(options.openWorkspace).not.toHaveBeenCalled()
+    expect(options.pushPreviewRoute).not.toHaveBeenCalled()
+    expect(options.triggerOpenFeedback).not.toHaveBeenCalled()
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+  })
+
   it('resolves against the worktree root: no terminal handle and no cwd', async () => {
     const sendRequest = vi.fn(async () => worktreeFileResolution('src/app.ts'))
     const options = baseOptions({ sendRequest })

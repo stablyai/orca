@@ -1,6 +1,9 @@
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
+import { useFocusEffect } from 'expo-router'
 import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-location'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
+import { hostStackRouteHref } from '../navigation/host-stack-navigation'
+import { mobileSessionRouteTarget } from './mobile-session-route'
 import { triggerSelection } from '../platform/haptics'
 import { openMobileFileTap, type FileTapSessionTab } from './mobile-file-tap-open'
 import { openMobileNativeChatFileTap } from './native-chat/visual/mobile-native-chat-open-file'
@@ -53,7 +56,23 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
   const optionsRef = useRef(options)
   const activationSeqRef = useRef(0)
 
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        activationSeqRef.current += 1
+      },
+      []
+    )
+  )
+
   useLayoutEffect(() => {
+    if (
+      optionsRef.current.client !== client ||
+      optionsRef.current.hostId !== hostId ||
+      optionsRef.current.worktreeId !== worktreeId
+    ) {
+      activationSeqRef.current += 1
+    }
     routerRef.current = router
     optionsRef.current = {
       activeHandleRef,
@@ -91,6 +110,14 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     worktreeName
   ])
 
+  const openWorkspace = useCallback((worktreeId: string) => {
+    routerRef.current.navigate(
+      hostStackRouteHref(
+        mobileSessionRouteTarget({ hostId: optionsRef.current.hostId, worktreeId })
+      )
+    )
+  }, [])
+
   const handleFileTap = useCallback(
     (handle: string, candidates: readonly ParsedFileLinkLocation[]) => {
       const current = optionsRef.current
@@ -111,6 +138,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
         cwd: current.terminalCwdRef.current.get(handle) ?? null,
         candidates,
         pushPreviewRoute: (href) => routerRef.current.push(href),
+        openWorkspace,
         openBrowser: current.openBrowser,
         triggerOpenFeedback: triggerSelection,
         fetchSessionTabs: current.fetchSessionTabs,
@@ -128,49 +156,53 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
         scheduleDelayedAction: current.scheduleDelayedAction
       })
     },
-    []
+    [openWorkspace]
   )
 
-  const handleNativeChatFileTap = useCallback((pathText: string) => {
-    const current = optionsRef.current
-    const sourceTerminalHandle = current.activeHandleRef.current
-    const nativeChatSessionId = current.nativeChatSessionId
-    const nativeChatTabId = current.getActiveSessionTabId()
-    if (!current.client || (!sourceTerminalHandle && !(nativeChatSessionId && nativeChatTabId))) {
-      return
-    }
-    const activationSeq = ++activationSeqRef.current
-    openMobileNativeChatFileTap<T>({
-      client: current.client,
-      hostId: current.hostId,
-      worktreeId: current.worktreeId,
-      worktreeName: current.worktreeName,
-      pathText,
-      nativeChatContext:
-        nativeChatSessionId && nativeChatTabId
-          ? { tabId: nativeChatTabId, sessionId: nativeChatSessionId }
-          : null,
-      pushPreviewRoute: (href) => routerRef.current.push(href),
-      openBrowser: current.openBrowser,
-      triggerOpenFeedback: triggerSelection,
-      fetchSessionTabs: current.fetchSessionTabs,
-      getSessionTabs: current.getSessionTabs,
-      getActiveSessionTabId: current.getActiveSessionTabId,
-      getActivationState: (activated) => ({
-        activated,
-        activationSeq,
-        latestActivationSeq: activationSeqRef.current,
-        sourceTerminalHandle,
-        activeTerminalHandle: current.activeHandleRef.current,
-        sourceSessionTabId: nativeChatTabId,
-        activeSessionTabId: current.getActiveSessionTabId(),
-        activeTabType: current.getActiveSessionTabType()
-      }),
-      switchSessionTab: current.switchSessionTab,
-      scheduleDelayedAction: current.scheduleDelayedAction,
-      onOpenFailed: () => current.reportChatTapFailure(`Couldn't open ${pathText}`)
-    })
-  }, [])
+  const handleNativeChatFileTap = useCallback(
+    (pathText: string) => {
+      const current = optionsRef.current
+      const sourceTerminalHandle = current.activeHandleRef.current
+      const nativeChatSessionId = current.nativeChatSessionId
+      const nativeChatTabId = current.getActiveSessionTabId()
+      if (!current.client || (!sourceTerminalHandle && !(nativeChatSessionId && nativeChatTabId))) {
+        return
+      }
+      const activationSeq = ++activationSeqRef.current
+      openMobileNativeChatFileTap<T>({
+        client: current.client,
+        hostId: current.hostId,
+        worktreeId: current.worktreeId,
+        worktreeName: current.worktreeName,
+        pathText,
+        nativeChatContext:
+          nativeChatSessionId && nativeChatTabId
+            ? { tabId: nativeChatTabId, sessionId: nativeChatSessionId }
+            : null,
+        pushPreviewRoute: (href) => routerRef.current.push(href),
+        openWorkspace,
+        openBrowser: current.openBrowser,
+        triggerOpenFeedback: triggerSelection,
+        fetchSessionTabs: current.fetchSessionTabs,
+        getSessionTabs: current.getSessionTabs,
+        getActiveSessionTabId: current.getActiveSessionTabId,
+        getActivationState: (activated) => ({
+          activated,
+          activationSeq,
+          latestActivationSeq: activationSeqRef.current,
+          sourceTerminalHandle,
+          activeTerminalHandle: current.activeHandleRef.current,
+          sourceSessionTabId: nativeChatTabId,
+          activeSessionTabId: current.getActiveSessionTabId(),
+          activeTabType: current.getActiveSessionTabType()
+        }),
+        switchSessionTab: current.switchSessionTab,
+        scheduleDelayedAction: current.scheduleDelayedAction,
+        onOpenFailed: () => current.reportChatTapFailure(`Couldn't open ${pathText}`)
+      })
+    },
+    [openWorkspace]
+  )
 
   return { handleFileTap, handleNativeChatFileTap }
 }

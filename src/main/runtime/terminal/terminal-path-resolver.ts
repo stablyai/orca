@@ -102,6 +102,22 @@ export class RuntimeTerminalPathResolver {
               absolutePath
             )
           ).type === 'directory'
+        if (isDirectory && crossWorkspace && relativePath !== '' && !knownWorkspaceTarget) {
+          const nestedWorkspaceTarget = await this.host.resolveKnownWorkspaceFileTarget?.(
+            absolutePath,
+            target.executionHostId
+          )
+          if (nestedWorkspaceTarget?.relativePath === '') {
+            return {
+              worktree: nestedWorkspaceTarget.worktree.id,
+              relativePath: '',
+              absolutePath,
+              exists: true,
+              isDirectory: true,
+              openTarget: undefined
+            }
+          }
+        }
         return {
           worktree: ownedWorktree.id,
           relativePath: ownedRelativePath,
