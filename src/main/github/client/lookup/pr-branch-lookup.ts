@@ -41,7 +41,8 @@ export async function getRestPRForBranch(
     `repos/${prRepo.owner}/${prRepo.repo}/pulls?head=${head}&state=all&per_page=${BRANCH_PR_LOOKUP_PAGE_SIZE}`,
     ghOptions
   )
-  const pr = preferOpenPullRequest(JSON.parse(stdout) as RestPullRequest[])
+  const list = JSON.parse(stdout) as RestPullRequest[]
+  const pr = preferOpenPullRequest(list)
   return pr ? mapRestPullRequest(pr) : null
 }
 
@@ -68,7 +69,8 @@ export async function getFallbackPRListForBranch(
     ],
     { ...ghOptions, ...githubHostExecOptions(prRepo) }
   )
-  return preferOpenPullRequest(JSON.parse(stdout) as PullRequestLookupData[]) ?? null
+  const list = JSON.parse(stdout) as PullRequestLookupData[]
+  return preferOpenPullRequest(list) ?? null
 }
 
 export async function hydrateBranchLookupWithExactPR(
