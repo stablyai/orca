@@ -218,7 +218,10 @@
       "title": "Run {{distro}} as a host (recommended)",
       "why": "Git, files and terminals then run natively in Linux instead of across the Windows file share.",
       "accept": "Run as host",
-      "projectNotFound": "Could not find the added project to move. Use \"Move to {{distro}} host…\" on the project in the sidebar."
+      "projectNotFound": "Could not find the added project to move. Use \"Move to {{distro}} host…\" on the project in the sidebar.",
+      "existingTitle": "Add on the {{distro}} host (recommended)",
+      "existingWhy": "{{distro}} already runs as a host, so Git, files and terminals run natively in Linux instead of across the Windows file share.",
+      "existingAccept": "Add on host"
     }
   },
   "app": {
@@ -22350,7 +22353,8 @@
       "changed": "Moved earlier, then changed here by an older version of Orca. It is not moved again.",
       "chatsStay": "Existing chats stay on this computer. New chats in this project start on the WSL host.",
       "browserLoginsConflict": "Browser sign-ins won’t carry over, because the host’s browser profile is already in use. Sign in again in the host’s browser tabs after the move.",
-      "browserLoginsNotCarried": "Browser sign-ins won’t carry over to this host. Sign in again in its browser tabs after the move."
+      "browserLoginsNotCarried": "Browser sign-ins won’t carry over to this host. Sign in again in its browser tabs after the move.",
+      "why": "Work then runs inside Linux, next to your files, so terminals, Git and file changes are faster and more reliable. Your projects don’t change, and you can move any project back with “Use on this computer again”."
     },
     "cancel": "Cancel",
     "progress": {
