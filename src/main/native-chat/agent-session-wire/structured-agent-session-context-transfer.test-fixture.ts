@@ -4,7 +4,10 @@ import { join } from 'node:path'
 import { expect, vi } from 'vitest'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalMessageItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
@@ -88,8 +91,8 @@ export async function contextTransferFixture() {
   const childPhase = () => host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase
   const submission = async (id: string) =>
     (await host.journalSnapshot(SESSION)).submissions.find((row) => row.clientMessageId === id)
-  const accept = async (text: string) => {
-    const body = hostTestMessage(text)
+  const accept = async (input: string | AgentJournalMessageItem) => {
+    const body = typeof input === 'string' ? hostTestMessage(input) : input
     const clientOperationId = hostTestOperationId()
     expect(
       await host.send(TRANSFER_CALLER, {

@@ -78,7 +78,20 @@ export function prepareRecoveryDelivery(
         transcriptPath = path && record.location.wslDistro ? toLinuxPath(path) : path
       } catch {}
       signal?.throwIfAborted()
-      const encoding = await ctx.adapter.historicalInputBytes?.({ sessionId: ctx.sessionId, body })
+      // Attachments encode once per carrier; shrinking re-measures only the text, which adapters encode apart from them.
+      const encoding = await ctx.adapter.historicalInputBytes?.({
+        sessionId: ctx.sessionId,
+        body: withRecoveryContext(body, '')
+      })
+      const text = { ...body, blocks: body.blocks.filter((block) => block.type === 'text') }
+      const textBytes = async (context: string) =>
+        (
+          await ctx.adapter.historicalInputBytes?.({
+            sessionId: ctx.sessionId,
+            body: withRecoveryContext(text, context)
+          })
+        )?.bytes ?? 0
+      const emptyText = encoding ? await textBytes('') : 0
       const facts = ctx.journal.contextUsage()
       const native = latestStructuredAgentContextFacts(
         ctx.journal.snapshot().items.filter((item) => {
@@ -127,17 +140,17 @@ export function prepareRecoveryDelivery(
             ...(encoding ? { encodedInputBytes: encoding.bytes, encodedLimit: limit } : {}),
             ...(transcriptPath ? { transcriptPath } : {})
           })
-          const actual = await ctx.adapter.historicalInputBytes?.({
-            sessionId: ctx.sessionId,
-            body: withRecoveryContext(body, selected.encodedContext)
-          })
-          if (!actual || actual.bytes <= actual.limit) {
+          if (!encoding) {
+            return selected
+          }
+          const actual = encoding.bytes + (await textBytes(selected.encodedContext)) - emptyText
+          if (actual <= encoding.limit) {
             return selected
           }
           if (selected.itemIds.length === 0) {
             throw new RecoveryContextBudgetError('Saved context cannot fit beside this input')
           }
-          limit -= actual.bytes - actual.limit + 32
+          limit -= actual - encoding.limit + 32
         }
       }
       const selection = await select(id)

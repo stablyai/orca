@@ -1,4 +1,5 @@
-import { rm } from 'node:fs/promises'
+import { rm, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { agentSessionRecoveryExportRoot } from '../agent-session-context-recovery-exports'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
@@ -35,10 +36,15 @@ import {
 import * as journalOpen from '../agent-session-journal/journal-open'
 import { rebaseCompletedContextRewind } from '../agent-session-journal/context-transfer-rebase'
 import { captureRecoveryContext } from '../agent-session-journal/context-transfer-capture'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  agentJournalSubmissionKey,
+  parseAgentJournalItemKey
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { catchUpCodexThread } from '../../codex/codex-structured-thread-catch-up'
 import { codexWith } from '../../codex/codex-thread-catch-up-contract-test-fixture'
 import { persistRewindRecord } from './structured-rewind-recovery'
+import { PiRpcSessionAdapter } from '../../pi/rpc-session-adapter'
+import * as dispatchContent from '../../claude/structured/claude-structured-dispatch-content'
 
 // N/10N contracts: count record visits, decodes, writes and text reads, never time.
 const fixtures: Awaited<ReturnType<typeof contextTransferFixture>>[] = []
@@ -369,6 +375,72 @@ it('carries owed history through occupancy, encoding and selection independent o
     usage: small.usage
   })
   expect(small.encodings).toBeGreaterThan(1)
+})
+
+const PNG = Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(4096 - 8, 7)])
+
+async function piCarrierWork(images: number, shrinks: number) {
+  const { fixture, journal } = await reattachedRecovery(0)
+  fixture.host.deps.adapter.injectHistoricalContext = undefined
+  const pi = new PiRpcSessionAdapter({
+    resolveLaunch: async () => {
+      throw new Error('Pi is not launched here')
+    },
+    onLifecycle: () => {},
+    onSettled: () => {},
+    logger: { warn: vi.fn(), error: vi.fn() }
+  })
+  const blocks: AgentJournalMessageItem['blocks'] = [{ type: 'text', text: 'Look at these' }]
+  for (let i = 0; i < images; i++) {
+    const path = join(fixture.root, `image-${i}.png`)
+    await writeFile(path, PNG)
+    blocks.push({ type: 'image-ref', path })
+  }
+  const reads = vi.spyOn(dispatchContent, 'readClaudeImage').mockClear()
+  const encoded: number[] = []
+  let pressure = shrinks
+  fixture.host.deps.adapter.historicalInputBytes = async (input) => {
+    const measured = await pi.historicalInputBytes(input)
+    encoded.push(measured.bytes)
+    // An escape-heavy history can encode past the limit; each report forces one shrink.
+    const carried = input.body.blocks.some(
+      (block) => block.type === 'text' && block.text.includes('<orca_context_handoff')
+    )
+    return carried && pressure-- > 0 ? { ...measured, bytes: measured.limit + 1 } : measured
+  }
+  const body = { ...hostTestMessage(''), blocks }
+  const sent = await fixture.accept(body)
+  await eventually(async () =>
+    expect((await fixture.submission(sent))?.dispatchState).toBe('accepted')
+  )
+  const carrier = fixture.dispatch.mock.calls.at(-1)![0].body
+  expect(JSON.stringify(carrier)).toContain('42')
+  expect(carrier.blocks.filter((block) => block.type === 'image-ref')).toEqual(
+    blocks.filter((block) => block.type === 'image-ref')
+  )
+  expect(journal.itemBody(agentJournalSubmissionKey(sent))).toEqual(body)
+  return { reads: reads.mock.calls.length, measures: encoded.length, carrierBytes: encoded[0]! }
+}
+
+it('reads and encodes the images of a Pi carrier once, however often its history shrinks', async () => {
+  const small = await piCarrierWork(1, 1)
+  const shrunk = await piCarrierWork(1, 4)
+  const large = await piCarrierWork(10, 1)
+  expect(small.reads).toBe(1)
+  expect(shrunk.reads).toBe(1)
+  expect(large.reads).toBe(10)
+  // Two fixed measures, then one text-only measure per selection.
+  expect(small.measures).toBe(2 + 2)
+  expect(shrunk.measures).toBe(2 + 5)
+  expect(large.measures).toBe(small.measures)
+  const image = Buffer.byteLength(
+    JSON.stringify({
+      type: 'image',
+      data: PNG.toString('base64'),
+      mimeType: 'image/png'
+    })
+  )
+  expect(large.carrierBytes - small.carrierBytes).toBe(9 * (image + 1))
 })
 
 it('classifies marked Codex history imports without scanning retained history', async () => {
