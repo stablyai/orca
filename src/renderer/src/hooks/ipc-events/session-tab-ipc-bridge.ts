@@ -42,8 +42,9 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
         isPinned: localTabId !== null && isUnifiedTabPinned(store, worktreeId, localTabId),
         tabLabel: resolvePinnedTabLabel(store, worktreeId, localTabId ?? tabId),
         onClose: () => {
-          const currentStore = useAppStore.getState()
-          closeMobileSessionTabInStore(currentStore, worktreeId, localTabId, tabId)
+          if (stillNamesTab(worktreeId, tabId, localTabId)) {
+            closeMobileSessionTabInStore(useAppStore.getState(), worktreeId, localTabId, tabId)
+          }
         }
       })
     })
@@ -87,12 +88,9 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
             respond()
             return
           }
-          const closed = closeMobileSessionTabInStore(
-            useAppStore.getState(),
-            worktreeId,
-            localTabId,
-            tabId
-          )
+          const closed =
+            stillNamesTab(worktreeId, tabId, localTabId) &&
+            closeMobileSessionTabInStore(useAppStore.getState(), worktreeId, localTabId, tabId)
           respond(closed ? undefined : SESSION_TAB_NOT_FOUND_ERROR)
         } catch (error) {
           respond(error instanceof Error ? error.message : SESSION_TAB_CLOSE_FAILED_ERROR)
@@ -149,6 +147,12 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
       })
     })
   )
+}
+
+/** A close acts on the tab its row named when it arrived only while that tab still publishes the
+ *  row: after a pinned tab's confirmation, a tab whose content changed meanwhile closes nothing. */
+function stillNamesTab(worktreeId: string, rowId: string, tabId: string | null): boolean {
+  return windowTabIdsByRowId(worktreeId)(rowId) === tabId
 }
 
 function tabDropOf(move: Exclude<RuntimeMobileSessionTabMove, { kind: 'reorder' }>): TabDrop {
