@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import React, { act } from 'react'
+import React, { act, type ComponentProps } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import { MobilePRSidebar } from '@orca/test-mobile/components/MobilePRSidebar'
@@ -9,15 +9,23 @@ import {
 } from '@orca/test-mobile/mobile-web-shell/bridge-host-test-fakes'
 import { createStableLogicalRpcClient } from '@orca/test-mobile/transport/stable-logical-rpc-client'
 import type { HostConnectionInputs } from '@orca/test-mobile/transport/client-context-connection-metrics'
+import type { TextField } from '@orca/test-mobile/components/composer-input/TextField'
 import { RuntimeGitHubRepositoryQueryCommands } from '@orca/test-host/main/runtime/runtime-github-repository-query-commands'
 import { GITHUB_REPO_WORK_ITEM_METHODS } from '@orca/test-host/main/runtime/rpc/methods/github-repo-work-item-methods'
 import type { OrcaRuntimeService } from '@orca/test-host/main/runtime/orca-runtime'
 import { eraseRpcMethods } from '@orca/test-host/main/runtime/rpc/core'
 import type { GitHubWorkItemDetails } from '@orca/test-host/shared/github/work-item-types'
 import type { Repo } from '@orca/test-host/shared/repo-types'
-const io = vi.hoisted(() => ({ gh: vi.fn(), resolved: vi.fn(), requestReviewer: vi.fn() }))
+const io = vi.hoisted(() => ({
+  gh: vi.fn(),
+  resolved: vi.fn(),
+  requestReviewer: vi.fn(),
+  // The sheet's real search field, as the thin native adapter last received it.
+  search: null as { value?: string; onChangeText?: (text: string) => void } | null
+}))
 vi.mock('react-native', () => ({
   StyleSheet: { create: <T,>(styles: T) => styles, hairlineWidth: 1 },
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
   View: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
   ScrollView: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
   Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
@@ -38,33 +46,118 @@ vi.mock('react-native', () => ({
     </button>
   )
 }))
-vi.mock('lucide-react-native', () => ({
-  Search: () => null,
-  Check: () => null,
-  X: () => null,
-  UserPlus: () => null,
-  RotateCw: () => null
+vi.mock('lucide-react-native', () =>
+  Object.fromEntries(
+    [
+      'ArrowRight',
+      'CircleCheck',
+      'CircleDashed',
+      'CircleMinus',
+      'CircleX',
+      'GitMerge',
+      'LoaderCircle',
+      'MessageCircle',
+      'MoreHorizontal',
+      'RotateCw',
+      'Search',
+      'X'
+    ].map((name) => [name, () => null])
+  )
+)
+// Thin native adapters: the drawer finishes its hide at once, rows and the header forward presses.
+vi.mock('../../components/bottom-drawer/mounted-bottom-drawer', async () => {
+  const { useLayoutEffect } = await import('react')
+  return {
+    MountedBottomDrawer: ({
+      visible,
+      children,
+      onHidden
+    }: React.PropsWithChildren<{ visible: boolean; onHidden: () => void }>) => {
+      useLayoutEffect(() => {
+        if (!visible) {
+          onHidden()
+        }
+      }, [visible, onHidden])
+      return <div data-sheet="">{children}</div>
+    }
+  }
+})
+vi.mock('../../components/list/ListGroup', () => ({
+  LIST_LEADING_INSET: 0,
+  ListGroup: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  ListRow: ({
+    title,
+    onPress,
+    detail,
+    accessory
+  }: {
+    title: string
+    onPress?: () => void
+    detail?: React.ReactNode
+    accessory?: React.ReactNode
+  }) => (
+    <div>
+      <button aria-label={title} onClick={onPress}>
+        {title}
+      </button>
+      {detail}
+      {accessory}
+    </div>
+  )
 }))
-vi.mock('../../components/BottomDrawer', () => ({
-  BottomDrawer: ({
-    visible,
-    children,
-    onClose
-  }: React.PropsWithChildren<{ visible: boolean; onClose: () => void }>) =>
-    visible ? (
-      <div>
-        <button aria-label="Close picker" onClick={onClose} />
-        {children}
-      </div>
-    ) : null
+vi.mock('../../components/nav-bar/SheetHeader', () => ({
+  SheetHeader: ({
+    title,
+    trailing
+  }: {
+    title: string
+    trailing?: { label: string; onPress: () => void }
+  }) => (
+    <div>
+      <span>{title}</span>
+      {trailing ? <button aria-label={trailing.label} onClick={trailing.onPress} /> : null}
+    </div>
+  )
 }))
+vi.mock('../../components/composer-input/TextField', () => ({
+  TextField: (props: ComponentProps<typeof TextField>) => {
+    io.search = props
+    return <input readOnly value={props.value} placeholder={props.placeholder} />
+  }
+}))
+vi.mock('../../components/nav-bar/NavBarButton', () => ({ NavBarButton: () => null }))
+vi.mock('../../components/nav-bar/PullDownMenu', () => ({ PullDownMenu: () => null }))
+vi.mock('../../components/pr-sidebar/use-pr-tab-menu', () => ({ usePrTabMenuGroups: () => null }))
+vi.mock('../../components/pr-sidebar/PrTabEmptyState', () => ({ PrTabEmptyState: () => null }))
+vi.mock('../../components/pr-sidebar/PrTabOverviewCards', () => ({
+  PrChangesCard: () => null,
+  PrDescription: () => null
+}))
+vi.mock('../../components/pr-sidebar/PrTabBottomAction', () => ({ PrTabBottomAction: () => null }))
+vi.mock('../../components/pr-sidebar/PrTabScreenView', () => ({ PrTabScreenView: () => null }))
+vi.mock('../../components/pr-sidebar/PrCreateSheet', () => ({ PrCreateSheet: () => null }))
+vi.mock('../../components/ConfirmModal', () => ({ ConfirmModal: () => null }))
+vi.mock('../../components/SheetPrimaryButton', () => ({ SheetPrimaryButton: () => null }))
+vi.mock('../../components/composer-input/FieldTextInput', () => ({ FieldTextInput: () => null }))
+vi.mock('../../components/MobileStateView', () => ({
+  MobileStateView: () => null,
+  MobileLoadErrorState: () => null
+}))
+vi.mock('../../components/mobile-pr-url', () => ({ openMobilePrUrl: () => {} }))
+vi.mock('../../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
+vi.mock('../../hooks/use-now', () => ({ useNow: () => 0, useAppActive: () => true }))
+vi.mock('expo-router', async () => {
+  const { useEffect } = await import('react')
+  return { useFocusEffect: (effect: () => void) => useEffect(effect, [effect]) }
+})
 vi.mock('../../components/pr-sidebar/mobile-pr-sidebar-styles', () => ({
   mobilePrSidebarStyles: {}
 }))
 vi.mock('../../theme/use-mobile-color-scheme', () => ({ useMobileColorScheme: () => 'dark' }))
 vi.mock('../../i18n/use-mobile-translation', () => ({
-  useMobileTranslation: () => (_key: string, fallback: string, args?: { login: string }) =>
-    fallback.replace('{{login}}', args?.login ?? '')
+  useMobileTranslation:
+    () => (_key: string, fallback: string, args?: Record<string, string | number>) =>
+      fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(args?.[name] ?? ''))
 }))
 vi.mock(
   '../../../../src/main/github/client',
@@ -85,7 +178,9 @@ vi.mock('../../../../src/main/github/work-item-details', () => ({}))
 vi.mock('../../session/use-mobile-pr-actions', () => ({
   useMobilePrActions: () => ({
     blocked: null,
+    error: null,
     resolveReviewerRequested: (_login: string, value: boolean) => value,
+    resolveState: (state: string) => state,
     isBusy: () => false,
     requestReviewer: io.requestReviewer,
     removeReviewer: vi.fn()
@@ -94,7 +189,9 @@ vi.mock('../../session/use-mobile-pr-actions', () => ({
 vi.mock('../../session/use-mobile-pr-comment-actions', () => ({
   useMobilePrCommentActions: () => ({})
 }))
-vi.mock('../../session/use-mobile-pr-title-action', () => ({ useMobilePrTitleAction: () => ({}) }))
+vi.mock('../../session/use-mobile-pr-text-action', () => ({
+  useMobilePrTextAction: () => ({ clearError: () => {}, saving: false, error: null })
+}))
 vi.mock('../../session/use-mobile-pr-ai-triage', () => ({
   useMobilePrAiTriage: () => ({ isBusy: () => false, noticeFor: () => ({}), availability: 'ready' })
 }))
@@ -104,25 +201,16 @@ vi.mock('../../components/host-protocol-gates-context', () => ({
 vi.mock('../../session/use-pr-bot-author-overrides', () => ({
   usePRBotAuthorOverrides: () => new Set()
 }))
-vi.mock('../../components/pr-sidebar/PRSidebarHeader', () => ({ PRSidebarHeader: () => null }))
-vi.mock('../../components/pr-sidebar/PRActionsSection', () => ({ PRActionsSection: () => null }))
-vi.mock('../../components/pr-sidebar/PRConflictingFilesSection', () => ({
-  PRConflictingFilesSection: () => null
-}))
-vi.mock('../../components/pr-sidebar/PRChecksSection', () => ({ PRChecksSection: () => null }))
-vi.mock('../../components/pr-sidebar/PRCommentsSection', () => ({ PRCommentsSection: () => null }))
-vi.mock('../../components/pr-sidebar/PrSidebarCreateEmptyState', () => ({
-  PrSidebarCreateEmptyState: () => null
-}))
 let root: ReturnType<typeof createRoot> | undefined
 afterEach(() => {
   if (root) {
     act(() => root!.unmount())
   }
   root = undefined
+  io.search = null
   vi.unstubAllGlobals()
 })
-it('real sidebar/section/drawer sends accepted fork to the runtime provider with original worktree/account, supports refusal/reopen/migration, and keeps one visit rows across connection changes', async () => {
+it('real tab/sheet sends a searched fork to the runtime provider with original worktree/account, supports refusal/reopen/migration, and keeps one visit rows across connection changes', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   const prRepo = { owner: 'fork', repo: 'widgets', host: 'github.corp' }
   const repo: Repo = {
@@ -236,13 +324,13 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
               number: 93,
               state: 'open',
               title: 'fork',
-              url: details.item.url,
+              url: `https://github.corp/${target.owner}/widgets/pull/93`,
               prRepo: target,
               checksStatus: 'success',
               updatedAt: '',
               mergeable: 'MERGEABLE'
             },
-            details,
+            details: { ...details, item: { ...details.item, prRepo: target } },
             checks: [],
             checksError: null,
             pushTarget: null
@@ -259,6 +347,7 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
       />
     )
   await act(async () => renderSidebar(prRepo, 'clone::/worktree'))
+  const sheet = () => container.querySelector('[data-sheet]')
   const press = async (label: string) => {
     const button = container.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)
     if (!button) {
@@ -266,25 +355,51 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
     }
     await act(async () => button.click())
   }
-  await press('Add or remove reviewers')
-  expect(container.textContent).toContain('Update Orca')
-  expect(frames).toEqual(['status.get'])
-  expect(io.gh).not.toHaveBeenCalled()
-  await press('Close picker')
-  capable = true
-  await press('Add or remove reviewers')
-  expect(container.textContent).toContain('fork-only')
-  expect(container.textContent).not.toContain('upstream-only')
-  expect(io.gh.mock.calls[0][0]).toContain('repos/fork/widgets/assignees?per_page=100')
-  await press('Request fork-only')
-  expect(io.requestReviewer).toHaveBeenCalledWith('fork-only')
-  expect(frames).toEqual(['status.get', 'status.get', 'github.listAssignableUsers'])
-  await press('Close picker')
-  const spinner = () => container.querySelector('[role="progressbar"]')
-  const text = () => container.textContent ?? ''
+  const spinner = () => sheet()?.querySelector('[role="progressbar"]') ?? null
+  const text = () => sheet()?.textContent ?? ''
+  const typeSearch = (value: string) => act(async () => io.search!.onChangeText!(value))
+  // The approvals gate row is the tab's way into the reviewers sheet; the sheet's Done closes it.
+  const openSheet = () => press('No approvals yet')
+  const closeSheet = () => press('Done')
   // Sends since the last check, at the status and list boundaries.
   const sent = () => frames.splice(0)
   const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)))
+
+  // Opening alone does no candidate work; the first search is the demand.
+  await openSheet()
+  await settle()
+  expect(sheet()).not.toBeNull()
+  expect(sent()).toEqual([])
+  expect(text()).not.toContain('Disconnected')
+  await typeSearch('o')
+  await settle()
+  expect(text()).toContain('Update Orca')
+  expect(sent()).toEqual(['status.get'])
+  expect(io.gh).not.toHaveBeenCalled()
+  await closeSheet()
+  expect(sheet()).toBeNull()
+  capable = true
+  await openSheet()
+  await settle()
+  expect(sent()).toEqual([])
+  expect(text()).not.toContain('Update Orca')
+  await typeSearch('o')
+  await settle()
+  expect(text()).toContain('fork-only')
+  expect(text()).not.toContain('upstream-only')
+  expect(io.gh.mock.calls[0][0]).toContain('repos/fork/widgets/assignees?per_page=100')
+  await press('fork-only')
+  expect(io.requestReviewer).toHaveBeenCalledWith('fork-only')
+  expect(sent()).toEqual(['status.get', 'github.listAssignableUsers'])
+  // Clearing the search shows the requested view and keeps the visit's candidates without another read.
+  await typeSearch('')
+  await settle()
+  expect(text()).toContain('No reviewers requested')
+  await typeSearch('o')
+  await settle()
+  expect(text()).toContain('fork-only')
+  expect(sent()).toEqual([])
+  await closeSheet()
   let session = physical
   const migrate = async () => {
     session = createFakeRpcClient()
@@ -292,7 +407,11 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
     await act(async () => logical.migrateTo(session, 'lan'))
     await settle()
   }
-  sent()
+  const openAndSearch = async () => {
+    await openSheet()
+    await typeSearch('o')
+    await settle()
+  }
 
   // 1. A connected-to-connected migration mid-load starts a successor instead of a false empty list.
   let late!: (value: { stdout: string }) => void
@@ -302,7 +421,7 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
         late = resolve
       })
   )
-  await press('Add or remove reviewers')
+  await openAndSearch()
   expect(spinner()).not.toBeNull()
   await migrate()
   expect(text()).not.toContain('No matching people')
@@ -317,7 +436,7 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
     'github.listAssignableUsers'
   ])
 
-  // 2. Loaded rows stay in place through a disconnect and the refresh reconnecting starts.
+  // 2. Loaded rows and the search stay in place through a disconnect and the refresh reconnecting starts.
   hold = true
   await act(async () => session.pushState('disconnected'))
   expect(spinner()).toBeNull()
@@ -328,6 +447,7 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
   expect(sent()).toEqual(['status.get', 'github.listAssignableUsers'])
   expect(spinner()).toBeNull()
   expect(text()).toContain('fork-only')
+  expect(io.search!.value).toBe('o')
   io.gh.mockImplementationOnce(async () => ({
     stdout: '{"login":"fork-only"}\n{"login":"fork-second"}'
   }))
@@ -345,8 +465,11 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
   expect(text()).not.toContain('socket closed')
 
   // Reopening is fresh demand; a down-up pair in one render still retires the first attempt.
-  await press('Close picker')
-  await press('Add or remove reviewers')
+  await closeSheet()
+  await openSheet()
+  await settle()
+  expect(sent()).toEqual([])
+  await typeSearch('o')
   await settle()
   expect(text()).not.toContain('fork-second')
   expect(spinner()).not.toBeNull()
@@ -365,12 +488,14 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
   await settle()
   expect(text()).toContain('fork-only')
 
-  // Opening offline sends nothing; the drawer explains the outage and recovers on connect.
-  await press('Close picker')
-  await act(async () => session.pushState('disconnected'))
+  // A first search while reconnecting sends nothing offline, explains the outage, and completes on recovery.
+  await closeSheet()
+  await act(async () => session.pushState('reconnecting'))
   io.gh.mockClear()
-  await press('Add or remove reviewers')
+  await openAndSearch()
   expect(text()).not.toContain('fork-only')
+  expect(text()).toContain('Reconnecting')
+  await act(async () => session.pushState('disconnected'))
   expect(text()).toContain('Disconnected')
   // The header's relay verdict explains the wait rather than the bare dial state.
   relay = { relayHostReachability: 'unreachable' }
@@ -382,25 +507,35 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
   expect(text()).toContain('Pairing invalid — re-pair with your desktop')
   expect(sent()).toEqual([])
   expect(io.gh).not.toHaveBeenCalled()
-  hold = false
   await act(async () => session.pushState('connected'))
   await settle()
+  // Exactly one recovery read, pending with the search kept and no error published.
   expect(sent()).toEqual(['status.get', 'github.listAssignableUsers'])
+  expect(io.search!.value).toBe('o')
+  expect(spinner()).not.toBeNull()
+  expect(text()).not.toContain('Pairing invalid')
+  expect(text()).not.toContain('Failed to load people')
+  await act(async () => held.shift()!.release())
+  await settle()
   expect(io.gh).toHaveBeenCalledTimes(1)
   expect(text()).toContain('fork-only')
-  expect(text()).not.toContain('Pairing invalid')
+  expect(sent()).toEqual([])
 
-  // A to B to A: each target is a new visit, and no earlier visit's reply can paint the current one.
-  hold = true
+  // A to B to A: a repository departure closes the open request; each target is a new visit, and no earlier visit's
+  // reply can paint the current one.
   const upstream = { owner: 'upstream', repo: 'widgets', host: 'github.corp' }
-  await migrate()
+  await closeSheet()
+  await openAndSearch()
   await act(async () => renderSidebar(upstream, 'clone::/worktree'))
   await settle()
-  expect(text()).not.toContain('fork-only')
+  expect(sheet()).toBeNull()
+  await openAndSearch()
   expect(spinner()).not.toBeNull()
   await act(async () => renderSidebar(prRepo, 'clone::/worktree'))
   await settle()
-  expect(text()).not.toContain('fork-only')
+  // The departed request never comes back on return.
+  expect(sheet()).toBeNull()
+  await openAndSearch()
   expect(spinner()).not.toBeNull()
   expect(sent()).toEqual([
     'status.get',
@@ -411,11 +546,13 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
     'github.listAssignableUsers'
   ])
   const [firstVisit, upstreamVisit, returnVisit] = held.splice(0)
+  io.gh.mockClear()
   io.gh.mockImplementationOnce(async () => ({ stdout: '{"login":"retired-person"}' }))
   await act(async () => firstVisit.release())
   await settle()
   await act(async () => upstreamVisit.release())
   await settle()
+  expect(io.gh.mock.calls[1][0]).toContain('repos/upstream/widgets/assignees?per_page=100')
   expect(text()).not.toContain('retired-person')
   expect(text()).not.toContain('upstream-only')
   expect(spinner()).not.toBeNull()
@@ -426,11 +563,11 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
   // A worktree change and a close/reopen while its reply is pending start fresh visits too.
   await act(async () => renderSidebar(prRepo, 'clone::/other'))
   await settle()
-  expect(text()).not.toContain('fork-only')
+  expect(sheet()).toBeNull()
+  await openAndSearch()
   expect(spinner()).not.toBeNull()
-  await press('Close picker')
-  await press('Add or remove reviewers')
-  await settle()
+  await closeSheet()
+  await openAndSearch()
   expect(sent()).toEqual([
     'status.get',
     'github.listAssignableUsers',
@@ -449,9 +586,8 @@ it('real sidebar/section/drawer sends accepted fork to the runtime provider with
 
   // A genuine empty reply is the only way to reach the empty state.
   hold = false
-  await press('Close picker')
+  await closeSheet()
   io.gh.mockImplementationOnce(async () => ({ stdout: '' }))
-  await press('Add or remove reviewers')
-  await settle()
+  await openAndSearch()
   expect(text()).toContain('No matching people')
 })
