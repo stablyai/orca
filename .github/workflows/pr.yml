@@ -1,5 +1,5 @@
 name: PR Checks
-run-name: "PR ${{ github.event.pull_request.number }} | source ${{ github.sha }} | workflow ${{ github.workflow_sha }} | unit ${{ github.event.pull_request.draft && vars.ORCA_UNIT_SELECTION_MODE == 'selected' && 'selected' || 'full' }}"
+run-name: "${{ github.event_name == 'push' && 'main' || format('PR {0}', github.event.pull_request.number) }} | source ${{ github.sha }} | workflow ${{ github.workflow_sha }} | unit ${{ github.event.pull_request.draft && vars.ORCA_UNIT_SELECTION_MODE == 'selected' && 'selected' || 'full' }}"
 
 on:
   pull_request:
@@ -9,10 +9,14 @@ on:
       - reopened
       - ready_for_review
       - converted_to_draft
+  # Main runs every check PRs may scope or skip, so a red main is visible to its alert.
+  push:
+    branches: [main]
 
+# Each main commit keeps its own run; only a PR's superseded runs cancel.
 concurrency:
-  group: pr-checks-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: ${{ github.event_name == 'push' && format('main-checks-{0}', github.sha) || format('pr-checks-{0}', github.event.pull_request.number) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -136,12 +140,15 @@ jobs:
           if git diff --quiet --no-renames --diff-filter=ACDRTUXB "$DIFF_BASE" HEAD; then
             MOBILE_CI_ARGS=(--mobile-ci-tools --daemon-init-test-support)
           fi
+          # An empty diff fails closed to every job, which is what a main push runs.
+          if [ "$GITHUB_EVENT_NAME" = push ]; then CHANGED=''; MOBILE_CI_ARGS=(); fi
           printf '%s\n' "$CHANGED" | node config/scripts/pr-code-change-scope.mjs "${MOBILE_CI_ARGS[@]}" | tee -a "$GITHUB_OUTPUT"
 
       # Reuse the path-detector checkout instead of queuing another runner.
       - name: Filter changed E2E specs
         id: e2e_filter
-        if: github.event.pull_request.draft != true && steps.filter.outputs.should_run == 'true'
+        # Advisory E2E lanes stay PR-only; main has their nightly schedules.
+        if: github.event_name == 'pull_request' && github.event.pull_request.draft != true && steps.filter.outputs.should_run == 'true'
         run: |
           set -euo pipefail
           BASE="${{ github.event.pull_request.base.sha }}"
@@ -227,6 +234,22 @@ jobs:
           bun-version-file: config/.bun-version
           no-cache: true
 
+      # Per-file passes check only changed paths on PRs; main pushes, detection failures and toolchain edits check everything.
+      - name: Select per-file lint scope
+        id: lint-scope
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          scope=full
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] &&
+            DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")" &&
+            git diff --name-only --no-renames -z "$DIFF_BASE" HEAD > "$RUNNER_TEMP/lint-changes"; then
+            scope="$(node config/scripts/lint-change-scope.mjs "$RUNNER_TEMP/lint-changes" "$RUNNER_TEMP/lint-scope")" || scope=full
+          fi
+          echo "Per-file lint scope: $scope"
+          echo "scope=$scope" >> "$GITHUB_OUTPUT"
+
       # Run gate scripts directly to avoid repeated package-manager startup.
       - name: Check process-host imports
         if: '!cancelled()'
@@ -258,9 +281,12 @@ jobs:
         env:
           PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+          LINT_SCOPE: ${{ steps.lint-scope.outputs.scope }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          node node_modules/oxlint/bin/oxlint --format github
+          if [ "$LINT_SCOPE" = changed ]; then mapfile -d '' paths < "$RUNNER_TEMP/lint-scope/oxlint"; else paths=(.); fi
+          [ "${#paths[@]}" -gt 0 ] || { echo 'No changed files for this pass.'; exit 0; }
+          node node_modules/oxlint/bin/oxlint --format github --no-error-on-unmatched-pattern "${paths[@]}"
 
       # JS plugins make Oxlint hand every AST to Node, so they run apart from the native root lint.
       - name: Enforce JS-plugin lint rules
@@ -270,9 +296,12 @@ jobs:
         env:
           PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+          LINT_SCOPE: ${{ steps.lint-scope.outputs.scope }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          node node_modules/oxlint/bin/oxlint --config config/oxlint-js-plugins.json --format github src config tests mobile native .github
+          if [ "$LINT_SCOPE" = changed ]; then mapfile -d '' paths < "$RUNNER_TEMP/lint-scope/js-plugins"; else paths=(src config tests mobile native .github); fi
+          [ "${#paths[@]}" -gt 0 ] || { echo 'No changed files for this pass.'; exit 0; }
+          node node_modules/oxlint/bin/oxlint --config config/oxlint-js-plugins.json --format github --no-error-on-unmatched-pattern "${paths[@]}"
 
       # Its single JS-plugin thread ran alone for ~12s as a foreground tail; overlapping it fills idle cores.
       - name: Reject low-evidence patterns
@@ -282,21 +311,33 @@ jobs:
         env:
           PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+          LINT_SCOPE: ${{ steps.lint-scope.outputs.scope }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          if [ "$LINT_SCOPE" = changed ]; then mapfile -d '' paths < "$RUNNER_TEMP/lint-scope/anti-slop"; else paths=(src config tests mobile); fi
+          [ "${#paths[@]}" -gt 0 ] || { echo 'No changed files for this pass.'; exit 0; }
           node config/scripts/sync-anti-slop-plugin.mjs
-          bun --smol node_modules/oxlint/bin/oxlint --config config/oxlint-anti-slop.json src config tests mobile --deny-warnings
+          bun --smol node_modules/oxlint/bin/oxlint --config config/oxlint-anti-slop.json --deny-warnings --no-error-on-unmatched-pattern "${paths[@]}"
 
       - name: Enforce ast-grep rules
         if: needs.code_paths.outputs.static_analysis == 'true'
+        env:
+          LINT_SCOPE: ${{ steps.lint-scope.outputs.scope }}
         run: |
           node_modules/.bin/ast-grep test --config config/sgconfig.yml --skip-snapshot-tests
-          node config/scripts/ast-grep-gates.mjs --format=github
+          scope=()
+          if [ "$LINT_SCOPE" = changed ]; then scope=(--paths-from="$RUNNER_TEMP/lint-scope/ast-grep"); fi
+          node config/scripts/ast-grep-gates.mjs --format=github "${scope[@]}"
 
-      # Why the full tree: it takes ~2s, and the pre-commit hook is skippable.
+      # Checks every changed path the pre-commit hook may have skipped.
       - name: Check formatting
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node node_modules/oxfmt/bin/oxfmt --check .
+        env:
+          LINT_SCOPE: ${{ steps.lint-scope.outputs.scope }}
+        run: |
+          if [ "$LINT_SCOPE" = changed ]; then mapfile -d '' paths < "$RUNNER_TEMP/lint-scope/oxfmt"; else paths=(.); fi
+          [ "${#paths[@]}" -gt 0 ] || { echo 'No changed files for this pass.'; exit 0; }
+          node node_modules/oxfmt/bin/oxfmt --check --no-error-on-unmatched-pattern "${paths[@]}"
 
       - wait: root-lint
 
@@ -372,9 +413,10 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          # Detection failures run the full check; renames retain the removed input path.
+          # Main pushes and detection failures run the full check; renames retain the removed input path.
           DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
-          if git diff --name-only --no-renames -z "$DIFF_BASE" HEAD > "$RUNNER_TEMP/localization-changes" &&
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] &&
+            git diff --name-only --no-renames -z "$DIFF_BASE" HEAD > "$RUNNER_TEMP/localization-changes" &&
             scope="$(node config/scripts/localization-extraction-change-scope.mjs "$RUNNER_TEMP/localization-changes")" && [ "$scope" = false ]; then
             echo "Localization extraction inputs are unchanged."
           else
@@ -416,7 +458,8 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
-          if git diff --quiet "$DIFF_BASE" HEAD -- \
+          # Main pushes always replay the rollback.
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] && git diff --quiet "$DIFF_BASE" HEAD -- \
             src/shared/ephemeral-vm-runtime-store.ts \
             src/shared/ephemeral-vm-runtime-feature-store.ts \
             src/shared/ephemeral-vm-runtime-rollback-projection.ts \
@@ -460,9 +503,10 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          # Detection failures run the smoke; renames retain the removed input path.
+          # Main pushes and detection failures run the smoke; renames retain the removed input path.
           DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
-          if git diff --name-only --no-renames -z "$DIFF_BASE" HEAD > "$RUNNER_TEMP/orcad-smoke-changes" &&
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] &&
+            git diff --name-only --no-renames -z "$DIFF_BASE" HEAD > "$RUNNER_TEMP/orcad-smoke-changes" &&
             scope="$(node config/scripts/orcad-terminal-smoke-change-scope.mjs "$RUNNER_TEMP/orcad-smoke-changes")" && [ "$scope" = false ]; then
             echo "Orcad terminal smoke inputs are unchanged."
             echo 'run=false' >> "$GITHUB_OUTPUT"
@@ -999,7 +1043,9 @@ jobs:
 
       # R3: a runtime launcher swap must not also bump the daemon protocol (D7.1).
       # The label is read from the event payload, so push again after applying it.
+      # Main pushes carry no labels; the merged PR already passed this with its label.
       - name: Runtime launcher change does not bump daemon protocol
+        if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           ORCA_ALLOW_RUNTIME_LAUNCHER_PROTOCOL_BUMP: ${{ contains(github.event.pull_request.labels.*.name, 'allow-runtime-launcher-protocol-bump') }}
@@ -1244,7 +1290,7 @@ jobs:
       # Kept briefly so a reviewer can run this exact AppImage on a real Linux desktop.
       - uses: actions/upload-artifact@v7
         with:
-          name: orca-linux-appimage-${{ github.event.pull_request.head.sha }}
+          name: orca-linux-appimage-${{ github.event.pull_request.head.sha || github.sha }}
           path: dist/orca-linux.AppImage
           retention-days: 3
           compression-level: 0
@@ -1539,7 +1585,7 @@ jobs:
   verify:
     name: PR checks passed
     # Publish an explicit result after every required dependency settles.
-    if: ${{ !cancelled() && github.event.pull_request.draft != true }}
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
     needs:
       - code_paths
       - preflight
