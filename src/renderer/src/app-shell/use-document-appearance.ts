@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { buildAppFontFamily } from '@/lib/app-font-family'
 import { applyCodeFontSmoothing } from '@/lib/code-font-smoothing'
 import { applyMarkdownCodeFontFamily } from '@/lib/markdown-code-font'
-import { applySplitDividerSetting } from '@/lib/split-divider-setting'
+import { useSplitDividerSetting } from '@/hooks/use-split-divider-setting'
 import { rebuildAllTerminalWebglRenderers } from '@/lib/pane-manager/pane-manager-registry'
 import { applyDocumentTheme, applyPluginAppTheme } from '../lib/document-theme'
 import { applyThemeBackground } from '../lib/theme-background'
@@ -83,12 +83,10 @@ export function useDocumentAppearance(): void {
   const ready = matchTerminal || pluginThemesLoaded
   usePluginTerminalPaletteRefresh()
   usePluginAppThemeSync()
+  useSplitDividerSetting()
   const appFontFamily = useAppStore((s) => s.settings?.appFontFamily)
   const codeFontSmoothing = useAppStore((s) => s.settings?.codeFontSmoothing)
   const editorFontFamily = useAppStore((s) => s.settings?.editorFontFamily)
-  const splitDividerColor = useAppStore((s) =>
-    dark ? s.settings?.terminalDividerColorDark : s.settings?.terminalDividerColorLight
-  )
   usePluginIconThemeActivation(useAppStore((s) => s.settings?.pluginIconTheme))
   const reduceEffects = useReduceVisualEffects(useAppStore((s) => s.settings?.reduceVisualEffects))
   const surfaceOpacity = useAppStore((s) => s.settings?.terminalBackgroundOpacity ?? 1)
@@ -161,10 +159,6 @@ export function useDocumentAppearance(): void {
   useEffect(() => {
     applyMarkdownCodeFontFamily(editorFontFamily)
   }, [editorFontFamily])
-
-  useEffect(() => {
-    applySplitDividerSetting(splitDividerColor, dark)
-  }, [splitDividerColor, dark])
 
   useEffect(() => {
     // WebGL glyph atlases keep the smoothing they were created with; rebuild only on a real change.
