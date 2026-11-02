@@ -67,6 +67,7 @@ describe('agent prompt writer: default path', () => {
         })
 
       await writing
+      await vi.advanceTimersByTimeAsync(0)
       expect(settled).toBe(false)
       release({ submits: 1 })
       await expect(receipt).resolves.toMatchObject({ handle: HANDLE, accepted: true })
