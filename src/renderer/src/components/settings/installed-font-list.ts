@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import { isWindowsDesktopClient } from '@/lib/windows-path-access'
 
 // One font list backs every font picker, so its availability is shared too.
@@ -6,10 +7,12 @@ let installedFontsUnavailable = false
 const listeners = new Set<() => void>()
 
 export function setInstalledFontsUnavailable(unavailable: boolean): void {
-  if (installedFontsUnavailable === unavailable) {
+  // Browsers never expose installed fonts to the web client, so there is no failure to report.
+  const next = unavailable && !isWebClientLocation()
+  if (installedFontsUnavailable === next) {
     return
   }
-  installedFontsUnavailable = unavailable
+  installedFontsUnavailable = next
   for (const listener of listeners) {
     listener()
   }

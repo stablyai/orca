@@ -157,12 +157,12 @@ export function attachMainWindowServices(
     }
   )
   mainWindow.webContents.session.setPermissionCheckHandler(
-    (_webContents, permission, _origin, details) => {
+    (webContents, permission, _origin, details) => {
       // Electron's typings omit 'local-fonts', which Chromium checks before queryLocalFonts().
       const permissionName: string = permission
-      // The font picker lists fonts through Chromium; subframes such as plugin panels never may.
+      // Only the app frame's font picker may list fonts; not subframes or other default-session pages.
       if (permissionName === 'local-fonts') {
-        return details.isMainFrame === true
+        return webContents?.id === mainWindow.webContents.id && details.isMainFrame === true
       }
       if (permission !== 'media') {
         return allowedPermissions.has(permission)
