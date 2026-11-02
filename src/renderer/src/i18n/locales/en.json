@@ -1063,6 +1063,25 @@
         "acrylic": "acrylic"
       },
       "windowsUnsupported": "Requires Windows 11 version 22H2 or later."
+    },
+    "updateDelay": {
+      "title": "Update Delay",
+      "description": "Wait this many days after a release is published before Orca offers it.",
+      "info": "About Update Delay",
+      "none": "None",
+      "availableSoon": "Available to you {{relative}}",
+      "availableOn": "Available to you {{date}} ({{relative}})",
+      "clearedTitle": "Orca {{version}} is ready",
+      "heldTitle": "Orca {{version}} is on hold",
+      "released": "Released {{released}}",
+      "progress": "Time until Orca {{version}} is available",
+      "skipDelayOnceHint": "Check for this release now. Your delay setting stays the same.",
+      "skipDelayOnce": "Skip Delay Once",
+      "upToDateWithHeld": "You’re up to date. A newer release is on hold until {{date}}.",
+      "heldReleaseReady": "A newer release is ready. Check for updates to get it.",
+      "keywordDelay": "delay",
+      "keywordCooldown": "cooldown",
+      "keywordSecurity": "security"
     }
   },
   "menu": {
@@ -2680,8 +2699,6 @@
         "25690a3855": "Start workspace from PR",
         "a459866967": "Resume workspace attached to PR",
         "347034903a": "Copy GitHub link",
-        "5a01ca7253": "Failed to sync viewed state with GitHub.",
-        "996a1897d2": "Unable to sync viewed state for this pull request.",
         "e0b15c793f": "Failed to copy GitHub link",
         "992e799227": "GitHub link copied",
         "61bfc81ada": "Unable to open the workspace attached to this pull request.",
