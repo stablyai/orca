@@ -56,6 +56,9 @@
     }
   },
   "chat": {
+    "notices": {
+      "orchestrationMail": "Orchestration mail"
+    },
     "subagentGroup": {
       "ran_one": "Ran {{count}} subagent",
       "ran_other": "Ran {{count}} subagents",

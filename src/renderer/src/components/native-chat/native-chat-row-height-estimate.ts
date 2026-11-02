@@ -13,6 +13,8 @@ export type NativeChatRowContentMetrics = {
   textLines: number
   /** A user prompt long enough to mount folded behind "Show full message". */
   userFolds: boolean
+  /** A typed service event starts as one activity line. */
+  collapsedActivity?: boolean
   imageCount: number
   toolCount: number
   subagentGroupCount: number
@@ -96,6 +98,7 @@ export function nativeChatRowContentMetrics(
   const content = deriveNativeChatRowContent(message.blocks)
   const metrics: NativeChatRowContentMetrics = {
     role: message.role,
+    ...(message.from?.orchestration?.message === 'mail-notice' ? { collapsedActivity: true } : {}),
     textLines: estimateNativeChatTextLines(content.markdown, typography.charsPerLine),
     userFolds: message.role === 'user' && nativeChatUserMessageFolds(content.markdown),
     imageCount: content.prose.filter((block) => block.type === 'image-ref').length,
@@ -136,15 +139,16 @@ export function estimateNativeChatRowHeight(
     height = content.subagentGroupCount * SUBAGENT_ROW_PX * scale
     partCount = height > 0 ? 1 : 0
   } else {
-    height =
-      content.role === 'reasoning'
+    height = content.collapsedActivity
+      ? COLLAPSED_REASONING_PX * scale
+      : content.role === 'reasoning'
         ? content.textLines > 0
           ? COLLAPSED_REASONING_PX * scale
           : 0
         : content.userFolds
           ? (NATIVE_CHAT_USER_MESSAGE_FOLDED_PX + USER_FOLD_TOGGLE_PX) * scale
           : content.textLines * typography.lineHeightPx
-    if (content.role === 'user' && content.textLines > 0) {
+    if (content.role === 'user' && content.textLines > 0 && !content.collapsedActivity) {
       height += USER_BUBBLE_CHROME_PX * scale
     }
     if (

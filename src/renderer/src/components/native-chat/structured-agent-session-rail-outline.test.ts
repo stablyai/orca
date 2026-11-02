@@ -9,6 +9,7 @@ function outline(
 ): AgentSessionConversationOutline {
   return {
     sessionId: 'session-1',
+    humanMessagesOnly: true,
     cursor: { epoch, sequence: through },
     entries: sequences.map((sequence) => ({
       itemId: `user-${sequence}`,
@@ -55,5 +56,18 @@ describe('structured rail outline selection', () => {
     expect(selectStructuredRailOutline(outline(48, [1]), WINDOW)).toEqual({ kind: 'stale' })
     // Covers through 49: the two sources abut, nothing is missing.
     expect(selectStructuredRailOutline(outline(49, [1]), WINDOW).kind).toBe('fresh')
+  })
+})
+
+it('does not reuse an old cached outline whose entries have no author guarantee', () => {
+  const current = outline(90, [1, 20])
+  expect(selectStructuredRailOutline(current, WINDOW)).toMatchObject({
+    kind: 'fresh',
+    entries: [{}, {}]
+  })
+  const { humanMessagesOnly: _marker, ...legacy } = current
+  expect(selectStructuredRailOutline(legacy, WINDOW)).toEqual({ kind: 'unattributed' })
+  expect(selectStructuredRailOutline(legacy, { ...WINDOW, oldestLoadedSequence: 60 })).toEqual({
+    kind: 'unattributed'
   })
 })

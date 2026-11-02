@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { NativeChatOrchestrationNotice } from './NativeChatOrchestrationNotice'
 import { memo, useRef } from 'react'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
@@ -72,6 +74,7 @@ function rowHasContent(content: ReturnType<typeof deriveNativeChatRowContent>): 
 export const MessageRow = memo(function MessageRow(
   props: MessageRowProps
 ): React.JSX.Element | null {
+  useTranslation()
   const {
     message,
     agentName,
@@ -146,7 +149,7 @@ export const MessageRow = memo(function MessageRow(
   }
 
   if (isUser) {
-    return (
+    const userRow = (
       <NativeChatUserMessageRow
         message={message}
         markdown={markdown}
@@ -159,6 +162,13 @@ export const MessageRow = memo(function MessageRow(
         rewind={rewind}
         deliveryNotice={deliveryNotice}
       />
+    )
+    return message.from?.orchestration?.message === 'mail-notice' ? (
+      <NativeChatOrchestrationNotice messageId={message.id}>
+        {userRow}
+      </NativeChatOrchestrationNotice>
+    ) : (
+      userRow
     )
   }
 

@@ -3090,6 +3090,9 @@
       "updateFromWorker": "Update from worker",
       "messageFrom": "Message from",
       "showMore": "Show more"
+    },
+    "notices": {
+      "orchestrationMail": "Orchestration mail"
     }
   },
   "sourceControl": {
