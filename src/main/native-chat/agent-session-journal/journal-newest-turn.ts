@@ -1,43 +1,55 @@
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
-import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { isStructuredAgentSessionCommandTurnId } from '../agent-session-wire/structured-agent-session-command-turn'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
+import {
+  compareTurnSources,
+  putTurnSource,
+  type TurnSource,
+  type TurnSourceNode
+} from './journal-newest-turn-tree'
 
-/** A turn or context clear that can decide the failure hold, with the row where it first became a
- * holding failure (zero while it is not one). */
-type Source = { item: AgentJournalRenderItem; failedAt: number }
-
-/** Owned by the transaction-isolated input order; never saved beside the journal. */
+/** Owned by the transaction-isolated input order; never saved beside the journal. Every turn and
+ * clear sits in a creation-ordered tree, so each row updates only the sources it touches. */
 export class JournalNewestTurn {
-  private latest: AgentJournalRenderItem | null = null
-  /** Newest ordinary turn or context clear: always decides when nothing newer does. */
-  private anchor: Source | null = null
-  /** Command turns created after the anchor. One that failed on its own terms (refused, or its
-   * own verdict) is see-through: it neither holds nor releases. */
-  private readonly commands = new Map<string, Source>()
+  private root: TurnSourceNode | undefined
+  private readonly sources = new Map<string, TurnSource>()
   /** Agent failure rows (usage limit, sign-in, terminal error) and the turn each reports on,
    * indexed whether or not that turn has arrived yet. */
   private readonly evidence = new Map<string, string>()
   private readonly reports = new Map<string, number>()
-  private source: string | null = null
+  /** Settlement order at or before this row is unknown (restore, or removal of a source that could
+   * decide), so a failure seen earlier holds until a Resume written after it. */
+  private boundary: number
 
+  /** Only on restore; streamed rows never rescan conversation history. */
   constructor(state: JournalReducerState) {
-    this.rebuild(state, state.lastSequence)
+    this.boundary = state.lastSequence
+    const turns: AgentJournalRenderItem[] = []
+    const reported = new Set<string>()
+    for (const item of state.items.values()) {
+      this.index(state, item.itemId, item, reported)
+      if (isTurnOrClear(item)) {
+        turns.push(item)
+      }
+    }
+    for (const item of turns) {
+      this.place(item, state.lastSequence)
+    }
   }
 
   read(): AgentJournalRenderItem | null {
-    return this.latest
+    return this.root?.latest.item ?? null
   }
 
   /** Releasing Resume marks must be written after this position. */
   failure(): number {
-    const id = this.source
-    return id === null ? 0 : ((this.commands.get(id) ?? this.anchor)?.failedAt ?? 0)
+    const failedAt = this.root?.winner?.failedAt ?? 0
+    return failedAt && Math.max(failedAt, this.boundary)
   }
 
   afterRow(state: JournalReducerState, row: JournalRow): void {
@@ -51,114 +63,54 @@ export class JournalNewestTurn {
     for (const raw of itemIds) {
       const itemId = state.aliases.get(raw) ?? raw
       const item = state.items.get(itemId)
-      if (!isTurnOrClear(item) && this.tracks(itemId)) {
-        // Order of what lies beneath is unknown; rebuild at a fixed boundary.
-        this.rebuild(state, row.seq)
-        return
+      const prior = this.sources.get(itemId)
+      if (prior && !isTurnOrClear(item)) {
+        // Removing one at or after the newest ordinary turn or clear exposes what lies beneath.
+        const anchor = this.root?.anchor
+        if (!anchor || compareTurnSources(prior, anchor) >= 0) {
+          this.boundary = row.seq
+        }
+        this.sources.delete(itemId)
+        this.root = putTurnSource(this.root, prior, true)
       }
-      this.observe(item)
       this.index(state, itemId, item, touched)
-      if (item && isTurnOrClear(item)) {
+      if (isTurnOrClear(item)) {
         touched.add(itemId)
       }
     }
-    let changed = false
     for (const itemId of touched) {
-      changed = this.place(state.items.get(itemId), row.seq) || changed
+      this.place(state.items.get(itemId), row.seq)
     }
-    if (changed) {
-      this.source = this.pick()
-    }
-  }
-
-  /** Only on restore/removal; streamed rows never rescan conversation history. Settlement order is
-   * not saved, so a failure found here holds until a Resume written after `at`. */
-  private rebuild(state: JournalReducerState, at: number): void {
-    this.latest = null
-    this.anchor = null
-    this.commands.clear()
-    this.evidence.clear()
-    this.reports.clear()
-    const commands: AgentJournalRenderItem[] = []
-    const reported = new Set<string>()
-    for (const item of state.items.values()) {
-      this.observe(item)
-      this.index(state, item.itemId, item, reported)
-      if (isCommand(item)) {
-        commands.push(item)
-      } else if (isTurnOrClear(item)) {
-        this.place(item, at)
-      }
-    }
-    for (const item of commands) {
-      this.place(item, at)
-    }
-    this.source = this.pick()
-  }
-
-  private tracks(itemId: string): boolean {
-    return (
-      this.latest?.itemId === itemId ||
-      this.anchor?.item.itemId === itemId ||
-      this.commands.has(itemId)
-    )
-  }
-
-  private observe(item: AgentJournalRenderItem | undefined): void {
-    if (
-      item &&
-      isTurnOrClear(item) &&
-      (!this.latest || compareAgentJournalItems(item, this.latest) >= 0)
-    ) {
-      this.latest = item
-    }
-  }
-
-  /** Re-derives one candidate; returns whether it can change the source. */
-  private place(item: AgentJournalRenderItem | undefined, at: number): boolean {
-    if (!item || !isTurnOrClear(item)) {
-      return false
-    }
-    const anchor = this.anchor
-    if (
-      anchor &&
-      anchor.item.itemId !== item.itemId &&
-      compareAgentJournalItems(item, anchor.item) < 0
-    ) {
-      return false
-    }
-    if (isCommand(item)) {
-      this.commands.set(item.itemId, this.settle(item, this.commands.get(item.itemId), at))
-      return true
-    }
-    this.anchor = this.settle(item, anchor?.item.itemId === item.itemId ? anchor : undefined, at)
-    for (const [itemId, command] of this.commands) {
-      if (compareAgentJournalItems(command.item, item) < 0) {
-        this.commands.delete(itemId)
-      }
-    }
-    return true
   }
 
   /** Keeps the first failure position across same-failure revisions; leaving failure clears it. */
-  private settle(item: AgentJournalRenderItem, prior: Source | undefined, at: number): Source {
-    const holds = settledFailure(item) && (!isCommand(item) || this.reported(item))
-    return { item, failedAt: holds ? prior?.failedAt || at : 0 }
-  }
-
-  private pick(): string | null {
-    let source = this.anchor
-    for (const command of this.commands.values()) {
-      const seeThrough = settledFailure(command.item) && !this.reported(command.item)
-      if (!seeThrough && (!source || compareAgentJournalItems(command.item, source.item) > 0)) {
-        source = command
-      }
+  private place(item: AgentJournalRenderItem | undefined, at: number): void {
+    if (!item || !isTurnOrClear(item)) {
+      return
     }
-    return source?.item.itemId ?? null
-  }
-
-  private reported(item: AgentJournalRenderItem): boolean {
-    return (this.reports.get(item.itemId) ?? 0) > 0
+    const prior = this.sources.get(item.itemId)
+    const command = isCommand(item)
+    const failed = settledFailure(item)
+    const reported = (this.reports.get(item.itemId) ?? 0) > 0
+    const source: TurnSource = {
+      item,
+      failedAt: failed && (!command || reported) ? prior?.failedAt || at : 0,
+      ordinary: !command,
+      relevant: !command || !failed || reported
+    }
+    if (
+      prior?.item === item &&
+      prior.failedAt === source.failedAt &&
+      prior.ordinary === source.ordinary &&
+      prior.relevant === source.relevant
+    ) {
+      return
+    }
+    if (prior && compareTurnSources(prior, source) !== 0) {
+      this.root = putTurnSource(this.root, prior, true)
+    }
+    this.sources.set(item.itemId, source)
+    this.root = putTurnSource(this.root, source, false)
   }
 
   private index(

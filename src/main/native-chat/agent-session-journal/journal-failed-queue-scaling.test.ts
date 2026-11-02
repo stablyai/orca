@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -255,3 +255,204 @@ it.each([100, 1_000])(
     }
   }
 )
+
+/** An AVL tree of T sources is at most 1.45 log2(T + 2) deep; per level, one source's update
+ * reaches a node, its sibling and their cached summaries, plus the row's fixed input-order work. */
+const perSource = (sources: number) => 32 * (Math.ceil(Math.log2(sources + 2)) + 1)
+
+/** Commits rows through real isolated transactions, counting each one's derived draft nodes and
+ * every walk of the saved items or of any map the failure projection owns. */
+function sourceIndexFold(size: number) {
+  const state = createJournalReducerState('session', 'epoch')
+  const revisions = new Map<string, number>()
+  const revise = (itemId: string) => {
+    const revision = (revisions.get(itemId) ?? 0) + 1
+    revisions.set(itemId, revision)
+    return revision
+  }
+  let seq = 0
+  const base = () => ({ v: 4, epoch: 'epoch', seq: ++seq, ts: seq, fence: 1 }) as const
+  const row = (mutation: Record<string, unknown> & { itemId: string }): JournalRow =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callers build item and tombstone rows of the v4 schema.
+    ({ ...base(), kind: 'item', revision: revise(mutation.itemId), ...mutation }) as JournalRow
+  const turn = (itemId: string, turnId: string, outcome?: 'failure' | 'success') => ({
+    kind: 'item',
+    itemId,
+    body: outcome
+      ? { kind: 'turn', turnId, state: 'completed', outcome }
+      : { kind: 'turn', turnId, state: 'running' }
+  })
+  const refusal = (id: string) => {
+    const { itemId, turnId } = structuredAgentSessionCommandTurn(id)
+    const settle = (): JournalRow => ({
+      ...base(),
+      kind: 'lifecycle-batch',
+      settlementId: `command-settled:${id}`,
+      mutations: [
+        {
+          kind: 'item',
+          itemId,
+          revision: revise(itemId),
+          body: { kind: 'turn', turnId, state: 'completed', outcome: 'failure' }
+        },
+        {
+          kind: 'item',
+          itemId: `orca:command-result:${id}`,
+          revision: 1,
+          body: {
+            kind: 'status',
+            text: 'Refused',
+            tone: 'error',
+            failure: { kind: 'commandRefused' }
+          },
+          turnScope: { kind: 'turn', turnItemId: itemId }
+        }
+      ]
+    })
+    return { itemId, turnId, settle }
+  }
+  for (let n = 0; n < size; n++) {
+    applyJournalRow(
+      state,
+      row({ itemId: `message-${n}`, body: { kind: 'message', role: 'assistant', blocks: [] } })
+    )
+  }
+  const owner = journalInputOrder(state).newestTurn
+  let walks = 0
+  let derived = 0
+  const watch = () => {
+    const maps = [state.items, ...Object.values(owner).filter((value) => value instanceof Map)]
+    for (const map of maps) {
+      for (const method of ['keys', 'values', 'entries', 'forEach', Symbol.iterator] as const) {
+        const walk = Reflect.get(map, method)
+        vi.spyOn(map, method).mockImplementation(function (this: unknown, ...args: unknown[]) {
+          walks++
+          return Reflect.apply(walk, this, args)
+        })
+      }
+    }
+  }
+  /** Keeps the most draft nodes one transaction reached per source it changed. */
+  const commit = (rows: JournalRow[], sources = 1) => {
+    const pending = isolateJournalTransition(state, (draft) => {
+      for (const next of rows) {
+        applyJournalRow(draft, next)
+      }
+    })
+    derived = Math.max(derived, pending.trackedDerived() / sources)
+    pending.adopt()
+    return rows.at(-1)!.seq
+  }
+  return {
+    state,
+    owner,
+    row,
+    turn,
+    refusal,
+    commit,
+    watch,
+    counts: () => ({ walks, derived }),
+    status: (turnItemId: string, itemId: string) => row({ ...usageLimit(turnItemId), itemId })
+  }
+}
+
+describe.each([100, 1_000])('failure source index cost with %s commands', (size) => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('updates only touched sources for refused chains and late or early evidence', () => {
+    const f = sourceIndexFold(size)
+    const failedAt = f.commit([f.row(f.turn('ordinary', 'ordinary', 'failure'))])
+    const chain = Array.from({ length: size }, (_, n) => f.refusal(`chain-${n}`))
+    for (const command of chain) {
+      applyJournalRow(f.state, command.settle())
+    }
+    f.watch()
+    for (let n = 0; n < 10; n++) {
+      expect(f.commit([f.refusal(`more-${n}`).settle()])).toBeGreaterThan(failedAt)
+      expect(f.owner.failure()).toBe(failedAt)
+    }
+    for (let n = 0; n < 10; n++) {
+      const late = chain[size / 2 + n]
+      const reported = f.commit([f.status(late.itemId, `late-${n}`)])
+      expect(f.owner.failure()).toBe(reported)
+    }
+    for (let n = 0; n < 10; n++) {
+      const early = f.refusal(`early-${n}`)
+      f.commit([f.status(early.itemId, `early-report-${n}`)])
+      const settled = f.commit([early.settle()])
+      expect(f.owner.failure()).toBe(settled)
+      expect(f.owner.read()?.itemId).toBe(early.itemId)
+    }
+    const { walks, derived } = f.counts()
+    expect(walks).toBe(0)
+    expect(derived).toBeLessThanOrEqual(perSource(2 * size + 32))
+  })
+
+  it('demotes a started command to the newest qualifying one without a walk', () => {
+    const f = sourceIndexFold(size)
+    const successes = Array.from({ length: size }, (_, n) =>
+      structuredAgentSessionCommandTurn(`ok-${n}`)
+    )
+    for (const { itemId, turnId } of successes) {
+      applyJournalRow(f.state, f.row(f.turn(itemId, turnId, 'success')))
+    }
+    f.watch()
+    for (let n = 0; n < 10; n++) {
+      const command = f.refusal(`refused-${n}`)
+      f.commit([f.row(f.turn(command.itemId, command.turnId))])
+      expect(f.owner.read()?.itemId).toBe(command.itemId)
+      f.commit([command.settle()])
+      expect([f.owner.read()?.itemId, f.owner.failure()]).toEqual([command.itemId, 0])
+    }
+    f.commit([f.status(successes.at(-1)!.itemId, 'qualified')])
+    expect(f.owner.failure()).toBe(0)
+    const { walks, derived } = f.counts()
+    expect(walks).toBe(0)
+    expect(derived).toBeLessThanOrEqual(perSource(size + 10))
+  })
+
+  it('keeps a revised anchor and its failure position without visiting newer commands', () => {
+    const f = sourceIndexFold(size)
+    const failedAt = f.commit([f.row(f.turn('ordinary', 'ordinary', 'failure'))])
+    for (let n = 0; n < size; n++) {
+      applyJournalRow(f.state, f.refusal(`chain-${n}`).settle())
+    }
+    f.watch()
+    for (let n = 0; n < 10; n++) {
+      f.commit([f.row(f.turn('ordinary', 'ordinary', 'failure'))])
+      expect(f.owner.failure()).toBe(failedAt)
+    }
+    const { walks, derived } = f.counts()
+    expect(walks).toBe(0)
+    expect(derived).toBeLessThanOrEqual(perSource(size + 1))
+  })
+
+  it('removes rewound commands, including the actual latest, without rebuilding', () => {
+    const f = sourceIndexFold(size)
+    f.commit([f.row(f.turn('ordinary', 'ordinary', 'failure'))])
+    const chain = Array.from({ length: size }, (_, n) => f.refusal(`chain-${n}`))
+    for (const command of chain) {
+      applyJournalRow(f.state, command.settle())
+    }
+    f.watch()
+    // The newest ten one by one, each the actual latest when removed.
+    for (const command of chain.slice(-10).toReversed()) {
+      f.commit([f.row({ kind: 'tombstone', itemId: command.itemId })])
+      expect(f.owner.read()?.itemId).not.toBe(command.itemId)
+    }
+    // Then the rest in one rewind transaction, oldest first, as the writer emits them.
+    const rewound = chain
+      .slice(0, -10)
+      .map((command) => f.row({ kind: 'tombstone', itemId: command.itemId }))
+    const boundary = f.commit(rewound, rewound.length)
+    // What lay beneath them has unknown settlement order: no earlier Resume releases it.
+    expect([f.owner.read()?.itemId, f.owner.failure()]).toEqual(['ordinary', boundary])
+    f.commit([f.row({ kind: 'tombstone', itemId: 'ordinary' })])
+    expect([f.owner.read(), f.owner.failure()]).toEqual([null, 0])
+    const { walks, derived } = f.counts()
+    expect(walks).toBe(0)
+    expect(derived).toBeLessThanOrEqual(perSource(size + 1))
+  })
+})
