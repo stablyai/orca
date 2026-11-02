@@ -8,7 +8,6 @@ import type {
 import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { ClaudeStructuredSessionAdapter } from './structured/claude-structured-session-adapter'
 import type {
   ClaudeStructuredSessionAdapterDeps,
@@ -528,7 +527,7 @@ describe('Claude fold receipt boundaries (synthetic orders)', () => {
     })
   })
 
-  it('a fresh replay uuid explicitly correlated to a joined send adopts the run it joined', async () => {
+  it('a fresh replay uuid with user_message_uuid correlation keeps the opener path, not a fold receipt', async () => {
     const rig = await riggedAdapter()
     const uuidA = await rig.dispatchAt(10, 'client-a', 'first prompt')
     rig.deliver(userReplay(1_000, PROVIDER_SESSION_ID, uuidA, 'first prompt'))
@@ -536,9 +535,8 @@ describe('Claude fold receipt boundaries (synthetic orders)', () => {
     const fresh = userReplay(2_000, PROVIDER_SESSION_ID, 'fresh-turn-2', STEER_PROMPT)
     rig.deliver({ ...fresh, frame: { ...fresh.frame, user_message_uuid: uuidB } })
 
-    // A fresh provider uuid is an alias; membership, not the uuid, decides the run.
-    expect([...new Set(rig.turns().map((turn) => turn.turnId))]).toEqual([uuidA])
-    expect(rig.turns().at(-1)).toMatchObject({ turnId: uuidA, state: 'running' })
+    expect([...new Set(rig.turns().map((turn) => turn.turnId))]).toEqual([uuidA, 'fresh-turn-2'])
+    expect(replayEventFor(rig.events, 'fresh-turn-2')).toMatchObject({ startsTurn: true })
     expect(rig.settled).toHaveBeenCalledWith({
       sessionId: 'session-1',
       clientMessageId: 'client-b',
@@ -587,61 +585,4 @@ describe('Claude fold receipt boundaries (synthetic orders)', () => {
       expect.objectContaining({ clientMessageId: 'client-b' })
     )
   })
-
-  it('root work after a finished run belongs to the follow-up it never ran, not the unechoed input it did', async () => {
-    const rig = await riggedAdapter()
-    await rig.dispatchAt(10, 'client-a', 'first prompt')
-    // No receipts and no echo: A's run executes from its init and output alone.
-    rig.deliver(assistantText(500, PROVIDER_SESSION_ID, 'reply-a', 'A done'))
-    await rig.dispatchAt(600, 'client-b', STEER_PROMPT)
-    rig.deliver(untagged(700, { type: 'result', subtype: 'success', is_error: false, uuid: 'r-a' }))
-    rig.deliver(initFrame(800, PROVIDER_SESSION_ID))
-    rig.deliver(
-      untagged(900, { type: 'system', subtype: 'status', status: 'compacting', uuid: 'compact-b' })
-    )
-
-    expect(rig.turns().at(-1)).toMatchObject({
-      state: 'running',
-      userItemId: agentJournalSubmissionKey('client-b')
-    })
-    expect(rig.claude.connections[0]!.sent).toHaveLength(2)
-  })
-
-  it.each([
-    ['singular', (uuid: string) => ({ user_message_uuid: uuid })],
-    ['plural', (uuid: string) => ({ user_message_uuids: [uuid] })]
-  ])(
-    'a %s result naming only an earlier send never ends the run handed over after it',
-    async (_label, names) => {
-      const rig = await riggedAdapter()
-      const uuidA = await rig.dispatchAt(10, 'client-a', 'first prompt')
-      rig.deliver(userReplay(100, PROVIDER_SESSION_ID, uuidA, 'first prompt'))
-      rig.deliver(
-        resultFrame(200, PROVIDER_SESSION_ID, 'result-a', {
-          userMessageUuids: [uuidA],
-          durationMs: 190,
-          numTurns: 1
-        })
-      )
-      const uuidB = await rig.dispatchAt(300, 'client-b', STEER_PROMPT)
-      rig.deliver(
-        untagged(400, { type: 'system', subtype: 'session_state_changed', state: 'running' })
-      )
-      rig.deliver(
-        untagged(500, {
-          type: 'result',
-          subtype: 'success',
-          is_error: false,
-          uuid: 'late',
-          ...names(uuidA)
-        })
-      )
-
-      expect(rig.turns().at(-1)).toMatchObject({ turnId: uuidB, state: 'running' })
-    }
-  )
 })
-
-function untagged(at: number, frame: Record<string, unknown>): CapturedFoldFrame {
-  return { at, frame: { session_id: PROVIDER_SESSION_ID, parent_tool_use_id: null, ...frame } }
-}

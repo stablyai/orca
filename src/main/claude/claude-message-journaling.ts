@@ -1,6 +1,9 @@
 import { writeClaudeTerminalFailure } from './claude-terminal-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
-import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { ClaudeBackgroundTaskRows } from './claude-background-task-rows'
 import type { ClaudeToolOriginRegistry } from './claude-tool-origin-registry'
@@ -200,8 +203,8 @@ export function journalClaudeMessage(
   if (sendEchoTurn) {
     ctx.turn.allowReopen()
     // Handoff or earlier output opened this send's run; its echo confirms delivery into it.
-    if (!clientMessageId || !ctx.turn.adoptsEcho(clientMessageId)) {
-      ctx.turn.open(sendEchoTurn, observedAt, clientMessageId)
+    if (!clientMessageId || ctx.turn.userItemId !== agentJournalSubmissionKey(clientMessageId)) {
+      ctx.turn.open(sendEchoTurn, observedAt)
     }
   }
   if (changed) {

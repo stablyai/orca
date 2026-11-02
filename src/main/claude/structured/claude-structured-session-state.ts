@@ -47,6 +47,8 @@ export type ClaudeStructuredSessionEvent =
       requestedAt?: number
       /** The submission this replay acknowledged, which opens the turn. */
       clientMessageId?: string
+      /** On any other frame: the unechoed send whose root work opens its turn when none is open. */
+      startedSend?: ClaudeStartedSend
       /** Host clock at receipt; stamped on turn boundaries only. */
       observedAt?: number
     }

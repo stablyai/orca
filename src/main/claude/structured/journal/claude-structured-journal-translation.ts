@@ -23,12 +23,16 @@ import { createClaudeStreamedTextCheckpoints } from '../../claude-streamed-text-
 import {
   claudeFrameParentRef,
   claudeStreamTurnStartSource,
-  claudeStreamTurnSource
+  claudeStreamTurnSource,
+  isRootClaudeFrame
 } from '../../claude-turn-opening'
 import { ClaudeOpenTurn } from '../../claude-open-turn'
 import { claudeCommandCurrentTurn, observeClaudeCommandFrame } from '../../claude-command-turn'
 import { ClaudeContextFacts } from '../../claude-context-facts'
-import { claudeSessionStateEndsTurn } from '../../claude-session-state-turn-over'
+import {
+  claudeSessionStateEndsTurn,
+  claudeSessionStateRuns
+} from '../../claude-session-state-turn-over'
 import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import { claudeChildToolQueries } from '../../claude-child-tool-queries'
 import { journalClaudeMessage } from '../../claude-message-journaling'
@@ -173,9 +177,27 @@ export function createClaudeJournalTranslator(
         turn.suppressReopen()
         return
       }
+      turn.observeStartedSend(event.type === 'message' ? (event.startedSend ?? null) : null)
       if (event.type === 'message') {
         context.observe(event.message, event.observedAt ?? Date.now())
-        turn.observeFrame(event.message, event.startsTurn === true, event.clientMessageId)
+        // Root init starts a cycle; replays after root work fold into it, while task frames do not mark cycle work.
+        if (isRootClaudeFrame(event.message)) {
+          if (event.message.type === 'system' && event.message.subtype === 'init') {
+            turn.observeProviderCycleStart()
+          } else if (claudeSessionStateRuns(event.message)) {
+            turn.observeProviderRunning()
+          } else if (
+            event.startsTurn === true ||
+            event.message.type === 'assistant' ||
+            event.message.type === 'stream_event'
+          ) {
+            turn.observeProviderCycleWork()
+            turn.inputChoiceWorkObserved ||=
+              event.message.type !== 'assistant' ||
+              event.message.is_api_error_message !== true ||
+              event.startedSend != null
+          }
+        }
       }
       if (event.type === 'message' && observeClaudeCommandFrame(turn.command, event.message)) {
         return
@@ -230,7 +252,7 @@ export function createClaudeJournalTranslator(
         if (claudeSessionStateEndsTurn(event.message)) {
           corrections.abandon()
           // No verdict: the CLI said the turn is over, not how it ended.
-          if (turn.endsAtIdle()) {
+          if (turn.settlesAtIdle) {
             turn.settle({ state: 'completed', completedAt: event.observedAt ?? Date.now() })
           }
         }

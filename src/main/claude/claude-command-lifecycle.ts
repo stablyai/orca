@@ -80,6 +80,19 @@ export function claudeStartedUnechoedSend(session: ClaudeSession): ClaudeStarted
     : null
 }
 
+/** Root work outside a run belongs to the oldest unechoed send not reported queued (receipt-less CLIs report none). */
+export function claudeRootWorkSend(session: ClaudeSession): ClaudeStartedSend | null {
+  const waiter = session.dispatchWaiters.find(
+    (candidate) => candidate.commandLifecycle !== 'queued' && candidate.clientMessageId !== null
+  )
+  return waiter?.clientMessageId
+    ? {
+        clientMessageId: waiter.clientMessageId,
+        ...(waiter.requestedAt === null ? {} : { requestedAt: waiter.requestedAt })
+      }
+    : null
+}
+
 /** Include settlements until the host hears them, avoiding a gap in dispatch ownership. */
 export function claudeHeldSends(session: ClaudeSession): ReadonlySet<string> {
   return new Set([

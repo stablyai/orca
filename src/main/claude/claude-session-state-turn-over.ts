@@ -11,6 +11,10 @@ export function claudeSessionStateEndsTurn(message: Record<string, unknown>): bo
   return isClaudeSessionStateFrame(message) && claudeText(message.state) === 'idle'
 }
 
+export function claudeSessionStateRuns(message: Record<string, unknown>): boolean {
+  return isClaudeSessionStateFrame(message) && claudeText(message.state) === 'running'
+}
+
 export function idleClaudeJournalTurn(
   translator: ClaudeJournalTranslator,
   sessionId: string,

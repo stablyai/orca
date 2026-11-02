@@ -9,7 +9,7 @@ import type { ClaudeContextReportPart, ClaudeContextReportTarget } from './claud
 import type { ClaudeJournalPrompts } from './structured/journal/claude-structured-journal-prompts'
 import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import type { ClaudeCommandStart } from './claude-command-turn'
-import type { ClaudeOfferedInput } from './claude-input-runs'
+import type { ClaudeOfferedInput } from './claude-open-turn'
 
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
