@@ -80,7 +80,10 @@ export class RuntimeBrowserNetwork {
       typeof params.profileId === 'string' && params.profileId.length > 0
         ? params.profileId
         : 'default'
-    const profile = browserSessionRegistry.getProfile(profileId)
+    // Why: 'default' is synthetic; same fallback as browserTabSetProfile.
+    const profile =
+      browserSessionRegistry.getProfile(profileId) ??
+      (profileId === 'default' ? browserSessionRegistry.getDefaultProfile() : null)
     if (!profile) {
       return { ok: false, reason: `Session profile not found: ${profileId}` }
     }
@@ -90,11 +93,11 @@ export class RuntimeBrowserNetwork {
       return result
     }
 
-    browserSessionRegistry.updateProfileSource(profileId, {
+    browserSessionRegistry.updateProfileSource(profile.id, {
       browserFamily: 'manual',
       importedAt: Date.now()
     })
-    return { ...result, profileId }
+    return { ...result, profileId: profile.id }
   }
 
   async browserSetViewport(
