@@ -1252,10 +1252,6 @@
         "permissionDenied": "Permission denied.",
         "symlink": "Symbolic links cannot be attached.",
         "unsupported": "Unsupported file type."
-      },
-      "activateAiVaultStructuredSession": {
-        "worktreeDeleted": "The worktree was deleted.",
-        "folderWorkspaceRemoved": "The folder workspace was removed."
       }
     },
     "runtime": {
@@ -1449,6 +1445,12 @@
       "approval": {
         "allow": "Allow",
         "deny": "Deny",
+        "folderTrust": {
+          "exit": "Exit",
+          "hint": "The agent asks before it can read, edit and run files in this folder.",
+          "title": "Trust this folder?",
+          "trust": "Trust folder"
+        },
         "plan": {
           "refineHint": "Refine plan closes the review so you can send what to change.",
           "reviewTitle": "Review proposed plan"
