@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import packageJson from '../../../../package.json'
 import { cancelTrackingResponse } from '../../lib/unread-response-body.test-fixtures'
 import type { SimulatorDevice } from '../simctl-simulator-devices'
 import type { ServeSimHelperProcess } from '../serve-sim-helper-processes'
@@ -103,9 +104,12 @@ describe('IosEmulatorBackend', () => {
     notifyutilState.stdout = 'com.apple.coredevice.dtuhidd.active 0\n'
     netFetchMock.mockImplementation(
       async () =>
-        new Response(JSON.stringify({ serve_sim: { version: '0.1.49-beta.139.1' } }), {
-          status: 200
-        })
+        new Response(
+          JSON.stringify({ serve_sim: { version: packageJson.dependencies['serve-sim'] } }),
+          {
+            status: 200
+          }
+        )
     )
   })
 
