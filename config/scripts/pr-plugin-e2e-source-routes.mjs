@@ -213,16 +213,34 @@ const SPECIFIC_PLUGIN_ROUTES = [
     'plugins.view-shot',
     ['plugin-shot', 'plugin-shot-editor'],
     [
-      `${UI}view\\/`,
-      `${STORE}(?:view-capture|shot-replay)`,
-      'src\\/main\\/plugins\\/testing\\/plugin-test-(?:hooks|register)',
-      'src\\/(?:main|shared)\\/plugins\\/view\\/',
+      `${UI}view\\/(?!PluginShotReplay|plugin-view-replay)`,
+      `${STORE}view-capture`,
+      'src\\/(?:main\\/plugins\\/view\\/(?!plugin-view-replay)|shared\\/plugins\\/view\\/)',
       'src\\/main\\/runtime\\/rpc\\/methods\\/plugin-view',
-      'src\\/cli\\/(?:handlers|specs)\\/plugin-(?:view|shot-scenario)',
+      // Every `plugin shot` checks for a chrome region and resolves the default shots folder.
+      'src\\/cli\\/(?:handlers\\/plugin-(?:view|shot-chrome|shot-default-dir)|specs\\/plugin-view)',
       'src\\/renderer\\/src\\/hooks\\/(?:ipc-events\\/plugin-view-ipc-bridge|use-document-dark-theme)',
       'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:plugin-panel-draw-status|use-plugin-panel-draw-report|right-sidebar-panel-content)'
     ].join('|'),
     'plugin-frame-guest|plugin-smoke|compiled-orca-cli'
+  ),
+  // `shot --scenario`: the check child draws the tree, then the renderer replays it.
+  pluginRoute(
+    'plugins.view-shot-scenario',
+    ['plugin-shot'],
+    [
+      `${UI}view\\/(?:PluginShotReplay|plugin-view-replay)`,
+      `${STORE}shot-replay`,
+      'src\\/main\\/plugins\\/view\\/plugin-view-replay',
+      'src\\/main\\/plugins\\/testing\\/plugin-test-(?:hooks|register)',
+      'src\\/cli\\/(?:handlers|specs)\\/plugin-shot-scenario',
+      'src\\/cli\\/plugin-authoring\\/plugin-(?:panel-check|test-runner|test-node)'
+    ].join('|')
+  ),
+  pluginRoute(
+    'plugins.view-shot-editor',
+    ['plugin-shot-editor'],
+    'src\\/cli\\/handlers\\/plugin-shot-editor'
   ),
   pluginRoute(
     'plugins.vm-recipes',
