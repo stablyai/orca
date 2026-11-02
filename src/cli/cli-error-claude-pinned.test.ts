@@ -1,9 +1,9 @@
-import { expect, it } from 'vitest'
-import { formatCliError } from './cli-error'
+import { afterEach, expect, it, vi } from 'vitest'
+import { formatCliError, reportCliError } from './cli-error'
 import { RuntimeRpcFailureError } from './runtime-client'
 
-it('prints a pinned Claude refusal without the renderer marker', () => {
-  const error = new RuntimeRpcFailureError({
+function pinnedRefusal(): RuntimeRpcFailureError {
+  return new RuntimeRpcFailureError({
     id: 'request-1',
     ok: false,
     error: {
@@ -12,7 +12,22 @@ it('prints a pinned Claude refusal without the renderer marker', () => {
     },
     _meta: { runtimeId: 'runtime-1' }
   })
-  const output = formatCliError(error)
+}
+
+afterEach(() => vi.restoreAllMocks())
+
+it('prints a pinned Claude refusal without the renderer marker', () => {
+  const output = formatCliError(pinnedRefusal())
   expect(output).toContain('That Claude account no longer exists.')
   expect(output).not.toContain('claude_pinned')
+})
+
+it('keeps the marker out of --json output and the concise error line', () => {
+  const stdout = vi.spyOn(console, 'log').mockImplementation(() => {})
+  const stderr = vi.spyOn(console, 'error').mockImplementation(() => {})
+  reportCliError(pinnedRefusal(), true)
+  reportCliError(pinnedRefusal(), true, { conciseOrchestration: true })
+  const printed = [...stdout.mock.calls, ...stderr.mock.calls].flat().join('\n')
+  expect(printed).toContain('That Claude account no longer exists.')
+  expect(printed).not.toContain('claude_pinned')
 })

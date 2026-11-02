@@ -99,6 +99,17 @@ describe('orchestration agent views', () => {
     expect(process.exitCode).toBe(1)
   })
 
+  it('keeps the pinned Claude marker out of a failed worker-start', async () => {
+    const { stdout, stderr } = await run('worker-start', [['task', 'task_1']], {
+      ...OLDER_RUNTIME_START,
+      state: 'failed',
+      failedStage: 'spawn',
+      lastError: 'That Claude account no longer exists. [claude_pinned:account-missing]'
+    })
+    expect(stdout).toContain('lastError="That Claude account no longer exists."')
+    expect(stderr).toBe('error: start_failed: spawn: That Claude account no longer exists.')
+  })
+
   it('escapes terminal control bytes in worker-written fields', async () => {
     const { stdout } = await run('worker-start', [['task', 'task_1']], {
       ...OLDER_RUNTIME_START,

@@ -11,9 +11,21 @@ export function claudePinnedLaunchError(code: ClaudePinnedLaunchErrorCode, messa
 
 const DISPLAY_MARKER_RE = new RegExp(`\\s?${MARKER_RE.source}`, 'g')
 
+type ErrorResponse = { error: { message: string } }
+
 /** CLI and mobile print host errors verbatim; the marker is only for the renderer's parser. */
-export function stripClaudePinnedLaunchMarker(text: string): string {
-  return text.replace(DISPLAY_MARKER_RE, '')
+export function stripClaudePinnedLaunchMarker(text: string): string
+export function stripClaudePinnedLaunchMarker<T extends ErrorResponse>(response: T): T
+export function stripClaudePinnedLaunchMarker(
+  value: string | ErrorResponse
+): string | ErrorResponse {
+  if (typeof value === 'string') {
+    return value.replace(DISPLAY_MARKER_RE, '')
+  }
+  return {
+    ...value,
+    error: { ...value.error, message: stripClaudePinnedLaunchMarker(value.error.message) }
+  }
 }
 
 export function readClaudePinnedLaunchErrorCode(text: string): ClaudePinnedLaunchErrorCode | null {

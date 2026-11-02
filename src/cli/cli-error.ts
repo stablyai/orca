@@ -152,7 +152,7 @@ export function reportCliError(error: unknown, json: boolean, context: CliErrorC
   const selector = contextRecovery(cliErrorCode(error), context)
   const concise = context.conciseOrchestration
   if (json) {
-    const response = cliErrorJsonResponse(error, context, selector)
+    const response = stripClaudePinnedLaunchMarker(cliErrorJsonResponse(error, context, selector))
     console.log(
       concise
         ? JSON.stringify({ ok: false, error: response.error })
