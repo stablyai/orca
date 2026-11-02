@@ -148,7 +148,7 @@ describe('a chat agent and a terminal agent see the same text but for how each i
     expect(chat).not.toContain(CHAT_WORKER_HANDLE)
     expect(chat).not.toContain('this terminal')
     expect(withoutRedispatch).not.toBe(chat)
-    expect(withoutRedispatch.split('this chat')).toHaveLength(3)
+    expect(withoutRedispatch.split('this chat')).toHaveLength(2)
     expect(
       withoutRedispatch
         .replace(SELF_LINE, '')
