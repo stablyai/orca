@@ -309,23 +309,14 @@ export function handleSwitchTerminalTab(direction: number): boolean {
   }
   const currentIndex = idx === -1 && direction > 0 ? -1 : idx === -1 ? 0 : idx
   const next = terminalTabs[(currentIndex + direction + terminalTabs.length) % terminalTabs.length]
-  if (next.type === 'agent-session') {
-    if (next.id === currentId && store.activeTabType === 'agent-session') {
-      return false
-    }
-    activateCyclableTab(store, next)
-    return true
-  }
   // Skip redundant activation writes to avoid unnecessary active-tab subscriber work.
-  if (next.id === store.activeTabId && store.activeTabType === 'terminal') {
+  const alreadyActive =
+    next.type === 'agent-session'
+      ? next.id === currentId && store.activeTabType === 'agent-session'
+      : next.id === store.activeTabId && store.activeTabType === 'terminal'
+  if (alreadyActive) {
     return false
   }
-  store.setActiveTab(next.id)
-  // Exact unified ID keeps focus in the right split when a terminal has copies in several groups.
-  if (next.tabId) {
-    store.activateTab?.(next.tabId)
-  }
-  store.setActiveTabType('terminal', worktreeId)
-  activateCycledTabOnOwner(worktreeId, next)
+  activateCyclableTab(store, next)
   return true
 }
