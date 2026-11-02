@@ -1,13 +1,15 @@
 import { captureStructuredLaunchSurfaceAddress } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { closeCliChatResumeTerminal } from './cli-chat-resume-close-terminal'
-import { admitCliChatResumeClose } from './cli-chat-resume-close-admission'
+import {
+  admitCliChatResumeClose,
+  showCliChatResumeLaunchHolder,
+  withoutJoiningLaunchHolder,
+  type LaunchHeld
+} from './cli-chat-resume-close-admission'
 import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import {
-  adoptAgentSessionLaunchVerdict,
-  type AgentSessionLaunchPlan
-} from '@/lib/agent-session-launch-plan'
+import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
 import {
   StructuredAgentSessionCreateSourceFailedError,
   type StructuredAgentSessionCreateGate
@@ -185,18 +187,8 @@ export async function runCliChatResume(
           : {})
       }
     })
-    // A chat already opening this conversation is joined: its create isn't this terminal's to gate.
-    let joinedOther = false
-    const plan: AgentSessionLaunchPlan = closes
-      ? {
-          ...verdict,
-          begin: (hooks, launchTarget) => {
-            const handle = verdict.begin(hooks, launchTarget)
-            joinedOther = handle?.joined === true
-            return handle
-          }
-        }
-      : verdict
+    const held: LaunchHeld = {}
+    const plan = closes ? withoutJoiningLaunchHolder(verdict, source, agent, held) : verdict
     let tabOpened: ((tabId: string | null) => void) | undefined
     const chatOpened = new Promise<string | null>((resolve) => {
       tabOpened = resolve
@@ -214,7 +206,7 @@ export async function runCliChatResume(
             // The chat takes the terminal's place, shown before the terminal goes.
             afterTabId: source.tabId,
             onTabOpenSettled: (tabId) => {
-              if (finished && tabId && !closed && !joinedOther) {
+              if (finished && tabId && !closed) {
                 // Its create was abandoned when the run ended without closing the terminal.
                 useAppStore.getState().closeUnifiedTab(tabId)
                 return
@@ -230,16 +222,15 @@ export async function runCliChatResume(
             target: { surfaceAddress }
           }
     )
-    if (!launch) {
+    if (closes && launch) {
+      chatTabId = await waitForPromiseWithSignal(chatOpened, controller.signal)
+    }
+    if (held.holder) {
+      await showCliChatResumeLaunchHolder(held.holder, openOwner, target)
       return
     }
-    if (closes) {
-      const opened = await waitForPromiseWithSignal(chatOpened, controller.signal)
-      // The joined chat shows, as an owner chat does, and the terminal stays beside it.
-      if (joinedOther) {
-        return
-      }
-      chatTabId = opened
+    if (!launch) {
+      return
     }
     if (chatTabId) {
       if (!isCurrent()) {

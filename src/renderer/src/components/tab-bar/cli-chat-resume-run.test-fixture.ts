@@ -58,6 +58,8 @@ export function refuse(
   }
 }
 
+const ROW_AT = 1_700_000_000_000
+
 export const row = (paneKey: string, extra: Record<string, unknown> = {}) => ({
   agentType: 'claude' as const,
   paneKey,
@@ -65,8 +67,8 @@ export const row = (paneKey: string, extra: Record<string, unknown> = {}) => ({
   providerSession: { key: 'session_id' as const, id: SOURCE.providerSessionId },
   state: 'done' as const,
   prompt: '',
-  updatedAt: Date.now(),
-  stateStartedAt: Date.now(),
+  updatedAt: ROW_AT,
+  stateStartedAt: ROW_AT,
   stateHistory: [],
   ...extra
 })

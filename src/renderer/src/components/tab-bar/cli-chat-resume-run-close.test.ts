@@ -71,7 +71,10 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
 )
 
 import { useAppStore } from '@/store'
-import { getStructuredAgentSessionLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import {
+  getStructuredAgentSessionLaunchFailure,
+  getStructuredAgentSessionLaunchLifecycle
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { startStructuredAgentLaunch } from '@/lib/agent-session/launch/structured-agent-session-launch'
 import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-focus-intent'
 import {
@@ -145,7 +148,7 @@ describe('close terminal then continue on capable hosts', () => {
     await runCliChatResume(SOURCE)
     await vi.waitFor(() =>
       expect(chatFailure()?.causeText).toBe(
-        "Orca closed Claude's terminal but couldn't confirm Claude stopped. Check the host connection, then try again."
+        "Orca closed Claude's terminal but couldn't confirm Claude stopped. Make sure it has stopped, then try again."
       )
     )
     expect(creates()).toEqual([])
@@ -202,6 +205,11 @@ describe('close terminal then continue on capable hosts', () => {
       name: 'another job runs after the agent quit',
       probe: { verdict: 'live', foregroundProcess: 'vim' },
       asks: true
+    },
+    {
+      name: 'another agent runs after this one quit',
+      probe: { verdict: 'live', foregroundProcess: 'codex' },
+      asks: true
     }
   ])('closes the terminal when $name', async ({ probe, asks }) => {
     if (probe) {
@@ -232,20 +240,36 @@ describe('close terminal then continue on capable hosts', () => {
     expect(mocks.toast).not.toHaveBeenCalled()
   })
 
-  it('shows a chat already opening this conversation and keeps the terminal', async () => {
-    mocks.call.mockImplementationOnce(() => new Promise(() => undefined))
-    const other = startStructuredAgentLaunch('wt-1', 'claude', {
-      requestId: 'other-resume',
-      resumeFrom: { providerSessionId: SOURCE.providerSessionId }
-    })
-    await vi.waitFor(() => expect(creates()).toHaveLength(1))
-    await runCliChatResume(SOURCE)
-    await main?.settle()
-    expect(mocks.closeTerminal).not.toHaveBeenCalled()
-    expect(tabs().map((tab) => tab.entityId)).toEqual([other.sessionId])
-    expect(creates()).toHaveLength(1)
-    expect(mocks.toast).not.toHaveBeenCalled()
-  })
+  // Joining it would re-send an unconfirmed chat's create beside the still-running CLI.
+  it.each(['pending', 'visibility-unknown'])(
+    'shows a %s chat already opening this conversation and keeps the terminal',
+    async (lifecycle) => {
+      // Its create never answers, or its reply is lost and the host can't be asked whether it exists.
+      const answer = mocks.call.getMockImplementation()
+      mocks.call.mockImplementation((...args: unknown[]) =>
+        args[1] !== 'agentSession.create'
+          ? answer?.(...args)
+          : lifecycle === 'pending'
+            ? new Promise(() => undefined)
+            : Promise.reject(new Error('response lost'))
+      )
+      const other = startStructuredAgentLaunch('wt-1', 'claude', {
+        requestId: 'other-resume',
+        resumeFrom: { providerSessionId: SOURCE.providerSessionId }
+      })
+      await vi.waitFor(() => {
+        expect(creates().length).toBeGreaterThan(0)
+        expect(getStructuredAgentSessionLaunchLifecycle('wt-1', other.sessionId)).toBe(lifecycle)
+      })
+      const sent = creates().length
+      await runCliChatResume(SOURCE, true)
+      await main?.settle()
+      expect(mocks.closeTerminal).not.toHaveBeenCalled()
+      expect(tabs().map((tab) => tab.entityId)).toEqual([other.sessionId])
+      expect(creates()).toHaveLength(sent)
+      expect(mocks.toast).not.toHaveBeenCalled()
+    }
+  )
 
   it('stops counting preparation time once the close waits on the user', async () => {
     vi.useFakeTimers()

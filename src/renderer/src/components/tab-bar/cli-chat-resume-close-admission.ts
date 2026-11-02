@@ -11,11 +11,21 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import { probePtyRunningWork } from '../terminal/pty-running-work-probe'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import { STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
-import { namesCliConversation } from '../../../../shared/structured-agent-cli-conversation-adoption'
+import {
+  chatAgentsShareConversations,
+  namesCliConversation
+} from '../../../../shared/structured-agent-cli-conversation-adoption'
 import { recognizeAgentProcess } from '../../../../shared/agent-process-recognition'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
 import { reportCliChatResumeOwner } from './cli-chat-resume-feedback'
+import type { AgentSessionLaunchPlan } from '@/lib/agent-session-launch-plan'
+import { structuredLaunchesHoldingIdentity } from '@/lib/agent-session/launch/structured-agent-session-launch-holders'
+import {
+  structuredLaunchIdentity,
+  type StructuredLaunchState
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { openStructuredAgentSessionProvisionalTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 
 /** keep: the agent quit, so the terminal stays; close: continuing stops the pane's agent;
  *  ask: the pane runs another job, so the terminal's own running-process prompt asks. */
@@ -40,12 +50,49 @@ async function paneClose(
   if (probe?.verdict === 'exited') {
     return 'keep'
   }
-  // A job started after the agent quit (an editor, a dev server) is the user's to stop.
-  return probe?.verdict === 'live' &&
-    probe.foregroundProcess &&
-    !recognizeAgentProcess(probe.foregroundProcess)
-    ? 'ask'
-    : 'close'
+  // Only this conversation's agent is the user's to stop; a job started after it quit (an editor,
+  // a dev server, another agent) is asked about first.
+  const running = probe?.verdict === 'live' ? probe.foregroundProcess : undefined
+  const agent = running ? recognizeAgentProcess(running)?.agent : undefined
+  return running && !(agent && chatAgentsShareConversations(source.agent, agent)) ? 'ask' : 'close'
+}
+
+export type LaunchHeld = { holder?: StructuredLaunchState }
+
+/** Starts the chat unless one already opening this conversation here would be joined, kept in
+ *  `held`: joining a chat whose start is unconfirmed re-sends its create beside the running CLI. */
+export function withoutJoiningLaunchHolder(
+  plan: AgentSessionLaunchPlan,
+  source: CliChatResumeSource,
+  agent: TuiAgent,
+  held: LaunchHeld
+): AgentSessionLaunchPlan {
+  const identity = structuredLaunchIdentity(source.workspaceId, agent, {
+    resumeFrom: { providerSessionId: source.providerSessionId },
+    executionHostId: source.executionHostId
+  })
+  return {
+    ...plan,
+    begin: (hooks, target) => {
+      held.holder = structuredLaunchesHoldingIdentity((candidate) => candidate === identity).at(-1)
+      return held.holder ? null : plan.begin(hooks, target)
+    }
+  }
+}
+
+/** Main's answer to a chat that already holds the conversation, for one still opening: the header
+ *  shows it, the menu says so; the terminal stays. */
+export async function showCliChatResumeLaunchHolder(
+  holder: StructuredLaunchState,
+  openOwner: boolean,
+  target: RuntimeClientTarget
+): Promise<void> {
+  if (!openOwner) {
+    await reportCliChatResumeOwner(undefined, openOwner, target)
+    return
+  }
+  const { worktreeId, executionHostId, sessionId, agent } = holder.intent
+  openStructuredAgentSessionProvisionalTab({ worktreeId, executionHostId, sessionId, agent })
 }
 
 /** How continuing treats the terminal; null when a check refused and said so, or the source changed. */

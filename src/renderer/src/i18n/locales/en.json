@@ -19853,7 +19853,7 @@
         "notSavedYet": "{{agent}} hasn't saved this conversation yet. Try again after it replies.",
         "terminalChanged": "The terminal running {{agent}} changed before it closed, so Orca left it open. Try again.",
         "terminalExitUnproven": "Orca closed {{agent}}'s terminal but couldn't confirm it stopped, so the chat didn't open. Check the host connection, then open the conversation from Session History.",
-        "terminalExitUnprovenInChat": "Orca closed {{agent}}'s terminal but couldn't confirm {{agent}} stopped. Check the host connection, then try again.",
+        "terminalExitUnprovenInChat": "Orca closed {{agent}}'s terminal but couldn't confirm {{agent}} stopped. Make sure it has stopped, then try again.",
         "resumeFailed": "{{agent}} couldn't continue in chat. Check this terminal and the host connection, then try again."
       },
       "state": {

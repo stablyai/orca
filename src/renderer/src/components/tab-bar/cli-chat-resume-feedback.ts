@@ -60,7 +60,7 @@ export async function reportCliChatResumeFailureInChat(
 export function cliChatResumeExitUnprovenText(source: CliChatResumeSource): string {
   return translate(
     'components.native-chat.resumeInNewChat.terminalExitUnprovenInChat',
-    "Orca closed {{agent}}'s terminal but couldn't confirm {{agent}} stopped. Check the host connection, then try again.",
+    "Orca closed {{agent}}'s terminal but couldn't confirm {{agent}} stopped. Make sure it has stopped, then try again.",
     { agent: agentLabel(source.agent) }
   )
 }

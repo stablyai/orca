@@ -133,11 +133,14 @@ beforeEach(async () => {
   main = await drawTabsFromMain(useAppStore)
 })
 
+// A fixed version: later snapshots in a test count up from it.
+const SNAPSHOT_VERSION = 1_700_000_000_000
+
 function snapshot(sessionId?: string): RuntimeMobileSessionTabsResult {
   return {
     worktree: 'wt-1',
     publicationEpoch: 'publication-test',
-    snapshotVersion: Date.now(),
+    snapshotVersion: SNAPSHOT_VERSION,
     activeGroupId: null,
     activeTabId: null,
     activeTabType: null,
@@ -463,7 +466,7 @@ describe('CLI identity resume through the existing launch owner', () => {
       expect(useAppStore.getState().activeGroupIdByWorktree['wt-1']).toBe(other.groupId)
       useAppStore.getState().moveUnifiedTabToGroup(slotId, other.groupId)
       applyStructuredSessionTabSnapshots([
-        { ...snapshot(sessionId), snapshotVersion: Date.now() + 1 }
+        { ...snapshot(sessionId), snapshotVersion: SNAPSHOT_VERSION + 1 }
       ])
       expect(tabs().find((tab) => tab.entityId === sessionId)?.groupId).toBe(other.groupId)
     }
