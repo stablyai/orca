@@ -167,7 +167,7 @@ export function AgentLaunchSetupPanel({
   const waitReason = (surface: AgentPickerSurface) =>
     surface === 'terminal' && terminalBlocked ? terminalPendingLabel() : undefined
   const surfaceDisabled = (surface: AgentPickerSurface) => disabled || !!waitReason(surface)
-  const use = (surface: AgentPickerSurface) => {
+  const launchSurface = (surface: AgentPickerSurface) => {
     if (!surfaceDisabled(surface)) {
       onUse({ ...draft, surface })
     }
@@ -184,7 +184,7 @@ export function AgentLaunchSetupPanel({
           (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
         ) {
           event.preventDefault()
-          use(entry.defaultSurface)
+          launchSurface(entry.defaultSurface)
         }
       }}
     >
@@ -201,7 +201,7 @@ export function AgentLaunchSetupPanel({
           ) {
             event.preventDefault()
             event.stopPropagation()
-            use(entry.defaultSurface)
+            launchSurface(entry.defaultSurface)
           }
         }}
         onKeyDown={(event) => {
@@ -380,7 +380,7 @@ export function AgentLaunchSetupPanel({
             title={waitReason(surface)}
             aria-description={waitReason(surface)}
             variant={surface === entry.defaultSurface ? 'default' : 'outline'}
-            onClick={() => use(surface)}
+            onClick={() => launchSurface(surface)}
           >
             {surface === 'chat'
               ? translate('agentPicker.launchChat', 'Launch chat')
