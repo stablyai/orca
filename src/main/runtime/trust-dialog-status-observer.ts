@@ -2,6 +2,7 @@ import type {
   AgentStatusIpcPayload,
   ParsedAgentStatusPayload
 } from '../../shared/agent-status-types'
+import type { TerminalAgent } from '../../shared/terminal-agent'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { HeadlessEmulator } from '../daemon/headless-emulator'
 import { startupDialogPrompt, startupDialogReason } from './startup-dialog-screen'
@@ -34,7 +35,8 @@ type PaneScan = {
 
 type TrustDialogStatusDeps = {
   getPaneAgent: (ptyId: string) => TuiAgent | null
-  refreshForegroundAgent: (ptyId: string) => Promise<unknown>
+  /** Names a hand-typed agent for this dialog only; null when launch/foreground evidence already owns the pane. */
+  identifyUnownedAgent: (ptyId: string) => Promise<TerminalAgent | null | undefined> | null
   readLaunchedAgentForeground: (ptyId: string, agent: TuiAgent) => Promise<LaunchedAgentForeground>
   /** The PTY's current screen model; replaced on renderer-snapshot recovery, undefined once gone. */
   getEmulator: (ptyId: string) => HeadlessEmulator | undefined
@@ -88,14 +90,14 @@ export class TrustDialogStatusObserver {
     }
     // An agent typed into a shell paints its dialog before the foreground-process probe names it.
     pane.resolvingAgent = true
-    const resolved = () => {
+    const resolved = (identified?: TerminalAgent | null) => {
       pane.resolvingAgent = false
       const current = this.deps.getEmulator(ptyId)
       if (this.panes.get(ptyId) === pane && current && startupDialogReason(current)) {
-        this.publishWaiting(ptyId, pane, this.deps.getPaneAgent(ptyId), current)
+        this.publishWaiting(ptyId, pane, identified ?? this.deps.getPaneAgent(ptyId), current)
       }
     }
-    void this.deps.refreshForegroundAgent(ptyId).then(resolved, resolved)
+    void Promise.resolve(this.deps.identifyUnownedAgent(ptyId)).then(resolved, () => resolved())
   }
 
   forget(ptyId: string): void {
@@ -106,7 +108,7 @@ export class TrustDialogStatusObserver {
   private publishWaiting(
     ptyId: string,
     pane: PaneScan,
-    agent: TuiAgent | null,
+    agent: TerminalAgent | null,
     emulator: HeadlessEmulator,
     read?: { prompt: string }
   ): void {
