@@ -36,7 +36,7 @@
 - `panels` (PanelContribution[], since 1.4.160): Sidebar panels. At most 64.
 - `commands` (CommandContribution[], since 1.4.160): Command palette entries. At most 256.
 - `events` (EventContribution[], since 1.4.160): Events delivered to the plugin worker. At most 4.
-- `hooks` (HookContribution[], since 1.4.248): Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 7.
+- `hooks` (HookContribution[], since 1.4.248): Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 8.
 - `languagePacks` (LanguagePackContribution[], since 1.4.160): Interface translations. At most 16.
 - `keybindings` (KeybindingContribution[], since 1.4.160): Keyboard shortcuts for contributed commands. At most 256.
 - `vmRecipes` (VmRecipeContribution[], since 1.4.160): Virtual machine environment recipes. At most 64.
@@ -69,6 +69,7 @@ A command palette entry. Requires the `declarative` execution profile or higher.
 - `title` (string, required, since 1.4.160): Title shown in the command palette.
 - `when` ("global" | "workspace", since 1.4.160): Where the command is available. `workspace` hides it when no workspace is active. Defaults to `global`.
 - `action` (one of worktree.history.back, worktree.history.forward, sidebar.left.toggle, sidebar.sleepingWorkspaces.toggle, floatingWorkspace.maximize, tab.rename, workspace.rename, workspace.openBoard, view.tasks, sidebar.right.toggle, sidebar.explorer.toggle, sidebar.search.toggle, sidebar.sourceControl.toggle, sidebar.checks.toggle, sidebar.ports.toggle, since 1.4.160): Built-in Orca action this command runs. A command with an action is declarative and never starts the plugin worker; one without needs `main`.
+- `replaces` (one of worktree.history.back, worktree.history.forward, sidebar.left.toggle, sidebar.sleepingWorkspaces.toggle, floatingWorkspace.maximize, tab.rename, workspace.rename, workspace.openBoard, view.tasks, sidebar.right.toggle, sidebar.explorer.toggle, sidebar.search.toggle, sidebar.sourceControl.toggle, sidebar.checks.toggle, sidebar.ports.toggle, since 1.4.248): Built-in Orca action this worker command runs in place of, from its shortcut, the palette or a menu. To also run Orca’s own, the command calls `commands.run` with the action (`workspace:write`); that never reaches a replacement. If the worker fails or takes over 2 s, Orca runs its own. The person sees it before approving and can turn it off in Settings; when two plugins replace one action, the one installed first does.
 
 ## EventContribution
 
@@ -80,7 +81,7 @@ An event subscription. Requires `main`, the `trusted-worker` execution profile a
 
 A hook Orca runs through the worker before (or after) it acts. Requires `main` and the `trusted-worker` execution profile.
 
-- `event` ("terminal.send" | "workspace.create.before" | "workspace.create.after" | "agent.launch.before" | "agent.prompt.before" | "agent.tool.before" | "agent.tool.after", required, since 1.4.248): Hook the worker handles with `orca.hooks.on`.
+- `event` ("terminal.send" | "workspace.create.before" | "workspace.create.after" | "agent.launch.before" | "agent.prompt.before" | "agent.tool.before" | "agent.tool.after" | "editor.save.before", required, since 1.4.248): Hook the worker handles with `orca.hooks.on`.
 - `onError` ("pass" | "deny", since 1.4.248): What Orca does when this plugin's hook throws, times out, crashes or does not start: `pass` (the default) carries on as if it passed; `deny` refuses the action, naming the plugin, so a guard fails closed. Ignored for hooks that only observe.
 
 ## LanguagePackContribution
