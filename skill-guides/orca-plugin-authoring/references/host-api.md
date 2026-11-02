@@ -6,7 +6,7 @@ Host API 1.3 (`"pluginApi": 1`). Call `host.call(method, params, { signal })`; a
 
 ## Methods per surface
 
-- Worker (`trusted-worker`, `main`): `orca` passed to `activate(orca)`: `workspace.readContext`, `terminal.sendText`, `notifications.show`, `storage.get`, `storage.set`, `storage.delete`, `storage.keys`, `secrets.get`, `secrets.set`, `secrets.delete`, `secrets.protection`, `settings.get`, `settings.set`, `agents.list`, `statusBar.update`, `workspace.list`, `workspace.open`, `terminal.create`, `terminal.read`, `agent.launch`
+- Worker (`trusted-worker`, `main`): `orca` passed to `activate(orca)`: `workspace.readContext`, `terminal.sendText`, `notifications.show`, `storage.get`, `storage.set`, `storage.delete`, `storage.keys`, `secrets.get`, `secrets.set`, `secrets.delete`, `secrets.protection`, `settings.get`, `settings.set`, `agents.list`, `statusBar.update`, `workspace.list`, `workspace.open`, `terminal.create`, `terminal.read`, `agent.launch`, `editor.open`, `commands.run`
 - Panel: global `orca` in an HTML panel; `host` imported from `orca` in a components panel: `workspace.readContext`, `notifications.show`, `storage.get`, `storage.set`, `storage.delete`, `storage.keys`, `secrets.get`, `secrets.set`, `secrets.delete`, `secrets.protection`, `settings.get`, `settings.set`, `shell.openExternal`, `files.saveAs`, `plugin.request`, `agents.list`, `events.subscribe`
 - Custom editor: global `orca` in the editor frame: `workspace.readContext`, `notifications.show`, `storage.get`, `storage.set`, `storage.delete`, `storage.keys`, `secrets.get`, `secrets.set`, `secrets.delete`, `secrets.protection`, `settings.get`, `settings.set`, `shell.openExternal`, `files.saveAs`, `plugin.request`, `agents.list`, `events.subscribe`
 
@@ -117,6 +117,10 @@ HTML panels and custom editors get these CSS variables from Orca's active theme,
   `(params: { terminalId: string; maxLines?: number }) => { lines: string[]; truncated: boolean }`
 - `agent.launch` (capability `agent:launch`; worker; since 1.3): Starts an agent's CLI in a new terminal of a workspace, in the background, and returns as soon as it starts; a `prompt` is sent once the agent is ready.
   `(params: { workspaceId: string; agent: string; prompt?: string }) => { terminalId: string }`
+- `editor.open` (capability `workspace:write`; worker; since 1.3): Opens a file of a workspace in an editor tab of Orca's window; desktop app only. `workspace.open` shows the workspace.
+  `(params: { workspaceId: string; path: string }) => { opened: true }`
+- `commands.run` (capability `workspace:write`; worker; since 1.3): Runs one of Orca's built-in actions in its window, never a plugin's replacement of it; desktop app only.
+  `(params: { action: "worktree.history.back" | "worktree.history.forward" | "sidebar.left.toggle" | "sidebar.sleepingWorkspaces.toggle" | "floatingWorkspace.maximize" | "tab.rename" | "workspace.rename" | "workspace.openBoard" | "view.tasks" | "sidebar.right.toggle" | "sidebar.explorer.toggle" | "sidebar.search.toggle" | "sidebar.sourceControl.toggle" | "sidebar.checks.toggle" | "sidebar.ports.toggle" }) => { ran: true }`
 
 ## Hooks
 
@@ -140,7 +144,7 @@ List each in `contributes.hooks` (`{ "event", "onError"? }`; `main` and `trusted
 ## Capabilities
 
 - `workspace:read` (since 1.4.160): Read the name, branch, and terminal list of your focused workspace, and get notified when workspaces are created or removed
-- `workspace:write` (since 1.4.248): Open your workspaces in Orca
+- `workspace:write` (since 1.4.248): Open your workspaces and their files in Orca, and run its built-in commands
 - `agent:read` (since 1.4.245): Get notified when agent status changes
 - `agent:launch` (since 1.4.248): Start agents in your workspaces, local and SSH
 - `terminal:send` (since 1.4.160): Type and run commands in your terminals, local and SSH
