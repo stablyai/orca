@@ -1518,6 +1518,13 @@ html.native-shell .app-layout {
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 3%, transparent);
 }
 
+/* #15971: the wash matches the pill's fill, so its border carries the shape; 80% keeps >=3:1 wherever the validated foreground is >=4.5:1. */
+@scope ([data-worktree-card-surface][data-worktree-card-active='primary']) to ([data-worktree-lineage-children]) {
+  [data-variant='hostContext'] {
+    border-color: color-mix(in srgb, var(--worktree-sidebar-foreground) 80%, transparent);
+  }
+}
+
 [data-worktree-card-surface][data-worktree-card-active='secondary'] {
   border-color: color-mix(in srgb, var(--sidebar-ring) 25%, transparent);
   background: color-mix(in srgb, var(--sidebar-accent) 45%, transparent);
