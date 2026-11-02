@@ -12,7 +12,6 @@ import {
   loadChatTabLayout,
   withChatTabChanges
 } from '../../src/main/runtime/agent-session/agent-session-tab-layout'
-import { getDefaultWorkspaceSession } from '../../src/shared/constants'
 
 const queueProbe = vi.hoisted(() => {
   const queues: Pick<ReturnType<typeof createChatTabLayoutQueue>, 'pendingOpens'>[] = []
