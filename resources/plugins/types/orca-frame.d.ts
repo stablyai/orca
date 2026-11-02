@@ -23,6 +23,9 @@ declare module 'orca/frame' {
     readonly content: EditorContent
     /** Bytes documents: the manifest suffix that matched, e.g. `xlsx`. */
     readonly fileType?: string
+    /** Only for a session with `merge`: the file changed on disk while the tab had unsaved edits;
+     *  this is the disk content those edits started from. */
+    readonly ancestor?: EditorContent
   }
   /** The whole new content, made against document `baseVersion`. */
   export type EditorEdit = { baseVersion: number; content: EditorContent }
@@ -48,6 +51,31 @@ declare module 'orca/frame' {
     onDidChange(handler: (document: EditorDocument) => void): Disposable
     /** Rejects with `conflict`, `too_large` or `not_permitted` (read-only). */
     applyEdit(edit: EditorEdit): Promise<null>
+    /** Document sync in one call; resolves once theme, locale and the first document are in. */
+    session<T = string>(options?: EditorSessionOptions<T>): Promise<EditorSession<T>>
+  }
+  /** `decode`/`encode` default to plain text; a bytes editor passes both. */
+  export type EditorSessionOptions<T> = {
+    decode?: (content: EditorContent) => T
+    encode?: (value: T) => EditorContent
+    /** On a conflict `base` is the last accepted value; when the file changes on disk under the
+     *  tab's unsaved edits, `base` is the disk content those edits started from and Orca skips its
+     *  banner. Without it the outside document wins, or Orca shows its banner. */
+    merge?: (base: T, outside: T, mine: T) => T
+    /** Wait after the last change before sending it; default 250. */
+    debounceMs?: number
+  }
+  export type EditorSession<T> = {
+    /** The latest value, including changes Orca has not accepted yet. */
+    readonly value: T
+    readonly readOnly: boolean
+    /** Schedules an edit; one is in flight at a time and later changes coalesce. No-op read-only. */
+    change(next: T): void
+    /** Sends now; rejects with the refusal's `code`. A refused draft is kept, except on a conflict without merge. */
+    flush(): Promise<void>
+    /** The file changed outside the editor, or a conflict merged; never your own accepted edits. */
+    onReplace(handler: (value: T) => void): Disposable
+    dispose(): void
   }
   export type OrcaFrameApi = {
     readonly api: HostApiVersion
@@ -77,7 +105,7 @@ declare module 'orca/frame' {
     readonly files?: {
       saveAs(options: SaveAsOptions): Promise<{ status: 'saved' | 'cancelled' }>
     }
-    /** Custom editors only. */
+    /** Custom editors only. Orca keeps no undo history for them: Cmd/Ctrl+Z reaches the frame. */
     readonly document?: EditorDocumentApi
   }
 

@@ -7,7 +7,7 @@ import {
 } from './acp-compaction-turn'
 import type { AcpDialect, AcpTurnEnding } from './acp-dialects/acp-dialect'
 import type { AcpTurnFailures } from './acp-turn-failures'
-import { hookOutcomeRowBody } from '../../shared/agent-session-hook-outcome'
+import { hookOutcomeRowBody } from '../../shared/agent-session/journal/agent-session-hook-outcome'
 import type { SessionUpdate } from './generated/acp-protocol.generated'
 
 export type AcpPromptTurn = {

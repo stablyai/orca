@@ -96,6 +96,7 @@ type SessionScope = Pick<
   | 'hostId'
   | 'worktreeId'
   | 'client'
+  | 'pairedHostClient'
   | 'connState'
   | 'agentSessionHostSupport'
   | 'setInput'
@@ -158,6 +159,7 @@ function Probe({ client, tab, connState, dictationEnabled }: ProbeOptions): null
     hostId: 'h1',
     worktreeId: 'w1',
     client,
+    pairedHostClient: client,
     connState,
     agentSessionHostSupport: structuredAgentSessionHostSupport([]),
     setInput: (next) => {

@@ -1,7 +1,7 @@
 // Command output stays off the reply timeline; only the command's result ends its turn.
 
 import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   providerDiagnostic,

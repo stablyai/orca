@@ -1,4 +1,4 @@
-import type { AgentSessionDeathEvidence } from '../../agent-session-death-evidence'
+import type { AgentSessionDeathEvidence } from './agent-session-death-evidence'
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
 import { isAgentSessionConversationName } from '../agent-session-conversation-name'
@@ -11,7 +11,7 @@ import {
 } from './agent-session-legacy-handoff-lease'
 /** Identity pins location, provider and account home independently of terminal tabs; the lease separately grants one process writer authority. */
 
-import type { AgentSessionLastTurn } from '../../agent-session-last-turn'
+import type { AgentSessionLastTurn } from './agent-session-last-turn'
 import type { ExecutionHostId } from '../../execution-host'
 import {
   isAgentSessionConversationCommandRecord,
