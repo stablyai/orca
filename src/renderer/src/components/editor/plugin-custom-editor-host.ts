@@ -237,7 +237,8 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
           now(),
           structuredCloneMessageBytes(data, CUSTOM_EDITOR_DOCUMENT_MAX_BYTES)
         )
-        if (refusal) {
+        // While a save waits, the edits it asked for commit at once; the rate limit resumes after.
+        if (refusal === 'oversized' || (refusal && pendingFlushes.size === 0)) {
           refuseEdit(data, refusal)
           return true
         }
@@ -272,9 +273,10 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
       if (!ready) {
         return Promise.resolve(!lostEdit)
       }
+      // Drain first: the frame answers only once its edits settle, and a held one would not.
+      applyHeldEdit()
       // A read-only document takes no edits, and a frame without a window cannot answer.
       if (options.getDocument().readOnly || !options.getFrameWindow()) {
-        applyHeldEdit()
         return Promise.resolve(!lostEdit)
       }
       const requestId = nextFlushId++
