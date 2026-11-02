@@ -79,7 +79,9 @@ export async function firePluginDevHook(input: {
     invoke: (_key, current, timeoutMs) =>
       worker ? worker.runHook(event, current, timeoutMs) : Promise.reject(new Error('no worker')),
     log: (pluginKey, line) => service.eventDelivery.logWarning(pluginKey)(line),
-    now: () => performance.now()
+    now: () => performance.now(),
+    failsClosed: () =>
+      plugin.manifest.contributes.hooks.some((h) => h.event === event && h.onError === 'deny')
   })
   return {
     pluginKey: plugin.pluginKey,
