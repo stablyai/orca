@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -46,6 +46,7 @@ describe.skipIf(process.platform === 'win32')('the slot process probe on a real 
     slotDir = join(base, '.orca-remote', 'orcad-1.6.0+bb01')
     userDataDir = join(base, '.orca')
     mkdirSync(join(userDataDir, 'daemon'), { recursive: true })
+    mkdirSync(slotDir, { recursive: true })
   })
 
   afterEach(() => {
@@ -71,6 +72,23 @@ describe.skipIf(process.platform === 'win32')('the slot process probe on a real 
     runFromSlot(join(base, '.orca-remote', 'orcad-1.5.0+aa01'))
     await new Promise((resolve) => setTimeout(resolve, 100))
     expect(await sh(wslOrcadSlotProcessProbeCommand(host, slotDir, userDataDir))).toBe('DEAD')
+  })
+
+  it('sees a daemon that names the resolved slot when the slot path runs through a symlink', async () => {
+    const realHome = join(base, 'real-home')
+    const realSlot = join(realHome, '.orca-remote', 'orcad-1.6.0+bb01')
+    mkdirSync(realSlot, { recursive: true })
+    symlinkSync(realHome, join(base, 'linked-home'))
+    const linkedSlot = join(base, 'linked-home', '.orca-remote', 'orcad-1.6.0+bb01')
+    runFromSlot(realpathSync(realSlot))
+    await expect
+      .poll(() => sh(wslOrcadSlotProcessProbeCommand(host, linkedSlot, userDataDir)))
+      .toBe('LIVE')
+  })
+
+  it('keeps the copy when the slot cannot be resolved', async () => {
+    const missing = join(base, '.orca-remote', 'orcad-0.0.0+gone')
+    expect(await sh(wslOrcadSlotProcessProbeCommand(host, missing, userDataDir))).toBe('UNKNOWN')
   })
 
   it("sees the slot's daemon through its live pid file", async () => {

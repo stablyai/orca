@@ -20,9 +20,12 @@ export function wslOrcadSlotProcessProbeCommand(
 ): string {
   const slot = quotePosixShell(`${slotDir.replace(/\/+$/u, '')}/`)
   const daemonDir = quotePosixShell(joinRemotePath(host, userDataDir, 'daemon'))
-  const inSlot = `grep -F -- "$orcad_slot" | grep -vF -- ${PROBE_MARKER} | grep -q .`
+  const inSlot =
+    'grep -F -e "$orcad_slot" -e "$orcad_real/" | ' + `grep -vF -- ${PROBE_MARKER} | grep -q .`
   return [
     `orcad_slot=${slot}; orcad_ddir=${daemonDir}; : ${PROBE_MARKER};`,
+    // Node realpaths its entry, so a daemon behind a symlinked home names the resolved slot.
+    'orcad_real=$(cd "$orcad_slot" 2>/dev/null && pwd -P) && [ -n "$orcad_real" ] || { echo UNKNOWN; exit 0; };',
     posixProcessArgsShellFunction(),
     // A live daemon whose pid file names it must be identified, not skipped.
     'for orcad_df in "$orcad_ddir"/daemon-v*.pid; do [ -f "$orcad_df" ] || continue;',
