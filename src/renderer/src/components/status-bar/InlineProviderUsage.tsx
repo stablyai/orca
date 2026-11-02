@@ -66,10 +66,7 @@ export function InlineUsageBars({
 
   return (
     <div
-      className={`grid w-full items-center gap-1.5 ${isFetching ? 'animate-pulse' : ''}`}
-      style={{
-        gridTemplateColumns: `repeat(${Math.max(1, usageWindows.length)}, minmax(0, 1fr))`
-      }}
+      className={`grid w-full grid-cols-1 items-center gap-1.5 ${isFetching ? 'animate-pulse' : ''}`}
     >
       {usageWindows.map((window) => (
         <div key={window.key} className="flex min-w-0 items-center gap-1">
@@ -80,7 +77,7 @@ export function InlineUsageBars({
               style={{ width: `${getDisplayedUsagePercentage(window.used, display)}%` }}
             />
           </div>
-          <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+          <span className="shrink-0 text-3xs tabular-nums text-muted-foreground">
             {formatUsagePercentageLabel(window.used, display)} {window.label}
           </span>
         </div>

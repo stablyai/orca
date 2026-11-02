@@ -93,7 +93,15 @@ function weeklyWindow(usedPercent: number, resetsInDays: number): RateLimitWindo
 function usageFor(account: SampleAccount): ProviderRateLimits {
   return {
     provider: 'codex',
-    session: null,
+    session:
+      account.weekly === null
+        ? null
+        : {
+            usedPercent: 32,
+            windowMinutes: 300,
+            resetsAt: Date.now() + 80 * 60_000 + 5_000,
+            resetDescription: null
+          },
     weekly: account.weekly === null ? null : weeklyWindow(account.weekly, account.resetsInDays),
     updatedAt: NOW - 60_000,
     error: account.weekly === null ? 'Not signed in' : null,

@@ -31,7 +31,7 @@ export function AccountSwitchRowItem({
           </>
         ) : null}
       </span>
-      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <span className="min-w-0 flex-1 whitespace-normal break-words">{label}</span>
       {children ? <div className="w-40 shrink-0 text-xs">{children}</div> : null}
     </DropdownMenuItem>
   )
