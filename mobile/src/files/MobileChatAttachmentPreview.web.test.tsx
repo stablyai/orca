@@ -81,7 +81,8 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
     offsetWidth: width,
     clientWidth: width,
     scrollHeight: (node: HTMLElement) => Math.max(height(node), ...flowChildren(node).map(height)),
-    scrollWidth: (node: HTMLElement) => Math.max(width(node), ...flowChildren(node).map(width)),
+    scrollWidth: (node: HTMLElement) =>
+      Math.max(width(node), ...flowChildren(node).map((child) => child.scrollWidth)),
     offsetParent: (node: HTMLElement) => node.parentElement,
     offsetLeft: (node: HTMLElement) => Number.parseFloat(getComputedStyle(node).left) || 0,
     offsetTop: (node: HTMLElement) => {
@@ -109,6 +110,26 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
     })
   }
   const positions = new WeakMap<HTMLElement, number>()
+  const horizontal = new WeakMap<HTMLElement, number>()
+  let deliverScroll = true
+  descriptors.set(
+    'scrollLeft',
+    Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollLeft')
+  )
+  Object.defineProperty(HTMLElement.prototype, 'scrollLeft', {
+    configurable: true,
+    get(this: HTMLElement) {
+      const left = Math.min(
+        horizontal.get(this) || 0,
+        Math.max(0, this.scrollWidth - this.clientWidth)
+      )
+      horizontal.set(this, left)
+      return left
+    },
+    set(this: HTMLElement, value: number) {
+      horizontal.set(this, Math.max(0, Math.min(value, this.scrollWidth - this.clientWidth)))
+    }
+  })
   descriptors.set('scrollTop', Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTop'))
   Object.defineProperty(HTMLElement.prototype, 'scrollTop', {
     configurable: true,
@@ -119,7 +140,9 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
       const top = Math.max(0, Math.min(value, this.scrollHeight - this.clientHeight))
       if (top !== this.scrollTop) {
         positions.set(this, top)
-        queueMicrotask(() => this.dispatchEvent(new Event('scroll')))
+        if (deliverScroll) {
+          queueMicrotask(() => this.dispatchEvent(new Event('scroll')))
+        }
       }
     }
   })
@@ -166,6 +189,9 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
   let content = Buffer.from(`${'\n'.repeat(25 * 1024 * 1024)}TAIL`)
   const sourceBlocks = vi.spyOn(AttachmentTextSource.prototype, 'block')
   const reads: { offset: number; length: number }[] = []
+  let hold: Promise<void> | undefined
+  const held = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
   mocks.send.mockImplementation(
     async (method: string, request?: { offset: number; length: number }): Promise<RpcResponse> => {
       if (method === 'status.get') {
@@ -179,6 +205,10 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
         throw new Error('Expected actual range')
       }
       reads.push(request)
+      if (hold && request.offset > 0) {
+        held.resolve()
+        await hold
+      }
       const part = content.subarray(request.offset, request.offset + request.length)
       return {
         id: 'r',
@@ -296,6 +326,73 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
     })
     await act(async () => button('Back').click())
     expect(mocks.back).toHaveBeenCalledOnce()
+    content = Buffer.from('x'.repeat(96 * 1024))
+    await act(async () =>
+      root.render(
+        createElement(MobileChatAttachmentPreview, { key: 'motion', params: route.params })
+      )
+    )
+    await vi.waitFor(async () => {
+      await flush()
+      expect(container.querySelector('[data-testid="attachment-text-segment"]')?.textContent).toBe(
+        'x'.repeat(256)
+      )
+    })
+    const motion = Array.from(container.querySelectorAll('div')).find((node) =>
+      ['auto', 'scroll'].includes(getComputedStyle(node).overflowY)
+    )
+    if (!(motion instanceof HTMLElement)) {
+      throw new Error('Missing actual vertical host')
+    }
+    let outer = motion.parentElement
+    while (outer && !['auto', 'scroll'].includes(getComputedStyle(outer).overflowX)) {
+      outer = outer.parentElement
+    }
+    if (!outer) {
+      throw new Error('Missing actual horizontal host')
+    }
+    const hostScroll = vi.spyOn(motion, 'scrollTo')
+    try {
+      outer.scrollLeft = 500
+      hold = release.promise
+      await act(async () => {
+        motion.scrollTop = 3000
+      })
+      await held.promise
+      expect(outer.scrollLeft).toBe(500)
+      deliverScroll = false
+      motion.scrollTop += 80
+      const live = motion.scrollTop
+      const calls = hostScroll.mock.calls.length
+      hold = undefined
+      await act(async () => release.resolve())
+      await vi.waitFor(async () => {
+        await flush()
+        expect(
+          container.querySelector('[data-testid="attachment-text-segment"]')?.textContent
+        ).toBe('x'.repeat(256))
+      })
+      expect(hostScroll.mock.calls.length).toBe(calls)
+      expect(motion.scrollTop).toBe(live)
+      expect(outer.scrollLeft).toBe(500)
+      deliverScroll = true
+      await act(async () => {
+        motion.scrollTop = 0
+        motion.dispatchEvent(new Event('scroll'))
+      })
+      await vi.waitFor(async () => {
+        await flush()
+        expect(motion.scrollTop).toBe(0)
+        expect(
+          container.querySelector('[data-testid="attachment-text-segment"]')?.textContent
+        ).toBe('x'.repeat(256))
+      })
+      expect(outer.scrollLeft).toBe(500)
+    } finally {
+      release.resolve()
+      deliverScroll = true
+      hostScroll.mockRestore()
+    }
     const literal = '    indented\tfield    value'
     content = Buffer.from(`\ufeffcomplete\r\n${literal}\n🙂`)
     await act(async () =>
@@ -332,6 +429,7 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
     )
     expect(mocks.write).toHaveBeenCalledTimes(1)
   } finally {
+    release.resolve()
     try {
       await act(async () => root.unmount())
     } finally {

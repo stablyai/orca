@@ -23,7 +23,8 @@ export type AttachmentTextRead = ((
 ) => Promise<unknown>) & {
   assertCurrent?: () => void
 }
-export const ATTACHMENT_TEXT_BLOCK_BYTES = 16 * 1024 - 8
+const SEAM_BYTES = 1024
+export const ATTACHMENT_TEXT_BLOCK_BYTES = 15 * 1024 - 8
 export const ATTACHMENT_TEXT_COPY_MAX_BYTES = 16 * 1024 * 1024
 
 export function attachmentTextBytes(contentBase64: string): Uint8Array {
@@ -69,6 +70,7 @@ export class AttachmentTextSource {
     this.demand = null
     this.blocks.clear()
     this.rowCounts.clear()
+    this.rowWidths.clear()
     this.abort.abort()
   }
   get disposed(): boolean {
@@ -134,30 +136,40 @@ export class AttachmentTextSource {
     if (!segments) {
       const offset = index * ATTACHMENT_TEXT_BLOCK_BYTES
       const start = Math.max(0, offset - 3)
-      const { bytes, eof } = await this.chunk(start, ATTACHMENT_TEXT_BLOCK_BYTES + (offset ? 6 : 3))
-      let from = offset - start
-      while (from < bytes.length && (bytes[from]! & 0xc0) === 0x80) {
-        from++
-      }
-      let to = Math.min(bytes.length, offset + ATTACHMENT_TEXT_BLOCK_BYTES - start)
-      if (!eof || to < bytes.length) {
-        while (to < bytes.length && (bytes[to]! & 0xc0) === 0x80) {
-          to++
+      const { bytes, eof } = await this.chunk(start, ATTACHMENT_TEXT_BLOCK_BYTES + SEAM_BYTES + 6)
+      // Both neighbours derive seam ownership from the same bounded bytes, including CRLF/UTF-8 overlap.
+      const boundary = (at: number) => {
+        let aligned = Math.min(at, bytes.length)
+        while (aligned < bytes.length && (bytes[aligned]! & 0xc0) === 0x80) {
+          aligned++
         }
+        if (!at || bytes[at - 1] === 10 || (bytes[at - 1] === 13 && bytes[at] !== 10)) {
+          return aligned
+        }
+        const limit = Math.min(bytes.length, at + SEAM_BYTES)
+        for (let end = aligned; end < limit; end++) {
+          if (bytes[end] === 10) {
+            return end + 1
+          }
+          if (bytes[end] === 13) {
+            return end + (bytes[end + 1] === 10 ? 2 : 1)
+          }
+        }
+        return eof && bytes.length <= at + SEAM_BYTES ? bytes.length : aligned
       }
+      const from = boundary(offset - start)
+      const to = boundary(offset + ATTACHMENT_TEXT_BLOCK_BYTES - start)
       const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(
         bytes.subarray(from, to)
       )
       if (text.includes('\0')) {
         throw new Error('This file cannot be previewed as text. Save it to open it in another app.')
       }
-      // A CRLF split across byte blocks is one display break; exports retain the original bytes.
-      const displayText = text.replace(/\r\n?/g, '\n')
-      segments = attachmentTextSegments(
-        from > 0 && bytes[from - 1] === 13 && text.startsWith('\n')
-          ? displayText.slice(1)
-          : displayText
-      )
+      segments = text
+        ? attachmentTextSegments(text.replace(/\r\n?/g, '\n'))
+        : this.size === 0
+          ? ['']
+          : []
       this.blocks.set(index, segments)
       while (this.blocks.size > 2) {
         this.blocks.delete(this.blocks.keys().next().value!)
@@ -166,10 +178,34 @@ export class AttachmentTextSource {
     this.blocks.delete(index)
     this.blocks.set(index, segments)
     this.rowCounts.set(index, segments.length)
+    this.rowWidths.set(
+      index,
+      Math.max(
+        0,
+        ...segments.map((row) =>
+          Array.from(row).reduce(
+            (units, character) =>
+              units +
+              (character === '\n'
+                ? 0
+                : character === '\t'
+                  ? 8
+                  : character.codePointAt(0)! > 127
+                    ? 2
+                    : 1),
+            0
+          )
+        )
+      )
+    )
     return segments
   }
 
   private readonly rowCounts = new Map<number, number>()
+  private readonly rowWidths = new Map<number, number>()
+  get displayUnits(): number {
+    return Math.max(0, ...this.rowWidths.values())
+  }
   private demand: { indices: number[]; publish: (error?: unknown) => void } | null = null
   private reading = false
 
@@ -177,7 +213,7 @@ export class AttachmentTextSource {
     return this.blocks.get(index)
   }
   rowCount(index: number): number {
-    return this.rowCounts.get(index) ?? 64
+    return this.rowCounts.get(index) ?? Math.ceil(ATTACHMENT_TEXT_BLOCK_BYTES / 256)
   }
 
   // Replace pending viewport work; only the already dispatched range may outlive a demand.

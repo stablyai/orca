@@ -15,13 +15,44 @@ export class AttachmentTextViewport {
   ) {
     for (let block = 0; block < source.blockCount; block++) {
       this.counts.push(source.rowCount(block))
+    }
+    const logicalTotal = this.counts.reduce((sum, count) => sum + count * rowHeight, 0)
+    const blockLimit = logicalTotal < 8_000_000 ? Infinity : (8_000_000 - 1) / source.blockCount
+    for (let block = 0; block < source.blockCount; block++) {
       const logical = this.counts[block]! * rowHeight
-      this.heights.push(Math.min(logical, 2048 + height))
+      this.heights.push(Math.min(logical, blockLimit))
       this.starts.push(this.starts[block]! + this.heights[block]!)
     }
   }
   get total(): number {
     return this.starts.at(-1)!
+  }
+  restore(
+    previous: AttachmentTextViewport | null,
+    top: number,
+    anchor: TextAnchor,
+    atEnd: boolean
+  ): number {
+    if (previous?.source !== this.source) {
+      return 0
+    }
+    if (
+      previous.rowHeight === this.rowHeight &&
+      previous.height === this.height &&
+      previous.counts.length === this.counts.length &&
+      previous.counts.every((count, index) => count === this.counts[index])
+    ) {
+      return top
+    }
+    const maximum = Math.max(0, this.total - this.height)
+    if (atEnd) {
+      return maximum
+    }
+    // A shrinking committed track may already have clamped the last delivered logical anchor.
+    const current =
+      top === maximum && previous.position(anchor) > top ? { ...anchor } : previous.anchor(top)
+    current.row *= (this.counts[current.block] ?? 1) / (previous.counts[current.block] || 1)
+    return Math.max(0, Math.min(maximum, this.position(current)))
   }
   private core(block: number) {
     return {

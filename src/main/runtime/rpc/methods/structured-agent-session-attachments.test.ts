@@ -198,6 +198,44 @@ describe('agentSessionAttachment.*', () => {
 })
 
 it('reads a committed text attachment through the registered mobile RPC and validates its complete snapshot', async () => {
+  {
+    const line = 'Original pasted contents 35636; exact Copy and Save.\n'
+    const header = `COPY35636-START\n    indented\tfield    value; whitespace35636\n        ${line}`
+    const tail = '\nCOPY35636-END\n'
+    const text = (header + line.repeat(2000)).slice(0, 98304 - tail.length) + tail
+    const bytes = Buffer.from(text)
+    const path = await uploadBytes('literal-seam.txt', bytes)
+    const requests: AttachmentTextRequest[] = []
+    const source = new AttachmentTextSource(path, async (request) => {
+      requests.push(request)
+      return result(await call('agentSessionAttachment.readTextChunk', request, CLIENT_A))
+    })
+    try {
+      await source.block(0)
+      const viewport = new AttachmentTextViewport(source, 19, 600)
+      expect.soft((viewport.anchor(300).row - viewport.anchor(200).row) * 19).toBeCloseTo(100)
+      const blocks: string[][] = []
+      for (let index = 0; index < source.blockCount; index++) {
+        blocks.push(await source.block(index))
+      }
+      expect.soft(blocks.flat().join('')).toBe(text)
+      expect
+        .soft(blocks.flat().filter((row) => row === line))
+        .toHaveLength(text.split('\n').filter((row) => row === line.trimEnd()).length)
+      for (let index = source.blockCount - 1; index >= 0; index--) {
+        expect.soft(await source.block(index)).toEqual(blocks[index])
+      }
+      expect(requests.every((request) => request.length <= 16 * 1024)).toBe(true)
+      expect(await source.copyText()).toBe(text)
+      const output: Uint8Array[] = []
+      for await (const chunk of source.bytes()) {
+        output.push(chunk)
+      }
+      expect(Buffer.concat(output)).toEqual(bytes)
+    } finally {
+      source.dispose()
+    }
+  }
   const prefix = '\ufeffstart\r\nmiddle\rlast\n'
   const bytes = Buffer.from(
     [

@@ -24,10 +24,9 @@ function TextViewport({
   const scroll = useRef<HTMLDivElement>(null)
   const probe = useRef<HTMLDivElement>(null)
   const anchor = useRef<TextAnchor>({ block: 0, row: 0 })
-  const previousSource = useRef(source)
   const previousLayout = useRef<AttachmentTextViewport | null>(null)
   const atEnd = useRef(false)
-  const [position, setPosition] = useState({ top: 0, height: 0, rowHeight: 20 })
+  const [position, setPosition] = useState({ top: 0, height: 0, rowHeight: 20, cellWidth: 8 })
   const layout = useMemo(
     () => new AttachmentTextViewport(source, position.rowHeight, position.height, revision),
     [source, revision, position.rowHeight, position.height]
@@ -37,25 +36,22 @@ function TextViewport({
     if (!node) {
       return
     }
-    if (previousSource.current !== source) {
-      anchor.current = { block: 0, row: 0 }
-      atEnd.current = false
-      previousSource.current = source
-    }
     const old = previousLayout.current
+    const live = node.scrollTop
     if (
-      old?.source === source &&
-      old.revision !== layout.revision &&
-      old.counts[anchor.current.block] !== layout.counts[anchor.current.block]
+      old?.source !== source ||
+      live < Math.min(old.total - old.height, layout.total - layout.height) - 1
     ) {
-      anchor.current.row *=
-        (layout.counts[anchor.current.block] ?? 1) / (old.counts[anchor.current.block] ?? 1)
+      atEnd.current = false
     }
+    const top = layout.restore(old, live, anchor.current, atEnd.current)
+    const endExtentChanged = old?.source === source && atEnd.current && old.total !== layout.total
     previousLayout.current = layout
-    node.scrollTop = atEnd.current
-      ? Math.max(0, layout.total - node.clientHeight)
-      : layout.position(anchor.current)
-    setPosition((old) => ({ ...old, top: node.scrollTop }))
+    if (Math.abs(top - live) >= 1 || endExtentChanged) {
+      node.scrollTop = top
+    }
+    anchor.current = layout.anchor(node.scrollTop)
+    setPosition((old) => (old.top === node.scrollTop ? old : { ...old, top: node.scrollTop }))
   }, [source, layout])
   useLayoutEffect(() => {
     const node = scroll.current
@@ -64,8 +60,13 @@ function TextViewport({
     }
     const measure = () => {
       const height = node.clientHeight
-      const rowHeight = probe.current?.getBoundingClientRect().height
-      setPosition((old) => ({ ...old, height, rowHeight: rowHeight || old.rowHeight }))
+      const cell = probe.current?.getBoundingClientRect()
+      setPosition((old) => ({
+        ...old,
+        height,
+        rowHeight: cell?.height || old.rowHeight,
+        cellWidth: cell?.width || old.cellWidth
+      }))
     }
     measure()
     const observer = new ResizeObserver(measure)
@@ -155,7 +156,13 @@ function TextViewport({
       >
         M
       </div>
-      <div style={{ height: layout.total, position: 'relative', minWidth: 'max-content' }}>
+      <div
+        style={{
+          height: layout.total,
+          position: 'relative',
+          minWidth: source.displayUnits * position.cellWidth
+        }}
+      >
         {layout.rows(position.top).map((row) => (
           <div
             key={row.key}

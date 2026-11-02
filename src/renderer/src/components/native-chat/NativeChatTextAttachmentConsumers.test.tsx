@@ -120,6 +120,46 @@ it('opens draft and sent sources, exports exact bytes and scrolls a giant-line p
       : nativeRect.call(this)
   })
   const positions = new WeakMap<HTMLElement, number>()
+  const horizontal = new WeakMap<HTMLElement, number>()
+  const scrollWrites: HTMLElement[] = []
+  let deliverScroll = true
+  const later = Promise.withResolvers<void>()
+  const laterStarted = Promise.withResolvers<void>()
+  let holdGiant = false
+  const arrayBuffer = Blob.prototype.arrayBuffer
+  vi.spyOn(Blob.prototype, 'arrayBuffer').mockImplementation(async function (this: Blob) {
+    if (holdGiant) {
+      laterStarted.resolve()
+      await later.promise
+    }
+    return arrayBuffer.call(this)
+  })
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(390)
+  vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    const track = this.lastElementChild
+    return Math.max(
+      this.clientWidth,
+      track instanceof HTMLElement ? Number.parseFloat(track.style.minWidth) || 0 : 0,
+      ...Array.from(this.querySelectorAll<HTMLElement>('[data-text-segment]')).map(
+        (row) => Array.from(row.textContent || '').length * 8
+      )
+    )
+  })
+  vi.spyOn(HTMLElement.prototype, 'scrollLeft', 'get').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    const left = Math.min(horizontal.get(this) || 0, this.scrollWidth - this.clientWidth)
+    horizontal.set(this, left)
+    return left
+  })
+  vi.spyOn(HTMLElement.prototype, 'scrollLeft', 'set').mockImplementation(function (
+    this: HTMLElement,
+    value
+  ) {
+    horizontal.set(this, Math.max(0, Math.min(value, this.scrollWidth - this.clientWidth)))
+  })
   const measurements = new Set<() => void>()
   vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(() => viewportHeight)
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(() => viewportHeight)
@@ -144,10 +184,13 @@ it('opens draft and sent sources, exports exact bytes and scrolls a giant-line p
     this: HTMLElement,
     value
   ) {
+    scrollWrites.push(this)
     const top = Math.max(0, Math.min(value, this.scrollHeight - this.clientHeight))
     if (top !== this.scrollTop) {
       positions.set(this, top)
-      queueMicrotask(() => this.dispatchEvent(new Event('scroll')))
+      if (deliverScroll) {
+        queueMicrotask(() => this.dispatchEvent(new Event('scroll')))
+      }
     }
   })
   vi.stubGlobal(
@@ -331,6 +374,28 @@ it('opens draft and sent sources, exports exact bytes and scrolls a giant-line p
       throw new Error('Expected virtual track')
     }
     expect(Number.parseFloat(track.style.height)).toBeLessThan(8_000_000)
+    scroller.scrollLeft = 500
+    holdGiant = true
+    await act(async () => {
+      scroller.scrollTop = 4000
+    })
+    await laterStarted.promise
+    expect.soft(scroller.scrollLeft).toBe(500)
+    deliverScroll = false
+    scroller.scrollTop += 80
+    const liveTop = scroller.scrollTop
+    const writes = scrollWrites.filter((node) => node === scroller).length
+    holdGiant = false
+    await act(async () => later.resolve())
+    await waitFor(() =>
+      expect(scroller.querySelectorAll('[data-text-segment]').length).toBeGreaterThan(0)
+    )
+    expect.soft(scrollWrites.filter((node) => node === scroller).length).toBe(writes)
+    expect.soft(scroller.scrollTop).toBe(liveTop)
+    expect.soft(scroller.scrollLeft).toBe(500)
+    deliverScroll = true
+    fireEvent.scroll(scroller)
+
     fireEvent.scroll(scroller, {
       target: { scrollTop: Number.parseFloat(track.style.height) - 600 }
     })
@@ -345,6 +410,7 @@ it('opens draft and sent sources, exports exact bytes and scrolls a giant-line p
     view.unmount()
   } finally {
     ending.resolve()
+    later.resolve()
     cleanup()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()

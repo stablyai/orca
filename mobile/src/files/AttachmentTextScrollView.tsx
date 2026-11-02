@@ -7,6 +7,18 @@ import {
 } from '../../../src/shared/attachment-text-viewport'
 import { chatAttachmentPreviewStyles as styles } from './mobile-file-preview-styles'
 
+function scrollElement(list: VirtualizedList<number> | null): HTMLElement | null {
+  if (Platform.OS !== 'web') {
+    return null
+  }
+  const ref = list?.getScrollRef()
+  const node: unknown =
+    ref && 'getScrollableNode' in ref && typeof ref.getScrollableNode === 'function'
+      ? ref.getScrollableNode()
+      : ref
+  return node instanceof HTMLElement ? node : null
+}
+
 export function AttachmentTextScrollView({
   source,
   revision,
@@ -27,26 +39,21 @@ export function AttachmentTextScrollView({
   )
   useLayoutEffect(() => {
     const old = previous.current
-    if (old?.source !== source) {
-      anchor.current = { block: 0, row: 0 }
-      atEnd.current = false
-    } else if (
-      old.revision !== layout.revision &&
-      old.counts[anchor.current.block] !== layout.counts[anchor.current.block]
+    const live = scrollElement(list.current)?.scrollTop ?? old?.position(anchor.current) ?? 0
+    if (
+      old?.source !== source ||
+      live < Math.min(old.total - old.height, layout.total - layout.height) - 1
     ) {
-      anchor.current.row *=
-        (layout.counts[anchor.current.block] ?? 1) / (old.counts[anchor.current.block] ?? 1)
+      atEnd.current = false
     }
+    const top = layout.restore(old, live, anchor.current, atEnd.current)
+    const endExtentChanged = old?.source === source && atEnd.current && old.total !== layout.total
     previous.current = layout
-    const top = Math.max(
-      0,
-      Math.min(
-        layout.total - position.height,
-        atEnd.current ? layout.total : layout.position(anchor.current)
-      )
-    )
-    list.current?.scrollToOffset({ offset: top, animated: false })
-    setPosition((old) => ({ ...old, top }))
+    if (Math.abs(top - live) >= 1 || endExtentChanged) {
+      list.current?.scrollToOffset({ offset: top, animated: false })
+    }
+    anchor.current = layout.anchor(top)
+    setPosition((old) => (old.top === top ? old : { ...old, top }))
   }, [source, layout, position.height])
   const block = layout.anchor(position.top).block
   const needsNext =
@@ -64,15 +71,8 @@ export function AttachmentTextScrollView({
     model.current = layout
   })
   useEffect(() => {
-    if (Platform.OS !== 'web') {
-      return
-    }
-    const ref = list.current?.getScrollRef()
-    const node: unknown =
-      ref && 'getScrollableNode' in ref && typeof ref.getScrollableNode === 'function'
-        ? ref.getScrollableNode()
-        : ref
-    if (!(node instanceof HTMLElement)) {
+    const node = scrollElement(list.current)
+    if (!node) {
       return
     }
     const move = (pixels: number) => {
@@ -100,19 +100,7 @@ export function AttachmentTextScrollView({
   const [width, setWidth] = useState(0)
   const [cellWidth, setCellWidth] = useState(8)
   const rows = layout.rows(position.top)
-  const contentWidth = Math.max(
-    width,
-    ...rows.map(
-      (row) =>
-        Array.from(row.text).reduce(
-          (units, character) =>
-            units + (character === '\t' ? 8 : character.codePointAt(0)! > 127 ? 2 : 1),
-          0
-        ) *
-          cellWidth +
-        32
-    )
-  )
+  const contentWidth = Math.max(width, source.displayUnits * cellWidth + 32)
   return (
     <ScrollView
       horizontal
