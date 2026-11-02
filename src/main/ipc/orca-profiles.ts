@@ -1,5 +1,5 @@
 import { ipcMain, type WebContents } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { relaunchApp, type AppRelaunchReason } from '../app-relaunch'
 import { quitProcess } from '../startup/process-quit-request'
 import type {

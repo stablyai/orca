@@ -6,7 +6,7 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal
 import {
   agentJournalTurnBody,
   readAgentJournalTurn
-} from '../../../shared/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
 import {
   agentJournalTurnRowReservedBytes,

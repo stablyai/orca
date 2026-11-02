@@ -2,12 +2,12 @@ import { agentSessionConversationView } from '../../shared/agent-session-convers
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 // Open Dispatches retain active work; chats at rest remain mail recipients until tab retirement. Process liveness and close proof remain separate.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { RunningStructuredSession } from './orchestration/structured-session-lineage'
 import { OrchestrationDb } from './orchestration/db'
 

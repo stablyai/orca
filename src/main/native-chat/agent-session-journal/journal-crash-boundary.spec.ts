@@ -18,7 +18,7 @@ import { agentSessionFailureFact } from '../../../shared/agent-session/failures/
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { digestPayload } from './journal-payload-bounds'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function registerJournalCrashBoundaryTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {

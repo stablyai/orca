@@ -7,7 +7,7 @@ import {
   boundJournalKeyComponent,
   MAX_JOURNAL_KEY_COMPONENT_CHARS
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
+import { activeStructuredAgentSessionTurnId } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { AgentSessionJournalError } from './journal-write-guards'
 import {
   openTestJournalHostDatabase,

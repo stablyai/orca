@@ -7,7 +7,7 @@ import {
   syncSystemConfigIntoManagedCodexHome
 } from '../codex/codex-config-mirror'
 import { readCodexTopLevelModelProvider } from '../codex/codex-model-provider-config'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { toWindowsWslPath } from '../wsl'
 import { wasWslDistroLastSeenRunningSettled } from '../wsl-background-distro-gate'
 import { WSL_UNC_RUNNING_LEASE_MS } from '../wsl/wsl-unc-access-gate'

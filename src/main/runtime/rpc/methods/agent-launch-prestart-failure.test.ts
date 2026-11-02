@@ -1,4 +1,7 @@
-import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  closeTestJournalHostDatabase
+} from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import '../unused-default-rpc-methods.test-fixture'
 /** Pre-dispatch failures prove no effects and record the real cause; a lost reply after dispatch remains unknown. Explicitly unsupported chat is refused before creation. */
 
@@ -9,9 +12,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
 import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../../shared/agent-launch-surface'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/opencode-model-startup-plan'
-import type { AgentSessionRecordStore } from '../../agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
+import {
+  openTestAgentSessionRecordStore,
+  editPersistedTestAgentSessionStore
+} from '../../agent-session/records/agent-session-record-store-test-harness'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import {
+  RuntimeLineageError,
+  LINEAGE_PARENT_AMBIGUOUS,
+  formatAmbiguousCwdParentMessage
+} from '../../runtime-worktree-lineage-resolution'
+import { trackTerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
+import {
+  launchFailureWithoutEffectsCode,
+  agentLaunchFailureMessage
+} from './agent-launch-failure-code'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcDispatchStreamingOptions } from '../dispatcher-stream-options'
 import {
@@ -69,6 +85,7 @@ describe('a launch whose terminal fails', () => {
   const OTHER_OPERATION_ID = `${Date.now()}-000000000000000000000000000000dd`
   let directory: string
   let store: AgentSessionRecordStore
+  const dispatchers = new WeakMap<AgentLaunchRuntimeStub, RpcDispatcher>()
 
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), 'orca-agent-launch-prestart-'))
@@ -92,11 +109,15 @@ describe('a launch whose terminal fails', () => {
     operationId: string = OPERATION_ID,
     options?: RpcDispatchStreamingOptions
   ) {
-    const dispatcher = new RpcDispatcher({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture implements every runtime method reached by agent.launch and dispatcher metadata.
-      runtime: { ...runtime, getRuntimeId: () => 'runtime-1' } as unknown as OrcaRuntimeService,
-      methods: AGENT_LAUNCH_METHODS
-    })
+    let dispatcher = dispatchers.get(runtime)
+    if (!dispatcher) {
+      dispatcher = new RpcDispatcher({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture implements every runtime method reached by agent.launch and dispatcher metadata.
+        runtime: { ...runtime, getRuntimeId: () => 'runtime-1' } as unknown as OrcaRuntimeService,
+        methods: AGENT_LAUNCH_METHODS
+      })
+      dispatchers.set(runtime, dispatcher)
+    }
     return dispatcher.dispatch(
       {
         id: 'request-1',
@@ -380,4 +401,128 @@ describe('a launch whose terminal fails', () => {
     expect(runtime.showRepo).not.toHaveBeenCalled()
     expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
   })
+  it.each([
+    new RuntimeLineageError('LINEAGE_PARENT_CONTEXT_MISSING', 'missing'),
+    Object.assign(new Error('looks typed'), { code: LINEAGE_PARENT_AMBIGUOUS }),
+    { code: LINEAGE_PARENT_AMBIGUOUS, message: 'looks typed' }
+  ])('does not infer no effects from another type/code %j', (error) => {
+    for (const target of ['create-worktree', 'existing', 'create-folder-workspace'] as const) {
+      expect(
+        launchFailureWithoutEffectsCode(error, target, trackTerminalSpawnDispatch())
+      ).toBeNull()
+      expect(agentLaunchFailureMessage(error, target)).toBeUndefined()
+    }
+  })
+  it('requires the actual typed code and create target, keeping bounded ingestion', () => {
+    const refusal = new RuntimeLineageError(
+      LINEAGE_PARENT_AMBIGUOUS,
+      formatAmbiguousCwdParentMessage('codex')
+    )
+    expect(
+      launchFailureWithoutEffectsCode(refusal, 'create-worktree', trackTerminalSpawnDispatch())
+    ).toBe(LINEAGE_PARENT_AMBIGUOUS)
+    expect(agentLaunchFailureMessage(refusal, 'create-worktree')).toBe(refusal.message)
+    for (const target of ['existing', 'create-folder-workspace'] as const) {
+      expect(
+        launchFailureWithoutEffectsCode(refusal, target, trackTerminalSpawnDispatch())
+      ).toBeNull()
+      expect(agentLaunchFailureMessage(refusal, target)).toBeUndefined()
+    }
+    expect(
+      agentLaunchFailureMessage(
+        new RuntimeLineageError(LINEAGE_PARENT_AMBIGUOUS, 'x'.repeat(5000)),
+        'create-worktree'
+      )
+    ).toHaveLength(4224)
+  })
+
+  it('joins and reopens successful true/absent observation churn without another create/start', async () => {
+    const first = runtimeStub({ settings: {} })
+    const create = {
+      repo: 'id:repo-1',
+      name: 'task',
+      cwdParentWorktree: 'id:parent',
+      callerTerminalHandle: 'term_R'
+    }
+    const observed = {
+      agent: 'claude',
+      target: { kind: 'create-worktree', create: { ...create, cwdParentAmbiguous: true } }
+    }
+    const absent = { ...observed, target: { ...observed.target, create } }
+    const realCreateBoundary = first.createManagedWorktree.getMockImplementation()!
+    let release!: () => void
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    first.createManagedWorktree.mockImplementation(async (args) => {
+      await waiting
+      return realCreateBoundary(args)
+    })
+    const pending = replay(first, observed)
+    await vi.waitFor(() => expect(first.createManagedWorktree).toHaveBeenCalledTimes(1))
+    const joined = replay(first, absent)
+    release()
+    const response = await pending
+    expect(response).toMatchObject({
+      ok: true,
+      result: { outcome: { kind: 'terminal', handle: 'term_agent_first' } }
+    })
+    expect(await joined).toEqual(response)
+    expect(await replay(first, absent)).toEqual(response)
+    expect(first.createManagedWorktree).toHaveBeenCalledTimes(1)
+    expect(first.createTerminal).not.toHaveBeenCalled()
+    expect(
+      await replay(first, {
+        ...absent,
+        target: { ...absent.target, create: { ...create, cwdParentWorktree: 'id:changed' } }
+      })
+    ).toMatchObject({ ok: false, error: { code: 'agent_session_operation_conflict' } })
+    await closeTestJournalHostDatabase(directory)
+    store = await openTestAgentSessionRecordStore(directory)
+    setAgentLaunchRecordStore(store)
+    const restarted = runtimeStub({ settings: {} })
+    for (const request of [observed, absent]) {
+      expect(await replay(restarted, request)).toEqual(response)
+    }
+    expect(restarted.showRepo).not.toHaveBeenCalled()
+    expect(restarted.showTerminal).not.toHaveBeenCalled()
+    expect(restarted.createManagedWorktree).not.toHaveBeenCalled()
+    expect(restarted.createTerminal).not.toHaveBeenCalled()
+  })
+
+  it.each([undefined, '', 42, { message: 'wrong type' }, 'old'.repeat(2000)])(
+    'retains failed proof across actual reopen with historical message %j',
+    async (message) => {
+      const runtime = runtimeStub({ settings: {} })
+      failingCreate(runtime, new Error(NO_LAUNCH_COMMAND), false)
+      await replay(runtime, EXISTING_LAUNCH)
+      await editPersistedTestAgentSessionStore(directory, (persisted) => {
+        for (const row of Object.values(persisted.operations)) {
+          row.outcome = JSON.parse(
+            JSON.stringify({
+              status: 'failed',
+              code: LINEAGE_PARENT_AMBIGUOUS,
+              ...(message !== undefined ? { message } : {})
+            })
+          )
+        }
+      })
+      await closeTestJournalHostDatabase(directory)
+      store = await openTestAgentSessionRecordStore(directory)
+      setAgentLaunchRecordStore(store)
+      const restarted = runtimeStub({ settings: {} })
+      const response = await replay(restarted, EXISTING_LAUNCH)
+      expect(response).toMatchObject({
+        ok: false,
+        error: {
+          code: LINEAGE_PARENT_AMBIGUOUS,
+          message:
+            typeof message === 'string' && message.length ? message : LINEAGE_PARENT_AMBIGUOUS
+        }
+      })
+      expect(outcomeOf(OPERATION_ID)?.status).toBe('failed')
+      expect(restarted.createTerminal).not.toHaveBeenCalled()
+      expect(restarted.showTerminalWorkspaceLaunchScope).not.toHaveBeenCalled()
+    }
+  )
 })

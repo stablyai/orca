@@ -50,6 +50,7 @@ export function resetBrowserManagerMocks(mocks: BrowserManagerMocks): void {
 export function resetBrowserManagerState(): void {
   browserManager.unregisterAll()
   browserManager.setBrowserGuestStateChangedListener(null)
+  browserManager.setOffscreenTabOpener(null)
   browserManager.setDictationShortcutForwardingPredicate(null)
   browserManager.setSettingsResolver(() => ({}))
 }

@@ -1,7 +1,9 @@
 import { EDITOR_METHODS, FRAME_EVENTS, type PluginFrameTheme } from './plugin-frame-bridge'
 import { PLUGIN_ERROR_CODES, PLUGIN_PROTOCOL_VERSION } from './plugin-protocol'
-import { PLUGIN_FRAME_TRANSPORT_GLOBAL } from './plugin-frame-guest'
+import { PLUGIN_DECLARATIVE_POST_GLOBAL, PLUGIN_FRAME_TRANSPORT_GLOBAL } from './plugin-frame-guest'
 import { PLUGIN_HOST_API_MAJOR } from '../workers/plugin-host-api-major'
+import { PLUGIN_FRAME_FACADES_SCRIPT } from './plugin-panel-shell-facades'
+import { PLUGIN_FRAME_DOCUMENT_SCRIPT } from './plugin-panel-shell-document'
 import {
   PLUGIN_FRAME_USER_METHODS,
   pluginFrameMethodsFor,
@@ -31,37 +33,11 @@ export const PANEL_SHELL_TOKENS_PLACEHOLDER = '/*__ORCA_PANEL_TOKENS__*/'
 export const PANEL_SHELL_COLOR_SCHEME_PLACEHOLDER = '__ORCA_COLOR_SCHEME__'
 const PANEL_SHELL_TOKENS_STYLE_ID = 'orca-design-tokens'
 
-/** Curated design-token subset injected into panel documents as `--orca-<name>`. Deliberately
- *  NOT all of main.css (~257 custom properties): freezing every token as
- *  public API would lock future refactors. Grow additively; renaming or
- *  dropping an entry here is a plugin-facing breaking change. */
-export const PANEL_DESIGN_TOKEN_ALLOWLIST = [
-  '--background',
-  '--foreground',
-  '--card',
-  '--card-foreground',
-  '--popover',
-  '--popover-foreground',
-  '--primary',
-  '--primary-foreground',
-  '--secondary',
-  '--secondary-foreground',
-  '--muted',
-  '--muted-foreground',
-  '--accent',
-  '--accent-foreground',
-  '--destructive',
-  '--destructive-foreground',
-  '--border',
-  '--input',
-  '--ring',
-  '--radius'
-] as const
-
 export type PluginFrameSurface = 'panel' | 'editor'
 
-/** How the frame script reaches the host: `window.parent` (srcdoc iframe) or the guest preload. */
-type FrameTransport = 'parent' | 'guest'
+/** How the frame script reaches the host: `window.parent` (srcdoc iframe) or the guest preload;
+ *  a declarative host page also gets Orca's boot script a way to post `ui.*` events. */
+type FrameTransport = 'parent' | 'guest' | 'declarative-guest'
 
 /** The frozen `window.orca` every frame gets before plugin code runs: the public frame API.
  *  The envelope underneath is internal. `api` and `has` start from this host's table, so they work
@@ -76,15 +52,18 @@ function frameApiScript(surface: PluginFrameSurface, transport: FrameTransport):
     codes: PLUGIN_ERROR_CODES,
     events: FRAME_EVENTS,
     editor: EDITOR_METHODS,
-    // Iframes get no user-gesture API at all: Orca cannot verify their gestures.
-    user: transport === 'parent' ? null : PLUGIN_FRAME_USER_METHODS,
+    // Iframes get no user-gesture API at all: Orca cannot verify their gestures. A components
+    // panel's hidden guest never has activation; its `orca` module routes these through the
+    // press grant with host.call instead.
+    user: transport === 'guest' ? PLUGIN_FRAME_USER_METHODS : null,
     tokensStyleId: PANEL_SHELL_TOKENS_STYLE_ID,
     maxPending: 256,
     deadlineMs: 120_000,
     // A save dialog waits on the person, so gesture methods get a long deadline.
     userDeadlineMs: 30 * 60_000,
     userMethodList: Object.values(PLUGIN_FRAME_USER_METHODS),
-    transportGlobal: transport === 'parent' ? null : PLUGIN_FRAME_TRANSPORT_GLOBAL
+    transportGlobal: transport === 'parent' ? null : PLUGIN_FRAME_TRANSPORT_GLOBAL,
+    declarativePost: transport === 'declarative-guest' ? PLUGIN_DECLARATIVE_POST_GLOBAL : null
   }).replaceAll('<', '\\u003c')
   return `;(function (C) {
   var E = C.events
@@ -95,6 +74,8 @@ function frameApiScript(surface: PluginFrameSurface, transport: FrameTransport):
   var methods = C.methods.slice()
   var latest = null
   var waiting = []
+  var helloSeen = false
+  var starting = []
   var locale = null
   var send = null
   if (C.transportGlobal) {
@@ -191,11 +172,16 @@ function frameApiScript(surface: PluginFrameSurface, transport: FrameTransport):
       if (Array.isArray(m.payload.methods)) methods = m.payload.methods.slice()
       if (typeof m.payload.locale === 'string') locale = m.payload.locale.slice(0, 64)
       applyTheme(m.payload.theme)
+      helloSeen = true
+      start()
     } else if (m.kind === 'evt' && m.event === E.theme) {
       applyTheme(m.payload)
+    } else if (m.kind === 'evt' && m.event === E.push) {
+      receivePush(m.payload)
     } else if (m.kind === 'evt' && m.event === E.editorDocument && C.surface === 'editor') {
       latest = Object.freeze(m.payload)
       waiting.splice(0).forEach(function (resolve) { resolve(latest) })
+      start()
       emit(E.editorDocument, latest)
     } else if (m.kind === 'evt') {
       emit(m.event, m.payload)
@@ -214,7 +200,7 @@ function frameApiScript(surface: PluginFrameSurface, transport: FrameTransport):
     }),
     on: on
   }
-  if (C.user) {
+${PLUGIN_FRAME_FACADES_SCRIPT}  if (C.user) {
     orca.shell = Object.freeze({
       openExternal: function (url) { return userCall(C.user.openExternal, { url: String(url) }) }
     })
@@ -237,20 +223,7 @@ function frameApiScript(surface: PluginFrameSurface, transport: FrameTransport):
   Object.defineProperty(orca, 'locale', {
     get: function () { return locale || navigator.language }, enumerable: true
   })
-  if (C.surface === 'editor') {
-    orca.document = Object.freeze({
-      get: function () {
-        return latest ? Promise.resolve(latest) : new Promise(function (resolve) { waiting.push(resolve) })
-      },
-      // Why replay: editors often subscribe after their bundle loads, when the first document is in.
-      onDidChange: function (fn) {
-        var subscription = on(E.editorDocument, fn)
-        var current = latest
-        if (current) Promise.resolve().then(function () { if (latest === current) fn(current) })
-        return subscription
-      },
-      applyEdit: function (edit) { return call(C.editor.applyEdit, edit) }
-    })
+${PLUGIN_FRAME_DOCUMENT_SCRIPT}  if (C.surface === 'editor') {
     window.addEventListener('keydown', function (event) {
       if (event.repeat || !(event.metaKey || event.ctrlKey)) return
       post({ kind: 'evt', event: E.editorKeydown, payload: {
@@ -260,6 +233,12 @@ function frameApiScript(surface: PluginFrameSurface, transport: FrameTransport):
     }, true)
   }
   Object.defineProperty(window, 'orca', { value: Object.freeze(orca), writable: false, configurable: false })
+  if (C.declarativePost) {
+    // One-shot for Orca's boot script, which deletes it before importing the plugin module.
+    Object.defineProperty(window, C.declarativePost, { configurable: true, value: function (event, payload) {
+      post({ kind: 'evt', event: String(event), payload: payload })
+    } })
+  }
   post({ kind: 'evt', event: E.ready, payload: { protocol: C.protocol } })
 })(${config})
 `
@@ -323,8 +302,9 @@ export const PLUGIN_GUEST_CSP =
 export function buildPluginGuestShellHtml(
   pluginHtml: string,
   surface: PluginFrameSurface = 'panel',
-  options: { theme?: PluginFrameTheme | null } = {}
+  options: { declarative?: boolean; theme?: PluginFrameTheme | null } = {}
 ): string {
+  const transport = options.declarative ? 'declarative-guest' : 'guest'
   const theme = options.theme
   // Why baked in: plugins that read tokens at boot, and the first paint, must not wait for `hello`.
   const scheme =
@@ -333,6 +313,6 @@ export function buildPluginGuestShellHtml(
   return (
     `<!doctype html>\n<html${scheme ? ` class="${scheme}"` : ''}>\n<head>\n<meta charset="utf-8">\n` +
     `<style id="${PANEL_SHELL_TOKENS_STYLE_ID}">:root{${tokens}}</style>\n` +
-    `<script>\n'use strict'\n${frameApiScript(surface, 'guest')}</script>\n</head>\n${pluginHtml}`
+    `<script>\n'use strict'\n${frameApiScript(surface, transport)}</script>\n</head>\n${pluginHtml}`
   )
 }

@@ -23,7 +23,12 @@ import {
   PLUGIN_PANEL_ENTRY_MAX_BYTES,
   readContainedPluginArtifactText
 } from '../plugin-artifact-validation'
-import { PluginPanelSessions, type PluginPanelSessionBinding } from './plugin-panel-sessions'
+import {
+  PluginPanelSessions,
+  type PluginPanelSessionBinding,
+  type ResolvedPluginPanelSession
+} from './plugin-panel-sessions'
+import type { PluginPanelCaller } from '../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 
 type PluginPanelControllerOptions = {
   resolveApprovedPlugin: (pluginKey: string) => ValidDiscoveredPlugin | null
@@ -37,22 +42,36 @@ type PluginPanelControllerOptions = {
   ) => Promise<PluginHostCallOutcome>
   log: (pluginKey: string) => (line: string) => void
   panelAdmission?: PluginPanelCallAdmission
+  /** A session's public id once it can no longer be used (its panel's requests stop). */
+  onSessionClosed?: (panelId: string) => void
 }
 
 type FrameOpenOptions = { shell?: boolean }
 
 type LoadedPluginPanel = {
-  entry: { html: string }
+  entry: { html: string; ui?: 'components' }
   binding: PluginPanelSessionBinding
 }
 
 export class PluginPanelController {
-  private readonly sessions = new PluginPanelSessions()
+  private readonly sessions: PluginPanelSessions
   private readonly boundOwnerSignals = new WeakSet<AbortSignal>()
   private readonly panelAdmission: PluginPanelCallAdmission
 
   constructor(private readonly options: PluginPanelControllerOptions) {
     this.panelAdmission = options.panelAdmission ?? createPluginPanelCallAdmission()
+    this.sessions = new PluginPanelSessions((panelId) => options.onSessionClosed?.(panelId))
+  }
+
+  /** The live, still-approved panel behind an owner's session: what its push channel serves. */
+  sessionCaller(
+    ownerKey: string,
+    sessionToken: string
+  ): { pluginKey: string; caller: PluginPanelCaller } | null {
+    const binding = this.sessions.resolve(ownerKey, sessionToken)
+    return binding && this.isCurrent(binding)
+      ? { pluginKey: binding.pluginKey, caller: panelCaller(binding) }
+      : null
   }
 
   async readEntry(pluginKey: string, panelId: string): Promise<{ html: string } | null> {
@@ -79,6 +98,31 @@ export class PluginPanelController {
     options: FrameOpenOptions = {}
   ): Promise<PluginFrameEntry | null> {
     return this.openFrame(ownerKey, pluginKey, 'editor', editorId, isCurrent, options)
+  }
+
+  /** The plugin behind this owner's live components-panel session, for its persisted state. */
+  componentsPanelPlugin(ownerKey: string, sessionToken: string): string | null {
+    return this.componentsPanelBinding(ownerKey, sessionToken)?.pluginKey ?? null
+  }
+
+  /** That plugin's root folder, for the image files its panel draws. */
+  componentsPanelRoot(ownerKey: string, sessionToken: string): string | null {
+    return this.componentsPanelBinding(ownerKey, sessionToken)?.rootDir ?? null
+  }
+
+  private componentsPanelBinding(
+    ownerKey: string,
+    sessionToken: string
+  ): { pluginKey: string; rootDir: string } | null {
+    const binding = this.sessions.resolve(ownerKey, sessionToken)
+    if (!binding || binding.surface !== 'panel') {
+      return null
+    }
+    const plugin = this.options.resolveApprovedPlugin(binding.pluginKey)
+    const panel = plugin ? findFrameContribution(plugin, 'panel', binding.contributionId) : null
+    return plugin && plugin.rootDir === binding.rootDir && panel?.ui === 'components'
+      ? { pluginKey: binding.pluginKey, rootDir: plugin.rootDir }
+      : null
   }
 
   revokeSession(ownerKey: string, sessionToken: string): void {
@@ -122,13 +166,7 @@ export class PluginPanelController {
     if (!parsed.success) {
       return { ok: false, code: 'invalid_request', error: 'malformed panel action call' }
     }
-    const plugin = this.options.resolveApprovedPlugin(binding.pluginKey)
-    if (
-      !plugin ||
-      plugin.rootDir !== binding.rootDir ||
-      JSON.stringify(plugin.manifest) !== binding.manifestRevision ||
-      !findFrameContribution(plugin, binding.surface, binding.contributionId)
-    ) {
+    if (!this.isCurrent(binding)) {
       return { ok: false, code: 'unavailable', error: 'panel session is no longer available' }
     }
     return this.options.executeHostCall(
@@ -136,7 +174,20 @@ export class PluginPanelController {
       parsed.data.action,
       parsed.data.params,
       binding.surface,
-      origin.desktop ? { webContentsId: origin.callerWebContentsId } : undefined
+      {
+        ...(origin.desktop ? { webContentsId: origin.callerWebContentsId } : {}),
+        panel: panelCaller(binding)
+      }
+    )
+  }
+
+  private isCurrent(binding: PluginPanelSessionBinding): boolean {
+    const plugin = this.options.resolveApprovedPlugin(binding.pluginKey)
+    return (
+      plugin !== null &&
+      plugin.rootDir === binding.rootDir &&
+      JSON.stringify(plugin.manifest) === binding.manifestRevision &&
+      findFrameContribution(plugin, binding.surface, binding.contributionId) !== null
     )
   }
 
@@ -216,12 +267,16 @@ export class PluginPanelController {
     if (!plugin || !contribution) {
       return null
     }
-    const html = withShell ? await this.readShell(plugin, contribution.entry, surface) : ''
+    const declarative = contribution.ui === 'components'
+    // Why no entry text: a declarative entry is a module the desktop guest imports, and an
+    // isolated-only editor never runs in the srcdoc fallback; both show they need the desktop app.
+    const shellEntry = declarative || contribution.frame === 'isolated' ? null : contribution.entry
+    const html = withShell ? await this.readShell(plugin, shellEntry, surface) : ''
     if (html === null) {
       return null
     }
     return {
-      entry: { html },
+      entry: declarative ? { html, ui: 'components' } : { html },
       binding: {
         pluginKey,
         surface,
@@ -234,7 +289,7 @@ export class PluginPanelController {
 
   private async readShell(
     plugin: ValidDiscoveredPlugin,
-    entryPath: string,
+    entryPath: string | null,
     surface: PluginFrameSurface
   ): Promise<string | null> {
     const { pluginKey } = plugin
@@ -242,11 +297,13 @@ export class PluginPanelController {
     try {
       await this.options.contentVerifier.verify(plugin)
       const html = buildPluginPanelShellHtml(
-        await readContainedPluginArtifactText(
-          plugin.rootDir,
-          entryPath,
-          PLUGIN_PANEL_ENTRY_MAX_BYTES
-        ),
+        entryPath === null
+          ? ''
+          : await readContainedPluginArtifactText(
+              plugin.rootDir,
+              entryPath,
+              PLUGIN_PANEL_ENTRY_MAX_BYTES
+            ),
         surface
       )
       const current = this.options.resolveApprovedPlugin(pluginKey)
@@ -263,11 +320,15 @@ export class PluginPanelController {
   }
 }
 
+function panelCaller(binding: ResolvedPluginPanelSession): PluginPanelCaller {
+  return { id: binding.publicId, surface: binding.surface, contributionId: binding.contributionId }
+}
+
 function findFrameContribution(
   plugin: ValidDiscoveredPlugin,
   surface: PluginPanelSessionBinding['surface'],
   id: string
-): { entry: string; runtime?: string } | null {
+): { entry: string; ui?: string; frame?: string } | null {
   const list =
     surface === 'panel'
       ? plugin.manifest.contributes.panels

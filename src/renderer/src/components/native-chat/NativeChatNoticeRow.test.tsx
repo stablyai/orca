@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
+import { projectStructuredItemsToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { isAdmissibleAgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-schemas'
 import { TooltipProvider } from '@/components/ui/tooltip'

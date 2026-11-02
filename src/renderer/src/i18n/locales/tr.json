@@ -214,7 +214,8 @@
     "wslHostOffer": {
       "title": "{{distro}} dağıtımını ana makine olarak çalıştır (önerilir)",
       "why": "Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
-      "accept": "Ana makine olarak çalıştır"
+      "accept": "Ana makine olarak çalıştır",
+      "projectNotFound": "Taşınacak eklenen proje bulunamadı. Kenar çubuğundaki projede \"{{distro}} ana makinesine taşı…\" seçeneğini kullanın."
     }
   },
   "app": {
@@ -835,6 +836,8 @@
       "claudeRemoveFolder": "Orca, bu hesabın Claude klasörünü ve oturum açma bilgilerini bu bilgisayardan siler. Sistem varsayılanı ile paylaşılan sohbet geçmişi korunur. Bu hesap seçiliyse bir sonraki Claude başlatılışında Sistem varsayılanı kullanılır."
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "Git işlemi başka yerde çalışıyor",
+      "remoteOperationInAnotherWorkspace": "Başka bir çalışma alanında Git işlemi (push, pull veya force push gibi) çalışıyor. İşlemlerin çakışmaması için bitmesini bekleyip bu eylemi kullanın.",
       "actionModel": {
         "on": "Açık",
         "off": "Kapalı",
@@ -1739,7 +1742,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "Yapılandırılmış ajan oturumu henüz kullanılamıyor. Bir süre sonra tekrar deneyin.",
         "gone": "Bu sohbet artık bu sunucuda değil, bu yüzden burada yeniden açılamıyor.",
-        "hostCannotOpen": "Orca güncellenene kadar bu sohbet yeniden açılamaz."
+        "hostCannotOpen": "Orca güncellenene kadar bu sohbet yeniden açılamaz.",
+        "worktreeDeleted": "Çalışma ağacı silindi.",
+        "folderWorkspaceRemoved": "Klasör çalışma alanı kaldırıldı."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Sağlanmış kök tarifleri sparse checkout'u desteklemez."
@@ -1749,7 +1754,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "Çalışma alanı dışındaki dosyalar eşlenen bir sunucuda henüz önizlenemiyor.",
           "webClientUnavailable": "Belge önizlemeleri web istemcisinde kullanılamıyor."
         }
       },
@@ -4519,7 +4523,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "Başka hesap yok",
-            "9332ba8684": "Şuna geç",
             "d450654fa2": "Claude Hesabı",
             "11e2354daf": "Claude kullanım çalışma zamanı",
             "3dd7ddfae1": "Claude ayrıntılarını ve hesap değiştiriciyi aç",
@@ -6385,11 +6388,7 @@
           "dbe2d18972": "Daha fazla {{value0}} işlemi",
           "openInOrcaBrowser": "Orca tarayıcısında aç",
           "2c67730e07": "Orca'da aç",
-          "e42941631a": "Linear'da görüntüle",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "Sorunu düzenle",
-          "b22f058067": "GitHub'da görüntüle",
-          "e97d8f2876": "Sorun #{{value0}}",
           "moreIssueActions": "Daha fazla sorun işlemi",
           "copyLink": "Bağlantıyı kopyala",
           "copyLinkSuccess": "{{value0}} kopyalandı",
@@ -6412,8 +6411,6 @@
           "cliCreatedFromShell": "`orca worktree create` ile oluşturuldu",
           "cliStartupAgent": "{{value0}} ile başlatıldı",
           "cliCreated": "Orca CLI tarafından oluşturuldu",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "Jira'da görüntüle",
           "linkedJira": "Bağlı Jira {{value0}}"
         },
         "WorktreeCardMetadataStatusBadges": {
@@ -6537,15 +6534,17 @@
           "remoteRuntimeEditorHint": "Bu bilgisayardaki uygulamalar, bu sunucunun dosyalarını yalnızca Orca sunucuya SSH üzerinden erişiyorsa açabilir.",
           "remotePathInvalid": "Yol, SSH sunucusu için geçerli değil.",
           "remotePathInvalidDetail": "Tekrar denemeden önce çalışma alanını yenileyin.",
-          "remoteLaunchFailed": "Yol düzenleyicide açılamadı.",
-          "remoteLaunchFailedDetail": "Bu makinede yapılandırılmış düzenleyici komutunu kontrol edin.",
+          "pathLaunchFailed": "Yol düzenleyicide açılamadı.",
+          "pathLaunchFailedDetail": "Bu makinede yapılandırılmış düzenleyici komutunu kontrol edin.",
           "1417fd8380": "Uygulamaları özelleştir...",
           "8009ab69a6": "Şununla aç:",
           "bd0e8159f8": "Bu makinedeki düzenleyici komutunu veya dosya yöneticisi yapılandırmasını kontrol edin.",
           "9a5381eb09": "Çalışma alanı klasörü açılamadı.",
           "0bed8727db": "Taşınmış veya silinmiş olabilir. Çalışma alanlarını yenileyin veya Orca'dan kaldırın.",
           "3921d3d9a5": "Çalışma alanı klasörü bulunamadı.",
+          "pathNotFound": "Dosya veya klasör bulunamadı. Taşınmış veya silinmiş olabilir.",
           "f387af445b": "Çalışma alanı yolu geçerli bir yerel yol değil.",
+          "pathInvalid": "Yol geçerli bir yerel yol değil.",
           "wsl": "WSL"
         },
         "WorktreeTitleInlineRename": {
@@ -7316,6 +7315,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "Hesap konumu kaydedilemedi. Tekrar deneyin.",
           "c2d2751587": "Hesabı Kaldır",
           "dbb9626ed1": "İptal",
           "63843e37e2": "Claude Hesabı Kaldırılsın mı?",
@@ -7562,14 +7562,13 @@
           "932ff1fbff": "Tema",
           "leftSidebarAppearance": {
             "title": "Sol Kenar Çubuğu Görünümü",
-            "rowDescription": "Sol kenar çubuğunu terminalinizle eşleştirin, varsayılanda bırakın veya bir renk tonu kullanın.",
             "default": "Varsayılan",
-            "matchTerminal": "Terminalle Eşleştir",
             "tinted": "Renk Tonlu",
             "tintColor": "Kenar Çubuğu Rengi",
             "tintColorDescription": "Sol kenar çubuğu yüzeyine karıştırılan renk.",
             "tintOpacity": "Renk Yoğunluğu",
-            "tintOpacityDescription": "Rengin kenar çubuğuna ne kadar güçlü karıştırılacağını kontrol eder."
+            "tintOpacityDescription": "Rengin kenar çubuğuna ne kadar güçlü karıştırılacağını kontrol eder.",
+            "tintDescription": "Sol kenar çubuğunu varsayılan bırakın veya renklendirin. Terminali izlemek için açık veya koyu tema olarak Terminalle Eşleştir seçeneğini seçin."
           },
           "interfaceDefaultFont": "Varsayılan yazı tipi",
           "terminalDefaultFont": "Varsayılan yazı tipi",
@@ -9320,10 +9319,7 @@
           "1afcc1d973": "Dikey Dolgu",
           "25e2f8e8e1": "Terminal ızgarası çevresindeki yatay dolgu, piksel cinsinden.",
           "36b8402015": "Yatay Dolgu",
-          "53ce336e15": "Pencere bulanıklığı değişikliğini uygulamak için Orca'yı yeniden başlatın.",
           "c65bb9ce63": "Yeniden başlatma gerekli",
-          "97950bb087": "Terminal penceresine arka plan bulanıklığı uygular. Yeniden başlatma gerektirir.",
-          "2b82242f43": "Pencere Bulanıklığı",
           "809f37738d": "Terminal arka planının saydamlığını kontrol eder. 1 tamamen opak, 0 tamamen saydamdır.",
           "ea7b1a158e": "Arka Plan Opaklığı",
           "03acb60aa0": "Terminal arka planının saydamlığını kontrol eder.",
@@ -9752,11 +9748,10 @@
             },
             "leftSidebarAppearance": {
               "title": "Sol Kenar Çubuğu Görünümü",
-              "description": "Sol kenar çubuğunu terminalinizle eşleştirin, varsayılan bırakın veya bir renk tonu kullanın.",
               "project": "proje",
-              "terminal": "terminal",
               "background": "arka plan",
-              "tint": "renk tonu"
+              "tint": "renk tonu",
+              "tintDescription": "Sol kenar çubuğunu varsayılan bırakın veya renklendirin. Terminali izlemek için açık veya koyu tema olarak Terminalle Eşleştir seçeneğini seçin."
             },
             "workspaceCardLayout": {
               "title": "Çalışma Alanı Kartı Düzeni",
@@ -9809,7 +9804,8 @@
               "kw": {
                 "cursor": "cursor"
               }
-            }
+            },
+            "matchTerminal": "Terminalle Eşleştir"
           }
         },
         "auto": {
@@ -10981,8 +10977,6 @@
             "f6dd9ff606": "arka plan",
             "71eb45e293": "bulanıklık",
             "0838b3717b": "pencere",
-            "bc2054657a": "Terminal penceresine arka plan bulanıklığı uygulayın. Yeniden başlatma gerektirir.",
-            "72d0482137": "Pencere Bulanıklığı",
             "7db59c4738": "alfa",
             "46d99ef4bb": "opaklık",
             "4c643695aa": "Terminal arka planının saydamlığını kontrol eder.",
@@ -13345,6 +13339,10 @@
         },
         "PluginContributionActionNewFile": {
           "create": "Oluştur"
+        },
+        "AppearanceThemeControl": {
+          "matchTerminal": "Terminalle Eşleştir",
+          "dynamic": "dinamik"
         }
       },
       "right": {
@@ -19732,6 +19730,8 @@
         "unnamedSender": "bir ajan",
         "messageFromCoordinator": "Koordinatörden mesaj",
         "startedWorker": "Çalışan başlatıldı",
+        "handedOffToAgent": "Ajana devredildi",
+        "startedAgent": "Ajan başlatıldı",
         "taskFromCoordinator": "Koordinatörden görev",
         "updateFromWorker": "Çalışandan güncelleme"
       },
@@ -20310,6 +20310,7 @@
       "detectingAgents": "Bu çalışma alanı ana makinesindeki Ajanlar tespit ediliyor…",
       "detectionFailed": "Bu çalışma alanı ana makinesinde Ajanlar tespit edilemedi.",
       "noAgents": "Bu çalışma alanı ana makinesinde etkin Ajan tespit edilmedi.",
+      "onlySourceFamilyDetected": "Bu çalışma alanı ana makinesinde yalnızca {{agent}} ile kullanım sınırını paylaşan Ajanlar kullanılabilir. Farklı bir Ajanı etkinleştirin veya yükleyin.",
       "context": "Bağlam",
       "modeFocused": "Odaklı devir (Önerilen)",
       "modeFocusedDescription": "En son durumu ve mevcut çalışma alanını kullanır, eski döküm ayrıntılarını yalnızca gerektiğinde okur.",
@@ -20423,7 +20424,23 @@
     },
     "newWorkspace": {
       "agentOptional": "Ajan [İsteğe bağlı]",
-      "createDescription": "Projeyi ve çalışma alanı adını seçin. Bir ajan başlatmak istiyorsanız ajan seçin."
+      "createDescription": "Projeyi ve çalışma alanı adını seçin. Bir ajan başlatmak istiyorsanız ajan seçin.",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Bu çalışma alanını oluşturmadan önce setup çalıştırılıp çalıştırılmayacağını seçin.",
+        "cancel": "İptal",
+        "retry": "Yeniden dene",
+        "setupScript": "Kurulum betiği",
+        "defaultTabCommands": "Varsayılan sekme komutları",
+        "setupAndDefaultTabs": "Kurulum ve varsayılan sekme komutları",
+        "askRunSetup": "Kurulum şimdi çalıştırılsın mı?",
+        "askRunDefaultTabs": "Varsayılan sekme komutları şimdi çalıştırılsın mı?",
+        "askRunSetupAndDefaultTabs": "Kurulum ve varsayılan sekme komutları şimdi çalıştırılsın mı?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + yerel",
+        "localSource": "yerel ayarlar"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Başka bir sorun değişikliği devam ediyor."
@@ -21155,6 +21172,7 @@
     "scanIssues": {
       "issuesOmitted": "Ek tarama sorunları gösterilmedi.",
       "sessionMetadataUnreadable": "Bu taramada oturum meta verileri okunamadı.",
+      "transcriptTooLarge": "Bir {{label}} konuşması Oturum Geçmişi'nde yüklenemeyecek kadar büyük. Doğrudan {{label}} içinde sürdürmeyi deneyin.",
       "openCodeScannerUnavailable": "Arka plan tarayıcısı başlatılamadığı için OpenCode geçmişi atlandı; uygulama yanıt vermeye devam ediyor.",
       "openCodeScanIncomplete": "OpenCode geçmiş taraması tamamlanamadı: {{detail}}",
       "openCodeWslReaderPreparing": "WSL SQLite okuyucusu hazırlanıyor. Kurulum tamamlandıktan sonra Vault bölümünü yenileyin.",
@@ -21704,7 +21722,8 @@
       "showLinked_other": "Bağlantılı {{count}} inceleme ve görevi göster",
       "showLinked_one": "Bağlantılı {{count}} inceleme ve görevi göster",
       "linkedCount_other": "{{count}} bağlantılı",
-      "linkedCount_one": "{{count}} bağlantılı"
+      "linkedCount_one": "{{count}} bağlantılı",
+      "labels": "Etiketler: {{labels}}"
     },
     "attachments": {
       "updateRuntime": "Çalışma alanı bağlantılarını değiştirmek için uzak çalışma zamanını güncelleyin",
@@ -22945,12 +22964,14 @@
       "serveSimUnavailable": "serve-sim kullanılamıyor.",
       "serveSimNoEndpoints": "serve-sim, akış uç noktalarını döndürmedi.",
       "serveSimEndpointUnreachable": "serve-sim başladı ancak akış uç noktasına erişilemiyor.",
+      "deviceHubInputBlocked": "Xcode'un Device Hub uygulaması bu simülatörün girişini devraldığı için dokunmalar ve yazılanlar ona ulaşmıyor. Device Hub'dan çıkın, ardından simülatörü yeniden bağlayın.",
       "androidSdkMissing": "Android SDK bulunamadı. Android Studio'yu yükleyin ve ANDROID_HOME değişkenini ayarlayın.",
       "adbUnavailable": "adb kullanılamıyor.",
       "noAndroidDevices": "Android cihazı veya AVD bulunamadı. Android Studio'da bir tane oluşturun.",
       "androidDeviceNotRunning": "\"{{device}}\" adlı Android cihazı çalışmıyor. Önce başlatın.",
       "unknownDeviceOrAvd": "\"{{device}}\", çalışan bir cihaz veya bilinen bir AVD değil.",
       "avdBootTimeout": "\"{{avdName}}\" adlı AVD'nin açılışı zamanında tamamlanmadı.",
+      "avdExitedBeforeBoot": "\"{{avdName}}\" adlı AVD açılışı tamamlanmadan durdu: {{detail}}",
       "scrcpyDownloadFailed": "scrcpy sunucusu indirilemedi: {{detail}}",
       "scrcpyServerInvalid": "İndirilen scrcpy sunucusu geçersizdi veya eksikti."
     },

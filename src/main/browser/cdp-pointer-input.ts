@@ -4,7 +4,7 @@ import {
   type CdpPointerButton,
   cdpPointerButtonMask,
   cdpPointerButtonFromMask
-} from './agent-browser-bridge-mouse'
+} from './agent-browser/agent-browser-bridge-mouse'
 
 const MULTI_CLICK_INTERVAL_MS = 500
 const MULTI_CLICK_SLOP_PX = 2

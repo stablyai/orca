@@ -2,7 +2,8 @@
 
 Plugins contribute three kinds of theme through `orca-plugin.json` `contributes`:
 `themes` (app colors), `terminalThemes` (an ANSI palette) and, separately, icon themes.
-Each entry is `{ "id", "title", "path" }` pointing at a JSON file of at most 16 KiB.
+Each entry is `{ "id", "title", "path" }` (format 1 manifests used `label`) pointing at a JSON
+file of at most 16 KiB, or 64 KiB for an icon theme.
 
 ## App themes
 
@@ -110,7 +111,10 @@ An app theme may add one image painted behind the window's translucent surfaces:
   `--background`; `size` is `cover` (default), `contain` or `tile`; `position` is `center`
   (default), `top`, `bottom`, `left` or `right`.
 - The image is one static layer, never blurred. Sidebars, editors and pages stay opaque; it
-  shows through terminals when the user's terminal Background Opacity is below 1.
+  shows through terminals and agent chats when the user's terminal Background Opacity is below 1.
+  Chat text sits on the chat canvas at that opacity (at least 0.8); message bubbles, code blocks,
+  approval and question cards, the composer and menus stay opaque. A chat split beside terminals
+  in one tab stays opaque.
 - Orca releases without background images ignore the field (`validate:plugin` on them reports it).
 
 ## Terminal themes

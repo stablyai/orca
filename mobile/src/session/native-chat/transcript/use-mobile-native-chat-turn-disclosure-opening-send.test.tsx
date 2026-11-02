@@ -16,11 +16,11 @@ import { nativeChatTurnMembership } from '../../../../../src/shared/native-chat/
 import {
   projectStructuredAgentSessionMessages,
   type StructuredAgentSessionOptimisticMessage
-} from '../../../../../src/shared/structured-agent-session-message-projection'
+} from '../../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import {
   buildMobileNativeChatTransientData,
   foldMobileNativeChatMessages
-} from '../../mobile-native-chat-render-data'
+} from '../mobile-native-chat-render-data'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 
 const NOW = 100_000

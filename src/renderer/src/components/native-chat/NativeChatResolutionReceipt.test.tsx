@@ -8,7 +8,7 @@ import type {
   AgentJournalQuestionItem,
   AgentJournalRenderItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
+import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session/agent-session-question-answer'
 import { NativeChatResolutionReceipt } from './NativeChatResolutionReceipt'
 import { structuredQuestionTranscript } from '../../../../shared/structured-agent-question-projection'
 import {

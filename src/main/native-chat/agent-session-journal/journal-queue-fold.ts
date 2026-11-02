@@ -5,7 +5,7 @@ import type { AgentJournalCursor } from '../../../shared/agent-session-journal-i
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
-import { structuredAgentSessionCommandTurnIdentity } from '../../../shared/structured-agent-session-command-turn-identity'
+import { structuredAgentSessionCommandTurnIdentity } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { readStoredRejectionFact } from './journal-dispatch-reducer'
 import { queuedHandOffOutcome } from './journal-dispatch-settlement'

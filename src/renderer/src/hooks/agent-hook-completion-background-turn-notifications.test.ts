@@ -155,41 +155,90 @@ describe('Claude background-turn completion notifications', () => {
     return { banners, rows }
   }
 
-  it('announces a subagent turn at Stop with that turn’s text, not when the child later drains', async () => {
-    const { banners, rows } = await play([
+  // Real Claude 2.1.287 PTY hooks (see the fixture's scenarios): every background-subagent run announces once, after the wake-up turn that consumes the last result.
+  it.each([
+    'one-subagent',
+    'two-subagents-together',
+    'subagent-resumed',
+    'subagent-with-own-shell',
+    'subagent-idle-ctrl-c'
+  ])('announces the %s capture once, when everything has drained', async (scenario) => {
+    const records: {
+      scenario: string
+      t: number
+      kind: string
+      payload?: Record<string, unknown>
+    }[] = (
+      await readFile(
+        new URL(
+          '../../../shared/__fixtures__/claude-task-notification-hooks.jsonl',
+          import.meta.url
+        ),
+        'utf8'
+      )
+    )
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line))
+    const events = records.flatMap((record) =>
+      record.scenario === scenario && record.kind === 'hook' && record.payload
+        ? [{ at: 1_700_000_000_000 + Math.round(record.t * 1000), payload: record.payload }]
+        : []
+    )
+    const lastStop = events.findLast((event) => event.payload.hook_event_name === 'Stop')
+
+    const { banners } = await play(events)
+
+    // A plain done waits out the quiet window before it is announced.
+    expect(banners.map((banner) => banner.at)).toEqual([(lastStop?.at ?? 0) + HOOK_DONE_QUIET_MS])
+  })
+
+  it('announces a coordinator waiting on workers in the background once, at its final turn', async () => {
+    const wait = 'orca orchestration check --wait --types worker_done,escalation --json'
+    const waitFor = (id: string, at: number) => [
       {
-        at: 1_700_000_000_000,
-        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'review the PR' }
-      },
-      {
-        at: 1_700_000_001_000,
+        at,
         payload: {
-          hook_event_name: 'SubagentStart',
-          agent_id: 'a1',
-          agent_type: 'general-purpose'
+          hook_event_name: 'PostToolUse',
+          tool_name: 'Bash',
+          tool_input: { command: wait, run_in_background: true },
+          tool_response: { backgroundTaskId: id }
         }
       },
       {
-        at: 1_700_000_006_000,
+        at: at + 1_000,
         payload: {
           hook_event_name: 'Stop',
-          last_assistant_message: 'Which cells need hand-verification?',
-          background_tasks: [{ id: 'a1', type: 'subagent', status: 'running' }]
+          last_assistant_message: 'Waiting for workers.',
+          background_tasks: [{ id, type: 'shell', status: 'running', command: wait }]
         }
-      },
+      }
+    ]
+    const wake = (id: string, at: number) => ({
+      at,
+      payload: {
+        hook_event_name: 'UserPromptSubmit',
+        prompt: `<task-notification>\n<task-id>${id}</task-id>\n<status>completed</status>\n</task-notification>`
+      }
+    })
+
+    const { banners } = await play([
+      { at: 1_700_000_000_000, payload: { hook_event_name: 'UserPromptSubmit', prompt: 'run it' } },
+      ...waitFor('w1', 1_700_000_001_000),
+      wake('w1', 1_700_000_060_000),
+      ...waitFor('w2', 1_700_000_061_000),
+      wake('w2', 1_700_000_120_000),
       {
-        at: 1_700_000_055_000,
-        payload: { hook_event_name: 'SubagentStop', agent_id: 'a1' }
+        at: 1_700_000_121_000,
+        payload: {
+          hook_event_name: 'Stop',
+          last_assistant_message: 'All workers done.',
+          background_tasks: []
+        }
       }
     ])
 
-    const stop = rows.find((row) => row.lastAssistantMessage?.includes('hand-verification'))
-    expect(stop?.state).toBe('working')
-    expect(stop?.turnCompletedAt).toBe(1_700_000_006_000)
-    expect(banners).toHaveLength(1)
-    expect(banners[0]?.at).toBe(1_700_000_006_000)
-    expect(banners[0]?.body).toBe('Which cells need hand-verification?')
-    expect(banners[0]?.stateStartedAt).toBe(1_700_000_006_000)
+    expect(banners).toEqual([expect.objectContaining({ body: 'All workers done.' })])
   })
 
   it('notifies each background-shell turn with a distinct notification identity', async () => {
@@ -234,7 +283,7 @@ describe('Claude background-turn completion notifications', () => {
     expect(banners[0]?.stateStartedAt).not.toBe(banners[1]?.stateStartedAt)
   })
 
-  it('applies the provider retirement to visible rows and quit capture without announcing the parent twice', async () => {
+  it('applies the provider retirement to visible rows and quit capture, announcing the parent once it is done', async () => {
     const { observeAgentHookCompletionForNotification } =
       await import('./agent-hook-completion-notifications')
     actualStore = createTestStore()
@@ -321,14 +370,14 @@ describe('Claude background-turn completion notifications', () => {
       }
       const before = store.getState().agentStatusByPaneKey[PANE_KEY]!
       const beforeEvent = current!
-      expect(beforeEvent.payload.turnCompletedAt).toBe(Date.parse(kill.timestamp) - 1_000)
+      expect(beforeEvent.payload.turnCompletedAt).toBeUndefined()
       expect(before.turnEndedAt).toBeUndefined()
       expect(before.turnEndDisposition).toBeUndefined()
       expect(before.subagents?.[0]?.id).toBe('a123')
       poller.schedule(current!)
       vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
       await poller.poll(PANE_KEY)
-      expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
+      expect(dispatchTerminalNotification).not.toHaveBeenCalled()
       await appendFile(path, `${JSON.stringify(kill)}\n`)
       await poller.poll(PANE_KEY)
       vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
@@ -338,7 +387,6 @@ describe('Claude background-turn completion notifications', () => {
       expect(after.mainAgent).toEqual(before.mainAgent)
       expect(current?.hookEventName).toBe('SubagentStop')
       expect(current?.toolAgentId).toBe('a123')
-      expect(current?.payload.turnCompletedAt).toBe(beforeEvent.payload.turnCompletedAt)
       expect(after.turnEndedAt).toBeUndefined()
       expect(after.turnEndDisposition).toBeUndefined()
       expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)

@@ -98,13 +98,16 @@ describe('createPluginFrameMessageHandler', () => {
       payload: {
         protocol: 1,
         surface: 'editor',
-        // An iframe is offered no 1.1 methods, so it reports 1.0.
-        api: { major: 1, minor: 0 },
+        // An iframe is offered no user-gesture methods, but 1.2 gave every frame storage.
+        api: { major: 1, minor: 2 },
         theme: { colorScheme: 'dark', tokens: '--orca-background:#000' }
       }
     })
     expect(hello.payload.methods).toContain('notifications.show')
-    expect(hello.payload.methods).not.toContain('storage.get')
+    expect(hello.payload.methods).toContain('storage.get')
+    expect(hello.payload.methods).toContain('plugin.request')
+    expect(hello.payload.methods).not.toContain('terminal.sendText')
+    expect(hello.payload.methods).not.toContain('files.saveAs')
     expect(onReady).toHaveBeenCalledOnce()
   })
 
@@ -433,7 +436,22 @@ describe('createPluginFrameEnvelopeHandler (guest transport)', () => {
     expect(() => pluginWebviewFrameWindow(webview).postMessage({}, '*')).not.toThrow()
   })
 
-  it('never runs user-gesture methods for a srcdoc iframe, even with window activation', async () => {
+  it('routes declarative trees on their own larger lane and errors to the panel', () => {
+    const onRender = vi.fn()
+    const onError = vi.fn()
+    const { handle, replies } = guest({ declarative: { onRender, onError } })
+    const tree = { type: 'Text', props: {}, children: ['x'.repeat(200 * 1024)] }
+    handle({ orca: 1, kind: 'evt', event: 'ui.render', payload: { revision: 1, tree } }, ctx)
+    handle(
+      { orca: 1, kind: 'evt', event: 'ui.error', payload: { revision: 1, message: 'boom' } },
+      ctx
+    )
+    expect(onRender).toHaveBeenCalledWith({ revision: 1, tree })
+    expect(onError).toHaveBeenCalledWith({ revision: 1, message: 'boom' })
+    expect(replies()).toEqual([])
+  })
+
+  it('never runs user-gesture methods for a srcdoc iframe, even with host activation', async () => {
     const frame = createFakeFrameWindow()
     const { handler, callHostMethod } = createHandler(frame)
     Object.defineProperty(navigator, 'userActivation', {
@@ -469,6 +487,19 @@ describe('createPluginFrameEnvelopeHandler (guest transport)', () => {
     }
     expect(methods(iframe.replies())).not.toContain('shell.openExternal')
     expect(methods(guestHello.replies())).toContain('shell.openExternal')
+  })
+
+  it("spends a one-shot host press grant for a components panel's guest", async () => {
+    let grants = 1
+    const { handle, callHostMethod } = guest({
+      declarative: { onRender: vi.fn(), onError: vi.fn() },
+      consumeHostActivation: () => grants-- > 0
+    })
+    const open = req(1, 'shell.openExternal', { url: 'https://example.com' })
+    handle(open, { userActivation: false, transport: 'guest' })
+    handle({ ...open, id: 2 }, { userActivation: false, transport: 'guest' })
+    await flush()
+    expect(callHostMethod).toHaveBeenCalledTimes(1)
   })
 })
 

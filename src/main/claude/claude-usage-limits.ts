@@ -12,7 +12,7 @@ import {
   type AgentSessionUsageLimitWindow
 } from '../../shared/agent-session/failures/agent-session-usage-limit'
 import type { ClaudeOpenTurn } from './claude-open-turn'
-import { claudeRecord, claudeText } from './claude-structured-item-translation'
+import { claudeRecord, claudeText } from './structured/journal/claude-structured-item-translation'
 
 const CLAUDE_LIMIT_WINDOWS: Record<string, AgentSessionUsageLimitWindow> = {
   five_hour: 'session',

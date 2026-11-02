@@ -1,5 +1,5 @@
 import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
-import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
+import type { AgentLaunchPreferences } from '../../shared/agent-session/agent-session-host-authority'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
 import type {
   AutomationWorkspaceProvenance,
@@ -103,6 +103,7 @@ export type RuntimeManagedWorktreeCreateArgs = {
     envParentWorkspace?: string
     parentWorktree?: string
     cwdParentWorktree?: string
+    cwdParentAmbiguous?: true
     noParent?: boolean
     callerTerminalHandle?: string
     comment?: string

@@ -1,11 +1,11 @@
 import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   adapterAtPublishFor,
   fakeClaude,
   PROVIDER_SESSION_ID
-} from '../../claude/claude-structured-session-test-support'
+} from '../../claude/structured/claude-structured-session-test-support'
 import { claudeAndCodexAgents } from './structured-agent-session-adapter-router-test-support'
 import { StructuredAgentSessionAdapterRouter } from './structured-agent-session-adapter-router'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'

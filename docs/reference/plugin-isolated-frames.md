@@ -1,6 +1,7 @@
 # Isolated plugin frames
 
-Design contract for running plugin UI in isolated guests.
+Design contract for running plugin UI in isolated guests. Components (TSX) panels run in the same
+guests; see [plugin-declarative-ui.md](./plugin-declarative-ui.md).
 
 ## Why
 
@@ -70,11 +71,11 @@ Every plugin frame on desktop is an Electron `<webview>`:
 - **Input**: Orca's window shortcuts are forwarded from a focused guest through the browser tab path, minus
   browser-page chords (address bar, find, reload, history, page zoom); a custom editor's save chord still
   rides `editor.keydown`, so it fires once. Editable fields get Orca's Cut/Copy/Paste context menu.
-- **Switch (default off)**: isolated guests ship off, so merging changes nothing; a separate one-line PR
-  flips the constant `PLUGIN_ISOLATED_FRAMES_DEFAULT` in `src/main/plugins/panels/plugin-frame-isolation.ts`.
-  `ORCA_PLUGIN_ISOLATED_FRAMES=1` (dev, e2e) turns guests on and `=0` off, overriding the
+- **Switch (default on)**: rolling back is the constant `PLUGIN_ISOLATED_FRAMES_DEFAULT` in
+  `src/main/plugins/panels/plugin-frame-isolation.ts`. `ORCA_PLUGIN_ISOLATED_FRAMES=0` turns guests off
+  for one machine and `=1` on, overriding the
   `experimentalPluginIsolatedFrames` setting; all are main-process only. Off, frames use the `srcdoc` iframe
-  (never offered `orca.shell`/`orca.files`).
+  (never offered `orca.shell`/`orca.files`), and components panels say they are not available.
 - **Compatibility**: existing single-file plugins load unchanged. Browser clients (serve/web) have no
   `<webview>` and keep the `srcdoc` iframe; multi-file assets need the desktop app. With isolation on, a
   desktop guest that cannot be set up fails closed (the panel shows its load error and its session is
@@ -84,6 +85,20 @@ Every plugin frame on desktop is an Electron `<webview>`:
   from `stat`), up to 32 MiB a file; a session holds at most 32 requests at once (`503` past that).
   Documents, scripts, styles, JSON, SVG and WASM are read whole (16 MiB cap). A declared HTML entry is a
   document whatever its extension. Path segments ending in a dot or space are refused.
+- **Source modules**: `.ts`, `.tsx`, `.mts` and `.jsx` are read whole (1 MiB cap), digest-checked like
+  any script, then transpiled with sucrase on one shared, lazily started worker thread (types stripped, automatic JSX for `orca`, lines
+  kept, inline source map) and served as `text/javascript`. Relative imports are rewritten to exact
+  files from the verified file list (the disk, for a dev tree); `orca` and URLs are left to the import
+  map and CSP; any other bare import is served as a module that throws, naming the file and import.
+  Results are cached in main by sha256 of the source, transpiler version and options. A transform
+  still running after 2 s is cut short: the worker is terminated and the next file starts a fresh
+  one. A file that fails or times out is served as a throwing module, and that result is cached too
+  (`plugin-frame-module-transform.ts`, `plugin-source-transpile-client.ts`). A declared `.ts`/`.tsx` frame entry is served as a generated
+  page whose only script is that file with `?orca-module`, which gets the JavaScript.
+- **Diagnostics**: each guest's `console-message` errors and warnings (uncaught exceptions included) go to
+  its plugin's log buffer with URLs reduced to plugin-relative paths, capped at 20 lines per plugin per
+  10 s and 2000 characters a line (`plugin-frame-guest-diagnostics.ts`). `plugins.devInspect` (CLI
+  `orca plugin dev inspect`) opens detached DevTools for live guests; headless hosts refuse it.
 - **Integrity**: a navigation re-hashes the plugin tree, at most every 2 s per tree; any other request
   (including `fetch` of an `.html` file) reuses a check from the last 10 s. The hash records each file's
   digest, and documents, scripts, styles, JSON, SVG and WASM are served only if their bytes still match
@@ -96,7 +111,9 @@ checks `navigator.userActivation` first; the frame host re-checks the activation
 message: only a guest's preload stamp counts. A srcdoc iframe shares the host window, whose activation any
 keystroke in Orca sets, so iframes (browser clients) are never offered these methods and get
 `not_permitted`. Main runs them only for calls from its own window over IPC, so a dialog or browser tab
-never opens on another machine.
+never opens on another machine. A components panel's hidden guest never has activation of its own; only a
+press on a stationary Orca-drawn control grants one call (see
+[User gestures](./plugin-declarative-ui.md#user-gestures)).
 
 - `orca.shell.openExternal(url)`: `http:`/`https:`/`mailto:` only, opened in the OS browser. Anything
   in the URL leaves the machine, so for an `http:`/`https:` host this plugin has not been allowed, Orca

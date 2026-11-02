@@ -1,18 +1,20 @@
 import { app, session as electronSession, type Session, type WebContents } from 'electron'
 import { existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createServer, type Server, type Socket } from 'node:net'
 import {
   PLUGIN_FRAME_SCHEME,
   pluginFrameKey,
   pluginFramePartition,
+  pluginDeclarativeHostUrl,
   pluginFrameUrl,
   readPluginFramePartitionKey
 } from '../../../shared/plugins/frames/plugin-frame-guest'
 import type { PluginFrameGuest } from '../../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginFrameSurface } from '../../../shared/plugins/frames/plugin-panel-shell'
 import type { ValidDiscoveredPlugin } from '../plugin-discovery'
-import { pluginDevRevision } from '../plugin-dev-revision'
+import { pluginFrameContentRevision } from '../plugin-dev-revision'
 import type { KeybindingOverrides } from '../../../shared/keybindings'
 import { createPluginFrameRequestHandler } from './plugin-frame-protocol'
 import { pluginFrameAttachKey } from './plugin-frame-request-policy'
@@ -22,6 +24,7 @@ import {
   installPluginFrameGuestPolicies
 } from './plugin-frame-guest-policies'
 import { setPluginFrameGuestHooks } from './plugin-frame-guest-registry'
+import { installPluginFrameGuestDiagnostics } from './plugin-frame-guest-diagnostics'
 import { currentPluginFrameThemeSnapshot } from './plugin-frame-theme-snapshot'
 
 /**
@@ -128,7 +131,8 @@ async function configureSession(frameKey: string): Promise<Session> {
         {
           findApprovedPluginByFrameKey,
           currentTheme: currentPluginFrameThemeSnapshot,
-          log: (pluginKey, line) => console.warn(`[plugins] ${pluginKey}: ${line}`)
+          log: (pluginKey, line) => console.warn(`[plugins] ${pluginKey}: ${line}`),
+          readDeclarativeRuntime
         },
         frameKey
       )
@@ -153,7 +157,12 @@ function ensureSession(frameKey: string): Promise<Session> {
   return pending
 }
 
-/** The URL a contribution's guest loads: its HTML entry. */
+// Why the app path: resources/ ships inside app.asar, and dev and e2e run from the checkout.
+function readDeclarativeRuntime(): Promise<Uint8Array> {
+  return readFile(join(app.getAppPath(), 'resources', 'plugins', 'declarative', 'orca-runtime.mjs'))
+}
+
+/** The URL a contribution's guest loads: its HTML entry, or Orca's host page for a module. */
 function contributionUrl(
   plugin: ValidDiscoveredPlugin,
   frameKey: string,
@@ -167,17 +176,17 @@ function contributionUrl(
     return editor ? pluginFrameUrl(frameKey, editor.entry) : null
   }
   const panel = plugin.manifest.contributes.panels.find((entry) => entry.id === contributionId)
-  return panel ? pluginFrameUrl(frameKey, panel.entry) : null
+  if (!panel) {
+    return null
+  }
+  return panel.ui === 'components'
+    ? pluginDeclarativeHostUrl(frameKey, panel.entry)
+    : pluginFrameUrl(frameKey, panel.entry)
 }
 
-/** Part of the guest URL, so an update or a dev edit (even asset-only) remounts the guest, and
- *  nothing else does. Dev trees change in place: the dev watcher counts their edits. */
-function contentRevision(plugin: ValidDiscoveredPlugin): string {
-  return plugin.contentHash ? plugin.contentHash.slice(0, 16) : pluginDevRevision(plugin.rootDir)
-}
-
+// Part of the guest URL, so an update or a dev edit remounts the guest, and nothing else does.
 function withRevision(url: string, plugin: ValidDiscoveredPlugin): string {
-  const revision = contentRevision(plugin)
+  const revision = pluginFrameContentRevision(plugin)
   return `${url}${url.includes('?') ? '&' : '?'}rev=${encodeURIComponent(revision)}`
 }
 
@@ -202,7 +211,11 @@ export async function preparePluginFrameGuest(
     console.warn(`[plugins] isolated frame session for ${pluginKey} is unavailable:`, error)
     return null
   }
-  return { partition: pluginFramePartition(frameKey), url }
+  return {
+    partition: pluginFramePartition(frameKey),
+    url,
+    ...(plugin.isDev ? { dev: true as const } : {})
+  }
 }
 
 function admitAttach(partition: string, src: string): boolean {
@@ -218,6 +231,10 @@ function attachGuest(guest: WebContents, host: WebContents): boolean {
     return false
   }
   installPluginFrameGuestPolicies(guest, frameKey, host, () => source?.getKeybindings?.())
+  const pluginKey = pluginKeyByFrameKey.get(frameKey)
+  if (pluginKey) {
+    installPluginFrameGuestDiagnostics(guest, frameKey, pluginKey)
+  }
   return true
 }
 

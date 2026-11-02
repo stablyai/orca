@@ -3,7 +3,7 @@
 import { renderHook } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/structured-agent-session-launch-options', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-options', () => ({
   getStructuredAgentSessionLaunchSelection: () => null
 }))
 

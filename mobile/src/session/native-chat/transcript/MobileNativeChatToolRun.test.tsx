@@ -3,7 +3,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalToolCallItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { MAX_TOOL_DETAIL_LENGTH } from '../../../../../src/shared/native-chat/tools/native-chat-tool-summary'
-import { projectStructuredItemToNativeChat } from '../../../../../src/shared/structured-agent-session-projection'
+import { projectStructuredItemToNativeChat } from '../../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type {
   NativeChatBlock,
   NativeChatMessage,

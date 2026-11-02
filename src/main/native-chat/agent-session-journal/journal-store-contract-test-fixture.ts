@@ -13,7 +13,7 @@ import {
   openTestJournalHostDatabase
 } from './journal-host-database-test-support'
 import type Database from '../../sqlite/sync-database'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function createFixture() {
   const IDENTITY: AgentSessionJournalIdentity = {

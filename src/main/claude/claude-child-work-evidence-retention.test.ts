@@ -6,8 +6,11 @@ import type { StructuredAgentSessionEventSink } from '../native-chat/agent-sessi
 import { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import { claudeChildOperation, drainClaudeChildWork } from './claude-child-work-evidence'
 import { ClaudePromptRegistry } from './claude-prompt-registry'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import { claudeToolResults, readClaudeMessageEnvelope } from './claude-structured-item-translation'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
+import {
+  claudeToolResults,
+  readClaudeMessageEnvelope
+} from './structured/journal/claude-structured-item-translation'
 
 function frame(content: unknown, parentToolUseId: string | null): Record<string, unknown> {
   return {

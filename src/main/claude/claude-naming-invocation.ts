@@ -1,17 +1,20 @@
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
-import { agentSessionPinnedLaunchDirectory } from '../runtime/agent-session-record-launch-directory'
+import { agentSessionPinnedLaunchDirectory } from '../runtime/agent-session/records/agent-session-record-launch-directory'
 import type { StructuredAgentLaunchSources } from '../runtime/structured-agent-launch-composition'
 import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
-import { claudeChildEnv, resolveClaudeChildEnvSources } from './claude-structured-child-env'
-import { claudeStructuredLaunchArgs } from './claude-structured-launch-args'
+import {
+  claudeChildEnv,
+  resolveClaudeChildEnvSources,
+  type ClaudeEnvDeps
+} from './structured/launch/claude-structured-child-env'
+import { claudeStructuredLaunchArgs } from './structured/launch/claude-structured-launch-args'
 import { claudeConfigDirEnvPatch, withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
 import { buildClaudeChildProcessEnv } from './claude-child-process-environment'
-import type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
+import type { ClaudeStructuredLaunch } from './structured/launch/claude-structured-launch-resolution'
 import { resolve } from 'node:path'
-import type { ClaudeEnvDeps } from './claude-structured-child-env'
 
 export type ClaudeNamingInputs = {
   command: string

@@ -3,19 +3,27 @@ import type {
   AgentJournalItemIdentity
 } from '../../agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
-import type { AgentSessionProviderContextBoundary } from '../../agent-session-provider-context'
+import type { AgentSessionProviderContextBoundary } from '../agent-session-provider-context'
 // Persist/republish plain JSON only. Append-only rows are upcast on read, never rewritten;
 // unreadable versions/kinds must refuse writes rather than be skipped or compacted away.
 
 import type { UnreadAgentSessionFailureFact } from '../failures/agent-session-failure'
 import type { AgentSessionFailureRowWords } from '../failures/agent-session-failure-words'
-import type { AgentSessionQuestionAnswer } from '../../agent-session-question-answer'
+import type { AgentSessionQuestionAnswer } from '../agent-session-question-answer'
 import type { AgentJournalTurnOutcome } from '../../agent-turn-outcome'
 import type { NativeChatToolMetadata } from '../../native-chat/tools/native-chat-tool-identity'
-import type { AgentSessionContextUsage } from '../../agent-session-context-usage'
+import type { AgentSessionContextUsage } from '../agent-session-context-usage'
 import type { NativeChatBlock, NativeChatRole } from '../../native-chat/native-chat-types'
-import type { AgentMessageSender, AgentMessageSource } from '../agent-session-message-source'
+import type { AgentMessageSource } from '../agent-session-message-source'
 import type { AgentSessionExecutionOptions } from '../options/agent-session-execution-options'
+import type {
+  AgentJournalAgentHandoffItem,
+  AgentJournalAgentStartItem
+} from './agent-journal-creation-facts'
+export type {
+  AgentJournalAgentHandoffItem,
+  AgentJournalAgentStartItem
+} from './agent-journal-creation-facts'
 
 /** Bump only alongside a read-time upcaster in `journal-row-schema.ts`. */
 /** v3 introduced turn items; other rows stay v2. The first v3 row stops older hosts writing (read-only on released builds, failed load here) rather than allowing truncation. */
@@ -306,16 +314,9 @@ export type AgentJournalStatusItem =
  *  absent whenever nothing told the host one. */
 export type AgentJournalTurnItem = { kind: 'turn' } & AgentJournalTurnLifecycle
 
-/** Display-only creation fact; survives removal of the orchestration Task and Dispatch. */
-export type AgentJournalAgentStartItem = {
-  kind: 'agent-start'
-  dispatchId: string
-  worker: AgentMessageSender
-  task: string
-}
-
 export type AgentJournalItemBody =
   | AgentJournalAgentStartItem
+  | AgentJournalAgentHandoffItem
   | AgentJournalMessageItem
   | AgentJournalToolCallItem
   | AgentJournalDiffItem

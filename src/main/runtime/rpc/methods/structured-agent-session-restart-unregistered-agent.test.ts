@@ -6,11 +6,11 @@ import { afterEach, expect, it, vi } from 'vitest'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../shared/agent-session-record.test-fixture'
-import type { AgentSessionRecord } from '../../../../shared/agent-session-record'
-import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session-provider-handle'
-import type { AgentSessionResumeMarker } from '../../../../shared/agent-session-resume-marker'
-import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/desktop-renderer-runtime-capabilities'
 import {
   closeTestJournalHostDatabase,
@@ -22,11 +22,11 @@ import { StructuredAgentSessionAdapterRouter } from '../../../native-chat/agent-
 import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { AgentSessionRecoveryCapsule } from '../../agent-session-recovery-capsule'
+import { AgentSessionRecoveryCapsule } from '../../agent-session/records/agent-session-recovery-capsule'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
-} from '../../agent-session-record-store-test-harness'
+} from '../../agent-session/records/agent-session-record-store-test-harness'
 import { call, clearStructuredHostStub } from './structured-agent-session-rpc.test-fixture'
 
 const NOW = 1_800_000_000_000

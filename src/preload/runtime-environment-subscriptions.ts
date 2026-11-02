@@ -1,3 +1,9 @@
+import { isCrewSetupFact } from '../shared/runtime-environment-subscription-setup'
+import type {
+  CrewSubscriptionAttemptArgs,
+  CrewSubscriptionAttemptCallbacks,
+  CrewSubscriptionSetupResult
+} from '../shared/runtime-environment-subscription-setup'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 
 type RuntimeEnvironmentSubscribeArgs = {
@@ -15,6 +21,7 @@ type RuntimeEnvironmentSubscriptionCallbacks = {
   onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
   onError?: (error: { code: string; message: string }) => void
   onClose?: () => void
+  crewAttempt?: true
 }
 
 export type RuntimeEnvironmentSubscriptionHandle = {
@@ -159,4 +166,89 @@ export async function subscribeRuntimeEnvironmentFromPreload(
       ipc.send('runtimeEnvironments:subscriptionBinary', { subscriptionId, bytes })
     }
   }
+}
+
+/** Cancel only the opt-in local registration; ordinary finite subscribers keep their contract. */
+export function cancelRuntimeEnvironmentSubscriptionFromPreload(
+  ipc: RuntimeEnvironmentSubscriptionIpc,
+  subscriptionId: string
+): Promise<void> {
+  const dispatcher = subscriptionDispatchers.get(ipc)
+  if (dispatcher?.callbacks.get(subscriptionId)?.crewAttempt) {
+    releaseSubscription(ipc, dispatcher, subscriptionId)
+  }
+  return ipc.invoke('runtimeEnvironments:unsubscribe', { subscriptionId }).then(() => undefined)
+}
+
+export async function subscribeCrewAttemptFromPreload(
+  ipc: RuntimeEnvironmentSubscriptionIpc,
+  args: CrewSubscriptionAttemptArgs,
+  callbacks: CrewSubscriptionAttemptCallbacks
+): Promise<CrewSubscriptionSetupResult> {
+  const { subscriptionId } = args
+  const dispatcher = getOrCreateDispatcher(ipc)
+  if (dispatcher.callbacks.has(subscriptionId)) {
+    return {
+      subscriptionId,
+      ok: false,
+      failure: {
+        message: 'Runtime environment subscription id already exists',
+        fact: { kind: 'input' }
+      }
+    }
+  }
+  const registration: RuntimeEnvironmentSubscriptionCallbacks = { ...callbacks, crewAttempt: true }
+  dispatcher.callbacks.set(subscriptionId, registration)
+  const release = (): void => {
+    if (dispatcher.callbacks.get(subscriptionId) === registration) {
+      releaseSubscription(ipc, dispatcher, subscriptionId)
+    }
+  }
+  try {
+    const result: unknown = await ipc.invoke('runtimeEnvironments:subscribe', {
+      ...args,
+      setupResult: 'crew'
+    })
+    if (!isCrewSubscriptionSetupResult(result) || result.subscriptionId !== subscriptionId) {
+      throw new Error('Invalid crew subscription setup result')
+    }
+    if (!result.ok) {
+      release()
+    }
+    return result
+  } catch (error) {
+    release()
+    throw error
+  }
+}
+
+function isCrewSubscriptionSetupResult(value: unknown): value is CrewSubscriptionSetupResult {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !('subscriptionId' in value) ||
+    typeof value.subscriptionId !== 'string' ||
+    !('ok' in value)
+  ) {
+    return false
+  }
+  if (value.ok === true) {
+    return true
+  }
+  if (
+    value.ok !== false ||
+    !('failure' in value) ||
+    typeof value.failure !== 'object' ||
+    value.failure === null
+  ) {
+    return false
+  }
+  const failure = value.failure
+  return (
+    'message' in failure &&
+    typeof failure.message === 'string' &&
+    (!('code' in failure) || typeof failure.code === 'string') &&
+    'fact' in failure &&
+    isCrewSetupFact(failure.fact)
+  )
 }

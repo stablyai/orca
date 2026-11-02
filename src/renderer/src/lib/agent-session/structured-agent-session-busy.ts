@@ -1,12 +1,12 @@
 import { sharedPromiseSettlementWaiters } from '../../../../shared/promise-settlement-waiters'
 import { useAppStore } from '@/store'
 import type { Tab } from '../../../../shared/tab-types'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { agentChildWorkLiveness } from '../../../../shared/agent-status-child-work-liveness'
 import type {
   AgentSessionStatusSummary,
   AgentSessionHistoryResult
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import { getStructuredAgentSessionLaunchLifecycle } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'

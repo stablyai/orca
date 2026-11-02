@@ -7,7 +7,7 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { latestStructuredAgentSessionRequest } from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
-import { projectStructuredAgentSessionStatusSummary } from '../../../shared/structured-agent-session-projection'
+import { projectStructuredAgentSessionStatusSummary } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { projectTurnItemHistory } from '../../runtime/rpc/methods/structured-agent-session-turn-item-capability'
 import { structuredAgentSessionWorkingAtStop } from './structured-agent-session-working-at-teardown'
 import {

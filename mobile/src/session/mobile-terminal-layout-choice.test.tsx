@@ -28,7 +28,7 @@ vi.mock('lucide-react-native', () => ({
   Edit3: 'Icon',
   Trash2: 'Icon'
 }))
-vi.mock('../components/BottomDrawer', () => ({
+vi.mock('../components/bottom-drawer/BottomDrawer', () => ({
   BottomDrawer: ({ visible, children }: { visible: boolean; children: unknown }) =>
     visible ? children : null
 }))
@@ -45,7 +45,7 @@ vi.mock('expo-router', async () => {
 vi.mock('../platform/keyboard-persisting-taps', () => ({ useKeyboardPersistingTaps: () => null }))
 vi.mock('../navigation/workspace-execution-host', () => ({ useWorkspaceExecutionHost: () => ({}) }))
 vi.mock('../browser/MobileBrowserSurface', () => ({ MobileBrowserSurface: () => null }))
-vi.mock('./MobileNativeChatOverlay', () => ({ MobileNativeChatOverlay: () => null }))
+vi.mock('./native-chat/MobileNativeChatOverlay', () => ({ MobileNativeChatOverlay: () => null }))
 vi.mock('./MobileSessionFileReader', () => ({ FileReader: () => null }))
 vi.mock('./MobileSessionMarkdownReader', () => ({ MarkdownReader: () => null }))
 vi.mock('../terminal/TerminalWebView', () => ({ TerminalWebView: 'TerminalWebView' }))

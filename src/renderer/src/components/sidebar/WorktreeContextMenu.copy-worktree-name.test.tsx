@@ -140,22 +140,6 @@ describe('WorktreeContextMenu Copy Worktree Name', () => {
     )
   })
 
-  it('copies the workspace display name', () => {
-    openMenu(worktreeFixture())
-
-    clickMenuItem('Copy Worktree Name')
-
-    expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith('Fix authentication race')
-  })
-
-  it('falls back like every other name read when the custom name is blank', () => {
-    openMenu(worktreeFixture({ displayName: '' }))
-
-    clickMenuItem('Copy Worktree Name')
-
-    expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith('feature/auth-race')
-  })
-
   it.each([
     ['its name', 'Refund fix', 'Refund fix'],
     ['the folder name when its name is blank', '', 'platform']

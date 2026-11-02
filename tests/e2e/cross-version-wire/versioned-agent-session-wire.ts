@@ -1,5 +1,5 @@
-import type * as ClientReducer from '../../../src/shared/structured-agent-session-reducer'
-import type * as ClientProjection from '../../../src/shared/structured-agent-session-projection'
+import type * as ClientReducer from '../../../src/shared/agent-session/structured-agent-session-reducer'
+import type * as ClientProjection from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type * as ClientSchemas from '../../../src/shared/agent-session/journal/agent-session-journal-schemas'
 import type { sendPlan } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-mutation-plans'
 import {
@@ -177,8 +177,8 @@ async function loadWorkingTreeBuild(): Promise<AgentSessionWireBuild> {
     methodNames: registeredMethodNames(methods),
     clientProjection: async () => {
       const [reducer, projection, schemas] = await Promise.all([
-        import('../../../src/shared/structured-agent-session-reducer'),
-        import('../../../src/shared/structured-agent-session-projection'),
+        import('../../../src/shared/agent-session/structured-agent-session-reducer'),
+        import('../../../src/shared/agent-session/view/structured-agent-session-projection'),
         import('../../../src/shared/agent-session/journal/agent-session-journal-schemas')
       ])
       return { ...reducer, ...projection, ...schemas }

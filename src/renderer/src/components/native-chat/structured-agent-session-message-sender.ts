@@ -2,7 +2,7 @@
 
 import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredAgentSessionFirstMessage } from '../../../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionFirstMessage } from '../../../../shared/agent-session/structured-agent-session-create'
 import {
   agentSessionUnconfirmedSendParts,
   agentSessionWriteNotDoneParts

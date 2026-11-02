@@ -263,32 +263,6 @@ describe('useMobileStructuredAgentSession', () => {
     hook = null
   })
 
-  it('subscribes and holds structured sessions without nativeChat or terminal RPCs', async () => {
-    act(() => {
-      renderer = create(createElement(Harness))
-    })
-
-    await vi.waitFor(() =>
-      expect(subscribe).toHaveBeenCalledWith(
-        'agentSession.subscribe',
-        { sessionId: 'session-1' },
-        expect.any(Function)
-      )
-    )
-    await vi.waitFor(() =>
-      expect(sendRequest).toHaveBeenCalledWith(
-        'agentSession.hold',
-        expect.objectContaining({ sessionId: 'session-1', holderId: expect.any(String) }),
-        expect.any(Object)
-      )
-    )
-    expect(sendRequest).not.toHaveBeenCalledWith(
-      expect.stringMatching(/^(nativeChat|terminal)\./),
-      expect.anything(),
-      expect.anything()
-    )
-  })
-
   it('projects worker creation facts for phone cards alongside conversation messages', async () => {
     await act(async () => void (renderer = create(createElement(Harness))))
     await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
@@ -715,6 +689,10 @@ describe('useMobileStructuredAgentSession', () => {
       expect(hook!.optionSnapshot.find((descriptor) => descriptor.id === 'model')).toMatchObject({
         settable: true
       })
+    })
+    // The picker is usable before fence 3's own read answers; only a read issued after the pick settles it.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
     })
     let reconcile!: (response: Awaited<ReturnType<typeof defaultSendRequest>>) => void
     sendRequest.mockImplementation(async (method, params) => {

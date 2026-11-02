@@ -5,9 +5,11 @@ import {
   PLUGIN_FRAME_KEY_CHANNEL
 } from '../../../../shared/plugins/frames/plugin-frame-guest'
 import { pluginEvent } from '../../../../shared/plugins/frames/plugin-protocol'
+import { pluginPanelPushSchema } from '../../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 import {
   createPluginFrameEnvelopeHandler,
   createPluginFrameMessageHandler,
+  type PluginFrameDeclarativeChannel,
   type PluginFrameEditorChannel
 } from './plugin-frame-host'
 import {
@@ -26,11 +28,25 @@ export function usePluginFrameHost(options: {
   frameKey: string | null
   sessionToken: string | null
   editor?: PluginFrameEditorChannel
+  declarative?: PluginFrameDeclarativeChannel
+  /** Must be stable: a one-shot grant from presses on Orca's own controls. */
+  consumeHostActivation?: () => boolean
+  /** Must be stable: counts the panel's host calls in flight. */
+  trackHostCall?: () => () => void
   onUnresponsive: () => void
   /** The guest's WebContents went away under an unchanged document (closed, crashed). */
   onGuestGone?: () => void
 }): { onFrameLoad: () => void } {
-  const { surface, frameRef, frameKey, sessionToken, editor } = options
+  const {
+    surface,
+    frameRef,
+    frameKey,
+    sessionToken,
+    editor,
+    declarative,
+    consumeHostActivation,
+    trackHostCall
+  } = options
   const [loadedFrameKey, setLoadedFrameKey] = useState<string | null>(null)
   const onUnresponsiveRef = useRef(options.onUnresponsive)
   const onGuestGoneRef = useRef(options.onGuestGone)
@@ -67,7 +83,10 @@ export function usePluginFrameHost(options: {
       getSessionToken: () => sessionTokenRef.current,
       isActive: () => active,
       onPong: (pingId: number) => watchdog.handlePong(pingId),
-      editor
+      editor,
+      declarative,
+      consumeHostActivation,
+      trackHostCall
     }
     if (element instanceof HTMLIFrameElement) {
       const handler = createPluginFrameMessageHandler(hostOptions)
@@ -112,7 +131,31 @@ export function usePluginFrameHost(options: {
       element.removeEventListener('destroyed', onGone)
       element.removeEventListener('render-process-gone', onGone)
     }
-  }, [editor, frameKey, frameRef, getFrameWindow, surface, watchdog])
+  }, [
+    consumeHostActivation,
+    declarative,
+    editor,
+    frameKey,
+    frameRef,
+    getFrameWindow,
+    surface,
+    trackHostCall,
+    watchdog
+  ])
+
+  // Worker posts, subscribed events and data changes for this panel, while its document lives.
+  useEffect(() => {
+    const subscribe = window.api?.plugins?.subscribePanelPush
+    if (!frameKey || !sessionToken || !subscribe) {
+      return
+    }
+    return subscribe(sessionToken, (raw) => {
+      const push = pluginPanelPushSchema.safeParse(raw)
+      if (push.success) {
+        getFrameWindow()?.postMessage(pluginEvent(FRAME_EVENTS.push, push.data), '*')
+      }
+    })
+  }, [frameKey, getFrameWindow, sessionToken])
 
   useEffect(() => {
     if (!frameKey || loadedFrameKey !== frameKey) {

@@ -3,7 +3,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journa
 import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import { structuredAgentSessionCommandTurn } from './structured-agent-session-command-turn'
+import { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import {
   attach,
   CALLER,

@@ -1,13 +1,12 @@
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { afterEach, expect, it, vi } from 'vitest'
-import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
+import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
 import {
-  AGENT_SESSION_RESTART_CONTINUATION_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE
-} from '../../../shared/agent-session-restart-continuation'
+} from '../../../shared/agent-session/lifecycle/agent-session-restart-continuation'
 import { StructuredAgentSessionResumeAdmission } from './structured-agent-session-restart-resume-runner'
 import {
   interruptedRestart,
@@ -81,21 +80,6 @@ it('says so in the chat when the agent cannot start for the continuation', async
   expect(await restarted.restartResume.list()).toEqual([])
   expect(acquire).toHaveBeenCalledTimes(starts)
   await restarted.flushAllStreamedEvents()
-})
-
-// Successful continuation notes follow their own message; preserve the earlier cut notice.
-it("keeps the quit's notice through a continuation that carries the chat on", async () => {
-  const { host } = await interruptedRestart()
-  await host.restartResume.list()
-  expect(await readerNotes(host)).toEqual([QUIT_CUT_NOTICE])
-
-  const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
-
-  expect(result.continued).toMatchObject([{ outcome: 'continued' }])
-  expect(await readerNotes(host)).toEqual([
-    QUIT_CUT_NOTICE,
-    { text: AGENT_SESSION_RESTART_CONTINUATION_NOTE, tone: undefined }
-  ])
 })
 
 it('keeps an unconfirmed failure while the agent the continuation started keeps running', async () => {

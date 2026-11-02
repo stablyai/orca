@@ -15,7 +15,7 @@ import { scaleDirectory, scaleJournal, scaleRecord } from './agent-session-scale
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
-} from './agent-session-record-store-test-harness'
+} from './agent-session/records/agent-session-record-store-test-harness'
 import { countStatusCutWork } from './agent-session-status-cut-work.test-support'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))

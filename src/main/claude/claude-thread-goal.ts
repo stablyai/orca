@@ -5,7 +5,7 @@ import type {
   AgentJournalThreadGoal
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
-import { claudeRecord, claudeText } from './claude-structured-item-translation'
+import { claudeRecord, claudeText } from './structured/journal/claude-structured-item-translation'
 import { isRootClaudeFrame } from './claude-turn-opening'
 import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
 

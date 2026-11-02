@@ -39,6 +39,7 @@ import {
 } from '../android/android-stream-session-starter'
 import { AndroidStreamController } from '../android/android-stream-controller'
 import { scrcpyVideoRegistry } from '../scrcpy-video-registry'
+import { ANDROID_AVD_BOOT_TIMEOUT_MS } from '../../../shared/emulator-attach-timeouts'
 import type { EmulatorGesturePoint } from '../emulator-gesture-sender'
 
 export type AndroidEmulatorBackendOptions = {
@@ -53,7 +54,6 @@ export type AndroidEmulatorBackendOptions = {
   streamMaxSize?: number
 }
 
-const DEFAULT_BOOT_TIMEOUT_MS = 180_000
 const DEFAULT_POLL_INTERVAL_MS = 2_000
 
 export class AndroidEmulatorBackend implements EmulatorBackend {
@@ -77,11 +77,13 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
   private readonly streamMaxSize: number
   private readonly streams: AndroidStreamController
   private readonly input: AndroidDeviceInput
+  // A second launch of a booting AVD exits on its lock, so concurrent attaches share one boot.
+  private readonly bootsInFlight = new Map<string, Promise<string>>()
 
   constructor(options: AndroidEmulatorBackendOptions = {}) {
     this.runner = options.runner ?? execFileAndroidCommandRunner
     this.sdkState = new AndroidSdkState(options.sdk !== undefined, options.sdk ?? null)
-    this.bootTimeoutMs = options.bootTimeoutMs ?? DEFAULT_BOOT_TIMEOUT_MS
+    this.bootTimeoutMs = options.bootTimeoutMs ?? ANDROID_AVD_BOOT_TIMEOUT_MS
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS
     this.sleep = options.sleep ?? defaultSleep
     this.ensureJar = options.ensureJar ?? ensureScrcpyServerJar
@@ -111,7 +113,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     if (!sdk) {
       return { available: false, devices: [], ...emulatorCodedMessage('androidSdkMissing') }
     }
-    const sdkPath = sdk.sdkRoot
+    const sdkPath = sdk.sdkRoot ?? sdk.adb
     let devices: EmulatorDevice[] = []
     try {
       devices = await this.listDevices()
@@ -277,11 +279,17 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
   }
 
   async ensureBooted(deviceOrName: string): Promise<string> {
-    return bootAndroidDevice(this.runner, this.requireSdk(), deviceOrName, {
+    const inFlight = this.bootsInFlight.get(deviceOrName)
+    if (inFlight) {
+      return inFlight
+    }
+    const boot = bootAndroidDevice(this.runner, this.requireSdk(), deviceOrName, {
       bootTimeoutMs: this.bootTimeoutMs,
       pollIntervalMs: this.pollIntervalMs,
       sleep: this.sleep
-    })
+    }).finally(() => this.bootsInFlight.delete(deviceOrName))
+    this.bootsInFlight.set(deviceOrName, boot)
+    return boot
   }
 
   private requireSdk(): AndroidSdkPaths {

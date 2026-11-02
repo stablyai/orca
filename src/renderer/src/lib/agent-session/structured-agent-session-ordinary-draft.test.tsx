@@ -20,8 +20,8 @@ import {
   getStructuredLaunchStateBySessionId,
   hasStructuredAgentSessionLaunchCancellationTombstone
 } from './launch/structured-agent-session-launch-registry'
-import { hasStagedStructuredLaunchPrompt } from '../structured-agent-session-launch-prompt'
-import { wasStructuredAgentLaunchClosedByLocalCancel } from '../structured-agent-session-local-launch-cancel'
+import { hasStagedStructuredLaunchPrompt } from './launch/structured-agent-session-launch-prompt'
+import { wasStructuredAgentLaunchClosedByLocalCancel } from './launch/structured-agent-session-local-launch-cancel'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
   clearNativeChatComposerDraftsForTests,
@@ -39,8 +39,8 @@ import {
 } from '@/components/native-chat/native-chat-pending-attachment-cache'
 import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
 import { useNativeChatDraft } from '@/components/native-chat/use-native-chat-draft'
-import { openStructuredAgentSessionProvisionalTab } from '../structured-agent-session-launch-surface'
-import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
+import { openStructuredAgentSessionProvisionalTab } from './launch/structured-agent-session-launch-surface'
+import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   handBackStructuredAgentSessionMessage,
   returnMessageToComposer

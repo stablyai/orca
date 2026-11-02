@@ -1,7 +1,7 @@
 // OpenCode 1.x models --verbose emits each provider/model ID followed by indented JSON.
 
 import { z } from 'zod'
-import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
+import type { AgentSessionModelOption } from '../../shared/agent-session/agent-session-wire'
 import { assertJsonTextStructureWithinLimits } from '../../shared/json-text-structure-limit'
 
 export const OPENCODE_MODEL_LISTING_ARGS = ['models', '--verbose'] as const
@@ -27,19 +27,22 @@ function modelOption(id: string, metadata: unknown): AgentSessionModelOption {
   const name = meta.success ? meta.data.name : undefined
   const variants = meta.success ? Object.keys(meta.data.variants ?? {}) : []
   const providerId = id.slice(0, id.indexOf('/'))
+  // This parser serves only OpenCode < 2.0, whose ACP session runs a listed default variant, else
+  // the first listed one; the listing keeps the runtime's variant order.
+  const runsVariant = variants.includes(DEFAULT_VARIANT) ? DEFAULT_VARIANT : variants[0]
   return {
     id,
     label: name ? `${providerId}/${name}` : id,
     // Listing proves availability, not the configured default.
     isDefault: false,
-    declaredDefaultEffort: variants.includes(DEFAULT_VARIANT) ? DEFAULT_VARIANT : null,
+    declaredDefaultEffort: runsVariant ?? null,
     ...(variants.length > 0
       ? {
           efforts: [...new Set([...variants, DEFAULT_VARIANT])].map((value) => ({
             value,
             label: variantLabel(value)
           })),
-          defaultEffort: variants.includes(DEFAULT_VARIANT) ? DEFAULT_VARIANT : variants[0]
+          defaultEffort: runsVariant
         }
       : { efforts: [] })
   }

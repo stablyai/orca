@@ -10,6 +10,7 @@ function createServices(storageSet: PluginHostServices['storage']['set']): Plugi
     resolveActiveWorktreeContext: vi.fn().mockResolvedValue(null),
     listWorktreeTerminals: vi.fn().mockResolvedValue([]),
     sendTerminalText: vi.fn().mockResolvedValue({ accepted: true }),
+    listAgentStatuses: () => [],
     dispatchPluginNotification: vi.fn().mockResolvedValue({ delivered: true }),
     storage: {
       get: vi.fn(),
@@ -190,9 +191,16 @@ describe('host API surfaces and strict params', () => {
     })
 
   it('lets each surface call only the methods that list it', async () => {
-    await expect(call('storage.keys', {}, 'editor')).resolves.toMatchObject({
+    await expect(
+      call('terminal.sendText', { terminalId: 't', text: 'x' }, 'editor')
+    ).resolves.toMatchObject({
       ok: false,
       code: 'not_permitted'
+    })
+    // Panels and editors share the plugin's own storage, behind the same capability.
+    await expect(call('storage.keys', {}, 'editor')).resolves.toEqual({
+      ok: true,
+      value: { keys: [] }
     })
     await expect(call('storage.keys', {}, 'worker')).resolves.toEqual({
       ok: true,
@@ -321,7 +329,7 @@ describe('executePluginHostCall frame desktop methods', () => {
   const audit = () => ({ record: vi.fn().mockResolvedValue(undefined) })
 
   it('need no capability but still consent, and stay off workers', async () => {
-    const desktop = { openExternal: vi.fn().mockResolvedValue(true), saveFile: vi.fn() }
+    const desktop = { openExternal: vi.fn().mockResolvedValue({ opened: true }), saveFile: vi.fn() }
     const services = { ...createServices(vi.fn()), desktop }
     const call = (overrides: Partial<Parameters<typeof executePluginHostCall>[0]>) =>
       executePluginHostCall({

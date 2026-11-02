@@ -11,7 +11,7 @@ import {
 } from './structured-agent-session-draft-position.test-fixture'
 import * as draftCache from '@/components/native-chat/native-chat-draft-cache'
 import * as draftMemory from '@/components/native-chat/native-chat-composer-draft-memory'
-import { seedStructuredAgentLaunchDraft } from '../structured-agent-session-launch-draft'
+import { seedStructuredAgentLaunchDraft } from './launch/structured-agent-session-launch-draft'
 import { publishedLayoutsOf } from '@/runtime/main-loaded-layout-frames.test-fixture'
 import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
@@ -33,7 +33,7 @@ import {
 } from '@/components/native-chat/native-chat-composer-draft-store'
 import { setNativeChatComposerDraftStorageForTests } from '@/components/native-chat/native-chat-composer-draft-storage'
 import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
-import { openStructuredAgentSessionProvisionalTab } from '../structured-agent-session-launch-surface'
+import { openStructuredAgentSessionProvisionalTab } from './launch/structured-agent-session-launch-surface'
 
 it
   .runIf(ORCA_LAYOUT_OWNER_IS_MAIN)

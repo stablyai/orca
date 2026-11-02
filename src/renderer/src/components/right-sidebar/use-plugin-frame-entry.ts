@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PluginFrameGuest } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import { currentPluginFrameTheme } from './plugin-panel-design-token-css'
+import { notePluginFrameIsolation } from '@/store/plugin-frame-isolation'
 
 export type PluginFrameEntryState =
   | { status: 'loading' }
@@ -12,6 +13,7 @@ export type PluginFrameEntryState =
       sessionToken: string | null
       revision: number
       guest?: PluginFrameGuest
+      ui?: 'components'
     }
 
 /**
@@ -71,6 +73,7 @@ export function usePluginFrameEntry(
             fail()
             return
           }
+          notePluginFrameIsolation(result.guest !== undefined)
           // Why the guest URL too: it is the document a guest loads, so a new one must remount.
           const identity = `${result.guest?.url ?? ''}\0${result.html}`
           const changed = identity !== currentHtml
@@ -83,7 +86,8 @@ export function usePluginFrameEntry(
             html: result.html,
             sessionToken: result.sessionToken,
             revision,
-            ...(result.guest ? { guest: result.guest } : {})
+            ...(result.guest ? { guest: result.guest } : {}),
+            ...(result.ui === 'components' ? { ui: 'components' as const } : {})
           }
           // Why: a session rotation must not revive a frame the watchdog suspended.
           setEntry((previous) =>

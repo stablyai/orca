@@ -47,6 +47,7 @@ import {
   OrcadPeerDesktopsParamsSchema
 } from '../orcad-peer-desktops-contract'
 import { OrcadTerminalCensusParamsSchema } from '../orcad-terminal-census'
+import { CrewSubscribeParams } from '../orchestration-crew'
 import {
   AccountsUnsubscribeParams,
   AddClaudeFromConfigDirParams,
@@ -317,6 +318,7 @@ import {
   ReviewThread
 } from './github-pull-request-params'
 import {
+  MarkPrDraft,
   MarkPrReadyForReview,
   MergePr,
   PRReviewComment,
@@ -334,6 +336,7 @@ import {
   RateLimit,
   WorkItem,
   WorkItemByOwnerRepo,
+  WorkItemDetails,
   WorkItemsCount,
   WorkItemsList
 } from './github-repo-work-item-params'
@@ -355,7 +358,7 @@ import {
   UpdateMrReviewers,
   UpdateMrState,
   WorkItemByPath,
-  WorkItemDetails,
+  WorkItemDetails as WorkItemDetailsOfGitlabParams,
   WorkItemsList as WorkItemsListOfGitlabParams
 } from './gitlab-params'
 import {
@@ -502,14 +505,21 @@ import {
 import { WorkerStartParams } from './orchestration-worker-start-params'
 import { WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerStopParams } from './orchestration-worker-stop-params'
 import {
+  PluginDevEmitParams,
+  PluginDevInspectParams,
   PluginDevLoadParams,
+  PluginDevRequestParams,
   PluginDevUnloadParams,
   PluginGetLogsParams,
   PluginInvokeCommandParams,
+  PluginOpenParams,
   PluginReadPanelEntryParams,
+  PluginRestartParams,
   PluginRpcConsentParams,
   PluginSetEnabledParams,
   PluginSetSystemEnabledParams,
+  PluginShotParams,
+  PluginShotReplayParams,
   PluginsPanelActionParams
 } from './plugins-params'
 import {
@@ -964,6 +974,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'emulator.availability': EmulatorAvailabilityParams,
   'emulator.ax': AxParams,
   'emulator.button': ButtonParams,
+  'emulator.checkInput': ListParams,
   'emulator.exec': ExecParams,
   'emulator.gesture': GestureParams,
   'emulator.kill': KillParams,
@@ -1071,6 +1082,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'github.listIssues': IssuesList,
   'github.listLabels': RepoSelector,
   'github.listWorkItems': WorkItemsList,
+  'github.markPRDraft': MarkPrDraft,
   'github.markPRReadyForReview': MarkPrReadyForReview,
   'github.mergePR': MergePr,
   'github.prCheckDetails': PullRequestCheckDetails,
@@ -1111,7 +1123,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'github.validateAccountBinding': ValidateAccountBinding,
   'github.workItem': WorkItem,
   'github.workItemByOwnerRepo': WorkItemByOwnerRepo,
-  'github.workItemDetails': WorkItem,
+  'github.workItemDetails': WorkItemDetails,
   'gitlab.addIssueComment': AddIssueComment,
   'gitlab.addMRComment': AddMRComment,
   'gitlab.addMRInlineComment': AddMRInlineComment,
@@ -1133,7 +1145,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'gitlab.updateMRReviewers': UpdateMrReviewers,
   'gitlab.updateMRState': UpdateMrState,
   'gitlab.workItemByPath': WorkItemByPath,
-  'gitlab.workItemDetails': WorkItemDetails,
+  'gitlab.workItemDetails': WorkItemDetailsOfGitlabParams,
   'host.declareClient': OrcadDeclareClientParamsSchema,
   'host.gitBash.isAvailable': null,
   'host.peerDesktops': OrcadPeerDesktopsParamsSchema,
@@ -1267,6 +1279,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.ask': AskParams,
   'orchestration.callerShow': null,
   'orchestration.check': CheckParams,
+  'orchestration.crewSubscribe': CrewSubscribeParams,
   'orchestration.dispatch': DispatchParams,
   'orchestration.dispatchShow': DispatchShowParams,
   'orchestration.federationAck': FederationAckParams,
@@ -1315,16 +1328,23 @@ export const RPC_PARAMS_BY_METHOD = {
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
   'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,
   'plugins.consent': PluginRpcConsentParams,
+  'plugins.devEmit': PluginDevEmitParams,
+  'plugins.devInspect': PluginDevInspectParams,
   'plugins.devLoad': PluginDevLoadParams,
+  'plugins.devRequest': PluginDevRequestParams,
   'plugins.devUnload': PluginDevUnloadParams,
   'plugins.getLogs': PluginGetLogsParams,
   'plugins.invokeCommand': PluginInvokeCommandParams,
   'plugins.list': null,
+  'plugins.open': PluginOpenParams,
   'plugins.panelAction': PluginsPanelActionParams,
   'plugins.readPanelEntry': PluginReadPanelEntryParams,
   'plugins.refresh': null,
+  'plugins.restart': PluginRestartParams,
   'plugins.setEnabled': PluginSetEnabledParams,
   'plugins.setSystemEnabled': PluginSetSystemEnabledParams,
+  'plugins.shot': PluginShotParams,
+  'plugins.shotReplay': PluginShotReplayParams,
   'preflight.check': PreflightCheck,
   'preflight.detectAgents': PreflightProjectAgentDetection,
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,

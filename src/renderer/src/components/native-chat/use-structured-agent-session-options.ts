@@ -16,7 +16,7 @@ import { agentSessionWriteFailureText } from './agent-session-write-notice-text'
 import {
   flushStructuredSessionSelectionOptions,
   holdStructuredAgentSessionLaunchOption
-} from '@/lib/structured-agent-session-launch-options'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-options'
 
 export type { StructuredAgentSessionOptionsArgs } from './structured-agent-session-options-contract'
 
@@ -62,9 +62,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     unloadedTurnRevisions: args.unloadedTurnRevisions
   })
 
-  const awaitingOptions = support?.sessionId === sessionId && support.fence !== fence
-  const acceptsPicks =
-    (!transportEnabled || fence !== null) && launch?.seedPending !== true && !awaitingOptions
+  const acceptsPicks = (!transportEnabled || fence !== null) && launch?.seedPending !== true
 
   const hostCatalog = useHostModelCatalogUpgrade({
     agent,

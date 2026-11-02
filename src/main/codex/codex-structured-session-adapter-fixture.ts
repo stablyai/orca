@@ -12,7 +12,7 @@ import type {
 import type {
   CodexAppServerLaunch,
   openCodexAppServerConnection
-} from './codex-app-server-connection'
+} from './app-server/codex-app-server-connection'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import type {
   CodexStructuredLaunch,
@@ -20,7 +20,7 @@ import type {
   CodexStructuredSessionAdapterDeps
 } from './codex-structured-session-state'
 
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const startLinks = new WeakMap<
   CodexStructuredSessionAdapter,

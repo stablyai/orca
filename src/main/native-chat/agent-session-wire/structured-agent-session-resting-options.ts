@@ -1,5 +1,5 @@
 import type { AgentModelCatalogReadParams } from '../agent-model-catalog/agent-model-catalog-service-contract'
-import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import { decodeStructuredAgentSessionOptionValue } from '../../../shared/agent-session/options/structured-agent-session-option-codec'
 import { finishedListingIds } from '../../../shared/agent-session/options/structured-agent-session-options'
 import { savedEffectiveServiceTier } from '../../../shared/agent-session/options/structured-agent-session-effective-tier'

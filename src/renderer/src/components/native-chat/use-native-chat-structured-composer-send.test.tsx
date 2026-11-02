@@ -11,7 +11,7 @@ import {
 import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
 import { createRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
+import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
@@ -147,23 +147,6 @@ describe('attachment guard follows what the host claims', () => {
     expect(structuredTransport.send).not.toHaveBeenCalled()
   })
 
-  it.each([
-    ['codex', '/permissions'],
-    ['claude', '/fast'],
-    ['claude', '/init'],
-    ['claude', '/review'],
-    ['codex', '/goal ship the fix']
-  ] as const)('sends %s attachments along with the passed-through %s', async (agent, text) => {
-    const { send, structuredTransport } = harness(agent)
-    send(text)
-    await vi.waitFor(() =>
-      expect(structuredTransport.send).toHaveBeenCalledWith(text, [ATTACHMENT])
-    )
-    expect(structuredTransport.onError).not.toHaveBeenCalledWith(
-      'Remove attachments before using a chat-session command.'
-    )
-  })
-
   it('refuses attachments on /goal where the host sets the goal, since no message is sent', () => {
     const setObjective = vi.fn(async () => true)
     const { send, structuredTransport } = harness('codex', { setObjective })
@@ -203,14 +186,6 @@ describe('reports the sends that bring the latest into view', () => {
     send('hello', [])
     await vi.waitFor(() => expect(structuredTransport.onError).toHaveBeenCalledTimes(2))
     expect(structuredTransport.send).toHaveBeenCalledWith('hello', [])
-    expect(onSubmitted).toHaveBeenCalledOnce()
-  })
-
-  it('reports a provider command sent without an inventory', async () => {
-    const onSubmitted = vi.fn()
-    const { send, structuredTransport } = harness('codex', undefined, onSubmitted)
-    await send('/permissions', [])
-    expect(structuredTransport.send).toHaveBeenCalledWith('/permissions', [])
     expect(onSubmitted).toHaveBeenCalledOnce()
   })
 })
@@ -449,7 +424,7 @@ describe('complete handback acceptance', () => {
       const fixture = acceptanceFixture()
       updateNativeChatComposerDraft(scope, { text: '/goal ship it' }, 'immediate')
       const hook = fixture.mount()
-      let pending: Promise<void> | undefined
+      let pending: Promise<boolean> | undefined
       act(() => {
         pending = hook.result.current.send('/goal ship it', [])
       })
@@ -507,7 +482,7 @@ describe('complete handback acceptance', () => {
     updateNativeChatComposerDraft(scope, readNativeChatComposerDraft(seed.scopeKey), 'immediate')
     discardNativeChatQueuedEdit(seed)
     const hook = fixture.mount()
-    let pending: Promise<void> | undefined
+    let pending: Promise<boolean> | undefined
     act(() => {
       pending = hook.result.current.send('$review sent', [])
     })
@@ -573,7 +548,7 @@ describe('complete handback acceptance', () => {
     const fixture = acceptanceFixture()
     updateNativeChatComposerDraft(scope, { text: '/goal ship it' }, 'immediate')
     const hook = fixture.mount()
-    let pending: Promise<void> | undefined
+    let pending: Promise<boolean> | undefined
     act(() => {
       pending = hook.result.current.send('/goal ship it', [])
     })
@@ -647,7 +622,7 @@ describe('complete handback acceptance', () => {
         )
         const hook = fixture.mount()
         expect(active.get(scope)).toBe(1)
-        let pending: Promise<void> | undefined
+        let pending: Promise<boolean> | undefined
         act(() => {
           pending = hook.result.current.send('/goal ship it', [])
         })

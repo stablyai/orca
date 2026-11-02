@@ -2,7 +2,7 @@ import {
   AGENT_SESSION_REWIND_REASONS,
   type AgentSessionRewindParams,
   type AgentSessionRewindReason
-} from '../../../shared/agent-session-rewind'
+} from '../../../shared/agent-session/lifecycle/agent-session-rewind'
 import {
   refuse,
   type AgentSessionWireRefusal

@@ -14,7 +14,7 @@ vi.mock('@/i18n/i18n', () => ({
 import { prepareNativeChatSessionAttachmentUpload } from './native-chat-attachment-upload'
 
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
-import { AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 
 describe('a structured chat on a paired server', () => {
   const owner = {

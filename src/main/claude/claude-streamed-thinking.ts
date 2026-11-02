@@ -19,7 +19,7 @@ import {
   claudeThinkingIdentity,
   claudeThinkingText,
   type ClaudeMessageEnvelope
-} from './claude-structured-item-translation'
+} from './structured/journal/claude-structured-item-translation'
 import type { ClaudeSubagentLinkageSource } from './claude-subagent-linkage'
 
 function streamScope(frame: Record<string, unknown>): string | null {

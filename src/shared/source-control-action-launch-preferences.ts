@@ -26,7 +26,7 @@ import {
 } from './source-control-ai-actions'
 import { isTuiAgent } from './tui-agent-config'
 import type { TuiAgent } from './tui-agent'
-import { isAgentSessionHandleProvider } from './agent-session-provider-handle'
+import { isAgentSessionHandleProvider } from './agent-session/lifecycle/agent-session-provider-handle'
 import { STRUCTURED_LAUNCH_SEED_OPTION_IDS } from './native-chat/input/native-chat-session-option-defaults'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-chat-permission-mode'
 import {

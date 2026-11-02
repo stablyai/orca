@@ -2,32 +2,30 @@ import { journalInputOrder } from './journal-input-order'
 import type { JournalInputContext } from './journal-input-lineage'
 import { journalItemEchoFields, type JournalItemEcho } from './journal-item-echo'
 import type {
-  AgentJournalSubmission,
-  AgentJournalItemBody,
-  AgentJournalProducerLinkage,
-  AgentJournalRowAttribution
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity,
   AgentSessionJournalProviderHandle
 } from '../../../shared/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
-import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { journalRowSchemaVersion } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import {
+  type AgentJournalSubmission,
+  type AgentJournalItemBody,
+  type AgentJournalProducerLinkage,
+  type AgentJournalRowAttribution,
+  journalRowSchemaVersion
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalLinkageFields } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { journalItemOwnerFence } from './journal-item-provenance'
 import type { JournalReducerState } from './journal-reducer'
-import type {
-  JournalDispatchRow,
-  JournalItemRow,
-  JournalLifecycleBatchRow,
-  JournalLifecycleMutation,
-  JournalSubmissionRow,
-  JournalTombstoneRow
-} from './journal-row-schema'
 import {
+  type JournalDispatchRow,
+  type JournalItemRow,
+  type JournalLifecycleBatchRow,
+  type JournalLifecycleMutation,
+  type JournalSubmissionRow,
+  type JournalTombstoneRow,
   MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
   MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS
 } from './journal-row-schema'

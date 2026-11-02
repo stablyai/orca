@@ -1,5 +1,5 @@
 import type { AgentJournalCursor } from '../agent-session-journal-identity'
-import type { AgentSessionSubscribeEvent } from '../agent-session-wire'
+import type { AgentSessionSubscribeEvent } from './agent-session-wire'
 import { createStructuredAgentSessionEventCoalescer } from './structured-agent-session-coalescer'
 import {
   AGENT_SESSION_UNATTACHED_READ_GRACE_MS,
@@ -13,7 +13,7 @@ import type {
   AgentSessionCurrentRequestsPiece,
   AgentSessionCurrentRequestsRead
 } from './requests/agent-session-current-requests-wire'
-import type { StructuredAgentSessionAction } from '../structured-agent-session-reducer'
+import type { StructuredAgentSessionAction } from './structured-agent-session-reducer'
 import { createReconnectScheduler } from './structured-agent-session-reconnect'
 
 /** One `agentSession.subscribe` stream, opened by whichever transport the client has. */

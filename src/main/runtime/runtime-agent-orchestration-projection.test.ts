@@ -1,12 +1,12 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { seedTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import { seedTestAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-test-harness'
 import { closeTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import {
   openAgentSessionRecordStoreOnce,
   releaseAgentSessionRecordStore
-} from './agent-session-record-store-slot'
+} from './agent-session/records/agent-session-record-store-slot'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { OrcaRuntimeService } from './orca-runtime'
 import './rpc/unused-default-rpc-methods.test-fixture'
@@ -32,7 +32,7 @@ import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixtur
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 import { RuntimeAgentOrchestrationProjection } from './runtime-agent-orchestration-projection'
 import {
   installSqlVisitCounters,

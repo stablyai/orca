@@ -23,6 +23,13 @@ export function selectWslHostUnavailableReason(
   if (!environment || !isWslHostRuntimeEnvironment(environment)) {
     return null
   }
+  return selectWslHostEnvironmentUnavailableReason(state)
+}
+
+/** Why any WSL host cannot run now, whichever workspace or host row asks. */
+export function selectWslHostEnvironmentUnavailableReason(
+  state: Pick<AppState, 'wslHostServerFiles' | 'settings' | 'runtimeEnvironments'>
+): WslHostUnavailableReason | null {
   if (state.wslHostServerFiles === 'missing') {
     return 'server-files-missing'
   }

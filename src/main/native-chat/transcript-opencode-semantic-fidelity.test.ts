@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
-import { AGENT_SESSION_HOST_STATUS_COPY } from '../../shared/agent-session-host-status-rows'
+import { AGENT_SESSION_HOST_STATUS_COPY } from '../../shared/agent-session/view/agent-session-host-status-rows'
 import Database from '../sqlite/sync-database'
 import { opencodeMessages } from './transcript-opencode-part-blocks'
 import {

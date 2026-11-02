@@ -15,7 +15,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalSubmission
 } from './agent-session/journal/agent-session-journal-types'
-import { pendingPromptsAllUnanswerableHere } from './agent-session-approval-subject'
+import { pendingPromptsAllUnanswerableHere } from './agent-session/agent-session-approval-subject'
 import type { NativeChatImageRefBlock } from './native-chat/native-chat-types'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
@@ -26,7 +26,7 @@ import {
   readAgentMessageSource,
   type AgentMessageSource
 } from './agent-session/agent-session-message-source'
-import { handedOffQueuedMessageIds } from './structured-agent-session-draft-hand-off'
+import { handedOffQueuedMessageIds } from './agent-session/view/structured-agent-session-draft-hand-off'
 import {
   NATIVE_CHAT_IMAGE_LABEL_ENGLISH,
   nativeChatImageLabel,

@@ -26,6 +26,7 @@ import {
   getTypographyEntries,
   getZoomEntries
 } from './appearance-search'
+import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { getTerminalAppearanceSearchEntries } from './terminal-search'
 import { TerminalAppearanceSection } from './TerminalAppearanceSection'
 import type { UseGhosttyImportReturn } from './useGhosttyImport'
@@ -139,6 +140,7 @@ export function AppearancePane({
     ...getTypographyEntries(),
     ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
     ...getTitlebarEntries(),
+    ...getReduceVisualEffectsEntries(),
     ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
     ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
   ]

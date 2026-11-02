@@ -87,9 +87,13 @@ async function startPermissiveProbeServer(): Promise<ProbeServer> {
 async function materializeHostilePlugin(origin: string): Promise<string> {
   const tempRoot = await mkdtemp(join(tmpdir(), 'orca-hostile-panel-e2e-'))
   const pluginRoot = join(tempRoot, 'hostile-panel')
-  await cp(join(process.cwd(), 'examples', 'plugins', 'hostile-panel'), pluginRoot, {
-    recursive: true
-  })
+  await cp(
+    join(process.cwd(), 'examples', 'plugins', 'test-fixtures', 'hostile-panel'),
+    pluginRoot,
+    {
+      recursive: true
+    }
+  )
   const panelPath = join(pluginRoot, 'panel.html')
   const panelHtml = await readFile(panelPath, 'utf8')
   await writeFile(panelPath, panelHtml.replaceAll('https://example.com', origin))
@@ -414,7 +418,7 @@ test('shell.openExternal from a panel needs a real gesture in the guest', async 
         button.textContent = 'Open external'
         button.style.cssText = 'position:fixed;top:0;left:0;width:160px;height:40px;z-index:9'
         button.onclick = () => window.orca.shell.openExternal(${JSON.stringify(target)}).then(
-          (result) => { window.__openExternal = result.opened ? 'opened' : 'cancelled' },
+          (result) => { window.__openExternal = result.opened ? 'opened' : result.reason },
           (error) => { window.__openExternal = String(error?.code) })
         document.body.appendChild(button)
       })()`
@@ -427,7 +431,6 @@ test('shell.openExternal from a panel needs a real gesture in the guest', async 
     expect((await readGuestObserver(electronApp)).externalUrls).toEqual([])
     expect((await readGuestObserver(electronApp)).prompts).toEqual([])
 
-    // A real click on a host this plugin was never allowed asks first; Cancel opens nothing.
     const clickAndRead = async (): Promise<string | null> => {
       await evalInGuest(guest, 'window.__openExternal = null')
       await clickInGuest(guest, '#open-external')
@@ -436,6 +439,19 @@ test('shell.openExternal from a panel needs a real gesture in the guest', async 
         .not.toBeNull()
       return readInGuest<string | null>(guest, 'window.__openExternal ?? null')
     }
+    // This background launch's window is hidden, so nobody could answer a prompt: it settles at
+    // once, unopened, instead of waiting forever.
+    expect(await clickAndRead()).toBe('consent-unavailable')
+    expect((await readGuestObserver(electronApp)).prompts).toEqual([])
+    // Report the window as on screen (it is never shown) so the prompt path runs.
+    await electronApp.evaluate(({ BrowserWindow }) => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        window.isVisible = () => true
+        window.isMinimized = () => false
+      }
+    })
+
+    // A real click on a host this plugin was never allowed asks first; Cancel opens nothing.
     expect(await clickAndRead()).toBe('cancelled')
     let observed = await readGuestObserver(electronApp)
     expect(observed.externalUrls).toEqual([])

@@ -2,12 +2,12 @@ import { isAgentSessionRefusalError } from '../../../shared/agent-session/failur
 import {
   agentSessionFingerprintConflict,
   computeAgentSessionPayloadFingerprint
-} from '../../../shared/agent-session-mutation-envelope'
+} from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-mutation-context'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from './structured-agent-session-send-settlement'
@@ -20,7 +20,7 @@ import {
 import type { ReadyOperationPlan } from './structured-agent-session-ready-operation-plan'
 import { mutationReplayContext } from './structured-agent-session-mutation-turn-context'
 import { commandReceiptScope } from '../agent-session-journal/command-receipt-schema'
-import { parseAgentSessionOperationTimestamp } from '../../../shared/agent-session-host-authority'
+import { parseAgentSessionOperationTimestamp } from '../../../shared/agent-session/agent-session-host-authority'
 import { waitForStructuredAgentSessionStart } from './structured-agent-session-start-readiness'
 import type { StructuredAgentSessionDeliveryPlace } from './structured-agent-session-delivery-order'
 import type { StructuredAgentSessionStartClaim } from './structured-agent-session-agent-start'

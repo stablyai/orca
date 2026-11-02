@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
-import { sanitizeOnboardingUpdate, type Store } from '../persistence'
+import { sanitizeOnboardingUpdate } from '../persistence/applying-settings/onboarding-normalization'
+import type { Store } from '../persistence/loading-store/store'
 import type { OnboardingState } from '../../shared/onboarding-state-types'
 import type { ChatUiLaunchTipVariant } from '../../shared/native-chat/chat-ui-launch-tip-audience'
 import { isChatUiLaunchTipDeferredForConsent } from '../telemetry/chat-ui-launch-tip-cohort'

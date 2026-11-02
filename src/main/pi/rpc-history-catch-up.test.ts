@@ -9,7 +9,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/a
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { projectStructuredAgentSessionMessages } from '../../shared/structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '../../shared/agent-session/view/structured-agent-session-message-projection'
 import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
 import { catchUpPiSession } from './rpc-history-catch-up'
 import { PiHistoryCapture } from './rpc-history-capture'

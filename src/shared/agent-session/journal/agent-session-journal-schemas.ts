@@ -6,7 +6,7 @@
 // History pages lack row v: extensions must also remain safe for older clients.
 
 import { z } from 'zod'
-import { AgentSessionContextUsageSchema } from '../../agent-session-context-usage-schema'
+import { AgentSessionContextUsageSchema } from '../agent-session-context-usage-schema'
 import { AgentJournalThreadGoalStateSchema } from './agent-session-journal-thread-goal-schema'
 import { AgentSessionFailureFactSchema } from '../failures/agent-session-failure-fact-schema'
 import { knownTags, openDiscriminatedUnion } from './agent-session-journal-open-union'
@@ -197,6 +197,11 @@ const KnownItemBody = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('agent-start'),
     dispatchId: z.string().min(1),
+    task: z.string()
+  }),
+  z.object({
+    kind: z.literal('agent-handoff'),
+    launchId: z.string().min(1),
     task: z.string()
   }),
   z.object({

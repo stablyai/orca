@@ -1,4 +1,4 @@
-import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
+import type { AgentSessionModelOption } from '../../shared/agent-session/agent-session-wire'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 
 // Bound config reads so a slow app-server cannot hold the model listing.

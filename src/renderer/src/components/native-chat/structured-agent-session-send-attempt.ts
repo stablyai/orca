@@ -6,7 +6,7 @@ import type {
   AgentSessionHistoryResult,
   AgentSessionMutationResult,
   AgentSessionSendResult
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import {
   AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS,
   agentSessionWriteNoticeParts,

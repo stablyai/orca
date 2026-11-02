@@ -3,7 +3,7 @@ import {
   structuredAgentSessionDraftScopeKey
 } from '@/components/native-chat/native-chat-composer-draft-store'
 import { nativeChatDraftPositions } from '@/components/native-chat/native-chat-composer-draft-memory'
-import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { afterPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import type {
@@ -21,7 +21,7 @@ import {
   type DeclinedStructuredLaunchTerminalOptions,
   type HostAdmittedStructuredLaunch,
   type StructuredLaunchTerminal
-} from '@/lib/structured-agent-session-launch-admission'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import {
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionTargetForHost
@@ -31,13 +31,13 @@ import {
   openTerminalForDeclinedChat,
   openDeclinedTerminal,
   opensAtAction
-} from '../structured-agent-session-action-launch'
+} from './launch/structured-agent-session-action-launch'
 import { holdEmptyWorkspaceDefaultSurfaceForLaunch } from '../empty-workspace-default-surface-claims'
 import type { OpenedAgentSessionTab } from '../structured-agent-session-tab-open-through-layout-owner'
 import {
   captureStructuredLaunchSurfaceAddress,
   openStructuredAgentSessionProvisionalTab
-} from '../structured-agent-session-launch-surface'
+} from './launch/structured-agent-session-launch-surface'
 
 type LocalProvisionalLaunch = StructuredAgentLaunchHandle & { tab: OpenedAgentSessionTab }
 
@@ -79,6 +79,8 @@ export type ProvisionalLaunchArgs = {
   deferPublication?: true
   /** Allow workspace reveal before host acquisition, when the launch has no session ID or owned chat tab yet. */
   beforeOpen?: (sessionId?: string) => boolean | void
+  /** The published tab, or null when the layout owner refuses or the launch ends without a chat. */
+  onTabOpenSettled?: (tabId: string | null, reason?: 'layout-refused') => void
   /** The terminal the host's "no" opens; a caller without one gets a new agent tab's. */
   onHostDeclined?: (
     target: RuntimeClientTarget,
@@ -99,9 +101,10 @@ export function beginStructuredAgentSessionProvisionalLaunch(
   }
   const worktreeId = args.target?.worktreeId ?? args.plan.worktreeId
   let tabOpened = false
-  const cancelIfNoTab = (): void => {
+  const settleWithoutTab = (): void => {
     if (!tabOpened) {
       focusIntent?.cancel()
+      args.onTabOpenSettled?.(null)
     }
   }
   const open = (
@@ -113,14 +116,14 @@ export function beginStructuredAgentSessionProvisionalLaunch(
         focusIntent?.request(launch.tab.id)
       }
     } else if (!launch) {
-      cancelIfNoTab()
+      settleWithoutTab()
     }
     return launch
   }
   try {
     const owner = worktreeId ? structuredLaunchOwner(args.plan, worktreeId, args.target) : null
     if (owner && worktreeId && !args.deferPublication && args.beforeOpen?.() === false) {
-      cancelIfNoTab()
+      settleWithoutTab()
       return null
     }
     if (!owner || !worktreeId) {
@@ -177,10 +180,10 @@ export function beginStructuredAgentSessionProvisionalLaunch(
       onHostDeclined: (target) => openDeclinedTerminal(args, worktreeId, target),
       ...(args.declinedOpensCallerSurface ? { declinedOpensCallerSurface: true as const } : {})
     })
-    void launch.settlement.then(cancelIfNoTab, cancelIfNoTab)
+    void launch.settlement.then(settleWithoutTab, settleWithoutTab)
     return launch
   } catch (error) {
-    cancelIfNoTab()
+    settleWithoutTab()
     throw error
   }
 }
@@ -224,6 +227,12 @@ function beginLocalProvisionalLaunch(
     afterPendingTab(tab.id, (shown) => {
       if (!shown || !useAppStore.getState().getTab(shown)) {
         retirePosition(tab.id)
+      }
+      if (shown === null) {
+        handle.cancel()
+        args.onTabOpenSettled?.(null, 'layout-refused')
+      } else {
+        args.onTabOpenSettled?.(shown)
       }
     })
     return { ...handle, tab }
