@@ -47,6 +47,8 @@ import {
 import { startAgentStateRulesLiveUpdates } from '../runtime/agent-state-rules/agent-state-rules-live-update'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/runtime-environment-registry-root'
+import { openOffscreenBrowserPageLink } from '../runtime/browser/offscreen-browser-page-link'
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
   const activation = state.desktopActivationGate
@@ -65,7 +67,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   }
   const orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport = {
     resolve: (selector) => {
-      const environment = resolveEnvironment(app.getPath('userData'), selector)
+      const environment = resolveEnvironment(getRuntimeEnvironmentRegistryRoot(), selector)
       const connection = getPreferredPairedRuntimeConnection(environment)
       return {
         environmentId: environment.id,
@@ -76,7 +78,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     },
     call: (selector, method, params, timeoutMs, envelope, expectedPairingRevision) =>
       callRuntimeEnvironment(
-        app.getPath('userData'),
+        getRuntimeEnvironmentRegistryRoot(),
         selector,
         method,
         params,
@@ -132,7 +134,13 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     orchestrationEnvironmentTransport,
     workspaceSleepPlatform: {
       callEnvironment: (environmentId, method, params, timeoutMs) =>
-        callRuntimeEnvironment(app.getPath('userData'), environmentId, method, params, timeoutMs),
+        callRuntimeEnvironment(
+          getRuntimeEnvironmentRegistryRoot(),
+          environmentId,
+          method,
+          params,
+          timeoutMs
+        ),
       suspendVm: (workspaceId) => suspendEphemeralVmWorkspace(store, workspaceId)
     },
     // Paired/local settings writes must reconcile the scanner child through the same path.
@@ -170,6 +178,12 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
     runtime.notifyMobileSessionTabsChanged(worktreeId)
   })
+  browserManager.setOffscreenTabOpener((request) =>
+    openOffscreenBrowserPageLink(
+      (params, caller) => runtime.browserTabCreate(params, caller),
+      request
+    )
+  )
   browserSessionRegistry.onProfilesChanged = () => runtime.notifyBrowserProfilesChanged()
   return runtime
 }

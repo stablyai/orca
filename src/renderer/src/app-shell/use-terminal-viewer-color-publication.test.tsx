@@ -2,18 +2,19 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
+import { terminalViewColorQueryReplyColors } from '../../../shared/terminal-view-attributes'
 import { _resetTerminalViewAttributesPublisherForTest } from '../components/terminal-pane/terminal-view-attributes-publisher'
 import { useAppStore } from '../store'
 
 const mocks = vi.hoisted(() => ({
-  setColors: vi.fn(),
+  setAttributes: vi.fn(),
   pushToAllHosts: vi.fn(),
   publishTerminalViewAttributes: vi.fn()
 }))
 
 vi.mock('../runtime/remote-runtime-terminal-color-push', () => ({
   remoteRuntimeTerminalColorPush: {
-    setColors: mocks.setColors,
+    setAttributes: mocks.setAttributes,
     pushToAllHosts: mocks.pushToAllHosts
   }
 }))
@@ -21,6 +22,10 @@ vi.mock('../runtime/remote-runtime-terminal-color-push', () => ({
 import { useTerminalViewerColorPublication } from './use-terminal-viewer-color-publication'
 
 const initialState = useAppStore.getState()
+
+function lastPushedColors() {
+  return terminalViewColorQueryReplyColors(mocks.setAttributes.mock.lastCall?.[0])
+}
 
 describe('useTerminalViewerColorPublication', () => {
   beforeEach(() => {
@@ -39,10 +44,7 @@ describe('useTerminalViewerColorPublication', () => {
 
   it('publishes a theme change with no terminal pane open, to main and to paired hosts', () => {
     const { unmount } = renderHook(() => useTerminalViewerColorPublication())
-    expect(mocks.setColors).toHaveBeenLastCalledWith({
-      foreground: '#ffffff',
-      background: '#282c34'
-    })
+    expect(lastPushedColors()).toEqual({ foreground: '#ffffff', background: '#282c34' })
 
     act(() => {
       const settings = useAppStore.getState().settings!
@@ -50,10 +52,7 @@ describe('useTerminalViewerColorPublication', () => {
     })
 
     expect(mocks.publishTerminalViewAttributes).toHaveBeenCalledTimes(2)
-    expect(mocks.setColors).toHaveBeenLastCalledWith({
-      foreground: '#2e3434',
-      background: '#ffffff'
-    })
+    expect(lastPushedColors()).toEqual({ foreground: '#2e3434', background: '#ffffff' })
     unmount()
   })
 

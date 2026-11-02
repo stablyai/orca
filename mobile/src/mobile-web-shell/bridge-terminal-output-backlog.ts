@@ -65,7 +65,8 @@ type Held =
 
 // Each backlog belongs to one subscription with one stream id; never multiplex ids or merges would corrupt output. Entries leave only when delivered or the stream ends visibly.
 export class BridgeTerminalOutputBacklog {
-  private readonly queue: Held[] = []
+  private queue: (Held | undefined)[] = []
+  private head = 0
   private pending = 0
   private peak = 0
   private merged = 0
@@ -96,7 +97,7 @@ export class BridgeTerminalOutputBacklog {
   }
 
   get held(): boolean {
-    return this.queue.length > 0
+    return this.head < this.queue.length
   }
 
   // Retain even the ceiling-breaking payload; false tells the caller to end the stream, not silently drop an entry.
@@ -117,14 +118,14 @@ export class BridgeTerminalOutputBacklog {
 
   // allowedBytes already includes the frame/window limit. A nonfitting head waits for an ack, except when the window is empty: then pass it to the ledger’s cap check because no later ack can add room.
   next(allowedBytes: number, windowEmpty: boolean): unknown | null {
-    const head = this.queue[0]
+    const head = this.queue[this.head]
     if (head === undefined) {
       return null
     }
     if (head.bytes > allowedBytes && !windowEmpty) {
       return null
     }
-    this.queue.shift()
+    this.removeHead()
     this.take(head.bytes)
     this.frames += 1
     if (head.kind === 'other') {
@@ -135,9 +136,9 @@ export class BridgeTerminalOutputBacklog {
     let bytes = head.bytes
     let lastUnit = head.chunk.charCodeAt(head.chunk.length - 1)
     // Merge consecutive output only; intervening state must stay ordered. Stream ids need no comparison because the backlog owns one subscription.
-    while (this.queue.length > 0) {
-      const nextHeld = this.queue[0]
-      if (nextHeld.kind !== 'output') {
+    while (this.held) {
+      const nextHeld = this.queue[this.head]
+      if (nextHeld?.kind !== 'output') {
         break
       }
       const firstUnit = nextHeld.chunk.charCodeAt(0)
@@ -149,7 +150,7 @@ export class BridgeTerminalOutputBacklog {
       if (mergedBytes > allowedBytes) {
         break
       }
-      this.queue.shift()
+      this.removeHead()
       this.take(nextHeld.bytes)
       chunks.push(nextHeld.chunk)
       bytes = mergedBytes
@@ -170,7 +171,21 @@ export class BridgeTerminalOutputBacklog {
   dispose(): void {
     this.clearSilence()
     this.queue.length = 0
+    this.head = 0
     this.pending = 0
+  }
+
+  private removeHead(): void {
+    this.queue[this.head] = undefined
+    this.head += 1
+    // Amortize compaction without retaining delivered payloads.
+    if (
+      this.head === this.queue.length ||
+      (this.head >= 1024 && this.head * 2 >= this.queue.length)
+    ) {
+      this.queue = this.queue.slice(this.head)
+      this.head = 0
+    }
   }
 
   private add(bytes: number): void {
@@ -184,7 +199,7 @@ export class BridgeTerminalOutputBacklog {
 
   // Arm only while output is pending; the final drain must clear the clock even if no further acknowledgement arrives, or an idle terminal dies on overflow.
   private syncSilence(): void {
-    if (this.queue.length === 0) {
+    if (!this.held) {
       this.clearSilence()
       return
     }

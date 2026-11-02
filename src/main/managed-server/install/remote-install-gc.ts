@@ -49,7 +49,7 @@ export async function gcOldRemoteInstallVersions(
   currentDirAbsPath: string,
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST,
   options: RemoteInstallGcOptions
-): Promise<void> {
+): Promise<boolean> {
   const baseDir = joinRemotePath(host, remoteHome, RELAY_REMOTE_DIR)
   const currentDirName = remoteBasename(currentDirAbsPath, host)
   let listing: string
@@ -63,7 +63,7 @@ export async function gcOldRemoteInstallVersions(
     if (isUnconfirmedSshCommandTermination(err)) {
       throw err
     }
-    return
+    return false
   }
   const entries = listing
     .split('\n')
@@ -82,13 +82,13 @@ export async function gcOldRemoteInstallVersions(
     .filter((name) => !pinned.has(name))
 
   if (candidates.length === 0) {
-    return
+    return true
   }
   const extraPins = options.resolveExtraPinnedDirNames
     ? await options.resolveExtraPinnedDirNames(candidates)
     : []
   if (!extraPins) {
-    return
+    return false
   }
   const survivors = candidates.filter((name) => !extraPins.includes(name))
 
@@ -158,6 +158,7 @@ export async function gcOldRemoteInstallVersions(
       `[${model.id}] GC: removed ${removed.length} stale version dir(s): ${removed.join(', ')}${keptSuffix}`
     )
   }
+  return kept.length === 0
 }
 
 async function isCandidateSafeToRemove(

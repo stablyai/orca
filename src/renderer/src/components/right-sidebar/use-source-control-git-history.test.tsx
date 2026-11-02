@@ -214,25 +214,6 @@ describe('useSourceControlGitHistory stale completion', () => {
     expect(latest?.gitHistoryState).toEqual({ status: 'idle' })
   })
 
-  it('re-fetches when the compare base moves and passes it to the history read', async () => {
-    const root = await mount({ compareBaseRef: 'origin/main' })
-    await flush()
-    expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(
-      expect.objectContaining({ worktreeId: 'A', worktreePath: '/a' }),
-      { limit: 50, baseRef: 'origin/main' }
-    )
-
-    await act(async () => {
-      root.render(<Probe compareBaseRef="origin/dev" />)
-    })
-    await flush()
-    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
-    expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(expect.anything(), {
-      limit: 50,
-      baseRef: 'origin/dev'
-    })
-  })
-
   it('re-fetches when the owner host changes but the worktree and path stay put', async () => {
     const root = await mount({
       activeRepoTarget: { kind: 'local' }

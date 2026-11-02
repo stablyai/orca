@@ -6,7 +6,7 @@ import {
 } from '../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import { structuredAgentSessionPaneKey } from '../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   deriveNotesSendAgentTargets,
   type NotesSendAgentTargetState

@@ -47,8 +47,8 @@ export function requestBrowserExtensionInstallPrompt(
       for (const contents of watched) {
         contents.removeListener('destroyed', decline)
         contents.removeListener('render-process-gone', decline)
+        contents.removeListener('did-navigate', decline)
       }
-      guest?.removeListener('did-navigate', decline)
       try {
         if (!renderer.isDestroyed()) {
           renderer.send(BROWSER_EXTENSION_INSTALL_PROMPT_CLOSED_CHANNEL, { requestId })
@@ -63,9 +63,9 @@ export function requestBrowserExtensionInstallPrompt(
     for (const contents of watched) {
       contents.once('destroyed', decline)
       contents.once('render-process-gone', decline)
+      // Why did-navigate: committed top-frame documents only, not store or Settings SPA routes.
+      contents.once('did-navigate', decline)
     }
-    // Why did-navigate: it fires only for committed cross-document top-frame loads, not store SPA routes.
-    guest?.once('did-navigate', decline)
     try {
       renderer.send(BROWSER_EXTENSION_INSTALL_PROMPT_REQUESTED_CHANNEL, { ...prompt, requestId })
     } catch {

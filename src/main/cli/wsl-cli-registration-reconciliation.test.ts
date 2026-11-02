@@ -24,7 +24,9 @@ describe('reconcileManagedWslCliRegistrations', () => {
       isPackaged: true,
       userDataPath: '/user-data',
       listDistros: async () => ['Ubuntu', 'Debian', 'Fedora'],
+      listOrcaHostDistros: () => ['Debian'],
       listRunningDistros: async () => ['Ubuntu', 'Debian', 'Fedora'],
+      isDistroRunning: async (distro: string) => ['Ubuntu', 'Debian', 'Fedora'].includes(distro),
       registry,
       createInstaller: (distro) => {
         if (distro === 'Ubuntu') {
@@ -36,7 +38,8 @@ describe('reconcileManagedWslCliRegistrations', () => {
 
     expect(registry.getCandidates).toHaveBeenCalledWith(['Ubuntu', 'Debian', 'Fedora'], {
       currentTarget: null,
-      appVersion: ''
+      appVersion: '',
+      inspectableDistros: ['Debian']
     })
     expect(registry.recordObservations).toHaveBeenCalledTimes(2)
     expect(registry.recordObservations).toHaveBeenCalledWith([
@@ -63,6 +66,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
       userDataPath: '/user-data',
       listDistros: async () => ['Broken Distro', 'No Interop'],
       listRunningDistros: async () => ['Broken Distro', 'No Interop'],
+      isDistroRunning: async (distro: string) => ['Broken Distro', 'No Interop'].includes(distro),
       registry,
       createInstaller: (distro) => ({
         repairManagedRegistration: async () => {
@@ -98,6 +102,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
         userDataPath: '/user-data',
         listDistros: async () => ['Ubuntu'],
         listRunningDistros: async () => ['Ubuntu'],
+        isDistroRunning: async (distro: string) => ['Ubuntu'].includes(distro),
         registry: {
           getCandidates: async () => ['Ubuntu'],
           recordObservations: async () => {
@@ -141,6 +146,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
       userDataPath: '/user-data',
       listDistros: async () => ['Ubuntu'],
       listRunningDistros: async () => ['Ubuntu'],
+      isDistroRunning: async (distro: string) => ['Ubuntu'].includes(distro),
       registry,
       createInstaller: () => ({
         repairManagedRegistration: async () => {
@@ -191,7 +197,9 @@ describe('reconcileManagedWslCliRegistrations', () => {
       isPackaged: true,
       userDataPath: '/user-data',
       listDistros: async () => ['Ubuntu', 'Debian'],
+      listOrcaHostDistros: () => [],
       listRunningDistros: async () => running,
+      isDistroRunning: async (distro: string) => running.includes(distro),
       deferUntilRunning: (distro: string, _key: string, task: () => unknown) => {
         deferred.set(distro, task)
       },
@@ -216,7 +224,65 @@ describe('reconcileManagedWslCliRegistrations', () => {
     expect(repaired).toEqual(['Ubuntu', 'Debian'])
     expect(registry.getCandidates).toHaveBeenLastCalledWith(['Debian'], {
       currentTarget: null,
-      appVersion: ''
+      appVersion: '',
+      inspectableDistros: []
     })
+  })
+
+  it('defers a listed distro that a settled read finds stopped, never spawning its repair (E9)', async () => {
+    const repaired: string[] = []
+    const deferred: string[] = []
+    const results = await reconcileManagedWslCliRegistrations({
+      platform: 'win32',
+      isPackaged: true,
+      userDataPath: '/user-data',
+      listDistros: async () => ['Ubuntu', 'Debian'],
+      // The unsettled list still names Debian while it stops.
+      listRunningDistros: async () => ['Ubuntu', 'Debian'],
+      isDistroRunning: async (distro: string) => distro === 'Ubuntu',
+      deferUntilRunning: (distro: string) => {
+        deferred.push(distro)
+      },
+      registry: {
+        getCandidates: async () => ['Ubuntu', 'Debian'],
+        recordObservations: async () => undefined
+      },
+      createInstaller: (distro: string) => ({
+        repairManagedRegistration: async () => {
+          repaired.push(distro)
+          return { changed: false, managed: true, status: { state: 'installed' as const } }
+        }
+      })
+    })
+
+    expect(repaired).toEqual(['Ubuntu'])
+    expect(deferred).toEqual(['Debian'])
+    expect(results).toContainEqual({ distro: 'Debian', outcome: 'deferred' })
+  })
+
+  it("asks the registry to inspect only distros Orca deployed a host into, read from the user's store", async () => {
+    const registry = {
+      getCandidates: vi.fn(async () => []),
+      recordObservations: vi.fn(async () => undefined)
+    }
+    const createInstaller = vi.fn()
+
+    await reconcileManagedWslCliRegistrations({
+      platform: 'win32',
+      isPackaged: true,
+      userDataPath: '/user-data-without-hosts',
+      listDistros: async () => ['Ubuntu', 'MyDevBox'],
+      getHostLauncherTarget: async () => null,
+      registry,
+      createInstaller
+    })
+
+    // No deployment store exists for this profile: no host, so no distro is inspectable.
+    expect(registry.getCandidates).toHaveBeenCalledWith(['Ubuntu', 'MyDevBox'], {
+      currentTarget: null,
+      appVersion: '',
+      inspectableDistros: []
+    })
+    expect(createInstaller).not.toHaveBeenCalled()
   })
 })

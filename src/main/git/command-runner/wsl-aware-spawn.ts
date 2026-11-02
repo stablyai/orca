@@ -1,6 +1,11 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
-import { resolveCommand } from './wsl-command-resolution'
+import {
+  commandLineLength,
+  MAX_COMMAND_LINE_CHARS,
+  WindowsCommandLineBudgetError
+} from '../../../shared/windows-command-line-budget'
+import { resolveCommand, withWslPreparation } from './wsl-command-resolution'
 
 export function wslAwareSpawn(
   command: string,
@@ -11,15 +16,28 @@ export function wslAwareSpawn(
     useWslLoginShell?: boolean
     wslShellCommand?: string
     cwdFailureExitCode?: number
+    preparation?: { script: string; args: string[] }
   }
 ): ChildProcess {
-  const { wslDistro, useWslLoginShell, wslShellCommand, cwdFailureExitCode, ...spawnOptions } =
-    options
-  const resolved = resolveCommand(command, args, options.cwd, wslDistro, {
+  const {
+    wslDistro,
+    useWslLoginShell,
+    wslShellCommand,
+    cwdFailureExitCode,
+    preparation,
+    ...spawnOptions
+  } = options
+  let resolved = resolveCommand(command, args, options.cwd, wslDistro, {
     useWslLoginShell,
     wslShellCommand,
     ...(cwdFailureExitCode === undefined ? {} : { cwdFailureExitCode })
   })
+  if (preparation && resolved.wsl) {
+    resolved = withWslPreparation(resolved, preparation)
+    if (commandLineLength([resolved.binary, ...resolved.args]) > MAX_COMMAND_LINE_CHARS) {
+      throw new WindowsCommandLineBudgetError()
+    }
+  }
   const spawnStartedAt = performance.now()
   const child = spawn(resolved.binary, resolved.args, {
     ...spawnOptions,

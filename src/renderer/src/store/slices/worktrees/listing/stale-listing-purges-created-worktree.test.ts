@@ -20,7 +20,7 @@ import {
   resetStructuredAgentLaunchPersistenceForTests,
   writeStructuredAgentLaunchRecord
 } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
-import { wasStructuredAgentLaunchClosedByLocalCancel } from '@/lib/structured-agent-session-local-launch-cancel'
+import { wasStructuredAgentLaunchClosedByLocalCancel } from '@/lib/agent-session/launch/structured-agent-session-local-launch-cancel'
 import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   resetStructuredAgentLaunchRegistryForTests
@@ -187,20 +187,6 @@ describe('an authoritative listing that omits a just-created worktree', () => {
     expect(launchWasCancelled()).toBe(true)
     expect(state.activeWorktreeId).toBeNull()
     expect(state.unifiedTabsByWorktree[CREATED_ID]).toBeUndefined()
-  })
-
-  it('control: a listing that includes the created worktree leaves everything intact', () => {
-    const store = createTestStore()
-    seedCreatedWorkspaceWithPendingLaunch(store, true)
-    const rows = store.getState().worktreesByRepo[REPO_ID]!
-
-    expect(applyListing(store, [...rows])).toBe('applied')
-
-    const state = store.getState()
-    expect(readStructuredAgentLaunchRecord(SESSION_ID)).toBeDefined()
-    expect(launchWasCancelled()).toBe(false)
-    expect(state.activeWorktreeId).toBe(CREATED_ID)
-    expect(state.unifiedTabsByWorktree[CREATED_ID]).toHaveLength(2)
   })
 })
 

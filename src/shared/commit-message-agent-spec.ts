@@ -44,8 +44,8 @@ export type CommitMessageAgentSpec = {
   id: TuiAgent
   label: string
   binary: string
-  /** Where the prompt is delivered. Large diffs go via stdin to avoid argv limits. */
-  promptDelivery: 'argv' | 'stdin'
+  /** Transport for the prompt; stdin and file delivery avoid argv limits. */
+  promptDelivery: 'argv' | 'stdin' | 'file'
   buildArgs: (params: {
     prompt: string
     model: string
@@ -94,8 +94,8 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     id: 'omp',
     label: 'OMP',
     binary: 'omp',
-    promptDelivery: 'stdin',
-    buildArgs: ({ model, thinkingLevel }) => [
+    promptDelivery: 'file',
+    buildArgs: ({ prompt, model, thinkingLevel }) => [
       '--print',
       '--no-session',
       '--no-tools',
@@ -105,7 +105,8 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       '--mode',
       'text',
       ...(model && model !== 'default' ? ['--model', model] : []),
-      ...(thinkingLevel ? ['--thinking', thinkingLevel] : [])
+      ...(thinkingLevel ? ['--thinking', thinkingLevel] : []),
+      prompt
     ],
     singletonOptions: [['--model'], ['--thinking']],
     modelSource: 'dynamic',

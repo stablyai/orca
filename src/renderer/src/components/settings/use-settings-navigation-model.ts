@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import { applyDocumentTheme } from '@/lib/document-theme'
+import { resolvePaintedTheme } from '@/lib/terminal-app-theme'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import type { SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
 import { COMPUTER_USE_SKILL_NAME, ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
@@ -33,9 +34,12 @@ export function useSettingsNavigationModel(
     }
   }
 
-  const applyTheme = useCallback((theme: 'system' | 'dark' | 'light') => {
-    applyDocumentTheme(theme)
-  }, [])
+  const applyTheme = useCallback(
+    // Why the painted theme: Match Terminal may paint the other mode than the one picked.
+    (theme: 'system' | 'dark' | 'light') =>
+      applyDocumentTheme(resolvePaintedTheme(model.settings, theme)),
+    [model.settings]
+  )
 
   const displayedGitUsername = model.repos[0]?.gitUsername ?? ''
   const baseNavSections = useSettingsNavigationMetadata()

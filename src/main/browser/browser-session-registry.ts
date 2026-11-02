@@ -58,6 +58,7 @@ class BrowserSessionRegistry {
   private defaultPartition = ORCA_BROWSER_PARTITION
   // Why: profiles change from IPC, the CLI and managed-profile owners; open windows and paired clients only learn of it here.
   onProfilesChanged: (() => void) | null = null
+  onProfileDeleted: ((profileId: string) => Promise<void>) | null = null
 
   constructor() {
     this.resetDefaultProfile()
@@ -130,7 +131,7 @@ class BrowserSessionRegistry {
       }
     }
     if (meta.profiles.length > 0) {
-      this.hydrateFromPersisted(meta.profiles)
+      this.hydrateFromPersisted(meta.profiles, meta.enabledExtensionIdsByProfileId)
     }
 
     // Hydration skips the default profile, so install its policies separately.
@@ -138,13 +139,16 @@ class BrowserSessionRegistry {
     void installBrowserSessionPartitionPolicies(defaultProfile).catch(() => {
       console.warn('[proxy] Failed to apply proxy to browser partition', defaultProfile.partition)
     })
-    this.attachExtensions(defaultProfile)
+    this.attachExtensions(defaultProfile, meta.enabledExtensionIdsByProfileId.default ?? [])
   }
 
   // Why here and not in the partition installer: that installer also serves route, SSH and
   // doc-preview partitions, and release 1 runs extensions only in local browser profiles.
-  private attachExtensions(profile: BrowserSessionProfile): void {
-    attachBrowserExtensionsToProfileSession(profile, this.getEnabledExtensionIds(profile.id))
+  private attachExtensions(
+    profile: BrowserSessionProfile,
+    enabledExtensionIds = this.getEnabledExtensionIds(profile.id)
+  ): void {
+    attachBrowserExtensionsToProfileSession(profile, enabledExtensionIds)
   }
 
   getEnabledExtensionIds(profileId: string): string[] {
@@ -291,7 +295,7 @@ class BrowserSessionRegistry {
     this.persistMeta(
       forgetBrowserSessionProfileMeta(this.loadPersistedMeta(), profile, this.defaultPartition)
     )
-    await retireDeletedBrowserSessionProfile(profile)
+    await retireDeletedBrowserSessionProfile(profile, () => this.onProfileDeleted?.(profileId))
     return true
   }
 
@@ -320,7 +324,10 @@ class BrowserSessionRegistry {
     }
   }
 
-  hydrateFromPersisted(profiles: BrowserSessionProfile[]): void {
+  hydrateFromPersisted(
+    profiles: BrowserSessionProfile[],
+    enabledExtensionIdsByProfileId = this.loadPersistedMeta().enabledExtensionIdsByProfileId
+  ): void {
     for (const profile of profiles) {
       if (!isValidPersistedBrowserSessionProfile(profile, this.activeOrcaProfileId)) {
         continue
@@ -330,7 +337,7 @@ class BrowserSessionRegistry {
         void installBrowserSessionPartitionPolicies(profile).catch(() => {
           console.warn('[proxy] Failed to apply proxy to browser partition', profile.partition)
         })
-        this.attachExtensions(profile)
+        this.attachExtensions(profile, enabledExtensionIdsByProfileId[profile.id] ?? [])
       }
     }
   }

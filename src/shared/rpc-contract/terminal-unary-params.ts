@@ -96,6 +96,8 @@ export const TerminalListParams = z.object({
   requireFreshPtyLiveness: z.boolean().optional(),
   // Only human CLI formatting needs the costly layouts; absent includes them for older clients.
   includeVisualLayouts: z.boolean().optional(),
+  // Readers that never show the output tail drop it; absent includes it, as older hosts always do.
+  includePreview: z.boolean().optional(),
   // Layout-owner hosts show the workspace's unshown live terminals before listing (a window's
   // activation sweep); other hosts drop it, as they did before it existed.
   placeUnshownLiveTerminals: z.boolean().optional()
@@ -212,7 +214,9 @@ const TerminalColorQueryReplyColorsParam = z.object({
 })
 
 export const TerminalSetViewerColors = z.object({
-  colors: TerminalColorQueryReplyColorsParam
+  colors: TerminalColorQueryReplyColorsParam,
+  /** Full appearance for hidden OSC 4/12 and ?996n replies; validated by the host, dropped by older hosts. */
+  attributes: z.unknown().optional()
 })
 
 /** The provider session a terminal's launch resumes. */
@@ -249,6 +253,8 @@ export const TerminalCreateParams = z.object({
   launchAgent: z.string().refine(isTuiAgent).optional(),
   terminalKittyKeyboardProtocol: z.boolean().optional(),
   terminalColorQueryReplies: TerminalColorQueryReplyColorsParam.optional(),
+  /** The creator's palette and cursor, validated by the host; older hosts drop it. */
+  terminalViewAttributes: z.unknown().optional(),
   title: OptionalString,
   focus: z.unknown().optional(),
   // Ignored here; the CLI still sends it for hosts before v1.4.211, which route on it.

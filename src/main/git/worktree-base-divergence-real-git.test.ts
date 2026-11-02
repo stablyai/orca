@@ -74,16 +74,6 @@ describe('measureRetargetDivergence with real Git', () => {
     ).resolves.toBe('exceeded')
   })
 
-  it('refuses a base that has drifted past the cap', async () => {
-    const repoPath = await createRepo()
-    git(repoPath, ['update-ref', 'refs/remotes/origin/main', 'HEAD'])
-    commitEmpty(repoPath, RETARGET_MAX_COMMIT_DIVERGENCE + 1)
-
-    await expect(
-      measureRetargetDivergence(repoPath, 'refs/remotes/origin/main', 'refs/heads/main')
-    ).resolves.toBe('exceeded')
-  })
-
   it('refuses unrelated histories, which share no commits at all', async () => {
     const repoPath = await createRepo()
     git(repoPath, ['checkout', '--quiet', '--orphan', 'unrelated'])

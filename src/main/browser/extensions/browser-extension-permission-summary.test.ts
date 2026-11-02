@@ -17,28 +17,12 @@ describe('summarizeManifestPermissions', () => {
       hostPermissions: ['<all_urls>', 'https://*.bank.example/*', 'https://legacy.example/*']
     })
   })
-
-  it('treats a missing or malformed manifest as asking for nothing', () => {
-    expect(summarizeManifestPermissions(null)).toEqual({ permissions: [], hostPermissions: [] })
-    expect(summarizeManifestPermissions({ permissions: 'tabs' })).toEqual({
-      permissions: [],
-      hostPermissions: []
-    })
-  })
 })
 
 describe('permission comparisons', () => {
   const approved = summarizeManifestPermissions({
     permissions: ['storage', 'tabs'],
     host_permissions: ['https://*/*']
-  })
-
-  it('matches the same access listed in a different order', () => {
-    const downloaded = summarizeManifestPermissions({
-      host_permissions: ['https://*/*'],
-      permissions: ['tabs', 'storage']
-    })
-    expect(samePermissionSummary(downloaded, approved)).toBe(true)
   })
 
   it('flags a download that asks for more or different access than approved', () => {

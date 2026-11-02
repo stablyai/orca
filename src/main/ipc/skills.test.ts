@@ -230,14 +230,20 @@ describe('registerSkillsHandlers', () => {
     expect(discoverSkillObservationInWslMock).toHaveBeenCalled()
   })
 
-  it('lets the Share dialog, which sends no target, read a stopped distro’s repo skills', async () => {
+  it('lets the Share dialog, which sends no target, read only its chosen skills’ stopped roots', async () => {
     registerSkillsHandlers(store as never, bundledRuntime() as never) // oxlint-disable-line typescript/consistent-type-assertions -- SAFETY: registration reads only getRepos and the runtime's provider roots.
     const shareDiscover = registerSkillCloudIpcHandlersMock.mock.lastCall?.[1]
+    const chosen = ['\\\\wsl.localhost\\Ubuntu\\home\\me\\repo\\.agents\\skills\\a']
 
-    await shareDiscover(undefined)
-
+    await shareDiscover(undefined, chosen)
     expect(discoverSkillsMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({ repos, gateStoppedWslDistros: false })
+      expect.objectContaining({ repos, readStoppedWslRootsFor: chosen })
+    )
+
+    // A caller that cannot name folders keeps the earlier behavior.
+    await shareDiscover(undefined)
+    expect(discoverSkillsMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ repos, readStoppedWslRootsFor: 'all' })
     )
   })
 
@@ -245,7 +251,7 @@ describe('registerSkillsHandlers', () => {
     const handler = getDiscoverHandler()
     await handler(null, undefined)
     expect(discoverSkillsMock).toHaveBeenLastCalledWith(
-      expect.not.objectContaining({ gateStoppedWslDistros: false })
+      expect.not.objectContaining({ readStoppedWslRootsFor: expect.anything() })
     )
   })
 

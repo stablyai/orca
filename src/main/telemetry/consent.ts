@@ -49,7 +49,7 @@ export function _resetMisconfigWarnCacheForTests(): void {
   warnedMisconfigured.clear()
 }
 
-export function resolveConsent(settings: GlobalSettings): ConsentState {
+function resolveEnvOverride(): ConsentState | null {
   if (isEnvVarTruthy('DO_NOT_TRACK')) {
     return { effective: 'disabled', reason: 'do_not_track' }
   }
@@ -59,6 +59,19 @@ export function resolveConsent(settings: GlobalSettings): ConsentState {
   // Any nonempty CI marker disables transmission, including non-boolean build IDs.
   if (CI_ENV_VARS.some((v) => process.env[v] !== undefined && process.env[v] !== '')) {
     return { effective: 'disabled', reason: 'ci' }
+  }
+  return null
+}
+
+/** Env/CI overrides beat any stored choice, so consent-change paths must not re-enable or emit through them. */
+export function isConsentEnvOverridden(): boolean {
+  return resolveEnvOverride() !== null
+}
+
+export function resolveConsent(settings: GlobalSettings): ConsentState {
+  const envOverride = resolveEnvOverride()
+  if (envOverride) {
+    return envOverride
   }
 
   const t = settings.telemetry

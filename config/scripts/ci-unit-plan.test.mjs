@@ -86,7 +86,7 @@ it.each([
   }
 )
 
-it.each(['5', '6', '10', 'invalid', '11'])(
+it.each(['5', '6', '16', 'invalid', '17'])(
   'validates the requested full shard count and keeps fallback coverage: %s',
   (requestedCount) => {
     const root = mkdtempSync(join(tmpdir(), 'orca-unit-count-'))
@@ -105,10 +105,10 @@ it.each(['5', '6', '10', 'invalid', '11'])(
           ORCA_SHARD_SOURCE_SHA: 'full-count-fixture'
         }
       })
-      if (['invalid', '11'].includes(requestedCount)) {
+      if (['invalid', '17'].includes(requestedCount)) {
         expect(result.code).not.toBe(0)
         expect(result.stderr).toContain(
-          'ORCA_UNIT_FULL_SHARD_COUNT must be an integer from 2 to 10'
+          'ORCA_UNIT_FULL_SHARD_COUNT must be an integer from 2 to 16'
         )
         return
       }

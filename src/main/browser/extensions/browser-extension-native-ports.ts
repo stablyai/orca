@@ -49,6 +49,7 @@ let nextSessionId = 1
 const observedSessions = new WeakSet<Electron.Session>()
 const observedContents = new WeakSet<Electron.WebContents>()
 let frameSweep: NodeJS.Timeout | null = null
+let framePortCount = 0
 
 function sessionId(sess: Electron.Session): number {
   let id = sessionIds.get(sess)
@@ -92,9 +93,12 @@ function finish(port: NativePort): void {
   }
   port.closed = true
   ports.delete(port.key)
+  if (port.owner.kind === 'frame') {
+    framePortCount -= 1
+  }
   port.task?.end()
   port.connection?.close()
-  if (frameSweep && ![...ports.values()].some((open) => open.owner.kind === 'frame')) {
+  if (frameSweep && framePortCount === 0) {
     clearInterval(frameSweep)
     frameSweep = null
   }
@@ -228,6 +232,9 @@ export async function openNativePort(
     onEvent
   }
   ports.set(key, port)
+  if (owner.kind === 'frame') {
+    framePortCount += 1
+  }
   observeSession(caller.session)
   if (caller.webContents && owner.kind === 'frame') {
     observeFrameOwner(caller.webContents)

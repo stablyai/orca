@@ -64,7 +64,8 @@ export const createWorkItemMutationActions = (
           continue
         }
         const updatedItems = [...entry.data]
-        updatedItems[idx] = { ...updatedItems[idx], ...patch }
+        const row = updatedItems[idx]
+        updatedItems[idx] = { ...row, ...(typeof patch === 'function' ? patch(row) : patch) }
         nextCache[key] = { ...entry, data: updatedItems }
         changed = true
       }

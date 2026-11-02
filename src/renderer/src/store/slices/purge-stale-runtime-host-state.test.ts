@@ -108,7 +108,22 @@ describe('purgeStaleRuntimeHostState', () => {
     })
     const epochBefore = store.getState().sortEpoch
 
+    const paneKey = `${TAB_A}:leaf`
+    const previous = {
+      paneKey,
+      state: 'done' as const,
+      prompt: '',
+      updatedAt: 1,
+      stateStartedAt: 1,
+      stateHistory: [],
+      terminalResumeEligible: false as const
+    }
+    store.setState({ agentStatusByPaneKey: { [paneKey]: previous } })
+    const accepted = vi.fn()
+    const dispose = store.getState().subscribeAgentStatusChanges(accepted)
     store.getState().purgeStaleRuntimeHostState(['env-a'])
+    expect(accepted).toHaveBeenCalledExactlyOnceWith([{ paneKey, previous, current: undefined }])
+    dispose()
 
     const s = store.getState()
     expect(s.repos.map((r) => r.id)).toEqual(['repo1', 'repoServing'])

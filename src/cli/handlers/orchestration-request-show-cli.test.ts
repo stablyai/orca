@@ -9,14 +9,19 @@ import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
 import { okFixture } from '../test-fixtures'
+import { orchestrationTestContext } from './orchestration-handler-test-context'
 
 async function runRequestShow(): Promise<void> {
-  await ORCHESTRATION_HANDLERS['orchestration request-show']({
-    flags: new Map<string, string | boolean>([['request', 'request_1']]),
-    client: { call: callMock },
-    cwd: '/tmp/repo',
-    json: false
-  } as never)
+  await ORCHESTRATION_HANDLERS['orchestration request-show'](
+    orchestrationTestContext(
+      callMock,
+      new Map<string, string | boolean>([
+        ['full', true],
+        ['request', 'request_1']
+      ]),
+      false
+    )
+  )
 }
 
 describe('orchestration request-show', () => {

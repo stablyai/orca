@@ -3,6 +3,7 @@ import type {
   CsvWorkerResponse,
   CsvWorkerValue
 } from './csv-preview-worker-protocol'
+import { CsvPreviewError } from './csv-preview-error'
 
 export class CsvPreviewWorkerClient {
   private worker = new Worker(new URL('./csv-preview.worker.ts', import.meta.url), {
@@ -23,18 +24,18 @@ export class CsvPreviewWorkerClient {
       if (response.ok) {
         request?.resolve(response.value)
       } else {
-        request?.reject(new Error(response.error))
+        request?.reject(
+          response.code ? new CsvPreviewError(response.code) : new Error(response.error)
+        )
       }
     }
-    this.worker.onerror = () =>
-      this.close(new Error('CSV preview worker failed. Reload the file to retry.'))
-    this.worker.onmessageerror = () =>
-      this.close(new Error('CSV preview worker returned an unreadable response.'))
+    this.worker.onerror = () => this.close(new CsvPreviewError('worker-failed'))
+    this.worker.onmessageerror = () => this.close(new CsvPreviewError('worker-unreadable-response'))
   }
 
   request(command: CsvWorkerCommand): Promise<CsvWorkerValue> {
     if (this.closed) {
-      return Promise.reject(new Error('CSV preview was canceled'))
+      return Promise.reject(new CsvPreviewError('canceled'))
     }
     const id = ++this.nextId
     return new Promise((resolve, reject) => {
@@ -48,7 +49,7 @@ export class CsvPreviewWorkerClient {
     })
   }
 
-  close(error = new Error('CSV preview was canceled')): void {
+  close(error = new CsvPreviewError('canceled')): void {
     this.closed = true
     this.worker.terminate()
     for (const request of this.pending.values()) {

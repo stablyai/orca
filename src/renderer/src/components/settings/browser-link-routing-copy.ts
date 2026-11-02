@@ -14,12 +14,12 @@ export function getBrowserLinkRoutingDescription(
   if (modifierInverts) {
     return translate(
       'auto.components.settings.BrowserLinkRoutingSetting.descriptionBase',
-      "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor."
+      'Open http(s) links from anywhere in Orca in its built-in browser. Sign-in pages still open in your system browser.'
     )
   }
   return translate(
     'auto.components.settings.BrowserLinkRoutingSetting.description',
-    "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. {{shortcut}} always uses your system browser.",
+    'Open http(s) links from anywhere in Orca in its built-in browser. Sign-in pages and {{shortcut}} always use your system browser.',
     { shortcut: getBrowserLinkRoutingShortcutLabel(platform) }
   )
 }

@@ -49,10 +49,14 @@ export function getComputerObserveFlags(flags: Map<string, string | boolean>): {
 export function getComputerActionObserveFlags(flags: Map<string, string | boolean>): {
   noScreenshot?: boolean
   restoreWindow?: boolean
+  treeDiff?: boolean
   windowId?: number
   windowIndex?: number
 } {
-  return getComputerObserveFlags(flags)
+  return {
+    ...getComputerObserveFlags(flags),
+    ...(flags.has('full-tree') ? {} : { treeDiff: true })
+  }
 }
 
 export function getComputerClickActionFlags(flags: Map<string, string | boolean>): {

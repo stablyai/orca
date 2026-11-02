@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 const mockKill = vi.fn().mockResolvedValue(undefined)
 const mockRuntimeCall = vi.fn().mockResolvedValue({

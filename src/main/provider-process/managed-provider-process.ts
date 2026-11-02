@@ -12,11 +12,11 @@ import {
   type ProviderProcessTeardownVerdict
 } from './provider-process-teardown'
 import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
-import { isMissingProviderExecutable } from './provider-executable-missing'
+import { providerSpawnAbsence, type ProviderSpawnAbsence } from './provider-executable-missing'
 import { supervisedProviderSpawnFailure } from './provider-spawn-failure-report'
 import { guardSupervisedProviderGroup } from './provider-group-orphan-guard'
 import {
-  acceptProviderRootExit,
+  acceptProviderWriterClose,
   closeProviderProcess,
   rootOnlyProviderClosePolicy,
   type ProviderProcessClosePolicy,
@@ -39,7 +39,7 @@ type ManagedProviderProcessOptions = {
   spawnImpl?: PipedProcessSpawner
   platform?: NodeJS.Platform
   inheritedEnv?: NodeJS.ProcessEnv
-  /** Defaults to accepting root exit without descendant proof. */
+  /** Defaults to accepting root exit or delivered writer termination without descendant proof. */
   acceptClose?: (result: ProviderProcessCloseResult) => boolean
   /** Defaults to `session`; a one-shot's stdin end completes its request instead of stopping it. */
   lifetime?: ProviderSupervisorLifetime
@@ -59,18 +59,22 @@ export type ManagedProviderProcess = {
   readonly rootVerdict: DescendantTreeVerdict
   /** A process that existed was seen to exit; never true for a processless child. */
   readonly rootExitObserved: boolean
-  /** The last close that ran the ladder; the already-exited answer only when none did. */
+  /** Retained close evidence on this handle; a late root event keeps its earlier diagnostic. */
   readonly lastCloseResult: ProviderProcessCloseResult | null
   /** First exit observation, including processless spawn failure; null before either is observed. */
   readonly exitStatus: ProviderProcessExit | null
   readonly exitPromise: Promise<void>
   /** Direct or supervisor-reported ENOENT for the provider executable. */
   readonly executableMissing: boolean
+  /** What that ENOENT proves absent; the working folder, not the CLI, when the cwd is gone. */
+  readonly spawnAbsence: ProviderSpawnAbsence | null
   /** The last 8 KiB of stderr, which the managed process drains so the child never blocks on it. */
   stderrTail(): string
   onExit(listener: (exit: ProviderProcessExit) => void): void
   terminateTree(): Promise<ProviderProcessTeardownVerdict>
   close(tree?: ProviderProcessTree): Promise<ProviderProcessCloseResult>
+  /** Writer retirement can finish while explicitly stricter tree cleanup remains retryable. */
+  closeWriter(tree: ProviderProcessTree): Promise<ProviderProcessCloseResult>
 }
 
 export function spawnManagedProviderProcess(
@@ -104,7 +108,7 @@ export function spawnManagedProviderProcess(
   let spawnFailed = false
   let spawnError: unknown = null
   let lastCloseResult: ProviderProcessCloseResult | null = null
-  const exitProof = new RetryableProcessExitProof(options.acceptClose ?? acceptProviderRootExit)
+  const exitProof = new RetryableProcessExitProof(options.acceptClose ?? acceptProviderWriterClose)
   let stderrTail = ''
   let stderrLine = ''
   let lineCut = false
@@ -161,8 +165,66 @@ export function spawnManagedProviderProcess(
   })
   const rootVerdict = (): DescendantTreeVerdict =>
     observed ? 'exited' : child.pid === undefined ? 'unverifiable' : 'live'
+  // Settled once a failure exists, so the cwd is stat'd at most once and only on failure.
+  let absence: ProviderSpawnAbsence | null | undefined
+  const spawnAbsence = (): ProviderSpawnAbsence | null => {
+    if (absence !== undefined) {
+      return absence
+    }
+    // A direct spawn error names what this process spawned: the supervisor, when there is one.
+    if (spawnError) {
+      const direct = providerSpawnAbsence(spawnError, spec.program, launch.cwd)
+      // A missing supervisor is Orca's own binary (e.g. mid-update), never the agent's CLI.
+      absence = spec.supervised && direct === 'executable' ? null : direct
+      return absence
+    }
+    const reported = observed ? supervisedProviderSpawnFailure(observed.code, stderrTail) : null
+    if (!reported) {
+      return null
+    }
+    absence = providerSpawnAbsence(reported.error, launch.command, launch.cwd)
+    return absence
+  }
   const terminateTree = (): Promise<ProviderProcessTeardownVerdict> =>
-    terminateProviderProcessTree(child, { site: options.site, platform })
+    terminateProviderProcessTree(child, {
+      site: options.site,
+      platform,
+      supervised: spec.supervised
+    })
+
+  const knownWriterClose = (tree?: ProviderProcessTree): ProviderProcessCloseResult | null => {
+    if (!lastCloseResult?.killDelivered && tree?.killDelivered) {
+      lastCloseResult = { root: rootVerdict(), tree: tree.treeVerdict, killDelivered: true }
+    }
+    return lastCloseResult?.killDelivered ? lastCloseResult : null
+  }
+
+  const close = (tree?: ProviderProcessTree): Promise<ProviderProcessCloseResult> =>
+    exitProof.run(async () => {
+      const known = knownWriterClose(tree)
+      if (known && !options.acceptClose) {
+        return known
+      }
+      if (observed && !tree) {
+        const result: ProviderProcessCloseResult = { root: 'exited', tree: null }
+        lastCloseResult ??= result
+        return result
+      }
+      const result = await closeProviderProcess({
+        child,
+        exitPromise,
+        rootVerdict,
+        supervised: spec.supervised,
+        policy,
+        tree,
+        terminateTree
+      })
+      lastCloseResult = {
+        ...result,
+        ...(lastCloseResult?.killDelivered || tree?.killDelivered ? { killDelivered: true } : {})
+      }
+      return lastCloseResult
+    })
 
   return {
     child,
@@ -181,10 +243,10 @@ export function spawnManagedProviderProcess(
       return observed !== null && !observed.processless
     },
     get executableMissing() {
-      const failure =
-        spawnError ??
-        (observed ? supervisedProviderSpawnFailure(observed.code, stderrTail)?.error : null)
-      return isMissingProviderExecutable(failure, launch.command)
+      return spawnAbsence() === 'executable'
+    },
+    get spawnAbsence() {
+      return spawnAbsence()
     },
     stderrTail: () => stderrTail,
     get lastCloseResult() {
@@ -198,29 +260,10 @@ export function spawnManagedProviderProcess(
       }
     },
     terminateTree,
-    close(tree) {
-      return exitProof.run(async () => {
-        // An already-exited response must preserve findings from the earlier close.
-        if (observed && !tree) {
-          const result: ProviderProcessCloseResult = {
-            root: 'exited',
-            tree: null
-          }
-          lastCloseResult ??= result
-          return result
-        }
-        const result = await closeProviderProcess({
-          child,
-          exitPromise,
-          rootVerdict,
-          supervised: spec.supervised,
-          policy,
-          tree,
-          terminateTree
-        })
-        lastCloseResult = result
-        return result
-      })
+    close,
+    closeWriter(tree) {
+      const known = knownWriterClose(tree)
+      return known ? Promise.resolve(known) : close(tree)
     }
   }
 }

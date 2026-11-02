@@ -2,13 +2,11 @@
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
-import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
-import {
-  structuredAgentSessionDeliveryNotices,
-  structuredAgentSessionStartFailureFacts
-} from './structured-agent-session-delivery-notices'
+import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
+import { agentSessionVisibleFailureFacts } from '../../../../shared/agent-session/failures/agent-session-visible-failures'
 
 afterEach(cleanup)
 describe('each agent names its own sign-in method before a send', () => {
@@ -23,7 +21,6 @@ describe('each agent names its own sign-in method before a send', () => {
     const { result } = renderHook(() =>
       useNativeChatAvailabilityNotice({
         agent,
-        agentLabel,
         unavailable: { reason: 'notSignedIn' },
         launchFailure: null,
         journalItems: []
@@ -55,7 +52,6 @@ it('keeps one auth explanation while an unechoed message still reads as unsent',
   const { result } = renderHook(() =>
     useNativeChatAvailabilityNotice({
       agent: 'codex',
-      agentLabel: 'Codex',
       unavailable: { reason: 'notSignedIn', account: 'system' },
       launchFailure: null,
       journalItems: [authRow]
@@ -65,7 +61,7 @@ it('keeps one auth explanation while an unechoed message still reads as unsent',
   const notices = structuredAgentSessionDeliveryNotices({
     pending: [],
     agentName: 'Codex',
-    startFailures: structuredAgentSessionStartFailureFacts([authRow]),
+    startFailures: agentSessionVisibleFailureFacts([authRow]),
     submissions: [
       {
         clientMessageId: 'send',
@@ -113,7 +109,6 @@ it("steps aside while the newest send's own line says the notice's reason", () =
     renderHook(() =>
       useNativeChatAvailabilityNotice({
         agent: 'pi',
-        agentLabel: 'Pi',
         unavailable: { reason: 'notSignedIn' },
         launchFailure: null,
         journalItems,
@@ -136,4 +131,27 @@ it("steps aside while the newest send's own line says the notice's reason", () =
     notice([sent('a', { at: 5, sequence: 1 }, 'notSignedIn'), sent('b', { at: 2, sequence: 2 })])
       ?.text
   ).toContain('/login')
+})
+
+describe('a missing agent CLI', () => {
+  const missing = (wslDistro?: string) =>
+    renderHook(() =>
+      useNativeChatAvailabilityNotice({
+        agent: 'claude',
+        ...(wslDistro ? { wslDistro } : {}),
+        unavailable: { reason: 'cliMissing' },
+        launchFailure: null,
+        journalItems: []
+      })
+    ).result.current?.text
+
+  it('names the WSL distro on a WSL host', () => {
+    expect(missing('Ubuntu')).toBe(
+      "Claude isn't installed in the WSL distro Ubuntu. Install it inside Ubuntu, or check its Command in Settings → Agents."
+    )
+  })
+
+  it('keeps the computer wording elsewhere', () => {
+    expect(missing()).toContain("Claude wasn't found on the computer running this chat.")
+  })
 })

@@ -1,24 +1,21 @@
-import { useContext, useEffect, useState } from 'react'
+import { useCallback, useContext, useEffect, useState } from 'react'
 import { Image, Pressable, Text, View } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { MobileMarkdown } from '../../../components/MobileMarkdown'
-import { isImageRefBlock, isTextBlock } from '../../../../../src/shared/native-chat-types'
-import type {
-  NativeChatBlock,
-  NativeChatImageRefBlock
-} from '../../../../../src/shared/native-chat-types'
 import {
-  AGENT_SESSION_HOST_STATUS_COPY,
-  isAgentSessionHostStatusPresentation
-} from '../../../../../src/shared/agent-session-host-status-rows'
+  isImageRefBlock,
+  isTextBlock,
+  type NativeChatBlock,
+  type NativeChatImageRefBlock
+} from '../../../../../src/shared/native-chat/native-chat-types'
+import { isAgentSessionHostStatusPresentation } from '../../../../../src/shared/agent-session/view/agent-session-host-status-rows'
 import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../../src/shared/native-chat/native-chat-visual-directive'
-import { isAgentSessionAttachmentStorePath } from '../../../../../src/shared/agent-session-attachments'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import {
   isRenderableImageUri,
-  readStoredChatImage
+  readHostChatImage,
+  type MobileNativeChatImageSource
 } from '../visual/mobile-native-chat-image-preview'
-import type { RpcClient } from '../../../transport/rpc-client'
 import {
   CHAT_PROSE_SCALE,
   scaledType,
@@ -27,6 +24,37 @@ import {
 } from './mobile-native-chat-message-styles'
 import type { MobileNativeChatVisualRender } from '../visual/mobile-native-chat-visual-context'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import { nativeChatHostStatusCopy } from './native-chat-notice-copy'
+import { pressedStyle } from '../../../theme/mobile-theme'
+import { routeNativeChatHref } from '../../../../../src/shared/native-chat/native-chat-href-routing'
+import { isRuntimePathAbsolute } from '../../../../../src/shared/cross-platform-path'
+import { isRasterImagePath } from '../../../../../src/shared/file-preview-kind'
+import { isKnownRasterImageMimeType } from '../../../../../src/shared/raster-image-preview-limits'
+import { isSvgFilePath } from '../../../../../src/shared/svg-document'
+
+/** Raster https, data and absolute-path images draw on the phone (paths through the chat's host); anything else stays a link.
+ *  The shell's CSP refuses plain http, and React Native's Image cannot draw SVG. */
+function markdownImageBlock(href: string, alt: string): NativeChatImageRefBlock | null {
+  const label = alt.trim() ? { alt } : {}
+  const source = href.trim()
+  if (/^data:/i.test(source)) {
+    return isKnownRasterImageMimeType(source.slice(5).split(/[;,]/, 1)[0])
+      ? { type: 'image-ref', url: source, ...label }
+      : null
+  }
+  const route = routeNativeChatHref(source)
+  if (route.kind === 'web') {
+    return /^https:/i.test(route.url) && !isSvgFilePath(route.url.split(/[?#]/, 1)[0] ?? '')
+      ? { type: 'image-ref', url: route.url, ...label }
+      : null
+  }
+  return route.kind === 'file' &&
+    isRuntimePathAbsolute(route.pathText) &&
+    isRasterImagePath(route.pathText)
+    ? { type: 'image-ref', path: route.pathText, ...label }
+    : null
+}
 
 export function Prose({
   block,
@@ -53,6 +81,16 @@ export function Prose({
   onLongPress?: () => void
 }): React.JSX.Element | null {
   useMobileColorScheme()
+  const t = useMobileTranslation()
+  const renderImage = useCallback(
+    (href: string, alt: string): React.ReactNode => {
+      const image = markdownImageBlock(href, alt)
+      return image ? (
+        <ImageAttachment block={image} fontScale={fontScale} onLongPress={onLongPress} />
+      ) : null
+    },
+    [fontScale, onLongPress]
+  )
   if (isTextBlock(block)) {
     if (isAgentSessionHostStatusPresentation(block.presentation)) {
       return (
@@ -60,7 +98,7 @@ export function Prose({
           selectable={INLINE_TEXT_SELECTION}
           style={[styles.hostNotice, scaledType(TEXT_SIZE, fontScale)]}
         >
-          {AGENT_SESSION_HOST_STATUS_COPY[block.presentation]}
+          {nativeChatHostStatusCopy(t)[block.presentation]}
         </Text>
       )
     }
@@ -73,6 +111,7 @@ export function Prose({
           textScale={CHAT_PROSE_SCALE * fontScale}
           onOpenFile={onOpenFile}
           onLongPress={onLongPress}
+          renderImage={renderImage}
         />
       )
     }
@@ -89,6 +128,7 @@ export function Prose({
         textScale={CHAT_PROSE_SCALE * fontScale}
         onOpenFile={onOpenFile}
         onLongPress={onLongPress}
+        renderImage={renderImage}
       />
     )
   }
@@ -98,7 +138,7 @@ export function Prose({
   return null
 }
 
-// Host paths cannot load on the phone; the chat's host reads its attachment store, anything else stays a placeholder.
+// Host paths cannot load on the phone; the chat's host reads them, and a refused read stays a placeholder.
 function ImageAttachment({
   block,
   fontScale,
@@ -109,51 +149,50 @@ function ImageAttachment({
   onLongPress?: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
-  const { openImage, imageClient } = useContext(MobileNativeChatRowOverlaysContext)
+  const t = useMobileTranslation()
+  const { openImage, imageSource } = useContext(MobileNativeChatRowOverlaysContext)
   const direct = block.url ?? block.path
   const renderable = isRenderableImageUri(direct) ? direct : null
-  const storedPath =
-    !renderable && imageClient && block.path && isAgentSessionAttachmentStorePath(block.path)
-      ? block.path
-      : null
-  const [stored, setStored] = useState<{
-    client: RpcClient
+  const hostPath = !renderable && imageSource && block.path ? block.path : null
+  const [hostRead, setHostRead] = useState<{
+    source: MobileNativeChatImageSource
     path: string
     uri: string | null
   } | null>(null)
   useEffect(() => {
-    if (!imageClient || !storedPath) {
+    if (!imageSource || !hostPath) {
       return
     }
     const unmounted = new AbortController()
-    void readStoredChatImage(imageClient, storedPath, unmounted.signal).then((uri) => {
+    void readHostChatImage(imageSource, hostPath, unmounted.signal).then((uri) => {
       if (!unmounted.signal.aborted) {
-        setStored({ client: imageClient, path: storedPath, uri })
+        setHostRead({ source: imageSource, path: hostPath, uri })
       }
     })
     return () => unmounted.abort()
-  }, [imageClient, storedPath])
+  }, [imageSource, hostPath])
   const read =
-    storedPath && stored?.path === storedPath && stored.client === imageClient ? stored : null
+    hostPath && hostRead?.path === hostPath && hostRead.source === imageSource ? hostRead : null
   const uri = renderable ?? read?.uri
-  const label = block.alt ?? 'Attached image'
-  if (storedPath && !read) {
+  const label = block.alt ?? t('chat.nativeChatProse.attachedImage', 'Attached image')
+  if (hostPath && !read) {
     return <View style={styles.imageThumb} accessibilityLabel={label} />
   }
   if (!uri) {
     return (
       <Text style={[styles.imageRef, { fontSize: TEXT_SIZE * fontScale }]}>
-        🖼 {block.alt ?? block.path ?? block.url ?? 'image'}
+        🖼 {block.alt ?? block.path ?? block.url ?? t('chat.nativeChatProse.image', 'image')}
       </Text>
     )
   }
   return (
     <Pressable
+      style={({ pressed }) => pressed && pressedStyle}
       onPress={() => openImage({ uri, label })}
       onLongPress={onLongPress}
       accessibilityRole="imagebutton"
       accessibilityLabel={label}
-      accessibilityHint="Opens the image full size"
+      accessibilityHint={t('chat.nativeChatProse.openImageHint', 'Opens the image full size')}
     >
       <Image source={{ uri }} style={styles.imageThumb} resizeMode="contain" />
     </Pressable>

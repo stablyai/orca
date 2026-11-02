@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type * as Ansi from '../../shared/ansi-escape-sequences'
-const { git, execute, scan } = vi.hoisted(() => ({ git: vi.fn(), execute: vi.fn(), scan: vi.fn() }))
+const { git, execute, scan, signature } = vi.hoisted(() => ({
+  git: vi.fn(),
+  execute: vi.fn(),
+  scan: vi.fn(),
+  signature: vi.fn()
+}))
 vi.mock('../git/runner', () => ({ gitExecFileAsync: git, glabExecFileAsync: execute }))
+vi.mock('../github/local-git-config-signature', () => ({ readLocalGitConfigSignature: signature }))
 vi.mock('../../shared/ansi-escape-sequences', async (original) => {
   const actual = await original<typeof Ansi>()
   return {
@@ -33,12 +39,24 @@ const counts = () => [
   execute.mock.calls.filter(([a]) => a.length === 2).length,
   execute.mock.calls.filter(([a]) => a[2] === '--hostname').length
 ]
+const urlReads = () => git.mock.calls.filter(([args]) => args[1] === 'get-url').length
+let remoteUrl: string
 let globalError: Error | undefined
 let hostError: Error | undefined
 beforeEach(() => {
   _resetKnownHostsCache()
   _resetProjectRefCache()
-  git.mockReset().mockResolvedValue({ stdout: 'https://alpha.test:8443/group/project.git\n' })
+  signature.mockReset().mockResolvedValue('sig-1')
+  remoteUrl = 'https://alpha.test:8443/group/project.git'
+  git.mockReset().mockImplementation(async (args: string[]) => {
+    if (args[0] === 'remote' && args[1] === 'get-url') {
+      return { stdout: remoteUrl }
+    }
+    if (args[0] === 'remote' && args[1] === '-v') {
+      return { stdout: `origin\t${remoteUrl} (fetch)\n` }
+    }
+    throw new Error(`Unexpected git command: ${args.join(' ')}`)
+  })
   scan.mockClear()
   vi.spyOn(Date, 'now').mockReturnValue(1_000)
   globalError = failure(login('alpha.test:8443'))
@@ -58,7 +76,7 @@ afterEach(() => vi.restoreAllMocks())
 it.each([false, true])(
   'preserves cached misses and current remote, late facts=%s',
   async (late) => {
-    git.mockResolvedValue({ stdout: 'https://beta.test/group/project.git\n' })
+    remoteUrl = 'https://beta.test/group/project.git'
     expect((await fetchIssues()).error?.type).toBe('not_found')
     vi.mocked(Date.now).mockReturnValue(15_999)
     expect((await fetchIssues()).error?.type).toBe('not_found')
@@ -73,15 +91,28 @@ it.each([false, true])(
       )
     } else {
       expect(result.error?.type).toBe('not_found')
-      expect(git).toHaveBeenCalledTimes(1)
-      git.mockResolvedValue({ stdout: 'https://changed.test/group/project.git\n' })
+      expect(urlReads()).toBe(1)
+      remoteUrl = 'https://changed.test/group/project.git'
       vi.mocked(Date.now).mockReturnValue(1_000 + NEGATIVE_ENTRY_TTL_MS)
       expect((await fetchIssues()).error?.type).toBe('not_found')
-      expect(git).toHaveBeenCalledTimes(2)
+      expect(urlReads()).toBe(2)
     }
     expect(counts()).toEqual(late ? [3, 2] : [2, 1])
   }
 )
+it('applies late partial facts only to the current unsigned remote', async () => {
+  signature.mockResolvedValue(undefined)
+  remoteUrl = 'https://beta.test/group/project.git'
+  expect((await fetchIssues()).error?.type).toBe('not_found')
+  vi.mocked(Date.now).mockReturnValue(16_000)
+  globalError = failure(login('beta.test'))
+  remoteUrl = 'https://changed.test/group/project.git'
+  expect((await fetchIssues()).error?.type).toBe('not_found')
+  remoteUrl = 'https://beta.test/group/project.git'
+  expect((await fetchIssues()).items[0]?.number).toBe(7)
+  expect(urlReads()).toBe(3)
+  expect(counts()).toEqual([2, 2])
+})
 it.each([100, 1_000])(
   'bounds global/project work and finite evidence at %i consumers/hosts',
   async (n) => {

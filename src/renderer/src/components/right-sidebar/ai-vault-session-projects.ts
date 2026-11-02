@@ -15,8 +15,8 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import {
   aiVaultSessionProjectCwdKey,
-  matchAiVaultProjectCandidates
-} from './ai-vault-session-project-candidates'
+  matchAiVaultSessionCwdCandidates
+} from '../../../../shared/ai-vault-session-cwd-candidates'
 import {
   folderGroupKey,
   folderLabel,
@@ -264,7 +264,7 @@ function resolveSessionProject(
     return { kind: 'unknown', key: 'unknown', label: '' }
   }
 
-  const matches = matchAiVaultProjectCandidates(session, cwd, candidates, compareCandidates)
+  const matches = matchAiVaultSessionCwdCandidates(session, cwd, candidates, compareCandidates)
   const sessionHostId = normalizeExecutionHostId(session.executionHostId)
   const hostMatches = sessionHostId
     ? matches.filter((candidate) => candidate.hostKey === sessionHostId)

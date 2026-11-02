@@ -1,3 +1,4 @@
+import type { DirectWorkItemLaunchResult } from '@/lib/direct-work-item-setup'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
@@ -33,6 +34,9 @@ export async function saveFixChecksActionDefault(
 }
 
 export async function startFixChecksFromDialog(args: {
+  signal?: AbortSignal
+  onCreateAccepted?: () => void
+  onFailureNotified?: () => void
   targetRepoId: string | null
   item: GitHubWorkItem
   agent: Parameters<typeof launchWorkItemDirect>[0]['agentOverride']
@@ -43,11 +47,14 @@ export async function startFixChecksFromDialog(args: {
   launchChoice?: Parameters<typeof launchWorkItemDirect>[0]['launchChoice']
   agentLaunchPreferences?: Parameters<typeof launchWorkItemDirect>[0]['agentLaunchPreferences']
   sessionOptionsYieldToAgentArgs?: true
-}): Promise<boolean> {
+}): Promise<DirectWorkItemLaunchResult> {
   if (!args.targetRepoId) {
     return false
   }
   return await launchWorkItemDirect({
+    signal: args.signal,
+    onCreateAccepted: args.onCreateAccepted,
+    onFailureNotified: args.onFailureNotified,
     item: { ...args.item, repoId: args.targetRepoId, pasteContent: args.commandInput },
     repoId: args.targetRepoId,
     launchSource: 'task_page',
@@ -104,6 +111,7 @@ export async function fixBrokenPullRequestChecks(args: {
       basePrompt,
       launchSource: 'task_page',
       telemetrySource: 'sidebar',
+      onSetupRequired: () => args.setFixChecksComposerPrompt(basePrompt),
       openModalFallback: () => {
         args.setFixChecksComposerPrompt(basePrompt)
       }

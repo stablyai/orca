@@ -4,22 +4,7 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
 import { collectLocalizationReferences } from './verify-localization-catalog.mjs'
-
-export const EN_CATALOG_RELATIVE_PATH = path.join(
-  'src',
-  'renderer',
-  'src',
-  'i18n',
-  'locales',
-  'en.json'
-)
-export const RUNTIME_REQUIRED_RELATIVE_PATH = path.join(
-  'src',
-  'renderer',
-  'src',
-  'i18n',
-  'en-runtime-required.json'
-)
+import { readLocalizationSurface } from './localization-surfaces.mjs'
 
 // i18next resolves CLDR plural suffixes only from catalog, never defaultValue.
 const PLURAL_SUFFIX_RE = /_(zero|one|two|few|many|other)$/
@@ -111,18 +96,21 @@ function reportKeys(label, keys) {
 
 export async function main(root = process.cwd(), argv = process.argv.slice(2), sharedReferences) {
   const fix = argv.includes('--fix')
+  const surface = readLocalizationSurface(argv)
   const catalogEntries = flattenCatalogEntries(
-    JSON.parse(await fs.readFile(path.join(root, EN_CATALOG_RELATIVE_PATH), 'utf8'))
+    JSON.parse(await fs.readFile(path.join(root, surface.localesDir, 'en.json'), 'utf8'))
   )
-  const references = sharedReferences ?? (await collectLocalizationReferences(root))
+  const references =
+    sharedReferences ?? (await collectLocalizationReferences(root, surface.sourceRoots))
   const requiredKeys = collectRuntimeRequiredKeys(catalogEntries, references)
-  const outputPath = path.join(root, RUNTIME_REQUIRED_RELATIVE_PATH)
+  const outputPath = path.join(root, surface.runtimeRequiredPath)
+  const outputLabel = path.relative(root, outputPath).split(path.sep).join('/')
 
   if (fix) {
     const catalog = buildRuntimeRequiredCatalog(catalogEntries, requiredKeys)
     await fs.writeFile(outputPath, `${JSON.stringify(catalog, null, 2)}\n`, 'utf8')
     console.log(
-      `Wrote ${requiredKeys.size} of ${catalogEntries.size} English entries to en-runtime-required.json.`
+      `Wrote ${requiredKeys.size} of ${catalogEntries.size} English entries to ${outputLabel}.`
     )
     return 0
   }
@@ -135,7 +123,7 @@ export async function main(root = process.cwd(), argv = process.argv.slice(2), s
   )
 
   if (missing.length > 0 || contradicting.length > 0) {
-    console.error('src/renderer/src/i18n/en-runtime-required.json no longer covers en.json.')
+    console.error(`${outputLabel} no longer covers en.json.`)
     console.error('')
     if (missing.length > 0) {
       reportKeys(
@@ -147,7 +135,7 @@ export async function main(root = process.cwd(), argv = process.argv.slice(2), s
       reportKeys('Shipped entries whose text disagrees with en.json', contradicting)
     }
     console.error('')
-    console.error('Run `pnpm run sync:localization-runtime-catalog` to regenerate it.')
+    console.error(`Run \`${surface.syncRuntimeCatalogCommand}\` to regenerate it.`)
     return 1
   }
 
@@ -156,7 +144,7 @@ export async function main(root = process.cwd(), argv = process.argv.slice(2), s
       ? `, ${superfluous.length} shipped entry/entries are no longer required (harmless; sync to drop them).`
       : '.'
   console.log(
-    `en-runtime-required.json covers en.json: ${requiredKeys.size} of ${catalogEntries.size} English entries must ship in the boot bundle${superfluousNote}`
+    `${outputLabel} covers en.json: ${requiredKeys.size} of ${catalogEntries.size} English entries must ship in the boot bundle${superfluousNote}`
   )
   return 0
 }

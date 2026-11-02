@@ -1,5 +1,8 @@
 import type { ParsedAgentStatusPayload } from '../../agent-status-types'
-import { isAgentStatusHeldOpenByChildWork } from '../../agent-lead-status-fold'
+import {
+  heldTurnCountsAsFinished,
+  isAgentStatusHeldOpenByChildWork
+} from '../../agent-lead-status-fold'
 import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
 import { readClaudeBackgroundAgentTasks } from '../../claude-background-task-inventory'
 import {
@@ -281,7 +284,8 @@ export function normalizeClaudeEvent(
   })
   // Reuse resolved state for compact ownership instead of folding twice (#15202).
   const effectiveState = resolvedStatus.stateName
-  // Pin held turn identity by end time for later all-clear pairing; cancelled turns earn no completion stamp.
+  const ownPreviousLead = previousLead?.waitingAgentId ? previousLead.stateBeforeWait : previousLead
+  // Stamp (announce now, pair the later all-clear) only a held turn that already counts as finished; cancelled turns earn none.
   const turnCompletedAt =
     eventAgentId === undefined &&
     isTurnBoundary &&
@@ -290,6 +294,7 @@ export function normalizeClaudeEvent(
       state: resolvedStatus.stateName,
       mainAgent: { state: reportedStateName }
     }) &&
+    heldTurnCountsAsFinished(resolvedStatus, outcome, ownPreviousLead?.taskWakeupTurn === true) &&
     // Owed notifications wake the lead within ~100ms; announcing first would duplicate completion.
     claudePaneHasRunningChildWork(state, paneKey)
       ? Date.now()

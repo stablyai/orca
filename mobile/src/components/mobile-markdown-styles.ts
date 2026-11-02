@@ -4,7 +4,7 @@ import { themedStyleSheet, themedStyles } from '../theme/themed-styles'
 
 export const styles = themedStyleSheet(() => ({
   root: {
-    gap: spacing.sm
+    gap: spacing.md
   },
   paragraph: {
     fontSize: 13,
@@ -40,7 +40,7 @@ export const styles = themedStyleSheet(() => ({
     fontSize: 12,
     color: colors.textPrimary,
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.row,
+    borderRadius: radii.mark,
     paddingHorizontal: 4
   },
   inlineCodeLink: {
@@ -50,8 +50,12 @@ export const styles = themedStyleSheet(() => ({
   quote: {
     borderLeftWidth: 2,
     borderLeftColor: colors.borderSubtle,
-    paddingLeft: spacing.sm,
-    gap: spacing.xs
+    borderTopRightRadius: radii.surface,
+    borderBottomRightRadius: radii.surface,
+    backgroundColor: colors.bgPanel,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm
   },
   quoteText: {
     fontSize: 13,
@@ -62,18 +66,37 @@ export const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
-    padding: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.xs
+    borderRadius: radii.surface,
+    overflow: 'hidden'
   },
-  codeBody: { flex: 1 },
+  codeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    minHeight: 32,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle
+  },
   codeLanguage: {
-    fontSize: 10,
-    color: colors.textMuted,
-    marginBottom: spacing.xs,
+    flexShrink: 1,
+    fontSize: typography.metaSize,
+    color: colors.textSecondary,
     textTransform: 'uppercase'
+  },
+  codeBody: {
+    flexDirection: 'row',
+    paddingVertical: spacing.sm
+  },
+  codeLineNumbers: {
+    paddingHorizontal: spacing.sm,
+    color: colors.textMuted,
+    textAlign: 'right'
+  },
+  codeLines: {
+    paddingRight: spacing.md
   },
   codeText: {
     fontFamily: typography.monoFamily,
@@ -81,10 +104,13 @@ export const styles = themedStyleSheet(() => ({
     lineHeight: 17,
     color: colors.textPrimary
   },
+  imageParagraph: {
+    gap: spacing.sm
+  },
   imageFrame: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgRaised,
     overflow: 'hidden',
     padding: spacing.sm
@@ -95,11 +121,15 @@ export const styles = themedStyleSheet(() => ({
     fontSize: 11,
     color: colors.textSecondary
   },
+  tableScroll: {
+    minWidth: '100%'
+  },
   table: {
+    flexGrow: 1,
     borderTopWidth: 1,
     borderLeftWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
+    borderRadius: radii.surface,
     overflow: 'hidden',
     backgroundColor: colors.bgPanel
   },
@@ -110,11 +140,14 @@ export const styles = themedStyleSheet(() => ({
     borderRightWidth: 1,
     borderBottomWidth: 1,
     borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     fontSize: 12,
     lineHeight: 17,
-    color: colors.textPrimary
+    color: colors.textPrimary,
+    // Every row grows its cells from the same widths, so a short table fills the message aligned.
+    flexGrow: 1,
+    flexShrink: 0
   },
   tableHeader: {
     fontWeight: '700',
@@ -150,6 +183,7 @@ export const styles = themedStyleSheet(() => ({
     color: colors.textSecondary
   },
   rule: {
+    marginVertical: spacing.xs,
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle
   }

@@ -72,9 +72,11 @@ describe('startMobileDictationDesktopSession', () => {
     expect(harness.setIdle).not.toHaveBeenCalled()
     expect(harness.getActiveId()).toBe('dictation-b')
     expect(harness.commitRecordingStart).not.toHaveBeenCalled()
-    expect(harness.sendRequest).toHaveBeenCalledWith('speech.dictation.cancel', {
-      dictationId: 'dictation-a'
-    })
+    expect(harness.sendRequest).toHaveBeenCalledWith(
+      'speech.dictation.cancel',
+      { dictationId: 'dictation-a' },
+      { failWhenDisconnected: true }
+    )
   })
 
   it('returns to idle when a disable makes the start stale', async () => {
@@ -112,9 +114,11 @@ describe('startMobileDictationDesktopSession', () => {
 
     // The hook opened capture before requesting a session; refusal must release it and the screen because no outer start catch does so.
     expect(harness.rollbackRecordingStart).toHaveBeenCalledOnce()
-    expect(harness.sendRequest).toHaveBeenCalledWith('speech.dictation.cancel', {
-      dictationId: 'dictation-a'
-    })
+    expect(harness.sendRequest).toHaveBeenCalledWith(
+      'speech.dictation.cancel',
+      { dictationId: 'dictation-a' },
+      { failWhenDisconnected: true }
+    )
   })
 
   it('leaves the capture alone when the failure is no longer the current start', async () => {
@@ -135,9 +139,11 @@ describe('startMobileDictationDesktopSession', () => {
     // Capture has no start identity; rolling back stale A would stop B’s microphone and release B’s screen.
     expect(harness.rollbackRecordingStart).not.toHaveBeenCalled()
     // A still owns its desktop session and must cancel that alone.
-    expect(harness.sendRequest).toHaveBeenCalledWith('speech.dictation.cancel', {
-      dictationId: 'dictation-a'
-    })
+    expect(harness.sendRequest).toHaveBeenCalledWith(
+      'speech.dictation.cancel',
+      { dictationId: 'dictation-a' },
+      { failWhenDisconnected: true }
+    )
   })
 
   it('commits recording before returning a current start to the hook', async () => {
@@ -160,9 +166,11 @@ describe('startMobileDictationDesktopSession', () => {
       'Audio focus request failed'
     )
 
-    expect(harness.sendRequest).toHaveBeenCalledWith('speech.dictation.cancel', {
-      dictationId: 'dictation-a'
-    })
+    expect(harness.sendRequest).toHaveBeenCalledWith(
+      'speech.dictation.cancel',
+      { dictationId: 'dictation-a' },
+      { failWhenDisconnected: true }
+    )
     expect(harness.getActiveId()).toBeNull()
     expect(harness.setIdle).toHaveBeenCalledOnce()
     expect(harness.rollbackRecordingStart).toHaveBeenCalledOnce()
@@ -175,9 +183,11 @@ describe('startMobileDictationDesktopSession', () => {
       'Failed to start microphone recording'
     )
 
-    expect(harness.sendRequest).toHaveBeenCalledWith('speech.dictation.cancel', {
-      dictationId: 'dictation-a'
-    })
+    expect(harness.sendRequest).toHaveBeenCalledWith(
+      'speech.dictation.cancel',
+      { dictationId: 'dictation-a' },
+      { failWhenDisconnected: true }
+    )
     expect(harness.getActiveId()).toBeNull()
     expect(harness.setIdle).toHaveBeenCalledOnce()
     expect(harness.rollbackRecordingStart).toHaveBeenCalledOnce()

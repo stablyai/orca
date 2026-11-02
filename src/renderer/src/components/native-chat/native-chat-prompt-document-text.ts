@@ -1,5 +1,8 @@
 import type { JSONContent } from '@tiptap/react'
-import { splitImageReferences } from '../../../../shared/native-chat-image-reference'
+import {
+  imageReferenceToken,
+  splitImageReferences
+} from '../../../../shared/native-chat/native-chat-image-reference'
 import { NATIVE_CHAT_PASTED_TEXT_TOKEN } from './native-chat-pasted-text-reference'
 
 export const IMAGE_REFERENCE_NODE = 'nativeChatImageReference'
@@ -28,19 +31,26 @@ export function promptTextContent(text: string): JSONContent {
   }
 }
 
+/** The document side of withoutImageReference: each chip goes with one space after it. */
 export function withoutImageReferenceNodes(
   document: JSONContent,
   attachmentId: string
 ): JSONContent {
+  const isChip = (node: JSONContent | undefined): boolean =>
+    node?.type === IMAGE_REFERENCE_NODE && node.attrs?.attachmentId === attachmentId
   return document.content
     ? {
         ...document,
-        content: document.content
-          .filter(
-            (node) =>
-              node.type !== IMAGE_REFERENCE_NODE || node.attrs?.attachmentId !== attachmentId
-          )
-          .map((node) => withoutImageReferenceNodes(node, attachmentId))
+        content: document.content.flatMap((node, index, nodes) => {
+          if (isChip(node)) {
+            return []
+          }
+          if (isChip(nodes[index - 1]) && node.type === 'text' && node.text?.startsWith(' ')) {
+            const text = node.text.slice(1)
+            return text ? [{ ...node, text }] : []
+          }
+          return [withoutImageReferenceNodes(node, attachmentId)]
+        })
       }
     : document
 }
@@ -91,4 +101,41 @@ export function appendPromptDocumentText(
     }
   }
   return promptTextContent(after)
+}
+
+/** Slice serialized prompt offsets while retaining selected nodes inside the range. */
+export function slicePromptDocument(document: JSONContent, from: number, to: number): JSONContent {
+  let offset = 0
+  const blocks: JSONContent[] = []
+  for (const [index, block] of (document.content ?? []).entries()) {
+    if (index > 0) {
+      offset++
+    }
+    const start = offset
+    const content: JSONContent[] = []
+    for (const node of block.content ?? []) {
+      const value =
+        node.type === IMAGE_REFERENCE_NODE
+          ? imageReferenceToken(String(node.attrs?.attachmentId))
+          : node.type === 'hardBreak'
+            ? '\n'
+            : (node.text ?? String(node.attrs?.token ?? ''))
+      const end = offset + value.length
+      if (end > from && offset < to) {
+        content.push(
+          node.type === 'text'
+            ? {
+                ...node,
+                text: value.slice(Math.max(0, from - offset), Math.min(value.length, to - offset))
+              }
+            : node
+        )
+      }
+      offset = end
+    }
+    if (offset >= from && start <= to) {
+      blocks.push({ ...block, content })
+    }
+  }
+  return { ...document, content: blocks.length ? blocks : [{ type: 'paragraph' }] }
 }

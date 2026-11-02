@@ -2,7 +2,7 @@ import { buildTerminalHttpLogicalLines, hasHardWrappedRows } from './terminal-ht
 import { extractTerminalHttpLinks } from './terminal-http-url-extraction'
 import { dedupeLogicalLines } from './terminal-link-logical-line-deduplication'
 import { rangeForParsedLinkOnRow } from './terminal-link-row-range'
-import { extractTerminalFileLinkCandidates, type ParsedTerminalFileLink } from './terminal-links'
+import { extractTerminalFileLinkReadings, type ParsedTerminalFileLink } from './terminal-links'
 import { terminalLogicalLinkHasOscLink } from './terminal-osc-link-cells'
 import {
   buildHardWrappedPathLogicalLineCandidates,
@@ -60,23 +60,28 @@ export function buildCandidateLogicalLinesForBufferPosition(
   return dedupeLogicalLines(candidates)
 }
 
-/** Every file-link reading that covers the cell; callers choose among soft/hard-wrap guesses. */
+/** The readings covering the cell; a guess needs the host to find its file before anyone acts on it. */
 export function findTerminalFileLinksAtBufferPosition(
   buffer: TerminalLinkBuffer,
   position: TerminalLinkBufferPosition,
   terminalColumns: number
-): TerminalFileLinkAtBufferPosition[] {
+): { links: TerminalFileLinkAtBufferPosition[]; guesses: TerminalFileLinkAtBufferPosition[] } {
   const links: TerminalFileLinkAtBufferPosition[] = []
+  const guesses: TerminalFileLinkAtBufferPosition[] = []
   for (const logicalLine of buildCandidateLogicalLinesForBufferPosition(buffer, position.y)) {
-    for (const parsed of extractTerminalFileLinkCandidates(logicalLine.text)) {
+    const readings = extractTerminalFileLinkReadings(logicalLine.text)
+    const covering = (parsed: ParsedTerminalFileLink): boolean => {
       const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
-      if (!range || !rangeContainsBufferPosition(range, position, terminalColumns)) {
-        continue
-      }
+      return range !== null && rangeContainsBufferPosition(range, position, terminalColumns)
+    }
+    for (const parsed of readings.links.filter(covering)) {
       links.push({ ...parsed, logicalLine })
     }
+    for (const parsed of readings.guesses.filter(covering)) {
+      guesses.push({ ...parsed, logicalLine })
+    }
   }
-  return links
+  return { links, guesses }
 }
 
 function rangeContainsBufferPosition(

@@ -20,6 +20,7 @@ import { isAutomaticTabActivation } from '../../../../shared/tab-activation-inte
 import { isWorktreeTerminalsSleepingError } from '../../worktree-terminals-sleeping-error'
 
 import { paneHoldsSession } from '../../terminal/surface/main-terminal-surfaces'
+import { resolveChatTabActivation } from '../../agent-session/agent-session-tab-identity'
 export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRuntimeWithRestoredPaneStart {
   protected abstract buildResolvedWorktreeFromId(
     ...args: Parameters<WorkspaceSelectors['buildResolvedWorktreeFromId']>
@@ -130,12 +131,14 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
     const navigation = opts.navigation ?? (opts.notifyClients === false ? 'caller' : 'all')
     const targetsHost = navigationTargetsHost(navigation)
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
-    let worktreeId = explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+    let worktreeId =
+      explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     await this.refreshMobileSessionPtyRecords(worktreeId)
     // Why: the renderer can publish the host's spelling while inventory refresh is pending.
     worktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ?? worktreeId
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    tabId = resolveChatTabActivation(snapshot?.tabs ?? [], tabId)
     const directTab = snapshot?.tabs.find((candidate) => candidate.id === tabId)
     const tab = leafId
       ? ((directTab?.type === 'terminal' && directTab.leafId === leafId ? directTab : undefined) ??
@@ -182,7 +185,13 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
         const targetGroupId = snapshot?.tabGroups?.find((group) =>
           group.tabOrder.includes(tab.parentTabId)
         )?.id
-        const trigger = { automatic, targetsHost, targetGroupId }
+        // An explicit tab open is the user's act; an automatic probe never starts a stopped distro.
+        const trigger = {
+          automatic,
+          targetsHost,
+          targetGroupId,
+          ...(automatic ? {} : { wslUserAct: true as const })
+        }
         let startupCwdFallback: RuntimeMobileSessionTabActivationResult['startupCwdFallback']
         try {
           if (ORCA_LAYOUT_OWNER_IS_MAIN) {

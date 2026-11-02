@@ -31,21 +31,23 @@ export type ProcessFileExplorerFsPayloadArgs = {
   refreshTree: () => void
 }
 
+const cachedChildPathIndexes = new WeakMap<readonly TreeNode[], ReadonlyMap<string, TreeNode>>()
+
 function cachedDirectoryChild(
   cache: Record<string, DirCache>,
   cachedDirPath: string,
-  childPath: string,
-  childPathIndexes: Map<string, Map<string, TreeNode>>
+  childPath: string
 ): TreeNode | undefined {
-  let childPaths = childPathIndexes.get(cachedDirPath)
+  const children = cache[cachedDirPath]?.children
+  if (!children) {
+    return undefined
+  }
+  let childPaths = cachedChildPathIndexes.get(children)
   if (!childPaths) {
     childPaths = new Map(
-      cache[cachedDirPath]?.children.map((child) => [
-        normalizeRuntimePathForComparison(child.path),
-        child
-      ]) ?? []
+      children.map((child) => [normalizeRuntimePathForComparison(child.path), child])
     )
-    childPathIndexes.set(cachedDirPath, childPaths)
+    cachedChildPathIndexes.set(children, childPaths)
   }
   return childPaths.get(normalizeRuntimePathForComparison(childPath))
 }
@@ -83,7 +85,6 @@ export function processFileExplorerFsPayload(args: ProcessFileExplorerFsPayloadA
   }
 
   const dirsToRefresh = new Set<string>()
-  const childPathIndexes = new Map<string, Map<string, TreeNode>>()
   let hasLinkedCache: boolean | undefined
   let cachedDirKeys: string[] | undefined
   let cachedDirPathIndex: ReadonlyMap<string, string> | undefined
@@ -114,7 +115,7 @@ export function processFileExplorerFsPayload(args: ProcessFileExplorerFsPayloadA
     const cachedParent = resolveCachedDirPath(cache, parent, currentWorktreePath, cachePathIndex)
     const updatedChild =
       evt.kind === 'update' && cachedParent
-        ? cachedDirectoryChild(cache, cachedParent, normalizedPath, childPathIndexes)
+        ? cachedDirectoryChild(cache, cachedParent, normalizedPath)
         : undefined
     const knownFileUpdate =
       evt.kind === 'update' &&
@@ -227,7 +228,7 @@ export function processFileExplorerFsPayload(args: ProcessFileExplorerFsPayloadA
       if (
         cachedParent &&
         !dirsToRefresh.has(cachedParent) &&
-        !cachedDirectoryChild(cache, cachedParent, normalizedPath, childPathIndexes)
+        !cachedDirectoryChild(cache, cachedParent, normalizedPath)
       ) {
         dirsToRefresh.add(cachedParent)
       }

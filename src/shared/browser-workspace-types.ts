@@ -1,3 +1,5 @@
+import type { BrowserCookieImportFailure } from './browser-cookie-import-failure-copy'
+import type { GoogleCookieClearLocalReceipt } from './browser-google-cookie-clear'
 import type { ManagedBrowserProfileOwner } from './browser-profile-scope'
 export type BrowserHistoryEntry = {
   url: string
@@ -145,6 +147,7 @@ export type BrowserSessionProfileSource = {
     | 'safari'
     | 'comet'
     | 'helium'
+    | 'vivaldi'
     | 'manual'
   profileName?: string
   importedAt: number
@@ -186,5 +189,10 @@ export type BrowserCookieImportSummary = {
 }
 
 export type BrowserCookieImportResult =
-  | { ok: true; profileId: string; summary: BrowserCookieImportSummary }
-  | { ok: false; reason: string }
+  | {
+      ok: true
+      profileId: string
+      summary: BrowserCookieImportSummary
+      googleCookieClearTarget?: GoogleCookieClearLocalReceipt
+    }
+  | BrowserCookieImportFailure

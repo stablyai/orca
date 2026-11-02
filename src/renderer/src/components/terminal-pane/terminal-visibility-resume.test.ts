@@ -123,12 +123,12 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     expect(resetTerminalLinkifierHoverState).toHaveBeenCalledWith(second)
   })
 
-  it('schedules the repaint after rendering resumes on a heavy reveal', () => {
+  it('schedules the settled present after rendering resumes on a heavy reveal', () => {
     const order: string[] = []
     const manager = createManager(order)
     resumeTerminalVisibility(resumeArgs(manager, false))
 
-    expect(order).toEqual(['resume-rendering', 'fit-reveal', 'reveal-repaint'])
+    expect(order).toEqual(['resume-rendering', 'fit-reveal', 'reveal-present'])
   })
 
   it('routes a heavy reveal through fitAllRevealedPanes, not the sync fit', () => {
@@ -182,9 +182,9 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     resumeTerminalVisibility(resumeArgs(manager, false))
 
     expect(presentPaneViewport).toHaveBeenCalledWith(pane)
-    // The expensive registry-wide rebuild is still deferred to the settled frame.
+    // A healthy shared atlas is never cleared on an ordinary reveal.
     expect(resetAndRefreshAllTerminalWebglAtlases).not.toHaveBeenCalled()
-    expect(manager.scheduleRevealRepaint).toHaveBeenCalledTimes(1)
+    expect(manager.scheduleRevealRepaint).not.toHaveBeenCalled()
   })
 
   it('does not fit on a light tab reveal', () => {

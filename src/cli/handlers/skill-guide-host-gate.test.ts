@@ -111,7 +111,7 @@ describe('skills get host-capability gating', () => {
     expect(guide.stdout).not.toMatch(PUBLISHING_TEXT)
     expect(full.stdout).not.toMatch(PUBLISHING_TEXT)
     expect(full.stdout).not.toContain('host-capability')
-    expect(listed.stdout.trim().split('\n')).toEqual(['automations', 'browser'])
+    expect(listed.stdout.trim().split('\n')).toEqual(['automations', 'browser', 'plugins'])
     expect(withheld.stdout).toBe('')
     expect(withheld.stderr).toContain('turned off on this host')
   })
@@ -132,6 +132,7 @@ describe('skills get host-capability gating', () => {
       'artifacts',
       'automations',
       'browser',
+      'plugins',
       'skill-sharing'
     ])
   })

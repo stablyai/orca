@@ -74,8 +74,9 @@ function verifyPackagedPluginResources(resourcesDir) {
   }
   const index = readJsonFile(join(launchRoot, 'bundled-plugins.json'), 'bundled plugin index')
   readJsonFile(join(launchRoot, 'orca-marketplace.json'), 'marketplace index')
-  if (index?.version !== 1 || !Array.isArray(index.plugins) || index.plugins.length === 0) {
-    throw new Error('[verify-packaged-plugin-resources] bundled plugin index is empty or invalid')
+  // An empty index is valid: a release may ship no bundled plugins.
+  if (index?.version !== 1 || !Array.isArray(index.plugins)) {
+    throw new Error('[verify-packaged-plugin-resources] bundled plugin index is invalid')
   }
   const resolvedRoot = resolve(launchRoot)
   for (const entry of index.plugins) {
@@ -108,4 +109,4 @@ function verifyPackagedPluginResources(resourcesDir) {
   )
 }
 
-module.exports = { verifyPackagedPluginResources }
+module.exports = { hashPackagedPluginTree, verifyPackagedPluginResources }

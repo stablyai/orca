@@ -58,7 +58,7 @@ const storeBase = {
 type RuntimeInternals = {
   offscreenBrowserBackend: unknown
   agentBrowserBridge: unknown
-  resolveWorktreeSelector: (selector: string) => Promise<{ id: string }>
+  resolveGitWorktreeSelector: (selector: string) => Promise<{ id: string }>
 }
 
 function makeSession(): WorkspaceSessionState {
@@ -95,9 +95,10 @@ function createPairedRuntime() {
   })
   const internals = runtime as unknown as RuntimeInternals
   // Stub git selector resolution; this contract needs only the resolved workspace id.
-  internals.resolveWorktreeSelector = async () => ({ id: WT })
+  internals.resolveGitWorktreeSelector = async () => ({ id: WT })
   internals.offscreenBrowserBackend = {
     closeTab: vi.fn(),
+    ownsTab: () => true,
     createTab: vi.fn(async (options: { browserPageId?: string }) => ({
       browserPageId: options.browserPageId ?? 'page-new'
     }))

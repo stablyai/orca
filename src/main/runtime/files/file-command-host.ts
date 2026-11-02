@@ -7,7 +7,6 @@ import type { RuntimeFileOpenPosition } from '../../../shared/runtime-file-contr
 export type RuntimeFileCommandHost = {
   getRuntimeId(): string
   requireStore(): RuntimeStore
-  resolveWorktreeSelector(selector: string): Promise<ResolvedRuntimeFileWorktree>
   resolveRuntimeFileTarget(selector: string): Promise<ResolvedRuntimeFileTarget>
   resolveKnownWorkspaceFileTarget?(
     absolutePath: string,
@@ -33,6 +32,7 @@ export type RuntimeFileCommandHost = {
     relativePath: string,
     staged: boolean,
     runtimeEnvironmentId?: string | null,
-    navigation?: RuntimeNavigationTarget
+    navigation?: RuntimeNavigationTarget,
+    oldPath?: string
   ): void
 }

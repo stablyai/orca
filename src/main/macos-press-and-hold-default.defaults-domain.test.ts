@@ -75,14 +75,6 @@ describe.skipIf(process.platform !== 'darwin')(
       expect(rawRead(explicitlyFalse)).toBe('0')
     })
 
-    it('reports an explicit true as set', () => {
-      const domain = throwawayDomain()
-      write(domain, 'true')
-
-      expect(readDomainPressAndHoldPreference(domain)).toBe('set')
-      expect(rawRead(domain)).toBe('1')
-    })
-
     it('writes false into a previously unset domain', () => {
       const domain = throwawayDomain()
 

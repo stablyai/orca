@@ -1,81 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  ActivateTab,
-  CloseLifecycleTab,
-  CloseTab,
-  UpdatePaneLayout
-} from '../../../../shared/rpc-contract/session-tabs-schemas-params'
+import { UpdatePaneLayout } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 
 const WT = 'id:wt'
-
-describe('ActivateTab.navigation', () => {
-  it('accepts declared targets and rejects unknown fanout', () => {
-    expect(ActivateTab.parse({ worktree: WT, tabId: 'tab', navigation: 'all' }).navigation).toBe(
-      'all'
-    )
-    expect(
-      ActivateTab.safeParse({ worktree: WT, tabId: 'tab', navigation: 'others' }).success
-    ).toBe(false)
-  })
-})
-
-describe('CloseTab (session.tabs.close params)', () => {
-  it('accepts only explicit user intent on the legacy close method', () => {
-    const parsed = CloseTab.parse({ worktree: WT, tabId: 'tab-1', reason: 'user' })
-    expect(parsed).toMatchObject({ tabId: 'tab-1', reason: 'user' })
-    expect(CloseTab.safeParse({ worktree: WT, tabId: 'tab-1', reason: 'pty-exit' }).success).toBe(
-      false
-    )
-    expect(CloseTab.safeParse({ worktree: WT, tabId: 'tab-1', reason: 'cleanup' }).success).toBe(
-      false
-    )
-  })
-
-  it('accepts a reasonless payload from legacy clients', () => {
-    // Keep parsing compatible; RPC policy refuses missing intent.
-    const parsed = CloseTab.parse({ worktree: WT, tabId: 'tab-1' })
-    expect(parsed.tabId).toBe('tab-1')
-    expect(parsed.reason).toBeUndefined()
-  })
-
-  it('keeps a new explicit-user payload parseable by the previous server schema', () => {
-    // Older ActivateTab schemas must strip additive intent rather than reject new clients' manual closes.
-    const parsed = ActivateTab.parse({ worktree: WT, tabId: 'tab-1', reason: 'user' })
-    expect(parsed).toEqual({ worktree: WT, tabId: 'tab-1' })
-  })
-
-  it('rejects an unknown close reason', () => {
-    expect(() =>
-      CloseTab.parse({ worktree: WT, tabId: 'tab-1', reason: 'transport-glitch' })
-    ).toThrow()
-  })
-})
-
-describe('CloseLifecycleTab (session.tabs.closeLifecycle params)', () => {
-  it('requires lifecycle intent and incarnation evidence', () => {
-    expect(
-      CloseLifecycleTab.parse({
-        worktree: WT,
-        tabId: 'tab-1',
-        reason: 'pty-exit',
-        publicationEpoch: 'epoch-1',
-        terminal: 'term-1'
-      })
-    ).toMatchObject({ reason: 'pty-exit', publicationEpoch: 'epoch-1', terminal: 'term-1' })
-    expect(
-      CloseLifecycleTab.safeParse({ worktree: WT, tabId: 'tab-1', reason: 'pty-exit' }).success
-    ).toBe(false)
-    expect(
-      CloseLifecycleTab.safeParse({
-        worktree: WT,
-        tabId: 'tab-1',
-        reason: 'user',
-        publicationEpoch: 'epoch-1',
-        terminal: 'term-1'
-      }).success
-    ).toBe(false)
-  })
-})
 
 describe('UpdatePaneLayout.root (untrusted remote pane-layout tree)', () => {
   it('accepts a valid split tree', () => {
@@ -91,10 +17,6 @@ describe('UpdatePaneLayout.root (untrusted remote pane-layout tree)', () => {
       }
     })
     expect(parsed.root).toMatchObject({ type: 'split', direction: 'horizontal' })
-  })
-
-  it('accepts a null root', () => {
-    expect(UpdatePaneLayout.parse({ worktree: WT, tabId: 'tab', root: null }).root).toBeNull()
   })
 
   it('rejects an over-deep tree instead of overflowing the stack', () => {

@@ -5,6 +5,7 @@ import { assertCallerHandleMatchesEvidence, resolveOrchestrationCaller } from '.
 import { exposeRun } from './run-receipt'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationCallerIdentity } from '../../../../orchestration/orchestration-caller-identity'
+import type { RunRow } from '../../../../orchestration/types'
 import { currentDispatchAssigneeRun } from '../messaging/recipient-routing'
 import {
   RunCreateParams,
@@ -26,6 +27,25 @@ function cancelBoundDispatchWaiters(
   }
 }
 
+/** Create a Run and bind it to the caller, as `run-create` does; one-step `worker-start` reuses it. */
+export function createBoundRun(
+  runtime: OrcaRuntimeService,
+  caller: OrchestrationCallerIdentity,
+  from: string,
+  objective: string
+): RunRow {
+  const run = runtime.getOrchestrationDb().createRun({
+    objective,
+    coordinatorHandle: caller.terminalHandle,
+    coordinatorPaneKey: caller.paneKey,
+    coordinatorOrcaSessionId: caller.orcaSessionId
+  })
+  // The earlier Run keeps this consumer, so only waiters that plain check now redirects end.
+  runtime.cancelMessageWaiters(from)
+  cancelBoundDispatchWaiters(runtime, caller, run.id)
+  return run
+}
+
 export const ORCHESTRATION_RUN_METHODS = [
   defineMethod({
     name: 'orchestration.runCreate',
@@ -38,20 +58,7 @@ export const ORCHESTRATION_RUN_METHODS = [
         callerSession: orchestrationCaller,
         requireStablePane: true
       })
-      const db = runtime.getOrchestrationDb()
-      const priorRun = db.getCurrentRunForCoordinator(caller)
-      const run = db.createRun({
-        objective: params.objective,
-        coordinatorHandle: caller.terminalHandle,
-        coordinatorPaneKey: caller.paneKey,
-        coordinatorOrcaSessionId: caller.orcaSessionId
-      })
-      runtime.cancelMessageWaiters(params.from)
-      cancelBoundDispatchWaiters(runtime, caller, run.id)
-      if (priorRun) {
-        runtime.cancelMessageWaiters(`run:${priorRun.id}`)
-      }
-      return { run: exposeRun(run) }
+      return { run: exposeRun(createBoundRun(runtime, caller, params.from, params.objective)) }
     }
   }),
   defineMethod({
@@ -76,8 +83,13 @@ export const ORCHESTRATION_RUN_METHODS = [
         requireStablePane: true,
         evidenceAssertedByCaller: true
       })
-      if (
+      const db = runtime.getOrchestrationDb()
+      // Why: bindRun fences workers and rejects the flag on ordinary Runs before any effect.
+      const takeoverNeedsAuthority =
         params.takeoverLegacy &&
+        (db.getRun(params.id)?.legacy !== 0 || db.getLegacyAdoption()?.adopted_run_id === params.id)
+      if (
+        takeoverNeedsAuthority &&
         (callerAuthority?.terminalHandle !== params.from ||
           callerAuthority.paneKey !== caller.paneKey)
       ) {
@@ -88,8 +100,7 @@ export const ORCHESTRATION_RUN_METHODS = [
         )
       }
       assertCallerHandleMatchesEvidence(runtime, params.from, orchestrationCompatibilityEvidence)
-      const db = runtime.getOrchestrationDb()
-      const priorRun = db.getCurrentRunForCoordinator(caller)
+      const priorRuns = db.runsBoundToCoordinator(caller)
       const run = db.bindRun({
         runId: params.id,
         coordinatorHandle: caller.terminalHandle,
@@ -106,9 +117,9 @@ export const ORCHESTRATION_RUN_METHODS = [
       }
       runtime.cancelMessageWaiters(params.from)
       cancelBoundDispatchWaiters(runtime, caller, run.id)
-      runtime.cancelMessageWaiters(`run:${params.id}`)
-      if (priorRun && priorRun.id !== params.id) {
-        runtime.cancelMessageWaiters(`run:${priorRun.id}`)
+      // run-use keeps only this Run, so every Run it held before has a new or no consumer.
+      for (const runId of new Set([params.id, ...priorRuns.map((prior) => prior.id)])) {
+        runtime.cancelMessageWaiters(`run:${runId}`)
       }
       return { run: exposeRun(run) }
     }

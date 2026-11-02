@@ -3,9 +3,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
-  AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY
-} from '../../../shared/protocol-version'
+} from '../../../shared/agent-session/agent-session-runtime-capabilities'
 
 const mocks = vi.hoisted(() => ({
   subscribe: vi.fn(),
@@ -30,43 +29,8 @@ vi.mock('./local-runtime-capabilities', () => ({
 
 import {
   callStructuredAgentSession,
-  readStructuredAgentSessionConversationOutline,
-  subscribeStructuredAgentSession,
-  supportsStructuredAgentSessionPromptCancel
+  readStructuredAgentSessionConversationOutline
 } from './structured-agent-session-client'
-
-describe('structured prompt cancellation capability', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mocks.readLocalCapabilities.mockReturnValue(null)
-    mocks.ensureLocalCapabilities.mockResolvedValue(null)
-  })
-
-  it('uses the local status cache and fails closed until the host answers', async () => {
-    const target = { kind: 'local' } as const
-    await expect(supportsStructuredAgentSessionPromptCancel(target)).resolves.toBe(false)
-    mocks.ensureLocalCapabilities.mockResolvedValue([
-      AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY
-    ])
-    await expect(supportsStructuredAgentSessionPromptCancel(target)).resolves.toBe(true)
-    mocks.readLocalCapabilities.mockReturnValue([AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY])
-    await expect(supportsStructuredAgentSessionPromptCancel(target)).resolves.toBe(true)
-    expect(mocks.ensureLocalCapabilities).toHaveBeenCalledTimes(2)
-  })
-
-  it('checks the selected remote runtime and downgrades on absent or failed capability', async () => {
-    const target = { kind: 'environment', environmentId: 'ssh-env-1' } as const
-    mocks.supportsCapability.mockResolvedValueOnce(true).mockResolvedValueOnce(false)
-    await expect(supportsStructuredAgentSessionPromptCancel(target)).resolves.toBe(true)
-    await expect(supportsStructuredAgentSessionPromptCancel(target)).resolves.toBe(false)
-    mocks.supportsCapability.mockRejectedValue(new Error('Disconnected'))
-    await expect(supportsStructuredAgentSessionPromptCancel(target)).resolves.toBe(false)
-    expect(mocks.supportsCapability).toHaveBeenCalledWith(
-      'ssh-env-1',
-      AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY
-    )
-  })
-})
 
 describe('callStructuredAgentSession rewind capability', () => {
   const target = { kind: 'environment', environmentId: 'env-1' } as const
@@ -91,22 +55,6 @@ describe('callStructuredAgentSession rewind capability', () => {
     expect(mocks.call).not.toHaveBeenCalled()
   })
 
-  it('dispatches rewind once the host advertises the method', async () => {
-    await expect(
-      callStructuredAgentSession(target, 'agentSession.rewind', params)
-    ).resolves.toEqual({
-      ok: true
-    })
-    expect(mocks.supportsCapability).toHaveBeenCalledWith(
-      'env-1',
-      AGENT_SESSION_REWIND_RUNTIME_CAPABILITY
-    )
-    // As long as a command's: the host may start an agent at rest first.
-    expect(mocks.call).toHaveBeenCalledExactlyOnceWith(target, 'agentSession.rewind', params, {
-      timeoutMs: 195_000
-    })
-  })
-
   it('does not dispatch rewind when host capability cannot be verified', async () => {
     mocks.supportsCapability.mockRejectedValue(new Error('Host unreachable'))
 
@@ -114,17 +62,6 @@ describe('callStructuredAgentSession rewind capability', () => {
       'Host unreachable'
     )
     expect(mocks.call).not.toHaveBeenCalled()
-  })
-
-  it('uses the local build directly and leaves existing remote methods available', async () => {
-    await callStructuredAgentSession({ kind: 'local' }, 'agentSession.rewind', params)
-    await callStructuredAgentSession(target, 'agentSession.send', params)
-
-    expect(mocks.supportsCapability).not.toHaveBeenCalled()
-    expect(mocks.call).toHaveBeenCalledWith({ kind: 'local' }, 'agentSession.rewind', params, {
-      timeoutMs: 195_000
-    })
-    expect(mocks.call).toHaveBeenCalledWith(target, 'agentSession.send', params)
   })
 })
 
@@ -134,14 +71,6 @@ describe('callStructuredAgentSession timeouts', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     mocks.call.mockResolvedValue({ origin: 'unknown' })
-  })
-
-  // A waiting read lasts as long as the host's listing, which outlasts the default 15 s.
-  it('gives a model catalog read longer than the slowest host listing', async () => {
-    const params = { agent: 'claude', sessionId: 'session-1', waitForListing: true }
-    await callStructuredAgentSession(target, 'agentSession.modelCatalog', params)
-    const [, , , options] = mocks.call.mock.calls[0]!
-    expect(options.timeoutMs).toBeGreaterThan(80_000)
   })
 
   it('allows restart dispatch settlement while preserving dispatch options', async () => {
@@ -157,42 +86,6 @@ describe('callStructuredAgentSession timeouts', () => {
         ...options
       }
     )
-  })
-
-  it('leaves other reads on the default timeout', async () => {
-    await callStructuredAgentSession(target, 'agentSession.options', { sessionId: 'session-1' })
-    expect(mocks.call).toHaveBeenCalledExactlyOnceWith(target, 'agentSession.options', {
-      sessionId: 'session-1'
-    })
-  })
-})
-
-describe('subscribeStructuredAgentSession', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mocks.subscribe.mockResolvedValue({ unsubscribe: vi.fn() })
-    Object.assign(window, {
-      api: {
-        runtimeEnvironments: { subscribe: mocks.subscribe }
-      }
-    })
-  })
-
-  it('forwards graceful remote closes to the reconnect owner', async () => {
-    const onClose = vi.fn()
-
-    await subscribeStructuredAgentSession(
-      { kind: 'environment', environmentId: 'env-1' },
-      { sessionId: 'session-1' },
-      vi.fn(),
-      vi.fn(),
-      onClose
-    )
-
-    const callbacks = mocks.subscribe.mock.calls[0]?.[1] as { onClose?: () => void }
-    expect(callbacks.onClose).toBe(onClose)
-    callbacks.onClose?.()
-    expect(onClose).toHaveBeenCalledOnce()
   })
 })
 

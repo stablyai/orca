@@ -118,6 +118,48 @@ describe('buildWslUsageSnapshot', () => {
     expect(validate('wsl_usage_snapshot', props).ok).toBe(true)
   })
 
+  it('reports the gate state when known, as an optional field', () => {
+    const props = buildWslUsageSnapshot({ ...baseInput, wslHostsGateState: 'serve-only' })
+    expect(props.wsl_hosts_gate_state).toBe('serve-only')
+    expect(validate('wsl_usage_snapshot', props).ok).toBe(true)
+    expect(buildWslUsageSnapshot(baseInput)).not.toHaveProperty('wsl_hosts_gate_state')
+  })
+
+  it.each(['allow', 'block', 'missing'] as const)(
+    'reports the applied remote policy %s as an optional field',
+    (wslHostsPolicy) => {
+      const props = buildWslUsageSnapshot({ ...baseInput, wslHostsPolicy })
+      expect(props.wsl_hosts_policy).toBe(wslHostsPolicy)
+      expect(validate('wsl_usage_snapshot', props).ok).toBe(true)
+    }
+  )
+
+  it.each(['keep', 'bring-back'] as const)(
+    'reports what a block asks for moved projects (%s) as an optional field',
+    (wslHostsMovedProjects) => {
+      const props = buildWslUsageSnapshot({
+        ...baseInput,
+        wslHostsPolicy: 'block',
+        wslHostsMovedProjects
+      })
+      expect(props.wsl_hosts_moved_projects).toBe(wslHostsMovedProjects)
+      expect(validate('wsl_usage_snapshot', props).ok).toBe(true)
+    }
+  )
+
+  it('omits moved projects when nothing blocks', () => {
+    expect(
+      buildWslUsageSnapshot({ ...baseInput, wslHostsPolicy: 'allow', wslHostsMovedProjects: null })
+    ).not.toHaveProperty('wsl_hosts_moved_projects')
+  })
+
+  it('omits the remote policy when the internal gate left it unread', () => {
+    expect(buildWslUsageSnapshot({ ...baseInput, wslHostsPolicy: null })).not.toHaveProperty(
+      'wsl_hosts_policy'
+    )
+    expect(buildWslUsageSnapshot(baseInput)).not.toHaveProperty('wsl_hosts_policy')
+  })
+
   it('reports no WSL and an unreadable registry without a version', () => {
     const props = buildWslUsageSnapshot({
       ...baseInput,

@@ -1,10 +1,12 @@
+import { projectSelectedSourceControlActionLaunch } from '../../../../shared/source-control-action-launch-preferences'
+import type { SelectedSourceControlActionRecipe } from '../../../../shared/source-control-action-selection'
 import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type {
-  SourceControlActionRecipe,
-  SourceControlLaunchActionId
+  SourceControlLaunchActionId,
+  SourceControlActionRecipe
 } from '../../../../shared/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -25,10 +27,10 @@ type UseSourceControlAgentActionStartArgs = {
   selectedAgent: TuiAgent | null
   commandInput: string
   trimmedCommandInput: string
-  agentArgs?: string
   /** False when the launch would be structured native chat, which reads no CLI arguments. */
   agentArgsApply: boolean
-  recipe: SourceControlActionRecipe
+  prepareRecipe?: (agent: TuiAgent) => SelectedSourceControlActionRecipe
+  recipe: SelectedSourceControlActionRecipe
   saveLaunchRecipe: boolean
   saveTargetValue: string
   actionId: SourceControlLaunchActionId
@@ -70,6 +72,7 @@ type UseSourceControlAgentActionStartResult = {
   resetDeliveryPlan: () => void
   cancelStart: () => void
   isStarting: boolean
+  isCreateAccepted: boolean
   handleStart: () => Promise<void>
   startWithDetectedAgents: (
     args: SourceControlAgentActionStartWithDetectedAgentsArgs
@@ -82,9 +85,9 @@ export function useSourceControlAgentActionStart({
   selectedAgent,
   commandInput,
   trimmedCommandInput,
-  agentArgs,
   agentArgsApply,
   recipe,
+  prepareRecipe,
   saveLaunchRecipe,
   saveTargetValue,
   actionId,
@@ -112,25 +115,41 @@ export function useSourceControlAgentActionStart({
   const [deliveryPlan, setDeliveryPlan] = useState<SourceControlAgentActionDeliveryPlanState>({
     status: 'idle'
   })
-  const [isStarting, setIsStarting] = useState(false)
-  const attemptRef = useRef<AbortController | null>(null)
+  const [phase, setPhase] = useState<'idle' | 'preparing' | 'accepted'>('idle')
+  const attemptRef = useRef<{
+    controller: AbortController
+    accepted: boolean
+  } | null>(null)
   const resetDeliveryPlan = useCallback(() => setDeliveryPlan({ status: 'idle' }), [])
   const cancelStart = useCallback(() => {
-    attemptRef.current?.abort()
-    attemptRef.current = null
-    setIsStarting(false)
+    const attempt = attemptRef.current
+    attempt?.controller.abort()
+    // Hiding detaches the UI; only settlement releases an issued creation.
+    if (!attempt?.accepted) {
+      attemptRef.current = null
+      setPhase('idle')
+    }
   }, [])
   useEffect(() => cancelStart, [open, worktreeId, connectionId, actionId, cancelStart])
 
   const buildPlan = useCallback(
-    (currentDetectedAgents: TuiAgent[]): SourceControlAgentActionDeliveryPlanState =>
+    (
+      currentDetectedAgents: TuiAgent[],
+      submitted: SelectedSourceControlActionRecipe
+    ): SourceControlAgentActionDeliveryPlanState =>
       buildSourceControlAgentDeliveryPlan({
         settings,
         agentLaunchPreferences,
         selectedAgent,
         commandInput,
         // Why: the check must judge the arguments the launch will really apply.
-        agentArgs: agentArgsApply ? agentArgs : undefined,
+        agentArgs:
+          agentArgsApply && selectedAgent
+            ? projectSelectedSourceControlActionLaunch(submitted, selectedAgent, {
+                renderedPrompt: commandInput,
+                settings
+              }).agentArgs
+            : undefined,
         detectedAgents: currentDetectedAgents,
         connectionUnavailable,
         launchPlatform,
@@ -139,7 +158,6 @@ export function useSourceControlAgentActionStart({
     [
       settings,
       agentLaunchPreferences,
-      agentArgs,
       agentArgsApply,
       commandInput,
       connectionUnavailable,
@@ -160,11 +178,12 @@ export function useSourceControlAgentActionStart({
         setDeliveryPlan(buildSourceControlAgentConnectionErrorPlan())
         return false
       }
-      const attempt = new AbortController()
+      const attempt = { controller: new AbortController(), accepted: false }
       attemptRef.current = attempt
-      setIsStarting(true)
+      setPhase('preparing')
       try {
-        const nextPlan = buildPlan(nextAgents)
+        const submitted = prepareRecipe ? prepareRecipe(selectedAgent) : recipe
+        const nextPlan = buildPlan(nextAgents, submitted)
         if (nextPlan.status === 'error') {
           setDeliveryPlan(nextPlan)
           return false
@@ -174,7 +193,7 @@ export function useSourceControlAgentActionStart({
           selectedAgent,
           trimmedCommandInput,
           launchChoice,
-          recipe,
+          recipe: submitted,
           saveTargetValue: saveLaunchRecipe ? saveTargetValue : 'none',
           actionId,
           repoId,
@@ -187,21 +206,29 @@ export function useSourceControlAgentActionStart({
           launchPlatform,
           launchSource,
           recoveryContext,
-          signal: attempt.signal,
+          signal: attempt.controller.signal,
+          onCreateAccepted: () => {
+            if (attemptRef.current === attempt) {
+              attempt.accepted = true
+              setPhase('accepted')
+            }
+          },
           onStart,
           onSaveAgentDefault,
           onLaunchAccepted,
           onLaunchAborted,
           onLaunched,
           onClose: () => {
-            resetDeliveryPlan()
-            onClose()
+            if (attemptRef.current === attempt && !attempt.controller.signal.aborted) {
+              resetDeliveryPlan()
+              onClose()
+            }
           }
         })
       } finally {
         if (attemptRef.current === attempt) {
           attemptRef.current = null
-          setIsStarting(false)
+          setPhase('idle')
         }
       }
     },
@@ -211,6 +238,7 @@ export function useSourceControlAgentActionStart({
       buildPlan,
       launchChoice,
       recipe,
+      prepareRecipe,
       connectionUnavailable,
       groupId,
       launchSource,
@@ -244,7 +272,8 @@ export function useSourceControlAgentActionStart({
     deliveryPlan,
     resetDeliveryPlan,
     cancelStart,
-    isStarting,
+    isStarting: phase !== 'idle',
+    isCreateAccepted: phase === 'accepted',
     handleStart,
     startWithDetectedAgents
   }

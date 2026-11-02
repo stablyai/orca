@@ -252,6 +252,19 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     connection.close()
   })
 
+  it('calls onReady for every socket that becomes ready, including after a reconnect', async () => {
+    const server = await createServer()
+    const onReady = vi.fn()
+    const connection = new RemoteRuntimeSharedControlConnection(server.pairing, { onReady })
+    await connection.request('worktree.ps', undefined, 1000)
+    expect(onReady).toHaveBeenCalledTimes(1)
+    server.closeClients()
+    await vi.waitFor(() => expect(server.connectionCount()).toBe(2))
+    await connection.request('worktree.ps', undefined, 2000)
+    expect(onReady).toHaveBeenCalledTimes(2)
+    connection.close()
+  })
+
   it('cleans up an id-scoped subscription closed before its ready response', async () => {
     const server = await createServer({ delaySubscriptionReady: true })
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)

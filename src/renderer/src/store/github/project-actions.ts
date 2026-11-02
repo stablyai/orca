@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
@@ -79,6 +80,10 @@ export const createProjectActions = (
                 { timeoutMs: 60_000 }
               )
             : await window.api.gh.getProjectViewTable(args)
+        if (envelope.ok) {
+          // Board rows are partial and unversioned: they can only ask task records to verify.
+          get().githubTaskCache.observeProject(envelope.data, target)
+        }
         // Bounded waits may overlap stronger requests; late non-OK results must not overwrite their newer data/errors.
         if (!ownsInflightRequest(inflightProjectViewRequests, requestKey, requestId)) {
           return envelope
@@ -118,7 +123,10 @@ export const createProjectActions = (
           ok: false,
           error: {
             type: 'unknown',
-            message: err instanceof Error ? err.message : 'Failed to fetch project view'
+            message:
+              err instanceof Error
+                ? err.message
+                : translate('projectViews.picker.viewFailed', 'Failed to fetch project view')
           }
         }
       } finally {

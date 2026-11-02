@@ -1,3 +1,6 @@
+import { getMobilePrimaryActionHint } from './mobile-source-control-actions'
+import { getMobilePrimaryActionLabel } from './mobile-source-control-primary-action-label'
+import { getMobileForcePushBlockedReason } from './mobile-source-control-review-copy'
 import type { SourceControlPrimaryActionDecisionInputs } from '../../../src/shared/source-control-primary-action-decision-types'
 import {
   resolveSourceControlCommitAreaPrimaryActionDecision,
@@ -13,6 +16,8 @@ import type { GitPushTarget } from '../../../src/shared/worktree/types'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
 import type { MobileGitBranchCompareResult } from './mobile-branch-compare'
 import type { MobileGitStatusResult } from './mobile-git-status'
+
+export { getMobileForcePushBlockedReason } from './mobile-source-control-review-copy'
 
 type GitStep = { method: string; params?: Record<string, unknown> }
 
@@ -67,13 +72,6 @@ export function resolveMobileSourceControlReviewInputs(
   return state.kind === 'loading' ? { ...NO_REVIEW, isPRStateLoading: true } : NO_REVIEW
 }
 
-// Mobile pushes without a review's saved push target, so a force push there could overwrite the wrong branch.
-export function getMobileForcePushBlockedReason(
-  review: MobileSourceControlReviewInputs | undefined
-): string | undefined {
-  return review?.pushTarget ? "Force push this pull request's branch from desktop" : undefined
-}
-
 export type MobileSourceControlPrimaryActionArgs = {
   status: MobileGitStatusResult | null
   hasUnresolvedConflicts: boolean
@@ -82,8 +80,6 @@ export type MobileSourceControlPrimaryActionArgs = {
   unstagedCount: number
   commitMessage: string
   busyAction: string | null
-  openingPath: string | null
-  openingBranchPath: string | null
   branchCompareResult: MobileGitBranchCompareResult | null
   review?: MobileSourceControlReviewInputs
   handlers: MobileSourceControlPrimaryActionHandlers
@@ -132,8 +128,7 @@ export function buildMobileSourceControlPrimaryAction(
   const decision = resolveSourceControlCommitAreaPrimaryActionDecision(
     buildMobileSourceControlDecisionInputs(args)
   )
-  const ioBusy =
-    args.busyAction !== null || args.openingPath !== null || args.openingBranchPath !== null
+  const ioBusy = args.busyAction !== null
   const forcePushBlockedReason = decision.requiresForceWithLease
     ? getMobileForcePushBlockedReason(args.review)
     : undefined
@@ -141,8 +136,8 @@ export function buildMobileSourceControlPrimaryAction(
 
   return {
     kind: decision.kind,
-    label: getMobilePrimaryActionLabel(decision),
-    accessibilityLabel: getMobilePrimaryActionLabel(decision),
+    label: getMobilePrimaryActionLabel(decision, args.stagedCount),
+    accessibilityLabel: getMobilePrimaryActionLabel(decision, args.stagedCount),
     accessibilityHint: forcePushBlockedReason ?? getMobilePrimaryActionHint(decision),
     disabled,
     loading: isLoadingDecision(decision, args.busyAction),
@@ -153,6 +148,39 @@ export function buildMobileSourceControlPrimaryAction(
       }
       void runMobilePrimaryAction(decision, args.handlers)
     }
+  }
+}
+
+export type MobileBranchRemoteAction = {
+  label: string
+  disabled: boolean
+  loading: boolean
+  run: () => Promise<void>
+}
+
+// The Commits list's Push: the branch's remote step from the same decision, with local changes set aside.
+export function buildMobileBranchRemoteAction(
+  args: MobileSourceControlPrimaryActionArgs
+): MobileBranchRemoteAction | null {
+  const decision = resolveSourceControlCommitAreaPrimaryActionDecision({
+    ...buildMobileSourceControlDecisionInputs(args),
+    stagedCount: 0,
+    hasUnstagedChanges: false,
+    hasStageableChanges: false,
+    hasMessage: false
+  })
+  if (decision.kind !== 'push' && decision.kind !== 'publish' && decision.kind !== 'sync') {
+    return null
+  }
+  const ioBusy = args.busyAction !== null
+  const forcePushBlocked =
+    decision.requiresForceWithLease === true &&
+    getMobileForcePushBlockedReason(args.review) !== undefined
+  return {
+    label: getMobilePrimaryActionLabel(decision, 0),
+    disabled: decision.disabled || ioBusy || forcePushBlocked,
+    loading: isLoadingDecision(decision, args.busyAction),
+    run: () => runMobilePrimaryAction(decision, args.handlers)
   }
 }
 
@@ -197,72 +225,6 @@ export function getMobileBranchCommitsAhead(
   }
   const upstream = args.status?.upstreamStatus
   return upstream?.hasUpstream ? upstream.ahead : undefined
-}
-
-function getMobilePrimaryActionLabel(decision: MobileSourceControlPrimaryActionDecision): string {
-  if (decision.requiresForceWithLease) {
-    return 'Force Push'
-  }
-  switch (decision.kind) {
-    case 'commit':
-      return 'Commit'
-    case 'stage':
-      return 'Stage All'
-    case 'push':
-      return 'Push'
-    case 'pull':
-      return 'Pull'
-    case 'sync':
-      return 'Sync'
-    case 'publish':
-      return 'Publish Branch'
-  }
-}
-
-function getMobilePrimaryActionHint(decision: MobileSourceControlPrimaryActionDecision): string {
-  switch (decision.titleIntent) {
-    case 'commit_in_progress':
-      return 'Commit in progress.'
-    case 'force_push_in_progress':
-      return 'Force push in progress.'
-    case 'action_in_progress':
-    case 'remote_operation_in_progress':
-      return 'Remote operation in progress.'
-    case 'remote_operation_blocks_commit':
-      return 'Try again once the remote operation finishes.'
-    case 'resolve_conflicts_before_commit':
-      return 'Resolve conflicts before committing.'
-    case 'commit_staged_changes':
-      return 'Commit staged changes.'
-    case 'enter_commit_message':
-      return 'Enter a commit message to commit.'
-    case 'stage_all_changes':
-      return 'Stage all changes.'
-    case 'stage_file_to_commit':
-      return 'Stage at least one file to commit.'
-    case 'checkout_branch_before_publish':
-      return 'Check out a branch before publishing commits.'
-    case 'checking_review_status':
-      return 'Checking review status.'
-    case 'review_already_merged':
-      return 'Nothing to commit. The review is already merged.'
-    case 'publish_branch':
-      return 'Publish this branch to origin.'
-    case 'push_linked_review':
-      return 'Push updates to the linked review branch.'
-    case 'linked_review_target_unavailable':
-      return 'The linked review branch is unavailable.'
-    case 'force_push_with_lease':
-      return 'Force push with lease to update the remote branch.'
-    case 'sync_counts':
-      return `Pull ${decision.behind ?? 0}, push ${decision.ahead ?? 0}.`
-    case 'pull_count':
-      return `Pull ${decision.count ?? 0} commit${decision.count === 1 ? '' : 's'}.`
-    case 'push_count':
-      return `Push ${decision.count ?? 0} commit${decision.count === 1 ? '' : 's'}.`
-    case 'nothing_to_commit_up_to_date':
-      return 'Nothing to commit. Branch is up to date.'
-  }
 }
 
 function isLoadingDecision(

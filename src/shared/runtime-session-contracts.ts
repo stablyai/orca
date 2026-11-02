@@ -221,6 +221,8 @@ export type RuntimeMobileSessionTabMoveResult = { moved: true }
 
 export type RuntimeMobileSessionTabCloseResult = {
   closed: true
+  /** Proven host retirement; delegated and legacy replies omit this receipt. */
+  retirementConfirmed?: true
   refused?: true
   refusalReason?:
     | 'missing-intent'

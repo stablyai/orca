@@ -28,6 +28,7 @@ function terminalHandle(): TerminalWebViewHandle {
     reflow: vi.fn(),
     clear: vi.fn(),
     fitDimensions: vi.fn(() => null),
+    scrollToBottom: vi.fn(),
     resetZoom: vi.fn(),
     cancelSelect: vi.fn(),
     doSelectAll: vi.fn(),
@@ -142,5 +143,25 @@ describe('terminal foreground recovery', () => {
     harness.runScheduled()
 
     expect(harness.subscribeToTerminal).not.toHaveBeenCalled()
+  })
+})
+
+describe('split terminal foreground recovery', () => {
+  it('replays both visible panes but does not revive a pane closed during the delay', () => {
+    const harness = createHarness()
+    harness.terminalRefs.current.set('term-2', harness.terminalRefs.current.get('term-1')!)
+    harness.initializedHandlesRef.current.add('term-2')
+    const visibleTerminalHandlesRef = { current: ['term-1', 'term-2'] }
+    recoverActiveTerminalAfterForeground({ ...harness, visibleTerminalHandlesRef })
+    expect(harness.unsubscribeTerminal.mock.calls).toEqual([['term-1'], ['term-2']])
+    harness.activeHandleRef.current = 'term-2'
+    harness.runScheduled()
+    expect(harness.subscribeToTerminal.mock.calls).toEqual([['term-1'], ['term-2']])
+    harness.initializedHandlesRef.current = new Set(['term-1', 'term-2'])
+    harness.subscribeToTerminal.mockClear()
+    recoverActiveTerminalAfterForeground({ ...harness, visibleTerminalHandlesRef })
+    visibleTerminalHandlesRef.current = ['term-2']
+    harness.runScheduled()
+    expect(harness.subscribeToTerminal.mock.calls).toEqual([['term-2']])
   })
 })

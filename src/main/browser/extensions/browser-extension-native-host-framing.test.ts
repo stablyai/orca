@@ -50,10 +50,14 @@ describe('native host message framing', () => {
     expect(messages).toEqual(Array(4).fill('{"text":"🦈🦈"}'))
   })
 
-  it('delivers every message in one chunk, in order', () => {
+  it('keeps a partial remainder after coalesced messages intact across pushes', () => {
     const { reader, messages } = collect()
-    reader.push(Buffer.concat([frame('1'), frame('{"a":2}'), frame('"three"')]))
-    expect(messages).toEqual(['1', '{"a":2}', '"three"'])
+    const tail = frame('{"t":"🦈"}')
+    for (const cut of [2, 7]) {
+      reader.push(Buffer.concat([frame('1'), frame('2'), tail.subarray(0, cut)]))
+      reader.push(tail.subarray(cut))
+    }
+    expect(messages).toEqual(['1', '2', '{"t":"🦈"}', '1', '2', '{"t":"🦈"}'])
   })
 
   it('takes a message of exactly 1 MB and refuses one byte more without waiting for it', () => {

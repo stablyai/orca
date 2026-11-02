@@ -101,7 +101,7 @@ describe('createGitHubSlice.fetchProjectViewTable coordination', () => {
       expect(groups.map((group) => group.label)).toEqual(['1', '2'])
       expect(groups.flatMap((group) => group.rows.map(projectRelationCellText))).toEqual([
         ['', ''],
-        ['#12 +2', '1/2 (50%)']
+        ['#12 +2 more', '1/2 (50%)']
       ])
       expect(cached.rows[1].content).not.toHaveProperty('linkedPullRequests')
       expect(cached.rows[1].content).not.toHaveProperty('subIssuesProgress')

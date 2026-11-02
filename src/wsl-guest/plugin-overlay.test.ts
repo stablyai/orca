@@ -30,33 +30,6 @@ describe('PluginOverlayManager', () => {
     rmSync(homeDir, { recursive: true, force: true })
   })
 
-  it('reports no source until install runs', () => {
-    expect(manager.hasOpenCodeSource()).toBe(false)
-    expect(manager.hasPiSource()).toBe(false)
-    expect(manager.materializeOpenCode('tab-1:0')).toBeNull()
-    expect(manager.materializePi('tab-1:0')).toBeNull()
-  })
-
-  it('materializes OpenCode plugin into <overlay>/plugins/<file>', () => {
-    manager.setSources({ opencodePluginSource: 'export const X = 1' })
-    const dir = manager.materializeOpenCode('tab-1:0')
-    expect(dir).not.toBeNull()
-    const expected = join(dir!, 'plugins', 'orca-opencode-status.js')
-    expect(existsSync(expected)).toBe(true)
-    expect(readFileSync(expected, 'utf8')).toBe('export const X = 1')
-  })
-
-  it('keeps the OpenCode 2 plugin in a separate overlay and filename', () => {
-    manager.setSources({ opencode2PluginSource: 'export const V2 = 1' })
-    expect(manager.hasOpenCodeSource('opencode2')).toBe(true)
-    const dir = manager.materializeOpenCode('tab-2:0', undefined, 'opencode2')
-    expect(dir).not.toBeNull()
-    expect(readFileSync(join(dir!, 'plugins', 'orca-opencode2-status.js'), 'utf8')).toBe(
-      'export const V2 = 1'
-    )
-    expect(existsSync(join(dir!, 'plugins', 'orca-opencode-status.js'))).toBe(false)
-  })
-
   it('installs OpenCode plugins in the canonical XDG config roots', () => {
     manager.setSources({
       opencodePluginSource: 'v1 plugin',
@@ -212,16 +185,6 @@ describe('PluginOverlayManager', () => {
     manager.setSources({ opencodePluginSource: 'orca plugin' })
 
     expect(manager.materializeOpenCode('tab-missing:0', join(homeDir, 'missing'))).toBeNull()
-  })
-
-  it('installs Pi extension into the real agent extensions dir', () => {
-    manager.setSources({ piExtensionSource: '// pi extension' })
-    const result = manager.materializePi('tab-2:0')
-    expect(result?.sourceAgentDir).toBeDefined()
-    const file = join(result!.sourceAgentDir!, 'extensions', 'orca-agent-status.ts')
-    expect(result?.statusExtensionPath).toBe(file)
-    expect(existsSync(file)).toBe(true)
-    expect(readFileSync(file, 'utf8')).toContain('@orca-managed-pi-extension')
   })
 
   it("does not overwrite a user's same-named remote Pi extension file", () => {

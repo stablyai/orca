@@ -9,6 +9,7 @@ import {
 } from '../../../../runtime/runtime-rpc-client'
 import {
   TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
+  WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../../../shared/protocol-version'
@@ -96,6 +97,16 @@ async function persistWorktreeMetaUntracked(
     return
   }
   await assertWorkspaceAttachmentWriteCapability(target, updates)
+  if (updates.firstAgentMessageRenameError === null && updates.displayName === undefined) {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY,
+      translate(
+        'auto.store.slices.worktrees.metadata.worktree.meta.persist.dismissRenameError',
+        'Update the remote runtime to dismiss auto-name errors'
+      )
+    )
+  }
   // Old worktree.set strips unknown keys, including clears; gate by presence so dropped fields cannot strand hidden review links.
   if (
     target.kind === 'environment' &&

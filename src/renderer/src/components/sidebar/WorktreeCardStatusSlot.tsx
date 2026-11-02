@@ -3,6 +3,7 @@ import { Bell, GitBranch, Moon } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import { observeOffscreenAnimation } from '@/lib/offscreen-animation-pause'
 import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
 import { FilledBellIcon } from './WorktreeCardHelpers'
 import StatusIndicator from './StatusIndicator'
@@ -75,26 +76,26 @@ function overlayNewCardUnreadStatus(
 }
 
 function getReviewStatusLabel(review: WorktreeCardPrDisplay): string {
-  const label = getReviewLabel(review)
+  const values = { review: getReviewLabel(review) }
   if (review.state === 'merged') {
-    return `${label}: Merged`
+    return translate('workspace.reviewStatus.merged', '{{review}}: Merged', values)
   }
   if (review.state === 'closed') {
-    return `${label}: Closed`
+    return translate('workspace.reviewStatus.closed', '{{review}}: Closed', values)
   }
   if (review.state === 'draft') {
-    return `${label}: Draft`
+    return translate('workspace.reviewStatus.draft', '{{review}}: Draft', values)
   }
   if (review.status === 'failure') {
-    return `${label} checks: Failed`
+    return translate('workspace.reviewStatus.checksFailed', '{{review}} checks: Failed', values)
   }
   if (review.status === 'pending') {
-    return `${label} checks: Pending`
+    return translate('workspace.reviewStatus.checksPending', '{{review}} checks: Pending', values)
   }
   if (review.status === 'success') {
-    return `${label} checks: Passing`
+    return translate('workspace.reviewStatus.checksPassing', '{{review}} checks: Passing', values)
   }
-  return `${label}: Open`
+  return translate('workspace.reviewStatus.open', '{{review}}: Open', values)
 }
 
 export function WorktreeCardStatusSlot({
@@ -148,14 +149,17 @@ export function WorktreeCardStatusSlot({
       ? `${passiveStatusLabel} · ${translate('workspace.links.lastKnownStatus', 'Last known status')}`
       : passiveStatusLabel
   const passiveStatusAnnouncement =
-    newCardStyle && isUnread ? `${reviewLabel} · Unread` : reviewLabel
+    newCardStyle && isUnread
+      ? translate('workspace.activity.unreadLabel', '{{status}} · Unread', { status: reviewLabel })
+      : reviewLabel
   // Working/permission own the lane; retain unread in accessible copy and restore its dot afterward.
   const showNewCardUnreadAlert =
     newCardStyle && isUnread && showStatus && status !== 'working' && status !== 'permission'
+  const reviewStaleRef = reviewStale ? observeOffscreenAnimation : undefined
   const reviewStatusIconClassName = cn(
     compactReviewAndBranchStatusIconClassName,
     // Same last-known treatment as the hover card's reference rows.
-    reviewStale && 'shimmer shimmer-duration-2400'
+    reviewStale && 'shimmer shimmer-duration-2400 shimmer-steps-30'
   )
   const branchStatusIcon = <GitBranch className={branchStatusIconClassName} aria-hidden="true" />
   const sleepingStatusIcon = <Moon className={sleepingStatusIconClassName} aria-hidden="true" />
@@ -165,7 +169,10 @@ export function WorktreeCardStatusSlot({
       <span className="sr-only">{passiveStatusAnnouncement}</span>
     </span>
   ) : canShowReviewStatus && (collectionChecks || prDisplay) ? (
-    <span className={cn('inline-flex size-5 items-center justify-center p-0.5', className)}>
+    <span
+      ref={reviewStaleRef}
+      className={cn('inline-flex size-5 items-center justify-center p-0.5', className)}
+    >
       {collectionChecks ? (
         <WorkspaceReviewChecksIndicator
           summary={collectionChecks}
@@ -236,7 +243,10 @@ export function WorktreeCardStatusSlot({
           >
             {newCardStyle ? (
               showStatus && canShowReviewStatus && prDisplay ? (
-                <span className="inline-flex size-5 items-center justify-center p-0.5">
+                <span
+                  ref={reviewStaleRef}
+                  className="inline-flex size-5 items-center justify-center p-0.5"
+                >
                   <ReviewIcon
                     review={prDisplay}
                     className={reviewStatusIconClassName}

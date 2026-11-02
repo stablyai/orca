@@ -18,6 +18,9 @@ vi.mock('../browser/browser-route-session-runtime', async () => ({
     attachGuest: (await import('./createMainWindow-test-harness')).attachRouteGuestMock
   }
 }))
+vi.mock('../browser/browser-javascript-dialogs', () => ({
+  installBrowserJavaScriptDialogs: vi.fn()
+}))
 vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
   const harness = await import('./createMainWindow-test-harness')
   return {
@@ -58,6 +61,7 @@ describe('createMainWindow', () => {
       on: vi.fn(),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -117,6 +121,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn((handler) => {
         windowOpenHandler = handler
@@ -294,6 +299,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -351,6 +357,7 @@ describe('createMainWindow', () => {
         on: vi.fn(),
         setZoomLevel: vi.fn(),
         setBackgroundThrottling: vi.fn(),
+        setWebRTCIPHandlingPolicy: vi.fn(),
         invalidate: vi.fn(),
         setWindowOpenHandler: vi.fn(),
         send: vi.fn(),
@@ -381,59 +388,16 @@ describe('createMainWindow', () => {
       const browserWindowOptions = browserWindowMock.mock.calls[0]?.[0]
       expect(browserWindowOptions.titleBarStyle).toBe(expected.titleBarStyle)
       expect(browserWindowOptions.frame).toBe(expected.frame)
-    }
-  })
-
-  it('never requests macOS vibrancy or transparency when window blur is enabled (#8482)', () => {
-    for (const [platform, expected] of [
-      ['darwin', { backgroundMaterial: undefined }],
-      ['win32', { backgroundMaterial: 'acrylic' }],
-      ['linux', { backgroundMaterial: undefined }]
-    ] satisfies [NodeJS.Platform, { backgroundMaterial: string | undefined }][]) {
-      browserWindowMock.mockReset()
-      const webContents = {
-        on: vi.fn(),
-        setZoomLevel: vi.fn(),
-        setBackgroundThrottling: vi.fn(),
-        invalidate: vi.fn(),
-        setWindowOpenHandler: vi.fn(),
-        send: vi.fn(),
-        isDevToolsOpened: vi.fn(),
-        openDevTools: vi.fn(),
-        closeDevTools: vi.fn()
-      }
-      const browserWindowInstance = {
-        webContents,
-        on: vi.fn(),
-        isDestroyed: vi.fn(() => false),
-        isMaximized: vi.fn(() => false),
-        isFullScreen: vi.fn(() => false),
-        getSize: vi.fn(() => [1200, 800]),
-        getBounds: vi.fn(() => ({ x: 10, y: 20, width: 1000, height: 700 })),
-        setSize: vi.fn(),
-        setWindowButtonPosition: vi.fn(),
-        maximize: vi.fn(),
-        show: vi.fn(),
-        loadFile: vi.fn(() => Promise.resolve()),
-        loadURL: vi.fn(() => Promise.resolve())
-      }
-      browserWindowMock.mockImplementation(function () {
-        return browserWindowInstance
-      })
-
-      withPlatform(platform, () =>
-        createMainWindow({
-          getUI: () => ({}),
-          getSettings: () => ({ windowBackgroundBlur: true }),
-          updateUI: vi.fn()
-        } as never)
-      )
-
-      const browserWindowOptions = browserWindowMock.mock.calls[0]?.[0]
-      expect(browserWindowOptions.vibrancy).toBeUndefined()
-      expect(browserWindowOptions.transparent).toBeUndefined()
-      expect(browserWindowOptions.backgroundMaterial).toBe(expected.backgroundMaterial)
+      // Material off (the default) must leave the window exactly as before: opaque, no material argument.
       expect(browserWindowOptions.backgroundColor).toBe('#ffffff')
+      for (const key of ['vibrancy', 'transparent', 'backgroundMaterial']) {
+        expect(browserWindowOptions).not.toHaveProperty(key)
+      }
+      expect(
+        (browserWindowOptions.webPreferences?.additionalArguments ?? []).some((arg) =>
+          arg.startsWith('--orca-window-material=')
+        )
+      ).toBe(false)
     }
   })
 
@@ -445,6 +409,7 @@ describe('createMainWindow', () => {
       on: vi.fn(),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       isDestroyed: vi.fn(() => false),
       setWindowOpenHandler: vi.fn(),
@@ -519,6 +484,7 @@ describe('createMainWindow', () => {
       on: vi.fn(),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       isDestroyed: vi.fn(() => false),
       setWindowOpenHandler: vi.fn(),
@@ -597,6 +563,7 @@ describe('createMainWindow', () => {
       on: vi.fn(),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       isDestroyed: vi.fn(() => false),
       setWindowOpenHandler: vi.fn(),
@@ -645,6 +612,7 @@ describe('createMainWindow', () => {
       on: vi.fn(),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       isDestroyed: vi.fn(() => false),
       setWindowOpenHandler: vi.fn(),
@@ -691,6 +659,7 @@ describe('createMainWindow', () => {
       on: vi.fn(),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       isDestroyed: vi.fn(() => false),
       setWindowOpenHandler: vi.fn(),

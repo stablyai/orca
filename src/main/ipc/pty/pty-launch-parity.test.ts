@@ -130,6 +130,11 @@ vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
 vi.mock('../../../shared/openssh-default-shell', () => ({
   readOpenSshDefaultShell: vi.fn(() => '')
 }))
+// Fake-win32 runs have no wsl.exe: the distro runs, so main's background-start hold passes (E9).
+vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  readWslDistroRunningState: vi.fn(async () => 'running')
+}))
 
 // Exercise real window-lane spawning through provider, telemetry and pane binding.
 describe('window lane: pty:spawn request -> provider', () => {
@@ -273,9 +278,9 @@ describe('launch facts outside the tables', () => {
         const paneKey = makePaneKey(pane.tabId, pane.leafId)
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: exposes the existing selector; empty-inventory Sleep needs only this local workspace identity.
         const selecting = lanes.runtime as unknown as {
-          resolveWorktreeSelector: () => Promise<{ id: string }>
+          resolveGitWorktreeSelector: () => Promise<{ id: string }>
         }
-        vi.spyOn(selecting, 'resolveWorktreeSelector').mockResolvedValue({ id: pane.worktreeId })
+        vi.spyOn(selecting, 'resolveGitWorktreeSelector').mockResolvedValue({ id: pane.worktreeId })
         const events: string[] = []
         const releases: ReturnType<typeof vi.fn<() => void>>[] = []
         const finishes: ReturnType<typeof vi.fn<() => void>>[] = []
@@ -767,33 +772,35 @@ describe('spawn preflight: where the lanes differ today', () => {
     )
   })
 
-  it.each([
-    {
-      name: 'a folder containing a WSL-project repo',
-      workspace: {
-        kind: 'folder',
-        path: String.raw`C:\Users\alice`,
-        repoPath: WIN_PATH,
-        projectRuntime: WSL_UBUNTU
-      } satisfies LaunchWorkspace,
-      host: { shellOverride: 'powershell.exe', terminalWindowsWslDistro: null }
-    },
-    {
-      name: 'a \\wsl$ repo with no saved runtime',
-      workspace: { kind: 'repo', path: WSL_PATH } satisfies LaunchWorkspace,
-      // The distro comes from the path, but the shell stays the settings' PowerShell.
-      host: { shellOverride: 'powershell.exe', terminalWindowsWslDistro: 'Ubuntu' }
-    }
-  ])('Windows plain terminal, $name: the window uses the sent runtime', async (c) => {
+  it('Windows folder plain terminal: both lanes use its saved local project runtime', async () => {
     setMainPlatform('win32')
-    const lanes = startParityLanes(suite, { workspace: c.workspace })
-    const facts = await spawnBoth(lanes, c.workspace, { projectRuntime: WSL_PROJECT_SENT })
+    const workspace = {
+      kind: 'folder',
+      path: String.raw`C:\Users\alice`,
+      repoPath: WIN_PATH,
+      projectRuntime: WSL_UBUNTU
+    } satisfies LaunchWorkspace
+    const lanes = startParityLanes(suite, { workspace })
+    const facts = await spawnBoth(lanes, workspace, { projectRuntime: WSL_PROJECT_SENT })
+    const expected = { shellOverride: 'wsl.exe', terminalWindowsWslDistro: 'Ubuntu' }
+    expect(facts.window).toMatchObject(expected)
+    expect(facts.host).toMatchObject(expected)
+  })
 
+  it('Windows plain terminal on a WSL share: only the window has a sent runtime', async () => {
+    setMainPlatform('win32')
+    const workspace = { kind: 'repo', path: WSL_PATH } satisfies LaunchWorkspace
+    const lanes = startParityLanes(suite, { workspace })
+    const facts = await spawnBoth(lanes, workspace, { projectRuntime: WSL_PROJECT_SENT })
     expect(facts.window).toMatchObject({
       shellOverride: 'wsl.exe',
       terminalWindowsWslDistro: 'Ubuntu'
     })
-    expect(facts.host).toMatchObject(c.host)
+    // The distro comes from the path, but the host shell stays the settings' PowerShell.
+    expect(facts.host).toMatchObject({
+      shellOverride: 'powershell.exe',
+      terminalWindowsWslDistro: 'Ubuntu'
+    })
   })
 
   // Managed SSH hosts expose this shell environment; the shared resolver serves both lanes.

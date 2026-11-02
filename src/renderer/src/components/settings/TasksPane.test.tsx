@@ -382,6 +382,6 @@ describe('TasksPane', () => {
     await act(async () => {
       retry?.click()
     })
-    expect(mocks.refreshPreflightStatus).toHaveBeenCalledWith({ force: true })
+    expect(mocks.refreshPreflightStatus).toHaveBeenCalledWith({ force: true, wakeWslDistro: true })
   })
 })
