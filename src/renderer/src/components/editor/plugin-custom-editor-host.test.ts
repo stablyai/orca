@@ -398,6 +398,21 @@ describe('custom editor document channel', () => {
     await expect(host.flush()).resolves.toBe(false)
   })
 
+  it('settles a flush at once for a read-only document or a frame with no window', async () => {
+    const { host, send, messages } = setup({ text: 'a', readOnly: true })
+    send(READY)
+    await expect(host.flush()).resolves.toBe(true)
+    expect(messages()).not.toContainEqual(expect.objectContaining({ method: 'editor.flush' }))
+
+    const detached = createCustomEditorHost({
+      getFrameWindow: () => null,
+      getDocument: () => ({ text: 'a', readOnly: false }),
+      onEdit: vi.fn()
+    })
+    detached.channel.onReady()
+    await expect(detached.flush()).resolves.toBe(true)
+  })
+
   it('forwards key chords from the shell for Orca to match, dropping malformed ones', () => {
     const { onKeyChord, send } = setup({ text: 'a' })
     send(keydown({ key: 'x'.repeat(65), code: 'a' }))

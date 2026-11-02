@@ -15,6 +15,7 @@ import { usePluginFrameHost } from '../right-sidebar/use-plugin-frame-host'
 import { usePluginFrameEntry } from '../right-sidebar/use-plugin-frame-entry'
 import { editorShortcutMatches } from './editor-shortcuts'
 import { registerEditorFrameFlush } from './editor-pending-flush'
+import { useCustomEditorReloadFlush } from './use-custom-editor-reload-flush'
 import {
   createCustomEditorHost,
   type CustomEditorBinaryDocument,
@@ -89,20 +90,11 @@ export default function PluginCustomEditorFrame({
   const isLarge =
     (binaryDocument?.bytes.byteLength ?? content.length) > CUSTOM_EDITOR_LARGE_DOCUMENT_BYTES
 
-  const { entry, markUnresponsive, remountGone } = usePluginFrameEntry(
-    'editor',
-    editor.pluginKey,
-    editor.id
-  )
-
-  const frameKey = entry.status === 'ready' ? `${editor.key}:${entry.revision}` : null
-  const guest = usablePluginFrameGuest(entry.status === 'ready' ? entry.guest : undefined)
-  const entryHtml = entry.status === 'ready' && !guest ? entry.html : null
-  // Why memoized: a new srcdoc reloads the frame; theme changes arrive as messages instead.
-  const frameDocument = useMemo(
-    () => (entryHtml === null ? null : fillPluginPanelShell(entryHtml)),
-    [entryHtml]
-  )
+  const {
+    entry: liveEntry,
+    markUnresponsive,
+    remountGone
+  } = usePluginFrameEntry('editor', editor.pluginKey, editor.id)
 
   const host = useMemo(() => {
     const created = createCustomEditorHost({
@@ -145,6 +137,16 @@ export default function PluginCustomEditorFrame({
     return created
   }, [isBinary])
 
+  const entry = useCustomEditorReloadFlush(liveEntry, host.flush)
+  const frameKey = entry.status === 'ready' ? `${editor.key}:${entry.revision}` : null
+  const guest = usablePluginFrameGuest(entry.status === 'ready' ? entry.guest : undefined)
+  const entryHtml = entry.status === 'ready' && !guest ? entry.html : null
+  // Why memoized: a new srcdoc reloads the frame; theme changes arrive as messages instead.
+  const frameDocument = useMemo(
+    () => (entryHtml === null ? null : fillPluginPanelShell(entryHtml)),
+    [entryHtml]
+  )
+
   const { onFrameLoad } = usePluginFrameHost({
     surface: 'editor',
     frameRef,
@@ -152,7 +154,11 @@ export default function PluginCustomEditorFrame({
     sessionToken: entry.status === 'ready' ? entry.sessionToken : null,
     editor: host.channel,
     onUnresponsive: markUnresponsive,
-    onGuestGone: remountGone
+    onGuestGone: () => {
+      // A dead guest cannot answer the reload's flush.
+      host.reset()
+      remountGone()
+    }
   })
 
   useEffect(() => {
