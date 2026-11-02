@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { readNativeChatSessionOptionCache } from '../native-chat/native-chat-session-option-cache'
+import { readNativeChatSessionOptionCache } from '../../../../shared/native-chat/input/native-chat-session-option-cache'
 import { planQueuedPaneAgentLaunch } from '../../../../main/ipc/pty/pane-agent-launch.test-fixture'
 import type { RunSourceControlAgentActionStartArgs } from './runSourceControlAgentActionStart'
 import type { PtySpawnIpcArgs } from '../../../../main/ipc/pty/ipc/spawn-types'
@@ -717,7 +717,7 @@ it.each(['claude', 'codex'] as const)(
     const f = mountSourceDialog(recipe, recipe)
     act(() =>
       useAppStore.setState(({ settings }) => ({
-        settings: { ...settings!, nativeChatProviders: {} }
+        settings: { ...settings!, nativeChatProviders: { [agent]: true } }
       }))
     )
     const user = userEvent.setup()

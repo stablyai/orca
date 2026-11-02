@@ -4,7 +4,7 @@ import { launchDraftSource } from '../native-chat/native-chat-launch-draft-sourc
 import { acceptAgentPickerArguments } from '../../../../shared/agent-launch-picker-edits'
 import { agentLaunchPromptScopeKey } from './AgentLaunchPromptComposer'
 import { act, createElement, useState } from 'react'
-import { fireEvent, render, renderHook, waitFor } from '@testing-library/react'
+import { fireEvent, getByRole, render, renderHook, waitFor } from '@testing-library/react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
@@ -144,6 +144,41 @@ it.each(['button', 'enter'] as const)(
       )
     }
     expect(launch).toHaveBeenCalledExactlyOnceWith(initial)
+  }
+)
+
+it.each(['chat', 'terminal'] as const)(
+  'keeps the stored %s surface and setup when reselecting the agent in a form',
+  (surface) => {
+    const draft: AgentPickerDraft = {
+      agent: 'codex',
+      surface,
+      choices: { model: 'astra', options: { effort: 'low' } },
+      arguments: '--search'
+    }
+    act(() =>
+      root.render(
+        <TooltipProvider>
+          <DropdownMenu defaultOpen modal={false}>
+            <DropdownMenuTrigger>Select agent</DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <AgentLaunchPickerMenu
+                entries={[{ ...entry, defaultSurface: surface === 'chat' ? 'terminal' : 'chat' }]}
+                mode="select"
+                value={draft}
+                runLaunch={launch}
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </TooltipProvider>
+      )
+    )
+    fireEvent.click(getByRole(document.body, 'menuitem', { name: /^Codex/ }))
+    expect(launch).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ agent: 'codex', kind: surface === 'chat' ? 'chat' : 'cli' }),
+      draft,
+      expect.objectContaining({ agent: 'codex' })
+    )
   }
 )
 

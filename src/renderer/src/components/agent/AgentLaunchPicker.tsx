@@ -132,8 +132,9 @@ export const AgentLaunchPicker = memo(
                     row.agent,
                     draft,
                     entry,
-                    // Setup buttons pass a changed surface. A chat row with no draft is the chat choice.
-                    surface ?? (!draft && row.kind === 'chat' ? 'chat' : undefined)
+                    // Re-selecting an agent preserves the form's surface; a new chat row chooses Chat.
+                    surface ??
+                      (!draft && row.agent !== agent && row.kind === 'chat' ? 'chat' : undefined)
                   )
                 }
               />

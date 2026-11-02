@@ -470,6 +470,12 @@ it('keeps accepted and newer pending ordinary intent across same-target agent sw
     await open('Claude')
     await useDraft(route)
     await closeMenu()
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+      button: 0,
+      ctrlKey: false
+    })
+    fireEvent.click(await screen.findByRole('menuitem', { name: /^Claude/ }))
+    expect(evidence.submit).toHaveBeenCalledTimes(captured.length)
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Create worktree' })))
     const submitted = evidence.submit.mock.calls.at(-1)!
     expect(submitted[0]).toBe('claude')

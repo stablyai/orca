@@ -356,7 +356,7 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
               dismissing.current = false
               return
             }
-            const draft = initial
+            const draft = initial ?? (mode === 'select' ? selected : undefined)
             const surface = draft?.surface ?? entry.defaultSurface
             const row = draft
               ? pickerLaunchRow(entry, surface)
