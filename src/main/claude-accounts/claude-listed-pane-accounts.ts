@@ -11,7 +11,7 @@ export function claudeListedPaneAccounts(
   records: readonly ClaudePaneAccountRecord[]
 ): {
   paneAccounts: ClaudePaneAccountSnapshot[]
-  assignedSessions: { accountId: string; count: number }[]
+  assignedSessions: { accountId: string; count: number; chatCount?: number }[]
 } {
   const emails = accounts.map((account) => account.email)
   const paneAccounts: ClaudePaneAccountSnapshot[] = []
@@ -31,9 +31,16 @@ export function claudeListedPaneAccounts(
   }
   return {
     paneAccounts,
-    assignedSessions: accounts.map((account) => ({
-      accountId: account.id,
-      count: paneAccounts.filter((pane) => pane.accountId === account.id).length
-    }))
+    assignedSessions: accounts.map((account) => {
+      const count = paneAccounts.filter((pane) => pane.accountId === account.id).length
+      const chatCount = records.filter(
+        (record) => record.surface === 'chat' && claudeBillingAccountId(record) === account.id
+      ).length
+      return {
+        accountId: account.id,
+        count,
+        ...(chatCount > 0 ? { chatCount } : {})
+      }
+    })
   }
 }

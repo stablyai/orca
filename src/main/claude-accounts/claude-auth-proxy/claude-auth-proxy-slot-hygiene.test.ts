@@ -3,8 +3,10 @@ import { registerPty, unregisterPty } from '../../memory/pty-registry'
 import {
   _internals,
   forgetClaudePaneAccount,
+  getClaudePaneAccount,
   recordClaudePaneAccount
 } from '../claude-pane-account-registry'
+import { applyStructuredClaudeProxySlot } from '../../claude/claude-structured-pane-account'
 import {
   claudeAuthProxyStatus,
   getClaudeAuthProxy,
@@ -169,5 +171,67 @@ describe('claudeAuthProxyStatus slot prune', () => {
       isReattach: true
     })
     expect(proxy.accountIdForSlot(reattach)).toBeNull()
+  })
+
+  it('reuses a native chat slot when a later launch prepared another one', () => {
+    const proxy = requireProxy()
+    const port = proxy.port()
+    const kept = proxy.allocateSlot('chat')
+    noteClaudeAuthProxySlotAllocated(kept)
+    recordClaudePaneAccount({
+      ptyId: 'chat-key',
+      paneKey: 'chat-key',
+      surface: 'chat',
+      accountId: 'chat',
+      configDir: null,
+      launchedAt: 1,
+      pinned: false,
+      source: 'spawn',
+      proxySlot: kept,
+      assignedAccountId: 'chat'
+    })
+    const fresh = proxy.allocateSlot('chat')
+    noteClaudeAuthProxySlotAllocated(fresh)
+    const freshUrl = `http://127.0.0.1:${port}/p/${fresh}/`
+    const env = { ANTHROPIC_BASE_URL: freshUrl }
+    expect(
+      applyStructuredClaudeProxySlot({
+        env,
+        preparation: {
+          configDir: '/chat',
+          envPatch: { ANTHROPIC_BASE_URL: freshUrl },
+          provenance: 'profile:chat'
+        },
+        existing: getClaudePaneAccount('chat-key'),
+        reuseRecordedSlot: true,
+        userPinnedUrl: false
+      })
+    ).toBe(kept)
+    expect(env.ANTHROPIC_BASE_URL).toBe(`http://127.0.0.1:${port}/p/${kept}/`)
+    expect(proxy.accountIdForSlot(fresh)).toBeNull()
+    expect(proxy.accountIdForSlot(kept)).toBe('chat')
+
+    const pinned = { ANTHROPIC_BASE_URL: 'https://api.example.test' }
+    const unused = proxy.allocateSlot('unused')
+    noteClaudeAuthProxySlotAllocated(unused)
+    expect(
+      applyStructuredClaudeProxySlot({
+        env: pinned,
+        preparation: {
+          configDir: '/chat',
+          envPatch: { ANTHROPIC_BASE_URL: `http://127.0.0.1:${port}/p/${unused}/` },
+          provenance: 'profile:chat'
+        },
+        existing: getClaudePaneAccount('chat-key'),
+        reuseRecordedSlot: true,
+        userPinnedUrl: true
+      })
+    ).toBeUndefined()
+    expect(pinned.ANTHROPIC_BASE_URL).toBe('https://api.example.test')
+    expect(proxy.accountIdForSlot(unused)).toBeNull()
+    expect(proxy.accountIdForSlot(kept)).toBe('chat')
+
+    forgetClaudePaneAccount('chat-key')
+    expect(proxy.accountIdForSlot(kept)).toBeNull()
   })
 })

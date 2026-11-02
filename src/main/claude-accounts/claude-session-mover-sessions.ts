@@ -99,8 +99,10 @@ export function collectClaudeMoverSessions(args: {
             id: identity.sessionId,
             ...(identity.transcriptPath ? { transcriptPath: identity.transcriptPath } : {})
           })
-        : null,
-      worktreeId: identity?.worktreeId ?? args.resolveWorktreeId(record.ptyId)
+        : record.providerSessionId
+          ? { key: 'session_id', id: record.providerSessionId }
+          : null,
+      worktreeId: identity?.worktreeId ?? record.worktreeId ?? args.resolveWorktreeId(record.ptyId)
     }
   })
 }

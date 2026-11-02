@@ -83,6 +83,39 @@ describe('createClaudeSessionMover', () => {
     expect(move).toHaveBeenCalledTimes(1)
   })
 
+  it('skips a native chat that has no proxy slot instead of resuming it', async () => {
+    const { mover, session, publish, move, notices, records } = setup()
+    session('chat-1', 'structured-agent-session-s:leaf', 'b')
+    records[0]!.surface = 'chat'
+    mover.start()
+    publish(state(30, { b: limits(96), c: limits(20) }))
+    await vi.runAllTimersAsync()
+    expect(move).not.toHaveBeenCalled()
+    expect(notices[0]).toMatchObject({ kind: 'skipped', detail: 'structured-needs-proxy' })
+    expect(mover.lastDecisions()[0]).toMatchObject({ reason: 'skipped', chat: true })
+  })
+
+  it('proxy-moves a native chat during a turn and keeps its key', async () => {
+    const proxyMove = vi.fn(async (request: { ptyId: string }) => ({
+      kind: 'moved' as const,
+      newPtyId: request.ptyId
+    }))
+    const { mover, session, publish, move, notices, records } = setup({
+      proxyStrategy: { move: proxyMove }
+    })
+    session('chat-1', 'structured-agent-session-s:leaf', 'b', 'working')
+    records[0]!.surface = 'chat'
+    records[0]!.proxySlot = 'slot-chat'
+    records[0]!.assignedAccountId = 'b'
+    mover.start()
+    publish(state(30, { b: limits(96), c: limits(20) }))
+    await vi.runAllTimersAsync()
+    expect(move).not.toHaveBeenCalled()
+    expect(proxyMove).toHaveBeenCalledTimes(1)
+    expect(proxyMove.mock.calls[0]?.[0]).toMatchObject({ ptyId: 'chat-1' })
+    expect(notices[0]).toMatchObject({ kind: 'moved', restartless: true, detail: 'chat-1' })
+  })
+
   it('flips a proxy slot during a turn and keeps the same pty on the assigned account', async () => {
     const proxyMove = vi.fn(async (request: { ptyId: string }) => ({
       kind: 'moved' as const,

@@ -17,7 +17,7 @@ type AccountsBlock = {
   /** Claude only: whether new launches spread across accounts (absent from older hosts). */
   pool?: 'on' | 'off'
   /** Claude only: live sessions billed to each account (absent from older hosts). */
-  assignedSessions?: readonly { accountId: string; count: number }[]
+  assignedSessions?: readonly { accountId: string; count: number; chatCount?: number }[]
   /** Claude only: whether launches bill through the local auth proxy. */
   authProxy?: 'on' | 'off'
   /** Claude only: Windows view of WSL guest billing. */
@@ -39,6 +39,12 @@ export function formatDataAccounts(label: string, state: ManagedDataAccountsStat
     .join('\n')}`
 }
 
+function formatSessionCount(count: number, chatCount: number | undefined): string {
+  const chats =
+    chatCount && chatCount > 0 ? ` (${chatCount} chat${chatCount === 1 ? '' : 's'})` : ''
+  return `sessions: ${count}${chats}`
+}
+
 export function formatAccountsBlock(label: string, block: AccountsBlock): string {
   const hostAccountId = block.activeAccountIdsByRuntime?.host ?? block.activeAccountId
   const system = `  system  System default${hostAccountId === null ? ' (active)' : ''}`
@@ -51,13 +57,14 @@ export function formatAccountsBlock(label: string, block: AccountsBlock): string
     ...Object.values(block.activeAccountIdsByRuntime?.wsl ?? {})
   ])
   const sessionCountByAccount = new Map(
-    (block.assignedSessions ?? []).map((row) => [row.accountId, row.count])
+    (block.assignedSessions ?? []).map((row) => [row.accountId, row])
   )
   // Why the id: `orca account select --account` needs it when one email signs into several orgs.
   const lines = block.accounts.map((account) => {
+    const row = sessionCountByAccount.get(account.id)
     const sessions =
       block.assignedSessions !== undefined
-        ? `  sessions: ${sessionCountByAccount.get(account.id) ?? 0}`
+        ? `  ${formatSessionCount(row?.count ?? 0, row?.chatCount)}`
         : ''
     return `  ${account.id}  ${account.email}${activeAccountIds.has(account.id) ? ' (active)' : ''}${
       account.needsSignIn ? ' (sign in again in Orca Settings > AI Provider Accounts)' : ''

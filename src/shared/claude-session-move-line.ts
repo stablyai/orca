@@ -5,7 +5,8 @@ export function formatClaudeSessionMoveLine(move: ClaudeSessionMoveSummary): str
   const pane = move.paneKey ?? move.ptyId
   const to = move.toAccountId ?? '-'
   const strategy = move.strategy ?? '-'
-  return `${new Date(move.at).toISOString()}  ${pane}  ${move.fromAccountId} → ${to}  ${move.reason}  ${strategy}`
+  const chat = move.chat ? '  chat' : ''
+  return `${new Date(move.at).toISOString()}  ${pane}  ${move.fromAccountId} → ${to}  ${move.reason}  ${strategy}${chat}`
 }
 
 /** The text `orca account moves` prints for a non-empty list. */

@@ -4,6 +4,7 @@ import type {
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionAgentTabStatus
 } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import { claudeAccountIdForPaneKey } from '../../../claude-accounts/claude-pane-account-registry'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
@@ -33,13 +34,15 @@ export function withStructuredChatStatus(
   if (!row) {
     return tab
   }
+  const claudeAccountId = tab.agent === 'claude' ? claudeAccountIdForPaneKey(paneKey) : null
   const chatStatus: RuntimeMobileSessionAgentTabStatus = {
     state: row.state,
     ...(row.workingMode ? { workingMode: row.workingMode } : {}),
     ...agentVerdictFields(row),
     updatedAt: row.receivedAt,
     ...(row.evidenceObservedAt !== undefined ? { evidenceObservedAt: row.evidenceObservedAt } : {}),
-    ...(row.structuredHost === 'owned' ? { structuredHostOwned: true as const } : {})
+    ...(row.structuredHost === 'owned' ? { structuredHostOwned: true as const } : {}),
+    ...(claudeAccountId ? { claudeAccountId } : {})
   }
   return { ...tab, chatStatus }
 }

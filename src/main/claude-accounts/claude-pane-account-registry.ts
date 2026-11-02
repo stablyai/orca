@@ -19,8 +19,21 @@ import { normalizeClaudeConfigDir } from '../rate-limits/service/service-types'
 export type ClaudePaneAccountSource = 'spawn' | 'transcript' | 'pool'
 
 export type ClaudePaneAccountRecord = {
+  /**
+   * Map key. A terminal pane uses its PTY id. A native chat uses the structured pane key, so the
+   * same record is found on the next turn without renaming every PTY call site.
+   */
   ptyId: string
   paneKey: string | null
+  /** Native chat. Absent on terminal panes. */
+  surface?: 'chat'
+  /** Workspace the chat was launched in. Terminal panes resolve this from the PTY registry. */
+  worktreeId?: string
+  /**
+   * Host selection when this chat was last launched. A pool pick changes `accountId` without
+   * changing this, so the next turn can tell a respawn from the user switching accounts.
+   */
+  launchSelectionId?: string | null
   /**
    * The managed account whose quota this pane consumes. A System-default pane records the account
    * covered by System default, because that login IS the account's.
@@ -147,6 +160,16 @@ export function rememberClaudeSessionAssignment(sessionId: string, accountId: st
 
 export function claudeAssignedAccountForProviderSession(sessionId: string): string | null {
   return sessionAssignments.get(sessionId) ?? null
+}
+
+/** The account a pane bills, including when it still bills the account it launched on. */
+export function claudeAccountIdForPaneKey(paneKey: string): string | null {
+  for (const record of records.values()) {
+    if (record.paneKey === paneKey || record.ptyId === paneKey) {
+      return claudeBillingAccountId(record)
+    }
+  }
+  return null
 }
 
 /** Assigned account only when it differs from the spawn account, so an unmoved pane stays on folder routing. */

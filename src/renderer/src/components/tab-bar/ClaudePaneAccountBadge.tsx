@@ -7,6 +7,11 @@ import {
   subscribeClaudePaneAccounts
 } from '@/lib/claude-pane-account-assignments'
 import { useFocusedTerminalPtyId } from '@/lib/use-tab-agent'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import type { NativeChatTabSession } from './tab-session-history-switch'
 
 export function claudeSessionCountLabel(count: number): string {
   if (count === 1) {
@@ -58,19 +63,30 @@ export function ClaudePaneAccountBadge({ ptyId }: { ptyId: string }): React.JSX.
 export function ClaudePaneAccountMark({
   tabId,
   color,
-  editing
+  editing,
+  nativeChat
 }: {
   tabId: string
   color: string | null
   editing: boolean
+  /** A Claude chat looks up the structured pane key. A terminal tab uses the focused PTY. */
+  nativeChat?: NativeChatTabSession
 }): React.JSX.Element | null {
   const ptyId = useFocusedTerminalPtyId(tabId)
-  if (editing || (!ptyId && !color)) {
+  const sessionKey =
+    nativeChat?.agent === 'claude'
+      ? structuredAgentSessionPaneKey(
+          structuredAgentSessionTabId(nativeChat.sessionId),
+          nativeChat.sessionId
+        )
+      : null
+  const accountKey = sessionKey || ptyId
+  if (editing || (!accountKey && !color)) {
     return null
   }
   return (
     <>
-      {ptyId ? <ClaudePaneAccountBadge ptyId={ptyId} /> : null}
+      {accountKey ? <ClaudePaneAccountBadge ptyId={accountKey} /> : null}
       {color ? (
         <span className="mr-1.5 size-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
       ) : null}

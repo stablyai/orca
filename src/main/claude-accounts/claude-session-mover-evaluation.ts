@@ -136,6 +136,11 @@ export function evaluateClaudeMoverSessions(
       settled('skipped', 'no-pane')
       continue
     }
+    // A chat cannot be relaunched under another account home. Only a proxy flip moves it.
+    if (view.record.surface === 'chat' && !proxyMove) {
+      settled('skipped', 'structured-needs-proxy')
+      continue
+    }
     // Why the claim: five sessions over the line must not all pick the same account in one tick.
     targetClaims.set(to.id, {
       at: now,

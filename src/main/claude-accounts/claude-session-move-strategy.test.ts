@@ -219,4 +219,30 @@ describe('createProxyMoveStrategy', () => {
     expect(getClaudePaneAccount('pty-old')).toBe(pane)
     expect(claudeAssignedAccountForProviderSession('sess-abc')).toBe('c')
   })
+
+  it('flips a native-chat slot and returns the same key with no process action', async () => {
+    const paneKey = 'structured-agent-session-chat:leaf'
+    recordClaudePaneAccount({
+      ptyId: paneKey,
+      paneKey,
+      surface: 'chat',
+      accountId: 'b',
+      configDir: '/profiles/b/home',
+      launchedAt: 0,
+      pinned: false,
+      source: 'spawn',
+      proxySlot: 'slot-chat',
+      assignedAccountId: 'b',
+      providerSessionId: 'prov-chat'
+    })
+    const assignSlot = vi.fn(() => true)
+    const pane = getClaudePaneAccount(paneKey)
+    await expect(
+      strategy(assignSlot).move({ ...request(), ptyId: paneKey, paneKey })
+    ).resolves.toEqual({ kind: 'moved', newPtyId: paneKey })
+    expect(assignSlot).toHaveBeenCalledWith('slot-chat', 'c')
+    expect(pane?.assignedAccountId).toBe('c')
+    expect(pane?.providerSessionId).toBe('sess-abc')
+    expect(getClaudePaneAccount(paneKey)).toBe(pane)
+  })
 })

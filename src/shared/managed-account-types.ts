@@ -145,8 +145,8 @@ export type ClaudeRateLimitAccountsState = {
   sessionMover?: 'off' | 'ask' | 'move'
   /** The mover's last decision per live session, newest first. */
   sessionMoves?: ClaudeSessionMoveSummary[]
-  /** Live sessions billed to each account. Absent from older hosts. */
-  assignedSessions?: { accountId: string; count: number }[]
+  /** Live sessions billed to each account. Absent from older hosts. `chatCount` is native chat. */
+  assignedSessions?: { accountId: string; count: number; chatCount?: number }[]
   /** Every live pane and the account it bills. */
   paneAccounts?: ClaudePaneAccountSnapshot[]
   /** Panes whose billed account differs from the folder they were spawned in. */
@@ -182,6 +182,8 @@ export type ClaudeSessionMoveSummary = {
   reason: string
   at: number
   strategy?: 'resume' | 'proxy'
+  /** Native chat. Absent on terminal sessions and older hosts. */
+  chat?: true
 }
 
 /** Pushed when a pane's billed account changes, including when the pane is gone (`accountId` null). */
