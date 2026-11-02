@@ -248,10 +248,18 @@ function Row({
     return null
   }
   const { prose, tools } = splitNativeChatBlocks((workRun ?? [message]).flatMap((m) => m.blocks))
+  // Synthetic spawn cards sit on the roster row. They are not the line this harness holds.
+  const heldTools = tools.filter(
+    (block) =>
+      !(
+        (block.type === 'tool-call' || block.type === 'tool-result') &&
+        block.callId?.startsWith('spawn:')
+      )
+  )
   const words = prose
     .map((block, i) => h('span', { key: i }, block.type === 'text' ? block.text : ''))
     .concat(Array.from({ length: joined }, (_, i) => h('span', { key: `joined:${i}` }, 'joined')))
-  const run = tools.length > 0 && h(ToolRun, { blocks: tools })
+  const run = heldTools.length > 0 && h(ToolRun, { blocks: heldTools })
   return h('div', { testID: mobileNativeChatRowId(rowKey) }, words, run)
 }
 
