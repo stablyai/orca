@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, rm, rmdir, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, rm, rmdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
 import { renameFileWithWindowsRetryAsync } from '../../shared/windows-retry-file-operations'
 import { ensureOwnedTempStagingRoot } from '../window/owned-temp-staging-root'
 import { agentSessionContextSnapshotRoot } from './agent-session-context-snapshots'
@@ -19,7 +20,8 @@ export async function publishAgentSessionRecoveryExport(
   key: string,
   text: string
 ): Promise<string | undefined> {
-  if (Buffer.byteLength(text, 'utf8') > RECOVERY_EXPORT_MAX_BYTES) {
+  const bytes = Buffer.from(text, 'utf8')
+  if (bytes.length > RECOVERY_EXPORT_MAX_BYTES) {
     return undefined
   }
   const root = agentSessionContextSnapshotRoot(stateDirectory)
@@ -32,9 +34,11 @@ export async function publishAgentSessionRecoveryExport(
     `slot-${Number.parseInt(name.slice(0, 8), 16) % RECOVERY_EXPORT_SLOTS}`
   )
   const path = join(slot, `${name}.txt`)
-  const published = await readFile(path, 'utf8').catch(() => undefined)
-  if (published !== undefined) {
-    return published === text ? path : undefined
+  const published = await lstat(path).catch(() => undefined)
+  if (published) {
+    return published.isFile() && published.size === bytes.length && (await sameBytes(path, bytes))
+      ? path
+      : undefined
   }
   await mkdir(agentSessionRecoveryExportRoot(stateDirectory), { mode: 0o700 }).catch(
     () => undefined
@@ -47,7 +51,7 @@ export async function publishAgentSessionRecoveryExport(
   }
   const stage = `${path}.part`
   try {
-    await writeFile(stage, text, { flag: 'wx', mode: 0o600 })
+    await writeFile(stage, bytes, { flag: 'wx', mode: 0o600 })
     if (!(await renameFileWithWindowsRetryAsync(stage, path))) {
       throw new Error('Recovery export was not published')
     }
@@ -58,5 +62,15 @@ export async function publishAgentSessionRecoveryExport(
       .then(() => rmdir(slot))
       .catch(() => undefined)
     return undefined
+  }
+}
+
+/** A bounded nonblocking read, so a file swapped for a FIFO or grown after lstat can't hang Send. */
+async function sameBytes(path: string, bytes: Buffer): Promise<boolean> {
+  try {
+    const { buffer } = await readNodeFileWithinLimit(path, bytes.length, { regularFileOnly: true })
+    return buffer.equals(bytes)
+  } catch {
+    return false
   }
 }

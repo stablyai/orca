@@ -1,5 +1,6 @@
 import type * as FsPromises from 'node:fs/promises'
-import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
+import { lstat, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -194,5 +195,35 @@ it('holds the bound under racing exports, failed publication and leftover claims
     expect(counts.staged).toBe(1)
     expect(counts.completed).toBe(counts.admitted)
     expect(counts.completed).toBeLessThanOrEqual(RECOVERY_EXPORT_SLOTS - 2)
+  }
+})
+
+it('reuses a published export only when its raw bytes are the source, and leaves any other file as it is', async () => {
+  const { nextSource, exportOf } = await exporter()
+  const h = await nextSource('Saved � answer', 'raw-bytes')
+  const path = await exportOf(h)
+  expect(path).toEqual(expect.any(String))
+  const exact = await readFile(path!)
+  expect(await exportOf(h)).toBe(path)
+  const marker = Buffer.from('�', 'utf8')
+  const at = exact.indexOf(marker)
+  // A lone 0xFF decodes to the same text, so only a raw-byte check refuses it.
+  const invalid = Buffer.concat([
+    exact.subarray(0, at),
+    Buffer.from([0xff]),
+    exact.subarray(at + 3)
+  ])
+  const flipped = Buffer.from(exact)
+  flipped[at + 3] = flipped[at + 3]! ^ 1
+  for (const altered of [invalid, flipped]) {
+    await writeFile(path!, altered)
+    expect(await exportOf(h)).toBeUndefined()
+    expect(await readFile(path!)).toEqual(altered)
+  }
+  if (process.platform !== 'win32') {
+    await rm(path!)
+    execFileSync('mkfifo', [path!])
+    expect(await exportOf(h)).toBeUndefined()
+    expect((await lstat(path!)).isFIFO()).toBe(true)
   }
 })
