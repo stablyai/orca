@@ -276,7 +276,8 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     if (!db.reserveStructuredMailSend(attempt, again?.row.operation_id)) {
       return 'next'
     }
-    let owed: QueuedMessageOwed = 'owed'
+    // The host's last answer, set inside its own check: a holder, so the read after the send sees it.
+    const last: { owed: QueuedMessageOwed } = { owed: 'owed' }
     const outcome = await this.deps.host.send({
       sessionId,
       dispatchId: target.dispatchId,
@@ -284,9 +285,9 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       expectedRuntimeFence: fence,
       body,
       stillOwed: () => {
-        owed = this.authority.owedTo(sessionId, mailboxHandle, [message.id])
+        last.owed = this.authority.owedTo(sessionId, mailboxHandle, [message.id])
         return (
-          owed === 'owed' &&
+          last.owed === 'owed' &&
           !shouldReleaseOrchestrationPointer(
             this.deps.getDb(),
             mailboxHandle,
@@ -304,7 +305,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
         return 'park'
       case 'obsolete':
         db.releaseStructuredMailSend(attempt)
-        return owed === 'unavailable' ? 'park' : 'next'
+        return last.owed === 'unavailable' ? 'park' : 'next'
       case 'queued':
         return 'next'
       case 'sent':

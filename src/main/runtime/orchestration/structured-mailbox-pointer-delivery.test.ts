@@ -134,7 +134,9 @@ function harness(options: { busy?: boolean } = {}) {
         ? { kind: 'queued' as const }
         : { kind: 'sent' as const, state: 'accepted' as const }
     }),
-    observe: vi.fn(async (_sessionId, operationId) => chat.get(operationId) ?? { kind: 'absent' }),
+    observe: vi.fn(
+      async (_sessionId, operationId) => chat.get(operationId) ?? { kind: 'absent' as const }
+    ),
     wakeQueue: vi.fn(),
     withdraw: vi.fn(async (_sessionId, operationId) => {
       chat.set(operationId, { kind: 'withdrawn' })
