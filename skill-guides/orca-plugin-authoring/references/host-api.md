@@ -15,7 +15,7 @@ Host API 1.2 (`"pluginApi": 1`). Call `host.call(method, params, { signal })`; a
 - `api: HostApiVersion`
 - `commands.register(commandId: string, handler: (args: unknown, context: CommandContext) => unknown)`: A string result is shown as-is in Orca; anything else as JSON.
 - `events.on(event: E, handler: (payload: PluginEvents[E]) => void | Promise<void>)`: Only events listed in the manifest's `contributes.events` arrive.
-- `hooks.on(hook: H, handler: HookHandler<H>)`: Only hooks listed in `contributes.hooks` run. Return `next(event)` to go on (with the fields the hook allows changed), a result such as `{ deny: reason }` to stop, or nothing to pass. Plugins run in turn, then Orca acts; past 2 s, or on a throw, Orca carries on as if this plugin passed and logs it.
+- `hooks.on(hook: H, handler: HookHandler<H>)`: Only hooks listed in `contributes.hooks` run. Return `next(event)` to go on (with the fields the hook allows changed), a result such as `{ deny: reason }` to stop, or nothing to pass. Plugins run in turn, then Orca acts; past 2 s, or on a throw, Orca logs it and passes by default, or refuses the action when the hook lists `onError: "deny"`. Denial reasons must contain 1–500 characters; invalid results pass even with `onError: "deny"`.
 - `host: HostApi<'worker'>`
 - `panels: PanelsApi`: This plugin's panels and custom editors.
 - `storage: StorageApi`: Same store as panels' `storage` (`storage:own`); `onDidChange` hears their writes too.

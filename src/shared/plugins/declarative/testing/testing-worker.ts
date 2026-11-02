@@ -159,12 +159,11 @@ export async function mountWorker(module: WorkerModule, options: MountWorkerOpti
           payload: parsed.data,
           participants: ['worker'],
           invoke: (_plugin, current) =>
-            runPluginWorkerHookHandlers(tables.hooks.get(event) ?? [], current),
+            runPluginWorkerHookHandlers(tables.hooks.get(event) ?? [], structuredClone(current)),
           log: (_plugin, line) => void logs.push(line),
           now: () => performance.now(),
           failsClosed: () => failsClosed.has(event)
         })
-        await host.idle()
         return outcome.kind === 'deny'
           ? { kind: 'deny', reason: outcome.reason }
           : { kind: 'continue', event: outcome.payload }

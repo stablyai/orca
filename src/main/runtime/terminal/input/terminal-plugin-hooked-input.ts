@@ -41,7 +41,7 @@ export abstract class OrcaRuntimeWithPluginHookedTerminalInput extends OrcaRunti
     )
   }
 
-  async sendTerminalAgentPrompt(
+  sendTerminalAgentPrompt(
     handle: string,
     prompt: string,
     options: RuntimeAgentPromptWriteOptions

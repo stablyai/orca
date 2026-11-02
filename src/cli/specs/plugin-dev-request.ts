@@ -10,7 +10,7 @@ export const PLUGIN_DEV_HOOK_COMMAND_SPEC: CommandSpec = {
   positionalArgs: ['target', 'event'],
   notes: [
     "Runs the worker's `orca.hooks.on` handlers with that plugin as the only one in the chain, under the same deadline and checks as a real hook; nothing in Orca acts on the result. The plugin must be an approved development plugin listing the hook in contributes.hooks.",
-    "--data is the hook's event as JSON (the host API reference lists them). Prints `{ pluginKey, event, decision }`, where decision is `{ kind: 'continue', event }` or `{ kind: 'deny', reason }`. A timeout or throw counts as passing and shows in `orca plugin logs`."
+    "--data is the hook's event as JSON (the host API reference lists them). Prints `{ pluginKey, event, decision }`, where decision is `{ kind: 'continue', event }` or `{ kind: 'deny', reason }`. A timeout or throw shows in `orca plugin logs` and passes by default, or denies when the hook lists `onError: \"deny\"`."
   ],
   examples: [
     'orca plugin dev hook . terminal.send --data \'{"terminalId":"t1","text":"rm -rf /","enter":true,"inputKind":"driving"}\''

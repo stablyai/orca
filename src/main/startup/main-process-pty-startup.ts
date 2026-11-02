@@ -39,7 +39,9 @@ import { notifyWorkspaceCreatedPluginHook } from '../plugins/hooks/workspace-cre
 
 export function emitPluginWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
   const identity = { workspaceId: event.worktreeId, kind: 'worktree', path: event.path }
-  const folder = parseWorkspaceKey(event.worktreeId)?.type === 'folder'
+  const folder =
+    (event.kind === 'created' && event.folder === true) ||
+    parseWorkspaceKey(event.worktreeId)?.type === 'folder'
   if (event.kind === 'created') {
     notifyWorkspaceCreatedPluginHook({ ...event, folder })
   }

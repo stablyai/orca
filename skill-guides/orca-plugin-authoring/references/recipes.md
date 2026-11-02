@@ -93,7 +93,7 @@ Return `{ deny }` to stop, nothing (or `next(event)`) to pass. Past 2 s or on a 
 on as if the hook passed and logs it (`ORCA plugin logs`); a guard that must fail closed lists the
 hook as `{ "event": "terminal.send", "onError": "deny" }`. Decide before any other awaited call:
 `await orca.host.call('notifications.show', …)` ahead of `return { deny }` can throw or time out and
-let the action through, so count blocks after deciding (`void orca.host.call(...)`). Unit-test with
+let the action through, so handle errors from detached calls (`void orca.host.call(...).catch(() => orca.log('Block notification failed'))`). Unit-test with
 `(await mountWorker(worker)).hooks.fire('terminal.send', event)`, which returns
 `{ kind: 'continue', event }` or `{ kind: 'deny', reason }`; against the loaded dev plugin,
 `ORCA plugin dev hook . terminal.send --data '<json>'` prints the same decision.

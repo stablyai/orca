@@ -46,6 +46,7 @@ type RuntimeFolderWorktreeCreateDeps = {
     worktreeId: string
     path: string
     branch: string
+    folder: true
   }) => void
   activate: (
     repoId: string,
@@ -140,7 +141,8 @@ export async function createRuntimeFolderWorktree(args: {
     kind: 'created',
     worktreeId: worktree.id,
     path: worktree.path,
-    branch: worktree.branch
+    branch: worktree.branch,
+    folder: true
   })
   const shouldActivate = request.activate === true || request.runHooks === true
   let warning: string | undefined

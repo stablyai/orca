@@ -97,8 +97,9 @@ declare module 'orca/worker' {
     readonly hooks: {
       /** Only hooks listed in `contributes.hooks` run. Return `next(event)` to go on (with the
        *  fields the hook allows changed), a result such as `{ deny: reason }` to stop, or nothing
-       *  to pass. Plugins run in turn, then Orca acts; past 2 s, or on a throw, Orca carries on as
-       *  if this plugin passed and logs it. */
+       *  to pass. Plugins run in turn, then Orca acts; past 2 s, or on a throw, Orca logs it and
+       *  passes by default, or refuses the action when the hook lists `onError: "deny"`.
+       *  Denial reasons must contain 1–500 characters; invalid results pass even with `onError: "deny"`. */
       on<H extends PluginHookName>(hook: H, handler: HookHandler<H>): Disposable
     }
     readonly host: HostApi<'worker'>

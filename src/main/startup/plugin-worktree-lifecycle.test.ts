@@ -11,7 +11,10 @@ describe('emitPluginWorktreeLifecycle', () => {
     setPluginHookRunner(null)
   })
 
-  it('runs workspace.create.after for folders too, while workspace.created stays Git-only', () => {
+  it.each([
+    { worktreeId: 'folder:ws-1', branch: '' },
+    { worktreeId: 'folder-repo::/ws::workspace:instance', branch: 'Workspace', folder: true }
+  ])('keeps folder creation internal: $worktreeId', (workspace) => {
     const emitEvent = vi.fn()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the emitter only calls emitEvent.
     mainProcessState.pluginService = { emitEvent } as unknown as PluginService
@@ -22,13 +25,12 @@ describe('emitPluginWorktreeLifecycle', () => {
     setPluginHookRunner({ wants: () => true, run })
     emitPluginWorktreeLifecycle({
       kind: 'created',
-      worktreeId: 'folder:ws-1',
       path: '/ws',
-      branch: ''
+      ...workspace
     })
     expect(emitEvent).not.toHaveBeenCalled()
     expect(run).toHaveBeenCalledWith('workspace.create.after', {
-      workspaceId: 'folder:ws-1',
+      workspaceId: workspace.worktreeId,
       kind: 'folder',
       path: '/ws',
       branch: ''

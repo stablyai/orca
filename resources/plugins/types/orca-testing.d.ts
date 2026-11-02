@@ -226,8 +226,8 @@ declare module 'orca/testing' {
     emit<E extends PluginEventName>(event: E, payload: PluginEvents[E]): Promise<void>
     readonly hooks: {
       /** Runs a hook as Orca would, with this worker as the only plugin: the same deadline, the
-       *  fields `next` may change, and the same checks on its result. A throw or timeout counts as
-       *  passing and lands in `logs`. */
+       *  fields `next` may change, and the same checks on its result. A throw or timeout lands in `logs` and
+       *  passes by default, or denies when the hook lists `onError: "deny"`. */
       fire<H extends PluginHookName>(
         hook: H,
         event: PluginHooks[H]['event']

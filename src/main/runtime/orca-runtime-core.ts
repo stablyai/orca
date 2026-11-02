@@ -254,7 +254,7 @@ export const AGENT_HOOK_RUNTIME_ENV_KEYS = [
 ] as const
 
 export type RuntimeWorktreeLifecycleEvent =
-  | { kind: 'created'; worktreeId: string; path: string; branch: string }
+  | { kind: 'created'; worktreeId: string; path: string; branch: string; folder?: boolean }
   | { kind: 'removed'; worktreeId: string; path: string }
 
 // One driver per PTY: idle has no subscriber; desktop has passive/reclaimed subscribers.

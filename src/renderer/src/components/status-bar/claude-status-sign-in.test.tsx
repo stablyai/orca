@@ -155,7 +155,7 @@ describe('status bar Claude account that needs a sign-in', () => {
 
   it('marks it and signs in to it inline, without selecting anything', async () => {
     await openAccounts()
-    expect(screen.getByText('Sign in again to use this account')).toBeTruthy()
+    expect(await screen.findByText('Sign in again to use this account')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /Sign in/ }))
     await waitFor(() => expect(reauthenticate).toHaveBeenCalledWith({ accountId: 'old' }))
     expect(reauthenticate).toHaveBeenCalledTimes(1)
@@ -236,6 +236,6 @@ describe('status bar Claude account that needs a sign-in', () => {
     activeRuntimeEnvironmentId = 'env-1'
     await openAccounts()
     expect(screen.queryByRole('button', { name: /Sign in/ })).toBeNull()
-    expect(screen.getByText('Sign in again to use this account')).toBeTruthy()
+    expect(await screen.findByText('Sign in again to use this account')).toBeTruthy()
   })
 })

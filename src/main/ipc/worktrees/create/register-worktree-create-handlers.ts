@@ -123,7 +123,8 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           kind: 'created',
           worktreeId: result.worktree.id,
           path: result.worktree.path,
-          branch: result.worktree.branch
+          branch: result.worktree.branch,
+          folder: isFolderRepo(repo)
         })
 
         // Stamp after the create notification bumps generation so the reply names its resulting catalog.
@@ -179,7 +180,8 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           kind: 'created',
           worktreeId: result.worktree.id,
           path: result.worktree.path,
-          branch: result.worktree.branch
+          branch: result.worktree.branch,
+          folder: isFolderRepo(repo)
         })
         return { ...result, catalogVersion: getLocalWorktreeCatalogVersion(repo.id) }
       })

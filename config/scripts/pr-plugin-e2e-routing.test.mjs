@@ -86,6 +86,8 @@ describe('plugin PR E2E routing', () => {
     ['examples/plugins/hello-orca/main.mjs', 'plugin-demo'],
     ['examples/plugins/hello-worker-panel/worker/main.mjs', 'plugin-worker-panel'],
     ['src/main/plugins/panels/plugin-panel-bridge.ts', 'plugin-worker-panel'],
+    ['src/main/plugins/hooks/plugin-dev-hook-fire.ts', 'plugin-worker-panel'],
+    ['src/shared/plugins/events/plugin-hook-payloads.ts', 'plugin-worker-panel'],
     ['src/main/plugins/plugin-runtime-binding.ts', 'plugin-panel-agents'],
     ['examples/plugins/test-fixtures/hostile-panel/panel.html', 'plugin-panel-containment']
   ])('routes %s to %s', (file, spec) => {

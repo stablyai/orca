@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentStatusChangedPayloadSchema } from '../../events/plugin-events'
 import { terminalSendHookPayloadSchema } from '../../events/plugin-hook-payloads'
+import { isPluginJsonObject } from '../../manifest/plugin-json-object'
 import { atom, read, set } from '../runtime/declarative-atoms'
 import { h } from '../runtime/declarative-elements'
 import { host as panelHost, plugin } from '../runtime/orca-module'
@@ -174,6 +175,68 @@ describe('mountWorker', () => {
       /not in contributes.hooks/
     )
   })
+
+  it.each([false, true])('isolates handler mutations, forwarding: %s', async (forward) => {
+    const mounted = await mountWorker(
+      {
+        default(orca: HookedOrca) {
+          orca.hooks.on('terminal.send', (event, next) => {
+            if (!isPluginJsonObject(event)) {
+              throw new TypeError('Expected an event object')
+            }
+            Object.assign(event, { terminalId: 'changed', text: 'changed' })
+            return forward ? next(event) : undefined
+          })
+        }
+      },
+      { hooks: ['terminal.send'] }
+    )
+    const event = { terminalId: 't', text: 'hello', enter: true, inputKind: 'driving' }
+    await expect(mounted.hooks.fire('terminal.send', event)).resolves.toEqual({
+      kind: 'continue',
+      event: { ...event, text: 'changed' }
+    })
+    await mounted.deactivate()
+  })
+
+  it.each(['pass', 'deny'] as const)(
+    'returns the %s timeout decision while a host call is pending',
+    async (onError) => {
+      vi.useFakeTimers()
+      let release!: (value: unknown) => void
+      const pending = new Promise((resolve) => {
+        release = resolve
+      })
+      const host = mockHost({
+        capabilities: ['notifications:show'],
+        results: { 'notifications.show': () => pending }
+      })
+      const mounted = await mountWorker(
+        {
+          default(orca: HookedOrca) {
+            orca.hooks.on('terminal.send', async () => {
+              await orca.host.call('notifications.show', { title: 'pending' })
+            })
+          }
+        },
+        { host, hooks: [{ event: 'terminal.send', onError }] }
+      )
+      try {
+        const event = { terminalId: 't', text: 'hello', enter: true, inputKind: 'driving' }
+        const decision = mounted.hooks.fire('terminal.send', event)
+        await vi.advanceTimersByTimeAsync(2_000)
+        await expect(decision).resolves.toEqual(
+          onError === 'pass'
+            ? { kind: 'continue', event }
+            : { kind: 'deny', reason: expect.stringContaining('timed out') }
+        )
+      } finally {
+        release({ delivered: true })
+        vi.useRealTimers()
+        await mounted.deactivate()
+      }
+    }
+  )
 })
 
 describe('panel refusals', () => {

@@ -199,6 +199,8 @@ const SPECIFIC_PLUGIN_ROUTES = [
     ['plugin-worker-panel'],
     [
       'src\\/main\\/plugins\\/panels\\/plugin-panel-bridge',
+      'src\\/main\\/plugins\\/hooks\\/',
+      'src\\/shared\\/plugins\\/(?:workers\\/plugin-(?:hook-chain|worker-hooks)|contributions\\/plugin-hook-contribution|events\\/plugin-hook-payloads)',
       'src\\/main\\/plugins\\/(?:plugin-declared-settings|workers\\/plugin-(?:worker-orca-api|host-panel-method-bindings|worker-requests))',
       'src\\/main\\/ipc\\/plugin-(?:panel-push|settings)-ipc',
       'src\\/shared\\/plugins\\/(?:workers\\/plugin-panel-bridge-protocol|frames\\/plugin-panel-shell-facades|contributions\\/plugin-settings-)',
