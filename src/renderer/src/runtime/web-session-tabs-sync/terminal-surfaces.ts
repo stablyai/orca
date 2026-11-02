@@ -24,6 +24,7 @@ import type {
 import type { Tab } from '../../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { publishesSameChatRow } from '../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { withPendingPaneTitleRenames } from '../pending-pane-title-renames'
 import {
@@ -86,8 +87,8 @@ export function buildMirroredAgentTabs(
   const assignedIds = new Set<string>()
   const allocate = (preferred: string) => {
     let id = preferred
-    for (let suffix = 2; occupiedIds.has(id); suffix++) {
-      id = `${preferred}-${suffix}`
+    for (let suffix = 1; occupiedIds.has(id); suffix++) {
+      id = `${preferred}:history-${suffix}`
     }
     occupiedIds.add(id)
     return id
@@ -143,9 +144,15 @@ export function buildMirroredAgentTabs(
         : undefined
     let localId = resolved?.id ?? own?.id
     if (localId === undefined || assignedIds.has(localId)) {
-      // This window's own chat goes in the tab main recorded for it, so main's rows for this
-      // tab name one layout tab whatever it later holds.
-      localId = allocate(hostTabs ? baseId : hostTabId)
+      // This window's own chat goes in the tab main recorded for it (the row's layout tab, or a
+      // reopened chat's own row), so main's rows for this tab name one layout tab whatever it
+      // later holds; otherwise its usual id.
+      localId = allocate(
+        hostTabs
+          ? baseId
+          : (tab.logicalTabId ??
+              (publishesSameChatRow(tab.sessionId, tab.id, baseId) ? baseId : tab.id))
+      )
     }
     assignedIds.add(localId)
     return {

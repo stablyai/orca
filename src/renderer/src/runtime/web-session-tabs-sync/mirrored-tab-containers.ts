@@ -29,9 +29,10 @@ export type MirroredTabContainers<T extends ContainerTab = Tab> = {
  * pin and selection stay, on every load and whichever content it first showed. The local id is the
  * client's own and never decoded. A tab saved before the association existed is adopted once by
  * the id form it has always had (a terminal tab's `web-terminal-<id>`, a chat tab's own id) or by
- * what it holds, keeping its id. Another host's tabs, and a tab mirroring another host tab, are
- * never matched. The snapshot mirror and the main-owned frame codec both draw through this one
- * index, so a workspace moving between them keeps its tabs.
+ * what it holds, keeping its id. A tab mirroring another host tab is never matched, nor another
+ * host's tab by id (two hosts reuse ids); what a tab holds is matched on any host, since the
+ * content's own id names it everywhere. The snapshot mirror and the main-owned frame codec both
+ * draw through this one index, so a workspace moving between them keeps its tabs.
  */
 export function mirroredTabContainers<T extends ContainerTab>(
   unifiedTabs: readonly T[],
@@ -45,10 +46,7 @@ export function mirroredTabContainers<T extends ContainerTab>(
     occupied.add(tab.id)
     const origin = tab.mirroredHostTab
     if (!origin) {
-      // Tabs saved before host stamping name no host; another host's never match.
-      if (tab.executionHostId === undefined || tab.executionHostId === hostId) {
-        unassociated.set(tab.id, tab)
-      }
+      unassociated.set(tab.id, tab)
     } else if (origin.hostId === hostId && origin.workspaceId === workspaceId) {
       byHostTab.set(origin.tabId, tab)
     }
@@ -57,6 +55,11 @@ export function mirroredTabContainers<T extends ContainerTab>(
   const resolved = new Map<string, { id: string; tab?: T }>()
   const adoptable = (tab: T | undefined): T | undefined =>
     tab && unassociated.has(tab.id) && !claimed.has(tab.id) ? tab : undefined
+  // An id names a tab of one host only: tabs saved before host stamping name no host.
+  const adoptableById = (tab: T | undefined): T | undefined =>
+    tab?.executionHostId === undefined || tab.executionHostId === hostId
+      ? adoptable(tab)
+      : undefined
   return {
     origin: (tabId) => ({ hostId, workspaceId, tabId }),
     resolve: (hostTabId, contentHolder, preferred) => {
@@ -66,8 +69,8 @@ export function mirroredTabContainers<T extends ContainerTab>(
       }
       const tab =
         byHostTab.get(hostTabId) ??
-        adoptable(unassociated.get(toWebTerminalSurfaceTabId(hostTabId))) ??
-        adoptable(unassociated.get(hostTabId)) ??
+        adoptableById(unassociated.get(toWebTerminalSurfaceTabId(hostTabId))) ??
+        adoptableById(unassociated.get(hostTabId)) ??
         adoptable(contentHolder)
       let id = tab?.id ?? preferred
       if (tab) {
