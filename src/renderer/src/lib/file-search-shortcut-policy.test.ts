@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { keybindingMatchesAction } from '../../../shared/keybindings'
-import { fileSearchClaimsTextKey } from './file-search-shortcut-policy'
+import { fileSearchClaimsTextKey, textFieldClaimsActionKey } from './file-search-shortcut-policy'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -95,6 +95,22 @@ describe('file search shortcut ownership', () => {
     expect(fileSearchClaimsTextKey({ target: document.createElement('button'), key: 'b' })).toBe(
       false
     )
+  })
+
+  it('keeps chat editing and AltGr chords while releasing only workspace navigation', () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Macintosh')
+    const target = document.createElement('div')
+    target.contentEditable = 'true'
+    target.setAttribute('data-native-chat-prompt', '')
+    expect(textFieldClaimsActionKey({ target, key: 'a', metaKey: true }, 'worktree.palette')).toBe(
+      true
+    )
+    for (const action of ['worktree.navigateUp', 'worktree.navigateDown'] as const) {
+      expect(textFieldClaimsActionKey({ target, key: '¬', altKey: true }, action)).toBe(true)
+      expect(
+        textFieldClaimsActionKey({ target, key: '@', ctrlKey: true, altGraph: true }, action)
+      ).toBe(true)
+    }
   })
 })
 
