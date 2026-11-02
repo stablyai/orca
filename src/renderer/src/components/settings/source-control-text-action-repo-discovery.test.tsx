@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import type * as GenerationClient from '@/runtime/runtime-git-generation-client'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
@@ -28,6 +29,7 @@ beforeEach(() => {
     worktreesByRepo: {}
   })
 })
+afterEach(() => vi.unstubAllGlobals())
 
 function openRepoCard(repoId: string) {
   useAppStore.setState(({ settings }) => ({
@@ -85,6 +87,33 @@ it('a local repository card lists the models this machine reports when its picke
   )
   const saved = useAppStore.getState().settings?.sourceControlAi
   expect(saved?.discoveredModelsByAgentByHost?.local?.codex).toEqual(SOL)
+})
+
+it('a local repository card in WSL refreshes the local catalog generation reads, as the global card does', async () => {
+  const actual = await vi.importActual<typeof GenerationClient>(
+    '@/runtime/runtime-git-generation-client'
+  )
+  discover.mockImplementation(actual.discoverRuntimeCommitMessageModels)
+  const list = vi.fn(async (args: { worktreePath?: string }) => ({
+    success: true,
+    models: args.worktreePath ? [{ id: 'wsl-only', label: 'WSL only' }] : SOL
+  }))
+  vi.stubGlobal('api', { git: { discoverCommitMessageModels: list } })
+  const path = String.raw`\\wsl.localhost\Ubuntu\home\me\repo`
+  const repo = { ...TEST_REPO, path, executionHostId: 'local' }
+  const worktree = makeWorktree({ id: `${repo.id}::${path}`, repoId: repo.id, path })
+  useAppStore.setState({ repos: [repo], worktreesByRepo: { [repo.id]: [worktree] } })
+  openRepoCard(repo.id)
+  expect(await screen.findByRole('option', { name: 'GPT-6.1 Sol' })).toBeDefined()
+  expect(screen.queryByRole('option', { name: 'WSL only' })).toBeNull()
+  expect(list).toHaveBeenCalledExactlyOnceWith({
+    agentId: 'codex',
+    worktreePath: '',
+    connectionId: undefined
+  })
+  expect(useAppStore.getState().settings?.sourceControlAi?.discoveredModelsByAgentByHost).toEqual({
+    local: { codex: SOL }
+  })
 })
 
 it.each([

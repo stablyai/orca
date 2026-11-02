@@ -20,6 +20,8 @@ const pending = new Map<string, Promise<void>>()
 function discoveryContext(hostKey: string, repoId: string | undefined): RuntimeGitContext | null {
   const state = useAppStore.getState()
   if (hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY) {
+    // Text generation validates native and WSL repositories against one local catalog, so a local
+    // repo card refreshes that catalog with the same native request as the global card.
     return { target: { kind: 'local' }, prefs: state.settings, worktreeId: null, worktreePath: '' }
   }
   const worktree = repoId ? state.worktreesByRepo[repoId]?.[0] : undefined

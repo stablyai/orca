@@ -87,6 +87,31 @@ function writeChoice(
   return Object.keys(next).length ? next : undefined
 }
 
+/** Remote hosts a model pick covers: the given hosts plus every host the saved settings name. */
+export function sourceControlAiModelChoiceHostKeys(
+  input: Pick<ActionModelChoiceInput, 'target' | 'settings' | 'repo' | 'actionId' | 'hostKeys'>
+): Set<string> {
+  const source = normalizeSourceControlAiSettings(
+    input.settings.sourceControlAi,
+    input.settings.commitMessageAi
+  )
+  const choice =
+    input.target.type === 'global'
+      ? source.modelOverridesByOperation?.[input.actionId]
+      : input.actionId === 'conversationName'
+        ? undefined
+        : input.repo?.sourceControlAi?.modelOverridesByOperation?.[input.actionId]
+  const hostKeys = new Set([
+    ...Object.keys(choice?.selectedModelByAgentByHost ?? {}),
+    ...Object.keys(source.selectedModelByAgentByHost ?? {}),
+    ...Object.keys(source.discoveredModelsByAgentByHost ?? {}),
+    ...Object.keys(input.settings.commitMessageAi?.discoveredModelsByAgentByHost ?? {}),
+    ...(input.hostKeys ?? [])
+  ])
+  hostKeys.delete(LOCAL_COMMIT_MESSAGE_HOST_KEY)
+  return hostKeys
+}
+
 export function saveSourceControlAiActionModelChoice(
   input: ActionModelChoiceInput
 ): SourceControlActionRecipeSaveResult & { unrecognizedArguments: boolean } {
@@ -102,14 +127,7 @@ export function saveSourceControlAiActionModelChoice(
       : input.actionId === 'conversationName'
         ? undefined
         : repo?.modelOverridesByOperation?.[input.actionId]
-  const remoteHostKeys = new Set([
-    ...Object.keys(choice?.selectedModelByAgentByHost ?? {}),
-    ...Object.keys(source.selectedModelByAgentByHost ?? {}),
-    ...Object.keys(source.discoveredModelsByAgentByHost ?? {}),
-    ...Object.keys(input.settings.commitMessageAi?.discoveredModelsByAgentByHost ?? {}),
-    ...(input.hostKeys ?? [])
-  ])
-  remoteHostKeys.delete(LOCAL_COMMIT_MESSAGE_HOST_KEY)
+  const remoteHostKeys = sourceControlAiModelChoiceHostKeys(input)
   const recipe =
     input.target.type === 'global'
       ? source.actions?.[input.actionId]

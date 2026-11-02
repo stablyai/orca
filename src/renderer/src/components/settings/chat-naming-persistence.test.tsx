@@ -763,3 +763,32 @@ it('saving only Chat name Arguments keeps a newer model choice saved by another 
     'gpt-5.5'
   )
 })
+
+it.each([
+  ['High', 'Low'],
+  ['Low', 'High']
+])(
+  'the latest Effort for a model two agents share is saved: Codex %s, then Copilot %s',
+  async (codexEffort, copilotEffort) => {
+    useAppStore.setState({ repos: [] })
+    const card = renderGlobalCommitCard({
+      agentId: 'codex',
+      modelOverridesByOperation: {
+        commitMessage: { selectedModelByAgent: { codex: 'gpt-5.4', copilot: 'gpt-5.4' } }
+      }
+    })
+    card.open('Codex')
+    fireEvent.click(screen.getByRole('radio', { name: codexEffort }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    card.open('GitHub Copilot')
+    fireEvent.click(screen.getByRole('radio', { name: copilotEffort }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    // A later Model edit on the first agent does not bring back its older Effort.
+    card.open('Codex')
+    fireEvent.click(screen.getByRole('option', { name: 'GPT-5.5' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    const saved = (await card.save()).sourceControlAi?.modelOverridesByOperation?.commitMessage
+    expect(saved?.selectedModelByAgent).toEqual({ codex: 'gpt-5.5', copilot: 'gpt-5.4' })
+    expect(saved?.selectedThinkingByModel?.['gpt-5.4']).toBe(copilotEffort.toLowerCase())
+  }
+)

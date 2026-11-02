@@ -1,35 +1,36 @@
-import { saveSourceControlAiActionModelChoice } from './source-control-ai-action-model-choice'
+import {
+  saveSourceControlAiActionModelChoice,
+  sourceControlAiModelChoiceHostKeys
+} from './source-control-ai-action-model-choice'
 import type { SourceControlAiWriteTarget } from './source-control-ai-recipe-save'
 import type { GlobalSettings } from './global-settings-types'
 import type { Repo } from './repo-types'
 import type { AiTextOperation, SourceControlAiModelChoice } from './source-control-ai-types'
 import type { TuiAgent } from './tui-agent'
 
-/** What a card's Model and Effort menus changed, kept in memory until Save; `null` is a clear. */
-export type SourceControlAiModelEdits = readonly {
-  agentId: TuiAgent
-  model?: string | null
-  effortByModel?: Record<string, string | null>
-}[]
-
 export type SourceControlAiModelEdit =
   | { field: 'model'; value: string | undefined }
   | { field: 'effort'; modelId: string; value: string | undefined }
 
-/** Later edits to the same field win, as in the menu. */
+/** What a card's Model and Effort menus changed, in edit order, kept in memory until Save. */
+export type SourceControlAiModelEdits = readonly ({
+  agentId: TuiAgent
+} & SourceControlAiModelEdit)[]
+
+// The saved field an edit writes: a model per agent, an effort per model id shared by every agent.
+function savedFieldKey(edit: SourceControlAiModelEdits[number]): string {
+  return edit.field === 'model' ? `model ${edit.agentId}` : `effort ${edit.modelId}`
+}
+
+/** A later edit to the same saved field replaces the earlier one; the rest keep their order. */
 export function addSourceControlAiModelEdit(
   edits: SourceControlAiModelEdits | undefined,
   agentId: TuiAgent,
   edit: SourceControlAiModelEdit
 ): SourceControlAiModelEdits {
-  const others = (edits ?? []).filter((entry) => entry.agentId !== agentId)
-  const agentEdits = { ...edits?.find((entry) => entry.agentId === agentId), agentId }
-  if (edit.field === 'model') {
-    agentEdits.model = edit.value ?? null
-  } else {
-    agentEdits.effortByModel = { ...agentEdits.effortByModel, [edit.modelId]: edit.value ?? null }
-  }
-  return [...others, agentEdits]
+  const next = { agentId, ...edit }
+  const key = savedFieldKey(next)
+  return [...(edits ?? []).filter((entry) => savedFieldKey(entry) !== key), next]
 }
 
 /** Apply the edits to the settings current at the write, covering the hosts registered then. */
@@ -43,33 +44,23 @@ export function replaySourceControlAiModelEdits(input: {
 }): SourceControlAiModelChoice | undefined {
   let settings = input.settings
   let repo = input.repo ?? null
-  for (const { agentId, ...agentEdits } of input.edits) {
-    const changes: SourceControlAiModelEdit[] = [
-      ...(agentEdits.model !== undefined
-        ? [{ field: 'model' as const, value: agentEdits.model ?? undefined }]
-        : []),
-      ...Object.entries(agentEdits.effortByModel ?? {}).map(([modelId, value]) => ({
-        field: 'effort' as const,
-        modelId,
-        value: value ?? undefined
-      }))
-    ]
-    for (const change of changes) {
-      const saved = saveSourceControlAiActionModelChoice({
-        target: input.target,
-        settings,
-        repo,
-        actionId: input.actionId,
-        agentId,
-        hostKeys: input.hostKeys,
-        change
-      })
-      // Only the model map is replayed; Arguments come from the card's staged text.
-      if ('sourceControlAi' in saved) {
-        settings = { ...settings, sourceControlAi: saved.sourceControlAi }
-      } else {
-        repo = { sourceControlAi: saved.update.sourceControlAi }
-      }
+  // Every edit covers the same hosts, so dropping a superseded edit cannot drop a destination.
+  const hostKeys = [...sourceControlAiModelChoiceHostKeys({ ...input, repo })]
+  for (const edit of input.edits) {
+    const saved = saveSourceControlAiActionModelChoice({
+      target: input.target,
+      settings,
+      repo,
+      actionId: input.actionId,
+      agentId: edit.agentId,
+      hostKeys,
+      change: edit
+    })
+    // Only the model map is replayed; Arguments come from the card's staged text.
+    if ('sourceControlAi' in saved) {
+      settings = { ...settings, sourceControlAi: saved.sourceControlAi }
+    } else {
+      repo = { sourceControlAi: saved.update.sourceControlAi }
     }
   }
   return input.target.type === 'global'
