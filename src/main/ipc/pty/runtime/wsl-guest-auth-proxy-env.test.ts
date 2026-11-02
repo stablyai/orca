@@ -90,6 +90,6 @@ describe('applyWslGuestAuthProxyEnv', () => {
 
 describe('desktop SSH spawn', () => {
   it('refuses an SSH execution host before this machine can inject its proxy URL', () => {
-    expect(() => getProvider('ssh:macstudio')).toThrow(PtyHostNotDispatchableError)
+    expect(() => getProvider('ssh:build-box')).toThrow(PtyHostNotDispatchableError)
   })
 })

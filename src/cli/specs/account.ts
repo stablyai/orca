@@ -95,7 +95,7 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
     ],
     examples: [
       'orca account auth-proxy --agent claude --off',
-      'orca account auth-proxy --agent claude --on --environment macstudio',
+      'orca account auth-proxy --agent claude --on --environment build-box',
       'orca account auth-proxy --agent claude --status'
     ]
   }
