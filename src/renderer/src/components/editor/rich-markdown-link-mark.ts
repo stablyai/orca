@@ -153,13 +153,19 @@ export const RichMarkdownLink = Link.extend({
             newState.doc.textBetween(newRange.from, newRange.to, ' ', ' ')
           )
           const boundaries: number[] = []
-          for (const match of normalizedRange.matchAll(/(\S*)(\s+)/g)) {
-            if (match.index !== undefined && (match.index === 0 || /[.:]/.test(match[1]))) {
+          let segmentStart = 0
+          for (const match of normalizedRange.matchAll(/\s+/g)) {
+            if (match.index === undefined) {
+              continue
+            }
+            const segment = normalizedRange.slice(segmentStart, match.index)
+            if (segmentStart === 0 || /[.:]/.test(segment)) {
               boundaries.push(newRange.from + match.index + match[0].length)
               if (boundaries.length >= MAX_AUTOLINK_PASSES) {
                 break
               }
             }
+            segmentStart = match.index + match[0].length
           }
           if (boundaries.length > 0) {
             rangeBoundaries.set(newRange.to, boundaries)
