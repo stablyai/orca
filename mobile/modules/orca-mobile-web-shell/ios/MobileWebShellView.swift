@@ -175,6 +175,19 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   private var isolationReady = false
   private var isolationFailed = false
   private let loadState = MobileWebShellLoadStateMachine()
+  private var keyboardPreparationPending = false
+  private var windowObservers: [NSObjectProtocol] = []
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    loadWhenIsolated()
+  }
+
+  deinit {
+    for observer in windowObservers {
+      NotificationCenter.default.removeObserver(observer)
+    }
+  }
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -207,6 +220,13 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
       webView.leadingAnchor.constraint(equalTo: leadingAnchor),
       webView.trailingAnchor.constraint(equalTo: trailingAnchor)
     ])
+    for name in [UIWindow.didBecomeKeyNotification, UIApplication.didBecomeActiveNotification] {
+      windowObservers.append(NotificationCenter.default.addObserver(
+        forName: name, object: nil, queue: .main
+      ) { [weak self] _ in
+        self?.loadWhenIsolated()
+      })
+    }
     installNetworkBlock(into: configuration.userContentController)
   }
 
@@ -392,11 +412,33 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   }
 
   private func loadWhenIsolated() {
-    guard isolationReady, let url = pendingDocumentUrl else { return }
-    pendingDocumentUrl = nil
-    // Only our own load raises this flag; every document ending clears it.
-    loadState.shellLoadStarted()
-    webView.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData))
+    guard isolationReady, pendingDocumentUrl != nil, !keyboardPreparationPending,
+      let window, window.isKeyWindow,
+      window.windowScene?.activationState == .foregroundActive else { return }
+    keyboardPreparationPending = true
+    DispatchQueue.main.async { [weak self, weak window] in
+      guard let self else { return }
+      guard let window, self.window === window, window.isKeyWindow,
+        window.windowScene?.activationState == .foregroundActive else {
+        self.keyboardPreparationPending = false
+        self.loadWhenIsolated()
+        return
+      }
+      let delay = MobileWebShellKeyboardWarmup.prepare(in: window)
+      DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak window] in
+        guard let self else { return }
+        self.keyboardPreparationPending = false
+        guard let window, self.window === window, window.isKeyWindow,
+          window.windowScene?.activationState == .foregroundActive else {
+          self.loadWhenIsolated()
+          return
+        }
+        guard self.isolationReady, let url = self.pendingDocumentUrl else { return }
+        self.pendingDocumentUrl = nil
+        self.loadState.shellLoadStarted()
+        self.webView.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData))
+      }
+    }
   }
 
   private func emit(_ emission: MobileWebShellLoadEmission?) {
