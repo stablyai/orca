@@ -10,17 +10,36 @@ vi.mock('@/components/dashboard/dashboard-client-host', () => ({
   readDashboardClientHost: () => ({ platform: 'win32', userAgent: 'Windows', osRelease: '10.0' })
 }))
 
-import type { AppState } from '../types'
-import { resolveDetachedTerminalInput } from './detached-terminal-input'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import {
+  resolveDetachedTerminalInput,
+  type DetachedTerminalInputState
+} from './detached-terminal-input'
 
 const leafId = '11111111-1111-4111-8111-111111111111'
 
-function stateWith(tab: Record<string, unknown>, layout?: Record<string, unknown>): AppState {
+function stateWith(
+  tab: Partial<TerminalTab>,
+  layout?: Pick<TerminalLayoutSnapshot, 'activeLeafId' | 'ptyIdsByLeafId'>
+): DetachedTerminalInputState {
+  const terminalTab: TerminalTab = {
+    id: 'tab-1',
+    ptyId: null,
+    worktreeId: 'wt-1',
+    title: 'Terminal',
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0,
+    ...tab
+  }
   return {
-    tabsByWorktree: { 'wt-1': [{ id: 'tab-1', worktreeId: 'wt-1', ...tab }] },
-    terminalLayoutsByTabId: layout ? { 'tab-1': layout } : {},
+    tabsByWorktree: { 'wt-1': [terminalTab] },
+    terminalLayoutsByTabId: layout
+      ? { 'tab-1': { root: null, expandedLeafId: null, ...layout } }
+      : {},
     allWorktrees: () => [{ id: 'wt-1', path: 'C:\\repo' }]
-  } as unknown as AppState
+  }
 }
 
 describe('resolveDetachedTerminalInput', () => {

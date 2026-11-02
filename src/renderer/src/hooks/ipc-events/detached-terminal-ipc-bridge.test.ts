@@ -7,13 +7,18 @@ type BridgeState = {
   unrelated: number
 }
 
-const { store, resolveInput } = vi.hoisted(() => ({
-  store: { current: null as unknown as UseBoundStore<StoreApi<BridgeState>> },
-  resolveInput: vi.fn((state: BridgeState, tabId: string) => ({
-    tabId,
-    agent: state.agentStatusByPaneKey[tabId] ?? null
-  }))
-}))
+type BridgeStore = UseBoundStore<StoreApi<BridgeState>>
+
+const { store, resolveInput } = vi.hoisted(() => {
+  const holder: { current?: BridgeStore } = {}
+  return {
+    store: holder,
+    resolveInput: vi.fn((state: BridgeState, tabId: string) => ({
+      tabId,
+      agent: state.agentStatusByPaneKey[tabId] ?? null
+    }))
+  }
+})
 
 vi.mock('../../store', () => ({
   get useAppStore() {
@@ -26,20 +31,23 @@ vi.mock('../../store/terminals/detached-terminal-input', () => ({
 
 import { publishDetachedTerminalInputs } from './detached-terminal-ipc-bridge'
 
+let appStore: BridgeStore
+
 describe('detached terminal input publishing', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    store.current = create<BridgeState>(() => ({
+    appStore = create<BridgeState>(() => ({
       detachedTerminalByTabId: {},
       agentStatusByPaneKey: {},
       unrelated: 0
     }))
+    store.current = appStore
   })
 
   it('sends a companion its facts once, then only when they change', () => {
     const send = vi.fn()
     const stop = publishDetachedTerminalInputs(send)
-    const { setState } = store.current
+    const { setState } = appStore
 
     setState({ detachedTerminalByTabId: { 'tab-1': { ptyId: 'pty-1' } } })
     setState({ unrelated: 1 })
@@ -58,7 +66,7 @@ describe('detached terminal input publishing', () => {
   it('sends again after the tab is re-docked and detached anew', () => {
     const send = vi.fn()
     const stop = publishDetachedTerminalInputs(send)
-    const { setState } = store.current
+    const { setState } = appStore
 
     setState({ detachedTerminalByTabId: { 'tab-1': { ptyId: 'pty-1' } } })
     setState({ detachedTerminalByTabId: {} })

@@ -43,9 +43,7 @@ function admitTerminalInput(value: unknown): DashboardCardTerminalInput | null |
   if (terminalInput === null || terminalInput === undefined) {
     return null
   }
-  return isDashboardTerminalInput(terminalInput)
-    ? (terminalInput as DashboardCardTerminalInput)
-    : undefined
+  return isDashboardTerminalInput(terminalInput) ? terminalInput : undefined
 }
 
 function admitTabId(value: unknown): string | null {

@@ -1,12 +1,21 @@
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
-import { resolveDashboardCardTerminalInput } from '@/components/dashboard/dashboard-card-terminal-input'
+import {
+  resolveDashboardCardTerminalInput,
+  type DashboardCardTerminalInputState
+} from '@/components/dashboard/dashboard-card-terminal-input'
 import { readDashboardClientHost } from '@/components/dashboard/dashboard-client-host'
 import type { AppState } from '../types'
 
+/** The tab, its layout and its worktree path, plus whatever dashboard input slices the store holds. */
+export type DetachedTerminalInputState = Partial<DashboardCardTerminalInputState> &
+  Pick<AppState, 'tabsByWorktree' | 'terminalLayoutsByTabId'> & {
+    allWorktrees: () => readonly { id: string; path: string }[]
+  }
+
 /** The pane's host-input facts for its companion window, resolved as the dashboard resolves a card's. */
 export function resolveDetachedTerminalInput(
-  state: AppState,
+  state: DetachedTerminalInputState,
   tabId: string,
   ptyId: string
 ): DashboardCardTerminalInput | null {

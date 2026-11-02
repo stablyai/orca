@@ -6,12 +6,12 @@ import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
 
 const returnToMain = vi.fn()
-const previewProps = vi.hoisted(() => ({
-  ptyId: '',
-  className: '',
-  scrollbackRows: undefined as number | undefined,
-  terminalInput: undefined as unknown
-}))
+const previewProps = vi.hoisted(
+  (): { ptyId: string; className: string; scrollbackRows?: number; terminalInput?: unknown } => ({
+    ptyId: '',
+    className: ''
+  })
+)
 
 vi.mock('../dashboard-popout/AgentTerminalPreview', () => ({
   AgentTerminalPreview: ({
