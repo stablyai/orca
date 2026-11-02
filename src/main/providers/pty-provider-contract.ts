@@ -144,6 +144,9 @@ export type IPtyProvider = {
   providesAgentSessionOwnerListings?: (ptyId: string) => boolean
   supportsFencedTermination?: (id: string) => boolean
   killFenced?: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
+  /** A routing container's verified owner of this exact PTY incarnation, or null when it can't
+   *  prove one; never a guess from where new spawns go. */
+  resolveAgentSessionAuthority?: (id: string, incarnationId: string) => Promise<IPtyProvider | null>
   /** Whether this PTY's owner can remove one conversation claim while the PTY keeps running. */
   supportsAgentSessionClaimRelease?: (id: string) => boolean
   releaseAgentSessionClaim?: (

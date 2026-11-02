@@ -24,6 +24,11 @@ export class DegradedDaemonOwnerRecovery {
   resolveFencedOwner = (id: string, incarnationId: string) =>
     this.attachResolver.resolveTermination(id, incarnationId)
 
+  resolveAuthority = async (id: string, incarnationId: string): Promise<IPtyProvider | null> => {
+    const owner = await this.resolveFencedOwner(id, incarnationId)
+    return owner.kind === 'owner' ? owner.provider : null
+  }
+
   spawn = async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
     if (opts.attachOnly && opts.sessionId) {
       return await this.attachResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })

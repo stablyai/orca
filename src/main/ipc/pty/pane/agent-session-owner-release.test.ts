@@ -159,4 +159,66 @@ describe('releaseAgentSessionOwnerForFresh', () => {
     await inFlight
     expect(agentSessionOwners.find(claim)).toBeNull()
   })
+
+  describe('behind a routing container such as the degraded daemon provider', () => {
+    // The container answers only with what its recorded route or a fresh inventory proves.
+    const container = (authority: () => Promise<IPtyProvider | null>) =>
+      ({
+        resolveAgentSessionAuthority: vi.fn(authority),
+        // A degraded container would send unknown ids to its fallback; release never asks it.
+        releaseAgentSessionClaim: vi.fn()
+      }) as unknown as IPtyProvider
+
+    it('releases at main for its local fallback, and at a recovered or retained capable daemon', async () => {
+      routes.set(
+        'pty-p',
+        container(async () => new LocalPtyProvider())
+      )
+      let owner = await ownerOn('pty-p')
+      const input = () => ({ owner, incarnationId: 'incarnation-1', deadline: deadline() })
+      await expect(releaseAgentSessionOwnerForFresh(input())).resolves.toBe(true)
+      expect(agentSessionOwners.find(claim)).toBeNull()
+
+      const capable = daemon(async () => ({ outcome: 'released' }))
+      routes.set(
+        'pty-p',
+        container(async () => capable)
+      )
+      owner = await ownerOn('pty-p')
+      await expect(releaseAgentSessionOwnerForFresh(input())).resolves.toBe(true)
+      expect(capable.releaseAgentSessionClaim).toHaveBeenCalledOnce()
+      // A later ordinary ensure of the conversation creates a new owner, never this terminal.
+      const later = await agentSessionOwners.ensure({
+        claim,
+        surface,
+        spawn: async () => ({ ptyId: 'pty-new' })
+      })
+      expect(later.owner.ptyId).toBe('pty-new')
+    })
+
+    it('resumes for an unproved route, an old daemon behind it, or a resolver past the deadline', async () => {
+      const unproved = container(async () => null)
+      routes.set('pty-p', unproved)
+      const owner = await ownerOn('pty-p')
+      const input = { owner, incarnationId: 'incarnation-1', deadline: deadline() }
+      await expect(releaseAgentSessionOwnerForFresh(input)).resolves.toBe(false)
+      expect(unproved.releaseAgentSessionClaim).not.toHaveBeenCalled()
+
+      const oldDaemon = { providesAgentSessionOwnerListings: () => true } as unknown as IPtyProvider
+      routes.set(
+        'pty-p',
+        container(async () => oldDaemon)
+      )
+      await expect(releaseAgentSessionOwnerForFresh(input)).resolves.toBe(false)
+
+      routes.set(
+        'pty-p',
+        container(() => new Promise(() => {}))
+      )
+      await expect(
+        releaseAgentSessionOwnerForFresh({ ...input, deadline: Date.now() + 50 })
+      ).resolves.toBe(false)
+      expect(agentSessionOwners.find(claim)).toEqual(owner)
+    })
+  })
 })

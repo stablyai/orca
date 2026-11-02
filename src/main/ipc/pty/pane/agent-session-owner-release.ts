@@ -1,8 +1,31 @@
 import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/agent-session-host-authority'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
+import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { ptyIncarnationById } from '../provider/ownership-state'
 import { tryGetProviderForPty } from '../provider/registry'
 import { agentSessionOwners, drainAgentSessionOwnerReconciliation } from './agent-session-owners'
+
+const MAX_ROUTING_HOPS = 3
+
+/** Unwraps routing containers only through their verified resolver, within the deadline. */
+async function resolveAuthority(
+  provider: IPtyProvider | undefined,
+  id: string,
+  incarnationId: string,
+  deadline: number
+): Promise<IPtyProvider | null> {
+  let current: IPtyProvider | null = provider ?? null
+  for (let hop = 0; current?.resolveAgentSessionAuthority && hop < MAX_ROUTING_HOPS; hop += 1) {
+    const resolver = current.resolveAgentSessionAuthority(id, incarnationId)
+    current = await Promise.race([
+      resolver,
+      new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), Math.max(0, deadline - Date.now())).unref?.()
+      )
+    ])
+  }
+  return current?.resolveAgentSessionAuthority ? null : current
+}
 
 /** Removes one conversation's owner binding where it lives, keeping its terminal running: main's
  *  registry for an in-process PTY, the daemon (then main's copy) for a daemon PTY. True only on a
@@ -14,7 +37,14 @@ export async function releaseAgentSessionOwnerForFresh(input: {
   deadline: number
 }): Promise<boolean> {
   const { owner, incarnationId, deadline } = input
-  const provider = tryGetProviderForPty(owner.ptyId)
+  const provider = incarnationId
+    ? await resolveAuthority(
+        tryGetProviderForPty(owner.ptyId),
+        owner.ptyId,
+        incarnationId,
+        deadline
+      )
+    : null
   if (
     !provider ||
     !incarnationId ||
