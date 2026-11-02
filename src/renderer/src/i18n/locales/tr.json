@@ -22591,7 +22591,8 @@
       "changed": "Daha önce taşındı, ardından burada Orca'nın eski bir sürümü tarafından değiştirildi. Yeniden taşınmaz.",
       "chatsStay": "Mevcut sohbetler bu bilgisayarda kalır. Bu projedeki yeni sohbetler WSL ana makinesinde başlar.",
       "browserLoginsConflict": "Ana makinenin tarayıcı profili zaten kullanımda olduğundan tarayıcı oturumları aktarılmayacak. Taşımadan sonra ana makinenin tarayıcı sekmelerinde yeniden oturum açın.",
-      "browserLoginsNotCarried": "Tarayıcı oturumları bu ana makineye aktarılmayacak. Taşımadan sonra ana makinenin tarayıcı sekmelerinde yeniden oturum açın."
+      "browserLoginsNotCarried": "Tarayıcı oturumları bu ana makineye aktarılmayacak. Taşımadan sonra ana makinenin tarayıcı sekmelerinde yeniden oturum açın.",
+      "why": "Çalışma artık dosyalarınızın yanında, Linux içinde yürür; bu sayede terminaller, Git ve dosya değişiklikleri daha hızlı ve daha güvenilir olur. Projeleriniz değişmez ve herhangi bir projeyi “Bu bilgisayarda yeniden kullan” ile geri taşıyabilirsiniz."
     },
     "cancel": "İptal",
     "progress": {
