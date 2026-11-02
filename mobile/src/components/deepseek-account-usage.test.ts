@@ -1,8 +1,22 @@
 import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
+import { createElement } from 'react'
+import { Text } from 'react-native'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { decodeAccountsSnapshot } from './accounts-snapshot'
+vi.mock('react-native', () => ({
+  Text: 'Text',
+  View: 'View',
+  Pressable: 'Pressable',
+  ActivityIndicator: 'ActivityIndicator',
+  StyleSheet: { create: (styles: Record<string, unknown>) => styles }
+}))
+vi.mock('lucide-react-native', () => ({ Wallet: 'Wallet' }))
+vi.mock('./AgentIcons', () => ({ ClaudeIcon: 'ClaudeIcon', OpenAIIcon: 'OpenAIIcon' }))
+
+import { decodeAccountsSnapshot, type AccountsSnapshot } from './accounts-snapshot'
 import { getDeepSeekAccountUsage, hasDeepSeekAccountUsage } from './deepseek-account-usage'
+import { DeepSeekAccountUsageSection } from '../accounts/DeepSeekAccountUsageSection'
 
 function deepSeekLimits(overrides: Record<string, unknown> = {}) {
   return {
@@ -129,12 +143,72 @@ describe('getDeepSeekAccountUsage', () => {
     expect(snapshot.rateLimits.claude?.status).toBe('ok')
     expect(getDeepSeekAccountUsage(snapshot)).toMatchObject({
       balanceLabel: null,
-      status: 'loading'
+      status: 'unavailable',
+      statusLabel: 'Balance unavailable'
     })
   })
 })
 
 describe('DeepSeek usage surfaces', () => {
+  let mounted: ReactTestRenderer | null = null
+
+  afterEach(async () => {
+    await act(async () => mounted?.unmount())
+    mounted = null
+  })
+
+  it.each([
+    { name: 'pending', raw: undefined, text: 'Checking balance…', balance: null },
+    { name: 'malformed', raw: { provider: 'claude' }, text: 'Balance unavailable', balance: null },
+    {
+      name: 'available',
+      raw: deepSeekLimits({ monthly: balanceWindow(0, 'USD 72.00') }),
+      text: null,
+      balance: 'USD 72.00'
+    },
+    {
+      name: 'depleted',
+      raw: deepSeekLimits({ monthly: balanceWindow(100, 'USD 0.00') }),
+      text: 'No balance remaining',
+      balance: 'USD 0.00'
+    },
+    {
+      name: 'refresh error',
+      raw: deepSeekLimits({ status: 'error', monthly: balanceWindow(0, 'USD 72.00') }),
+      text: 'Balance refresh failed',
+      balance: 'USD 72.00'
+    }
+  ])('renders the $name balance on Accounts', async ({ raw, text, balance }) => {
+    const snapshot = decode({ deepseekAuthConfigured: true, deepseek: raw })
+    const tree = await renderSection(snapshot)
+    const texts = tree.root.findAll((node) => node.type === Text)
+    const shown = texts.map((node) => node.children.join(''))
+    expect(shown.filter((value) => value === 'DeepSeek API')).toHaveLength(1)
+    const primary = balance ?? text
+    if (primary) {
+      expect(shown).toContain(primary)
+      expect(
+        texts.find((node) => node.children.join('') === primary)?.props.accessibilityLiveRegion
+      ).toBe('polite')
+    }
+    if (text && balance) {
+      expect(shown).toContain(text)
+      expect(
+        texts.find((node) => node.children.join('') === text)?.props.accessibilityLiveRegion
+      ).toBe('polite')
+    }
+  })
+
+  async function renderSection(snapshot: AccountsSnapshot): Promise<ReactTestRenderer> {
+    await act(async () => {
+      mounted = create(createElement(DeepSeekAccountUsageSection, { snapshot }))
+    })
+    if (!mounted) {
+      throw new Error('usage section did not mount')
+    }
+    return mounted
+  }
+
   it('mounts the read-only DeepSeek section on Accounts', () => {
     const accounts = readFileSync(
       new URL('../accounts/MobileAccountsScreen.tsx', import.meta.url),
@@ -149,3 +223,7 @@ describe('DeepSeek usage surfaces', () => {
     expect(section).toContain('getDeepSeekAccountUsage(snapshot)')
   })
 })
+
+function balanceWindow(usedPercent: number, resetDescription: string) {
+  return { usedPercent, windowMinutes: 43_200, resetsAt: null, resetDescription }
+}
