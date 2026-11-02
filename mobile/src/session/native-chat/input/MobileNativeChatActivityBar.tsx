@@ -9,7 +9,7 @@ import {
   nativeChatListedSubagents,
   type NativeChatSubagentActivity
 } from '../../../../../src/shared/native-chat/input/native-chat-activity'
-import { BottomDrawer } from '../../../components/BottomDrawer'
+import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
