@@ -315,3 +315,36 @@ it.each([10, 100])(
     warn.mockRestore()
   }
 )
+
+it.each(['accepted', 'refused'] as const)(
+  "closes a workspace's adjacent chat tabs in one command, or each alone when that one is %s",
+  async (verdict) => {
+    const { withChatTabChanges } = await import('./agent-session/agent-session-tab-layout')
+    const { getDefaultWorkspaceSession } = await import('../../shared/constants')
+    const ids = ['a', 'b', 'c']
+    const session = withChatTabChanges(
+      'local',
+      getDefaultWorkspaceSession(),
+      'wt',
+      ids.map((id) => open(id)).map(({ change }) => change)
+    )!
+    const commands: string[][] = []
+    const queue = createChatTabLayoutQueue({
+      sessionOf: () => session,
+      hostIdOf: () => 'local',
+      apply: async (command: ChatTabLayoutCommand) => {
+        const tabIds = command.type === 'closeTabs' ? [...command.tabIds] : []
+        commands.push(tabIds)
+        return verdict === 'refused' && tabIds.length > 1
+          ? { ok: false, code: 'host_not_owned' }
+          : { ok: true, result: {} }
+      }
+    })
+    await queue(ids.map((id) => ({ worktreeId: 'wt', change: { close: id, tabId: `tab-${id}` } })))
+    expect(commands).toEqual(
+      verdict === 'accepted'
+        ? [['tab-a', 'tab-b', 'tab-c']]
+        : [['tab-a', 'tab-b', 'tab-c'], ['tab-a'], ['tab-b'], ['tab-c']]
+    )
+  }
+)

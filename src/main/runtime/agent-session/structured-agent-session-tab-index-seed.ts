@@ -8,9 +8,15 @@ export function chatTabChangesMatchingIndex(
   restored: readonly ({ worktreeId: string } & Extract<ChatTabChange, { open: unknown }>)[],
   retired: (sessionId: string, worktreeId: string, tab: Tab) => boolean
 ): Map<string, ChatTabChange[]> {
+  // Each workspace's list is this call's own and only grows, so a batch of K changes costs K.
   const changes = new Map<string, ChatTabChange[]>()
   const add = (worktreeId: string, change: ChatTabChange): void => {
-    changes.set(worktreeId, [...(changes.get(worktreeId) ?? []), change])
+    const bucket = changes.get(worktreeId)
+    if (bucket) {
+      bucket.push(change)
+    } else {
+      changes.set(worktreeId, [change])
+    }
   }
   for (const { worktreeId, open } of restored) {
     add(worktreeId, { open })

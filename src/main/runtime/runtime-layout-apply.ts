@@ -19,7 +19,7 @@ export type WindowLayoutCommand =
       (
         | { tabId: string }
         | { type: 'setGroupRatios' }
-        | { type: 'closeTabs'; tabIds: [string] }
+        | { type: 'closeTabs'; tabIds: [string, ...string[]] }
         | { browserTabId: string }
         | { type: 'moveTabToWorkspace' }
         | { type: 'renameEditorFiles' }
@@ -57,13 +57,12 @@ export async function applyWindowLayoutCommand(
   if (command.type === 'renameEditorFiles' && command.alsoIn) {
     return renameEditorFilesInWorkspaces(store, hostIdsFor, command)
   }
-  const routedTabId =
-    'tabId' in command
-      ? (command.tabId ?? null)
-      : command.type === 'closeTabs'
-        ? command.tabIds[0]
-        : null
-  const hostIds = hostIdsFor(command.workspace, routedTabId)
+  const routedTabId = 'tabId' in command ? (command.tabId ?? null) : null
+  // A close goes to every partition holding any of its tabs; a window sends one tab at a time.
+  const hostIds =
+    command.type === 'closeTabs'
+      ? [...new Set(command.tabIds.flatMap((tabId) => hostIdsFor(command.workspace, tabId)))]
+      : hostIdsFor(command.workspace, routedTabId)
   // Paired servers keep mirrored layout until they advertise ownership.
   if (!hostIds[0] || parseExecutionHostId(hostIds[0])?.kind === 'runtime') {
     return { ok: false, code: 'host_not_owned' }
@@ -76,19 +75,27 @@ export async function applyWindowLayoutCommand(
   if (command.type === 'closeTabs') {
     // Window closes already confirmed/stopped terminals: force removal without killing shared PTYs. Honor pinned-tab refusals from CLI/new phones.
     // Read intent before close removes the record.
-    const terminalTabId = terminalIdOf(store, hostIds[0], command.workspace, command.tabIds[0])
+    const terminalTabIds =
+      command.recordClose === 'user'
+        ? new Map(
+            command.tabIds.map((tabId) => [
+              tabId,
+              terminalIdOf(store, hostIds[0], command.workspace, tabId)
+            ])
+          )
+        : null
     const reply = await store.applyLayoutCommand(
       { ...command, force: command.refusePinned ? command.force === true : true },
       holders,
       run
     )
     // Cancel launches only for tabs actually closed; refused pinned tabs still receive theirs.
-    if (
-      command.recordClose === 'user' &&
-      reply.ok &&
-      reply.result.closed?.includes(command.tabIds[0])
-    ) {
-      markAgentLaunchesClosedByUser(command.workspace, { kind: 'tab', tabId: terminalTabId })
+    if (terminalTabIds && reply.ok) {
+      for (const [tabId, terminalTabId] of terminalTabIds) {
+        if (reply.result.closed?.includes(tabId)) {
+          markAgentLaunchesClosedByUser(command.workspace, { kind: 'tab', tabId: terminalTabId })
+        }
+      }
     }
     // Missing workspaces have no tab to close; let windows handle this as tab_not_found.
     return reply.ok && reply.result.alreadyClosed

@@ -23,7 +23,7 @@ export type ChatTabChange =
 
 export type ChatTabLayoutCommand =
   | (CommandOf<'openAgentSessionTab'> & { tabId: string })
-  | (CommandOf<'closeTabs'> & { tabIds: [string] })
+  | (CommandOf<'closeTabs'> & { tabIds: [string, ...string[]] })
 
 /** Shared by main's queue and windowless saves; null means unchanged. */
 export function chatTabLayoutCommand(
@@ -46,15 +46,13 @@ export function chatTabLayoutCommand(
     workspace?.groups.some((group) => group.id === groupId && group.tabOrder.includes(after))
       ? after
       : undefined
-  const sessionId = 'close' in change ? change.close : change.open.sessionId
+  if ('close' in change) {
+    return chatTabCloseCommand(workspace, worktreeId, [change])
+  }
+  const sessionId = change.open.sessionId
   const tabId =
     workspace?.tabs.find((tab) => tab.kind === 'agent-session' && tab.entityId === sessionId)?.id ??
     null
-  if ('close' in change) {
-    return tabId && change.tabId === tabId
-      ? { type: 'closeTabs', workspace: worktreeId, tabIds: [tabId], force: true }
-      : null
-  }
   if (tabId) {
     return (isReopenedChatTabId(change.open.tabId) || isReopenedChatTabId(tabId)) &&
       tabId !== change.open.tabId
@@ -71,6 +69,27 @@ export function chatTabLayoutCommand(
     ...(groupId ? { groupId } : {}),
     ...(afterTabId ? { afterTabId } : {})
   }
+}
+
+/** One command closing every listed chat whose tab here is still the one it names; null when none is. */
+export function chatTabCloseCommand(
+  workspace: WorkspaceLayout | undefined,
+  worktreeId: string,
+  closes: readonly Extract<ChatTabChange, { close: string }>[]
+): Extract<ChatTabLayoutCommand, { type: 'closeTabs' }> | null {
+  // A chat's tab is the first one listing it, as a single close reads it.
+  const tabOf = new Map<string, string>()
+  for (const tab of workspace?.tabs ?? []) {
+    if (tab.kind === 'agent-session' && !tabOf.has(tab.entityId)) {
+      tabOf.set(tab.entityId, tab.id)
+    }
+  }
+  const [first, ...rest] = closes.flatMap((change) =>
+    change.tabId && tabOf.get(change.close) === change.tabId ? [change.tabId] : []
+  )
+  return first
+    ? { type: 'closeTabs', workspace: worktreeId, tabIds: [first, ...rest], force: true }
+    : null
 }
 
 export function loadChatTabLayout(
