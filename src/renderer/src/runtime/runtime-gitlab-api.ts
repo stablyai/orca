@@ -1,5 +1,6 @@
 import type { PreloadApi } from '../../../preload/api-types'
 import {
+  GITLAB_MR_INVOLVEMENT_RUNTIME_CAPABILITY,
   GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
   GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE,
   type RuntimeCapability
@@ -33,7 +34,17 @@ export function createRuntimeGitLabApi(transport: RuntimeGitLabTransport): GitLa
     projectSlug: () => Promise.resolve(null),
     mrForBranch: () => Promise.resolve(null),
     mr: () => Promise.resolve(null),
-    listMRs: (args) => route<GitLabApiResult<'listMRs'>>(GITLAB_WEB_RPC_METHODS.listMRs, args),
+    listMRs: async (args) => {
+      if (
+        args.involvement &&
+        !(await transport.supportsCapability(GITLAB_MR_INVOLVEMENT_RUNTIME_CAPABILITY))
+      ) {
+        throw new Error(
+          'Filtering merge requests by user requires a newer Orca server. Update the server and try again.'
+        )
+      }
+      return route<GitLabApiResult<'listMRs'>>(GITLAB_WEB_RPC_METHODS.listMRs, args)
+    },
     listWorkItems: (args) =>
       route<GitLabApiResult<'listWorkItems'>>(GITLAB_WEB_RPC_METHODS.listWorkItems, args),
     issue: () => Promise.resolve(null),

@@ -86,7 +86,7 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
-    await runtime.listGitLabRepoMRs(TEST_REPO_ID, 'closed', 2, 25, 'ambiguous selector')
+    await runtime.listGitLabRepoMRs(TEST_REPO_ID, 'closed', 2, 25, 'ambiguous selector', 'mine')
     await runtime.listGitLabRepoWorkItems(TEST_REPO_ID, 'closed', 2, 25, 'ambiguous selector')
     const issues = await runtime.listGitLabRepoIssues(TEST_REPO_ID, 'opened', '@me', 50, 3)
     await runtime.listGitLabRepoTodos(TEST_REPO_ID)
@@ -127,7 +127,9 @@ describe('OrcaRuntimeService', () => {
       25,
       'origin',
       'ambiguous selector',
-      'ssh-1'
+      'ssh-1',
+      {},
+      'mine'
     )
     expect(listGitLabWorkItemsMock).toHaveBeenCalledWith(
       '/remote/repo',
@@ -311,7 +313,7 @@ describe('OrcaRuntimeService', () => {
     updateGitLabIssueMock.mockResolvedValue({ ok: true })
     addGitLabIssueCommentMock.mockResolvedValue({ ok: true })
 
-    await runtime.listGitLabRepoMRs(TEST_REPO_ID, 'opened', 1, 20)
+    await runtime.listGitLabRepoMRs(TEST_REPO_ID, 'opened', 1, 20, undefined, 'needs-review')
     await runtime.listGitLabRepoWorkItems(TEST_REPO_ID, 'opened', 1, 20)
     await runtime.listGitLabRepoIssues(TEST_REPO_ID, 'opened', undefined, 20)
     await runtime.listGitLabRepoTodos(TEST_REPO_ID)
@@ -328,7 +330,8 @@ describe('OrcaRuntimeService', () => {
       undefined,
       undefined,
       null,
-      localGitOptions
+      localGitOptions,
+      'needs-review'
     )
     expect(listGitLabWorkItemsMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,

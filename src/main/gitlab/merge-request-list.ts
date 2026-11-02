@@ -1,4 +1,8 @@
-import type { ListMergeRequestsResult, MRListState } from '../../shared/gitlab-types'
+import type {
+  GitLabMRInvolvement,
+  ListMergeRequestsResult,
+  MRListState
+} from '../../shared/gitlab-types'
 import type { IssueSourcePreference } from '../../shared/repo-types'
 import { mapMRToWorkItem } from './mappers'
 import {
@@ -39,7 +43,8 @@ export async function listMergeRequests(
   preference?: IssueSourcePreference,
   query?: string,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  involvement?: GitLabMRInvolvement
 ): Promise<ListMergeRequestsResult> {
   const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   // Resolve the same preference-selected project as issue listings.
@@ -54,7 +59,7 @@ export async function listMergeRequests(
     if (await isTaskRepositoryIneligible(repoPath, 'gitlab', connectionId, localGitOptions)) {
       return { items: [], page, perPage, totalCount: 0, totalPages: 0 }
     }
-    if (connectionId) {
+    if (connectionId || involvement) {
       // Without local cwd, an unresolved SSH project could become an unrelated glab repository.
       return {
         items: [],
@@ -123,6 +128,70 @@ export async function listMergeRequests(
 
   await acquire()
   try {
+    if (involvement === 'mine' || involvement === 'needs-review') {
+      const options = glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+      const hostArgs = ['--hostname', projectRef.host]
+      const { stdout } = await glabExecFileAsync(['api', ...hostArgs, 'user'], options)
+      const viewer = JSON.parse(stdout)
+      if (!Number.isSafeInteger(viewer.id) || viewer.id <= 0) {
+        throw new Error('Could not identify the authenticated GitLab user.')
+      }
+      const filters =
+        involvement === 'mine'
+          ? [`author_id=${viewer.id}`, `assignee_id=${viewer.id}&not[author_id]=${viewer.id}`]
+          : [`reviewer_id=${viewer.id}`]
+      // Read each disjoint stream's prefix before slicing the combined, updated-at ordered page.
+      const streams: {
+        items: ReturnType<typeof mapMRToWorkItem>[]
+        totalCount: number | undefined
+        totalPages: number | undefined
+        hasMore: boolean
+      }[] = []
+      for (const filter of filters) {
+        const items: ReturnType<typeof mapMRToWorkItem>[] = []
+        let totalCount: number | undefined
+        let totalPages: number | undefined
+        let hasMore = true
+        const firstPage = involvement === 'mine' ? 1 : page
+        const prefixSize = involvement === 'mine' ? page * perPage : perPage
+        for (let streamPage = firstPage; hasMore && items.length < prefixSize; streamPage++) {
+          const streamPath = path.replace(`page=${page}&`, `page=${streamPage}&`)
+          const response = await glabApiWithHeaders(
+            [...hostArgs, `${streamPath}&scope=all&${filter}`],
+            options
+          )
+          const data = parseGlabJsonList<Parameters<typeof mapMRToWorkItem>[0]>(response.body)
+          items.push(...data.map((d) => mapMRToWorkItem(d, repoId, projectRef)))
+          totalCount = parseGlabPaginationHeader(response.headers['x-total'], 0)
+          totalPages = parseGlabPaginationHeader(response.headers['x-total-pages'], 1)
+          hasMore = totalPages === undefined ? data.length === perPage : streamPage < totalPages
+        }
+        streams.push({ items, totalCount, totalPages, hasMore })
+      }
+      const combined = streams
+        .flatMap((stream) => stream.items)
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.number - a.number)
+      const items = [...new Map(combined.map((item) => [item.number, item])).values()]
+      const totalKnown = streams.every((stream) => stream.totalCount !== undefined)
+      const totalCount = totalKnown
+        ? streams.reduce((sum, stream) => sum + (stream.totalCount ?? 0), 0)
+        : 0
+      const hasMore = streams.some((stream) => stream.hasMore) || items.length > page * perPage
+      return {
+        items: involvement === 'mine' ? items.slice((page - 1) * perPage, page * perPage) : items,
+        page,
+        perPage,
+        totalCount,
+        totalPages:
+          involvement === 'needs-review' && streams[0]?.totalPages !== undefined
+            ? streams[0].totalPages
+            : totalKnown
+              ? Math.max(1, Math.ceil(totalCount / perPage))
+              : hasMore
+                ? page + 1
+                : page
+      }
+    }
     const { body, headers } = await glabApiWithHeaders(
       [...glabHostnameArgs(projectRef, connectionId), path],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)

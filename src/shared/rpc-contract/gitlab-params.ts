@@ -30,6 +30,10 @@ export const WorkItemsList = RepoSelector.extend({
   query: OptionalString
 })
 
+export const MergeRequestsList = WorkItemsList.extend({
+  involvement: z.enum(['mine', 'needs-review']).optional()
+})
+
 export const IssuesList = RepoSelector.extend({
   state: z.unknown().optional(),
   assignee: OptionalString,
