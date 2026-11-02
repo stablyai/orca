@@ -5,6 +5,7 @@ import { ALL_RPC_METHODS } from '../runtime/rpc/methods'
 const DISPATCHED = [
   'worktree.list',
   'repo.list',
+  'folderWorkspace.list',
   'worktree.activate',
   'terminal.create',
   'terminal.read',

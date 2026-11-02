@@ -37,7 +37,7 @@ export function pluginCapabilityDescription(kind: string, fallback: string): str
     case 'workspace:write':
       return translate(
         'auto.components.settings.PluginConsentDialog.capability.workspaceWrite',
-        'Open your workspaces'
+        'Open your workspaces and files, and run built-in commands'
       )
     case 'agent:launch':
       return translate(

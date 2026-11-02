@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../../tui-agent-config'
+import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../contributions/plugin-command-actions'
 import { spec, WORKER_ONLY } from './plugin-host-method-spec'
 
 /**
@@ -74,6 +75,34 @@ const agentLaunchResult = z.object({
   terminalId
 })
 
+/** A `/`-separated path inside the workspace: not absolute, no `..`, no drive letter. */
+export function isPluginWorkspaceRelativePath(path: string): boolean {
+  const segments = path.split(/[\\/]/)
+  return (
+    !/^[a-z]:/i.test(path) &&
+    segments[0] !== '' &&
+    segments.every((segment) => segment !== '..') &&
+    segments.some((segment) => segment !== '' && segment !== '.')
+  )
+}
+
+const editorOpenParams = z.strictObject({
+  workspaceId,
+  /** Relative to the workspace, `/`-separated; it must stay inside it. */
+  path: z
+    .string()
+    .min(1)
+    .max(ID_MAX)
+    .refine(isPluginWorkspaceRelativePath, 'path must be relative and inside the workspace')
+})
+const editorOpenResult = z.object({ opened: z.literal(true) })
+
+const commandsRunParams = z.strictObject({
+  /** A built-in action, the same list `contributes.commands[].action` takes. */
+  action: z.enum(PLUGIN_COMMAND_ALIAS_ACTION_IDS)
+})
+const commandsRunResult = z.object({ ran: z.literal(true) })
+
 export const PLUGIN_WORKSPACE_ACTIONS_API = {
   'workspace.list': spec({
     summary: 'Lists every workspace, Git worktrees and folders, on every host Orca reaches.',
@@ -86,7 +115,8 @@ export const PLUGIN_WORKSPACE_ACTIONS_API = {
     result: workspaceListResult
   }),
   'workspace.open': spec({
-    summary: 'Shows a workspace in Orca, as clicking it in the sidebar does.',
+    summary:
+      'Shows a workspace in Orca, as clicking it in the sidebar does; a folder workspace needs the desktop app.',
     since: 3,
     scope: 'any-workspace',
     capability: 'workspace:write',
@@ -125,5 +155,27 @@ export const PLUGIN_WORKSPACE_ACTIONS_API = {
     surfaces: WORKER_ONLY,
     params: agentLaunchParams,
     result: agentLaunchResult
+  }),
+  'editor.open': spec({
+    summary:
+      "Opens a file of a workspace in an editor tab of Orca's window; desktop app only. `workspace.open` shows the workspace.",
+    since: 3,
+    scope: 'any-workspace',
+    capability: 'workspace:write',
+    mutation: true,
+    surfaces: WORKER_ONLY,
+    params: editorOpenParams,
+    result: editorOpenResult
+  }),
+  'commands.run': spec({
+    summary:
+      "Runs one of Orca's built-in actions in its window, never a plugin's replacement of it; desktop app only.",
+    since: 3,
+    scope: 'desktop',
+    capability: 'workspace:write',
+    mutation: true,
+    surfaces: WORKER_ONLY,
+    params: commandsRunParams,
+    result: commandsRunResult
   })
 }

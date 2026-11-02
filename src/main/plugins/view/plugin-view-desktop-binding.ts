@@ -8,6 +8,10 @@ import {
 } from '../panels/plugin-frame-guest-diagnostics'
 import { createPluginViewDesktop } from './plugin-view-desktop'
 import { isPluginShotWindowShown } from './plugin-shot-policy'
+import { setPluginHostRendererRequest } from './plugin-host-renderer-actions'
+import { requestPluginViewFromRenderer } from './plugin-view-renderer-relay'
+
+const HOST_ACTION_TIMEOUT_MS = 10_000
 
 /** Guest console lines into plugin logs, and `plugins.open` / `plugins.shot` for the desktop
  *  app; a headless serve leaves open and shot refusing. */
@@ -19,8 +23,16 @@ export function bindPluginDesktopViews(
   setPluginFrameGuestLogSink((pluginKey) => service.captureLog(pluginKey))
   if (serveMode) {
     setPluginViewForRpc(null)
+    setPluginHostRendererRequest(null)
     return
   }
+  // The one main window, so a worker's editor.open and commands.run always reach the same one.
+  setPluginHostRendererRequest((body) => {
+    const window = getMainWindow()
+    return window && !window.isDestroyed()
+      ? requestPluginViewFromRenderer(window.webContents, body, HOST_ACTION_TIMEOUT_MS)
+      : null
+  })
   setPluginViewForRpc(
     createPluginViewDesktop({
       rendererContents: () => {

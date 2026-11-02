@@ -32,10 +32,12 @@ Methods whose capability is `none` need no capability but still need the plugin 
 | [`events.subscribe`](#eventssubscribe) | none | panel, editor | no | 1.2 | Delivers a workspace or agent event to this panel as `orca.on(event)`; needs the event's read capability. The frame APIs call it for you. |
 | [`statusBar.update`](#statusbarupdate) | none | worker | no | 1.2 | Changes one of the plugin's `contributes.statusBarItems` (named by `id`): fields given replace their current value, `visible: false` hides it. Desktop app only; lasts until Orca restarts, and is hidden while the plugin is disabled. |
 | [`workspace.list`](#workspacelist) | `workspace:read` | worker | no | 1.3 | Lists every workspace, Git worktrees and folders, on every host Orca reaches. |
-| [`workspace.open`](#workspaceopen) | `workspace:write` | worker | yes | 1.3 | Shows a workspace in Orca, as clicking it in the sidebar does. |
+| [`workspace.open`](#workspaceopen) | `workspace:write` | worker | yes | 1.3 | Shows a workspace in Orca, as clicking it in the sidebar does; a folder workspace needs the desktop app. |
 | [`terminal.create`](#terminalcreate) | `terminal:send` | worker | yes | 1.3 | Opens a terminal in a workspace, optionally running a command, in the background. |
 | [`terminal.read`](#terminalread) | `terminal:read` | worker | no | 1.3 | Reads a terminal's newest output as plain text, at most 2000 lines. |
 | [`agent.launch`](#agentlaunch) | `agent:launch` | worker | yes | 1.3 | Starts an agent's CLI in a new terminal of a workspace, in the background, and returns as soon as it starts; a `prompt` is sent once the agent is ready. |
+| [`editor.open`](#editoropen) | `workspace:write` | worker | yes | 1.3 | Opens a file of a workspace in an editor tab of Orca's window; desktop app only. `workspace.open` shows the workspace. |
+| [`commands.run`](#commandsrun) | `workspace:write` | worker | yes | 1.3 | Runs one of Orca's built-in actions in its window, never a plugin's replacement of it; desktop app only. |
 
 ### `workspace.readContext`
 
@@ -199,7 +201,7 @@ Lists every workspace, Git worktrees and folders, on every host Orca reaches.
 
 ### `workspace.open`
 
-Shows a workspace in Orca, as clicking it in the sidebar does.
+Shows a workspace in Orca, as clicking it in the sidebar does; a folder workspace needs the desktop app.
 
 ```ts
 (params: { workspaceId: string }) => { opened: true }
@@ -227,6 +229,22 @@ Starts an agent's CLI in a new terminal of a workspace, in the background, and r
 
 ```ts
 (params: { workspaceId: string; agent: string; prompt?: string }) => { terminalId: string }
+```
+
+### `editor.open`
+
+Opens a file of a workspace in an editor tab of Orca's window; desktop app only. `workspace.open` shows the workspace.
+
+```ts
+(params: { workspaceId: string; path: string }) => { opened: true }
+```
+
+### `commands.run`
+
+Runs one of Orca's built-in actions in its window, never a plugin's replacement of it; desktop app only.
+
+```ts
+(params: { action: "worktree.history.back" | "worktree.history.forward" | "sidebar.left.toggle" | "sidebar.sleepingWorkspaces.toggle" | "floatingWorkspace.maximize" | "tab.rename" | "workspace.rename" | "workspace.openBoard" | "view.tasks" | "sidebar.right.toggle" | "sidebar.explorer.toggle" | "sidebar.search.toggle" | "sidebar.sourceControl.toggle" | "sidebar.checks.toggle" | "sidebar.ports.toggle" }) => { ran: true }
 ```
 
 ## Events
