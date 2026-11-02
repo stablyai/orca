@@ -40,6 +40,8 @@ function emptyState(overrides: Partial<WebSessionTabsSyncState>): WebSessionTabs
     editorBuffers: {},
     ptyIdsByTabId: {},
     remoteBrowserPageHandlesByPageId: {},
+    retainedAgentsByPaneKey: {},
+    retentionSuppressedPaneKeys: {},
     tabBarOrderByWorktree: {},
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},

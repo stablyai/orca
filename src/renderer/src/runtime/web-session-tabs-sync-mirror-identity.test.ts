@@ -73,6 +73,8 @@ function makeState(overrides: Partial<WebSessionTabsSyncState> = {}): WebSession
     editorBuffers: {},
     ptyIdsByTabId: {},
     remoteBrowserPageHandlesByPageId: {},
+    retainedAgentsByPaneKey: {},
+    retentionSuppressedPaneKeys: {},
     tabBarOrderByWorktree: {},
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},

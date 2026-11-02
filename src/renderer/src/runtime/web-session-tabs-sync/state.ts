@@ -261,6 +261,8 @@ export type WebSessionTabsBatchRecordKey =
   | 'paneForegroundAgentByPaneKey'
   | 'ptyIdsByTabId'
   | 'remoteBrowserPageHandlesByPageId'
+  | 'retainedAgentsByPaneKey'
+  | 'retentionSuppressedPaneKeys'
   | 'runtimePaneTitlesByTabId'
   | 'tabBarOrderByWorktree'
   | 'tabsByWorktree'

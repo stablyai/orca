@@ -61,6 +61,8 @@ describe('web session structured tab focus', () => {
       editorBuffers: {},
       ptyIdsByTabId: {},
       remoteBrowserPageHandlesByPageId: {},
+      retainedAgentsByPaneKey: {},
+      retentionSuppressedPaneKeys: {},
       tabBarOrderByWorktree: { [WORKTREE_ID]: [first.id, second.id] },
       tabsByWorktree: {},
       terminalLayoutsByTabId: {},

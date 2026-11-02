@@ -27,7 +27,8 @@ export function buildMirroredAgentRetentionPatch(
       continue
     }
     const live = state.agentStatusByPaneKey[paneKey]
-    if (isClientOwnedAgentStatus(paneKey, live)) {
+    const clientOwnsStatus: boolean = isClientOwnedAgentStatus(paneKey, live)
+    if (clientOwnsStatus) {
       continue
     }
     const owned = (entry: AgentStatusEntry): boolean =>
@@ -37,34 +38,34 @@ export function buildMirroredAgentRetentionPatch(
     const retiresRetained =
       retained && owned(retained.entry) && matchesMirroredTerminal(retained.entry, surface)
     if (retiresRetained) {
-      patch.retainedAgentsByPaneKey ??= writableWebSessionTabsRecord(
+      const nextRetained = (patch.retainedAgentsByPaneKey ??= writableWebSessionTabsRecord(
         state,
         'retainedAgentsByPaneKey',
         batchContext
-      )
-      delete patch.retainedAgentsByPaneKey[paneKey]
+      ))
+      delete nextRetained[paneKey]
     }
     if (
       (retiresRetained || (live && live.mirroredEvidenceReceivedAt !== undefined && owned(live))) &&
       !state.retentionSuppressedPaneKeys?.[paneKey]
     ) {
-      patch.retentionSuppressedPaneKeys ??= writableWebSessionTabsRecord(
+      const nextSuppressed = (patch.retentionSuppressedPaneKeys ??= writableWebSessionTabsRecord(
         state,
         'retentionSuppressedPaneKeys',
         batchContext
-      )
-      patch.retentionSuppressedPaneKeys[paneKey] = true
+      ))
+      nextSuppressed[paneKey] = true
     }
   }
   // A fresh host row ends suppression and re-derives session dating even after retention effects.
   for (const paneKey of accepted.keys()) {
     if ((patch.retentionSuppressedPaneKeys ?? state.retentionSuppressedPaneKeys)?.[paneKey]) {
-      patch.retentionSuppressedPaneKeys ??= writableWebSessionTabsRecord(
+      const nextSuppressed = (patch.retentionSuppressedPaneKeys ??= writableWebSessionTabsRecord(
         state,
         'retentionSuppressedPaneKeys',
         batchContext
-      )
-      delete patch.retentionSuppressedPaneKeys[paneKey]
+      ))
+      delete nextSuppressed[paneKey]
     }
   }
   return patch

@@ -44,7 +44,12 @@ export function buildMirroredAgentStatusPatch(
   retractedTabIds: ReadonlySet<string>,
   now: number,
   batchContext?: WebSessionTabsBatchContext
-): Partial<WebSessionTabsSyncState> | null {
+):
+  | (Pick<WebSessionTabsSyncState, 'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'> &
+      Partial<
+        Pick<WebSessionTabsSyncState, 'retainedAgentsByPaneKey' | 'retentionSuppressedPaneKeys'>
+      >)
+  | null {
   const mirroredTabIds = new Set<string>()
   for (const tab of currentTerminalTabs) {
     if (isWebTerminalSurfaceTabId(tab.id)) {

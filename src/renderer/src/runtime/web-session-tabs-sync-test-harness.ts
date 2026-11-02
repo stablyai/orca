@@ -62,6 +62,8 @@ export function makeState(
     editorBuffers: {},
     ptyIdsByTabId: {},
     remoteBrowserPageHandlesByPageId: {},
+    retainedAgentsByPaneKey: {},
+    retentionSuppressedPaneKeys: {},
     tabBarOrderByWorktree: {},
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},
