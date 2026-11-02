@@ -11,6 +11,7 @@ function connection() {
   let state: ConnectionState = 'connected'
   let generation = 0
   const callbacks: ((event: unknown) => void)[] = []
+  const routedCallbacks: { host: string | undefined; callback: (event: unknown) => void }[] = []
   const states = new Set<(state: ConnectionState) => void>()
   const stops = vi.fn()
   const replies: ((reply: RpcResponse) => void)[] = []
@@ -24,8 +25,9 @@ function connection() {
   )
   const client: RpcClient = {
     sendRequest,
-    subscribe: vi.fn((_method, _params, callback) => {
+    subscribe: vi.fn<RpcClient['subscribe']>((_method, _params, callback, options) => {
       callbacks.push(callback)
+      routedCallbacks.push({ host: options?.envelope?.executionHost, callback })
       return stops
     }),
     onStateChange: (callback) => {
@@ -50,6 +52,8 @@ function connection() {
     callbacks,
     states,
     emit: (event: unknown) => callbacks.at(-1)?.(event),
+    emitAt: (host: string | undefined, event: unknown) =>
+      routedCallbacks.findLast((entry) => entry.host === host)?.callback(event),
     change: (next: ConnectionState, migrate = false) => {
       state = next
       if (migrate) {
@@ -78,13 +82,93 @@ afterEach(() => {
   renderers.clear()
 })
 
+it.each([1, 10])(
+  'shares paired/server reads and isolates selected renders for %i server chats',
+  async (count) => {
+    const desktop = connection(),
+      other = connection()
+    desktop.client.sendRequest = vi.fn<RpcClient['sendRequest']>(
+      async (_method, _params, options) => reply(options?.envelope?.executionHost !== undefined)
+    )
+    other.client.sendRequest = vi.fn<RpcClient['sendRequest']>(async () => reply(false))
+    const server = scopeRpcClientToExecutionHost(desktop.client, 'runtime:s')
+    const renders = new Map<string, number>()
+    const values = new Map<string, boolean>()
+    function Chat({ id, client, paired }: { id: string; client: RpcClient; paired: RpcClient }) {
+      values.set(id, useMobileNativeChatQueueFollowUps(client, true, id, paired))
+      renders.set(id, (renders.get(id) ?? 0) + 1)
+      return null
+    }
+    await act(async () => {
+      renderers.add(
+        create(
+          <>
+            {Array.from({ length: count }, (_, index) => (
+              <Chat key={index} id={`d${index}`} client={server} paired={desktop.client} />
+            ))}
+            <Chat id="other" client={other.client} paired={other.client} />
+          </>
+        )
+      )
+    })
+    const initial = new Map(renders)
+    const desktopRenders = () =>
+      Array.from({ length: count }, (_, index) => renders.get(`d${index}`))
+    const initialDesktopRenders = desktopRenders()
+    expect(Array.from({ length: count }, (_, index) => values.get(`d${index}`))).toEqual(
+      Array(count).fill(false)
+    )
+    for (const host of [undefined, 'runtime:s']) {
+      expect(
+        vi
+          .mocked(desktop.client.sendRequest)
+          .mock.calls.filter(
+            ([method, , options]) =>
+              method === 'settings.get' && options?.envelope?.executionHost === host
+          )
+      ).toHaveLength(1)
+      expect(
+        vi
+          .mocked(desktop.client.subscribe)
+          .mock.calls.filter(
+            ([method, , , options]) =>
+              method === 'runtime.clientEvents.subscribe' &&
+              options?.envelope?.executionHost === host
+          )
+      ).toHaveLength(1)
+    }
+    expect(desktop.stops).not.toHaveBeenCalled()
+    await act(async () => desktop.emitAt(undefined, { type: 'unrelated' }))
+    expect(desktopRenders()).toEqual(initialDesktopRenders)
+    await act(async () =>
+      desktop.emitAt('runtime:s', {
+        type: 'nativeChatQueueFollowUpsChanged',
+        queueFollowUps: false
+      })
+    )
+    expect(desktopRenders()).toEqual(initialDesktopRenders)
+    await act(async () =>
+      other.emitAt(undefined, { type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: true })
+    )
+    expect(desktopRenders()).toEqual(initialDesktopRenders)
+    expect(renders.get('other')).toBe(initial.get('other')! + 1)
+    const otherRenders = renders.get('other')
+    await act(async () =>
+      desktop.emitAt(undefined, { type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: true })
+    )
+    expect(desktopRenders()).toEqual(initialDesktopRenders.map((renders) => renders! + 1))
+    expect(renders.get('other')).toBe(otherRenders)
+    expect(desktop.stops).not.toHaveBeenCalled()
+  }
+)
+
 it('shares one live scalar per connection, fences late reads/events, and isolates real hook renders', async () => {
   const a = connection(),
     b = connection()
   const renders = new Map<string, number>()
   const values = new Map<string, boolean>()
   function Chat({ id, client }: { id: string; client: RpcClient }) {
-    values.set(id, useMobileNativeChatQueueFollowUps(client, true, id))
+    values.set(id, useMobileNativeChatQueueFollowUps(client, true, id, client))
     renders.set(id, (renders.get(id) ?? 0) + 1)
     return null
   }
@@ -216,7 +300,7 @@ it('keeps known OFF across real direct/relay migrations and failed reads, while 
   const logical = createStableLogicalRpcClient(direct.client, 'lan')
   const values = new Map<string, boolean>()
   function Chat({ id, client }: { id: string; client: RpcClient | null }) {
-    values.set(id, useMobileNativeChatQueueFollowUps(client, true, id))
+    values.set(id, useMobileNativeChatQueueFollowUps(client, true, id, client))
     return null
   }
   let mounted!: ReactTestRenderer

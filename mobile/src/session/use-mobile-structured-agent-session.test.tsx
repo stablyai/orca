@@ -230,6 +230,7 @@ describe('useMobileStructuredAgentSession', () => {
   }): null {
     hook = useMobileStructuredAgentSession({
       client,
+      pairedHostClient: client,
       sessionId,
       sourceIdentity,
       enabled: true,

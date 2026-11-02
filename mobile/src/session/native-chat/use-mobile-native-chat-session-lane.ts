@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import type { RpcClient } from '../../transport/rpc-client'
+import { useHostClient } from '../../transport/host-client-hooks'
 import type { ConnectionState } from '../../transport/types'
 import type { StructuredAgentSessionHostSupport } from '../mobile-structured-agent-session-host-support'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
@@ -49,6 +50,7 @@ export function useMobileNativeChatSessionLane({
   )
   const agent = resolution?.agent ?? null
   const sessionId = resolution?.sessionId ?? null
+  const { client: pairedHostClient } = useHostClient(hostId)
   // One read serves both send-side ownership and the composer's `/` menu.
   const sessionCommands = useMobileStructuredSessionCommands({
     client,
@@ -66,6 +68,7 @@ export function useMobileNativeChatSessionLane({
   })
   const structuredSession = useMobileStructuredAgentSession({
     client,
+    pairedHostClient,
     sessionId: structured ? sessionId : null,
     sourceIdentity,
     hostSupport,

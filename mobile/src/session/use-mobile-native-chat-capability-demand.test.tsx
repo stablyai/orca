@@ -14,6 +14,9 @@ import { useMobileNativeChatStructuredComposer } from './native-chat/composer/us
 import { useMobileNativeChatComposerMenu } from './native-chat/composer/use-mobile-native-chat-composer-menu'
 
 // Transcript/terminal services are outside this capability-to-command ownership contract.
+vi.mock('../transport/host-client-hooks', () => ({
+  useHostClient: () => ({ client: null })
+}))
 vi.mock('./native-chat/use-mobile-native-chat-session', () => ({
   useMobileNativeChatSession: () => ({})
 }))

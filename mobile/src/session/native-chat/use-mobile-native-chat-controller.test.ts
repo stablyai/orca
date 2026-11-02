@@ -76,6 +76,9 @@ const promptsState: Pick<MobileNativeChatPrompts, 'permission' | 'ask' | 'waitSt
 }
 
 // Isolate send outcomes and draft accounting by stubbing unrelated controller hooks.
+vi.mock('../../transport/host-client-hooks', () => ({
+  useHostClient: () => ({ client: null })
+}))
 vi.mock('../use-mobile-session-view-mode', () => ({
   useMobileSessionViewMode: () => ({
     isTabChatView: (tabId: string) => viewMode.isTabChatView(tabId),

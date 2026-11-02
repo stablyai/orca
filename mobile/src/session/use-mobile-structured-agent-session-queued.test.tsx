@@ -10,6 +10,11 @@ import type { RpcResponse } from '../transport/types'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
+import { useMobileNativeChatSessionLane } from './native-chat/use-mobile-native-chat-session-lane'
+import { useHostClient } from '../transport/host-client-hooks'
+import { useWorkspaceClient, WorkspaceServerContext } from '../transport/use-workspace-client'
+import { scopeRpcClientToExecutionHost } from '../transport/execution-host-scoped-rpc-client'
+import type { RpcClientContextValue } from '../transport/rpc-client-context-contract'
 
 import {
   CAPABLE,
@@ -31,6 +36,29 @@ const asyncStorage = vi.hoisted(() => ({
 }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
+
+const pairedContext = vi.hoisted(
+  (): {
+    value: Pick<
+      RpcClientContextValue,
+      | 'acquire'
+      | 'release'
+      | 'getKnownState'
+      | 'getClientId'
+      | 'getAllClients'
+      | 'subscribeHostState'
+    > | null
+  } => ({ value: null })
+)
+vi.mock('../transport/client-context', async (original) => ({
+  ...(await original<typeof import('../transport/client-context')>()),
+  useRpcClientContext: () => {
+    if (!pairedContext.value) {
+      throw new Error('No paired-host fixture')
+    }
+    return pairedContext.value
+  }
+}))
 
 function normalReply(method: string): RpcResponse {
   // Queue is the default; explicit OFF is covered below.
@@ -90,6 +118,7 @@ describe('mobile structured queued messages', () => {
   }): null {
     hook = useMobileStructuredAgentSession({
       client,
+      pairedHostClient: client,
       sessionId,
       sourceIdentity: 'host-a\0workspace-a',
       enabled: true,
@@ -204,6 +233,178 @@ describe('mobile structured queued messages', () => {
   })
 
   describe('capability-gated delivery', () => {
+    it('routes preference reads to the paired desktop and sends to the workspace server', async () => {
+      let serverValue: boolean | undefined = true
+      const desktopValues = new Map<string, boolean | undefined>([
+        ['a', false],
+        ['b', true]
+      ])
+      const desktopEvents = new Map<string, (event: unknown) => void>()
+      let refuseDesktopRead = false
+      const desktops = new Map<string, RpcClient>()
+      for (const id of ['a', 'b']) {
+        desktops.set(id, {
+          ...client,
+          sendRequest: vi.fn<RpcClient['sendRequest']>(async (method, params, options) => {
+            if (options?.envelope?.executionHost) {
+              return client.sendRequest(method, params, options)
+            }
+            if (method === 'settings.get') {
+              return refuseDesktopRead
+                ? {
+                    id: 'old',
+                    ok: false,
+                    error: { code: 'method_not_found', message: 'Unavailable' }
+                  }
+                : ok({ settings: { nativeChatQueueFollowUps: desktopValues.get(id) } })
+            }
+            return normalReply(method)
+          }),
+          subscribe: vi.fn<RpcClient['subscribe']>((method, params, callback, options) => {
+            if (options?.envelope?.executionHost) {
+              return client.subscribe(method, params, callback, options)
+            }
+            if (method === 'runtime.clientEvents.subscribe') {
+              desktopEvents.set(id, callback)
+            }
+            return () => {
+              desktopEvents.delete(id)
+            }
+          })
+        })
+      }
+      pairedContext.value = {
+        acquire: (id) => desktops.get(id) ?? null,
+        release: () => {},
+        getKnownState: () => 'connected',
+        getClientId: () => 'phone',
+        getAllClients: () => [...desktops].map(([hostId, client]) => ({ hostId, client })),
+        subscribeHostState: () => () => {}
+      }
+      sendRequest.mockImplementation(async (method) => {
+        if (method === 'settings.get') {
+          return ok({ settings: { nativeChatQueueFollowUps: serverValue } })
+        }
+        if (method === 'agentSession.send') {
+          return mutationOk({
+            clientMessageId: 'client-1',
+            submission: acceptedSubmission('client-1')
+          })
+        }
+        return normalReply(method)
+      })
+      function Chat({ hostId }: { hostId: string }) {
+        const workspace = useWorkspaceClient(hostId)
+        hook = useMobileNativeChatSessionLane({
+          client: workspace.client,
+          hostId,
+          connState: workspace.state,
+          structured: true,
+          resolution: {
+            agent: 'claude',
+            sessionId: SESSION_ID,
+            transcriptPath: null,
+            agentConfirmed: true,
+            sessionLive: true
+          },
+          sourceIdentity: hostId,
+          hostSupport: CAPABLE,
+          appendComposerTextRef: { current: appendText },
+          enabled: true,
+          onSendError
+        }).structuredSession
+        return null
+      }
+      function Route({ hostId }: { hostId: string }) {
+        const desktop = useHostClient(hostId)
+        return createElement(
+          WorkspaceServerContext.Provider,
+          {
+            value: {
+              client: desktop.client
+                ? scopeRpcClientToExecutionHost(desktop.client, 'runtime:server')
+                : null,
+              state: desktop.client ? desktop.state : 'connecting',
+              desktopCapabilities: []
+            }
+          },
+          createElement(Chat, { hostId })
+        )
+      }
+      const working = {
+        ...snapshotEvent(),
+        page: {
+          ...snapshotEvent().page,
+          working: true,
+          latestTurn: null,
+          nextQueuedMessageId: null
+        }
+      }
+      await act(async () => {
+        renderer = create(createElement(Route, { hostId: 'a' }))
+      })
+      await act(async () => listener?.(working))
+      expect(hook!.sendFollowUp).toEqual({ action: 'steer', offersChoice: true })
+      await act(async () => {
+        await hook!.sendWithOutcome('follow desktop OFF')
+      })
+      expect(requestOf('agentSession.send').params.delivery).toBeUndefined()
+      expect(
+        sendRequest.mock.calls.find(([method]) => method === 'agentSession.send')?.[2]?.envelope
+          ?.executionHost
+      ).toBe('runtime:server')
+      const desktop = desktops.get('a')!
+      expect(
+        vi
+          .mocked(desktop.sendRequest)
+          .mock.calls.some(
+            ([method, , options]) =>
+              method === 'settings.get' && options?.envelope?.executionHost === undefined
+          )
+      ).toBe(true)
+      expect(
+        vi
+          .mocked(desktop.subscribe)
+          .mock.calls.some(
+            ([method, , , options]) =>
+              method === 'runtime.clientEvents.subscribe' &&
+              options?.envelope?.executionHost === undefined
+          )
+      ).toBe(true)
+
+      await act(async () =>
+        desktopEvents.get('a')?.({ type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: true })
+      )
+      await act(async () => {
+        await hook!.sendWithOutcome('follow desktop ON')
+      })
+      expect(requestOf('agentSession.send', 1).params.delivery).toBe('queue-if-active')
+      await act(async () =>
+        preferenceListener?.({ type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: false })
+      )
+      expect(hook!.sendFollowUp?.action).toBe('queue')
+
+      // A refusal retains the desktop answer; an accepted missing field restores the old host path.
+      refuseDesktopRead = true
+      await act(async () => desktopEvents.get('a')?.({ type: 'ready', snapshot: {} }))
+      expect(hook!.sendFollowUp?.action).toBe('queue')
+      refuseDesktopRead = false
+      desktopValues.set('a', undefined)
+      await act(async () => desktopEvents.get('a')?.({ type: 'ready', snapshot: {} }))
+      expect(hook!.sendFollowUp?.action).toBe('steer')
+      serverValue = undefined
+      await act(async () => preferenceListener?.({ type: 'ready', snapshot: {} }))
+      expect(hook!.sendFollowUp?.action).toBe('queue')
+
+      await act(async () =>
+        desktopEvents.get('a')?.({ type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: false })
+      )
+      expect(hook!.sendFollowUp?.action).toBe('steer')
+      await act(async () => renderer!.update(createElement(Route, { hostId: 'b' })))
+      await act(async () => listener?.(working))
+      expect(hook!.sendFollowUp?.action).toBe('queue')
+    })
+
     it.each(['steer', 'queue'] as const)(
       'pre-turn host Working honors default and explicit choice (%s)',
       async (behavior) => {
