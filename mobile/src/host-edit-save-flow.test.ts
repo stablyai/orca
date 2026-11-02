@@ -27,9 +27,6 @@ vi.mock('react-native', () => ({
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 0 })
 }))
-vi.mock('./layout/side-safe-area', () => ({
-  SideSafeArea: ({ children }: { children: unknown }) => children
-}))
 
 vi.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ hostId: dependencies.hostId }),

@@ -1,6 +1,6 @@
-export type MobileArtifactKind = 'image' | 'html' | 'other'
+export type MobileArtifactKind = 'image' | 'vector' | 'html' | 'other'
 
-// RN Image cannot decode SVG data URIs; render SVG as XML source instead of a blank image.
+// SVG is read as text so the same reply feeds both the drawing and its source view.
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico'])
 
 const HTML_EXTENSIONS = new Set(['html', 'htm'])
@@ -18,6 +18,9 @@ export function classifyMobileArtifact(path: string): MobileArtifactKind {
   const ext = extensionOf(path)
   if (IMAGE_EXTENSIONS.has(ext)) {
     return 'image'
+  }
+  if (ext === 'svg') {
+    return 'vector'
   }
   if (HTML_EXTENSIONS.has(ext)) {
     return 'html'

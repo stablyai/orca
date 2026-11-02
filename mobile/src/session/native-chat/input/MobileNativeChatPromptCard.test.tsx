@@ -4,10 +4,11 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { Pressable, TextInput } from 'react-native'
 import { describe, expect, it, vi } from 'vitest'
 import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
-import { nativeChatAskDismissKey } from '../../../../../src/shared/native-chat-ask-dismiss-key'
+import { nativeChatAskDismissKey } from '../../../../../src/shared/native-chat/input/native-chat-ask-dismiss-key'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 
-vi.mock('react-native', () => ({
+vi.mock('react-native', async () => ({
+  ...(await import('../../../test-support/react-native-motion-stub')).reactNativeMotionStub(),
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },

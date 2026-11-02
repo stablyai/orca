@@ -1,3 +1,4 @@
+import { linearIssueReadFailureMessage } from '../../../src/shared/integration-credential-errors'
 import type { ProviderLoadActionsModel } from './use-mobile-tasks-provider-load-actions'
 import { fetchJiraTaskIssues } from './mobile-jira-task-source'
 import { isHostedTaskRepo, useCallback, useEffect, useRef } from './mobile-tasks-dependencies'
@@ -57,6 +58,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
     setItems,
     setLoading,
     setRefreshing,
+    setTaskListSettled,
     taskStateHydrated,
     tasksSupported
   } = model
@@ -261,7 +263,13 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
         }
         setItems([])
         resetGitHubItemsState()
-        setError(err instanceof Error ? err.message : 'Failed to load tasks')
+        setError(
+          provider === 'linear'
+            ? linearIssueReadFailureMessage(err)
+            : err instanceof Error
+              ? err.message
+              : 'Failed to load tasks'
+        )
       } finally {
         if (unsettledLoadRef.current === generation) {
           unsettledLoadRef.current = 0
@@ -269,6 +277,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
         if (isCurrent()) {
           setLoading(false)
           setRefreshing(false)
+          setTaskListSettled(true)
         }
       }
     },

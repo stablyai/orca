@@ -44,6 +44,12 @@ export type PopupOwnerContext = {
   browserTabId: string
   rootGuestWebContentsId: number
 }
+/** A live popup window an agent can drive, owned by the tab whose page opened its chain. */
+export type BrowserPopupPage = {
+  browserPageId: string
+  webContentsId: number
+  openerBrowserPageId: string
+}
 
 /** Document guests render one grant and report only to its host; browsing policies do not apply. */
 export type BrowserGuestPolicy =

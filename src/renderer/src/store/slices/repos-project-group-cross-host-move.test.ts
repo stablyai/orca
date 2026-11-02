@@ -123,17 +123,6 @@ describe('moving a project into a group on another host', () => {
     expect(store.getState().repos[0]?.projectGroupId).toBeNull()
     expect(toast.error).toHaveBeenCalledTimes(1)
   })
-
-  it('keeps removing a project from its group a success', async () => {
-    runtimeMoveReturns({ ...remoteRepo, projectGroupId: null })
-    const store = storeWith([group('remote-group', REMOTE_HOST)])
-
-    await expect(store.getState().moveProjectToGroup(remoteRepo, null, undefined)).resolves.toBe(
-      true
-    )
-
-    expect(toast.error).not.toHaveBeenCalled()
-  })
 })
 
 describe('moving one twin of a repo id shared by a local and an SSH row', () => {

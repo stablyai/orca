@@ -210,6 +210,22 @@ describe('closeTerminalTab unified close contract', () => {
     expect(store.getState().activeWorktreeId).toBeNull()
   })
 
+  it('keeps an emptied worktree selected for a caller about to open its replacement', () => {
+    seedWorktreeWithTabs(GIT_WT, {
+      terminalIds: ['term-1'],
+      groupOrder: ['u-term-1'],
+      recentTabIds: ['u-term-1'],
+      activeUnifiedTabId: 'u-term-1',
+      activeTerminalId: 'term-1',
+      includeChatTab: false
+    })
+
+    closeTerminalTab('term-1', { preserveWorktreeSelection: true })
+
+    expect(store.getState().activeWorktreeId).toBe(GIT_WT)
+    expect(store.getState().unifiedTabsByWorktree[GIT_WT]).toEqual([])
+  })
+
   it('lands on an open editor tab instead of deactivating when the last terminal closes', () => {
     seedWorktreeWithTabs(GIT_WT, {
       terminalIds: ['term-1'],

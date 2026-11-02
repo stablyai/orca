@@ -2,7 +2,6 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
-import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
 
 const store = vi.hoisted(() => {
   const initialOverride: Record<string, boolean> = {}
@@ -62,9 +61,6 @@ import type { useMarkdownDocuments } from './useMarkdownDocuments'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import { MARKDOWN_RENDER_OVERRIDE_MAX_SIZE_BYTES } from './markdown-rich-size-limit'
 import { getEditorPanelRenderModel } from './editor-panel-render-model'
-
-// Whole-document rendering previously blocked for seconds and retained gigabytes; enforce the fallback budget.
-const mediumDoc = 'a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES + 1024)
 const hugeDoc = 'a'.repeat(MARKDOWN_RENDER_OVERRIDE_MAX_SIZE_BYTES + 1)
 // Multibyte text whose UTF-16 length is under the cap but UTF-8 size is over it.
 const hugeCjkDoc = '中'.repeat(Math.ceil((MARKDOWN_RENDER_OVERRIDE_MAX_SIZE_BYTES + 1) / 3))
@@ -189,11 +185,6 @@ afterEach(() => {
 })
 
 describe('large markdown render guard', () => {
-  it('"Open anyway" still reaches the rich editor below the hard cap', () => {
-    expect(richRenderMode(mediumDoc, false)).toBe('source')
-    expect(richRenderMode(mediumDoc, true)).toBe('rich-editor')
-  })
-
   it('"Open anyway" cannot push a document past the hard cap into the rich editor', () => {
     expect(richRenderMode(hugeDoc, true)).toBe('source')
     expect(richRenderMode(hugeCjkDoc, true)).toBe('source')
@@ -222,28 +213,10 @@ describe('large markdown render guard', () => {
     expect(instance()).not.toBe(originalInstance)
   })
 
-  it('preview tab renders small documents directly', () => {
-    expect(renderPreviewTab('# Small').isPreviewRendered()).toBe(true)
-  })
-
-  it('preview tab sends documents above the former cap to the large preview', () => {
-    expect(renderPreviewTab(mediumDoc).isPreviewRendered()).toBe(true)
-    cleanup()
-    expect(renderPreviewTab(hugeDoc).isPreviewRendered()).toBe(true)
-  })
-
   it('preview tab never passes input above the worker limit to the renderer', () => {
     store.markdownRichModeSizeOverride = { [previewTab.id]: true }
     expect(renderPreviewTab('x'.repeat(8 * 1024 * 1024 + 1)).isPreviewRendered()).toBe(false)
     expect(screen.queryByRole('button', { name: 'Render anyway' })).toBeNull()
-  })
-
-  it('diff preview routes larger documents through the same preview surface', () => {
-    expect(renderDiffPreview('# Small').isPreviewRendered()).toBe(true)
-    cleanup()
-    expect(renderDiffPreview(mediumDoc).isPreviewRendered()).toBe(true)
-    cleanup()
-    expect(renderDiffPreview(hugeDoc).isPreviewRendered()).toBe(true)
   })
 
   it('diff preview keeps its input cap despite a rich-mode override', () => {

@@ -93,7 +93,7 @@ export class BrowserAgentActivity {
       ended = true
       owned.commands -= 1
       if (owned.commands === 0) {
-        owned.idleTimer = setTimeout(() => this.end(browserPageId), ACTIVITY_IDLE_MS)
+        this.restartIdleWindow(browserPageId, owned)
       }
     }
     return {
@@ -110,6 +110,28 @@ export class BrowserAgentActivity {
       },
       end
     }
+  }
+
+  /** The agent continues on another page (a closed popup's opener), so its claim moves there. */
+  handOver(fromPageId: string, toPageId: string): void {
+    const existing = this.pages.get(toPageId)
+    // A running command restarts the idle window itself when it settles.
+    if (!this.pages.has(fromPageId) || (existing && existing.commands > 0)) {
+      return
+    }
+    const page = existing ?? { commands: 0, executing: false, idleTimer: null }
+    this.restartIdleWindow(toPageId, page)
+    if (!existing) {
+      this.pages.set(toPageId, page)
+      this.publish(toPageId, true)
+    }
+  }
+
+  private restartIdleWindow(browserPageId: string, page: PageActivity): void {
+    if (page.idleTimer) {
+      clearTimeout(page.idleTimer)
+    }
+    page.idleTimer = setTimeout(() => this.end(browserPageId), ACTIVITY_IDLE_MS)
   }
 
   isActive(browserPageId: string): boolean {

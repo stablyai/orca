@@ -9,9 +9,20 @@ import type { BROWSER_UNAVAILABLE_ERROR_CODE } from './runtime-session-contracts
 
 export type BrowserSnapshotRef = { ref: string; role: string; name: string }
 
+// agent-browser's `snapshot --delta` answer; `full` carries the tree, the others change the last one.
+export type BrowserSnapshotDelta =
+  | { kind: 'full'; revision: number; tree: string }
+  | { kind: 'unchanged'; revision: number; baseRevision: number }
+  | {
+      kind: 'delta'
+      revision: number
+      baseRevision: number
+      treeChange?: { startLine: number; deleteCount: number; lines: string[] }
+    }
+
 export type BrowserSnapshotResult = {
   browserPageId: string
-  snapshot: string
+  snapshot: string | BrowserSnapshotDelta
   refs: BrowserSnapshotRef[]
   url: string
   title: string
@@ -44,7 +55,21 @@ export type BrowserSelectResult = { selected: string }
 export type BrowserScrollResult = { scrolled: 'up' | 'down' }
 export type BrowserBackResult = { url: string; title: string }
 export type BrowserReloadResult = { url: string; title: string }
-export type BrowserScreenshotResult = { data: string; format: 'png' | 'jpeg' }
+export type BrowserScreenshotAnnotation = {
+  ref: string
+  number: number
+  role: string
+  name?: string
+  box: { x: number; y: number; width: number; height: number }
+}
+
+export type BrowserScreenshotResult = {
+  data: string
+  format: 'png' | 'jpeg'
+  // Set only for --if-changed; false means nothing was captured and data is empty.
+  changed?: boolean
+  annotations?: BrowserScreenshotAnnotation[]
+}
 
 export type BrowserScreencastReadyResult = {
   type: 'ready'
@@ -79,6 +104,10 @@ export type BrowserTabInfo = {
   worktreeId?: string | null
   profileId?: string | null
   profileLabel?: string | null
+  /** Set on a popup window (OAuth, payment): the tab whose page opened it. */
+  openerBrowserPageId?: string
+  /** False for a restored tab whose page has not loaded; a command aimed at it loads it. */
+  loaded?: boolean
 }
 
 export type BrowserTabListResult = { tabs: BrowserTabInfo[] }
@@ -129,7 +158,8 @@ export type BrowserProfileImportFromBrowserResult = BrowserCookieImportResult & 
 export type BrowserProfileClearDefaultCookiesResult = { cleared: boolean }
 export type BrowserHoverResult = { hovered: string }
 export type BrowserDragResult = { dragged: { from: string; to: string } }
-export type BrowserUploadResult = { uploaded: number }
+// Older hosts and server-hosted pages report only the count.
+export type BrowserUploadResult = { uploaded: number; frameUrl?: string }
 export type BrowserWaitResult = { waited: boolean }
 export type BrowserCheckResult = { checked: boolean }
 export type BrowserFocusResult = { focused: string }

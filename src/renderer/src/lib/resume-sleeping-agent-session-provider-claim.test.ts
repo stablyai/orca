@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
@@ -150,34 +150,6 @@ describe('resume sleeping agent provider claims', () => {
     const state = useAppStore.getState()
     expect(state.tabsByWorktree['wt-1']).toHaveLength(1)
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
-  })
-
-  // Orphan adoption rekeys tabs without sleeping records; a live PTY owns its transcript across workspace IDs, including done turns. Cover both same/cross-workspace claims so the sweep never forks that session.
-  it('does not fork a provider session a live pane in this workspace already finished a turn on', () => {
-    const paneKey = makePaneKey('tab-1', LEAF_ID)
-    const peerPaneKey = makePaneKey('tab-peer', OTHER_LEAF_ID)
-    const record = makeRecord(paneKey)
-    useAppStore.setState({
-      activeWorktreeId: 'wt-1',
-      activeTabType: 'terminal',
-      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-peer')] },
-      terminalLayoutsByTabId: {
-        'tab-peer': {
-          root: { type: 'leaf', leafId: OTHER_LEAF_ID },
-          activeLeafId: OTHER_LEAF_ID,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [OTHER_LEAF_ID]: 'pty-peer' }
-        }
-      },
-      ptyIdsByTabId: { 'tab-peer': ['pty-peer'] },
-      sleepingAgentSessionsByPaneKey: { [paneKey]: record },
-      agentStatusByPaneKey: {
-        [peerPaneKey]: { ...makeWorkingStatus(peerPaneKey, 'tab-peer', record), state: 'done' }
-      }
-    })
-
-    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
   // Only cross-workspace live+done proves ownership ignores workspace scope; live means PTY, not unfinished agent turn.

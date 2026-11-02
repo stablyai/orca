@@ -6,6 +6,11 @@ export const MISSED_PROBE_LIMIT = 3
 // One miss ends a session already suspected dead; long enough for radio wake and TCP retransmit before redial.
 export const DECISIVE_PROBE_TIMEOUT_MS = 4_000
 
+// Older desktops ignore the probe flag and answer the full status; either reply proves liveness.
+export function livenessProbeFrame(id: string): { id: string; method: string; params: object } {
+  return { id, method: 'status.get', params: { probe: true } }
+}
+
 declare const rpcSessionIdentityBrand: unique symbol
 
 /** Opaque per-session token; only ever compared by reference. */

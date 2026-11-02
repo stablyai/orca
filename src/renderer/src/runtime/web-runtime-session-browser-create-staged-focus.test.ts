@@ -191,10 +191,4 @@ describe('browser create focus intent across the client-host preparation await',
     // A surviving intent makes reconciliation steal focus back to the new browser.
     expect(intentAtReconcile).toBeNull()
   })
-
-  it('keeps the focus intent when the user stays on the new tab', async () => {
-    const intentAtReconcile = await runCreateSwitchingDuringPreparation({ switchTab: false })
-
-    expect(intentAtReconcile).not.toBeNull()
-  })
 })

@@ -41,7 +41,8 @@ export function useMobileNativeChatComposerTray({
     pause,
     onResume,
     sessionKey,
-    steerHeld
+    steerHeld,
+    agentWorking
   } = queued
   return useMemo(
     () => ({
@@ -66,7 +67,8 @@ export function useMobileNativeChatComposerTray({
           onMove,
           pause,
           onResume,
-          steerHeld
+          steerHeld,
+          agentWorking
         })
       ),
       composerInputRef
@@ -84,7 +86,8 @@ export function useMobileNativeChatComposerTray({
       onSend,
       pause,
       sessionKey,
-      steerHeld
+      steerHeld,
+      agentWorking
     ]
   )
 }

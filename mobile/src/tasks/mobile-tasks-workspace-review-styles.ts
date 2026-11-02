@@ -40,7 +40,7 @@ export const mobileTasksWorkspaceReviewStyles = themedStyleSheet(() => ({
   },
   sshConnectCard: {
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
+    borderRadius: radii.surface,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     paddingHorizontal: spacing.md,
@@ -55,7 +55,7 @@ export const mobileTasksWorkspaceReviewStyles = themedStyleSheet(() => ({
   sshStatusDot: {
     width: 8,
     height: 8,
-    borderRadius: 999
+    borderRadius: radii.pill
   },
   sshStatusDotConnected: {
     backgroundColor: colors.statusGreen
@@ -81,14 +81,14 @@ export const mobileTasksWorkspaceReviewStyles = themedStyleSheet(() => ({
     gap: spacing.sm,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs
   },
   reviewerAvatar: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgRaised
@@ -119,7 +119,7 @@ export const mobileTasksWorkspaceReviewStyles = themedStyleSheet(() => ({
   projectFieldCard: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     padding: spacing.sm,
     gap: spacing.xs
   },
@@ -158,7 +158,7 @@ export const mobileTasksWorkspaceReviewStyles = themedStyleSheet(() => ({
   fileCard: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     padding: spacing.sm,
     gap: spacing.xs
   },
@@ -166,7 +166,7 @@ export const mobileTasksWorkspaceReviewStyles = themedStyleSheet(() => ({
     flexShrink: 0,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     backgroundColor: colors.bgRaised,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2

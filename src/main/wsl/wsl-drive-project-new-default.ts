@@ -15,7 +15,7 @@ import type { Project } from '../../shared/project-types'
 import { isFolderRepo } from '../../shared/repo-kind'
 import type { Repo } from '../../shared/repo-types'
 import { isForeignLink } from '../git/worktree-prune-guard'
-import { wslHostsGateOpen } from './wsl-host-gate'
+import { wslHostsOptedIn } from './wsl-host-gate'
 
 export type NewWindowsDriveProjectDefaultArgs = {
   platform: string
@@ -54,7 +54,8 @@ export function newWindowsDriveProjectRuntimePreference(
 export function applyNewWindowsDriveProjectDefault(
   state: {
     projects: Pick<Project, 'sourceRepoIds' | 'localWindowsRuntimePreference'>[]
-    settings: Pick<GlobalSettings, 'localWindowsRuntimeDefault'>
+    settings: Pick<GlobalSettings, 'localWindowsRuntimeDefault'> &
+      Partial<Pick<GlobalSettings, 'experimentalWslHosts'>>
   },
   repo: NewWindowsDriveProjectDefaultArgs['repo'] & Pick<Repo, 'id'>,
   env: Pick<NewWindowsDriveProjectDefaultArgs, 'platform' | 'readWorktreeLinks'> = {
@@ -62,7 +63,8 @@ export function applyNewWindowsDriveProjectDefault(
     readWorktreeLinks: readMainCheckoutWorktreeLinks
   }
 ): boolean {
-  if (!wslHostsGateOpen()) {
+  // Stage 1 is opt-in: with the WSL hosts setting off, a new project keeps today's Git.
+  if (!wslHostsOptedIn(state.settings)) {
     return false
   }
   const project = state.projects.find((entry) => entry.sourceRepoIds.includes(repo.id))

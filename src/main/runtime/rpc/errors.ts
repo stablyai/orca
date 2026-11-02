@@ -1,10 +1,11 @@
+import { formatTerminalStartFailure } from '../../../shared/terminal-start-failure'
 // Centralize the runtimeId envelope and error-code contracts that clients use for decisions and display.
 import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../shared/agent-launch-surface'
 import {
   agentSessionRefusalReference,
   isAgentSessionRefusalError,
   type AgentSessionRefusalError
-} from '../../../shared/agent-session-wire-refusals'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
 import { CONNECTOR_REPLY_ERROR_CODES } from '../../../shared/rpc-contract/connector-params'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orchestration-session-caller-codes'
@@ -14,7 +15,7 @@ import { TerminalSplitOutcomeError } from '../../../shared/terminal-split-outcom
 import { WslHostWindowsDriveRefusalError } from '../../../shared/wsl-host-windows-drive-refusal'
 import { wslDistroHoldRpcFailure } from '../../../shared/wsl-distro-stopped-hold'
 import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
-import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../shared/agent-session-host-authority'
+import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../shared/agent-session/agent-session-host-authority'
 import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../shared/artifact-sharing-gate'
 import { AGENT_SKILL_SHARING_DISABLED_CODE } from '../../../shared/agent-skill-sharing-gate'
 import { SHARING_UNAVAILABLE_ON_HOST_CODE } from '../../../shared/sharing-unavailable-on-host'
@@ -149,6 +150,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'worker_prompt_too_large',
   'terminal_worktree_mismatch',
   'terminal_is_coordinator',
+  // The user chose Keep open; only they can undo it, so a coordinator must not retry blindly.
+  'terminal_kept_open',
   'worker_cannot_coordinate_own_run',
   'worker_cannot_take_over_run',
   'request_mismatch',
@@ -248,7 +251,7 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     )
   }
   if (RUNTIME_PASSTHROUGH_CODES.has(message)) {
-    return errorResponse(id, meta, message, message)
+    return errorResponse(id, meta, message, formatTerminalStartFailure(error) ?? message)
   }
   const deferral = parseTerminalSpawnDeferral(message)
   if (deferral) {
@@ -273,7 +276,7 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
   if (message === 'invalid_terminal_send') {
     return errorResponse(id, meta, 'invalid_argument', 'Missing terminal send payload')
   }
-  return errorResponse(id, meta, 'runtime_error', message)
+  return errorResponse(id, meta, 'runtime_error', formatTerminalStartFailure(error) ?? message)
 }
 
 /** Map agent-session refusals before generic code passthrough; preserve released clients' exact code/message and add ignored details only in data. */

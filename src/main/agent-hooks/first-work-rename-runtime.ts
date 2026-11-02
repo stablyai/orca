@@ -6,7 +6,7 @@ import { rememberBranchRenameFailureOutput } from './branch-rename-failure-outpu
 import { renameWorktreeFolderOnFirstWork } from './first-work-folder-rename'
 import { moveWorktree } from '../git/worktree'
 import { isWslMoveFolderWorkspaceBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { resolveWorktreeMetaOwner } from '../persistence/host-qualified-worktree-meta'

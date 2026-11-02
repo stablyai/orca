@@ -1,3 +1,4 @@
+import { inheritLaunchReadoptions } from '@/components/native-chat/native-chat-launch-draft-continuity'
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
@@ -47,7 +48,9 @@ export function reconcileReadoptedSshRepoRows(
       )
     }
     if (pendingRepoIds.length > 0) {
-      pendingReadoptions.push({ ...readoption, repoIds: pendingRepoIds })
+      const pending = { ...readoption, repoIds: pendingRepoIds }
+      inheritLaunchReadoptions([readoption], [pending])
+      pendingReadoptions.push(pending)
     }
   }
 
@@ -75,8 +78,11 @@ export function mergeSshRepoReadoptions(
     readoption.repoIds.forEach((repoId) => repoIds.add(repoId))
     repoIdsByMigration.set(key, repoIds)
   }
-  return [...repoIdsByMigration].map(([key, repoIds]) => {
+  const result = [...repoIdsByMigration].map(([key, repoIds]) => {
     const [oldTargetId, newTargetId] = key.split('\0')
-    return { oldTargetId, newTargetId, repoIds: [...repoIds] }
+    const next = { oldTargetId, newTargetId, repoIds: [...repoIds] }
+    return next
   })
+  inheritLaunchReadoptions([...pending, ...incoming], result)
+  return result
 }

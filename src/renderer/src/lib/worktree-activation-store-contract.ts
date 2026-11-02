@@ -1,11 +1,10 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../../shared/agent-session-resume'
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { ClosedTerminalTabTombstonesByTabId } from '../../../shared/closed-terminal-tab-tombstones'
@@ -54,7 +53,6 @@ export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
     startup: { command: string; env?: Record<string, string> }
   ) => void
   queueTabInitialCwd: (tabId: string, cwd: string) => void
-  settings?: Pick<GlobalSettings, 'experimentalNativeChat'> | null
 }
 
 export type InitialTerminalOptions = {

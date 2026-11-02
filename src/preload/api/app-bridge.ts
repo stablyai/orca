@@ -34,6 +34,8 @@ export const appApi = {
     ),
   getFeatureWallAssetBaseUrl: (): Promise<string> =>
     ipcRenderer.invoke('app:getFeatureWallAssetBaseUrl'),
+  setWindowMaterialSuppressed: (suppressed: boolean): Promise<void> =>
+    ipcRenderer.invoke('app:setWindowMaterialSuppressed', suppressed),
   relaunch: (): Promise<void> =>
     prepareAndInvokeAppRestart(
       window,
