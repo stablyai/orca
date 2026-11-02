@@ -49,7 +49,8 @@ import type { subscribeRemoteRuntimeRequest } from '../../../shared/remote-runti
 import {
   subscribeSupportRoutedRuntimeEnvironment,
   routeRuntimeEnvironmentCallBySupport,
-  routeRuntimeEnvironmentSubscriptionBySupport
+  routeRuntimeEnvironmentSubscriptionBySupport,
+  shouldUseSharedControlEnvelope
 } from './runtime-environment-support-routing'
 
 beforeEach(() => {
@@ -301,3 +302,24 @@ it.each(['capable', 'absent'] as const)(
     expect(setup).toHaveBeenCalledOnce()
   }
 )
+
+describe('shared-control envelope eligibility', () => {
+  const envelope = { orchestrationContractVersion: 1, orchestrationRequestId: 'request-1' }
+
+  it.each([
+    ['orchestration.federationPull', true],
+    ['orchestration.federationAck', true],
+    ['orchestration.federationImport', true],
+    ['orchestration.workerStart', false],
+    ['orchestration.federationRelease', false],
+    ['repo.list', false]
+  ])('%s with an envelope shares control: %s', (method, shared) => {
+    expect(shouldUseSharedControlEnvelope(method, {}, envelope)).toBe(shared ? envelope : undefined)
+  })
+
+  it('never shares control without an envelope', () => {
+    expect(shouldUseSharedControlEnvelope('orchestration.federationAck', {}, undefined)).toBe(
+      undefined
+    )
+  })
+})

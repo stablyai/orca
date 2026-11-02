@@ -78,6 +78,7 @@ vi.mock('./runtime-environment-request-connections', async () => {
 })
 
 import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
+import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import { channelHandlerLookup, pairingCode } from './runtime-environments-ipc-test-harness'
 
 const handler = channelHandlerLookup(handleMock)
@@ -698,6 +699,72 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'session.tabs.list'
     ])
     expect(sendRemoteRuntimeSharedControlRequestMock).toHaveBeenCalledTimes(11)
+  })
+
+  describe('federation sync tick transport', () => {
+    const tick = [
+      ['orchestration.federationPull', { dispatchId: 'dispatch-1', afterSequence: 0, limit: 50 }],
+      ['orchestration.federationAck', { dispatchId: 'dispatch-1', throughSequence: 4 }],
+      ['orchestration.federationImport', { dispatchId: 'dispatch-1', items: [] }]
+    ] as const
+
+    async function runTick(capabilities: string[]): Promise<string[]> {
+      sendRemoteRuntimeRequestMock.mockImplementation(async (_pairing, method) => ({
+        id: method,
+        ok: true,
+        result: method === 'status.get' ? { runtimeId: 'runtime-remote', capabilities } : {},
+        _meta: { runtimeId: 'runtime-remote' }
+      }))
+      sendRemoteRuntimeSharedControlRequestMock.mockImplementation(
+        async (_id, _pairing, method) => ({
+          id: method,
+          ok: true,
+          result: {},
+          _meta: { runtimeId: 'runtime-remote' }
+        })
+      )
+      getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue({ state: 'ready' })
+      const environment = environmentStore.addEnvironmentFromPairingCode(userDataPath, {
+        name: 'worker',
+        pairingCode: pairingCode()
+      })
+      for (const [method, params] of tick) {
+        await callRuntimeEnvironment(
+          userDataPath,
+          environment.id,
+          method,
+          params,
+          15_000,
+          undefined,
+          {
+            orchestrationContractVersion: 1,
+            orchestrationRequestId: `request-${method}`
+          }
+        )
+      }
+      return tick.map(([method]) => method)
+    }
+
+    it('opens no one-shot socket per tick once shared control is advertised', async () => {
+      const methods = await runTick([REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY])
+
+      expect(sendRemoteRuntimeRequestMock.mock.calls.map((entry) => entry[1])).toEqual([
+        'status.get'
+      ])
+      expect(sendRemoteRuntimeSharedControlRequestMock.mock.calls.map((entry) => entry[2])).toEqual(
+        methods
+      )
+    })
+
+    it('keeps the whole tick on one-shot sockets when the host lacks shared control', async () => {
+      const methods = await runTick([])
+
+      expect(sendRemoteRuntimeRequestMock.mock.calls.map((entry) => entry[1])).toEqual([
+        'status.get',
+        ...methods
+      ])
+      expect(sendRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
+    })
   })
 
   it('limits background one-shot RPCs without blocking foreground runtime calls', async () => {
