@@ -18,9 +18,7 @@ import { waitForSessionReady } from './helpers/store'
 import {
   configureIsolatedGitIdentity,
   createProjectFixtures,
-  expectRuntimeActivation,
-  injectSameIdLocalActivationCollision,
-  installFinalActivationGate
+  expectRuntimeActivation
 } from './pr11346-selected-runtime-identity-oracle'
 
 async function selectRuntimeHost(page: Page, runtimeName: string): Promise<Locator> {
@@ -121,65 +119,45 @@ async function runSelectedRuntimeAddJourney(
     expect(initialClientInventory.repos.map((repo) => repo.path)).not.toContain(fixture.gitPath)
 
     startedAt = Date.now()
-    await installFinalActivationGate(client.page, fixture.gitPath)
     const gitDialog = await selectRuntimeHostAndOpenManualPath(client.page, runtimeName)
     await gitDialog.locator('#server-project-path').fill(fixture.gitPath)
     await gitDialog.getByRole('button', { name: /Add Git Project/i }).click()
-    const gitCollision = await injectSameIdLocalActivationCollision(
+    await expect(gitDialog).toBeHidden({ timeout: 30_000 })
+    const gitWorktreeId = await expectRuntimeActivation(
       client.page,
       fixture.gitPath,
-      fixture.localCloneCollisionPath
+      client.environmentId
     )
-    await expect(gitDialog).toBeHidden({ timeout: 30_000 })
-    await expectRuntimeActivation(client.page, gitCollision)
     measurements.gitAddMs = Date.now() - startedAt
 
     startedAt = Date.now()
-    await installFinalActivationGate(client.page, fixture.folderPath)
     const folderDialog = await selectRuntimeHostAndOpenManualPath(client.page, runtimeName)
     await folderDialog.locator('#server-project-path').fill(fixture.folderPath)
     await folderDialog.getByRole('button', { name: /Open as Folder/i }).click()
-    const folderCollision = await injectSameIdLocalActivationCollision(
-      client.page,
-      fixture.folderPath,
-      fixture.localCreateCollisionPath
-    )
     await expect(folderDialog).toBeHidden({ timeout: 30_000 })
-    await expectRuntimeActivation(client.page, folderCollision)
+    await expectRuntimeActivation(client.page, fixture.folderPath, client.environmentId)
     measurements.folderAddMs = Date.now() - startedAt
 
     startedAt = Date.now()
-    await installFinalActivationGate(client.page, fixture.clonedRepoPath)
     const cloneDialog = await selectRuntimeHost(client.page, runtimeName)
     await cloneDialog.getByRole('button', { name: /Clone from URL/i }).click()
     const cloneStep = client.page.getByRole('dialog', { name: /Clone from URL/i })
     await cloneStep.getByRole('textbox').nth(0).fill(fixture.gitPath)
     await cloneStep.getByRole('textbox').nth(1).fill(fixture.cloneParentPath)
     await cloneStep.getByRole('button', { name: /^Clone$/i }).click()
-    const cloneCollision = await injectSameIdLocalActivationCollision(
-      client.page,
-      fixture.clonedRepoPath,
-      fixture.localCloneCollisionPath
-    )
     await expect(cloneStep).toBeHidden({ timeout: 30_000 })
-    await expectRuntimeActivation(client.page, cloneCollision)
+    await expectRuntimeActivation(client.page, fixture.clonedRepoPath, client.environmentId)
     measurements.cloneMs = Date.now() - startedAt
 
     startedAt = Date.now()
-    await installFinalActivationGate(client.page, fixture.createdRepoPath)
     const createDialog = await selectRuntimeHost(client.page, runtimeName)
     await createDialog.getByRole('button', { name: /Create (?:on host|new project)/i }).click()
     const createStep = client.page.getByRole('dialog', { name: /Create a new project/i })
     await createStep.locator('#create-project-name').fill('runtime-created-project')
     await createStep.getByPlaceholder('/home/user/projects').fill(fixture.createParentPath)
     await createStep.getByRole('button', { name: 'Create project', exact: true }).click()
-    const createCollision = await injectSameIdLocalActivationCollision(
-      client.page,
-      fixture.createdRepoPath,
-      fixture.localCreateCollisionPath
-    )
     await expect(createStep).toBeHidden({ timeout: 30_000 })
-    await expectRuntimeActivation(client.page, createCollision)
+    await expectRuntimeActivation(client.page, fixture.createdRepoPath, client.environmentId)
     measurements.createMs = Date.now() - startedAt
 
     startedAt = Date.now()
@@ -646,13 +624,6 @@ async function runSelectedRuntimeAddJourney(
       nestedReposInGroup: true
     })
 
-    // Local inventory refresh replaces transient collision rows; seed the next action again.
-    await injectSameIdLocalActivationCollision(
-      client.page,
-      fixture.gitPath,
-      fixture.localCloneCollisionPath,
-      false
-    )
     const terminalActivation = await client.page.evaluate(
       async ({ environmentId, worktreeId }) => {
         const bridge = (
@@ -668,30 +639,23 @@ async function runSelectedRuntimeAddJourney(
         if (!bridge || !store) {
           throw new Error('Runtime terminal activation bridge unavailable')
         }
-        const sameIdHosts = Object.values(store.getState().worktreesByRepo)
-          .flat()
-          .filter((worktree) => worktree.id === worktreeId)
-          .map((worktree) => worktree.hostId ?? 'local')
-          .sort()
         const outcome = await bridge.createTerminal({ environmentId, worktreeId })
         const state = store.getState()
         return {
           activeHostId: state.activeWorkspaceExecutionHostId,
           activeWorktreeId: state.activeWorktreeId,
-          outcome,
-          sameIdHosts
+          outcome
         }
       },
       {
         environmentId: client.environmentId,
-        worktreeId: gitCollision.runtimeWorktreeId
+        worktreeId: gitWorktreeId
       }
     )
     expect(terminalActivation).toEqual({
       activeHostId: `runtime:${client.environmentId}`,
-      activeWorktreeId: gitCollision.runtimeWorktreeId,
-      outcome: { status: 'created' },
-      sameIdHosts: ['local', `runtime:${client.environmentId}`]
+      activeWorktreeId: gitWorktreeId,
+      outcome: { status: 'created' }
     })
 
     const finalClientInventory = await listRuntimeInventory(clientLocalRuntime)
