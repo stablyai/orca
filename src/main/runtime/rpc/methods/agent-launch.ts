@@ -1,11 +1,14 @@
-import { activeAgentLaunchesFor } from './agent-launch-in-flight'
+import { joinOrStartActiveAgentLaunch, type ActiveAgentLaunch } from './agent-launch-in-flight'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 /** Capability-gated surface routing; callers must inspect outcome.kind and receipt for fallback reasons.
  * Keep worktree.create's PTY/handle contract for older clients.
  * operationId adds durable at-most-once execution and recorded replay; unknown outcomes refuse, while stranded-surface recovery remains separate. */
 
 import { agentLaunchFeatureRequirement } from '../agent-launch-feature-requirement'
-import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch-tab-closed'
+import {
+  AGENT_LAUNCH_TAB_CLOSED_CODE,
+  AgentLaunchTabClosedError
+} from '../../../../shared/agent-launch-tab-closed'
 import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
 import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
 import { agentSessionOperationKey } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
@@ -15,9 +18,10 @@ import { defineMethod, type RpcContext } from '../core'
 import {
   admitAgentLaunchOperation,
   agentLaunchOperationCallerKey,
-  type AcceptedAgentLaunch,
+  type AgentLaunchAdmission,
   type ReplaySafeLaunch
 } from './agent-launch-replay'
+import type { AgentLaunchAcceptance } from '../../../agent-launch/agent-launch-acceptance'
 import {
   AgentLaunchExecutionError,
   agentLaunchRefusalError,
@@ -132,19 +136,20 @@ async function executeReplaySafeAgentLaunch(
   params: AgentLaunchParams & { operationId: string },
   context: HostLaunchContext,
   fingerprint: string,
-  accepted?: AcceptedAgentLaunch
+  onAdmitted: (admission: AgentLaunchAdmission) => void,
+  acceptance?: AgentLaunchAcceptance
 ): Promise<AgentLaunchResult> {
   // The tab is the host's first act: admission has a cold cost the user should not watch.
   // An accepted launch publishes nothing before dispatch; its caller shows its own pending surface.
-  const early = accepted ? null : await publishEarlyTab(params, context)
-  let admission: Awaited<ReturnType<typeof admitAgentLaunchOperation>>
+  const early = acceptance ? null : await publishEarlyTab(params, context)
+  let admission: AgentLaunchAdmission
   try {
     admission = await admitAgentLaunchOperation(context, params, fingerprint, Date.now())
   } catch (error) {
     early?.finish()
     throw error
   }
-  accepted?.onAdmitted(admission)
+  onAdmitted(admission)
   if (admission.decision !== 'execute') {
     // No effect runs on refusal; remove only this request's empty tab, never a pane that survived for replay.
     early?.finish(
@@ -163,7 +168,7 @@ async function executeReplaySafeAgentLaunch(
     executeAdmittedAgentLaunch(params, context, admission, {
       early,
       presentation: params.presentation,
-      ...(accepted ? { acceptance: accepted.acceptance } : {})
+      ...(acceptance ? { acceptance } : {})
     })
   )
 }
@@ -203,6 +208,12 @@ async function executeAdmittedAgentLaunch(
     if (view.early?.closedByUser()) {
       await settleLaunchWhoseTabWasClosed(context, view.early, admission)
     }
+    if (acceptance?.closed.aborted && error instanceof AgentLaunchTabClosedError) {
+      // The user's close ends it as closed for every retry: before any surface, or once the surface
+      // its owner made was closed again, as a closed early tab's launch ends.
+      await settleQuietly(admission.fail(AGENT_LAUNCH_TAB_CLOSED_CODE))
+      throw new AgentLaunchExecutionError(error, AGENT_LAUNCH_TAB_CLOSED_CODE)
+    }
     const failedWithoutEffects = launchFailureWithoutEffectsCode(
       error,
       resolved.intent.target.kind,
@@ -222,32 +233,29 @@ async function executeAdmittedAgentLaunch(
   return handedOff(result)
 }
 
-/** One in-process execution per caller operation: a retry or an accepted launch's read joins it. */
-export function runReplaySafeAgentLaunch(
+/** One in-process execution per caller operation, so a retry, an accepted launch's read or an
+ *  overlapping accept joins it; a different request under its id conflicts. */
+export function joinReplaySafeAgentLaunch(
   params: AgentLaunchParams & { operationId: string },
   context: HostLaunchContext,
-  accepted?: AcceptedAgentLaunch
-): Promise<AgentLaunchResult> {
-  const callerKey = agentLaunchOperationCallerKey(context)
-  const key = agentSessionOperationKey(callerKey, params.operationId)
-  const fingerprint = computeAgentLaunchFingerprint(params)
-  const activeAgentLaunches = activeAgentLaunchesFor(context.runtime)
-  const active = activeAgentLaunches.get(key)
-  if (active) {
-    if (active.fingerprint !== fingerprint) {
-      return Promise.reject(new Error('agent_session_operation_conflict'))
-    }
-    return active.promise
-  }
+  fingerprint: string,
+  acceptance?: AgentLaunchAcceptance
+): ActiveAgentLaunch {
+  const key = agentSessionOperationKey(agentLaunchOperationCallerKey(context), params.operationId)
+  return joinOrStartActiveAgentLaunch(context.runtime, key, fingerprint, (onAdmitted) =>
+    executeReplaySafeAgentLaunch(params, context, fingerprint, onAdmitted, acceptance)
+  )
+}
 
-  let promise: Promise<AgentLaunchResult>
-  promise = executeReplaySafeAgentLaunch(params, context, fingerprint, accepted).finally(() => {
-    if (activeAgentLaunches.get(key)?.promise === promise) {
-      activeAgentLaunches.delete(key)
-    }
-  })
-  activeAgentLaunches.set(key, { fingerprint, promise })
-  return promise
+function runReplaySafeAgentLaunch(
+  params: AgentLaunchParams & { operationId: string },
+  context: HostLaunchContext
+): Promise<AgentLaunchResult> {
+  try {
+    return joinReplaySafeAgentLaunch(params, context, computeAgentLaunchFingerprint(params)).promise
+  } catch (error) {
+    return Promise.reject(error)
+  }
 }
 
 export const AGENT_LAUNCH_METHODS = [

@@ -41,12 +41,6 @@ export type ReplaySafeLaunch = {
   acceptance?: AgentLaunchAcceptance
 }
 
-/** A launch accepted before Setup: what it waits on, and who hears its admission before it runs. */
-export type AcceptedAgentLaunch = {
-  acceptance: AgentLaunchAcceptance
-  onAdmitted: (admission: AgentLaunchAdmission) => void
-}
-
 export type AgentLaunchAdmission =
   /** This caller owns the operation. It alone runs the effect, and it must settle the row. */
   | {

@@ -123,6 +123,27 @@ describe('withWslOrcadAccountEnv', () => {
     await expect(run('agent.launchReplay', reused)).resolves.toEqual({ ok: true, params: reused })
   })
 
+  it('prepares the account for an accepted launch, refusing it when that fails', async () => {
+    const accepted = {
+      agent: 'claude',
+      target: { kind: 'existing', worktree: 'id:wt' },
+      terminalStartup: { kind: 'command', command: "claude --model 'opus'", prompt: 'none' }
+    }
+    // Its terminal alternative is an agent start like any launch's, under the same selected account.
+    await expect(run('agent.launchAccept', accepted)).resolves.toMatchObject({
+      params: { accountEnv: { CLAUDE_CONFIG_DIR: CLAUDE_HOME } }
+    })
+    const failing = dependencies({
+      prepareClaudeLaunch: async () => {
+        throw new Error('The selected Claude account could not be set up.')
+      }
+    })
+    await expect(run('agent.launchAccept', accepted, failing)).resolves.toEqual({
+      ok: false,
+      message: 'The selected Claude account could not be set up.'
+    })
+  })
+
   it('refuses the call when the account cannot be prepared', async () => {
     const deps = dependencies({
       prepareClaudeLaunch: async () => {

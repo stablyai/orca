@@ -33,6 +33,7 @@ import { workspaceLifecycleKey } from '../../../runtime/workspaces/workspace-lif
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { beginWorkspaceCreateTelemetry } from '../../../workspace-create-telemetry'
 import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { promisedChatSetupReceipt } from '../../../runtime/setup/setup-run'
 
 export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime, options } = context
@@ -78,7 +79,11 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           // Track operational failures; malformed IPC rejected above is outside the creation funnel.
           if (isFolderRepo(repo)) {
             // Folder creation only registers metadata, so it needs no filesystem host route.
-            result = createFolderWorkspace(createArgs, repo, store)
+            result = {
+              ...createFolderWorkspace(createArgs, repo, store),
+              // A folder runs no Setup, so a chat it promised waits for nothing.
+              ...promisedChatSetupReceipt(createArgs.promisedAgentChat, undefined)
+            }
           } else {
             // Resolve executionHostId-only SSH ownership before any local Git operation.
             const createRoute = requireWorktreeCreateRoute(repo)

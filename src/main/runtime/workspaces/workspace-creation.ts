@@ -32,6 +32,7 @@ import { resolveManagedWorktreeCreateStartup } from './managed-worktree-create-s
 import type { WorkspaceCreationHandle } from './workspace-lifecycle-creations'
 import { workspaceLifecycleKey } from './workspace-lifecycle-commands'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { promisedChatSetupReceipt } from '../setup/setup-run'
 
 export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
   protected abstract resolveLineageForWorktreeCreate(
@@ -113,7 +114,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     const createRoute = resolveWorktreeCreateRoute(repo)
     if (isFolderRepo(repo)) {
       // A folder workspace is a registration, not a filesystem create, so it is host-agnostic.
-      return createRuntimeFolderWorktree({
+      const folder = await createRuntimeFolderWorktree({
         request: args,
         repo,
         startup: effectiveStartup,
@@ -138,6 +139,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
           activate: activationCallbacks.folder
         }
       })
+      // A folder runs no Setup, so a chat it promised waits for nothing.
+      return { ...folder, ...promisedChatSetupReceipt(args.promisedAgentChat, undefined) }
     }
     const lineageInput =
       args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
@@ -286,6 +289,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
           }
         : {}),
       ...(defaultTabs && !args.promisedAgentChat ? { defaultTabs } : {}),
+      ...promisedChatSetupReceipt(args.promisedAgentChat, setupRun),
       ...(warning ? { warning } : {}),
       ...(localCreate.baseFallback ? { baseFallback: localCreate.baseFallback } : {}),
       ...(addResult.localBaseRefRefresh

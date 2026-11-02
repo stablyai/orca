@@ -40,6 +40,7 @@ import {
 import { structuredAgentSessionClosedBeforeCreate } from './structured-agent-session-close-before-create'
 import type { ChatTabPlacement } from '../../agent-session/agent-session-tab-layout'
 import { replayRecordedAtRestCreate } from './structured-agent-session-create-replay'
+import { AgentLaunchClosedBeforeDispatchError } from '../../../../shared/agent-launch-tab-closed'
 
 export type PreparedStructuredAgentSessionCreate = {
   host: StructuredAgentSessionHost
@@ -295,6 +296,9 @@ export async function createStructuredAgentSessionForWorktree(args: {
   atRest?: true
   firstMessage?: StructuredAgentSessionFirstMessage
   signal?: AbortSignal
+  /** The user's close of a launch's reserved chat; checked once preparation is done, before commit. */
+  closed?: AbortSignal
+  capture?: (surface: StructuredSessionSurface) => void
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   // An at-rest create's ledger row is keyed by its intent, as a client's create is.
   const envelope = args.atRest
@@ -310,10 +314,15 @@ export async function createStructuredAgentSessionForWorktree(args: {
     return { ok: false, refusal: prepared.refusal }
   }
   assertAgentPromptRequestActive(args.signal)
+  if (args.closed?.aborted) {
+    // Nothing is made yet, so a close during preparation starts nothing, as the RPC create refuses.
+    throw new AgentLaunchClosedBeforeDispatchError()
+  }
   return commitStructuredAgentSessionCreate({
     runtime: args.runtime,
     caller: args.caller,
     prepared,
-    activate: args.activate
+    activate: args.activate,
+    ...(args.capture ? { capture: args.capture } : {})
   })
 }

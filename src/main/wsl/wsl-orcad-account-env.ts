@@ -136,7 +136,12 @@ type EnvPatchPlan = {
 
 /** Null leaves the call untouched. */
 function envPatchPlan(method: string, params: Record<string, unknown>): EnvPatchPlan | null {
-  if (method === 'agent.launch' || method === 'agent.launchReplay') {
+  // An accepted launch's terminal alternative starts under the selected account, as any launch's does.
+  if (
+    method === 'agent.launch' ||
+    method === 'agent.launchReplay' ||
+    method === 'agent.launchAccept'
+  ) {
     // A reused terminal starts no process, so it has no home to choose.
     return params.reuseTerminal ? null : { field: 'accountEnv', agent: tuiAgentOf(params.agent) }
   }

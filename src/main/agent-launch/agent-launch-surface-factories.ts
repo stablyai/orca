@@ -34,6 +34,8 @@ export type AgentLaunchSurfaceFactory = {
     withoutPrompt?: true
     firstMessage?: StructuredAgentSessionFirstMessage
     signal?: AbortSignal
+    /** An accepted launch's close: before commit it starts nothing; after, the chat made is closed. */
+    closed?: AbortSignal
   }): Promise<AgentLaunchStructuredSurface>
   createTerminalAgent(args: {
     worktreeId: string
@@ -50,8 +52,15 @@ export type AgentLaunchSurfaceFactory = {
     viewMode?: 'terminal' | 'chat'
     /** Account routing overrides merged over the agent environment. */
     accountEnv?: Readonly<Record<string, string>>
-    /** The caller's own command, run instead of the configured launcher; `draft` is left unsent once it is ready. */
-    startup?: Omit<AgentLaunchTerminalStartupParams, 'promptDelivery'> & { draft?: string }
+    /** The caller's own command, run verbatim instead of the configured launcher. */
+    startup?: Omit<
+      Extract<AgentLaunchTerminalStartupParams, { kind: 'command' }>,
+      'kind' | 'prompt'
+    >
+    /** Left unsent in the agent's input once it is ready. */
+    draft?: string
+    /** An accepted launch's close: before dispatch it spawns nothing; after, the terminal is closed. */
+    closed?: AbortSignal
   }): Promise<{
     handle: string
     /** Omit when the runtime reports no pane; never invent one. */

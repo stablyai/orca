@@ -129,7 +129,7 @@ export async function executeAgentLaunch(
     }
 
     const acceptance = execution.acceptance
-    if ((acceptance?.requiredSetup ?? placed.requiredSetup)?.waitsForAgent) {
+    if (acceptance ? acceptance.setupReceipt.required : placed.requiredSetup?.waitsForAgent) {
       execution.onStage?.('setup_wait')
     }
     await (acceptance
@@ -267,6 +267,8 @@ export type CreatedSurface = {
   terminalCreation?: RuntimeTerminalCreate
   structured?: AgentLaunchStructuredSurface
   promptRodeLaunchCommand?: boolean
+  /** The caller's plan gives this terminal none of the launch's text. */
+  promptLeftUnsent?: boolean
 }
 
 async function createSurface(
@@ -284,8 +286,9 @@ async function createSurface(
       ...(intent.chatOptions ? { chatOptions: intent.chatOptions } : {}),
       ...(intent.sessionId ? { sessionId: intent.sessionId } : {}),
       ...(reservedTabId ? { tabId: reservedTabId } : {}),
-      ...launchPromptCreateInputs(intent, execution.signal),
-      ...(intent.prompt ? {} : { withoutPrompt: true as const })
+      ...launchPromptCreateInputs(intent, execution.signal, execution.acceptance?.clientMessageId),
+      ...(intent.prompt ? {} : { withoutPrompt: true as const }),
+      ...(execution.acceptance ? { closed: execution.acceptance.closed } : {})
     })
     return {
       outcome: {

@@ -134,11 +134,13 @@ describe('automation creates: main provisions setup and default tabs', () => {
         name: 'improve-dashboard',
         setupDecision: 'run',
         promisedAgentChat: true
-      })) as { worktree: { id: string } }
+      })) as { worktree: { id: string }; agentLaunchSetup?: unknown }
       expect(result).not.toHaveProperty('setup')
       expect(result).not.toHaveProperty('defaultTabs')
       const run = runtime.getSetupRun(result.worktree.id)
       expect(run?.waitsForAgent).toBe(true)
+      // The reply names that exact run, even when its runner never started: a launch waits for it.
+      expect(result.agentLaunchSetup).toEqual({ required: true, runId: run?.id })
       if (fails) {
         await expect(awaitRequiredSetup(run, 'claude')).rejects.toThrow('Claude was not started')
       } else {

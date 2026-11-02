@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto'
 import { tuiAgentDisplayName } from '../../../shared/tui-agent-display-names'
+import type { AgentLaunchSetupReceipt } from '../../../shared/rpc-contract/agent-launch-accept-params'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { DEFAULT_WAIT_TIMEOUT_SECONDS } from '../../../shared/setup-agent-sequencing'
 import { createSetupCompletionScanner } from '../orchestration/setup-completion-signal'
@@ -13,6 +15,8 @@ export type SetupRunOutcome =
     }
 
 export type SetupRun = {
+  /** In memory only: a restarted host mints new ids, so a receipt from before can name no run of its. */
+  id: string
   waitsForAgent: boolean
   outcome: Promise<SetupRunOutcome>
   result: SetupRunOutcome | undefined
@@ -24,6 +28,7 @@ export function createSetupRun(waitsForAgent: boolean): SetupRun {
   let resolve!: (result: SetupRunOutcome) => void
   const cleanups: (() => void)[] = []
   const run: SetupRun = {
+    id: randomUUID(),
     waitsForAgent,
     outcome: new Promise((complete) => {
       resolve = complete
@@ -114,12 +119,34 @@ export async function awaitRequiredSetup(
   agent: string,
   signal?: AbortSignal
 ): Promise<void> {
-  if (!run?.waitsForAgent) {
-    return
+  if (run?.waitsForAgent) {
+    await awaitSetupRunSuccess(run, agent, signal)
   }
+}
+
+/** Only this run's own success releases the agent; any other end refuses it. */
+export async function awaitSetupRunSuccess(
+  run: SetupRun,
+  agent: string,
+  signal?: AbortSignal
+): Promise<void> {
   const outcome = await waitForPromiseWithSignal(run.outcome, signal)
   if (outcome.kind !== 'succeeded') {
     throw new AgentLaunchSetupNotCompletedError(outcome, agent)
+  }
+}
+
+/** What a creation that promised a chat reports, and no other creation: decided by the applied policy
+ *  when the run is made, before its runner can fail, so a failed runner still names the run that failed. */
+export function promisedChatSetupReceipt(
+  promisedAgentChat: boolean | undefined,
+  run: SetupRun | undefined
+): { agentLaunchSetup?: AgentLaunchSetupReceipt } {
+  if (!promisedAgentChat) {
+    return {}
+  }
+  return {
+    agentLaunchSetup: run?.waitsForAgent ? { required: true, runId: run.id } : { required: false }
   }
 }
 

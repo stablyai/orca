@@ -138,6 +138,8 @@ describe('native-chat setup through renderer payload, RPC and execution host', (
       expect(result.setup).toBeUndefined()
       expect(result.setupReceipt).toMatchObject({ state: 'running' })
       expect(result.startupTerminal).toBeUndefined()
+      // Only a create that promised a chat answers for that chat's Setup.
+      expect(result).not.toHaveProperty('agentLaunchSetup')
     }
   )
 
@@ -192,6 +194,8 @@ it.each([false, true])(
     })
     const run = runtime.getSetupRun(result.worktree.id)
     expect(run?.waitsForAgent).toBe(true)
+    // The paired reply names that exact run, even when its runner never started: a launch waits for it.
+    expect(result.agentLaunchSetup).toEqual({ required: true, runId: run?.id })
     if (fails) {
       await expect(awaitRequiredSetup(run, 'codex')).rejects.toThrow('Codex was not started')
       expect(spawn).not.toHaveBeenCalled()

@@ -10,7 +10,8 @@ export type AgentLaunchFingerprintInput = {
     | { kind: 'existing'; worktree: string }
     | { kind: 'create-worktree'; create: Readonly<Record<string, unknown>> }
     | { kind: 'create-folder-workspace'; create: Readonly<Record<string, unknown>> }
-  prompt?: { text: string; delivery: string }
+  /** An accepted launch's message id names the message its chat founds, so it is identity too. */
+  prompt?: { text: string; delivery: string; clientMessageId?: string }
   sessionOptions?: Readonly<Record<string, string>>
   chatOptions?: Readonly<Record<string, string>>
   reuseTerminal?: { handle: string }
@@ -24,6 +25,10 @@ export type AgentLaunchFingerprintInput = {
   sessionId?: string
   /** In: unlike the user's default surface, an explicit pick is what the call asks to run. */
   surface?: string
+  /** In: an accepted launch's terminal alternative is what runs when its chat cannot. */
+  terminalStartup?: Readonly<Record<string, unknown>>
+  /** In: the creation's Setup receipt decides what an accepted launch waits for. */
+  setupReceipt?: Readonly<Record<string, unknown>>
   /** Exclude launchSource, placement and presentation: they change attribution/view, not execution. Replays truthfully retain the first launch's attribution. */
 }
 
@@ -47,7 +52,9 @@ export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput
     // Absent keys are dropped by the canonical form, so every digest without one is unchanged.
     paneKey: input.paneKey,
     sessionId: input.sessionId,
-    surface: input.surface
+    surface: input.surface,
+    terminalStartup: input.terminalStartup,
+    setupReceipt: input.setupReceipt
   })
 }
 

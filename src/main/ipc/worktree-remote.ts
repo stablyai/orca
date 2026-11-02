@@ -1,6 +1,7 @@
 import {
   createSetupRun,
   AgentLaunchSetupNotCompletedError,
+  promisedChatSetupReceipt,
   type SetupRun
 } from '../runtime/setup/setup-run'
 import { shouldWaitForSetupBeforeAgentStartup } from '../../shared/setup-agent-startup-policy'
@@ -1805,6 +1806,7 @@ async function performLocalWorktreeCreate(
               : {}),
           ...(defaultTabs ? { defaultTabs } : {})
         }),
+    ...promisedChatSetupReceipt(args.promisedAgentChat, setupRun),
     ...(addResult.localBaseRefRefresh
       ? { localBaseRefRefresh: addResult.localBaseRefRefresh }
       : {}),
