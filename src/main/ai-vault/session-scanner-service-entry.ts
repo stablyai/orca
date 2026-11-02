@@ -122,6 +122,11 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
           sessionId: session.sessionId,
           title: trimmedTitle
         })
+      } else if (
+        (session.agent === 'claude' || session.agent === 'codex') &&
+        trimmedTitle === generatedSessionTitle(session.agent, session.sessionId)
+      ) {
+        titleIndex.delete(titleKey(session))
       }
     }
     return {
