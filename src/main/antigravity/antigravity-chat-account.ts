@@ -8,6 +8,7 @@ import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisit
 import { RevisionedState } from '../runtime/revisioned-state'
 import { antigravityBrowserHelperWorks } from './antigravity-browser-helper'
 import { AcpLaunchGate } from '../acp/acp-launch-gate'
+import { recoverAntigravityChatToken } from './antigravity-chat-reauthentication'
 
 type SignInOwner = Pick<AcpAgentConnection, 'close' | 'onExit' | 'exited'>
 const retained = new ProviderAcquisitionStarts<SignInOwner>()
@@ -70,5 +71,6 @@ export const antigravityChatAccount = {
       )
     }
     await folder.prepare?.(env)
+    await recoverAntigravityChatToken(home)
   }
 }

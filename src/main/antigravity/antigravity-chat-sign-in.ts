@@ -16,7 +16,6 @@ import { resolveAcpLaunchInvocation } from '../acp/acp-structured-launch-resolut
 import { prepareAcpLaunch } from '../acp/acp-structured-launch-preparation'
 import { AcpAgentError, AcpConnectionClosedError } from '../acp/acp-errors'
 import { captureSignInModelPublisher } from './antigravity-sign-in-models'
-import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { structuredAgentHostLaunchSources } from '../runtime/structured-agent-launch-support'
 import {
   AntigravitySignInCloseUnprovenError,
@@ -31,10 +30,11 @@ import {
 } from './antigravity-sign-in-callback'
 import { removeAntigravitySignInSessionFiles } from './antigravity-sign-in-session-files'
 import { antigravitySignInUrl } from './antigravity-sign-in-url'
+import { antigravitySignInFailure, SIGN_IN_FAILED } from './antigravity-sign-in-failure'
+import { prepareAntigravityChatReauthentication } from './antigravity-chat-reauthentication'
 
 // Match the server’s browser wait.
 const FLOW_DEADLINE_MS = 300_000
-const SIGN_IN_FAILED = 'Google sign-in for Antigravity failed. Start sign-in again.'
 const SECOND_LINK = {
   phase: 'failed',
   error: 'Antigravity started more than one Google sign-in request.'
@@ -175,6 +175,8 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
   const home = launch.env.GEMINI_HOME
   const cwd = await mkdtemp(join(tmpdir(), 'orca-antigravity-sign-in-'))
   let connection: AcpAgentConnection | null = null
+  let finishReauthentication: ((signedIn: boolean) => Promise<void>) | undefined
+  let signedIn = false
   // Wait for proven exit and session ownership before deleting files.
   const owned = { sessionId: '', exited: false, done: false, disposed: false }
   const disposeWhenGone = async (): Promise<void> => {
@@ -188,6 +190,8 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
     )
   }
   try {
+    finishReauthentication = await prepareAntigravityChatReauthentication(home)
+    closed()
     connection = connect(
       { ...launch, args: spec.args({ fullAccess: false, pluginDir: null }), cwd },
       {
@@ -219,10 +223,18 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
       signal.removeEventListener('abort', stop)
       await closeAntigravitySignInOwner(home, server)
     }
+    closed()
+    signedIn = true
   } finally {
     owned.done = true
     owned.exited ||= !connection || connection.exited
-    await disposeWhenGone()
+    try {
+      if (owned.exited) {
+        await finishReauthentication?.(signedIn)
+      }
+    } finally {
+      await disposeWhenGone()
+    }
   }
 }
 
@@ -238,30 +250,6 @@ function receiveLink(current: Flow, link: string): void {
   }
   current.pending = parsed
   publish(current, { phase: 'waiting', url: link })
-}
-
-function antigravitySignInFailure(error: unknown): string {
-  const cause = isAgentSessionPreSpawnError(error) ? error.cause : error
-  if (cause instanceof AntigravitySignInSentence) {
-    return cause.message
-  }
-  if (isAgentSessionPreSpawnError(error) && error.reason === 'runtimeNotInstalled') {
-    return 'Antigravity is not installed on this host. Install it, then start sign-in again.'
-  }
-  if (error instanceof AcpAgentError) {
-    // Provider errors may put the reason in data instead of message.
-    const text = `${error.message} ${JSON.stringify(error.data ?? '')}`
-    if (text.includes('SUBSCRIPTION_REQUIRED')) {
-      return 'Google requires an eligible Antigravity subscription for this account.'
-    }
-    if (/onboarding failed|ineligible/i.test(text)) {
-      return "This Google account can't use Antigravity. Sign in with a different account."
-    }
-    if (/access_denied|denied access|cancelled/i.test(text)) {
-      return 'Google sign-in for Antigravity was not approved. Start sign-in again.'
-    }
-  }
-  return SIGN_IN_FAILED
 }
 
 function ownFlow(owner: string, flowId: string): Flow {

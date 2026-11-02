@@ -4,7 +4,7 @@ import * as profileStorage from '../orca-profiles/profile-storage-paths'
 // The chat sign-in against a scripted Antigravity server.
 
 import { createServer } from 'node:http'
-import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -97,6 +97,7 @@ async function signInAgainst(
     metaCwd?: string
     sessionResult?: Record<string, unknown>
     realLaunchSources?: boolean
+    cachedToken?: string
   } = {}
 ) {
   vi.spyOn(ANTIGRAVITY_LAUNCH_SPEC.managedRuntime, 'pin').mockReturnValue(PIN)
@@ -104,12 +105,33 @@ async function signInAgainst(
   const stateDirectory = await mkdtemp(join(tmpdir(), 'orca-agy-sign-in-'))
   folders.push(stateDirectory)
   const folder = join(stateDirectory, 'antigravity-chat')
+  const token = join(folder, 'antigravity-acp', 'acp_token.json')
+  if (options.cachedToken) {
+    await mkdir(join(folder, 'antigravity-acp'), { recursive: true })
+    await writeFile(token, options.cachedToken)
+  }
   const agent = new AcpScriptedAgent()
   const stderr = new PassThrough()
   const [browserDone, sessionOpen] = [deferred<void>(), deferred<void>()]
   agent.on('authenticate', (frame) => {
-    void output().then((text) => (options.stream === 'stdout' ? agent.stdout : stderr).write(text))
-    void browserDone.promise.then(() => agent.reply(frame, {}))
+    void readFile(token, 'utf8')
+      .catch(() => null)
+      .then((cached) => {
+        if (cached) {
+          agent.reply(frame, {})
+          sessionOpen.resolve()
+          return
+        }
+        void output().then((text) =>
+          (options.stream === 'stdout' ? agent.stdout : stderr).write(text)
+        )
+        void browserDone.promise.then(async () => {
+          if (options.cachedToken) {
+            await writeFile(token, 'replacement-token')
+          }
+          agent.reply(frame, {})
+        })
+      })
   })
   agent.on('session/new', (frame) => {
     void sessionOpen.promise.then(async () => {
@@ -654,4 +676,45 @@ it('retires a cold checking producer on effective Refresh while valid sign-in st
       await cancelAntigravityChatSignIn(DESKTOP, run.flowId)
     }
   }
+})
+
+it('opens Google instead of silently reusing the saved Chat account, and keeps the replacement', async () => {
+  const run = await signInAgainst(printed(GOOGLE_LINK), { cachedToken: 'previous-token' })
+  try {
+    await vi.waitFor(() =>
+      expect(readAntigravityChatSignInStatus(DESKTOP).flow?.phase).toBe('waiting')
+    )
+    run.finishBrowser()
+    await stateAfter(run.flowId, 'waiting')
+    run.openSession()
+    await stateAfter(run.flowId, 'verifying')
+    expect(await readFile(join(run.folder, 'antigravity-acp', 'acp_token.json'), 'utf8')).toBe(
+      'replacement-token'
+    )
+    await expect(
+      stat(join(run.folder, 'antigravity-acp', 'acp_token.json.orca-sign-in-backup'))
+    ).rejects.toMatchObject({ code: 'ENOENT' })
+  } finally {
+    const phase = readAntigravityChatSignInStatus(DESKTOP).flow?.phase
+    if (phase === 'starting' || phase === 'waiting' || phase === 'verifying') {
+      await cancelAntigravityChatSignIn(DESKTOP, run.flowId)
+    }
+  }
+})
+
+it('restores the saved Chat account when its replacement sign-in is cancelled', async () => {
+  const run = await signInAgainst(printed(GOOGLE_LINK), { cachedToken: 'previous-token' })
+  try {
+    await vi.waitFor(() =>
+      expect(readAntigravityChatSignInStatus(DESKTOP).flow?.phase).toBe('waiting')
+    )
+  } finally {
+    const phase = readAntigravityChatSignInStatus(DESKTOP).flow?.phase
+    if (phase === 'starting' || phase === 'waiting' || phase === 'verifying') {
+      await cancelAntigravityChatSignIn(DESKTOP, run.flowId)
+    }
+  }
+  expect(await readFile(join(run.folder, 'antigravity-acp', 'acp_token.json'), 'utf8')).toBe(
+    'previous-token'
+  )
 })
