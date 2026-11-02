@@ -8,13 +8,12 @@ import {
   readLinuxStat,
   readMacosProcessStartedAtMs
 } from '../../../daemon/daemon-process-inspection'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   formatPreparedLaunchGeneration,
   readCurrentPreparedLaunchIncarnation
 } from '../../../daemon/prepared-agent-launch-incarnation'
-import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ClaimedAgentPtyOwnerRegistry } from '../../../../shared/claimed-agent-pty-owner'
 import {

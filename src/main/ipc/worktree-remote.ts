@@ -381,8 +381,7 @@ export async function spawnLocalStartupAndSetupTerminals(args: {
       return {
         didSpawnSetup: setup?.waitForAgentStartup === true || provisioned.setupSpawned,
         defaultTabsHandled: true,
-        startupTerminal: { spawned: false, pending: prepared.pending },
-        ...(prepared.warning ? { warning: prepared.warning } : {})
+        startupTerminal: { spawned: false, pending: prepared.pending }
       }
     }
   }

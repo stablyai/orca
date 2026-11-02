@@ -1,11 +1,11 @@
-import type { PtyCreationDisposition } from '../../shared/claimed-agent-pty-owner'
 import {
   agentSessionOperationKey,
   type AgentSessionOperationRow
 } from '../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import type {
   ClaimedAgentPtyOwnerRegistry,
-  PreparedAgentPtyOwner
+  PreparedAgentPtyOwner,
+  PtyCreationDisposition
 } from '../../shared/claimed-agent-pty-owner'
 import { createSetupCompletionScanner } from '../runtime/orchestration/setup-completion-signal'
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
