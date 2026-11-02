@@ -39,6 +39,7 @@ export function SourceControlSectionFileList({
   revealInExplorer,
   activeConnectionId,
   handleOpenDiff,
+  handleOpenWorkingTreeFile,
   handleStage,
   handleResolveConflict,
   handleUnstage,
@@ -67,6 +68,7 @@ export function SourceControlSectionFileList({
   revealInExplorer: (worktreeId: string, absolutePath: string) => void
   activeConnectionId: string | null
   handleOpenDiff: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
+  handleOpenWorkingTreeFile: (entry: GitStatusEntry) => void
   handleStage: (path: string) => Promise<void>
   handleResolveConflict: (entry: GitStatusEntry, resolution: ConflictResolution) => Promise<void>
   handleUnstage: (path: string, oldPath?: string) => Promise<void>
@@ -126,6 +128,7 @@ export function SourceControlSectionFileList({
             onRevealInExplorer={revealInExplorer}
             connectionId={activeConnectionId}
             onOpen={handleOpenDiff}
+            onOpenFile={handleOpenWorkingTreeFile}
             onStage={handleStage}
             onResolveConflict={handleResolveConflict}
             onUnstage={handleUnstage}
@@ -178,6 +181,7 @@ export function SourceControlSectionFileList({
             onRevealInExplorer={revealInExplorer}
             connectionId={activeConnectionId}
             onOpen={handleOpenDiff}
+            onOpenFile={handleOpenWorkingTreeFile}
             onStage={handleStage}
             onResolveConflict={handleResolveConflict}
             onUnstage={handleUnstage}
