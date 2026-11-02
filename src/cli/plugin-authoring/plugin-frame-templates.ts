@@ -66,6 +66,8 @@ export function editor(input: PluginTemplateInput): PluginTemplate {
       let version = 0
       // True while the textarea holds typing Orca has not accepted yet.
       let dirty = false
+      // Only the newest input's answer settles dirty and the notice; older ones are stale.
+      let generation = 0
       // Orca sends the document now and again whenever the file changes outside the editor.
       orca.document.onDidChange((doc) => {
         version = doc.version
@@ -76,17 +78,20 @@ export function editor(input: PluginTemplateInput): PluginTemplate {
       })
       text.addEventListener('input', () => {
         dirty = true
-        const sent = text.value
-        orca.document.applyEdit({ baseVersion: version, content: { kind: 'text', text: sent } }).then(
-          () => {
-            if (text.value === sent) dirty = false
-            notice.textContent = ''
-          },
-          (error) => {
-            // Your text stays; the next keystroke edits the latest document.
-            notice.textContent = 'Not saved: ' + error.message
-          }
-        )
+        const current = ++generation
+        orca.document
+          .applyEdit({ baseVersion: version, content: { kind: 'text', text: text.value } })
+          .then(
+            () => {
+              if (current !== generation) return
+              dirty = false
+              notice.textContent = ''
+            },
+            (error) => {
+              // Your text stays; the next keystroke edits the latest document.
+              if (current === generation) notice.textContent = 'Not saved: ' + error.message
+            }
+          )
       })
     </script>
   </body>

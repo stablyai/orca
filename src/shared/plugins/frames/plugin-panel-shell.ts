@@ -71,8 +71,7 @@ function frameApiScript(surface: PluginFrameSurface, transport: FrameTransport):
   var listeners = new Map()
   var api = Object.freeze(C.api)
   var methods = C.methods.slice()
-  var latest = null
-  var waiting = []
+  var latest = null, waiting = []
   var locale = null
   var send = null
   if (C.transportGlobal) {
@@ -232,11 +231,13 @@ ${PLUGIN_FRAME_FACADES_SCRIPT}  if (C.user) {
       },
       applyEdit: function (edit) {
         var base = edit && edit.baseVersion
-        var content = edit && edit.content ? Object.freeze(Object.assign({}, edit.content)) : null
+        var content = edit && edit.content ? Object.assign({}, edit.content) : null
+        // Copied: the caller may reuse its buffer, and get() must keep what Orca accepted.
+        if (content && content.bytes instanceof ArrayBuffer) content.bytes = content.bytes.slice(0)
         return call(C.editor.applyEdit, edit).then(function (result) {
           // Accepted edits keep their version, so get() takes the content without a new version.
           if (latest && content && latest.version === base) {
-            latest = Object.freeze(Object.assign({}, latest, { content: content }))
+            latest = Object.freeze(Object.assign({}, latest, { content: Object.freeze(content) }))
           }
           return result
         })

@@ -11,6 +11,14 @@ const doc = (version: number, text: string) => ({
 })
 const answer = (id: number) => ({ orca: 1, kind: 'res', id, result: null })
 const text = (value: string) => ({ kind: 'text', text: value })
+const isBytesDocument = (value: unknown): value is { content: { bytes: ArrayBuffer } } =>
+  typeof value === 'object' &&
+  value !== null &&
+  'content' in value &&
+  typeof value.content === 'object' &&
+  value.content !== null &&
+  'bytes' in value.content &&
+  value.content.bytes instanceof ArrayBuffer
 
 describe('orca.document.get after applyEdit', () => {
   it('returns the accepted content at the version Orca sent', async () => {
@@ -29,6 +37,26 @@ describe('orca.document.get after applyEdit', () => {
       readOnly: false,
       content: text('b')
     })
+  })
+
+  it('copies accepted bytes, so reusing the buffer leaves get() unchanged', async () => {
+    const { orca, fromHost } = mountShell('editor')
+    fromHost({
+      ...doc(1, ''),
+      payload: {
+        version: 1,
+        readOnly: false,
+        content: { kind: 'bytes', bytes: new ArrayBuffer(1) }
+      }
+    })
+    const bytes = new Uint8Array([1, 2]).buffer
+    const applied = orca.document!.applyEdit({ baseVersion: 1, content: { kind: 'bytes', bytes } })
+    fromHost(answer(0))
+    await applied
+    new Uint8Array(bytes).fill(9)
+    const current = await orca.document!.get()
+    expect(current).toMatchObject({ content: { kind: 'bytes' } })
+    expect(isBytesDocument(current) && [...new Uint8Array(current.content.bytes)]).toEqual([1, 2])
   })
 
   it('keeps the old content when Orca refuses the edit', async () => {

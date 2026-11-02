@@ -71,4 +71,24 @@ describe('editor template', () => {
     await flush()
     expect(notice.textContent).toBe('')
   })
+
+  it('lets only the newest input settle dirty and the notice', async () => {
+    const { fromHost, textarea, notice, type } = mountEditorTemplate()
+    fromHost(doc(1, 'start'))
+    await flush()
+    type('A')
+    type('AB')
+    type('A')
+    fromHost({ orca: 1, kind: 'res', id: 0, result: null })
+    await flush()
+    // The final `A` is still unanswered, so an outside change must not replace it.
+    fromHost(doc(2, 'outside'))
+    expect(textarea.value).toBe('A')
+    fromHost({ orca: 1, kind: 'res', id: 2, error: { code: 'conflict', message: 'Changed.' } })
+    await flush()
+    // An older success arriving after a newer refusal keeps the notice.
+    fromHost({ orca: 1, kind: 'res', id: 1, result: null })
+    await flush()
+    expect(notice.textContent).toBe('Not saved: Changed.')
+  })
 })
