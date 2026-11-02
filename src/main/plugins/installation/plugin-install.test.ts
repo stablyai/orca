@@ -162,6 +162,29 @@ describe('installPluginFromLocalPath', () => {
     }
   })
 
+  it('keeps the first install time across an update, so it keeps a replaced action', async () => {
+    const sourcePath = await tempRoot('orca-plugin-source-')
+    const pluginsDir = await tempRoot('orca-plugin-installs-')
+    await writePluginSource(sourcePath)
+    const first = await installPluginFromLocalPath({ pluginsDir, sourcePath, hostVersion: '1.4.0' })
+    expect(first.ok).toBe(true)
+    if (!first.ok) {
+      return
+    }
+    const installedAt = (await readPluginLockfile(pluginsDir)).plugins[first.pluginKey]?.installedAt
+    await writeFile(join(sourcePath, 'panel.html'), '<h1>Updated</h1>')
+    vi.spyOn(Date, 'now').mockReturnValue((installedAt ?? 0) + 60_000)
+    const updated = await installPluginFromLocalPath({
+      pluginsDir,
+      sourcePath,
+      hostVersion: '1.4.0'
+    })
+    expect(updated.ok && updated.contentHash !== first.contentHash).toBe(true)
+    expect((await readPluginLockfile(pluginsDir)).plugins[first.pluginKey]?.installedAt).toBe(
+      installedAt
+    )
+  })
+
   it('restores the previous current pointer when lockfile publication fails', async () => {
     const sourcePath = await tempRoot('orca-plugin-source-')
     const pluginsDir = await tempRoot('orca-plugin-installs-')

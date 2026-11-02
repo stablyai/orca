@@ -4,7 +4,7 @@ import { runningStructuredAgentSessionTurnId } from '../../../src/shared/agent-s
 import {
   joinStructuredAgentSessionStop,
   structuredAgentSessionStopIsJoinable
-} from '../../../src/shared/structured-agent-session-stop-join'
+} from '../../../src/shared/agent-session/requests/structured-agent-session-stop-join'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   requestStructuredAgentSessionMutation,

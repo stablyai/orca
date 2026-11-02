@@ -6,6 +6,7 @@ import {
 } from '../agent-session/lifecycle/agent-session-orca-stop'
 import { isRootAgentJournalItem } from '../agent-session/journal/agent-session-journal-producer'
 import type {
+  AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../agent-session/journal/agent-session-journal-types'
@@ -15,7 +16,10 @@ import {
   readAgentJournalTurnOutcome
 } from '../agent-session/lifecycle/agent-session-turn-record'
 import { agentTurnVerdict, type AgentTurnOutcome } from '../agent-turn-outcome'
-import { structuredAgentSessionCommandTurnItemIds } from '../agent-session/structured-agent-session-command-entry'
+import {
+  isStructuredAgentSessionCommandTurn,
+  structuredAgentSessionCommandTurnItemIds
+} from '../agent-session/structured-agent-session-command-entry'
 import {
   isStructuredAgentSessionNonRequestRow,
   type StructuredAgentSessionLatestRequest
@@ -44,12 +48,16 @@ export type NativeChatOrcaStopCut = {
 /** Latest root turn only if no later request or in-flight send exists; steers/conversation commands do not count as new requests. */
 export function latestNativeChatTurnSinceRequest(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
+  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[],
+  /** With an indexed body read, only the turns this scan reaches are checked, not all history. */
+  bodyOf?: (itemId: string) => AgentJournalItemBody | null | undefined
 ): { turnItem: AgentJournalRenderItem; verdict: AgentTurnOutcome | null } | null {
   if (submissions.some((submission) => submission.dispatchState === 'pending')) {
     return null
   }
-  const commandTurns = structuredAgentSessionCommandTurnItemIds(items)
+  const commandTurns = bodyOf
+    ? commandTurnsByBody(bodyOf)
+    : structuredAgentSessionCommandTurnItemIds(items)
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]!
     if (
@@ -85,6 +93,25 @@ export function findInNativeChatTurn<T>(
     }
   }
   return null
+}
+
+function commandTurnsByBody(
+  bodyOf: (itemId: string) => AgentJournalItemBody | null | undefined
+): Pick<ReadonlySet<string>, 'has'> {
+  const known = new Map<string, boolean>()
+  return {
+    has: (itemId) => {
+      let command = known.get(itemId)
+      if (command === undefined) {
+        command = isStructuredAgentSessionCommandTurn(
+          readAgentJournalTurn(bodyOf(itemId) ?? undefined),
+          bodyOf
+        )
+        known.set(itemId, command)
+      }
+      return command
+    }
+  }
 }
 
 export function latestNativeChatOrcaStopCut(

@@ -8,7 +8,7 @@ import {
   lockedStructuredAgentSessionOptionSnapshot,
   structuredAgentSessionOptionSnapshot
 } from '../../../../shared/agent-session/options/structured-agent-session-option-snapshot'
-import { createStructuredAgentSessionOptionsWriteOwner } from '../../../../shared/structured-agent-session-options-write-owner'
+import { createStructuredAgentSessionOptionsWriteOwner } from '../../../../shared/agent-session/options/structured-agent-session-options-write-owner'
 import { structuredAgentSessionShownSnapshot } from '../../../../shared/agent-session/options/structured-agent-session-option-view'
 import { useHostModelCatalogUpgrade } from './use-host-model-catalog-upgrade'
 import { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
@@ -62,9 +62,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     unloadedTurnRevisions: args.unloadedTurnRevisions
   })
 
-  const awaitingOptions = support?.sessionId === sessionId && support.fence !== fence
-  const acceptsPicks =
-    (!transportEnabled || fence !== null) && launch?.seedPending !== true && !awaitingOptions
+  const acceptsPicks = (!transportEnabled || fence !== null) && launch?.seedPending !== true
 
   const hostCatalog = useHostModelCatalogUpgrade({
     agent,

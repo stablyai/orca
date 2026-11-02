@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useOptionPager } from '../components/BottomDrawer'
+import { useOptionPager } from '../components/bottom-drawer/BottomDrawer'
 import { useBackClaim } from '../navigation/use-back-claim'
 import type { SourceControlHubRouteTab, SourceControlHubTab } from './mobile-source-control-hub-tab'
+import type { PrTabScreen } from '../components/pr-sidebar/use-mobile-pr-tab'
 
-// Screens pushed over the hub; siblings add theirs here (e.g. checks, comments).
-export type SourceControlHubScreen = 'commits'
+// Screens pushed over the hub: Commits, and the PR tab's Checks and Comments.
+export type SourceControlHubScreen = 'commits' | PrTabScreen
 
 function hubTabFor(tab: SourceControlHubRouteTab): SourceControlHubTab {
   return tab === 'history' ? 'changes' : tab

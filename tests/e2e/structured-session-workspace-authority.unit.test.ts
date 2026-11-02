@@ -39,7 +39,6 @@ import { storeRepo } from '../../src/main/runtime/runtime-store-partial-fixture'
 import { hostWorktreeTarget } from '../../src/shared/worktree/host-qualified-identity'
 import type { RuntimeWorktreeScanResult } from '../../src/main/runtime/repo-worktree-resolution-scan'
 import { openMobileAgentHistoryChat } from '../../mobile/src/agent-history/open-mobile-agent-history-chat'
-import { hostRouteWithNotice } from '../../mobile/src/host-route-notice'
 import type { RpcClient } from '../../mobile/src/transport/rpc-client'
 import type { AiVaultSession } from '../../src/shared/ai-vault-types'
 
@@ -185,7 +184,10 @@ it.each([true, false])(
     expect((await rig.host.journalSnapshot(B)).items).toEqual(transcript)
     expect(result).toMatchObject({
       ok: true,
-      result: { ok: false, refusal: { code: 'agent_session_workspace_removed' } }
+      result: {
+        ok: false,
+        refusal: { code: 'agent_session_workspace_removed', details: { workspaceKind: 'folder' } }
+      }
     })
     expect(rig.acquire).not.toHaveBeenCalled()
     const phone = phoneClient(rig)
@@ -204,10 +206,8 @@ it.each([true, false])(
         failed
       })
     ).toBe(true)
-    expect(opened).toHaveBeenCalledExactlyOnceWith(
-      hostRouteWithNotice('owning-host', 'worktree-missing')
-    )
-    expect(failed).not.toHaveBeenCalled()
+    expect(opened).not.toHaveBeenCalled()
+    expect(failed).toHaveBeenCalledExactlyOnceWith('workspace-missing', 'folder')
     expect(rig.acquire).not.toHaveBeenCalled()
   }
 )
@@ -531,7 +531,10 @@ it('fences actual folder-extra teardown through forget without denying its survi
   expect(await rig.runtime.removeManagedWorktree(`id:${workspace}`)).toEqual({})
   expect(await reveal(rig)).toMatchObject({
     ok: true,
-    result: { ok: false, refusal: { code: 'agent_session_workspace_removed' } }
+    result: {
+      ok: false,
+      refusal: { code: 'agent_session_workspace_removed', details: { workspaceKind: 'folder' } }
+    }
   })
   expect(rig.store.getSessionTabId(B)).toBeNull()
   expect(rig.runtime.mobileSessionTabsByWorktree.has(workspace)).toBe(false)
@@ -622,7 +625,13 @@ it('successful owning Git scan plus positive repo/parent and absent saved W outr
   const record = rig.store.getRecord(B)
   expect(await reveal(rig)).toMatchObject({
     ok: true,
-    result: { ok: false, refusal: { code: 'agent_session_workspace_removed' } }
+    result: {
+      ok: false,
+      refusal: {
+        code: 'agent_session_workspace_removed',
+        details: { workspaceKind: 'git-worktree' }
+      }
+    }
   })
   expect(rig.store.getSessionTabId(B)).toBeNull()
   expect(rig.runtime.mobileSessionTabsByWorktree.has(workspace)).toBe(false)
@@ -725,7 +734,13 @@ it('excludes a late reveal after actual folder retirement while its authority ro
   expect(await rig.runtime.deleteFolderWorkspace(rig.folderId)).toEqual({ deleted: true })
   expect(await reveal(rig)).toMatchObject({
     ok: true,
-    result: { ok: false, refusal: { code: 'agent_session_workspace_removed' } }
+    result: {
+      ok: false,
+      refusal: {
+        code: 'agent_session_workspace_removed',
+        details: { workspaceKind: 'folder' }
+      }
+    }
   })
   expect(() => {
     const install = beginWatcherInstall(root)

@@ -1,7 +1,14 @@
+import { cancelAgentSessionUsageLimitContinue } from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
+import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
+import { CrewReadModel, type CrewReadDependencies } from '../../orchestration/crew/crew-read-model'
+import { subscribeCrew } from '../../orchestration/crew/crew-stream'
+import { OrchestrationDb } from '../../orchestration/db'
+import { conversationRecordReader } from '../../orchestration/structured-session-lineage'
+import type { OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   closeTestJournalHostDatabases,
@@ -139,10 +146,25 @@ describe('a receipt', () => {
   const operationId = `${NOW}-${'7'.repeat(32)}`
   const outcome = { status: 'succeeded' as const, sessionId: 'chat-a-0001' }
 
-  async function pendingOperation(): Promise<AgentSessionRecordStore> {
+  const cancel = {
+    turnItemId: `orca:${'long-supported-identity'.repeat(220)}`,
+    resetsAt: NOW + 60_000
+  }
+  const change = {
+    sessionId: 'chat-a-0001',
+    update: (record: AgentSessionRecord) => cancelAgentSessionUsageLimitContinue(record, cancel)
+  }
+  async function pendingOperation(insert = false): Promise<AgentSessionRecordStore> {
     const store = await openTestAgentSessionRecordStore(root)
     await liveChat(store, 'chat-a-0001')
-    await store.admitOperation({ callerKey: 'client-1', operationId, fingerprint: 'fp', now: NOW })
+    if (!insert) {
+      await store.admitOperation({
+        callerKey: 'client-1',
+        operationId,
+        fingerprint: 'fp',
+        now: NOW
+      })
+    }
     return store
   }
 
@@ -151,24 +173,49 @@ describe('a receipt', () => {
     return reopened.getOperationRow('client-1', operationId)?.outcome.status
   }
 
-  it('shows its rows in memory only once committed is called after the commit', async () => {
-    const store = await pendingOperation()
-    const receipt = store.operationOutcomeReceipt({ callerKey: 'client-1', operationId, outcome })
+  it.each([false, true])(
+    'adopts record and operation together after commit (insert=%s)',
+    async (insert) => {
+      const store = await pendingOperation(insert)
+      const receipt = store.operationOutcomeReceipt({
+        callerKey: 'client-1',
+        operationId,
+        outcome,
+        record: change,
+        ...(insert ? { fingerprint: 'fp', now: NOW } : {})
+      })
 
-    openTestJournalHostDatabase(root).transaction((db) => {
-      receipt.write(db)
-      expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe('pending')
+      openTestJournalHostDatabase(root).transaction((db) => {
+        receipt.write(db)
+        expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe(
+          insert ? undefined : 'pending'
+        )
+        expect(store.getRecord('chat-a-0001')?.usageLimitContinueCancel).toBeUndefined()
+      })
+      expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe(
+        insert ? undefined : 'pending'
+      )
+      expect(
+        (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')
+          ?.usageLimitContinueCancel
+      ).toEqual(cancel)
+      expect(await persistedStatus()).toBe('succeeded')
+
+      receipt.committed()
+      expect(store.getOperationRow('client-1', operationId)?.outcome).toEqual(outcome)
+      expect(store.getRecord('chat-a-0001')?.usageLimitContinueCancel).toEqual(cancel)
+    }
+  )
+
+  it.each([false, true])('rolls record and operation back together (insert=%s)', async (insert) => {
+    const store = await pendingOperation(insert)
+    const receipt = store.operationOutcomeReceipt({
+      callerKey: 'client-1',
+      operationId,
+      outcome,
+      record: change,
+      ...(insert ? { fingerprint: 'fp', now: NOW } : {})
     })
-    expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe('pending')
-    expect(await persistedStatus()).toBe('succeeded')
-
-    receipt.committed()
-    expect(store.getOperationRow('client-1', operationId)?.outcome).toEqual(outcome)
-  })
-
-  it('leaves memory and rows as they were when the transaction rolls back', async () => {
-    const store = await pendingOperation()
-    const receipt = store.operationOutcomeReceipt({ callerKey: 'client-1', operationId, outcome })
 
     expect(() =>
       openTestJournalHostDatabase(root).transaction((db) => {
@@ -177,11 +224,56 @@ describe('a receipt', () => {
       })
     ).toThrow('the journal row was refused')
 
-    expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe('pending')
-    expect(await persistedStatus()).toBe('pending')
+    expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe(
+      insert ? undefined : 'pending'
+    )
+    expect(await persistedStatus()).toBe(insert ? undefined : 'pending')
+    expect(store.getRecord('chat-a-0001')?.usageLimitContinueCancel).toBeUndefined()
+    expect(
+      (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')
+        ?.usageLimitContinueCancel
+    ).toBeUndefined()
     // A discarded draft must not become the next diff baseline.
     await store.setConversationName('chat-a-0001', 'after')
+    expect(await persistedStatus()).toBe(insert ? undefined : 'pending')
+  })
+  it('keeps an existing operation identity and rolls a competing insertion back with its record', async () => {
+    const store = await pendingOperation()
+    const args = {
+      callerKey: 'client-1',
+      operationId,
+      fingerprint: 'fp',
+      now: NOW,
+      outcome,
+      record: change
+    }
+    await store.commitOperationReceipt(store.operationOutcomeReceipt(args))
     expect(await persistedStatus()).toBe('pending')
+    expect(store.getRecord('chat-a-0001')?.usageLimitContinueCancel).toEqual(cancel)
+    await expect(
+      store.commitOperationReceipt(store.operationOutcomeReceipt({ ...args, fingerprint: 'other' }))
+    ).rejects.toThrow()
+    const stale = await openTestAgentSessionRecordStore(root)
+    const otherId = `${NOW}-${'8'.repeat(32)}`
+    await store.admitOperation({
+      callerKey: 'client-1',
+      operationId: otherId,
+      fingerprint: 'other',
+      now: NOW
+    })
+    await expect(
+      stale.commitOperationReceipt(
+        stale.operationOutcomeReceipt({
+          ...args,
+          operationId: otherId,
+          record: { ...change, update: (r) => ({ ...r, conversationName: 'lost' }) }
+        })
+      )
+    ).rejects.toThrow()
+    expect(stale.getRecord('chat-a-0001')?.conversationName).not.toBe('lost')
+    expect(
+      (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')?.conversationName
+    ).not.toBe('lost')
   })
 })
 
@@ -243,3 +335,85 @@ describe('after the database closes', () => {
     expect(store.getRecord('chat-a-0001')).toBe(before)
   })
 })
+
+it.each([3, 30])(
+  'keeps %i crew subscribers idle on lease-only commits and refreshes a committed name',
+  async (population) => {
+    const store = await openTestAgentSessionRecordStore(root)
+    const records: AgentSessionRecord[] = []
+    for (let i = 0; i < population; i++) {
+      records.push(await liveChat(store, `chat-crew-${i}`))
+    }
+    const db = new OrchestrationDb(':memory:')
+    const run = db.createRun({
+      objective: 'Crew',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    })
+    db.createDispatchContext({
+      taskId: db.createTask({ runId: run.id, spec: 'Worker' }).id,
+      assigneeHandle: `orca_session_id:${records[0].sessionId}`,
+      creator: { kind: 'system' },
+      maxDepth: 10
+    })
+    const list = vi.spyOn(store, 'listConversations')
+    const dependencies = vi.fn((): CrewReadDependencies => ({
+      db,
+      retainedDbExists: true,
+      hostKey: 'test',
+      records: conversationRecordReader(store),
+      statuses: [],
+      liveHandle: (handle) => handle === 'term_coord',
+      handleForPane: () => null,
+      paneForHandle: () => 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      name: (party, _task, captured) =>
+        party.orcaSessionId
+          ? (captured?.getRecord(party.orcaSessionId)?.conversationName ?? 'Chat')
+          : 'Coordinator'
+    }))
+    const model = new CrewReadModel(dependencies, (wake) => {
+      const stops = [db.crewChanges.subscribe(wake), sessionCrewChanges.subscribe(wake)]
+      return () => stops.forEach((stop) => stop())
+    })
+    const publications = Array.from({ length: population }, (): OrchestrationCrewFrame[] => [])
+    const stops = publications.map((frames, i) =>
+      subscribeCrew(
+        () => model.read(i === 0 ? 'term_coord' : `orca_session_id:chat-empty-${i}`),
+        model.subscribe,
+        (frame) => frames.push(frame)
+      )
+    )
+    try {
+      expect(dependencies).toHaveBeenCalledTimes(1)
+      expect(list).toHaveBeenCalledTimes(1)
+      for (const record of records) {
+        await store.renewLease({
+          sessionId: record.sessionId,
+          fence: record.lease.runtimeFence,
+          childProbe: { outcome: 'identity-matched', matchedOn: ['spawn-token'] },
+          now: NOW + 10_000
+        })
+      }
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(dependencies).toHaveBeenCalledTimes(1)
+      expect(list).toHaveBeenCalledTimes(1)
+      await store.setConversationName(records[0].sessionId, 'Renamed worker')
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(dependencies).toHaveBeenCalledTimes(2)
+      expect(list).toHaveBeenCalledTimes(1)
+      expect(publications[0].filter((frame) => frame.type === 'complete')).toHaveLength(2)
+      expect(publications[0].findLast((frame) => frame.type === 'rows')).toMatchObject({
+        rows: [{ label: 'Renamed worker' }]
+      })
+      for (const frames of publications.slice(1)) {
+        expect(frames.filter((frame) => frame.type === 'complete')).toHaveLength(1)
+      }
+    } finally {
+      stops.forEach((stop) => stop())
+      list.mockRestore()
+      db.close()
+    }
+  }
+)

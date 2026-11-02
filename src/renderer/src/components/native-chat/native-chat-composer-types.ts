@@ -1,3 +1,4 @@
+import type { OrchestrationAgentReference } from '../../../../shared/orchestration-agent-reference'
 import type { CaptureStructuredAgentSessionPresentation } from './use-structured-agent-session-mutate'
 import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
@@ -44,7 +45,7 @@ export type NativeChatStructuredComposerTransport = {
     text: string,
     attachments: readonly NativeChatComposerImageAttachment[],
     request?: StructuredAgentSessionSendRequest
-  ) => boolean | 'queued'
+  ) => boolean | 'queued' | Promise<boolean>
   /** A send is out: Send stays disabled, and a send returns false, until it settles. */
   sendOut?: boolean
   /** Send is held for this reason, which the disabled button says. */
@@ -137,6 +138,9 @@ export type NativeChatComposerProps = {
    *  text and dictation only, with no command/skill/@-file pickers, `/resume`, attachments or
    *  file-backed pastes. The pending transport reports no session options or context usage. */
   workspacePending?: true
+  /** The first prompt in an agent's launch panel: one line that grows, Attach as its only control,
+   *  no /resume, the launch workspace's skills, and a draft kept in memory until the launch. */
+  launchPrompt?: { placeholder: string; onEmptySubmit: () => void }
   /** Cmd/Ctrl+Shift+Enter steers the head queued card; false when it can't. */
   steerHead?: () => boolean
   /** The chat's own notices, shown in the composer's notice card above its input. */
@@ -155,6 +159,7 @@ export type NativeChatLaunchSeed = {
 }
 
 export type NativeChatComposerHandle = {
+  insertAgentReferences: (references: OrchestrationAgentReference[]) => boolean
   isComposing?: () => boolean
   focus: () => boolean
   insertTypedText: (text: string) => boolean
@@ -173,4 +178,6 @@ export type NativeChatComposerHandle = {
   pasteFromClipboard: () => void
   /** Whether a node is inside the composer's own input, not merely the chat pane. */
   contains: (node: Node | null) => boolean
+  /** Sends the draft as Enter would, for a send control outside the composer. */
+  submit?: () => void
 }

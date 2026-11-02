@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { resolveClientEnvironmentFooter } from '@/lib/client-environment-info'
 import {
   LEGACY_PTY_ALLOCATION_HINT,
   LEGACY_TERMINAL_PROCESS_LIMIT_HINT,
@@ -42,4 +43,17 @@ export function withoutTerminalSpawnIssueRequest(error: string): string {
         : line
     )
     .join('\n')
+}
+
+const FAILED_SPAWN_SHELL = /failed to spawn shell "([^"\r\n]+)"/i
+
+/** The shell a failed spawn names, which the footer reports instead of the client's default shell. */
+export function failedSpawnShell(error: string): string | null {
+  return FAILED_SPAWN_SHELL.exec(error)?.[1] ?? null
+}
+
+/** The client environment footer, naming the failed spawn's own shell (wsl.exe, say) over the default one. */
+export function failedSpawnEnvironmentFooter(error: string): Promise<string> {
+  const shell = failedSpawnShell(error)
+  return resolveClientEnvironmentFooter(shell ? { shell } : {})
 }

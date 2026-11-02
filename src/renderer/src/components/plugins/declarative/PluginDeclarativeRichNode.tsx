@@ -21,6 +21,7 @@ import { PluginDeclarativeTree } from './PluginDeclarativeTree'
 import { PluginDeclarativeMarkdown } from './PluginDeclarativeMarkdown'
 import { PluginDeclarativeImage } from './PluginDeclarativeImage'
 import { PluginDeclarativeRelativeTimeText } from './PluginDeclarativeRelativeTime'
+import { PluginDeclarativeBox } from './PluginDeclarativeBox'
 import {
   PluginDeclarativeCallout,
   PluginDeclarativeCodeView,
@@ -47,11 +48,12 @@ const RICH_TYPES = [
   'KeyValue',
   'Callout',
   'Skeleton',
-  'RelativeTime'
+  'RelativeTime',
+  'Box'
 ] as const
 const RICH_TYPE_SET: ReadonlySet<string> = new Set(RICH_TYPES)
 
-/** Catalog 2 components (Orca 1.4.247). */
+/** Catalog 2+ components (Orca 1.4.247 and later). */
 export type PluginDeclarativeRichNode = Extract<
   PluginDeclarativeNode,
   { type: (typeof RICH_TYPES)[number] }
@@ -133,5 +135,7 @@ export function PluginDeclarativeRichNodeView({
           <PluginDeclarativeRelativeTimeText at={node.props.at} format={node.props.format} />
         </span>
       )
+    case 'Box':
+      return <PluginDeclarativeBox props={node.props}>{children}</PluginDeclarativeBox>
   }
 }
