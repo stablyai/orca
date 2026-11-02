@@ -163,7 +163,8 @@ describe('PluginPanelController identity binding', () => {
     ).resolves.toEqual({
       ok: false,
       code: 'rate_limited',
-      error: 'too many panel requests'
+      error: 'too many panel requests',
+      retryAfterMs: 10_000
     })
     expect(executeHostCall).not.toHaveBeenCalled()
   })

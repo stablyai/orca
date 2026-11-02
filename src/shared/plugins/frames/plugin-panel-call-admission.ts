@@ -9,6 +9,8 @@ export type PluginPanelCallRefusal = 'oversized' | 'rate_limited'
 
 export type PluginPanelCallAdmission = {
   admit(pluginKey: string, message: unknown): PluginPanelCallRefusal | null
+  /** After a rate-limit refusal: how long until this plugin's window admits another call. */
+  retryAfterMs(pluginKey: string): number
   clear(pluginKey?: string): void
 }
 
@@ -22,7 +24,12 @@ export function admitPluginPanelCall(
     return { ok: false, code: 'too_large', error: 'panel message exceeds the size limit' }
   }
   if (refusal === 'rate_limited') {
-    return { ok: false, code: 'rate_limited', error: 'too many panel requests' }
+    return {
+      ok: false,
+      code: 'rate_limited',
+      error: 'too many panel requests',
+      retryAfterMs: admission.retryAfterMs(pluginKey)
+    }
   }
   return null
 }
@@ -51,6 +58,9 @@ export function createPluginPanelCallAdmission(
     admit(pluginKey, message) {
       const budget = budgetFor(pluginKey)
       return budget.admit(now(), structuredCloneMessageBytes(message, budget.maxBytes))
+    },
+    retryAfterMs(pluginKey) {
+      return budgets.get(pluginKey)?.retryAfterMs?.(now()) ?? 0
     },
     clear(pluginKey) {
       if (pluginKey === undefined) {
