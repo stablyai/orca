@@ -104,6 +104,7 @@ export type TerminalActions = {
       captureRecentlyClosed?: boolean
       force?: boolean
       hostAliasCloseConfirmed?: true
+      worktreeId?: string
       remoteCloseOwnedByHost?: boolean
       /** See closeUnifiedTab. */
       preserveWorktreeSelection?: boolean

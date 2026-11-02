@@ -38,12 +38,22 @@ export function createTerminalTabCloseActions(
   return {
     closeTab: (tabId, opts) => {
       const closeReason = opts?.reason ?? 'user'
-      const aliasRow = Object.values(get().tabsByWorktree)
-        .flat()
-        .find((row) => row.id === tabId && row.hostTerminalAlias)
+      const aliasRows = opts?.worktreeId
+        ? (get().tabsByWorktree[opts.worktreeId] ?? [])
+        : Object.values(get().tabsByWorktree).flat()
+      const aliasRow = aliasRows.find((row) => row.id === tabId && row.hostTerminalAlias)
       const alias = aliasRow?.hostTerminalAlias
       if (aliasRow && alias && !opts?.hostAliasCloseConfirmed) {
-        if (closeReason !== 'user') {
+        if (
+          closeReason !== 'user' ||
+          (!opts?.force &&
+            Object.values(get().unifiedTabsByWorktree).some((entries) =>
+              entries.some(
+                (entry) =>
+                  (entry.id === tabId || entry.entityId === tabId) && entry.isPinned === true
+              )
+            ))
+        ) {
           return
         }
         startTerminalHostAliasRetirement(aliasRow, get, opts)

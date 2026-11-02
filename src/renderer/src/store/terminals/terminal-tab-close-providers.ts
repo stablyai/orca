@@ -156,6 +156,7 @@ export function startTerminalHostAliasRetirement(
       ) {
         get().closeTab(aliasRow.id, {
           ...opts,
+          worktreeId: aliasRow.worktreeId,
           captureRecentlyClosed: false,
           remoteCloseOwnedByHost: true,
           localPtyTeardownOwnedExternally: true,
