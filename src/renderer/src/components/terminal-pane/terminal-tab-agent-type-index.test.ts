@@ -97,4 +97,19 @@ describe('createTerminalTabAgentTypeSelector', () => {
       })
     ).toEqual({})
   })
+
+  it('prefers paneOwner.agent over a nested guest agentType', () => {
+    const select = createTerminalTabAgentTypeSelector()
+    expect(
+      select(
+        {
+          'tab-1:leaf-a': {
+            ...entry('grok'),
+            paneOwner: { agent: 'antigravity', session: 'agy-conv-1' }
+          }
+        },
+        'tab-1'
+      )
+    ).toEqual({ 'leaf-a': 'antigravity' })
+  })
 })

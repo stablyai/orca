@@ -1,4 +1,8 @@
-import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import {
+  effectiveAgentStatusOwnerType,
+  type AgentStatusEntry,
+  type AgentType
+} from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import {
   isNativeChatTabWideFallbackSafe,
@@ -52,7 +56,7 @@ function activeLeafAgentType(
 ): AgentType | undefined {
   const activeLeafId = resolveNativeChatActiveLayoutLeafId(layout)
   return activeLeafId
-    ? (agentStatusByPaneKey[`${tabId}:${activeLeafId}`]?.agentType ?? undefined)
+    ? (effectiveAgentStatusOwnerType(agentStatusByPaneKey[`${tabId}:${activeLeafId}`]) ?? undefined)
     : undefined
 }
 
@@ -71,7 +75,7 @@ function firstPaneAgentTypes(
     }
     const tabId = paneKey.slice(0, colon)
     if (!byTabId.has(tabId) && isUnclaimedTab(tabId)) {
-      byTabId.set(tabId, entry.agentType ?? undefined)
+      byTabId.set(tabId, effectiveAgentStatusOwnerType(entry) ?? undefined)
     }
   }
   return byTabId
@@ -122,7 +126,10 @@ function statusChangeKeepsAgentTypes(
     index += 1
     const before = previous[paneKey]
     const entry = next[paneKey]
-    if (before !== entry && before?.agentType !== entry?.agentType) {
+    if (
+      before !== entry &&
+      effectiveAgentStatusOwnerType(before) !== effectiveAgentStatusOwnerType(entry)
+    ) {
       return false
     }
   }

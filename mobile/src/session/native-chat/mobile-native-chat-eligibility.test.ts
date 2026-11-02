@@ -116,6 +116,23 @@ describe('resolveMobileNativeChat', () => {
     expect(resolveMobileNativeChat({ type: 'terminal', launchAgent: 'gemini' })).toBeNull()
   })
 
+  it('keeps a terminal-only paneOwner out of Native Chat even if agentStatus reports a nested grok subagent', () => {
+    const tab = {
+      type: 'terminal' as const,
+      agentStatus: status({
+        agentType: 'grok',
+        paneOwner: { agent: 'antigravity', session: 'agy-conv-1' },
+        providerSession: {
+          key: 'session_id',
+          id: 'grok-subagent-1',
+          transcriptPath: '/tmp/grok-subagent.jsonl'
+        }
+      })
+    }
+    expect(resolveMobileNativeChat(tab)).toBeNull()
+    expect(resolveMobileNativeChatSessionId(tab)).toBeNull()
+  })
+
   it('admits Grok only when its transcript is readable by the serving host', () => {
     const tab = { type: 'terminal', launchAgent: 'grok' }
     expect(resolveMobileNativeChat(tab, isNativeChatTranscriptLocalReadable(null))).toMatchObject({

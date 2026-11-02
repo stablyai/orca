@@ -53,12 +53,14 @@ export function readAgentProcessIdentity(value: unknown): AgentProcessIdentity |
   return { pid, platform, startTime }
 }
 
-// Why: only Claude's hook command captures its agent's process; other hooks cannot speak for liveness.
+// Why: only Claude and Antigravity POSIX hook commands capture their agent's process; other hooks cannot speak for liveness.
 export function readHookAgentProcess(
   source: string,
   value: unknown
 ): AgentProcessIdentity | undefined {
-  return source === 'claude' ? readAgentProcessIdentity(value) : undefined
+  return source === 'claude' || source === 'antigravity'
+    ? readAgentProcessIdentity(value)
+    : undefined
 }
 
 export function readAgentProcessPresence(value: unknown): AgentProcessPresence | undefined {

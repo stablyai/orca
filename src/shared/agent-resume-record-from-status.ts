@@ -1,8 +1,10 @@
 // Share status-to-resume rules with main so accepted hook statuses can checkpoint panes no window opened.
 
+import { isAgentHookSource } from './agent-hook-relay'
 import { agentVerdictFields } from './agent-main-agent-verdict'
 import {
   agentProviderSessionsEqual,
+  extractAgentProviderSession,
   isResumableTuiAgent,
   type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig,
@@ -21,6 +23,7 @@ export type ResumeRecordStatus = Pick<
   AgentStatusEntry,
   | 'paneKey'
   | 'agentType'
+  | 'paneOwner'
   | 'state'
   | 'prompt'
   | 'updatedAt'
@@ -54,15 +57,27 @@ export function resumeRecordFromStatus(args: {
   launchConfig?: SleepingAgentLaunchConfig
   origin?: SleepingAgentSessionRecord['origin']
 }): SleepingAgentSessionRecord | null {
-  const agent = args.entry.agentType
+  const nestedGuest = Boolean(
+    args.entry.paneOwner?.agent && args.entry.paneOwner.agent !== args.entry.agentType
+  )
+  const agent = args.entry.paneOwner?.agent ?? args.entry.agentType
+  const providerSession =
+    nestedGuest && args.entry.paneOwner
+      ? isAgentHookSource(args.entry.paneOwner.agent)
+        ? (extractAgentProviderSession(args.entry.paneOwner.agent, {
+            session_id: args.entry.paneOwner.session,
+            conversationId: args.entry.paneOwner.session
+          }) ?? undefined)
+        : undefined
+      : args.entry.providerSession
   if (
     args.entry.terminalResumeEligible === false ||
     !isResumableTuiAgent(agent) ||
-    !args.entry.providerSession
+    !providerSession
   ) {
     return null
   }
-  if (!getAgentResumeArgv(agent, args.entry.providerSession)) {
+  if (!getAgentResumeArgv(agent, providerSession)) {
     return null
   }
   const tab = args.tabOf?.()
@@ -71,7 +86,7 @@ export function resumeRecordFromStatus(args: {
     ...(tab ? { tabId: tab.id } : {}),
     worktreeId: args.worktreeId,
     agent,
-    providerSession: args.entry.providerSession,
+    providerSession,
     ...(args.entry.connectionId !== undefined ? { connectionId: args.entry.connectionId } : {}),
     prompt: args.entry.prompt,
     state: args.entry.state,

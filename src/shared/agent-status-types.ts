@@ -146,6 +146,8 @@ export type AgentStatusEntry = {
   /** Provider-owned conversation/session id captured from hook payloads.
    *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
   providerSession?: AgentProviderSessionMetadata
+  /** Session-bound pane owner retained across nested guest CLI hooks. */
+  paneOwner?: { agent: AgentType; session: string }
   /** False when the status belongs to a non-terminal owner that restores itself. */
   terminalResumeEligible?: false
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
@@ -265,6 +267,13 @@ export function pickHostTurnEnd(row: HostTurnEndFacts): HostTurnEndFacts {
 
 export function isAgentStatusState(value: unknown): value is AgentStatusState {
   return typeof value === 'string' && VALID_STATES.has(value)
+}
+
+/** Prefer the session-bound pane owner when a nested CLI hook temporarily updates status. */
+export function effectiveAgentStatusOwnerType(
+  entry: Pick<AgentStatusEntry, 'agentType' | 'paneOwner'> | null | undefined
+): AgentType | undefined {
+  return entry?.paneOwner?.agent ?? entry?.agentType
 }
 
 export const AGENT_STATUS_JSON_STRUCTURE_LIMITS = {

@@ -89,6 +89,7 @@ export function demoteRuntimeMobileAgentStatus(
     paneKey: status.paneKey,
     stateHistory: [],
     agentType: status.agentType,
+    ...(status.paneOwner ? { paneOwner: status.paneOwner } : {}),
     ...completedTurnFields(status),
     ...(status.providerSession ? { providerSession: status.providerSession } : {})
   }
@@ -138,6 +139,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     paneKey: status.paneKey,
     stateHistory: [],
     ...(status.agentType ? { agentType: status.agentType } : {}),
+    ...(status.paneOwner ? { paneOwner: status.paneOwner } : {}),
     ...(status.terminalHandle ? { terminalHandle: status.terminalHandle } : {}),
     ...(status.worktreeId ? { worktreeId: status.worktreeId } : {}),
     ...(status.tabId ? { tabId: status.tabId } : {}),
@@ -205,6 +207,7 @@ export type RuntimeHookAgentRowLookup = {
   providerSession: AgentProviderSessionMetadata | null
   providerSessionAgentType: string | null
   providerSessionReceivedAt: number | null
+  paneOwner: { agent: string; session: string } | null
   agentType: string | null
   agentIsLive: boolean
   live: HookLiveAgentRow | null
@@ -268,7 +271,8 @@ export function selectRuntimeHookAgentRowForPane(
     providerSession: session?.providerSession ?? null,
     providerSessionAgentType: session?.agentType ?? null,
     providerSessionReceivedAt: session?.receivedAt ?? null,
-    agentType: agent?.agentType ?? null,
+    paneOwner: agent?.paneOwner ?? session?.paneOwner ?? null,
+    agentType: agent?.paneOwner?.agent ?? agent?.agentType ?? null,
     agentIsLive: agent != null && agent.state !== 'done',
     live: live ? toHookLiveAgentRow(live) : null,
     restored: restored ? toHookLiveAgentRow(restored) : null
@@ -283,6 +287,7 @@ function toHookLiveAgentRow(row: AgentStatusIpcPayload): HookLiveAgentRow {
     stateStartedAt: row.stateStartedAt ?? row.receivedAt,
     ...pickHostTurnEnd(row),
     ...(row.worktreeId ? { worktreeId: row.worktreeId } : {}),
+    ...(row.paneOwner ? { paneOwner: row.paneOwner } : {}),
     ...(row.programStatus ? { programStatus: row.programStatus } : {})
   }
 }

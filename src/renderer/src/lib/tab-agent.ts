@@ -1,4 +1,7 @@
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import {
+  effectiveAgentStatusOwnerType,
+  type AgentStatusEntry
+} from '../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
@@ -53,7 +56,7 @@ function agentFromStatusEntry(entry: AgentStatusEntry | undefined): TerminalAgen
   if (!entry || entry.state === 'done') {
     return null
   }
-  return agentTypeToIconAgent(entry.agentType)
+  return agentTypeToIconAgent(effectiveAgentStatusOwnerType(entry))
 }
 
 export function resolveFocusedCompletedTabAgent(
@@ -96,7 +99,7 @@ function completedAgentFromStatusEntry(entry: AgentStatusEntry | undefined): Ter
   if (!entry || entry.state !== 'done') {
     return null
   }
-  return agentTypeToIconAgent(entry.agentType)
+  return agentTypeToIconAgent(effectiveAgentStatusOwnerType(entry))
 }
 
 export function resolveFocusedRetainedTabAgent(

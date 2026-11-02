@@ -423,4 +423,61 @@ describe('idle foreground process owns its provider session', () => {
     expect(await server.checkAgentPresence(PANE)).toBeNull()
     expect(probe).not.toHaveBeenCalled()
   })
+
+  it('keeps an idle antigravity process owner when a nested grok subagent emits hooks', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'idle-antigravity-owner-'))
+    const transcriptPath = join(directory, 'agy.jsonl')
+    try {
+      writeFileSync(
+        transcriptPath,
+        `${JSON.stringify({
+          step_index: 0,
+          source: 'USER_EXPLICIT',
+          type: 'USER_INPUT',
+          content: 'Run background Grok task'
+        })}\n`
+      )
+      const server = await start()
+      const agyProcess = { pid: 5001, platform: 'linux', startTime: 'birth-5001' }
+      for (const [hook_event_name, extra] of [
+        ['PreInvocation', {}],
+        ['Stop', { fullyIdle: true, terminationReason: 'NO_TOOL_CALL', error: '' }]
+      ] as const) {
+        await postHookEvent(
+          server,
+          buildBody(
+            {
+              hook_event_name,
+              conversationId: 'agy-conv-1',
+              transcriptPath,
+              prompt: 'Run background Grok task',
+              ...extra
+            },
+            { agentProcess: JSON.stringify(agyProcess) }
+          ),
+          '/hook/antigravity'
+        )
+      }
+      for (const hook_event_name of ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'Stop']) {
+        await postHookEvent(
+          server,
+          buildBody({
+            hook_event_name,
+            session_id: 'nested-grok-1',
+            prompt: 'Subagent task',
+            tool_name: 'Bash'
+          }),
+          '/hook/grok'
+        )
+      }
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        agentType: 'antigravity',
+        state: 'done',
+        prompt: 'Run background Grok task',
+        providerSession: { key: 'conversation_id', id: 'agy-conv-1' }
+      })
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
 })
