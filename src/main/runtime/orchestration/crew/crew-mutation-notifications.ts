@@ -1,3 +1,4 @@
+import type { CrewInvalidation } from './crew-changes'
 import type { OrchestrationDb } from '../db'
 
 type CrewMutationPrototype = Partial<OrchestrationDb>
@@ -133,9 +134,13 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
   prototype.insertMessage = function (this: OrchestrationDb, message) {
     const result = insert.call(this, message)
     if (result.type !== 'heartbeat') {
-      this.crewChanges.notify(
-        new Set([result.delivery_contract === 'legacy_direct' ? 'topology' : 'traffic'])
-      )
+      const notice: CrewInvalidation =
+        result.delivery_contract === 'legacy_direct'
+          ? new Set(['topology'])
+          : Object.assign(new Set(['traffic'] as const), {
+              trafficAddresses: new Set([result.from_handle, result.to_handle])
+            })
+      this.crewChanges.notify(notice)
     }
     return result
   }
