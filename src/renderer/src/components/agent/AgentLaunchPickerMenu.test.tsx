@@ -8,6 +8,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -166,7 +167,24 @@ it.each([
       terminal: { model: 'astra', permissionMode: 'ask' },
       structured: { model: 'astra', permissionMode: 'ask' }
     }
-    show(hydrated)
+    const showPopover = (value: AgentPickerEntry) =>
+      act(() =>
+        root.render(
+          <TooltipProvider>
+            <DropdownMenu defaultOpen modal={false}>
+              <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <AgentLaunchSetupButton
+                  entry={value}
+                  onUse={launch}
+                  renderAnchor={(trigger) => <DropdownMenuItem>{trigger}</DropdownMenuItem>}
+                />
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </TooltipProvider>
+        )
+      )
+    showPopover(hydrated)
     let viewportWidth = viewport
     let placementReads = 0
     const observers = new Set<ResizeObserverFixture>()
@@ -339,7 +357,7 @@ it.each([
     expect(content.querySelector('button[aria-label="Codex permissions"]')?.textContent).toContain(
       'Full access'
     )
-    show({ ...hydrated })
+    showPopover({ ...hydrated })
     expect(document.querySelector('[role="menuitem"]')?.isConnected).toBe(true)
     await waitFor(() => {
       expect(content.parentElement!.style.transform).toBe(originalTransform)
@@ -418,12 +436,14 @@ it.each([
 
 it('opens setup with a clicked chevron without launching, then dispatches its selected surface once', () => {
   const configure = getByRole(document.body, 'button', { name: 'Configure Codex' })
-  expect(configure?.dataset.variant).toBe('ghost')
-  expect(configure?.previousElementSibling?.getAttribute('data-orientation')).toBe('vertical')
+  expect(configure?.closest('[data-agent-launch-row]')?.getAttribute('data-slot')).toBe(
+    'dropdown-menu-sub-trigger'
+  )
+  expect(configure?.previousElementSibling?.getAttribute('data-orientation')).not.toBe('vertical')
   act(() => configure?.click())
   expect(launch).not.toHaveBeenCalled()
   expect(document.body.textContent).toContain('Arguments')
-  expect(getByRole(document.body, 'dialog', { name: 'Configure Codex' })).not.toBeNull()
+  expect(getByRole(document.body, 'menu', { name: 'Configure Codex' })).not.toBeNull()
   const terminal = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
     (button) => button.textContent === 'Launch terminal'
   )
@@ -439,8 +459,10 @@ it('opens the setup panel on the menu layer so it stacks above the new tab menu'
   act(() => getByRole(document.body, 'button', { name: 'Configure Codex' }).click())
   // happy-dom computes no stacking, so compare the z-index utilities the layers come from.
   const layer = (element: HTMLElement) => element.className.match(/\bz-\[\d+\]/)?.[0]
-  const panel = layer(getByRole(document.body, 'dialog', { name: 'Configure Codex' }))
-  expect(panel).toBe(layer(getByRole(document.body, 'menu')))
+  const panel = layer(getByRole(document.body, 'menu', { name: 'Configure Codex' }))
+  expect(panel).toBe(
+    layer(document.querySelector<HTMLElement>('[data-slot="dropdown-menu-content"]')!)
+  )
   expect(panel).not.toBe('z-[60]')
 })
 it('keeps setup open while the pointer expands and collapses Arguments', async () => {
@@ -448,75 +470,57 @@ it('keeps setup open while the pointer expands and collapses Arguments', async (
   await user.click(
     document.querySelector<HTMLButtonElement>('button[aria-label="Configure Codex"]')!
   )
-  const panel = document.querySelector('[role="dialog"]')!
+  const panel = document.querySelector('[data-slot="dropdown-menu-sub-content"]')!
   expect(panel).not.toBeNull()
   expect(panel.querySelector('textarea[aria-label="Arguments"]')).toBeNull()
   const toggle = panel.querySelector<HTMLButtonElement>('button[aria-label="Toggle Arguments"]')!
   await user.hover(toggle)
-  expect(document.querySelector('[role="dialog"]')).toBe(panel)
+  expect(document.querySelector('[data-slot="dropdown-menu-sub-content"]')).toBe(panel)
   await user.click(toggle)
-  expect(document.querySelector('[role="dialog"]')).toBe(panel)
+  expect(document.querySelector('[data-slot="dropdown-menu-sub-content"]')).toBe(panel)
   expect(panel.querySelector('textarea[aria-label="Arguments"]')).not.toBeNull()
   await user.click(toggle)
-  expect(document.querySelector('[role="dialog"]')).toBe(panel)
+  expect(document.querySelector('[data-slot="dropdown-menu-sub-content"]')).toBe(panel)
   expect(panel.querySelector('textarea[aria-label="Arguments"]')).toBeNull()
   expect(launch).not.toHaveBeenCalled()
 })
 
-it.each(['{Enter}', ' '])(
-  'keeps setup on hover, replaces it on keyboard %s, and dismisses without launching',
-  async (key) => {
-    show(entry, [
-      {
-        ...entry,
-        agent: 'claude',
-        label: 'Claude',
-        rows: [{ agent: 'claude', kind: 'chat' }]
-      }
-    ])
-    const user = userEvent.setup()
-    await user.click(
-      document.querySelector<HTMLButtonElement>('button[aria-label="Configure Codex"]')!
-    )
-    const panel = document.querySelector('[role="dialog"]')!
-    expect(panel).not.toBeNull()
-    const closeAutoFocus = vi.fn()
-    panel.addEventListener('focusScope.autoFocusOnUnmount', closeAutoFocus, { once: true })
-    const otherRow = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
-      (row) => row.textContent === 'Claude'
-    )!
-    fireEvent.pointerMove(otherRow, { pointerType: 'mouse' })
-    await waitFor(() => expect(document.activeElement).toBe(otherRow))
-    expect(document.querySelector('[role="dialog"]')).toBe(panel)
-    await user.keyboard('{ArrowRight}')
-    const otherTrigger = document.querySelector<HTMLButtonElement>(
-      'button[aria-label="Configure Claude"]'
-    )!
-    expect(document.activeElement).toBe(otherTrigger)
-    await user.keyboard(key)
-    await waitFor(() => expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1))
-    const replacement = document.querySelector('[role="dialog"]')!
-    const search = replacement.querySelector<HTMLInputElement>(
-      'input[placeholder="Search Claude models…"]'
-    )!
-    expect(search).not.toBeNull()
-    expect(replacement).not.toBe(panel)
-    await waitFor(() => expect(panel.isConnected).toBe(false))
-    await waitFor(() => expect(closeAutoFocus).toHaveBeenCalledOnce())
-    expect(document.activeElement).toBe(search)
-    await user.keyboard('astra')
-    expect(search.value).toBe('astra')
-    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1)
-    await user.keyboard('{Escape}')
-    await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull())
-    await waitFor(() => expect(document.activeElement).toBe(otherTrigger))
-    await user.click(otherTrigger)
-    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1)
-    fireEvent.pointerDown(document.body, { pointerType: 'mouse', button: 0 })
-    await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull())
-    expect(launch).not.toHaveBeenCalled()
-  }
-)
+it('opens on chevron hover, crosses into setup, and switches agents without launching', async () => {
+  show(entry, [
+    { ...entry, agent: 'claude', label: 'Claude', rows: [{ agent: 'claude', kind: 'chat' }] }
+  ])
+  const user = userEvent.setup()
+  const codex = getByRole(document.body, 'button', { name: 'Configure Codex' })
+  await user.hover(codex)
+  const panel = await waitFor(() => getByRole(document.body, 'menu', { name: 'Configure Codex' }))
+  await user.hover(panel)
+  expect(panel.isConnected).toBe(true)
+  const claude = getByRole(document.body, 'button', { name: 'Configure Claude' })
+  await user.hover(claude)
+  await waitFor(() =>
+    expect(document.querySelectorAll('[data-slot="dropdown-menu-sub-content"]')).toHaveLength(1)
+  )
+  await waitFor(() =>
+    expect(getByRole(document.body, 'menu', { name: 'Configure Claude' })).toBeTruthy()
+  )
+  expect(panel.isConnected).toBe(false)
+  expect(launch).not.toHaveBeenCalled()
+})
+
+it('opens with ArrowRight and returns to the trigger with ArrowLeft', async () => {
+  const user = userEvent.setup()
+  const row = document.querySelector<HTMLElement>('[data-agent-launch-row]')!
+  act(() => row.focus())
+  await user.keyboard('{ArrowRight}')
+  const panel = getByRole(document.body, 'menu', { name: 'Configure Codex' })
+  act(() => getByRole(panel, 'button', { name: 'Toggle Arguments' }).focus())
+  await user.keyboard('{ArrowLeft}')
+  expect(document.querySelector('[data-slot="dropdown-menu-sub-content"]')).toBeNull()
+  expect(document.activeElement).toBe(
+    getByRole(document.body, 'button', { name: 'Configure Codex' })
+  )
+  expect(launch).not.toHaveBeenCalled()
+})
 
 it('keeps model, permission and Fast badge pointer interactions inside setup, but dismisses outside', async () => {
   show({
@@ -541,11 +545,11 @@ it('keeps model, permission and Fast badge pointer interactions inside setup, bu
   await user.click(
     document.querySelector<HTMLButtonElement>('button[aria-label="Configure Claude"]')!
   )
-  const panel = document.querySelector('[role="dialog"]')!
+  const panel = document.querySelector('[data-slot="dropdown-menu-sub-content"]')!
   const model = panel.querySelector<HTMLElement>('[cmdk-item]')!
   await user.hover(model)
   await user.click(model)
-  expect(document.querySelector('[role="dialog"]')).toBe(panel)
+  expect(document.querySelector('[data-slot="dropdown-menu-sub-content"]')).toBe(panel)
   await user.click(
     panel.querySelector<HTMLButtonElement>('button[aria-label="Claude permissions"]')!
   )
@@ -554,16 +558,16 @@ it('keeps model, permission and Fast badge pointer interactions inside setup, bu
       item.textContent?.startsWith('Full access')
     )!
   )
-  expect(document.querySelector('[role="dialog"]')).toBe(panel)
+  expect(document.querySelector('[data-slot="dropdown-menu-sub-content"]')).toBe(panel)
   await user.click(panel.querySelector<HTMLButtonElement>('button[aria-label="Toggle Arguments"]')!)
   const chip = panel.querySelector<HTMLButtonElement>('button[aria-label*="Remove --settings"]')!
   expect(chip).not.toBeNull()
   await user.click(chip)
-  expect(document.querySelector('[role="dialog"]')).toBe(panel)
+  expect(document.querySelector('[data-slot="dropdown-menu-sub-content"]')).toBe(panel)
   expect(panel.querySelector('button[aria-label*="Remove --settings"]')).toBeNull()
   expect(panel.querySelector<HTMLTextAreaElement>('textarea')?.value).toContain('"theme":"light"')
   await user.click(document.body)
-  expect(document.querySelector('[role="dialog"]')).toBeNull()
+  expect(document.querySelector('[data-slot="dropdown-menu-sub-content"]')).toBeNull()
   expect(launch).not.toHaveBeenCalled()
 })
 
@@ -624,9 +628,7 @@ it('still launches today’s default when the row is clicked while its setup is 
 })
 
 it('lets the chevron return keyboard focus to its row without opening or launching', () => {
-  const configure = document.querySelector<HTMLButtonElement>(
-    'button[aria-label="Configure Codex"]'
-  )
+  const configure = getByRole(document.body, 'button', { name: 'Configure Codex' })
   act(() => {
     configure?.focus()
     configure?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
@@ -658,9 +660,7 @@ it('launches the searched default once from Enter', () => {
 })
 
 it('closes Configure with Escape without dispatch and returns focus to its trigger', async () => {
-  const configure = document.querySelector<HTMLButtonElement>(
-    'button[aria-label="Configure Codex"]'
-  )!
+  const configure = getByRole(document.body, 'button', { name: 'Configure Codex' })!
   act(() => configure.click())
   const search = document.querySelector<HTMLInputElement>('input[aria-label="Search models"]')!
   act(() => {
@@ -813,4 +813,10 @@ it('retains the whole row draft after outside dismissal, menu remount and launch
   assertDraft()
   showButton({ ...own, ownerKey: 'replacement-claude' })
   assertDraft()
+})
+
+it('does not launch when a menu drag is released over the submenu trigger', () => {
+  const configure = getByRole(document.body, 'button', { name: 'Configure Codex' })
+  fireEvent.pointerUp(configure, { pointerType: 'mouse', button: 0 })
+  expect(launch).not.toHaveBeenCalled()
 })
