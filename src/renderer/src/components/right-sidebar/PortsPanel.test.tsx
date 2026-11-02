@@ -11,7 +11,7 @@ import {
   addressForPortForwardEntry,
   browserUrlForPort,
   browserUrlForPortForwardEntry
-} from '@/lib/workspace-port-urls'
+} from '@/lib/workspace-ports/workspace-port-urls'
 
 const { activateAndRevealWorktreeMock } = vi.hoisted(() => ({
   activateAndRevealWorktreeMock: vi.fn()
@@ -31,7 +31,7 @@ import {
   refreshWorkspacePortScanAfterStop,
   resolvePortOpenInOrcaBrowser,
   scanWorkspacePortsForTarget
-} from '@/lib/workspace-port-actions'
+} from '@/lib/workspace-ports/workspace-port-actions'
 
 const workspacePort: WorkspacePort = {
   id: '127.0.0.1:63468:1234',

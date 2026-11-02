@@ -105,7 +105,30 @@ afterEach(() => {
 })
 
 function installApi(plugins: Record<string, unknown>): void {
-  Object.defineProperty(window, 'api', { configurable: true, value: { plugins } })
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      plugins: {
+        getInstalledManifest: vi.fn().mockResolvedValue(null),
+        consent: vi.fn().mockResolvedValue([]),
+        ...plugins
+      }
+    }
+  })
+}
+
+function workerUpdate(pluginKey: string, official: boolean): PluginMarketplaceHostInstallPreview {
+  const next = preview(pluginKey, ['secrets:own'])
+  return {
+    ...next,
+    official,
+    manifest: { ...next.manifest, main: 'worker.js' },
+    accessGrowth: {
+      capabilities: ['secrets:own'],
+      execution: 'trusted-worker',
+      contributions: []
+    }
+  }
 }
 
 async function renderDialog(
@@ -129,6 +152,12 @@ async function renderDialog(
   return container
 }
 
+function reviewButton(container: HTMLElement, pluginKey: string): HTMLButtonElement | undefined {
+  return Array.from(
+    container.querySelectorAll<HTMLButtonElement>(`[data-plugin-update="${pluginKey}"] button`)
+  ).find((candidate) => candidate.textContent === 'Review')
+}
+
 function button(container: HTMLElement, text: string): HTMLButtonElement | undefined {
   return Array.from(container.querySelectorAll('button')).find(
     (candidate) => candidate.textContent === text
@@ -147,7 +176,7 @@ describe('PluginUpdateAllDialog', () => {
     )
   })
 
-  it('flags an update whose catalog moved it to another repository and leaves it unticked', async () => {
+  it('keeps an update whose catalog moved it to another repository out of Update all', async () => {
     const installMarketplacePlugin = vi.fn()
     installApi({
       previewMarketplaceUpdate: vi.fn(({ pluginKey }: { pluginKey: string }) =>
@@ -178,8 +207,14 @@ describe('PluginUpdateAllDialog', () => {
     expect(container.textContent).toContain(
       'New source: https://example.com/acme/plugin.git (was git@example.com:acme/original.git)'
     )
-    expect(container.querySelector('#plugin-update-a')?.getAttribute('aria-checked')).toBe('false')
+    expect(container.querySelector('#plugin-update-a')).toBeNull()
+    expect(reviewButton(container, 'a')).toBeDefined()
     expect(container.querySelector('#plugin-update-b')?.getAttribute('aria-checked')).toBe('true')
+    await act(async () => button(container, 'Update')?.click())
+    expect(installMarketplacePlugin).toHaveBeenCalledTimes(1)
+    expect(installMarketplacePlugin).toHaveBeenCalledWith(
+      expect.objectContaining({ pluginKey: 'b' })
+    )
   })
 
   it('trusts main on what grows, so a lower execution profile is not new access', async () => {
@@ -211,7 +246,7 @@ describe('PluginUpdateAllDialog', () => {
     expect(container.textContent).toContain('See all access')
   })
 
-  it('reviews every update in one dialog and installs only the ticked ones', async () => {
+  it('lists every update in one dialog and bulk-installs only those asking for nothing new', async () => {
     const installMarketplacePlugin = vi.fn().mockResolvedValue({ ok: true, pluginKey: 'b' })
     Object.defineProperty(window, 'api', {
       configurable: true,
@@ -220,7 +255,8 @@ describe('PluginUpdateAllDialog', () => {
           previewMarketplaceUpdate: vi.fn(({ pluginKey }: { pluginKey: string }) =>
             Promise.resolve(preview(pluginKey, pluginKey === 'a' ? ['secrets:own'] : []))
           ),
-          installMarketplacePlugin
+          installMarketplacePlugin,
+          getInstalledManifest: vi.fn().mockResolvedValue(null)
         }
       }
     })
@@ -242,8 +278,8 @@ describe('PluginUpdateAllDialog', () => {
     expect(container.textContent).toContain('New: Store its own encrypted secrets')
     expect(container.querySelector('[data-plugin-update="b"]')?.textContent).toBe('b1.0.0 → 1.1.0')
 
-    const first = container.querySelector<HTMLButtonElement>('#plugin-update-a')
-    await act(async () => first?.click())
+    // Why no checkbox: an update that grows access is never part of the bulk Update.
+    expect(container.querySelector('#plugin-update-a')).toBeNull()
     const confirm = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Update'
     )
@@ -328,5 +364,78 @@ describe('PluginUpdateAllDialog', () => {
     expect(checkbox?.disabled).toBe(true)
     expect(checkbox?.getAttribute('aria-checked')).toBe('false')
     expect(button(container, 'Update')?.disabled).toBe(false)
+  })
+
+  it('approves an update that grows access only from its own before/after review', async () => {
+    const installMarketplacePlugin = vi.fn(({ pluginKey }: { pluginKey: string }) =>
+      Promise.resolve({ ok: true, pluginKey, consentFingerprint: 'f' })
+    )
+    const consent = vi.fn().mockResolvedValue([])
+    installApi({
+      previewMarketplaceUpdate: vi.fn(({ pluginKey }: { pluginKey: string }) =>
+        Promise.resolve(pluginKey === 'a' ? workerUpdate('a', false) : preview(pluginKey, []))
+      ),
+      installMarketplacePlugin,
+      consent
+    })
+    const onUpdated = vi.fn().mockResolvedValue(undefined)
+    const container = await renderDialog([entry('a', ['storage:own']), entry('b', [])], {
+      onUpdated
+    })
+
+    await act(async () => reviewButton(container, 'a')?.click())
+    expect(container.querySelector('h2')?.textContent).toBe('Review update to a')
+    const review = container.querySelector('[data-plugin-update-review="a"]')
+    expect(review?.textContent).toContain('BeforeContent onlyStore its own data')
+    expect(review?.textContent).toContain('New: Full access')
+    expect(review?.textContent).toContain('New: Store its own encrypted secrets')
+    expect(review?.textContent).toContain('Not an official plugin:')
+    expect(installMarketplacePlugin).not.toHaveBeenCalled()
+
+    await act(async () => button(container, 'Approve & update')?.click())
+    expect(installMarketplacePlugin).toHaveBeenCalledTimes(1)
+    expect(installMarketplacePlugin).toHaveBeenCalledWith(
+      expect.objectContaining({ pluginKey: 'a' })
+    )
+    expect(consent).toHaveBeenCalledWith({
+      pluginKey: 'a',
+      reviewedFingerprint: 'f',
+      decision: 'approve'
+    })
+    expect(onUpdated).toHaveBeenCalledWith(['a'])
+    // Why back to the list: "b" still waits for the bulk Update.
+    expect(container.querySelector('[data-plugin-update="a"]')?.textContent).toContain('Updated')
+  })
+
+  it('never approves bytes other than the ones it reviewed', async () => {
+    const consent = vi.fn().mockResolvedValue([])
+    installApi({
+      previewMarketplaceUpdate: vi.fn().mockResolvedValue(workerUpdate('a', false)),
+      installMarketplacePlugin: vi
+        .fn()
+        .mockResolvedValue({ ok: true, pluginKey: 'a', consentFingerprint: 'other' }),
+      consent
+    })
+    const onUpdated = vi.fn().mockResolvedValue(undefined)
+    const container = await renderDialog([entry('a', [])], { onUpdated })
+    await act(async () => button(container, 'Approve & update')?.click())
+    expect(consent).not.toHaveBeenCalled()
+    // Why: main left it for review, which the page opens after the reload.
+    expect(onUpdated).toHaveBeenCalledWith(['a'])
+  })
+
+  it('names the publisher only for a non-official update', async () => {
+    installApi({ previewMarketplaceUpdate: vi.fn().mockResolvedValue(workerUpdate('a', true)) })
+    const official = await renderDialog([entry('a', [])])
+    expect(official.querySelector('[data-plugin-update-review="a"]')).not.toBeNull()
+    expect(official.textContent).not.toContain('Not an official plugin')
+    act(() => root?.unmount())
+    document.body.innerHTML = ''
+
+    installApi({ previewMarketplaceUpdate: vi.fn().mockResolvedValue(workerUpdate('a', false)) })
+    const community = await renderDialog([entry('a', [])])
+    expect(community.textContent).toContain(
+      'Not an official plugin: Make sure you trust acme before updating.'
+    )
   })
 })

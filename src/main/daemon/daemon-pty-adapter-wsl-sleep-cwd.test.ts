@@ -56,6 +56,7 @@ describe('a sleeping bridge WSL pane keeps its shell folder', () => {
     const harness = await startDaemonAdapterHarness((opts) => {
       spawnCwds.push(opts.cwd)
       if (opts.cwd && deletedCwds.has(opts.cwd)) {
+        opts.onCreationDisposition?.({ kind: 'no-fork' })
         throw new Error(`Working directory "${opts.cwd}" does not exist. It may have been deleted.`)
       }
       lastSubprocess = createMockSubprocess()

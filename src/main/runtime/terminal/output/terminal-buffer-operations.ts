@@ -13,6 +13,9 @@ import {
   restoredTerminalTailSeedAllowed
 } from '../../terminal-tail-restore-seed'
 
+import { hookLeadTurnState } from '../../tui-idle-hook-lane'
+import { agentHookServer } from '../../../agent-hooks/server'
+
 export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged {
   protected abstract serializePreferredRestoredTerminalBuffer(
     ptyId: string,
@@ -229,6 +232,54 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
         // Seeding is best-effort; live data will continue to populate the
         // emulator even if the snapshot replay fails.
       })
+  }
+
+  /** A reattached live process may print nothing; its silence is observed quiet from the first attach of this generation. */
+  startReattachedOutputClock(ptyId: string): void {
+    const pty = this.ptysById.get(ptyId)
+    if (pty && pty.lastOutputAt === null) {
+      pty.outputObservedSince ??= Date.now()
+    }
+  }
+
+  /** A surviving process main never saw live still has its agent's last own report, which the hook
+   *  server restores across restarts. Nothing can type into the terminal while main is down, so the
+   *  report is current as long as an agent, not a shell, still holds the process. */
+  restoreReattachedAgentStatus(ptyId: string): void {
+    const pty = this.ptysById.get(ptyId)
+    if (!pty?.connected || pty.lastAgentStatusObservedLive) {
+      return
+    }
+    const { incarnationId } = pty
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    const paneKeys = [...this.collectAgentStatusPaneKeysForPty(ptyId)]
+    void Promise.all([
+      this.ptyForegroundAgent.identifyForeground(ptyId),
+      ...paneKeys.map((paneKey) => agentHookServer.readRestoredAgentStatus(paneKey))
+    ]).then(([agent, ...reports]) => {
+      const report = reports.find((candidate) => candidate !== null)
+      const turn = agent && report ? hookLeadTurnState(report) : null
+      // A respawn, an exit or a live report since the reattach decides instead.
+      if (
+        !turn ||
+        this.ptysById.get(ptyId) !== pty ||
+        pty.incarnationId !== incarnationId ||
+        this.getPtyLifecycleGeneration(ptyId) !== generation ||
+        !pty.connected ||
+        pty.lastAgentStatusObservedLive
+      ) {
+        return
+      }
+      this.applyTrackedPtyTitle(ptyId, pty.lastOscTitle ?? '', pty.lastOscTitle ?? '', undefined, {
+        statusOnly: true,
+        status: turn === 'done' ? 'idle' : turn
+      })
+    })
+  }
+
+  protected readOutputClockAt(ptyId: string | null | undefined): number | null {
+    const pty = ptyId ? this.ptysById.get(ptyId) : undefined
+    return pty ? (pty.lastOutputAt ?? pty.outputObservedSince ?? null) : null
   }
 
   // Restore RPC bytes bypass onPtyData; seed read/list state without waiters, orchestration events or fresh-output clocks.

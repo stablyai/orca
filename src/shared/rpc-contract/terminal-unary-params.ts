@@ -96,6 +96,8 @@ export const TerminalListParams = z.object({
   requireFreshPtyLiveness: z.boolean().optional(),
   // Only human CLI formatting needs the costly layouts; absent includes them for older clients.
   includeVisualLayouts: z.boolean().optional(),
+  // Readers that never show the output tail drop it; absent includes it, as older hosts always do.
+  includePreview: z.boolean().optional(),
   // Layout-owner hosts show the workspace's unshown live terminals before listing (a window's
   // activation sweep); other hosts drop it, as they did before it existed.
   placeUnshownLiveTerminals: z.boolean().optional()

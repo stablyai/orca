@@ -16,12 +16,15 @@ export const EMULATOR_FAILURE_COPY = {
   serveSimUnavailable: 'serve-sim is unavailable.',
   serveSimNoEndpoints: 'serve-sim did not return stream endpoints.',
   serveSimEndpointUnreachable: 'serve-sim started but its stream endpoint is not reachable.',
+  deviceHubInputBlocked:
+    "Xcode's Device Hub has taken over input for this simulator, so taps and typing won't reach it. Quit Device Hub, then attach the simulator again.",
   androidSdkMissing: 'Android SDK not found. Install Android Studio and set ANDROID_HOME.',
   adbUnavailable: 'adb is unavailable.',
   noAndroidDevices: 'No Android devices or AVDs found. Create one in Android Studio.',
   androidDeviceNotRunning: 'Android device "{{device}}" is not running. Boot it first.',
   unknownDeviceOrAvd: '"{{device}}" is not a running device or a known AVD.',
   avdBootTimeout: 'AVD "{{avdName}}" did not finish booting in time.',
+  avdExitedBeforeBoot: 'AVD "{{avdName}}" stopped before it finished booting: {{detail}}',
   scrcpyDownloadFailed: 'Could not download scrcpy server: {{detail}}',
   scrcpyServerInvalid: 'Downloaded scrcpy server was invalid or truncated.'
 } as const
@@ -53,9 +56,11 @@ const COPY_CODES_BY_ERROR_CODE: Readonly<Record<string, readonly EmulatorFailure
     'serveSimNoEndpoints',
     'serveSimEndpointUnreachable',
     'avdBootTimeout',
+    'avdExitedBeforeBoot',
     'scrcpyDownloadFailed',
     'scrcpyServerInvalid'
   ],
+  emulator_input_blocked: ['deviceHubInputBlocked'],
   emulator_error: ['androidSdkMissing']
 }
 

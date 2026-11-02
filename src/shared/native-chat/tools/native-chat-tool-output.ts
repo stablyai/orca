@@ -1,9 +1,9 @@
 import type {
   AgentJournalBoundedPayload,
   AgentJournalItemBody
-} from '../../agent-session-journal-types'
+} from '../../agent-session/journal/agent-session-journal-types'
 import { formatBytes } from '../../format-bytes'
-import type { NativeChatToolResultBlock } from '../../native-chat-types'
+import type { NativeChatToolResultBlock } from '../native-chat-types'
 import { MAX_TOOL_DETAIL_LENGTH } from './native-chat-tool-summary'
 
 export const NATIVE_CHAT_TOOL_OUTPUT_COPY = {

@@ -50,7 +50,13 @@ export default function CombinedDiffViewer({
   viewStateKey: string
   viewStateScopeId?: string
 }): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
+  const combinedDiffFileTreeVisibleByDefault = useAppStore(
+    (s) => s.settings?.combinedDiffFileTreeVisibleByDefault
+  )
+  const diffDefaultView = useAppStore((s) => s.settings?.diffDefaultView)
+  const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace)
+  const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap)
+  const editorLineNumbers = useAppStore((s) => s.settings?.editorLineNumbers !== false)
   const gitStatusEntries = useAppStore(
     (s) => s.gitStatusByWorktree[file.worktreeId] ?? EMPTY_GIT_STATUS_ENTRIES
   )
@@ -90,12 +96,11 @@ export default function CombinedDiffViewer({
     markdownReviewNotesEnabled,
     worktreeId: file.worktreeId
   })
-  const editorLineNumbers = settings?.editorLineNumbers !== false
   const preferences = useCombinedDiffViewPreferences({
-    combinedDiffFileTreeVisibleByDefault: settings?.combinedDiffFileTreeVisibleByDefault,
-    diffDefaultView: settings?.diffDefaultView,
-    diffShowWhitespace: settings?.diffShowWhitespace,
-    diffWordWrap: settings?.diffWordWrap,
+    combinedDiffFileTreeVisibleByDefault,
+    diffDefaultView,
+    diffShowWhitespace,
+    diffWordWrap,
     registry,
     setSections,
     updateSettings
@@ -336,8 +341,8 @@ export default function CombinedDiffViewer({
           diffCommentCount={notes.diffCommentCount}
           diffCommentsForWorktree={diffCommentsForWorktree}
           diffLineNumbers={editorLineNumbers}
-          diffShowWhitespace={settings?.diffShowWhitespace}
-          diffWordWrap={settings?.diffWordWrap}
+          diffShowWhitespace={diffShowWhitespace}
+          diffWordWrap={diffWordWrap}
           file={file}
           fileTreeCollapsed={preferences.fileTreeCollapsed}
           isAllMode={entrySet.isAllMode}
@@ -398,7 +403,6 @@ export default function CombinedDiffViewer({
             setScrollContainerRef={setScrollContainerRef}
             setSectionHeights={setSectionHeights}
             setSections={setSections}
-            settings={settings}
             sideBySide={preferences.sideBySide}
             skippedConflictNotice={skippedConflictNotice}
             toggleSection={toggleSection}

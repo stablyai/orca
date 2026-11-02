@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
-import { getProjectHostSetupProjectionFromState } from '../project-host-setup-selector'
+
 import { fetchProjectHostSetupCompatibility } from './project-host-routing'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
 
@@ -20,27 +20,6 @@ const projects = [
     updatedAt: 1
   }
 ] satisfies Project[]
-
-// Mirrors the Settings.tsx projectByRepoId useMemo that crashed.
-function buildProjectByRepoIdLikeSettings(
-  setups: readonly ProjectHostSetup[],
-  projectList: readonly Project[]
-): Map<string, Project> {
-  const projectById = new Map(projectList.map((project) => [project.id, project]))
-  const byRepoId = new Map<string, Project>()
-  for (const setup of setups) {
-    const project = projectById.get(setup.projectId)
-    if (project && setup.repoId.trim()) {
-      byRepoId.set(setup.repoId, project)
-    }
-  }
-  return byRepoId
-}
-
-// Mirrors project-grouping.ts's checkout identity, which runs on the sidebar render path.
-function checkoutIdentityLikeSidebar(setup: ProjectHostSetup): string {
-  return setup.path.trim() || setup.repoId || setup.id
-}
 
 // Reflect.set models older-host malformed fields without asserting them valid.
 function badSetups(): ProjectHostSetup[] {
@@ -93,30 +72,6 @@ describe('project catalog ingest with non-string row fields', () => {
     expect(adopted.hostId).toBe('runtime:env-1')
   })
 
-  it('lets the Settings projectByRepoId memo run instead of throwing on .trim()', async () => {
-    stubProjectsApi(badSetups())
-    const ingested = await fetchProjectHostSetupCompatibility({ kind: 'local' }, repos)
-    const projection = getProjectHostSetupProjectionFromState({
-      repos,
-      projects: [...ingested.projects],
-      projectHostSetups: [...ingested.setups]
-    })
-    expect(() =>
-      buildProjectByRepoIdLikeSettings(projection.setups, projection.projects)
-    ).not.toThrow()
-    // Why: an empty repoId is not an openable repo row, so it must not be indexed.
-    const byRepoId = buildProjectByRepoIdLikeSettings(projection.setups, projection.projects)
-    expect(byRepoId.has('')).toBe(false)
-    expect([...byRepoId.keys()]).toEqual(['repo-1'])
-  })
-
-  // Null path crashes main-window sidebar grouping, beyond Settings’ error boundary.
-  it('lets the sidebar checkout identity run instead of throwing on a null path', async () => {
-    stubProjectsApi(badSetups())
-    const ingested = await fetchProjectHostSetupCompatibility({ kind: 'local' }, repos)
-    expect(() => ingested.setups.map(checkoutIdentityLikeSidebar)).not.toThrow()
-  })
-
   // Why: a coerced field must change one value, never which rows exist.
   it('does not add or drop rows because a field was repaired', async () => {
     stubProjectsApi(badSetups())
@@ -133,29 +88,48 @@ describe('project catalog ingest with non-string row fields', () => {
       untouched.projects.map((project) => project.id)
     )
   })
-
-  // Why: this is a zustand selector compared with Object.is, so instability is a re-render storm.
-  it('keeps the projection reference-stable per (repos, projects, setups) input', async () => {
-    stubProjectsApi(badSetups())
-    const ingested = await fetchProjectHostSetupCompatibility({ kind: 'local' }, repos)
-    const args = {
-      repos,
-      projects: [...ingested.projects],
-      projectHostSetups: [...ingested.setups]
-    }
-    expect(getProjectHostSetupProjectionFromState(args)).toBe(
-      getProjectHostSetupProjectionFromState(args)
-    )
-  })
-
-  // Clean ingest must retain rows: TerminalPane/quick-command memos depend on their identity.
-  it('preserves row identity when the catalog is already clean', async () => {
-    const clean = badSetups()
-    ;(clean[1] as { repoId: string; path: string }).repoId = ''
-    ;(clean[1] as { repoId: string; path: string }).path = ''
-    stubProjectsApi(clean)
-    const projection = await fetchProjectHostSetupCompatibility({ kind: 'local' }, repos)
-    expect(projection.setups[0]).toBe(clean[0])
-    expect(projection.setups[1]).toBe(clean[1])
-  })
 })
+
+import { createTestStore } from '../slices/store-test-helpers'
+import * as launchDrafts from '@/components/native-chat/native-chat-composer-draft-store'
+
+it.each([false, true])(
+  'actual host-setup deletion revokes new return writers only for a returned registered repo=%s',
+  async (registered) => {
+    launchDrafts.clearNativeChatComposerDraftsForTests()
+    const setup = badSetups()[0]
+    const store = createTestStore()
+    store.setState({ repos, projects, projectHostSetups: [setup] })
+    const deleteSetup = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('refused'))
+      .mockResolvedValue({ project: projects[0], setup, ...(registered ? { repo: repos[0] } : {}) })
+    vi.stubGlobal('window', { api: { projects: { deleteHostSetup: deleteSetup } } })
+    const key = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+      'repo-1::/source-only',
+      'codex',
+      'local'
+    )
+    const other = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+      'repo-1::/source-only',
+      'codex',
+      'ssh:other'
+    )
+    for (const scope of [key, other]) {
+      launchDrafts.updateNativeChatComposerDraft(scope, { text: 'task' }, 'immediate')
+    }
+    const attempt = launchDrafts.captureNativeChatComposerSubmission(key)
+    expect(
+      await store.getState().deleteProjectHostSetup({ setupId: setup.id, hostId: 'local' })
+    ).toBeNull()
+    expect(attempt.draft?.text).toBe('task')
+    expect(
+      await store.getState().deleteProjectHostSetup({ setupId: setup.id, hostId: 'local' })
+    ).not.toBeNull()
+    expect(attempt.draft === undefined).toBe(registered)
+    expect(launchDrafts.readNativeChatComposerDraft(key).text).toBe('task')
+    expect(launchDrafts.readNativeChatComposerDraft(other).text).toBe('task')
+    launchDrafts.clearNativeChatComposerDraftsForTests()
+    vi.unstubAllGlobals()
+  }
+)

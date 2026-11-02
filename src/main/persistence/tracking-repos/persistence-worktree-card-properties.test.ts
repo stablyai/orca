@@ -51,6 +51,17 @@ vi.mock('../../telemetry/cohort-classifier', () => ({
 }))
 
 describe('Store', () => {
+  it('defaults absent model visibility on and preserves an explicit choice across reload', async () => {
+    writeDataFile({ schemaVersion: 1, repos: [], worktreeMeta: {}, ui: {} })
+    const store = await createStore()
+    expect(store.getUI().showAgentModels).toBe(true)
+    store.updateUI({ showAgentModels: false })
+    store.flush()
+    await closeTestStores()
+    const reloaded = await createStore()
+    expect(reloaded.getUI().showAgentModels).toBe(false)
+  })
+
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
     trackMock.mockReset()

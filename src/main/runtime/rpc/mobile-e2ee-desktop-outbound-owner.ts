@@ -14,6 +14,8 @@ import {
   type MobileE2EEOutboundSocketMemory
 } from './mobile-e2ee-outbound-memory-budget'
 import type { RpcBinarySendOptions } from './rpc-binary-sender'
+import type { RuntimeClientCapabilities } from './runtime-client-capabilities'
+import { compressMobileE2EEV2Item } from './mobile-e2ee-v2-compressed-frame'
 
 export class MobileE2EEDesktopOutboundOwner {
   private readonly memoryBudget: MobileE2EEOutboundMemoryBudget
@@ -26,6 +28,7 @@ export class MobileE2EEDesktopOutboundOwner {
     private readonly ws: WebSocket,
     private readonly isLegacyKeyed: () => boolean,
     private readonly onOverflow: () => void,
+    private readonly clientCapabilities: RuntimeClientCapabilities,
     memoryBudget: MobileE2EEOutboundMemoryBudget = createMobileE2EEOutboundMemoryBudget()
   ) {
     this.memoryBudget = memoryBudget
@@ -62,10 +65,11 @@ export class MobileE2EEDesktopOutboundOwner {
   }
 
   enqueueV2(
-    item: DesktopMobileE2EEV2OutboundItem,
+    plain: DesktopMobileE2EEV2OutboundItem,
     session: DesktopMobileE2EEV2Session,
     options?: RpcBinarySendOptions
   ): boolean | 'backlogged' {
+    const item = compressMobileE2EEV2Item(plain, this.clientCapabilities.current, options)
     if (!this.socketMemory) {
       this.onOverflow()
       return false

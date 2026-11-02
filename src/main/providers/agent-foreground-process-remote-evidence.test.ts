@@ -62,10 +62,25 @@ describe('host-stamped remote foreground resolver', () => {
     })
   })
 
+  it('names one agent that holds two rows of the group (npm Codex spawning native codex)', () => {
+    const evidence = resolveRemoteForegroundEvidence(
+      { rootPid: 100, fallbackProcess: 'zsh' },
+      metadata,
+      rowsFor(['node /usr/local/bin/codex', '/usr/local/lib/node_modules/@openai/codex/bin/codex'])
+    )
+    expect(evidence).toMatchObject({
+      verdict: 'live',
+      processName: 'codex',
+      fence: { process: { pid: 101, startTime: 'candidate-0' } }
+    })
+  })
+
   it.each([
     ['multiplexer_boundary', rowsFor(['tmux new-session'])],
     ['ambiguous_foreground_group', rowsFor(['node /opt/codex', 'node /opt/claude'])],
-    ['candidate_start_time_missing', rowsFor(['node /opt/codex'], { candidateStart: '' })]
+    ['candidate_start_time_missing', rowsFor(['node /opt/codex'], { candidateStart: '' })],
+    // An agent under sudo whose argv recovery failed or was withheld by the fork budget.
+    ['argv_unreadable', rowsFor(['(node)'])]
   ])('degrades to unverifiable for %s', (reason, rows) => {
     const evidence = resolveRemoteForegroundEvidence(
       { rootPid: 100, fallbackProcess: 'zsh' },

@@ -11,7 +11,8 @@ vi.mock('@/runtime/runtime-rpc-client', async () => {
   const actual = await vi.importActual<typeof RuntimeRpcClient>('@/runtime/runtime-rpc-client')
   return {
     ...actual,
-    callRuntimeRpc: vi.fn()
+    callRuntimeRpc: vi.fn(),
+    runtimeEnvironmentSupportsCapability: vi.fn().mockResolvedValue(false)
   }
 })
 
@@ -87,7 +88,7 @@ describe('GitHub source lookup routing', () => {
         number: 42,
         type: 'pr'
       },
-      { timeoutMs: 30_000 }
+      expect.objectContaining({ timeoutMs: 30_000 })
     )
     expect(window.api.gh.workItemByOwnerRepo).not.toHaveBeenCalled()
   })
@@ -178,5 +179,30 @@ describe('GitHub source lookup routing', () => {
       expect.objectContaining({ repoPath: '/home/fixture/widgets', ownerRepo })
     )
     expect(callRuntimeRpc).not.toHaveBeenCalled()
+  })
+  it('keeps the old runtime details path and refuses only unsupported canonical refresh', async () => {
+    vi.mocked(callRuntimeRpc).mockResolvedValue(null)
+    await expect(
+      lookupGitHubWorkItemDetailsForSource({
+        repoPath: '/remote',
+        repoId: 'renderer',
+        sourceContext: runtimeSourceContext,
+        number: 42,
+        type: 'issue'
+      })
+    ).resolves.toBeNull()
+    expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
+    await expect(
+      lookupGitHubWorkItemDetailsForSource({
+        repoPath: '/remote',
+        repoId: 'renderer',
+        sourceContext: runtimeSourceContext,
+        number: 42,
+        type: 'issue',
+        canonical: true,
+        ownerRepo: { owner: 'acme', repo: 'widgets' }
+      })
+    ).resolves.toBeNull()
+    expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
   })
 })

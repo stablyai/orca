@@ -1,5 +1,5 @@
 /** Let host-owned endpoints decide conversion safety, including terminals another desktop opened. */
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { HostServerTerminalVerdict } from '../ssh-host-server-on-connect'
 import {
   censusHostRelayEndpoints,

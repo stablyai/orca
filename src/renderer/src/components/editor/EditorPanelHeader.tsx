@@ -16,7 +16,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import EditorViewToggle, {
   CSV_VIEW_MODE_METADATA,
   CUSTOM_EDITOR_SOURCE_METADATA,
-  NOTEBOOK_VIEW_MODE_METADATA
+  NOTEBOOK_VIEW_MODE_METADATA,
+  SVG_VIEW_MODE_METADATA
 } from './EditorViewToggle'
 import type { CustomEditorToggleValue, EditorToggleValue } from './EditorViewToggle'
 import type { EditorHeaderOpenFileState } from './editor-header'
@@ -42,6 +43,7 @@ type EditorPanelHeaderProps = {
   isMarkdown: boolean
   isCsv: boolean
   isNotebook: boolean
+  isSvg?: boolean
   canToggleLineNumbers?: boolean
   /** Titles of the file's plugin editors, by toggle value; empty when none apply. */
   customEditorTitles?: Readonly<Record<CustomEditorToggleValue, string>>
@@ -79,6 +81,7 @@ export function EditorPanelHeader({
   isMarkdown,
   isCsv,
   isNotebook,
+  isSvg = false,
   canToggleLineNumbers = false,
   customEditorTitles = NO_CUSTOM_EDITOR_TITLES,
   hasEditorToggle,
@@ -302,9 +305,11 @@ export function EditorPanelHeader({
               ? CSV_VIEW_MODE_METADATA
               : isNotebook
                 ? NOTEBOOK_VIEW_MODE_METADATA
-                : Object.keys(customEditorTitles).length > 0
-                  ? CUSTOM_EDITOR_SOURCE_METADATA
-                  : undefined
+                : isSvg
+                  ? SVG_VIEW_MODE_METADATA
+                  : Object.keys(customEditorTitles).length > 0
+                    ? CUSTOM_EDITOR_SOURCE_METADATA
+                    : undefined
           }
           customEditorTitles={customEditorTitles}
         />

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
-import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { isDefaultBranchWorkspace } from '../../../../shared/worktree/workspace-kinds'
 import { computeVisibleWorktreeIds } from './compute-visible-worktrees'
@@ -46,12 +45,7 @@ function folderProjectRows(repo: Repo): { root: Worktree; instance: Worktree } {
   }
 }
 
-function visibleWithHideDefault(
-  repos: Repo[],
-  worktrees: Worktree[],
-  worktreeLineageById: Record<string, WorktreeLineage> = {},
-  injectLineageAncestors = true
-): string[] {
+function visibleWithHideDefault(repos: Repo[], worktrees: Worktree[]): string[] {
   const worktreesByRepo: Record<string, Worktree[]> = {}
   for (const worktree of worktrees) {
     ;(worktreesByRepo[worktree.repoId] ??= []).push(worktree)
@@ -75,50 +69,42 @@ function visibleWithHideDefault(
       repoMap: new Map(repos.map((repo) => [repo.id, repo])),
       workspaceHostScope: 'all',
       defaultHostId: LOCAL_EXECUTION_HOST_ID,
-      worktreeLineageById,
-      injectLineageAncestors
+      worktreeLineageById: {}
     }
   )
 }
 
 describe('"Hide default branch" on folder projects', () => {
-  it('hides the root of a non-git folder project and keeps its other workspaces', () => {
+  it('keeps a folder project root visible, even as its only workspace', () => {
     const repo = makeRepo('notes', '/Users/me/notes', 'folder')
     const { root, instance } = folderProjectRows(repo)
 
-    expect(isDefaultBranchWorkspace(root, repo)).toBe(true)
-    expect(isDefaultBranchWorkspace(instance, repo)).toBe(false)
-    expect(visibleWithHideDefault([repo], [root, instance])).toEqual([instance.id])
+    expect(visibleWithHideDefault([repo], [root])).toEqual([root.id])
+    expect(visibleWithHideDefault([repo], [root, instance])).toEqual([root.id, instance.id])
   })
 
-  it('hides the root of a folder project added from a git subdirectory', () => {
+  it('keeps the root of a folder project added from a git subdirectory', () => {
     const repo = makeRepo('app', '/Users/me/monorepo/packages/app', 'folder')
-    const { root, instance } = folderProjectRows(repo)
+    const { root } = folderProjectRows(repo)
+    root.branch = 'refs/heads/main'
 
-    expect(visibleWithHideDefault([repo], [root, instance])).toEqual([instance.id])
+    expect(visibleWithHideDefault([repo], [root])).toEqual([root.id])
   })
 
-  it('preserves the sidebar hierarchy exception for a folder root with a visible child', () => {
-    const repo = makeRepo('notes', '/notes', 'folder')
-    const rows = folderProjectRows(repo)
-    const root = { ...rows.root, instanceId: 'root-instance' }
-    const child = { ...rows.instance, instanceId: 'child-instance' }
-    const lineage: WorktreeLineage = {
-      worktreeId: child.id,
-      worktreeInstanceId: child.instanceId,
-      parentWorktreeId: root.id,
-      parentWorktreeInstanceId: root.instanceId,
-      origin: 'cli',
-      capture: { source: 'terminal-context', confidence: 'inferred' },
-      createdAt: 1
-    }
+  it('still hides the main checkout of a git project beside a folder project', () => {
+    const gitRepo = makeRepo('repo', '/code/repo', 'git')
+    const folderRepo = makeRepo('notes', '/notes', 'folder')
+    const main = makeRow(gitRepo, { id: 'repo::/code/repo' })
+    const feature = makeRow(gitRepo, {
+      id: 'repo::/code/feature',
+      branch: 'refs/heads/feature',
+      isMainWorktree: false
+    })
+    const { root } = folderProjectRows(folderRepo)
 
-    expect(visibleWithHideDefault([repo], [root, child], { [child.id]: lineage })).toEqual([
-      root.id,
-      child.id
-    ])
-    expect(visibleWithHideDefault([repo], [root, child], { [child.id]: lineage }, false)).toEqual([
-      child.id
+    expect(visibleWithHideDefault([gitRepo, folderRepo], [main, feature, root])).toEqual([
+      feature.id,
+      root.id
     ])
   })
 

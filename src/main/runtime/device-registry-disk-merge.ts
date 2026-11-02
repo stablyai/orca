@@ -31,8 +31,9 @@ export function mergeDeviceRegistrySave(
  * Writes saves merged over the file as it is now (atomically, through the secure-file stage and
  * rename). Remembers every id this process removed, recorded before the write so a failed save
  * (such as the load-time cleanup of session-only rows) still counts: a stale writer putting one of
- * those back must not get it re-adopted. A file that became unreadable or corrupt, or that this
- * process quarantined itself, proves nothing about removals, so then the save is written as is.
+ * those back must not get it re-adopted. A file that became unreadable or corrupt proves nothing
+ * about removals, so then the save is written as is; after this process's own quarantine, the save
+ * keeps only rows another writer added since.
  */
 export class DeviceRegistryWriter {
   private readonly removedIds = new Set<string>()
@@ -82,11 +83,14 @@ export class DeviceRegistryWriter {
         this.removedIds.add(deviceId)
       }
     }
-    const disk = this.quarantinedUntilWritten ? null : readDeviceRegistryFile(this.registryPath)
+    const disk = readDeviceRegistryFile(this.registryPath)
+    // After our own quarantine the file's absence is no removal evidence, but rows another writer
+    // (the pairing CLI) added since are still kept: merge with no known baseline.
+    const baseline = this.quarantinedUntilWritten ? [] : before
     const merged =
-      !disk || disk.unreadable || disk.corruptFilePending
+      disk.unreadable || disk.corruptFilePending
         ? [...next]
-        : mergeDeviceRegistrySave(before, next, disk, this.removedIds)
+        : mergeDeviceRegistrySave(baseline, next, disk, this.removedIds)
     const write = options.durable ? writeDurableSecureJsonFile : writeSecureJsonFile
     // Stat after our rename can't tell our write from one right after it; re-read once instead.
     this.readStamp = null

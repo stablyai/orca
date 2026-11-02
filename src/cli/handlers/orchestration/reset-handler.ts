@@ -1,5 +1,5 @@
 import type { CommandHandler } from '../../dispatch'
-import { printResult } from '../../format'
+import { printOrchestrationReceipt } from './agent-view'
 import { RuntimeClientError } from '../../runtime-client'
 import type { ResetRemovedWork } from '../../../shared/orchestration-removed-work'
 import { callOrchestrationMutation } from './mutation-request'
@@ -26,6 +26,6 @@ export const ORCHESTRATION_RESET_HANDLER: Record<string, CommandHandler> = {
         messages: flags.has('messages') ? true : undefined
       }
     )
-    printResult(result, json, formatResetResult)
+    printOrchestrationReceipt(result, { flags, json }, formatResetResult)
   }
 }

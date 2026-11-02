@@ -20,7 +20,8 @@ import { validGrants } from './device-registry-row-validation'
 import {
   isPendingTokenRow,
   mobilePairingConnectionModeOf,
-  isStillAuthenticated,
+  findPrincipalDevice,
+  findTokenDevice,
   type AuthenticatedPrincipalBinding,
   lookupDeviceKeyRow,
   sameGrants,
@@ -135,6 +136,8 @@ export class DeviceRegistry {
     parent: DeviceEntry,
     phones: readonly DelegatedPhone[]
   ): DelegatedMobileDeviceEntry[] {
+    // Plan over the file as it is: an unchanged child removed on disk would skip the save's merge.
+    this.adoptExternalEdits()
     const { nextDevices, entries } = planDelegatedMobileDevices(this.devices, parent, phones)
     if (nextDevices !== this.devices) {
       this.devices = this.save(nextDevices)
@@ -200,10 +203,7 @@ export class DeviceRegistry {
 
   validateToken(token: string): DeviceEntry | null {
     this.adoptExternalEdits()
-    return (
-      (token && this.devices.find((d) => d.credentialKind === undefined && d.token === token)) ||
-      null
-    )
+    return findTokenDevice(this.devices, token)
   }
 
   // Clients erase keys on unknown; reserve that verdict for readable absence.
@@ -246,8 +246,7 @@ export class DeviceRegistry {
 
   resolveAuthenticatedPrincipal(principal: AuthenticatedPrincipalBinding): DeviceEntry | null {
     this.adoptExternalEdits()
-    const device = this.getDevice(principal.deviceId)
-    return device && isStillAuthenticated(device, principal) ? device : null
+    return findPrincipalDevice(this.devices, principal)
   }
 
   updateLastSeen(deviceId: string): void {

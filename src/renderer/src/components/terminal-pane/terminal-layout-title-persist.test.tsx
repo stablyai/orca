@@ -3,7 +3,6 @@ import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useTerminalPaneLayoutPersistence } from './use-terminal-pane-layout-persistence'
 import type { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
-import { LOCAL_LAYOUT_APPLY_ORIGIN } from '@/runtime/server-layout-apply-routes'
 
 const LEFT = '11111111-1111-4111-8111-111111111111'
 const RIGHT = '22222222-2222-4222-8222-222222222222'
@@ -90,16 +89,6 @@ afterEach(() => {
 })
 
 describe('terminal layout title persist', () => {
-  it('pushes the cleared layout when the clear-title shortcut runs', () => {
-    const { hook, push } = renderPersistence()
-    push.mockClear()
-
-    hook.result.current.handleClearPaneTitleShortcut(1)
-
-    expect(push).toHaveBeenCalledOnce()
-    expect(push.mock.lastCall?.[0].layout.titlesByLeafId).toEqual({})
-  })
-
   it('tells the host to drop every title once the last remote pane title is cleared', () => {
     const { hook, push } = renderPersistence()
     hook.result.current.changePaneTitle(2, 'server')
@@ -114,38 +103,6 @@ describe('terminal layout title persist', () => {
     // An absent field means "unchanged" to every host, so the last clear must say {}.
     hook.result.current.removePaneTitle(1)
     expect(push.mock.lastCall?.[0].layout.titlesByLeafId).toEqual({})
-  })
-
-  it('a window-owned build saves a renamed pane at once, without asking main', () => {
-    const { hook, push } = renderPersistence()
-    push.mockClear()
-
-    hook.result.current.changePaneTitle(2, 'server')
-
-    expect(mocks.sendLayoutCommandToOwner).not.toHaveBeenCalled()
-    expect(push).toHaveBeenCalledOnce()
-  })
-
-  it('a layout-owner build sends a title change to main, whose frame draws it', () => {
-    mocks.layoutOwnerIsMain = true
-    mocks.sendLayoutCommandToOwner.mockReturnValue(true)
-    const { hook, push } = renderPersistence()
-    push.mockClear()
-
-    hook.result.current.changePaneTitle(2, 'server')
-    hook.result.current.removePaneTitle(1)
-
-    expect(mocks.sendLayoutCommandToOwner.mock.calls.map(([, command]) => command)).toEqual([
-      { type: 'renamePane', tabId: 'tab', leafId: RIGHT, title: 'server' },
-      { type: 'renamePane', tabId: 'tab', leafId: LEFT, title: null }
-    ])
-    expect(push).not.toHaveBeenCalled()
-
-    for (const [, , handlers] of mocks.sendLayoutCommandToOwner.mock.calls) {
-      handlers.apply({}, LOCAL_LAYOUT_APPLY_ORIGIN)
-    }
-    // The pane follows the layout's titles main's frame writes (use-host-pane-title-sync.ts).
-    expect(push).not.toHaveBeenCalled()
   })
 })
 

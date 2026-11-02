@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import path from 'node:path'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type * as RepoWorktreesModule from '../repo-worktrees'
 import type { GitStatusResult } from '../../shared/git-status-types'
 import type { Repo } from '../../shared/repo-types'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
 import { parseWorkspaceSession } from '../../../../../shared/workspace-session-schema'
 import { buildPaneActivityEvents } from '@/components/activity/activity-pane-events'

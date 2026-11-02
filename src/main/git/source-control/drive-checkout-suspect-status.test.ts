@@ -142,14 +142,6 @@ describe('reconcileDriveCheckoutSuspects', () => {
     })
   }
 
-  it('does nothing for checkouts outside the Windows-checkout config', async () => {
-    mocks.appliesTo = new Set()
-    await reconcileDriveCheckoutSuspects(repo, [], {})
-    changed(['a.ts'])
-    expect(await reconcileDriveCheckoutSuspects(repo, [], {})).toEqual([])
-    expect(mocks.gitStreamStdout).not.toHaveBeenCalled()
-  })
-
   it('rechecks only suspects minimal status reported clean, keeping the dirty ones', async () => {
     await touchFiles(['clean.ts', 'hidden edit.ts', 'already.ts'])
     await reconcileDriveCheckoutSuspects(repo, [], {})

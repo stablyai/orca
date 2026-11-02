@@ -54,7 +54,11 @@ export function readPersistedEnvironmentStore(
   }
 }
 
-/** Unreadable WSL state fails closed only while WSL hosts are served; otherwise it cannot hide SSH/paired servers. */
+/**
+ * Unreadable WSL state never hides SSH or paired servers. While WSL hosts are served, an unreadable
+ * file hides only the servers that could be WSL hosts (it may pin their keys); writes still refuse
+ * it, so a newer build's file is kept as it is. With hosts off it hides nothing.
+ */
 function readWslHostDeploymentsForRegistry(
   userDataPath: string
 ): ReturnType<typeof readWslHostDeployments> {
@@ -63,11 +67,11 @@ function readWslHostDeploymentsForRegistry(
     const read = readWslHostDeployments(userDataPath)
     return gateOpen ? read : { deployments: read.deployments, unreadableEnvironmentIds: new Set() }
   } catch (error) {
-    if (!(error instanceof WslHostDeploymentStoreInvalidError) || gateOpen) {
+    if (!(error instanceof WslHostDeploymentStoreInvalidError)) {
       throw error
     }
     warnUnreadableEnvironmentState(error.message)
-    return { deployments: [], unreadableEnvironmentIds: new Set() }
+    return { deployments: [], unreadableEnvironmentIds: new Set(), fileUnreadable: gateOpen }
   }
 }
 

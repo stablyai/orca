@@ -323,7 +323,8 @@ describe('hosted review cache race protection', () => {
       linkedGitHubPR: null,
       linkedGitLabMR: null,
       linkedGiteaPR: null,
-      repoPath: '/repo'
+      repoPath: '/repo',
+      reportReadOutcome: true
     })
     resolveGitHubLookup(githubReview)
 

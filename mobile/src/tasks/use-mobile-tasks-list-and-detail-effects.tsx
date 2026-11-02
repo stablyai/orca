@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import type { ProjectLoadingActionsModel } from './use-mobile-tasks-project-loading-actions'
 import {
   View,
@@ -60,6 +61,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     setItemTitleDraft,
     setLinearCommentDraft,
     setLinearStates,
+    setLinearStatesError,
     setLinearStatesLoading,
     setLinearSubIssueTitle,
     setLinearTeams,
@@ -253,6 +255,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     }
     let stale = false
     setLinearStatesLoading(true)
+    setLinearStatesError('')
     setLinearCommentDraft('')
     setLinearSubIssueTitle('')
     const baseParams = {
@@ -267,10 +270,14 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
         }
         const accepted = linearTeamStateListRead.interpret(statesResponse)
         setLinearStates(accepted.accepted ? accepted.value : [])
+        if (!accepted.accepted) {
+          setLinearStatesError(statesLoadFailed())
+        }
       })
       .catch(() => {
         if (!stale) {
           setLinearStates([])
+          setLinearStatesError(statesLoadFailed())
         }
       })
       .finally(() => {
@@ -320,3 +327,8 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
 }
 
 export type ListAndDetailEffectsModel = ReturnType<typeof useMobileTasksListAndDetailEffects>
+
+// A failed read must not read as a team with no states.
+function statesLoadFailed(): string {
+  return translate('tasks.filterPickers.statesFailed', "Couldn't load states. Reopen to try again.")
+}

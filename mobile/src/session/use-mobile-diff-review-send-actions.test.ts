@@ -117,6 +117,7 @@ describe('useMobileDiffReviewSendActions', () => {
   let setActionError: Mock<SendActionArgs['setActionError']>
   let sheets: {
     openSheet: Mock<ReviewSheetIntents['openSheet']>
+    openSheetWhenIdle: Mock<ReviewSheetIntents['openSheetWhenIdle']>
     closeSheet: Mock<ReviewSheetIntents['closeSheet']>
     updateSendSheet: Mock<ReviewSheetIntents['updateSendSheet']>
   }
@@ -128,7 +129,12 @@ describe('useMobileDiffReviewSendActions', () => {
     clipboardMock.setStringAsync.mockReset().mockResolvedValue(true)
     resetMobileNativeChatStaleInputForTests()
     setActionError = vi.fn()
-    sheets = { openSheet: vi.fn(), closeSheet: vi.fn(), updateSendSheet: vi.fn() }
+    sheets = {
+      openSheet: vi.fn(),
+      openSheetWhenIdle: vi.fn(),
+      closeSheet: vi.fn(),
+      updateSendSheet: vi.fn()
+    }
     saveCommentsAndReviewState = vi.fn().mockResolvedValue(undefined)
   })
 

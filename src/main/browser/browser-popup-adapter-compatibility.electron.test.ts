@@ -98,7 +98,7 @@ describe('Electron popup adapter API limits (not an admission safety gate)', () 
   it.each(creationPaths)(
     'records same-parent identical URLs with foreground, background and window intent: %s',
     async (path) => {
-      expect(status().electronVersion).toBe('43.8.1')
+      expect(status().electronVersion).toBe('43.8.4')
       const page = guest('probe-one')
       await configure(page, path)
       for (const modifier of [null, 'Shift', 'ControlOrMeta'] as const) {

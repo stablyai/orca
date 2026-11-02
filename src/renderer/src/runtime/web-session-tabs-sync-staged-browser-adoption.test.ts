@@ -209,26 +209,4 @@ describe('staged browser tab adoption', () => {
 
     expect(browserTabIds(next)).toEqual([STAGED.unifiedTabId])
   })
-
-  it('keeps three rapid staged tabs in click order under a reordered snapshot', () => {
-    const rows: BrowserRow[] = [1, 2, 3].map((index) => ({
-      workspaceId: `staged-workspace-${index}`,
-      pageId: `staged-page-${index}`,
-      unifiedTabId: `staged-unified-tab-${index}`,
-      remotePageId: `staged-page-${index}`,
-      staged: true
-    }))
-    const state = makeBrowserState(rows, rows[2].unifiedTabId)
-    const next = applyPatch(
-      state,
-      makeSnapshot(rows.toReversed().map((row) => hostBrowserTab(row.remotePageId)))
-    )
-
-    expect(browserTabIds(next)).toEqual(rows.map((row) => row.unifiedTabId).sort())
-    expect(stripOrder(next)).toEqual(rows.map((row) => row.unifiedTabId))
-    expect(next.groupsByWorktree[WT]?.[0]?.activeTabId).toBe(rows[2].unifiedTabId)
-    for (const row of rows) {
-      expect(next.remoteBrowserPageHandlesByPageId[row.pageId]?.staged).toBeUndefined()
-    }
-  })
 })

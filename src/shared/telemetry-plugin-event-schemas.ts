@@ -24,10 +24,3 @@ export const pluginInstalledSchema = z
     trigger: z.enum(PLUGIN_INSTALL_TRIGGERS)
   })
   .strict()
-
-export const pluginUninstalledSchema = z
-  .object({
-    plugin_key: pluginKeySchema,
-    catalog: z.enum(PLUGIN_TELEMETRY_CATALOGS)
-  })
-  .strict()

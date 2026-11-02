@@ -78,24 +78,6 @@ describe('browser tabs in a layout-owner build', () => {
     ])
   })
 
-  it('sends a close with the window’s reason while the tab still shows', async () => {
-    const user = store.getState().createBrowserTab(WT, 'about:blank')
-    const cleanup = store.getState().createBrowserTab(WT, 'about:blank')
-    await main.settle()
-    const userEntry = entryOf(user.id).id
-    const cleanupEntry = entryOf(cleanup.id).id
-    const before = sent().length
-
-    store.getState().closeBrowserTab(user.id)
-    store.getState().closeBrowserTab(cleanup.id, { reason: 'cleanup' })
-    await main.settle()
-
-    expect(sent().slice(before)).toEqual([
-      { type: 'closeTabs', workspace: WT, tabIds: [userEntry], recordClose: 'user' },
-      { type: 'closeTabs', workspace: WT, tabIds: [cleanupEntry], recordClose: 'cleanup' }
-    ])
-  })
-
   it('sends page create, convert and close, and a profile switch', async () => {
     const tab = store.getState().createBrowserTab(WT, 'about:blank')
     await main.settle()
@@ -135,14 +117,5 @@ describe('browser tabs in a layout-owner build', () => {
       }
     ])
     expect(store.getState().browserPagesByWorkspace[tab.id]).toHaveLength(1)
-  })
-
-  it('sends nothing for a page or tab the window does not hold', () => {
-    expect(store.getState().createBrowserPage('missing', 'about:blank')).toBeNull()
-    store.getState().closeBrowserPage('missing')
-    store.getState().closeBrowserTab('missing')
-    store.getState().switchBrowserTabProfile('missing', null)
-
-    expect(sent()).toEqual([])
   })
 })

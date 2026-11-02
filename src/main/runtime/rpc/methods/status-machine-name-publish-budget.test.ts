@@ -41,7 +41,7 @@ describe('status.get publish budget', () => {
     const hostname = normalizeMachineName(os.hostname())
 
     // The lookup outlives the budget: the answer is the hostname, not a probe that reads as "down".
-    const pending = STATUS_METHODS[0].handler(undefined, { runtime })
+    const pending = STATUS_METHODS[0].handler({}, { runtime })
     await vi.advanceTimersByTimeAsync(MACHINE_NAME_PUBLISH_WAIT_MS)
     await expect(pending).resolves.toMatchObject({ machineName: hostname })
 
@@ -53,7 +53,7 @@ describe('status.get publish budget', () => {
       stderr: '',
       timedOut: false
     })
-    await expect(STATUS_METHODS[0].handler(undefined, { runtime })).resolves.toMatchObject({
+    await expect(STATUS_METHODS[0].handler({}, { runtime })).resolves.toMatchObject({
       machineName: 'Friendly Name'
     })
     expect(runProcessMock).toHaveBeenCalledTimes(1)

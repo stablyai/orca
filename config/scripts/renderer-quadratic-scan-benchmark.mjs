@@ -188,14 +188,11 @@ compare({
   )
 })
 
-const { buildSourceControlTree } = await importRenderer(
-  'components/right-sidebar/source-control-tree.ts'
-)
-const { normalizeRelativePath } = await importRenderer('lib/path.ts')
-const { splitPathSegments } = await importRenderer('components/right-sidebar/path-tree.ts')
-const { compareFileNames } = await import(
-  pathToFileURL(path.join(ROOT, 'src/shared/file-name-sort.ts')).href
-)
+const importShared = (relativePath) =>
+  import(pathToFileURL(path.join(ROOT, 'src/shared', relativePath)).href)
+const { buildSourceControlTree } = await importShared('source-control-tree.ts')
+const { normalizeRelativePath, splitPathSegments } = await importShared('cross-platform-path.ts')
+const { compareFileNames } = await importShared('file-name-sort.ts')
 
 const changedEntries = Array.from({ length: CHANGED_FILES }, (_, index) => ({
   path: `src/area-${index % 20}/module-${index % 60}/nested/deep/part-${index % 7}/file-${index}.ts`
