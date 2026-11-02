@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement, useRef } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import {
@@ -326,7 +326,7 @@ describe('useNativeChatComposerRevealFocus', () => {
   })
 
   it.each(['menu', 'dialog'] as const)(
-    'preserves an open %s when the composer becomes ready',
+    'preserves a newer %s when the composer becomes ready',
     (role) => {
       render({ isVisible: true, isFocusedGroup: true, composerReady: false })
       const intent = captureNativeChatComposerFocusIntent()
@@ -342,6 +342,134 @@ describe('useNativeChatComposerRevealFocus', () => {
       render({ isVisible: true, isFocusedGroup: true, nonce: 1 })
       drainFrames()
       expect(document.activeElement).toBe(document.body)
+    }
+  )
+
+  it.each([
+    { dismissal: 'removed', readyAfterAttempts: 0 },
+    { dismissal: 'closed', readyAfterAttempts: 0 },
+    { dismissal: 'closed', readyAfterAttempts: 1 }
+  ])(
+    'hands launch focus to a ready composer ($dismissal, retries: $readyAfterAttempts)',
+    async ({ dismissal, readyAfterAttempts }) => {
+      render({ isVisible: true, isFocusedGroup: true, composerReady: false })
+      const menu = mountOverlay()
+      const search = document.createElement('input')
+      menu.appendChild(search)
+      search.focus()
+      const intent = captureNativeChatComposerFocusIntent()
+      intent.request('chat-tab')
+
+      render({ isVisible: true, isFocusedGroup: true, readyAfterAttempts })
+      drainFrames()
+      expect(document.activeElement).toBe(search)
+      expect(focusCalls).toBe(0)
+
+      await act(async () => {
+        if (dismissal === 'removed') {
+          menu.remove()
+        } else {
+          menu.setAttribute('data-state', 'closed')
+        }
+      })
+      drainFrames()
+      expect(document.activeElement).toBe(container.querySelector('textarea'))
+    }
+  )
+
+  it.each([false, true])(
+    'hands launch focus to a late composer (tab published after dismissal: %s)',
+    async (lateTab) => {
+      render({ isVisible: true, isFocusedGroup: true, composerReady: false })
+      const menu = mountOverlay()
+      const intent = captureNativeChatComposerFocusIntent()
+      if (!lateTab) {
+        intent.request('chat-tab')
+      }
+      await act(async () => menu.remove())
+      if (lateTab) {
+        intent.request('chat-tab')
+      }
+
+      render({ isVisible: true, isFocusedGroup: true })
+      drainFrames()
+
+      expect(document.activeElement).toBe(container.querySelector('textarea'))
+    }
+  )
+
+  it('waits for both the launch menu and its portaled setup to dismiss', async () => {
+    render({ isVisible: true, isFocusedGroup: true })
+    drainFrames()
+    const menu = mountOverlay()
+    const setup = mountOverlay('dialog')
+    const intent = captureNativeChatComposerFocusIntent()
+    act(() => intent.request('chat-tab'))
+    drainFrames()
+    const before = focusCalls
+
+    await act(async () => menu.remove())
+    drainFrames()
+    expect(document.activeElement).toBe(setup)
+    expect(focusCalls).toBe(before)
+
+    await act(async () => setup.remove())
+    drainFrames()
+    expect(document.activeElement).toBe(container.querySelector('textarea'))
+  })
+
+  it.each(['menu', 'dialog'] as const)(
+    'cancels a launch handoff when a newer %s opens before the source closes',
+    async (role) => {
+      render({ isVisible: true, isFocusedGroup: true, composerReady: false })
+      const source = mountOverlay()
+      const intent = captureNativeChatComposerFocusIntent()
+      intent.request('chat-tab')
+      render({ isVisible: true, isFocusedGroup: true })
+      drainFrames()
+
+      let newer: HTMLDivElement
+      await act(async () => {
+        newer = mountOverlay(role)
+      })
+      await act(async () => {
+        source.remove()
+        newer.remove()
+      })
+      drainFrames()
+
+      expect(document.activeElement).toBe(document.body)
+      expect(focusCalls).toBe(0)
+    }
+  )
+
+  it.each(['pointer', 'Tab', 'expiry'] as const)(
+    'cancels a source menu handoff after %s',
+    async (cancellation) => {
+      vi.useFakeTimers()
+      try {
+        render({ isVisible: true, isFocusedGroup: true, composerReady: false })
+        const menu = mountOverlay()
+        const intent = captureNativeChatComposerFocusIntent()
+        intent.request('chat-tab')
+        render({ isVisible: true, isFocusedGroup: true })
+        drainFrames()
+
+        if (cancellation === 'pointer') {
+          document.dispatchEvent(new Event('pointerdown'))
+        } else if (cancellation === 'Tab') {
+          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }))
+        } else {
+          act(() => vi.advanceTimersByTime(1000))
+        }
+        await act(async () => menu.remove())
+        drainFrames()
+
+        expect(document.activeElement).toBe(document.body)
+        expect(focusCalls).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
     }
   )
 

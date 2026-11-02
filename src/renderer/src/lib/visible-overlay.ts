@@ -13,35 +13,43 @@ type VisibleOverlayOptions = {
   ignoreDismissed?: boolean
 }
 
-/** Live overlays own Escape before page handlers and outrank queued terminal focus. Ignore page chrome while retaining nested layers. */
+/** Live overlays own Escape before page handlers and outrank queued terminal focus. */
 export function hasVisibleOverlay(options?: VisibleOverlayOptions): boolean {
-  return Array.from(document.querySelectorAll(OVERLAY_SELECTOR)).some((element) => {
-    if (!(element instanceof HTMLElement)) {
-      return false
-    }
-    if (element.closest('[aria-hidden="true"]')) {
-      return false
-    }
-    if (options?.ignoreSelector && element.closest(options.ignoreSelector)) {
-      return false
-    }
-    if (options?.ignoreMatches && element.matches(options.ignoreMatches)) {
-      return false
-    }
-    if (options?.ignoreContaining && element.contains(options.ignoreContaining)) {
-      return false
-    }
-    // Dismissed overlays remain painted during ~300ms exit animation; exclude them from focus ownership. Escape checks run before closed attributes update and must opt out.
-    if (options?.ignoreDismissed && element.getAttribute('data-state') === 'closed') {
-      return false
-    }
-    const style = window.getComputedStyle(element)
-    return (
-      style.display !== 'none' &&
-      style.visibility !== 'hidden' &&
-      element.getClientRects().length > 0
-    )
-  })
+  return Array.from(document.querySelectorAll(OVERLAY_SELECTOR)).some((element) =>
+    isVisibleOverlay(element, options)
+  )
+}
+
+export function getVisibleOverlays(options?: VisibleOverlayOptions): HTMLElement[] {
+  return Array.from(document.querySelectorAll<HTMLElement>(OVERLAY_SELECTOR)).filter((element) =>
+    isVisibleOverlay(element, options)
+  )
+}
+
+function isVisibleOverlay(element: Element, options?: VisibleOverlayOptions): boolean {
+  if (!(element instanceof HTMLElement)) {
+    return false
+  }
+  if (element.closest('[aria-hidden="true"]')) {
+    return false
+  }
+  if (options?.ignoreSelector && element.closest(options.ignoreSelector)) {
+    return false
+  }
+  if (options?.ignoreMatches && element.matches(options.ignoreMatches)) {
+    return false
+  }
+  if (options?.ignoreContaining && element.contains(options.ignoreContaining)) {
+    return false
+  }
+  // Dismissed overlays remain painted during ~300ms exit animation; exclude them from focus ownership. Escape checks run before closed attributes update and must opt out.
+  if (options?.ignoreDismissed && element.getAttribute('data-state') === 'closed') {
+    return false
+  }
+  const style = window.getComputedStyle(element)
+  return (
+    style.display !== 'none' && style.visibility !== 'hidden' && element.getClientRects().length > 0
+  )
 }
 
 // These don't own Escape, but still paint above pages: popper surfaces (tooltips, hover cards),
