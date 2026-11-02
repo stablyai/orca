@@ -266,16 +266,11 @@ describe('client-owned tab placement for paired worktrees', () => {
       )
 
     const adopted = applyWebSessionTabsSnapshot(clientWith([T2]), agentFirst(2), ENV, NOW)
-    expect(groupById(adopted as Partial<WebSessionTabsSyncState>, HOST_GROUP)?.tabOrder).toEqual([
-      T1,
-      T2
-    ])
+    expect(groupById(adopted, HOST_GROUP)?.tabOrder).toEqual([T1, T2])
     // The paired user moved the agent after Setup; the same host order must not undo that.
     const later = applyWebSessionTabsSnapshot(clientWith([T2, T1]), agentFirst(3), ENV, NOW + 1)
     // No group patch means the client's order stands.
-    expect(
-      groupById(later as Partial<WebSessionTabsSyncState>, HOST_GROUP)?.tabOrder ?? [T2, T1]
-    ).toEqual([T2, T1])
+    expect(groupById(later, HOST_GROUP)?.tabOrder ?? [T2, T1]).toEqual([T2, T1])
   })
 
   // Ambient host activeTabId must not override client focus.

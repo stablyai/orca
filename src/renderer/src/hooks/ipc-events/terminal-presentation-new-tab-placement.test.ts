@@ -2,9 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { createTestStore, makeWorktree, seedStore } from '../../store/slices/store-test-helpers'
 import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
 
-const mocks = vi.hoisted(() => ({
-  store: { current: null as ReturnType<typeof createTestStore> | null }
-}))
+const mocks = vi.hoisted(() => {
+  const store: { current: ReturnType<typeof createTestStore> | null } = { current: null }
+  return { store }
+})
 
 function testStore(): ReturnType<typeof createTestStore> {
   if (!mocks.store.current) {

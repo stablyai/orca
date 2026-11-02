@@ -31,7 +31,7 @@ describe('the Setup failure line written into a live shell', () => {
       let sessionData: (data: string) => void = () => {}
       let exit: (code: number) => void = () => {}
       emit = (data) => sessionData(data)
-      return {
+      const handle: SubprocessHandle = {
         pid: 4242,
         getForegroundProcess: () => null,
         write: vi.fn(),
@@ -47,7 +47,8 @@ describe('the Setup failure line written into a live shell', () => {
           exit = cb
         },
         dispose: vi.fn()
-      } as SubprocessHandle
+      }
+      return handle
     })
     host = new TerminalHost({ spawnSubprocess })
     const attemptId = randomUUID()

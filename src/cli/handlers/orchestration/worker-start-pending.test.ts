@@ -26,7 +26,7 @@ function pendingReceipt(pending: Record<string, string>) {
 }
 
 describe('worker-start whose caller timed out while Setup still runs', () => {
-  const output = { log: [] as unknown[], error: [] as unknown[] }
+  const output: { log: unknown[]; error: unknown[] } = { log: [], error: [] }
 
   beforeEach(() => {
     output.log.length = 0
