@@ -164,6 +164,17 @@ export function normalizeTerminalColorOverrides(value: unknown): TerminalColorOv
   return output
 }
 
+/** Light backgrounds read as light themes; used where an importer has no explicit appearance. */
+export function inferTerminalThemeMode(background: string | undefined): TerminalCustomThemeMode {
+  const hex = background ? normalizeTerminalHexColor(background)?.slice(1) : undefined
+  if (!hex) {
+    return 'unknown'
+  }
+  const channel = (offset: number): number =>
+    Number.parseInt(hex.slice(offset, offset + 2), 16) / 255
+  return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4) >= 0.55 ? 'light' : 'dark'
+}
+
 export function hasUsableTerminalThemeColors(terminal: TerminalColorOverrides): boolean {
   const ansiCount = TERMINAL_ANSI_COLOR_KEYS.filter((key) => terminal[key]).length
   return Boolean(terminal.background && terminal.foreground && ansiCount > 0)

@@ -1,5 +1,6 @@
 import { readFile, stat } from 'node:fs/promises'
 import { platform } from 'node:os'
+import path from 'node:path'
 import type { WebContents } from 'electron'
 import type {
   GhosttyImportPreview,
@@ -13,7 +14,7 @@ import { chooseTerminalConfigFile } from '../terminal-config-import/choose-confi
 import { findGhosttyConfigPaths } from './discovery'
 import { parseGhosttyConfig } from './parser'
 import { mapGhosttyToOrca } from './mapper'
-import { resolveGhosttyThemeColors } from './theme-resolution'
+import { importGhosttyTheme } from './theme-mapping'
 
 // Bound config reads to avoid loading arbitrarily large files into main.
 const MAX_CONFIG_BYTES = 1_000_000
@@ -43,6 +44,11 @@ function valuesEqual(a: unknown, b: unknown): boolean {
   return false
 }
 
+// An unset object setting already matches an import that clears it.
+function emptyLike(value: unknown): unknown {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? {} : undefined
+}
+
 function asArray(value: string | string[] | undefined): string[] {
   if (value === undefined) {
     return []
@@ -64,39 +70,36 @@ function mergeParsedConfig(
   }
 }
 
-function usesConditionalThemePair(themeName: string): boolean {
-  return themeName
-    .split(',')
-    .map((part) => part.trim())
-    .some((part) => part.startsWith('light:') || part.startsWith('dark:'))
-}
-
-// Theme colors are defaults; explicit config colors and palette entries take precedence.
-async function applyThemeReference(parsed: Record<string, string | string[]>): Promise<string[]> {
-  const rawTheme = parsed['theme']
+// An imported theme defines its slots' palettes, so explicit config colors replace those slots' overrides.
+async function applyThemeReference(
+  rawTheme: string | string[] | undefined,
+  diff: Partial<GlobalSettings>,
+  pickedConfigDir: string | undefined,
+  currentSettings: GlobalSettings
+): Promise<{ themeNames: GhosttyImportPreview['terminalThemes']; unsupportedKeys: string[] }> {
   if (rawTheme === undefined) {
-    return []
+    return { themeNames: undefined, unsupportedKeys: [] }
   }
-  delete parsed['theme']
-
-  const themeName = (Array.isArray(rawTheme) ? (rawTheme.at(-1) ?? '') : rawTheme).trim()
-  if (usesConditionalThemePair(themeName)) {
-    return ['theme (light:/dark: pairs not supported)']
+  const themeImport = await importGhosttyTheme(
+    Array.isArray(rawTheme) ? (rawTheme.at(-1) ?? '') : rawTheme,
+    pickedConfigDir,
+    currentSettings.terminalCustomThemes
+  )
+  const { themeNames, unsupportedKeys } = themeImport
+  if (themeNames.dark === undefined && themeNames.light === undefined) {
+    return { themeNames: undefined, unsupportedKeys }
   }
-
-  const themeColors = await resolveGhosttyThemeColors(themeName)
-  if (themeColors === null) {
-    return ['theme (theme file not found)']
+  const overrides = diff.terminalColorOverrides ?? {}
+  if (themeNames.dark !== undefined) {
+    diff.terminalColorOverrides = overrides
+  } else {
+    delete diff.terminalColorOverrides
   }
-
-  for (const [key, value] of Object.entries(themeColors)) {
-    if (key === 'palette') {
-      parsed[key] = [...asArray(value), ...asArray(parsed[key])]
-    } else if (parsed[key] === undefined) {
-      parsed[key] = value
-    }
+  if (themeNames.light !== undefined) {
+    diff.terminalColorOverridesLight = overrides
   }
-  return []
+  Object.assign(diff, themeImport.diff)
+  return { themeNames, unsupportedKeys }
 }
 
 async function resolveConfigPaths(
@@ -168,19 +171,24 @@ export async function previewGhosttyImport(
     }
   }
 
-  const themeUnsupportedKeys = await applyThemeReference(parsed)
-
+  const { theme: rawTheme, ...configKeys } = parsed
   const { diff: rawDiff, unsupportedKeys: mappedUnsupportedKeys } = mapGhosttyToOrca(
-    parsed,
+    configKeys,
     platform() === 'darwin'
   )
-  const unsupportedKeys = [...mappedUnsupportedKeys, ...themeUnsupportedKeys]
-
   const currentSettings = store.getSettings()
+  const theme = await applyThemeReference(
+    rawTheme,
+    rawDiff,
+    validatedSource.kind === 'chooseFile' ? path.dirname(readPaths[0]) : undefined,
+    currentSettings
+  )
+  const unsupportedKeys = [...mappedUnsupportedKeys, ...theme.unsupportedKeys]
+
   const actualDiff: Partial<typeof rawDiff> = {}
   for (const key of Object.keys(rawDiff) as (keyof typeof rawDiff)[]) {
     const value = rawDiff[key]
-    if (value !== undefined && !valuesEqual(currentSettings[key], value)) {
+    if (value !== undefined && !valuesEqual(currentSettings[key] ?? emptyLike(value), value)) {
       // Why: TypeScript's strict assignment checking for Partial<T>[K] requires
       // a cast because GlobalSettings has no index signature.
       ;(actualDiff as Record<string, GlobalSettings[keyof GlobalSettings]>)[key] = value
@@ -192,6 +200,7 @@ export async function previewGhosttyImport(
     configPath: readPaths[0],
     configPaths: readPaths,
     diff: actualDiff,
-    unsupportedKeys
+    unsupportedKeys,
+    ...(theme.themeNames ? { terminalThemes: theme.themeNames } : {})
   }
 }

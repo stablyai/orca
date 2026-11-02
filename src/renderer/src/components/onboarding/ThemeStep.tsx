@@ -10,7 +10,7 @@ import type { GhosttyImportPreview, GlobalSettings } from '../../../../shared/gl
 import type { DiscoveryStatusEmitted } from '../../../../shared/onboarding-state-types'
 import { i18n, translate } from '@/i18n/i18n'
 import { ChromePreview } from './theme-chrome-preview'
-import { withImportedTerminalColorOverrides } from '../../../../shared/terminal-theme-selection'
+import { ghosttyImportSettingsUpdate } from '../../../../shared/ghostty-import-preview'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 
 type ThemeStepProps = {
@@ -130,9 +130,7 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
         track('onboarding_ghostty_import_failed', { reason: 'empty_diff' })
         return
       }
-      await updateSettings(
-        withImportedTerminalColorOverrides(settings, resolved.diff, getSystemPrefersDark())
-      )
+      await updateSettings(ghosttyImportSettingsUpdate(settings, resolved, getSystemPrefersDark()))
       // Sync the controller’s local theme so Continue cannot overwrite the imported theme.
       if (resolved.diff.theme && mountedRef.current) {
         onThemeChange(resolved.diff.theme)
@@ -266,7 +264,7 @@ function humanFields(diff: Partial<GlobalSettings>): string[] {
     },
     {
       label: translate('auto.components.onboarding.ThemeStep.06a24f4f2d', 'Colors'),
-      keys: ['terminalColorOverrides']
+      keys: ['terminalColorOverrides', 'terminalColorOverridesLight']
     },
     {
       label: translate('auto.components.onboarding.ThemeStep.86c0f1caa2', 'Padding'),
