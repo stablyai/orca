@@ -77,7 +77,10 @@ describe('registerZoomIpcBridge', () => {
     vi.doMock('@/components/browser-pane/host-guest/browser-page-zoom', () => ({
       dispatchBrowserPageZoom
     }))
-    vi.doMock('@/components/editor/viewer-zoom-request', () => ({ requestViewerZoom }))
+    vi.doMock('@/components/editor/viewer-zoom-request', () => ({
+      requestViewerZoom,
+      requestFrontDialogViewerZoom: () => false
+    }))
     vi.doMock('@/lib/ui-zoom', () => ({ applyUIZoom }))
     vi.doMock('@/lib/zoom-events', () => ({ dispatchZoomLevelChanged }))
     vi.doMock('../store', () => ({
