@@ -101,4 +101,69 @@ describe('a windowless host’s chat tab saves', () => {
         .sort()
     ).toEqual(['chat-a', 'chat-b'])
   })
+
+  // Main's chat record and the saved layout are separate writes: a crash between a switch's record
+  // naming T and T's own write restarts with T still holding the stopped terminal.
+  it.each([
+    ['takes the chat in place when it still holds just the stopped terminal', false],
+    ['keeps a split the user made, the chat opening in a free tab', true]
+  ])('a tab a chat’s record names but a terminal holds %s', (_name, split) => {
+    const leaf = (leafId: string) => ({ type: 'leaf' as const, leafId })
+    const terminal = (id: string, extra: Partial<Tab> = {}): Tab => ({
+      id,
+      entityId: id,
+      groupId: 'g1',
+      worktreeId: WT,
+      contentType: 'terminal',
+      label: id,
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1,
+      ...extra
+    })
+    const row = (id: string) => ({
+      id,
+      ptyId: null,
+      worktreeId: WT,
+      title: id,
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    })
+    const pane = (root: object) => ({ root, activeLeafId: 'l-T', expandedLeafId: null })
+    const saved = change(
+      {
+        ...EMPTY,
+        tabsByWorktree: { [WT]: [row('before'), row('T')] },
+        terminalLayoutsByTabId: {
+          before: pane(leaf('l-before')),
+          T: pane(
+            split
+              ? { type: 'split', direction: 'vertical', first: leaf('l-T'), second: leaf('l-U') }
+              : leaf('l-T')
+          )
+        },
+        unifiedTabs: { [WT]: [terminal('before'), terminal('T', { isPinned: true })] },
+        tabGroups: {
+          [WT]: [{ id: 'g1', worktreeId: WT, activeTabId: 'T', tabOrder: ['before', 'T'] }]
+        },
+        activeGroupIdByWorktree: { [WT]: 'g1' }
+      } as WorkspaceSessionState,
+      [open('S', 'T')]
+    )
+    const tabs = saved.unifiedTabs?.[WT] ?? []
+    if (split) {
+      expect(tabs.find((tab) => tab.id === 'T')).toMatchObject({ contentType: 'terminal' })
+      expect(tabs.find((tab) => tab.entityId === 'S')?.id).toBe('structured-agent-session-S')
+      return
+    }
+    expect(tabs.map((tab) => [tab.id, tab.contentType, tab.entityId])).toEqual([
+      ['before', 'terminal', 'before'],
+      ['T', 'agent-session', 'S']
+    ])
+    expect(tabs[1]?.isPinned).toBe(true)
+    expect((saved.tabsByWorktree[WT] ?? []).map((entry) => entry.id)).toEqual(['before'])
+  })
 })

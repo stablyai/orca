@@ -8,9 +8,8 @@ import {
   type TabContent,
   type TabContentRef
 } from '../../../shared/workspace-layout/workspace-layout-tab-content'
-import { loadChatTabLayout } from '../agent-session/agent-session-tab-layout'
+import { chatTabIdAmong, loadChatTabLayout } from '../agent-session/agent-session-tab-layout'
 import type { WorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-model'
-import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { logicalTabIdOf } from '../../../shared/runtime-mobile-session-tab-contracts'
 import type { LayoutCommandRunOptions, WindowLayoutCommand } from '../runtime-layout-apply'
 import { OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal } from './pty-backed-session-publication'
@@ -134,17 +133,7 @@ export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntime
       })),
       ...(ORCA_LAYOUT_OWNER_IS_MAIN ? [] : shown)
     ]
-    const held = tabs.find((tab) => tab.holds)
-    if (held) {
-      return held.id
-    }
-    const taken = new Set(tabs.map((tab) => tab.id))
-    const preferred = structuredAgentSessionTabId(sessionId)
-    let id = preferred
-    for (let suffix = 2; taken.has(id); suffix++) {
-      id = `${preferred}-${suffix}`
-    }
-    return id
+    return chatTabIdAmong(tabs, sessionId)
   }
 
   /**

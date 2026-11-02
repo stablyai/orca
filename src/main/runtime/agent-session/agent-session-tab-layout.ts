@@ -13,6 +13,7 @@ import { randomUUID } from 'node:crypto'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { publishesSameChatRow } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
+import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-pane-tree'
 
 /** Placement in the creating client's host-owned group/tab ids. */
 export type ChatTabPlacement = { groupId?: string; afterTabId?: string; index?: number }
@@ -31,6 +32,25 @@ export type ChatTabChange =
 export type ChatTabLayoutCommand =
   | (CommandOf<'openAgentSessionTab'> & { tabId: string })
   | (CommandOf<'closeTabs'> & { tabIds: [string] })
+  | CommandOf<'setTabContent'>
+
+/** A chat's tab among these: the one holding it, else its usual id, else the next free one. */
+export function chatTabIdAmong(
+  tabs: readonly { id: string; holds: boolean }[],
+  sessionId: string
+): string {
+  const held = tabs.find((tab) => tab.holds)
+  if (held) {
+    return held.id
+  }
+  const taken = new Set(tabs.map((tab) => tab.id))
+  const preferred = structuredAgentSessionTabId(sessionId)
+  let id = preferred
+  for (let suffix = 2; taken.has(id); suffix++) {
+    id = `${preferred}-${suffix}`
+  }
+  return id
+}
 
 /** Shared by main's queue and windowless saves; null means unchanged. */
 export function chatTabLayoutCommand(
@@ -69,7 +89,28 @@ export function chatTabLayoutCommand(
       ? { type: 'closeTabs', workspace: worktreeId, tabIds: [tabId], force: true }
       : null
   }
-  const { sessionId: openedSessionId, agent, tabId: openedTabId } = change.open
+  const { sessionId: openedSessionId, agent } = change.open
+  let openedTabId = change.open.tabId
+  const taken = workspace?.tabs.find((tab) => tab.id === openedTabId)
+  if (taken && workspace) {
+    // The chat's record names a tab still holding just a terminal: a switch committed the chat
+    // there and the layout write never landed (main's two stores are separate writes). The tab
+    // takes the chat in place, as the switch would have. A tab holding anything else (the user
+    // split it) keeps it, and the chat opens in a free tab, never over it.
+    if (taken.kind === 'terminal' && collectLayoutLeafIdsInOrder(taken.panes.root).length === 1) {
+      return {
+        type: 'setTabContent',
+        workspace: worktreeId,
+        tabId: taken.id,
+        expectSource: { kind: 'terminal', terminalId: taken.entityId },
+        content: { kind: 'agent-session', sessionId: openedSessionId, agent }
+      }
+    }
+    openedTabId = chatTabIdAmong(
+      workspace.tabs.map((tab) => ({ id: tab.id, holds: false })),
+      openedSessionId
+    )
+  }
   return {
     type: 'openAgentSessionTab',
     workspace: worktreeId,
