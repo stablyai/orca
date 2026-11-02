@@ -83,7 +83,8 @@ export function createTerminalForegroundPublication(services: TerminalForeground
     owns,
     current,
     publish,
-    captureRead() {
+    // Process death may ground this execution's view without permission to publish its pane row.
+    captureRead(requirePublication = true) {
       const paneKey = key()
       const subject = captureTerminalFactSubject(paneKey)
       const pane = parsePaneKey(paneKey)
@@ -95,7 +96,7 @@ export function createTerminalForegroundPublication(services: TerminalForeground
       const input = services.getInputGeneration?.()
       const prior = current()
       return () =>
-        applicable() &&
+        (!requirePublication || applicable()) &&
         key() === paneKey &&
         (!pane || useAppStore.getState().terminalLayoutsByTabId[pane.tabId]?.root === root) &&
         services.getPtyId() === ptyId &&

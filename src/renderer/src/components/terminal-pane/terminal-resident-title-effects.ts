@@ -69,7 +69,9 @@ export function createTerminalResidentTitleEffects(context: TerminalResidentPoli
       clearSleepingRecordProviderDuplicates(state, sleeping)
     }
     resetAgentTitle(true)
-    context.presentation?.confirmedShell?.()
+    if (reason !== 'process-exit') {
+      context.presentation?.confirmedShell?.()
+    }
     if (!isHibernationWakeRecord) {
       context.presentation?.onAgentExited?.()
     }
@@ -78,6 +80,11 @@ export function createTerminalResidentTitleEffects(context: TerminalResidentPoli
     }
   }
   const onForegroundAgentExited = (exited: RecognizedAgentProcess) => {
+    // A confirmed execution exit grounds input even when its foreground row cannot be published.
+    context.presentation?.confirmedShell?.()
+    if (!context.foreground.publication.applicable()) {
+      return
+    }
     context.foreground.paneForegroundAgentTracker.onProcessExitConfirmed(exited)
     const entry = useAppStore.getState().agentStatusByPaneKey[binding.paneKey]
     if (

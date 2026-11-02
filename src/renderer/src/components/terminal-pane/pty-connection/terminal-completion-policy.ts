@@ -25,6 +25,7 @@ export function createTerminalCompletionPolicy(
     'paneKey' | 'getPtyId' | 'getExpectedIncarnationId' | 'isLive' | 'onForegroundAgentExited'
   > & {
     captureForegroundRead?: () => () => boolean
+    canPublishForeground?: () => boolean
     absorbBurstBellForHookOwnedIdle: () => void
     isVisible: () => boolean
     clearSuppressedTitleSideEffects: () => void
@@ -75,6 +76,9 @@ export function createTerminalCompletionPolicy(
       )
     },
     shouldSuppressConfirmedProcessExitCompletion: (exited) => {
+      if (services.canPublishForeground?.() === false) {
+        return true
+      }
       if (hookLaneOwnsAgentTurnEnds(services.paneKey, services.getPtyId(), exited.agent)) {
         return true
       }

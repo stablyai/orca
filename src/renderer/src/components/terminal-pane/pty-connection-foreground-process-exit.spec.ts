@@ -57,6 +57,7 @@ export function registerPtyConnectionForegroundProcessExitTests(): void {
       visible: boolean
     ): Promise<{
       cacheKey: string
+      pane: ReturnType<typeof createPane>
       binding: { sampleForegroundAgentOnFocus: () => void }
       deps: ReturnType<typeof createDeps>
     }> {
@@ -72,11 +73,50 @@ export function registerPtyConnectionForegroundProcessExitTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: ptyId },
         isVisibleRef: { current: visible }
       })
-      const binding = connectPanePty(...mockPanePtyArgs(createPane(1), createManager(1), deps))
+      const pane = createPane(1)
+      const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks(20)
-      return { cacheKey: makePaneKey(tabId, LEAF_1), binding, deps }
+      return { cacheKey: makePaneKey(tabId, LEAF_1), pane, binding, deps }
     }
+
+    it.each(['retired-pane', 'stale-pty'] as const)(
+      'grounds input modes on confirmed exit despite nonpublishable foreground: %s',
+      async (cause) => {
+        vi.useFakeTimers()
+        let foreground = 'codex'
+        let children = true
+        vi.mocked(window.api.pty.getForegroundProcess).mockImplementation(async () => foreground)
+        vi.mocked(window.api.pty.hasChildProcesses).mockImplementation(async () => children)
+        const { cacheKey, pane, binding } = await connectRestoredPane('pty-mode-reset', true)
+        await vi.advanceTimersByTimeAsync(3_000)
+        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]?.agent).toBe('codex')
+        if (cause === 'retired-pane') {
+          Object.assign(mockStoreState, {
+            recentlyRetiredAgentStatusPaneKeys: { [cacheKey]: true }
+          })
+        } else {
+          mockStoreState.terminalLayoutsByTabId['tab-pty-mode-reset'] = {
+            root: { type: 'leaf', id: LEAF_1 },
+            activeLeafId: LEAF_1,
+            ptyIdsByLeafId: { [LEAF_1]: 'replacement-pty' }
+          }
+        }
+        const prior = mockStoreState.paneForegroundAgentByPaneKey[cacheKey]
+        mockStoreState.clearAgentLaunchConfig.mockClear()
+        pane.terminal.write.mockClear()
+        foreground = 'zsh'
+        children = false
+        await vi.advanceTimersByTimeAsync(10_000)
+        expect(pane.terminal.write).toHaveBeenCalledWith(
+          expect.stringContaining('\x1b[<99u\x1b[=0u'),
+          expect.any(Function)
+        )
+        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toBe(prior)
+        expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
+        binding.dispose()
+      }
+    )
 
     it('retires a hand-typed Codex read in a pane without command marks once it exits', async () => {
       vi.useFakeTimers()

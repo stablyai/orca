@@ -215,7 +215,8 @@ export function createTerminalResidentPolicy(
     queueAgentIdleTerminalModeReset,
     scheduleAgentTaskCompleteNotification: notification.scheduleAgentTaskCompleteNotification,
     absorbBurstBellForHookOwnedIdle: notification.absorbBurstBellForHookOwnedIdle,
-    captureForegroundRead: foreground.publication.captureRead,
+    captureForegroundRead: () => foreground.publication.captureRead(false),
+    canPublishForeground: foreground.publication.applicable,
     onForegroundAgentExited: titleEffects.onForegroundAgentExited
   })
   if (binding.initialTitle) {
