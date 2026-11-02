@@ -4,7 +4,12 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journa
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import * as liveTurn from '../../../shared/agent-session/view/structured-agent-session-live-turn'
+import * as commands from '../../../shared/agent-session/structured-agent-session-command-entry'
+import * as usageLimitCut from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
+import * as reducer from '../agent-session-journal/journal-reducer'
+import * as stoppedCut from '../agent-session-journal/journal-stopped-usage-limit-cut'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   HOST_TEST_NOW as NOW,
@@ -39,6 +44,7 @@ function forgetTranslator() {
 afterEach(async () => {
   forgetTranslator()
   await rig?.dispose()
+  vi.restoreAllMocks()
   vi.useRealTimers()
 })
 
@@ -284,4 +290,93 @@ describe('a Stop accepted before a usage limit ends the turn', () => {
     await reopen()
     await expectNoAutomaticContinue(rig.host, cut.resetsAt)
   })
+})
+
+/** Work counted only inside the Stop's commit hook and the status projection's cut reader. */
+function countCommitWork() {
+  const counts = { hooks: 0, scans: 0, renders: 0, cutReads: 0, indexes: 0 }
+  let inside: 'hook' | 'cut' | null = null
+  const hook = stoppedCut.journalStoppedUsageLimitCut
+  vi.spyOn(stoppedCut, 'journalStoppedUsageLimitCut').mockImplementation((state, rows) => {
+    counts.hooks++
+    inside = 'hook'
+    try {
+      return hook(state, rows)
+    } finally {
+      inside = null
+    }
+  })
+  const newest = liveTurn.newestStructuredAgentSessionTurnBySequence
+  vi.spyOn(liveTurn, 'newestStructuredAgentSessionTurnBySequence').mockImplementation((items) => {
+    counts.scans += inside === 'hook' ? 1 : 0
+    return newest(items)
+  })
+  const render = reducer.renderJournalState
+  vi.spyOn(reducer, 'renderJournalState').mockImplementation((state) => {
+    counts.renders += inside === 'hook' ? 1 : 0
+    return render(state)
+  })
+  const read = usageLimitCut.latestNativeChatUsageLimitCut
+  vi.spyOn(usageLimitCut, 'latestNativeChatUsageLimitCut').mockImplementation(
+    (items, submissions, bodyOf) => {
+      counts.cutReads++
+      inside = 'cut'
+      try {
+        return read(items, submissions, bodyOf)
+      } finally {
+        inside = null
+      }
+    }
+  )
+  const index = commands.structuredAgentSessionCommandTurnItemIds
+  vi.spyOn(commands, 'structuredAgentSessionCommandTurnItemIds').mockImplementation((items) => {
+    counts.indexes += inside === 'cut' ? 1 : 0
+    return index(items)
+  })
+  const reset = () =>
+    Object.assign(counts, { hooks: 0, scans: 0, renders: 0, cutReads: 0, indexes: 0 })
+  return { counts, reset }
+}
+
+describe('journal commit work after a Stop', () => {
+  it.each([20, 200])(
+    'streamed rows scan no history and build no index with %i history rows',
+    async (history) => {
+      const { counts, reset } = countCommitWork()
+      await codexTurnAccepted('turn-1')
+      expect(await rig.stop()).toMatchObject({ ok: true })
+      await codexLimitedEnd('turn-1', 60)
+      // The Stop owns this end, so it rendered once to find the cut it withdraws.
+      expect(counts.renders).toBeGreaterThan(0)
+      expect(rig.store.getRecord(SESSION)?.usageLimitContinueCancel).toEqual(await currentCut())
+      const fence = rig.store.getRecord(SESSION)!.lease.runtimeFence
+      for (let i = 0; i < history; i++) {
+        await journal().appendItem(
+          { provider: 'orca', clientMessageId: `history-${i}` },
+          { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: `old ${i}` }] },
+          { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+        )
+      }
+      await codexTurnAccepted('turn-2')
+      reset()
+
+      const streamed = 10
+      for (let i = 0; i < streamed; i++) {
+        const item = { type: 'agentMessage', id: `reply-${i}`, text: 'x' }
+        codex()('item/started', { threadId: THREAD, turnId: 'turn-2', item: { ...item, text: '' } })
+        codex()('item/completed', { threadId: THREAD, turnId: 'turn-2', item })
+        await rig.host.flushStreamedEvents(SESSION)
+      }
+      // Every streamed commit ran the hook and the projection, at the same cost for any history.
+      expect(counts.hooks).toBeGreaterThanOrEqual(streamed)
+      expect(counts.cutReads).toBeGreaterThanOrEqual(streamed)
+      expect(counts).toMatchObject({ scans: 0, renders: 0, indexes: 0 })
+
+      reset()
+      codex()('turn/completed', { threadId: THREAD, turn: { id: 'turn-2', status: 'completed' } })
+      await rig.host.flushStreamedEvents(SESSION)
+      // The end scans for the newest turn once; the Stop does not own it, so nothing renders.
+      expect(counts).toMatchObject({ scans: 1, renders: 0, indexes: 0 })
+    }
+  )
 })
