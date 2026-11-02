@@ -35,11 +35,15 @@ export function carriedStoppedHistory(
   ) {
     return null
   }
+  const clearSequence = ctx.journal.context.floor()?.sequence ?? 0
   return selectStoppedHistory(
     agentSessionStoppedHistoryOwed({
-      submissions: ctx.journal.inputOrder.stoppedHistoryInputs(submission.clientMessageId),
+      submissions: ctx.journal.inputOrder.stoppedHistoryInputs(
+        submission.clientMessageId,
+        clearSequence
+      ),
       carried: new Map(),
-      clearSequence: ctx.journal.context.floor()?.sequence ?? 0,
+      clearSequence,
       body: (id) => ctx.journal.submissionBody(id)
     }),
     body

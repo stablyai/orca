@@ -22,6 +22,7 @@ export function projectJournalBatch(input: {
   snapshot: AgentJournalSnapshot
   afterSequence: number
   canonicalItemId?: (itemId: string) => string
+  hasSubmission?: (id: string) => boolean
   queueSourceIds?: (messageId: string) => readonly string[]
   readSnapshot?: (touched: ReadonlySet<string>) => AgentJournalSnapshot
 }): JournalBatchProjection {
@@ -34,12 +35,12 @@ export function projectJournalBatch(input: {
   ) {
     return { ok: false, reset: 'journal_gap' }
   }
-  const aliases = submissionAliases(input.snapshot.submissions)
+  const aliases = input.canonicalItemId ? undefined : submissionAliases(input.snapshot.submissions)
   const touchedItemIds = new Set<string>()
   for (const row of input.rows) {
     if (row.kind === 'outcome') {
       for (const itemId of row.itemIds) {
-        touchedItemIds.add(input.canonicalItemId?.(itemId) ?? aliases.get(itemId) ?? itemId)
+        touchedItemIds.add(input.canonicalItemId?.(itemId) ?? aliases?.get(itemId) ?? itemId)
       }
       for (const clientMessageId of row.submissionIds) {
         touchedItemIds.add(agentJournalSubmissionKey(clientMessageId))
@@ -50,7 +51,7 @@ export function projectJournalBatch(input: {
       for (const mutation of row.mutations) {
         touchedItemIds.add(
           input.canonicalItemId?.(mutation.itemId) ??
-            aliases.get(mutation.itemId) ??
+            aliases?.get(mutation.itemId) ??
             mutation.itemId
         )
       }
@@ -62,7 +63,7 @@ export function projectJournalBatch(input: {
     }
     if (row.kind === 'item' || row.kind === 'tombstone') {
       touchedItemIds.add(
-        input.canonicalItemId?.(row.itemId) ?? aliases.get(row.itemId) ?? row.itemId
+        input.canonicalItemId?.(row.itemId) ?? aliases?.get(row.itemId) ?? row.itemId
       )
       continue
     }
@@ -81,8 +82,12 @@ export function projectJournalBatch(input: {
         ? row.clientMessageId
         : attempt === undefined
           ? undefined
-          : input.snapshot.submissions.find((submission) => submission.clientMessageId === attempt)
-              ?.clientMessageId
+          : (input.hasSubmission?.(attempt) ??
+              input.snapshot.submissions.some(
+                (submission) => submission.clientMessageId === attempt
+              ))
+            ? attempt
+            : undefined
     if (clientMessageId !== undefined) {
       touchedItemIds.add(agentJournalSubmissionKey(clientMessageId))
     }

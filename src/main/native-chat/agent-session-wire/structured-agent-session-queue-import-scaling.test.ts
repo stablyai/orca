@@ -270,8 +270,9 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
           emit: (event) => events.push(event)
         })
       }
-      expect(work()).toEqual([corrections, 1, 1])
-      expect(sourceGets()).toHaveLength(2 * corrections)
+      expect(work()).toEqual([0, 1, 1])
+      // Adopted display shares the raw map used by the keyed inverse lookup.
+      expect(sourceGets()).toHaveLength((adopt ? 3 : 2) * corrections)
       expect(visits).toBeGreaterThanOrEqual(size)
       const key = journal.publicRead().normalizationKey
       const coldPublication = { visits, corrections: work() }
@@ -292,7 +293,7 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       expect(journal.snapshot()).not.toBe(snapshot)
       feed.publish(SESSION, journal)
       // Count canonical normalization reads, not the draft’s changed-key metadata.
-      expect(work()).toEqual([corrections, 1, 1])
+      expect(work()).toEqual([0, 1, 1])
       reset()
       const hotWork: { visits: number; reads: number; recordWrites: number }[] = []
       for (let publication = 0; publication < 10; publication++) {
@@ -321,7 +322,7 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
         expect(projectionVisits).toBe(0)
         expect(projectionReads).toBeLessThanOrEqual(8 * corrections)
         expect(recordWrites).toBe(adopt ? 0 : 3 * corrections)
-        expect(work()).toEqual([corrections, 1, 1])
+        expect(work()).toEqual([0, 1, 1])
         expect(journal.publicRead().normalizationKey).toBe(key)
         // Plain point reads prove unchanged presentation without a full snapshot in the hot phase.
         const current = journal.queuedMessages.displayState()

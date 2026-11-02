@@ -65,7 +65,7 @@ export function readAgentSessionHistory(
   request: AgentSessionHistoryRequest,
   {
     view = journal.publicRead(),
-    snapshot = view.snapshot,
+    snapshot,
     scope = 'every-agent',
     reader = CLIENT_HISTORY_READER,
     rowReplay = false
@@ -81,6 +81,8 @@ export function readAgentSessionHistory(
 ): AgentSessionHistoryResult {
   const limit = resolveHistoryLimit(request.limit)
   if (request.direction === 'after') {
+    const readSnapshot = snapshot ? () => snapshot! : view.snapshotForItems
+    snapshot ??= readSnapshot(new Set())
     if (
       !rowReplay &&
       request.cursor?.epoch === snapshot.cursor.epoch &&
@@ -89,8 +91,9 @@ export function readAgentSessionHistory(
     ) {
       return historyReset(journal, 'cursor_compacted', reader)
     }
-    return readForward(journal, snapshot, request.cursor, limit, reader)
+    return readForward(journal, snapshot, request.cursor, limit, reader, readSnapshot)
   }
+  snapshot ??= view.snapshot
   const cursor = request.direction === 'before' ? request.cursor : undefined
   if (cursor) {
     if (cursor.epoch !== snapshot.cursor.epoch) {
@@ -199,7 +202,8 @@ function readForward(
   snapshot: AgentJournalSnapshot,
   cursor: AgentJournalCursor | undefined,
   limit: number,
-  reader: HistoryReader
+  reader: HistoryReader,
+  readSnapshot: (ids: ReadonlySet<string>) => AgentJournalSnapshot
 ): AgentSessionHistoryResult {
   if (!cursor) {
     // Why: forward paging replays rows after a position; without one there is
@@ -236,8 +240,12 @@ function readForward(
       snapshot,
       afterSequence: cursor.sequence,
       canonicalItemId: (itemId) => journal.canonicalItemId(itemId),
+      hasSubmission: (id) => journal.submission(id) !== undefined,
       queueSourceIds: reader.queueSourceIds?.bind(undefined, journal),
-      readSnapshot: (ids) => reader.snapshot?.(journal, snapshot, ids) ?? snapshot
+      readSnapshot: (ids) => {
+        const selected = readSnapshot(ids)
+        return reader.snapshot?.(journal, selected, ids) ?? selected
+      }
     })
     if (!result.ok) {
       return result

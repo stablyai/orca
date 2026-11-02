@@ -2,6 +2,7 @@ import * as reducer from '../agent-session-journal/journal-reducer'
 import { newestAcceptedSendKey } from './structured-agent-session-status-child-work'
 import { withStoppedHistory } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
 import { carriedStoppedHistory } from './structured-agent-session-stopped-history-selection'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   readQueuePublication,
@@ -22,6 +23,7 @@ import { JournalInputPlaceIndex } from '../agent-session-journal/journal-input-p
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { selectStructuredAgentSessionInput } from './structured-agent-session-input-selection'
 import { createQueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
+import { subscribeQueuedHistory } from './structured-agent-session-subscriber-history.test-fixture'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_NOW,
@@ -72,7 +74,7 @@ it.each([10, 100])(
         statusItems: 0
       })
     const archived = (id: unknown) =>
-      typeof id === 'string' && /^archive-(withdrawn|sent|input)-/.test(id)
+      typeof id === 'string' && /^archive-(withdrawn|sent|input|stopped)-/.test(id)
     const visit = (value: unknown): void => {
       if (Array.isArray(value)) {
         for (const item of value) {
@@ -167,7 +169,14 @@ it.each([10, 100])(
     const firstPosition = JournalInputPlaceIndex.prototype.firstPosition
     const lastId = JournalInputPlaceIndex.prototype.lastId
     const successorId = JournalInputPlaceIndex.prototype.successorId
+    const idsAfter = JournalInputPlaceIndex.prototype.idsAfter
     const pathSpies = [
+      vi.spyOn(JournalInputPlaceIndex.prototype, 'idsAfter').mockImplementation(function (
+        this: JournalInputPlaceIndex,
+        sequence
+      ) {
+        return atPath(this, () => idsAfter.call(this, sequence))
+      }),
       vi.spyOn(JournalInputPlaceIndex.prototype, 'firstPosition').mockImplementation(function (
         this: JournalInputPlaceIndex
       ) {
@@ -197,6 +206,20 @@ it.each([10, 100])(
         }
       })
     const status = JournalInputOrder.prototype.statusInputs
+    const stoppedInputs = JournalInputOrder.prototype.stoppedHistoryInputs
+    const stoppedReads = vi
+      .spyOn(JournalInputOrder.prototype, 'stoppedHistoryInputs')
+      .mockImplementation(function (this: JournalInputOrder, ...args) {
+        return new Proxy(stoppedInputs.apply(this, args), {
+          get(target, key, receiver) {
+            const value = Reflect.get(target, key, receiver)
+            if (typeof key === 'string' && /^\d+$/.test(key)) {
+              visit(value)
+            }
+            return value
+          }
+        })
+      })
     const statuses = vi
       .spyOn(JournalInputOrder.prototype, 'statusInputs')
       .mockImplementation(function (this: JournalInputOrder, ...args) {
@@ -371,6 +394,11 @@ it.each([10, 100])(
         )
       ).toHaveLength(h)
       expect(journal.queuedMessages.list()).toEqual([])
+      expect(
+        journal
+          .snapshot()
+          .submissions.filter((send) => send.clientMessageId.startsWith('archive-input-'))
+      ).toHaveLength(h)
       publication()
       let stopped: { clientMessageId: string; words: string }[] = []
       let acceptedKey = `archive-input-${h - 1}`
@@ -398,6 +426,7 @@ it.each([10, 100])(
       }
       for (const l of [0, 1]) {
         phase = 'baseline'
+        let received: AgentSessionSubscribeEvent[] | undefined
         const baseline = l ? [`baseline-${l}`] : []
         if (l) {
           await insert(baseline[0])
@@ -416,6 +445,12 @@ it.each([10, 100])(
           }
           if (l) {
             expect(view.find((card) => card.messageId === baseline[0])?.paused).toBe(true)
+          }
+          if (received) {
+            const last = received.findLast(
+              (event) => event.type === 'batch' && event.queuedMessages !== undefined
+            )
+            expect(last?.type === 'batch' ? last.queuedMessages : undefined).toEqual(view)
           }
         }
         const cycle = async (id: string, edit = false) => {
@@ -456,6 +491,24 @@ it.each([10, 100])(
             await cycle(`cycle-${l}-${i}`, i === 0)
           }
         })
+        const { frames, close, expectCaughtUp } = await subscribeQueuedHistory(rig.host, journal, {
+          sessionId: SESSION,
+          id: `retained-reader-${l}`
+        })
+        received = frames
+        try {
+          await run(`subscriber-${l}`, async () => {
+            for (let i = 0; i < 10; i++) {
+              await cycle(`subscriber-${l}-${i}`)
+              expectCaughtUp(journal.cursor(), archived)
+            }
+            expect(frames.every((event) => event.type === 'batch')).toBe(true)
+            expect(frames.length).toBeGreaterThanOrEqual(20)
+          })
+        } finally {
+          close()
+          received = undefined
+        }
         await run(`stop-${l}`, async () => {
           const pending = rig.send(`stop pending ${l}`)
           expect(await pending.result).toMatchObject({ ok: true })
@@ -618,9 +671,85 @@ it.each([10, 100])(
         acceptedKey = next.id
         stopped = []
       })
+      phase = 'stopped-setup'
+      const seedStopped = async (id: string) => {
+        await lane(() =>
+          journal.appendSubmission({
+            clientMessageId: id,
+            origin: 'client',
+            source: { kind: 'user' },
+            body: hostTestMessage(id),
+            payloadFingerprint: id,
+            handoverRecorded: true,
+            fence: fence()
+          })
+        )
+        await lane(() =>
+          journal.resolveDispatch({
+            clientMessageId: id,
+            state: 'rejected',
+            fence: fence(),
+            ...agentSessionFailureWords(
+              agentSessionFailureFact('cancelled', { neverReachedAgent: true }),
+              { surface: 'rejection' }
+            )
+          })
+        )
+      }
+      for (let i = 0; i < h; i++) {
+        await seedStopped(`archive-stopped-${i}`)
+      }
+      await lane(() => journal.replaceEpochItems('unreconcilable_prefix', fence(), []))
+      expect(journal.physicalCursor().epoch).toBe(physical)
+      expect(
+        journal.inputOrder.stoppedHistoryInputs('probe').map((send) => send.clientMessageId)
+      ).toEqual(Array.from({ length: h }, (_, i) => `archive-stopped-${i}`))
+      await lane(() =>
+        journal.context.clear(
+          { operationId: 'retained-stopped-clear', afterFence: fence(), clearedAt: HOST_TEST_NOW },
+          { write: () => {}, committed: () => {} }
+        )
+      )
+      const floor = journal.context.floor()!
+      expect(journal.submission('archive-stopped-0')!.acceptedSequence).toBeLessThan(floor.sequence)
+      await seedStopped('current-stopped')
+      await run('stopped-send', async () => {
+        for (let i = 0; i < 3; i++) {
+          const words = `ordinary after clear ${i}`
+          const before = rig.dispatch.mock.calls.length
+          const next = rig.send(words)
+          expect(await next.result).toMatchObject({ ok: true })
+          await eventually(() => expect(rig.dispatch.mock.calls.length).toBe(before + 1))
+          expect(rig.dispatch.mock.calls.at(-1)?.[0].body).toEqual(
+            i === 0
+              ? withStoppedHistory(hostTestMessage(words), [
+                  { clientMessageId: 'current-stopped', words: 'current-stopped' }
+                ])
+              : hostTestMessage(words)
+          )
+          expect(journal.stoppedHistoryCarried().get(next.id) ?? []).toEqual(
+            i === 0 ? ['current-stopped'] : []
+          )
+          await rig.host.settleLateDispatch({
+            sessionId: SESSION,
+            clientMessageId: next.id,
+            providerIdentity: {
+              provider: 'codex',
+              threadId: HOST_TEST_THREAD,
+              turnId: `after-clear-${i}`,
+              ordinal: 0
+            }
+          })
+          acceptedKey = next.id
+        }
+      })
       console.info('terminal-queue-membership-counts', JSON.stringify({ h, phases }))
       for (const [name, c] of Object.entries(phases)) {
-        if (!/^(cycles|stop|resume|rewind|recovery)-|^(after-reopen|delivery)$/.test(name)) {
+        if (
+          !/^(cycles|stop|resume|rewind|recovery|subscriber)-|^(after-reopen|delivery|stopped-send)$/.test(
+            name
+          )
+        ) {
           continue
         }
         expect(c.archived, name).toBe(0)
@@ -655,6 +784,7 @@ it.each([10, 100])(
         nodes,
         drafts,
         statuses,
+        stoppedReads,
         rendered,
         queries,
         ...pathSpies

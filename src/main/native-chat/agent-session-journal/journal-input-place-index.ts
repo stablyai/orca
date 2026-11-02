@@ -208,6 +208,22 @@ export class JournalInputPlaceIndex {
     return selected
   }
 
+  idsAfter(sequence: number): string[] {
+    const ids: string[] = []
+    const visit = (node?: Node): void => {
+      if (!node) {
+        return
+      }
+      if (node.entry.sequence > sequence) {
+        visit(node.left)
+        ids.push(node.entry.id)
+      }
+      visit(node.right)
+    }
+    visit(this.all)
+    return ids
+  }
+
   firstPosition(): number {
     let node = this.all
     while (node?.left) {

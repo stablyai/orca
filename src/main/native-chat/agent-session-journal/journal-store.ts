@@ -70,7 +70,7 @@ export class AgentSessionJournal {
   private readonly database: JournalHostDatabase
 
   private state: JournalReducerState
-  private readonly readPublic = createJournalPublicReader()
+  private readonly readPublic = createJournalPublicReader(() => this.inputOrder)
   private openedThrough: AgentJournalCursor = { epoch: '', sequence: 0 }
   private reopenUnmarked: AgentJournalCursor | null = null
   private onCommitted: ((rows?: readonly JournalRow[]) => void) | null = null

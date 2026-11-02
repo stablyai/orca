@@ -184,8 +184,9 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
           emit: (event) => events.push(event)
         })
       }
-      expect(work()).toEqual([corrections, 1, 1])
-      expect(sourceGets()).toHaveLength(2 * corrections)
+      expect(work()).toEqual([0, 1, 1])
+      // Adopted display shares the raw map used by the keyed inverse lookup.
+      expect(sourceGets()).toHaveLength((adopt ? 3 : 2) * corrections)
       expect(visits).toBeGreaterThanOrEqual(size)
       const key = journal.publicRead().normalizationKey
       reset()
@@ -204,7 +205,7 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       expect(journal.queuedMessages.displayState() === display).toBe(false)
       expect(journal.snapshot()).not.toBe(snapshot)
       feed.publish(SESSION, journal)
-      expect(work()).toEqual([corrections, 1, 1])
+      expect(work()).toEqual([0, 1, 1])
       reset()
       await journal.appendItem(
         { provider: 'codex', threadId: 'progress', turnId: 't', ordinal: 0 },
@@ -219,7 +220,7 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       expect(latest?.type === 'batch' && latest.batch.items.at(-1)?.body).toEqual(
         message('progress')
       )
-      expect(work()).toEqual([corrections, 1, 1])
+      expect(work()).toEqual([0, 1, 1])
       expect(journal.publicRead().normalizationKey).toBe(key)
     } finally {
       for (const spy of [sets, gets, draftGets, sorts, json, entriesRead, valuesRead]) {
@@ -358,7 +359,7 @@ it('public metadata follows legacy-only commits, item recreation and epoch repla
     BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
   const journal = journalFor(SESSION)
   await journal.open()
-  const ids = vi.spyOn(journal.queuedMessages.displayState().normalizedHandOffs, Symbol.iterator)
+  const ids = vi.spyOn(journal.inputOrder, 'inputForItem')
   const key = journal.publicRead().normalizationKey
   const snapshot = journal.snapshot()
   expect(journal.snapshot()).toBe(snapshot)

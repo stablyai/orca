@@ -122,13 +122,13 @@ export function queuedImageReaderSnapshot(
     return snapshot
   }
   const revision = journal.queuedMessages.displayState().inputs.revision
+  const present = (send: AgentJournalSubmission) =>
+    ids.has(send.clientMessageId) || imageIds.has(send.queuedMessageId ?? '')
+      ? sourcePresentation(send, ids.get(send.clientMessageId) === true)
+      : send
   let memo = presentations.get(journal)
-  if (!memo || memo.revision !== revision || memo.cards !== cards) {
-    const submissions = snapshot.submissions.map((send) =>
-      ids.has(send.clientMessageId) || imageIds.has(send.queuedMessageId ?? '')
-        ? sourcePresentation(send, ids.get(send.clientMessageId) === true)
-        : send
-    )
+  if (!touched && (!memo || memo.revision !== revision || memo.cards !== cards)) {
+    const submissions = snapshot.submissions.map(present)
     memo = { revision, cards, submissions }
     presentations.set(journal, memo)
   }
@@ -144,7 +144,7 @@ export function queuedImageReaderSnapshot(
   return {
     ...snapshot,
     items: retained.length ? [...items, ...retained].sort(compareAgentJournalItems) : items,
-    submissions: memo.submissions
+    submissions: touched ? snapshot.submissions.map(present) : memo!.submissions
   }
 }
 

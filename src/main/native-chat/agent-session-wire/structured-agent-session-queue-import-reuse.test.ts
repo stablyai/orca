@@ -117,7 +117,7 @@ it('public metadata follows legacy-only commits, item recreation and epoch repla
     BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
   const journal = journalFor(SESSION)
   await journal.open()
-  const ids = vi.spyOn(journal.queuedMessages.displayState().normalizedHandOffs, Symbol.iterator)
+  const ids = vi.spyOn(journal.inputOrder, 'inputForItem')
   const key = journal.publicRead().normalizationKey
   const snapshot = journal.snapshot()
   expect(journal.snapshot()).toBe(snapshot)

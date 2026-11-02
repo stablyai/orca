@@ -31,7 +31,7 @@ export class JournalInputEvidence extends JournalInputObservations {
   private readonly steers = new Map<string, JournalInputPlaceIndex>()
   private readonly steerTurns = new Map<string, string>()
   private readonly stoppedCandidates = new Set<string>()
-  private readonly stoppedOwed = new Set<string>()
+  private readonly stoppedOwed = new JournalInputPlaceIndex('')
   private readonly carrierCoverage = new Map<string, readonly string[]>()
   private readonly coveredBy = new Map<string, Set<string>>()
 
@@ -111,11 +111,16 @@ export class JournalInputEvidence extends JournalInputObservations {
       )
   }
 
-  stoppedHistoryInputs(excluding: string): AgentJournalSubmission[] {
-    const ids = new Set(this.stoppedOwed)
+  stoppedHistoryInputs(excluding: string, afterSequence = 0): AgentJournalSubmission[] {
+    const ids = new Set(this.stoppedOwed.idsAfter(afterSequence))
     for (const id of this.carrierCoverage.get(excluding) ?? []) {
       const covers = this.coveredBy.get(id)
-      if (this.stoppedCandidates.has(id) && covers?.size === 1 && covers.has(excluding)) {
+      if (
+        this.stoppedCandidates.has(id) &&
+        covers?.size === 1 &&
+        covers.has(excluding) &&
+        this.state.submissions.get(id)!.acceptedSequence! > afterSequence
+      ) {
         ids.add(id)
       }
     }
@@ -132,10 +137,10 @@ export class JournalInputEvidence extends JournalInputObservations {
     id: string,
     entry: AgentJournalSubmission | undefined
   ): void {
-    this.refreshStopped(state, id, entry)
     if (entry && !this.ordinals.has(id)) {
       this.ordinals.set(id, this.nextOrdinal++)
     }
+    this.refreshStopped(state, id, entry)
     if (
       entry &&
       (entry.dispatchState === 'pending' ||
@@ -260,7 +265,11 @@ export class JournalInputEvidence extends JournalInputObservations {
     }
     for (const original of affected) {
       if (this.stoppedCandidates.has(original) && !this.coveredBy.has(original)) {
-        this.stoppedOwed.add(original)
+        this.stoppedOwed.setPosition(
+          original,
+          state.submissions.get(original)!.acceptedSequence!,
+          this.inputOrdinal(original)
+        )
       } else {
         this.stoppedOwed.delete(original)
       }
