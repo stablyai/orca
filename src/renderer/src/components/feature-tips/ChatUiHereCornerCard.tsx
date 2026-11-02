@@ -1,4 +1,4 @@
-import { useRef, useState, type JSX } from 'react'
+import { useEffect, useRef, useState, type JSX } from 'react'
 import { ArrowLeftRight, X } from 'lucide-react'
 import { FEATURE_TIPS } from '../../../../shared/feature-tips'
 import { Button } from '@/components/ui/button'
@@ -22,13 +22,22 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
   const [liveSwitchingOpen, setLiveSwitchingOpen] = useState(false)
   const liveSwitchingButtonRef = useRef<HTMLButtonElement>(null)
 
+  const liveSwitching = settings?.telemetry?.chatUiLaunchTipCohort === 'treatment-live-switch'
+  const liveSwitchingShownRef = useRef(false)
+
+  useEffect(() => {
+    if (liveSwitching && !liveSwitchingShownRef.current) {
+      liveSwitchingShownRef.current = true
+      trackChatUiFeatureTipAction('chat-ui-off', 'live_switching_shown')
+    }
+  }, [liveSwitching])
+
   const tip = FEATURE_TIPS.find((entry) => entry.id === 'chat-ui-here')
   if (!tip) {
     return null
   }
   const { paragraphs, secondaryLabel, primaryLabel } = getChatUiHereVariantCopy('chat-ui-off')
   const [intro = ''] = paragraphs
-  const liveSwitching = settings?.telemetry?.chatUiLaunchTipCohort === 'treatment-live-switch'
 
   const handleUseChatUi = async (): Promise<void> => {
     if (busy) {
@@ -72,9 +81,9 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
       <Card
         role="complementary"
         aria-labelledby="chat-ui-here-corner-heading"
-        className="gap-0 overflow-hidden py-0"
+        className="overflow-hidden"
       >
-        <CardHeader className="px-4 pt-3">
+        <CardHeader>
           <div className="flex items-center justify-between gap-2">
             <CardTitle id="chat-ui-here-corner-heading">
               {translate('featureTips.chatUiHere.title', 'Chat UI is here')}
@@ -92,12 +101,12 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
 
         <div
           aria-hidden="true"
-          className="mt-2 h-[17rem] border-y border-border bg-[color-mix(in_srgb,var(--foreground)_7%,var(--card))] p-3 dark:bg-[color-mix(in_srgb,var(--foreground)_14%,var(--card))]"
+          className="h-[17rem] border-y border-border bg-[color-mix(in_srgb,var(--foreground)_7%,var(--card))] p-3 dark:bg-[color-mix(in_srgb,var(--foreground)_14%,var(--card))]"
         >
           <ChatSurfacePreview />
         </div>
 
-        <CardContent className="px-4 pt-4 pb-4">
+        <CardContent>
           <div className="space-y-3">
             <CardDescription>
               <span className="block space-y-2">
@@ -128,6 +137,9 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
               <FeatureTipActions
                 currentTip={tip}
                 primaryBusy={busy}
+                swapButtons={
+                  settings?.telemetry?.chatUiLaunchTipCohort === 'treatment-swapped-buttons'
+                }
                 onPrimaryAction={() => void handleUseChatUi()}
                 onSkip={handleStayInTerminal}
                 showSkip={secondaryLabel !== null}

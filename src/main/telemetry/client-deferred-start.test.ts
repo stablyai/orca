@@ -74,12 +74,19 @@ describe('deferred PostHog client start', () => {
     restoreConsentEnv(envStash)
   })
 
-  it.each([true, false])(
-    'captures the filtered arm with local eligibility %s through real initialization',
-    (eligible) => {
+  it.each([
+    { draw: 7, cohort: 'treatment-swapped-buttons', eligible: true },
+    { draw: 7, cohort: 'treatment-swapped-buttons', eligible: false },
+    { draw: 8, cohort: 'treatment', eligible: true },
+    { draw: 8, cohort: 'treatment', eligible: false },
+    { draw: 9, cohort: 'treatment-live-switch', eligible: true },
+    { draw: 9, cohort: 'treatment-live-switch', eligible: false }
+  ] as const)(
+    'captures $cohort with local eligibility $eligible through real initialization',
+    ({ draw, cohort, eligible }) => {
       vi.mocked(store.getChatUiLaunchTipVariant).mockReturnValue('chat-ui-off')
       vi.mocked(crypto.randomInt)
-        .mockImplementationOnce(() => 8)
+        .mockImplementationOnce(() => draw)
         .mockImplementationOnce(() => 1)
       const resolveEligibility = vi.fn(() => eligible)
       scheduleClientStart.mockClear()
@@ -90,11 +97,24 @@ describe('deferred PostHog client start', () => {
         eligible
       })
       expect(track('app_opened', {})).toBe(true)
+      expect(
+        track('chat_ui_feature_tip_exposure', {
+          variant: 'chat_ui_off',
+          launch_tip_cohort: cohort,
+          targeting: 'eligible-harnesses',
+          shown: eligible
+        })
+      ).toBe(true)
+      if (eligible) {
+        expect(
+          track('chat_ui_feature_tip_action', { variant: 'chat_ui_off', action: 'use_chat_ui' })
+        ).toBe(true)
+      }
       scheduleClientStart.mock.calls[0][0]()
       expect(sdk.capture).toHaveBeenCalledWith(
         expect.objectContaining({
           properties: expect.objectContaining({
-            chat_ui_launch_tip_v1: 'treatment',
+            chat_ui_launch_tip_v1: cohort,
             chat_ui_launch_tip_targeting_v1: 'eligible-harnesses'
           })
         })

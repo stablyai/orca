@@ -27,6 +27,22 @@ export const liveSwitching = defineFixture({
   render: () => <ChatUiHereCornerCard onClose={() => {}} />
 })
 
+export const swappedButtons = defineFixture({
+  width: 360,
+  store: {
+    settings: createGlobalSettingsFixture({
+      agentDefaultSurface: 'terminal',
+      telemetry: {
+        optedIn: true,
+        installId: 'install',
+        existedBeforeTelemetryRelease: true,
+        chatUiLaunchTipCohort: 'treatment-swapped-buttons'
+      }
+    })
+  },
+  render: () => <ChatUiHereCornerCard onClose={() => {}} />
+})
+
 export const liveSwitchingDialog = defineFixture({
   width: 480,
   render: () => <LiveSwitchingDemoDialog open onOpenChange={() => {}} />
@@ -40,11 +56,11 @@ export const liveSwitchingDialogFromChat = defineFixture({
 export const liveSwitchingModes = defineFixture({
   width: 1200,
   setup: () => {
-    document.documentElement.style.background = '#808080'
-    document.body.style.background = '#808080'
+    document.documentElement.style.background = 'var(--background)'
+    document.body.style.background = 'var(--background)'
   },
   render: () => (
-    <div className="-m-4 grid grid-cols-2 gap-8 bg-[#808080] p-16">
+    <div className="-m-4 grid grid-cols-2 gap-8 bg-background p-16">
       <LiveSwitchingDemo
         active={false}
         initialSurface="terminal"

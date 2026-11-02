@@ -18,7 +18,9 @@ export function experimentCohortProps(
   const telemetry = store.getSettings().telemetry
   const language = telemetry?.onboardingLanguageCohort
   const targeting =
-    cohort === 'treatment' || cohort === 'treatment-live-switch'
+    cohort === 'treatment' ||
+    cohort === 'treatment-live-switch' ||
+    cohort === 'treatment-swapped-buttons'
       ? telemetry?.chatUiLaunchTipTargeting?.mode
       : undefined
   return {

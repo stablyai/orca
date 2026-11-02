@@ -4,7 +4,11 @@ export type ChatUiLaunchTipTargeting =
   | { mode: 'all' }
   | { mode: 'eligible-harnesses'; eligible: boolean }
 
-export type ChatUiLaunchTipCohort = 'control' | 'treatment' | 'treatment-live-switch'
+export type ChatUiLaunchTipCohort =
+  | 'control'
+  | 'treatment'
+  | 'treatment-live-switch'
+  | 'treatment-swapped-buttons'
 
 export type TelemetrySettings = {
   /** New users: true at install. Existing users: null until they resolve the first-launch banner. */
@@ -15,9 +19,9 @@ export type TelemetrySettings = {
   existedBeforeTelemetryRelease: boolean
   /** Frozen 50/50 assignment for fresh installs; absent for profiles predating the experiment. */
   onboardingLanguageCohort?: 'control' | 'treatment'
-  /** Frozen 80% control / 10% treatment / 10% live-switch assignment for the Chat UI launch tip; control never sees it. Absent means not enrolled, so the tip shows. */
+  /** Frozen 70% control / 10% treatment / 10% live-switch / 10% swapped-buttons assignment; control never sees the tip. Existing assignments persist. */
   chatUiLaunchTipCohort?: ChatUiLaunchTipCohort
-  /** Both treatment cards split equally by eligibility; frozen locally from settings, never usage history. */
+  /** Treatment cards split equally by eligibility; frozen locally from settings, never usage history. */
   chatUiLaunchTipTargeting?: ChatUiLaunchTipTargeting
   /** Local UTC-day cursors cap dashboard observations across restarts; at most two writes a day. */
   agentDashboardActiveDays?: Partial<Record<AgentDashboardSurface, number>>

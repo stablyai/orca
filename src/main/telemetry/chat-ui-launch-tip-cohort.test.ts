@@ -72,7 +72,7 @@ describe('ensureChatUiLaunchTipCohort', () => {
     { draw: 4, cohort: 'control' },
     { draw: 5, cohort: 'control' },
     { draw: 6, cohort: 'control' },
-    { draw: 7, cohort: 'control' },
+    { draw: 7, cohort: 'treatment-swapped-buttons' },
     { draw: 8, cohort: 'treatment' },
     { draw: 9, cohort: 'treatment-live-switch' }
   ])('assigns draw $draw to $cohort and keeps the frozen cohort', ({ draw, cohort }) => {
@@ -172,7 +172,7 @@ describe('ensureChatUiLaunchTipCohort', () => {
     })
   })
 
-  it.each(['control', 'treatment', 'treatment-live-switch'] as const)(
+  it.each(['control', 'treatment', 'treatment-live-switch', 'treatment-swapped-buttons'] as const)(
     'preserves existing %s assignments',
     (cohort) => {
       const store = makeStore({ chatUiLaunchTipCohort: cohort })
@@ -204,19 +204,26 @@ describe('ensureChatUiLaunchTipCohort', () => {
     }
   })
 
-  it('emits schema-valid targeting props immediately after enrollment without harness settings', () => {
-    vi.mocked(crypto.randomInt)
-      .mockImplementationOnce(() => 8)
-      .mockImplementationOnce(() => 1)
-    const store = makeStore({ onboardingLanguageCohort: 'treatment' })
-    const props = experimentCohortProps(store, hasChatUiLaunchTipEligibleHarness)
-    expect(props).toEqual({
-      onboarding_language_v1: 'treatment',
-      chat_ui_launch_tip_v1: 'treatment',
-      chat_ui_launch_tip_targeting_v1: 'eligible-harnesses'
-    })
-    expect(commonPropsSchema.safeParse({ ...BASE_COMMON, ...props }).success).toBe(true)
-  })
+  it.each([
+    { draw: 7, cohort: 'treatment-swapped-buttons' },
+    { draw: 8, cohort: 'treatment' },
+    { draw: 9, cohort: 'treatment-live-switch' }
+  ])(
+    'emits schema-valid targeting props immediately after $cohort enrollment',
+    ({ draw, cohort }) => {
+      vi.mocked(crypto.randomInt)
+        .mockImplementationOnce(() => draw)
+        .mockImplementationOnce(() => 1)
+      const store = makeStore({ onboardingLanguageCohort: 'treatment' })
+      const props = experimentCohortProps(store, hasChatUiLaunchTipEligibleHarness)
+      expect(props).toEqual({
+        onboarding_language_v1: 'treatment',
+        chat_ui_launch_tip_v1: cohort,
+        chat_ui_launch_tip_targeting_v1: 'eligible-harnesses'
+      })
+      expect(commonPropsSchema.safeParse({ ...BASE_COMMON, ...props }).success).toBe(true)
+    }
+  )
 
   it('ignores malformed targeting metadata rather than disabling all telemetry', () => {
     const store = makeStore({ chatUiLaunchTipCohort: 'treatment' })
@@ -235,7 +242,12 @@ describe('ensureChatUiLaunchTipCohort', () => {
     // Acknowledging the banner persists optedIn=true; the next launch enrolls the still-unseen tip.
     pending.getSettings().telemetry!.optedIn = true
     const cohort = ensureChatUiLaunchTipCohort(pending)
-    expect(['control', 'treatment', 'treatment-live-switch']).toContain(cohort)
+    expect([
+      'control',
+      'treatment',
+      'treatment-live-switch',
+      'treatment-swapped-buttons'
+    ]).toContain(cohort)
     expect(isChatUiLaunchTipDeferredForConsent()).toBe(false)
     expect(pending.getSettings().telemetry?.chatUiLaunchTipCohort).toBe(cohort)
   })

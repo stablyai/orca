@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
 
-import { act } from 'react'
+import { act, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
+import type { ChatUiLaunchTipCohort } from '../../../../shared/telemetry-settings-types'
 import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { ChatUiHereCornerCard } from './ChatUiHereCornerCard'
@@ -49,21 +50,29 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function renderCard(cohort?: 'treatment' | 'treatment-live-switch'): void {
+function renderCard(cohort?: ChatUiLaunchTipCohort): void {
   const settings = createGlobalSettingsFixture({ agentDefaultSurface: 'terminal' })
-  useAppStore.setState({
-    settings: {
-      ...settings,
-      telemetry: {
-        optedIn: settings.telemetry?.optedIn ?? true,
-        installId: settings.telemetry?.installId ?? 'install',
-        existedBeforeTelemetryRelease: settings.telemetry?.existedBeforeTelemetryRelease ?? true,
-        ...settings.telemetry,
-        chatUiLaunchTipCohort: cohort
+  act(() =>
+    useAppStore.setState({
+      settings: {
+        ...settings,
+        telemetry: {
+          optedIn: settings.telemetry?.optedIn ?? true,
+          installId: settings.telemetry?.installId ?? 'install',
+          existedBeforeTelemetryRelease: settings.telemetry?.existedBeforeTelemetryRelease ?? true,
+          ...settings.telemetry,
+          chatUiLaunchTipCohort: cohort
+        }
       }
-    }
-  })
-  act(() => root.render(<ChatUiHereCornerCard onClose={onClose} />))
+    })
+  )
+  act(() =>
+    root.render(
+      <StrictMode>
+        <ChatUiHereCornerCard onClose={onClose} />
+      </StrictMode>
+    )
+  )
 }
 
 function button(label: string): HTMLButtonElement {
@@ -77,20 +86,44 @@ function button(label: string): HTMLButtonElement {
 }
 
 describe('Chat UI corner card', () => {
-  it('turns on Chat UI, records the conversion and closes', async () => {
-    await act(async () => button('Use Chat UI').click())
-    expect(updateSettingsOrThrow).toHaveBeenCalledExactlyOnceWith({ agentDefaultSurface: 'chat' })
-    expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_action', {
-      variant: 'chat_ui_off',
-      action: 'use_chat_ui'
-    })
-    expect(track).toHaveBeenCalledWith('agent_default_surface_changed', {
-      from_mode: 'terminal',
-      to_mode: 'chat',
-      source: 'launch_card',
-      launch_tip_shown: true
-    })
-    expect(onClose).toHaveBeenCalledOnce()
+  it.each(['treatment', 'treatment-swapped-buttons'] as const)(
+    'turns on Chat UI, records the conversion and closes in %s',
+    async (cohort) => {
+      renderCard(cohort)
+      await act(async () => button('Use Chat UI').click())
+      expect(updateSettingsOrThrow).toHaveBeenCalledExactlyOnceWith({ agentDefaultSurface: 'chat' })
+      expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_action', {
+        variant: 'chat_ui_off',
+        action: 'use_chat_ui'
+      })
+      expect(track).toHaveBeenCalledWith('agent_default_surface_changed', {
+        from_mode: 'terminal',
+        to_mode: 'chat',
+        source: 'launch_card',
+        launch_tip_shown: true
+      })
+      expect(onClose).toHaveBeenCalledOnce()
+    }
+  )
+
+  it('swaps button order and emphasis only in the swapped-buttons arm', () => {
+    const actionLabels = (): (string | null)[] =>
+      Array.from(container.querySelectorAll('button'))
+        .filter((entry) => ['Stay in terminal', 'Use Chat UI'].includes(entry.textContent ?? ''))
+        .map((entry) => entry.textContent)
+
+    expect(actionLabels()).toEqual(['Stay in terminal', 'Use Chat UI'])
+    expect(button('Use Chat UI').dataset.variant).toBe('default')
+    expect(button('Stay in terminal').dataset.variant).toBe('ghost')
+    renderCard('treatment-live-switch')
+    expect(actionLabels()).toEqual(['Stay in terminal', 'Use Chat UI'])
+    expect(button('Use Chat UI').dataset.variant).toBe('default')
+    expect(button('Stay in terminal').dataset.variant).toBe('ghost')
+    renderCard('treatment-swapped-buttons')
+    expect(actionLabels()).toEqual(['Use Chat UI', 'Stay in terminal'])
+    expect(button('Use Chat UI').dataset.variant).toBe('ghost')
+    expect(button('Stay in terminal').dataset.variant).toBe('default')
+    expect(container.textContent).not.toContain('Live switching available')
   })
 
   it('keeps the card open with a retry when the save fails', async () => {
@@ -109,15 +142,19 @@ describe('Chat UI corner card', () => {
     expect(onClose).toHaveBeenCalledOnce()
   })
 
-  it('leaves the default alone when staying in the terminal', () => {
-    act(() => button('Stay in terminal').click())
-    expect(updateSettingsOrThrow).not.toHaveBeenCalled()
-    expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_action', {
-      variant: 'chat_ui_off',
-      action: 'stay_in_terminal'
-    })
-    expect(onClose).toHaveBeenCalledOnce()
-  })
+  it.each(['treatment', 'treatment-swapped-buttons'] as const)(
+    'leaves the default alone when staying in the terminal in %s',
+    (cohort) => {
+      renderCard(cohort)
+      act(() => button('Stay in terminal').click())
+      expect(updateSettingsOrThrow).not.toHaveBeenCalled()
+      expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_action', {
+        variant: 'chat_ui_off',
+        action: 'stay_in_terminal'
+      })
+      expect(onClose).toHaveBeenCalledOnce()
+    }
+  )
 
   it('opens Agents settings from the copy link', () => {
     const settingsLink = container.querySelector<HTMLButtonElement>('button.inline')
@@ -130,6 +167,28 @@ describe('Chat UI corner card', () => {
     })
     expect(openSettingsPage).toHaveBeenCalledOnce()
     expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('records live-switching exposure once when the link appears, separately from opening it', () => {
+    renderCard('treatment')
+    expect(track).not.toHaveBeenCalledWith(
+      'chat_ui_feature_tip_action',
+      expect.objectContaining({ action: 'live_switching_shown' })
+    )
+
+    renderCard('treatment-live-switch')
+    expect(button('Live switching available')).toBeDefined()
+    renderCard('treatment-live-switch')
+    expect(track).toHaveBeenCalledExactlyOnceWith('chat_ui_feature_tip_action', {
+      variant: 'chat_ui_off',
+      action: 'live_switching_shown'
+    })
+
+    act(() => button('Live switching available').click())
+    expect(track).toHaveBeenNthCalledWith(2, 'chat_ui_feature_tip_action', {
+      variant: 'chat_ui_off',
+      action: 'open_live_switching'
+    })
   })
 
   it('offers the live-switching demo only in the live-switch arm', () => {

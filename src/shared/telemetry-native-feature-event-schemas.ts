@@ -97,6 +97,7 @@ export const chatUiFeatureTipActionSchema = z
       'stay_in_terminal',
       'open_settings',
       'open_live_switching',
+      'live_switching_shown',
       'dismissed'
     ]),
     nth_repo_added: nthRepoAddedSchema
@@ -106,7 +107,13 @@ export const chatUiFeatureTipActionSchema = z
 export const chatUiFeatureTipExposureSchema = z
   .object({
     variant: chatUiFeatureTipVariantSchema,
-    launch_tip_cohort: z.enum(['control', 'treatment', 'treatment-live-switch', 'unassigned']),
+    launch_tip_cohort: z.enum([
+      'control',
+      'treatment',
+      'treatment-live-switch',
+      'treatment-swapped-buttons',
+      'unassigned'
+    ]),
     shown: z.boolean(),
     targeting: z.enum(['all', 'eligible-harnesses']).optional(),
     nth_repo_added: nthRepoAddedSchema

@@ -60,21 +60,18 @@ function DemoMenuItem({
   icon,
   label,
   highlighted = false,
-  inset = false,
   chevron = false
 }: {
   icon?: ReactNode
   label: string
   highlighted?: boolean
-  inset?: boolean
   chevron?: boolean
 }): JSX.Element {
   return (
     <div
       className={cn(
         'flex h-7 items-center gap-2 rounded-sm px-2 text-sm',
-        highlighted ? 'bg-accent text-accent-foreground' : 'text-foreground',
-        inset && 'pl-6'
+        highlighted ? 'bg-accent text-accent-foreground' : 'text-foreground'
       )}
     >
       {icon ? (
@@ -195,7 +192,6 @@ export function LiveSwitchingDemo({
               'auto.components.tab.bar.SortableTabContextMenu.8d16f9cd30',
               'Close Others'
             )}
-            inset
           />
         </div>
       </div>
@@ -243,12 +239,12 @@ export function LiveSwitchingDemoDialog({
       <DialogContent className="sm:max-w-md" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>
-            {translate('featureTips.chatUiHere.liveSwitchingTitle', 'Live switching')}
+            {translate('featureTips.chatUiHere.liveSwitchingTitle', 'Live switching 101')}
           </DialogTitle>
           <DialogDescription>
             {translate(
               'featureTips.chatUiHere.liveSwitchingDescription',
-              'Continue supported agent sessions in Chat UI or the terminal. Right-click an agent tab to see available switching options. Availability depends on the agent, host and runtime version.'
+              'Right-click an agent tab to switch between Chat UI and the terminal.'
             )}
           </DialogDescription>
         </DialogHeader>

@@ -28,7 +28,12 @@ export function ensureChatUiLaunchTipCohort(
     const settings = store.getSettings()
     const telemetry = settings.telemetry
     const saved = telemetry?.chatUiLaunchTipCohort
-    if (saved === 'control' || saved === 'treatment' || saved === 'treatment-live-switch') {
+    if (
+      saved === 'control' ||
+      saved === 'treatment' ||
+      saved === 'treatment-live-switch' ||
+      saved === 'treatment-swapped-buttons'
+    ) {
       return saved
     }
     if (
@@ -45,7 +50,13 @@ export function ensureChatUiLaunchTipCohort(
     }
     const draw = randomInt(10)
     const cohort: ChatUiLaunchTipCohort =
-      draw < 8 ? 'control' : draw === 8 ? 'treatment' : 'treatment-live-switch'
+      draw < 7
+        ? 'control'
+        : draw === 7
+          ? 'treatment-swapped-buttons'
+          : draw === 8
+            ? 'treatment'
+            : 'treatment-live-switch'
     const targeting =
       cohort === 'control' ? undefined : assignTargeting(settings, resolveEligibility)
     store.updateSettings({
