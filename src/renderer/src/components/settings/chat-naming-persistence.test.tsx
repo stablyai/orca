@@ -13,6 +13,7 @@ import {
 } from '../../../../shared/source-control-ai'
 import { planCommitMessageGeneration } from '../../../../shared/commit-message-plan'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
 import type {
   SourceControlAiSettings,
   SourceControlAiSettingsPatch
@@ -273,7 +274,7 @@ it.each(['global', 'repo'] as const)(
     const { RepositorySourceControlAiSection } =
       await import('./repository/source-control/RepositorySourceControlAiSection')
     Object.assign(window.api.preflight, { detectRemoteAgents: vi.fn(async () => ['codex']) })
-    const repo = {
+    const repo: Repo = {
       ...TEST_REPO,
       executionHostId: 'ssh:target%20one',
       connectionId: 'stale',
@@ -716,7 +717,7 @@ it('saving only Chat name Arguments keeps a newer model choice saved by another 
   const settings = useAppStore.getState().settings!
   const withModel = (model: string) =>
     normalizeSourceControlAiSettings({
-      ...settings.sourceControlAi,
+      ...normalizeSourceControlAiSettings(settings.sourceControlAi),
       modelOverridesByOperation: { conversationName: { selectedModelByAgent: { codex: model } } }
     })
   useAppStore.setState({ settings: { ...settings, sourceControlAi: withModel('gpt-5.4') } })
@@ -777,7 +778,7 @@ it('reopening the Chat name picker to change Effort keeps the earlier unsaved Mo
       ...settings,
       defaultTuiAgent: 'codex',
       sourceControlAi: normalizeSourceControlAiSettings({
-        ...settings.sourceControlAi,
+        ...normalizeSourceControlAiSettings(settings.sourceControlAi),
         actions: { conversationName: { agentId: 'codex', agentArgs: '' } }
       })
     }

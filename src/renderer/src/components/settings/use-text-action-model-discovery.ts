@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { discoverRuntimeCommitMessageModels } from '@/runtime/runtime-git-generation-client'
 import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import { resolveWorktreeModelDiscoveryRuntime } from '../native-chat/native-chat-session-option-discovery'
@@ -24,7 +25,7 @@ function discoveryContext(hostKey: string, repoId: string | undefined): RuntimeG
     // repo card refreshes that catalog with the same native request as the global card.
     return { target: { kind: 'local' }, prefs: state.settings, worktreeId: null, worktreePath: '' }
   }
-  const worktree = repoId ? state.worktreesByRepo[repoId]?.[0] : undefined
+  const worktree = repoId ? selectWorktreesByRepo(state)[repoId]?.[0] : undefined
   return worktree ? resolveWorktreeModelDiscoveryRuntime(state, worktree.id) : null
 }
 

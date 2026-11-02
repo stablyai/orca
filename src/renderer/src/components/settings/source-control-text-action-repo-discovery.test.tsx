@@ -10,6 +10,7 @@ import {
   normalizeSourceControlAiSettings
 } from '../../../../shared/source-control-ai'
 import type { SourceControlAiSettingsPatch } from '../../../../shared/source-control-ai-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { TooltipProvider } from '../ui/tooltip'
 import { SourceControlTextActionAgentPicker } from './SourceControlTextActionAgentPicker'
 
@@ -50,9 +51,10 @@ function openRepoCard(repoId: string) {
     useAppStore.setState(({ settings }) => ({
       settings: settings && {
         ...settings,
-        sourceControlAi: normalizeSourceControlAiSettings(
-          typeof patch === 'function' ? patch(settings.sourceControlAi!) : patch
-        )
+        sourceControlAi: normalizeSourceControlAiSettings({
+          ...settings.sourceControlAi!,
+          ...(typeof patch === 'function' ? patch(settings.sourceControlAi!) : patch)
+        })
       }
     }))
   })
@@ -101,7 +103,7 @@ it('a local repository card in WSL refreshes the local catalog generation reads,
   }))
   vi.stubGlobal('api', { git: { discoverCommitMessageModels: list } })
   const path = String.raw`\\wsl.localhost\Ubuntu\home\me\repo`
-  const repo = { ...TEST_REPO, path, executionHostId: 'local' }
+  const repo: Repo = { ...TEST_REPO, path, executionHostId: 'local' }
   const worktree = makeWorktree({ id: `${repo.id}::${path}`, repoId: repo.id, path })
   useAppStore.setState({ repos: [repo], worktreesByRepo: { [repo.id]: [worktree] } })
   openRepoCard(repo.id)
@@ -117,13 +119,13 @@ it('a local repository card in WSL refreshes the local catalog generation reads,
   })
 })
 
-it.each([
+it.each<{ host: Pick<Repo, 'connectionId' | 'executionHostId'>; hostKey: string }>([
   { host: { connectionId: 'box' }, hostKey: 'ssh:box' },
   { host: { executionHostId: 'runtime:env-1' }, hostKey: 'runtime:env-1' }
 ])(
   'a remote repository card asks its host through one of its worktrees and saves under $hostKey',
   async ({ host, hostKey }) => {
-    const repo = { ...TEST_REPO, id: 'remote', ...host }
+    const repo: Repo = { ...TEST_REPO, id: 'remote', ...host }
     const worktree = makeWorktree({ id: 'remote::/srv/app', repoId: 'remote', path: '/srv/app' })
     useAppStore.setState({ repos: [repo], worktreesByRepo: { remote: [worktree] } })
     openRepoCard('remote')
