@@ -326,7 +326,13 @@ import {
   UpdatePrState,
   UpdatePrTitle
 } from './github-pull-request-update-params'
-import { RepoIssueCommandRead, RepoSelector, RepoShow, SlugRepo } from './github-repo-target-params'
+import {
+  RepoIssueCommandRead,
+  RepoSelector,
+  RepoShow,
+  RepoWithGitHubAccountExpectation,
+  SlugRepo
+} from './github-repo-target-params'
 import {
   IssuesList,
   RateLimit,
@@ -1077,10 +1083,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'github.countWorkItems': WorkItemsCount,
   'github.createIssue': CreateIssue,
   'github.issue': Issue,
-  'github.listAssignableUsers': RepoSelector,
+  'github.listAssignableUsers': RepoWithGitHubAccountExpectation,
   'github.listBindableAccounts': BindableAccounts,
   'github.listIssues': IssuesList,
-  'github.listLabels': RepoSelector,
+  'github.listLabels': RepoWithGitHubAccountExpectation,
   'github.listWorkItems': WorkItemsList,
   'github.markPRDraft': MarkPrDraft,
   'github.markPRReadyForReview': MarkPrReadyForReview,
