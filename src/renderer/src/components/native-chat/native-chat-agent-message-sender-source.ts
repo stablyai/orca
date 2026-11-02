@@ -15,7 +15,6 @@ import {
   type AgentMessageSenderView
 } from '../../../../shared/agent-session/agent-message-presentation'
 
-const EMPTY_VIEW: AgentMessageSenderView = Object.freeze({})
 export type SenderLocation = {
   host: string
   worktreeId: string
@@ -23,6 +22,10 @@ export type SenderLocation = {
   agentType?: AgentMessageSenderView['agentType']
 }
 type LocateSender = (state: AppState) => SenderLocation | undefined
+export type SenderLookup = {
+  locate: LocateSender
+  savedAgent?: AgentMessageSenderView['agentType']
+}
 
 function equalView(a: AgentMessageSenderView, b: AgentMessageSenderView): boolean {
   return a.agentType === b.agentType && a.dot === b.dot && a.progress === b.progress
@@ -111,42 +114,69 @@ export function useAgentMessageSenderSource(
   locate: LocateSender,
   savedAgent?: AgentMessageSenderView['agentType']
 ): AgentMessageSenderView {
+  const lookups = useMemo(() => [{ locate, savedAgent }], [locate, savedAgent])
+  return useAgentMessageSenderSources(lookups)[0]
+}
+
+function releaseSource(key: string, source: Source): void {
+  if (--source.leases === 0) {
+    subscribedSources.delete(key)
+    source.dispose()
+  }
+}
+
+/** Resolve several senders under one store subscription; unchanged views keep their identity. */
+export function useAgentMessageSenderSources(
+  lookups: readonly SenderLookup[]
+): readonly AgentMessageSenderView[] {
   const selected = useMemo(() => {
-    let previous = EMPTY_VIEW
+    let previous: readonly AgentMessageSenderView[] = []
     return (state: AppState) => {
-      const location = locate(state)
-      const next = agentMessageSenderView(
-        location ? readSource(state, location).read(state, location.paneKey) : undefined,
-        location?.agentType ?? savedAgent
-      )
-      if (!equalView(previous, next)) {
+      let changed = previous.length !== lookups.length
+      const next = lookups.map(({ locate, savedAgent }, index) => {
+        const location = locate(state)
+        const view = agentMessageSenderView(
+          location ? readSource(state, location).read(state, location.paneKey) : undefined,
+          location?.agentType ?? savedAgent
+        )
+        const prior = previous[index]
+        if (prior && equalView(prior, view)) {
+          return prior
+        }
+        changed = true
+        return view
+      })
+      if (changed) {
         previous = next
       }
       return previous
     }
-  }, [locate, savedAgent])
+  }, [lookups])
   const subscribe = useCallback(
     (notify: () => void) => {
-      let lease: { key: string; source: Source } | undefined
-      const release = () => {
-        if (lease && --lease.source.leases === 0) {
-          subscribedSources.delete(lease.key)
-          lease.source.dispose()
-        }
-        lease = undefined
-      }
+      const leases = new Map<string, Source>()
       const update = () => {
         const state = useAppStore.getState()
-        const location = locate(state)
-        const key = location ? sourceKey(location) : undefined
-        if (lease?.key !== key) {
-          release()
-          if (location && key) {
+        const located = new Map<string, SenderLocation>()
+        for (const { locate } of lookups) {
+          const location = locate(state)
+          if (location) {
+            located.set(sourceKey(location), location)
+          }
+        }
+        for (const [key, source] of leases) {
+          if (!located.has(key)) {
+            leases.delete(key)
+            releaseSource(key, source)
+          }
+        }
+        for (const [key, location] of located) {
+          if (!leases.has(key)) {
             const source = readSource(state, location)
             transientSources.get(state)?.delete(key)
             source.leases++
             subscribedSources.set(key, source)
-            lease = { key, source }
+            leases.set(key, source)
           }
         }
         return selected(state)
@@ -161,10 +191,13 @@ export function useAgentMessageSenderSource(
       })
       return () => {
         unsubscribe()
-        release()
+        for (const [key, source] of leases) {
+          releaseSource(key, source)
+        }
+        leases.clear()
       }
     },
-    [locate, selected]
+    [lookups, selected]
   )
   const getSnapshot = useCallback(() => selected(useAppStore.getState()), [selected])
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)

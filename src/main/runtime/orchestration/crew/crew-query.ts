@@ -93,6 +93,16 @@ const Traffic = z.object({
 })
 export type CrewTraffic = z.infer<typeof Traffic>
 
+// Only an agent's own words can be a row's latest line: Orca's failure notices (escalations), empty setup
+// receipts and rejected lifecycle rewrites carry IDs or nothing. Heartbeat stays its own term so the
+// partial message indexes still match; octet_length avoids reading long bodies.
+const ADMITTED_TRAFFIC = `type <> 'heartbeat'
+  AND type IN ('status', 'dispatch', 'worker_done', 'merge_ready', 'handoff', 'decision_gate', 'question')
+  AND octet_length(body) > 0
+  AND NOT (payload IS NOT NULL AND json_valid(payload)
+    AND json_type(payload, '$._orcaLifecycleRejection.code') IS 'text'
+    AND json_type(payload, '$._orcaLifecycleRejection.reason') IS 'text')`
+
 /** Pair maxima follow enumeration, so a busy mailbox cannot crowd out its quieter peers. */
 export function readCrewTraffic(
   db: OrchestrationDb,
@@ -105,11 +115,11 @@ export function readCrewTraffic(
     WITH traffic AS (
       SELECT to_handle AS peer, 'to' AS direction, sequence
       FROM messages WHERE from_handle IN (SELECT value FROM json_each(?))
-        AND julianday(created_at) >= julianday(?) AND type <> 'heartbeat'
+        AND julianday(created_at) >= julianday(?) AND ${ADMITTED_TRAFFIC}
       UNION ALL
       SELECT from_handle AS peer, 'from' AS direction, sequence
       FROM messages WHERE to_handle IN (SELECT value FROM json_each(?))
-        AND julianday(created_at) >= julianday(?) AND type <> 'heartbeat'
+        AND julianday(created_at) >= julianday(?) AND ${ADMITTED_TRAFFIC}
     ), peers AS (SELECT peer, MAX(sequence) AS sequence FROM traffic GROUP BY peer)
     SELECT traffic.peer, traffic.direction, traffic.sequence, winner.body, winner.created_at
     FROM peers JOIN traffic ON traffic.peer = peers.peer AND traffic.sequence = peers.sequence

@@ -1,9 +1,13 @@
 // Open the sender through chat or terminal-handle routes; choose feedback from the answering host’s evidence, never the sender’s address shape.
 
+import { toast } from 'sonner'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import type { OrchestrationCrewRow } from '../../../shared/orchestration-crew'
 import {
   structuredSessionOpenFeedback,
-  openDesktopStructuredSession
+  structuredSessionOpenFeedbackText,
+  openDesktopStructuredSession,
+  type StructuredSessionOpenFeedback
 } from './activate-ai-vault-structured-session'
 import { useAppStore } from '@/store'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
@@ -106,14 +110,17 @@ async function openSender(
     host
   )
   if (result.kind === 'terminal') {
-    await focusTerminal(result.handle, environmentId, name ?? '')
+    await focusTerminal(result.handle, environmentId, {
+      gone: showAgentPaneUnavailable,
+      lookupFailure: (failure) => showLookupFailure(failure, name ?? '')
+    })
   }
 }
 
 async function focusTerminal(
   handle: string,
   environmentId: string | null,
-  agent: string
+  feedback: { gone: () => void; lookupFailure: (failure: LookupFailure) => void }
 ): Promise<void> {
   if (focusRendererTerminalHandle(handle, environmentId)) {
     return
@@ -122,17 +129,89 @@ async function focusTerminal(
     await focusRuntimeTerminalHandle(handle, environmentId)
   } catch (error) {
     if (error instanceof RuntimeRpcCallError && TERMINAL_GONE_CODES.has(error.code)) {
-      showAgentPaneUnavailable()
+      feedback.gone()
     } else {
-      showLookupFailure(isRuntimeCompatBlockError(error) ? 'update' : 'unreachable', agent)
+      feedback.lookupFailure(isRuntimeCompatBlockError(error) ? 'update' : 'unreachable')
     }
   }
 }
 
-function showLookupFailure(failure: LookupFailure, agent: string): void {
+function showLookupFailure(
+  failure: LookupFailure,
+  agent: string,
+  feedback: StructuredSessionOpenFeedback = structuredSessionOpenFeedback
+): void {
   if (failure === 'unreachable') {
-    structuredSessionOpenFeedback.unavailable(agent)
+    feedback.unavailable(agent)
   } else {
-    structuredSessionOpenFeedback.hostCannotOpen(agent)
+    feedback.hostCannotOpen(agent)
+  }
+}
+
+/** Crew opens share the sender's host-aware navigation; mailbox identity is never a terminal handle. */
+export async function openOrchestrationCrewAgent(
+  row: OrchestrationCrewRow,
+  host: RuntimeClientTarget
+): Promise<void> {
+  const unavailable = (detail: string) => toast.error(`${row.label}: ${detail}`)
+  const target = row.openTarget
+  // Lookups give the sender open's remedies, named for the row the user clicked.
+  const feedback: StructuredSessionOpenFeedback =
+    target?.kind === 'chat'
+      ? {
+          unavailable: () => unavailable('This host cannot open the chat. Try again.'),
+          gone: () => unavailable('This chat is no longer on this host.'),
+          hostCannotOpen: () => unavailable('Update Orca to open this chat.')
+        }
+      : {
+          unavailable: () => unavailable(structuredSessionOpenFeedbackText.unavailable()),
+          hostCannotOpen: () => unavailable(structuredSessionOpenFeedbackText.hostCannotOpen()),
+          gone: () => unavailable(structuredSessionOpenFeedbackText.gone()),
+          terminalGone: () => unavailable('This terminal has exited.')
+        }
+  const environmentId = host.kind === 'environment' ? host.environmentId : null
+  const terminalFeedback = {
+    gone: () => unavailable('This terminal has exited.'),
+    lookupFailure: (failure: LookupFailure) => showLookupFailure(failure, row.label, feedback)
+  }
+  try {
+    if (target?.kind === 'terminal') {
+      await focusTerminal(target.handle, environmentId, terminalFeedback)
+      return
+    }
+    if (target?.kind !== 'chat' && target?.kind !== 'dispatch') {
+      unavailable(
+        row.hostLabel
+          ? `Open this agent on ${row.hostLabel}.`
+          : 'This host cannot locate this agent. Try again.'
+      )
+      return
+    }
+    const result = await openDesktopStructuredSession(
+      target.kind === 'chat'
+        ? {
+            kind: 'history',
+            structuredSession: { workspaceId: target.worktreeId, sessionId: target.sessionId }
+          }
+        : {
+            kind: 'sender',
+            party: { address: target.address, terminalHandle: null, orcaSessionId: null },
+            messageIds: [],
+            displayName: row.label
+          },
+      host,
+      undefined,
+      undefined,
+      feedback
+    )
+    if (result.kind === 'terminal') {
+      await focusTerminal(result.handle, environmentId, terminalFeedback)
+    }
+  } catch (error) {
+    showLookupFailure(
+      isRuntimeCompatBlockError(error) ? 'update' : 'unreachable',
+      row.label,
+      feedback
+    )
   }
 }

@@ -4,6 +4,7 @@ import type {
   AgentMessageSource,
   AgentMessageSender
 } from '../../../shared/agent-session/agent-session-message-source'
+import type { OrchestrationCrewRow } from '../../../shared/orchestration-crew'
 
 const mocks = vi.hoisted(() => {
   const unifiedTabsByWorktree: Record<string, Tab[]> = {}
@@ -47,7 +48,7 @@ vi.mock('@/components/terminal-pane/terminal-handle-links', () => ({
 vi.mock('./worktree-activation', () => ({ activateAndRevealWorktree: mocks.reveal }))
 vi.mock('./wsl-moved-chat-activation', () => ({ activateWslMovedWorkspace: () => false }))
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
-import { openAgentMessageSender } from './open-agent-message-sender'
+import { openAgentMessageSender, openOrchestrationCrewAgent } from './open-agent-message-sender'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 const host = { kind: 'environment', environmentId: 'remote-2' } as const
 const ROOT = testOrcaSessionId('4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37')
@@ -263,4 +264,84 @@ it('coalesces one sender but keeps selected hosts independent', async () => {
   wait.resolve({ location: null })
   await Promise.all([a, b, c])
   expect(mocks.toast).toHaveBeenCalledTimes(2)
+})
+it('gives crew terminal and dispatch opens the sender remedies, named for the row, on the captured host', async () => {
+  const dispatch = { address: 'dispatch:d', terminalHandle: null, orcaSessionId: null }
+  const failure = (code: string) =>
+    new RuntimeRpcCallError({ id: 'focus', ok: false, error: { code, message: 'Failed' } })
+  for (const kind of ['terminal', 'dispatch'] as const) {
+    for (const outcome of ['compat', 'transient', 'gone', 'older-host'] as const) {
+      if (kind === 'terminal' && outcome === 'older-host') {
+        continue
+      }
+      const row: OrchestrationCrewRow = {
+        partyKey: 'captured-worker',
+        role: 'worker',
+        label: 'Worker',
+        agentKind: 'codex',
+        status: 'working',
+        sendAddress: 'run:mailbox-is-not-a-pane',
+        openTarget:
+          kind === 'terminal'
+            ? { kind, handle: 'term_captured' }
+            : { kind, address: dispatch.address }
+      }
+      const prepare = () => {
+        vi.clearAllMocks()
+        mocks.rpc.mockReset()
+        mocks.remoteFocus.mockReset()
+        mocks.focus.mockReturnValue(false)
+        const error =
+          outcome === 'compat'
+            ? Object.assign(new Error('Version blocked'), { code: 'runtime_compat_block' })
+            : failure('request_timeout')
+        if (kind === 'terminal') {
+          mocks.rpc.mockResolvedValue({ location: { kind: 'terminal', handle: 'term_captured' } })
+          mocks.remoteFocus.mockRejectedValue(
+            outcome === 'gone' ? failure('terminal_handle_stale') : error
+          )
+        } else if (outcome === 'gone') {
+          mocks.rpc.mockResolvedValue({ location: null, lost: 'terminal' })
+        } else {
+          mocks.rpc.mockRejectedValue(
+            outcome === 'older-host' ? { code: 'method_not_found' } : error
+          )
+        }
+      }
+      prepare()
+      await open(kind === 'terminal' ? party : dispatch)
+      const senderMessages = mocks.toast.mock.calls.map(([message]) => message)
+      expect(senderMessages).toEqual(
+        outcome === 'gone'
+          ? []
+          : [
+              outcome === 'transient'
+                ? 'The structured agent session is not available yet. Retry in a moment.'
+                : "This chat can't be reopened until Orca is updated."
+            ]
+      )
+      expect(mocks.info).toHaveBeenCalledTimes(outcome === 'gone' ? 1 : 0)
+      prepare()
+      await openOrchestrationCrewAgent(row, host)
+      expect(mocks.toast.mock.calls.map(([message]) => message)).toEqual([
+        outcome === 'gone' ? 'Worker: This terminal has exited.' : `Worker: ${senderMessages[0]}`
+      ])
+      expect(mocks.info).not.toHaveBeenCalled()
+      expect(mocks.activate).not.toHaveBeenCalled()
+      if (kind === 'terminal') {
+        expect(mocks.rpc).not.toHaveBeenCalled()
+        expect(mocks.focus).toHaveBeenCalledExactlyOnceWith('term_captured', 'remote-2')
+        expect(mocks.remoteFocus).toHaveBeenCalledExactlyOnceWith('term_captured', 'remote-2')
+      } else {
+        expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith(
+          host,
+          'orchestration.partyLocation',
+          { address: dispatch.address },
+          { timeoutMs: 5000 }
+        )
+        expect(mocks.focus).not.toHaveBeenCalled()
+        expect(mocks.remoteFocus).not.toHaveBeenCalled()
+      }
+    }
+  }
 })

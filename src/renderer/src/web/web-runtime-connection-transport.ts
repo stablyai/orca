@@ -7,23 +7,27 @@ import {
 } from './web-runtime-connection-frame-router'
 import {
   WebRuntimeConnectionAuth,
+  handleRejectedWebRuntimeAuth,
   type WebRuntimeConnectionLifecycle
 } from './web-runtime-connection-auth'
 import type { WebRuntimeAuthPlan } from './web-runtime-credential-source'
 import { WebRuntimeConnectionTimers } from './web-runtime-connection-timers'
-import {
-  createPairedE2EEClientHandshake,
-  type PairedE2EEClientHandshake
-} from '../../../shared/paired-e2ee-client-handshake'
-import { WEB_PAIRED_E2EE_PRIMITIVES } from './web-paired-e2ee-primitives'
+import type { PairedE2EEClientHandshake } from '../../../shared/paired-e2ee-client-handshake'
 import { withWebClientUpgradeMarker } from '../../../shared/web-origin-security'
 import type { WebRuntimeTransportSubscription } from './web-runtime-subscription-contract'
 import { WebRuntimeSubscriptionRegistry } from './web-runtime-subscription-registry'
 import { WebRuntimeRequestRegistry } from './web-runtime-request-registry'
+import {
+  installWebRuntimeSocket,
+  sendWebRuntimeSocketAuth,
+  closeWebRuntimeSocket
+} from './web-runtime-connection-socket'
 import { WebRuntimeConnectionWaiters } from './web-runtime-connection-waiters'
+import {
+  runtimeEnvironmentSetupFailure,
+  type RuntimeEnvironmentSetupFailure
+} from '../../../shared/runtime-environment-subscription-setup'
 
-const CONNECT_TIMEOUT_MS = 12_000
-const HANDSHAKE_TIMEOUT_MS = 10_000
 const RECONNECT_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 15_000]
 
 export class WebRuntimeConnectionTransport {
@@ -40,6 +44,7 @@ export class WebRuntimeConnectionTransport {
   private readonly subscriptionRegistry: WebRuntimeSubscriptionRegistry
   readonly requestRegistry: WebRuntimeRequestRegistry
   private readonly connectionWaiters: WebRuntimeConnectionWaiters
+  setupFailure: RuntimeEnvironmentSetupFailure | undefined
 
   constructor(
     private readonly connection: PairedRuntimeConnection,
@@ -54,6 +59,7 @@ export class WebRuntimeConnectionTransport {
       endpoint: connection.endpoint,
       getState: () => this.state,
       getAuthError: () => this.auth.failureError(),
+      getSetupFailure: () => this.setupFailure,
       isIntentionallyClosed: () => this.intentionallyClosed
     })
     this.subscriptionRegistry = new WebRuntimeSubscriptionRegistry({
@@ -93,10 +99,9 @@ export class WebRuntimeConnectionTransport {
     this.requestRegistry.rejectAll('Remote Orca runtime connection closed.')
     this.connectionWaiters.rejectAll(new Error('Remote Orca runtime connection closed.'))
     this.subscriptionRegistry.close(options.notifySubscriptions ?? true)
-    this.ws?.close()
-    this.ws = null
-    this.handshake = null
-    this.setState('disconnected')
+    closeWebRuntimeSocket(this, this.lifecycle.crewAttempt === true, (error) => {
+      this.setupFailure ??= runtimeEnvironmentSetupFailure(error, 'subscription')
+    })
   }
 
   async handleSocketMessage(rawData: unknown, sourceWs?: WebSocket): Promise<void> {
@@ -139,18 +144,26 @@ export class WebRuntimeConnectionTransport {
     this.setState('connected')
   }
 
-  private async handleAuthRejected(
+  private handleAuthRejected(
     reply: Parameters<WebRuntimeConnectionAuth['rejected']>[0]
   ): Promise<void> {
-    const socket = this.ws
-    const outcome = await this.auth.rejected(reply)
-    if (outcome.kind === 'failed') {
-      this.intentionallyClosed = true
-      this.setState('auth-failed')
-      this.requestRegistry.rejectAll(outcome.error)
-      this.subscriptionRegistry.notifyError('unauthorized', outcome.error.message)
-    }
-    socket?.close()
+    return handleRejectedWebRuntimeAuth(reply, {
+      auth: this.auth,
+      lifecycle: this.lifecycle,
+      getSocket: () => this.ws,
+      isClosed: () => this.intentionallyClosed,
+      failSetup: (error) => this.failSetup(error),
+      failAuth: (error) => {
+        if (this.lifecycle.crewAttempt) {
+          this.setupFailure = { error, fact: { kind: 'remote', code: 'unauthorized' } }
+        }
+        this.intentionallyClosed = true
+        this.setState('auth-failed')
+        this.requestRegistry.rejectAll(error)
+        this.subscriptionRegistry.notifyError('unauthorized', error.message)
+      },
+      close: () => this.close({ notifySubscriptions: false })
+    })
   }
 
   handleSocketClosed(closedWs: WebSocket): void {
@@ -165,6 +178,10 @@ export class WebRuntimeConnectionTransport {
     this.heartbeat.clear()
     this.requestRegistry.rejectAll('Remote Orca runtime connection interrupted.')
     this.subscriptionRegistry.handleInterrupted()
+    if (this.lifecycle.crewAttempt && !this.intentionallyClosed) {
+      this.failSetup(new Error('Remote Orca runtime connection interrupted.'))
+      return
+    }
     if (this.intentionallyClosed || this.state === 'auth-failed') {
       this.setState(this.state === 'auth-failed' ? 'auth-failed' : 'disconnected')
       return
@@ -200,8 +217,13 @@ export class WebRuntimeConnectionTransport {
   private openSocket(plan: WebRuntimeAuthPlan): void {
     let socket: WebSocket
     try {
+      this.lifecycle.assertCurrent?.()
       socket = new WebSocket(withWebClientUpgradeMarker(this.connection.endpoint))
     } catch (error) {
+      if (this.lifecycle.crewAttempt) {
+        this.failSetup(error)
+        return
+      }
       this.requestRegistry.rejectAll(error instanceof Error ? error.message : String(error))
       this.scheduleReconnect()
       return
@@ -209,47 +231,20 @@ export class WebRuntimeConnectionTransport {
     socket.binaryType = 'arraybuffer'
     this.ws = socket
     this.handshake = null
-    this.setState('connecting')
-    this.timers.arm('connect', CONNECT_TIMEOUT_MS, () => {
-      if (this.ws === socket && socket.readyState === WebSocket.CONNECTING) {
-        socket.close()
-        this.handleSocketClosed(socket)
-      }
+    installWebRuntimeSocket({
+      socket,
+      connection: this.connection,
+      plan,
+      auth: this.auth,
+      timers: this.timers,
+      owner: this,
+      noteInboundFrame: () => this.heartbeat.noteInboundFrame(),
+      rejectUnavailable: () => this.connectionWaiters.rejectUnavailable(),
+      isClosed: () => this.intentionallyClosed,
+      failSetup: (error) => this.failSetup(error),
+      finite: this.lifecycle.crewAttempt === true,
+      assertCurrent: this.lifecycle.assertCurrent
     })
-    socket.onopen = () => {
-      if (this.ws !== socket) {
-        return
-      }
-      this.timers.clear('connect')
-      this.setState('handshaking')
-      const handshake = createPairedE2EEClientHandshake({
-        primitives: WEB_PAIRED_E2EE_PRIMITIVES,
-        hostPublicKeyB64: this.connection.hostPublicKeyB64,
-        framing: this.auth.framingFor(plan),
-        transport: 'direct'
-      })
-      this.handshake = handshake
-      socket.send(handshake.helloText())
-      this.timers.arm('handshake', HANDSHAKE_TIMEOUT_MS, () => {
-        if (this.ws === socket && (this.state === 'handshaking' || this.state === 'migrating')) {
-          socket.close()
-          this.handleSocketClosed(socket)
-        }
-      })
-    }
-    socket.onmessage = (event) => {
-      if (this.ws !== socket) {
-        return
-      }
-      this.heartbeat.noteInboundFrame()
-      void this.handleSocketMessage(event.data, socket)
-    }
-    socket.onclose = () => this.handleSocketClosed(socket)
-    socket.onerror = () => {
-      if (this.ws === socket && this.state === 'connecting') {
-        this.connectionWaiters.rejectUnavailable()
-      }
-    }
   }
 
   sendEncrypted(message: unknown): boolean {
@@ -262,18 +257,13 @@ export class WebRuntimeConnectionTransport {
   }
 
   private sendAuth(handshake: PairedE2EEClientHandshake): void {
-    const socket = this.ws
-    this.auth.sendAuth({
-      handshake,
-      fallbackToken: this.connection.credential.deviceToken,
-      // Why: the socket may have closed or been replaced while the auth step ran.
-      isCurrent: () =>
-        this.handshake === handshake &&
-        this.ws === socket &&
-        socket?.readyState === WebSocket.OPEN &&
-        this.state === 'handshaking',
-      send: (frame) => socket?.send(frame),
-      fail: () => socket?.close()
+    sendWebRuntimeSocketAuth(handshake, {
+      owner: this,
+      connection: this.connection,
+      authOwner: this.auth,
+      lifecycle: this.lifecycle,
+      isClosed: () => this.intentionallyClosed,
+      failSetup: (error) => this.failSetup(error)
     })
   }
 
@@ -286,8 +276,14 @@ export class WebRuntimeConnectionTransport {
     return true
   }
 
-  waitForConnected(timeoutMs = 30_000): Promise<void> {
-    return this.connectionWaiters.wait(timeoutMs)
+  waitForConnected(timeoutMs = 30_000, signal?: AbortSignal): Promise<void> {
+    return this.connectionWaiters.wait(timeoutMs, signal)
+  }
+
+  private failSetup(error: unknown): void {
+    this.setupFailure ??= runtimeEnvironmentSetupFailure(error, 'subscription')
+    this.connectionWaiters.rejectAll(this.setupFailure.error)
+    this.close()
   }
 
   private scheduleReconnect(): void {

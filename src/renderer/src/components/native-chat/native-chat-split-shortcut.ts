@@ -1,3 +1,5 @@
+import type { KeyboardEvent } from 'react'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import {
   keybindingMatchesAction,
   type KeybindingInput,
@@ -18,4 +20,25 @@ export function matchNativeChatSplitShortcut(
     return 'down'
   }
   return null
+}
+
+export function handleNativeChatSplitShortcut(
+  event: KeyboardEvent,
+  keybindings: KeybindingOverrides,
+  actions?: { onSplitRight: () => void; onSplitDown: () => void }
+): boolean {
+  const direction = event.repeat
+    ? null
+    : matchNativeChatSplitShortcut(event, getShortcutPlatform(), keybindings)
+  if (!direction || !actions) {
+    return false
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  if (direction === 'right') {
+    actions.onSplitRight()
+  } else {
+    actions.onSplitDown()
+  }
+  return true
 }

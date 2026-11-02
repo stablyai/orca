@@ -1,3 +1,4 @@
+import { NativeChatCrewFrame } from '../orchestration-crew/NativeChatCrewPanel'
 import { NativeChatUsageLimitActionsProvider } from './NativeChatUsageLimitActions'
 import { useNativeChatHandOff } from './use-native-chat-hand-off'
 import { cn } from '@/lib/utils'
@@ -46,7 +47,10 @@ import { useStructuredAgentSessionHostExecution } from './StructuredAgentSession
 import { useNativeChatRewindHost } from './use-native-chat-rewind-host'
 import { NativeChatRewindContext } from './native-chat-rewind-context'
 import { NativeChatQueuedMessageList } from './NativeChatQueuedMessageList'
-import { nativeChatStructuredStopControls } from './native-chat-structured-stop-controls'
+import {
+  cancelStructuredPrompt,
+  nativeChatStructuredStopControls
+} from './native-chat-structured-stop-controls'
 import { chatApprovalFromJournal } from '../../../../shared/native-chat-interactive-prompt'
 import { useAppStore } from '../../store'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
@@ -181,14 +185,7 @@ export function NativeChatStructuredSession(
   const installLayout = viewState.kind === 'empty' ? 'hero' : 'strip'
   const install = useNativeChatInstallSlot(props, agentLabel, installLayout)
   const approval = prompt?.body.kind === 'approval' ? chatApprovalFromJournal(prompt.body) : null
-  const cancelPrompt = () => {
-    if (prompt && (controller.turnId || props.agent === 'pi')) {
-      void controller.cancel(controller.turnId ?? undefined, {
-        itemId: prompt.itemId,
-        expectedRevision: prompt.revision
-      })
-    }
-  }
+  const cancelPrompt = () => cancelStructuredPrompt(controller, prompt, props.agent)
   const rootInput = useNativeChatRootInputRouting({
     tabId: props.tabId,
     rootRef,
@@ -280,56 +277,60 @@ export function NativeChatStructuredSession(
       data-native-chat-scheme={appearanceStyle.colorScheme}
     >
       {nativeChatPaneHeader(props, ownerWorktreeId, appearanceStyle.colorScheme, handOff)}
-      <NativeChatContextClearFade clearing={controller.contextClear.clearing}>
-        {find.isOpen ? <NativeChatFindBar find={find} isVisible={props.isVisible} /> : null}
-        {viewState.kind === 'loading' || (viewState.kind === 'error' && !readFailure) ? (
-          historyPhase !== 'unread' && <NativeChatLoadingCue />
-        ) : viewState.kind === 'error' ? (
-          <NativeChatEmptyState
-            kind="error"
-            retrying={!readFailure?.final}
-            {...(readFailure?.named ? { headline: readFailure.text } : {})}
-          />
-        ) : viewState.kind === 'empty' ? (
-          <NativeChatEmptyPane slot={install.slot} agent={props.agent} />
-        ) : (
-          <NativeChatRewindContext.Provider value={controller.rewind.surface}>
-            <NativeChatUsageLimitActionsProvider
-              recovery={controller}
-              pane={props}
-              directory={fileLinkContext}
-              messages={controller.messages}
-              view={continuation.view}
-            >
-              <NativeChatClaudeSignInContext.Provider value={claudeSignIn}>
-                <NativeChatMessageList
-                  // A rewind or a /clear replaces the conversation; nothing the old one held carries over.
-                  key={`${controller.epoch}:${controller.contextClear.clears}`}
-                  ref={submits.messageListRef}
-                  session={session}
-                  journalItems={controller.journalItems}
-                  journalSubmissions={controller.submissions}
-                  journalLatestTurn={controller.latestTurn}
-                  journalHostWork={controller.hostWork}
-                  subagentRoster={controller.subagentRoster}
-                  railOutline={controller.railOutline}
-                  isVisible={props.isVisible}
-                  isWorking={controller.isWorking}
-                  expandSignal={false}
-                  workingStartedAt={controller.workingStartedAt}
-                  settledTurns={controller.settledTurns}
-                  awaitingInput={prompt === null ? null : 'shown'}
-                  turnActivity={controller.turnActivity}
-                  stopping={stopControls.stopping}
-                  {...fileLinkProps}
-                  runtimeContext={imageRuntimeContext}
-                  deliveryNotices={deliveryNotices}
-                />
-              </NativeChatClaudeSignInContext.Provider>
-            </NativeChatUsageLimitActionsProvider>
-          </NativeChatRewindContext.Provider>
-        )}
-      </NativeChatContextClearFade>
+      <NativeChatCrewFrame
+        crew={{ target: props.target, sessionId: props.sessionId, isVisible: props.isVisible }}
+      >
+        <NativeChatContextClearFade clearing={controller.contextClear.clearing}>
+          {find.isOpen ? <NativeChatFindBar find={find} isVisible={props.isVisible} /> : null}
+          {viewState.kind === 'loading' || (viewState.kind === 'error' && !readFailure) ? (
+            historyPhase !== 'unread' && <NativeChatLoadingCue />
+          ) : viewState.kind === 'error' ? (
+            <NativeChatEmptyState
+              kind="error"
+              retrying={!readFailure?.final}
+              {...(readFailure?.named ? { headline: readFailure.text } : {})}
+            />
+          ) : viewState.kind === 'empty' ? (
+            <NativeChatEmptyPane slot={install.slot} agent={props.agent} />
+          ) : (
+            <NativeChatRewindContext.Provider value={controller.rewind.surface}>
+              <NativeChatUsageLimitActionsProvider
+                recovery={controller}
+                pane={props}
+                directory={fileLinkContext}
+                messages={controller.messages}
+                view={continuation.view}
+              >
+                <NativeChatClaudeSignInContext.Provider value={claudeSignIn}>
+                  <NativeChatMessageList
+                    // A rewind or a /clear replaces the conversation; nothing the old one held carries over.
+                    key={`${controller.epoch}:${controller.contextClear.clears}`}
+                    ref={submits.messageListRef}
+                    session={session}
+                    journalItems={controller.journalItems}
+                    journalSubmissions={controller.submissions}
+                    journalLatestTurn={controller.latestTurn}
+                    journalHostWork={controller.hostWork}
+                    subagentRoster={controller.subagentRoster}
+                    railOutline={controller.railOutline}
+                    isVisible={props.isVisible}
+                    isWorking={controller.isWorking}
+                    expandSignal={false}
+                    workingStartedAt={controller.workingStartedAt}
+                    settledTurns={controller.settledTurns}
+                    awaitingInput={prompt === null ? null : 'shown'}
+                    turnActivity={controller.turnActivity}
+                    stopping={stopControls.stopping}
+                    {...fileLinkProps}
+                    runtimeContext={imageRuntimeContext}
+                    deliveryNotices={deliveryNotices}
+                  />
+                </NativeChatClaudeSignInContext.Provider>
+              </NativeChatUsageLimitActionsProvider>
+            </NativeChatRewindContext.Provider>
+          )}
+        </NativeChatContextClearFade>
+      </NativeChatCrewFrame>
       {readFailure?.final ? null : (
         <>
           {/* Keep queued drafts outside the transcript and above the background-task dock. */}
