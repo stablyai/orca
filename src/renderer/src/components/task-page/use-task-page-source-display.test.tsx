@@ -47,11 +47,13 @@ vi.mock('./task-page-cache-selectors', async (importOriginal) => {
     getTaskPageRepoCacheRows: (...args: Parameters<typeof actual.getTaskPageRepoCacheRows>) => {
       readerWork.keyCompositions += 1
       return new Proxy(actual.getTaskPageRepoCacheRows(...args), {
-        get: (target, key, receiver) => {
+        get: (target, key) => {
           if (typeof key === 'string' && /^\d+$/.test(key)) {
             readerWork.rowVisits += 1
+            return target[Number(key)]
           }
-          return Reflect.get(target, key, receiver)
+          // Array members (length, map, entries, the iterator) pass through untouched.
+          return target[key as keyof typeof target]
         }
       })
     },
@@ -63,9 +65,10 @@ vi.mock('./task-page-cache-selectors', async (importOriginal) => {
         let gets = 0
         const selection = select(
           new Proxy(cache, {
-            get: (target, key, receiver) => {
+            get: (target, key) => {
               gets += 1
-              return Reflect.get(target, key, receiver)
+              // Cache keys are strings; the reader never reads symbol keys.
+              return typeof key === 'string' ? target[key] : undefined
             },
             ownKeys: (target) => {
               readerWork.enumerations += 1
