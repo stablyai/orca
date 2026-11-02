@@ -4,11 +4,12 @@ import type {
   AskQuestion,
   InteractiveQuestionParser
 } from './native-chat-ask-types'
-import { isInterruptedStatusMessage, type NativeChatMessage } from '../../native-chat-types'
+import { isInterruptedStatusMessage, type NativeChatMessage } from '../native-chat-types'
 import {
   CODEX_ASYNC_QUESTION_TOOL,
   parseCodexAsyncQuestionsInput
 } from '../../codex-async-question-input'
+import { askAnswerQuote } from '../../native-chat-ask-answer'
 
 const QUESTION_TOOL_PARSERS = new Map<string, InteractiveQuestionParser>()
 
@@ -193,10 +194,17 @@ export function asyncQuestionOccurrenceId(
 }
 
 /** Filter addressed calls before grouping; one call's complete definition stays together. */
+function quotedByQueuedAnswer(question: AskQuestion, queuedTexts: readonly string[]): boolean {
+  const quote = askAnswerQuote(question)
+  return queuedTexts.some((text) => text.startsWith(quote) || text.includes(`\n\n${quote}`))
+}
+
+/** Queued texts hide questions an answer waiting in the queue already quotes; deleting that card brings them back. */
 export function aggregateAsyncQuestions(
   contributors: readonly AsyncQuestionContributor[],
   sourceScope?: string,
-  hiddenIds?: ReadonlySet<string>
+  hiddenIds?: ReadonlySet<string>,
+  queuedTexts: readonly string[] = []
 ): AskPrompt | null {
   const questions: AskQuestion[] = []
   const occurrenceIds: string[] = []
@@ -204,6 +212,9 @@ export function aggregateAsyncQuestions(
     const id =
       sourceScope === undefined ? undefined : asyncQuestionOccurrenceId(sourceScope, contributor)
     if (id !== undefined && hiddenIds?.has(id)) {
+      continue
+    }
+    if (contributor.questions.some((question) => quotedByQueuedAnswer(question, queuedTexts))) {
       continue
     }
     if (id !== undefined) {

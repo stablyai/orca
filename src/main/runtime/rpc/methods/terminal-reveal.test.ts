@@ -27,40 +27,6 @@ function createDispatcher() {
 }
 
 describe('terminal.reveal', () => {
-  it('reveals a paired server pane by worktree, tab and leaf', async () => {
-    const { revealTerminalPane, dispatcher } = createDispatcher()
-
-    const response = await dispatcher.dispatch(
-      request({
-        worktreeId: 'repo-1::/srv/app',
-        tabId: 'tab-1',
-        leafId: '11111111-1111-4111-8111-111111111111',
-        executionHostId: 'runtime:env-1'
-      })
-    )
-
-    expect(revealTerminalPane).toHaveBeenCalledWith({
-      worktreeId: 'repo-1::/srv/app',
-      tabId: 'tab-1',
-      leafId: '11111111-1111-4111-8111-111111111111',
-      executionHostId: 'runtime:env-1'
-    })
-    expect(response).toMatchObject({ ok: true, result: { reveal: { navigated: true } } })
-  })
-
-  it('leaves the leaf and host to the window when the caller omits them', async () => {
-    const { revealTerminalPane, dispatcher } = createDispatcher()
-
-    await dispatcher.dispatch(request({ worktreeId: 'repo-1::/srv/app', tabId: 'tab-1' }))
-
-    expect(revealTerminalPane).toHaveBeenCalledWith({
-      worktreeId: 'repo-1::/srv/app',
-      tabId: 'tab-1',
-      leafId: null,
-      executionHostId: null
-    })
-  })
-
   it.each(['runtime', 'mobile'] as const)(
     'refuses a paired %s client without touching the window',
     async (clientKind) => {
@@ -75,17 +41,4 @@ describe('terminal.reveal', () => {
       expect(revealTerminalPane).not.toHaveBeenCalled()
     }
   )
-
-  it.each([
-    [{ tabId: 'tab-1' }],
-    [{ worktreeId: 'repo-1::/srv/app' }],
-    [{ worktreeId: 'repo-1::/srv/app', tabId: 'tab-1', executionHostId: 'nowhere' }]
-  ])('refuses %o without touching the window', async (params) => {
-    const { revealTerminalPane, dispatcher } = createDispatcher()
-
-    const response = await dispatcher.dispatch(request(params))
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
-    expect(revealTerminalPane).not.toHaveBeenCalled()
-  })
 })

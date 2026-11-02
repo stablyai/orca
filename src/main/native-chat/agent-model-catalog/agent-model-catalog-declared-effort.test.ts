@@ -10,16 +10,16 @@ import { acpLaunchSpecFor } from '../../acp/acp-launch-specs'
 import { applyAcpMessageOptions } from '../../acp/acp-message-execution-options'
 import type { AcpStructuredSession } from '../../acp/acp-structured-session'
 import { captureStructuredExecutionOptions } from '../agent-session-wire/structured-agent-session-execution-options'
-import { structuredAgentSessionSeedCatalog } from '../../../shared/structured-agent-session-seed-catalog'
+import { structuredAgentSessionSeedCatalog } from '../../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState
-} from '../../../shared/structured-agent-session-options'
+} from '../../../shared/agent-session/options/structured-agent-session-options'
 import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionShownSnapshot
-} from '../../../shared/structured-agent-session-option-view'
+} from '../../../shared/agent-session/options/structured-agent-session-option-view'
 import {
   agentModelCatalogEntry,
   agentModelCatalogEntryWithSuccess,
@@ -97,6 +97,9 @@ it('joins recorded declarations to unchanged configured policy, host capture and
     expect(live.listedModelIds).toBeUndefined()
     expect(resting.listedModelIds).toContain(model)
     for (const result of [live, resting]) {
+      // A readback without this model's effort menu shows no effort, whatever the declaration.
+      const shown =
+        result.models.find((row) => row.id === model)!.efforts.length > 0 ? display : null
       const owned = applyStructuredAgentSessionOptions(
         createStructuredAgentSessionOptionState(agent, seed),
         seed,
@@ -104,7 +107,7 @@ it('joins recorded declarations to unchanged configured policy, host capture and
       )
       expect(
         structuredAgentSessionShownSnapshot(owned).find((o) => o.id === 'effort')?.kind.currentValue
-      ).toBe(display ?? undefined)
+      ).toBe(shown ?? undefined)
       expect(structuredAgentSessionMessageSelection(owned)).toEqual({ model })
       set.mockClear()
       const capture = captureStructuredExecutionOptions(

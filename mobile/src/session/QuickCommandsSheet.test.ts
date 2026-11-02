@@ -43,7 +43,7 @@ vi.mock('react-native', () => ({
 
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'ChevronLeft' }))
 
-vi.mock('../components/BottomDrawer', () => ({
+vi.mock('../components/bottom-drawer/BottomDrawer', () => ({
   BottomDrawer: ({ children }: { children: ReactNode }) => children
 }))
 

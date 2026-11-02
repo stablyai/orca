@@ -1,5 +1,5 @@
 import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 // Real wedged record shapes must become acquirable while retaining conversation and provider history.
 // Migration releases the lease; only operations needing the agent may spawn it.
 
@@ -10,24 +10,24 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import {
   evaluateAgentSessionAcquisition,
   type AgentSessionOwnerProbe
-} from '../../../shared/agent-session-lease-adjudication'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import { activeStructuredAgentSessionTurnId } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type {
   AgentSessionClaimStatus,
   AgentSessionProcessIdentity
-} from '../../../shared/agent-session-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   PersistedAgentSessionHandoffStage,
   PersistedAgentSessionRecord,
   PersistedAgentSessionRuntimeKind
-} from '../../../shared/agent-session-legacy-handoff-lease'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+} from '../../../shared/agent-session/lifecycle/agent-session-legacy-handoff-lease'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
-} from '../../runtime/agent-session-record-store-test-harness'
+} from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -51,7 +51,7 @@ import { createStructuredAgentSessionLogger } from './structured-agent-session-l
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }

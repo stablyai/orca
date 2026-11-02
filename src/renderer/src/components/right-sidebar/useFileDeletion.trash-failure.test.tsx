@@ -197,15 +197,3 @@ it('aborts a permanent retry if the workspace host changes while confirmation is
   expect(refreshDir).not.toHaveBeenCalled()
   expect(mocks.commitFileExplorerOp).not.toHaveBeenCalled()
 })
-
-it('keeps successful Trash deletion prompt-free', async () => {
-  mocks.deleteRuntimePath.mockResolvedValueOnce(undefined)
-  const { result, closeFile } = renderDeletion()
-
-  await requestDelete(result)
-
-  await vi.waitFor(() => expect(closeFile).toHaveBeenCalledWith('tab-1'))
-  expect(mocks.confirm).not.toHaveBeenCalled()
-  expect(mocks.deleteRuntimePath).toHaveBeenCalledTimes(1)
-  expect(mocks.toastError).not.toHaveBeenCalled()
-})

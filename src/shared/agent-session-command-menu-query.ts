@@ -1,4 +1,4 @@
-import type { AgentSessionCommandsResult } from './agent-session-wire'
+import type { AgentSessionCommandsResult } from './agent-session/agent-session-wire'
 
 /** Own recovery only while this target's menu is demanded. */
 export function startAgentSessionCommandMenuQuery(

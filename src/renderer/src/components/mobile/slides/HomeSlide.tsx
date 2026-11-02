@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 type AgentIndicator = 'waiting' | 'done' | 'working' | 'idle'
 
 type JumpBackInRowProps = {
+  className?: string
   indicator: AgentIndicator
   name: string
   status: string
@@ -59,25 +60,12 @@ export function HomeSlide({ tapping }: { tapping: boolean }): React.JSX.Element 
             time={translate('auto.components.mobile.slides.HomeSlide.0c14dac908', '2m')}
           />
           <JumpBackInRow
-            indicator="done"
-            name="tasks-sheet-polish"
-            status={translate('auto.components.mobile.slides.HomeSlide.77c0dae863', 'Done')}
-            desktop={translate('auto.components.mobile.slides.HomeSlide.b5308d5e2c', 'M1 Mini')}
-            time={translate('auto.components.mobile.slides.HomeSlide.3166f865af', '14m')}
-          />
-          <JumpBackInRow
+            className="is-tall-only"
             indicator="working"
             name="relay-reconnect-backoff"
             status={translate('auto.components.mobile.slides.HomeSlide.609517273b', 'Working')}
             desktop={macbookPro}
             time={translate('auto.components.mobile.slides.HomeSlide.005afbad3d', 'now')}
-          />
-          <JumpBackInRow
-            indicator="idle"
-            name="feat/mobile-page"
-            status={translate('auto.components.mobile.slides.HomeSlide.e986b282af', 'Last opened')}
-            desktop={macbookPro}
-            time={translate('auto.components.mobile.slides.HomeSlide.8a3ebdbdac', '1h')}
           />
         </div>
 
@@ -103,7 +91,7 @@ export function HomeSlide({ tapping }: { tapping: boolean }): React.JSX.Element 
               <ChevronIcon />
             </div>
           </div>
-          <div className="mp-home-row">
+          <div className="mp-home-row is-tall-only">
             <div className="mp-home-status">
               <span className="mp-status-dot is-muted" />
             </div>
@@ -119,18 +107,31 @@ export function HomeSlide({ tapping }: { tapping: boolean }): React.JSX.Element 
               <ChevronIcon />
             </div>
           </div>
-          <div className="mp-home-action-row">
+          <div className="mp-home-action-row is-tall-only">
             <PlusIcon />
             {translate('auto.components.mobile.slides.HomeSlide.aefd110ea5', 'Pair a desktop')}
           </div>
         </div>
+
+        <HomeSectionRow
+          icon={<ListTodoIcon />}
+          title={translate('auto.components.mobile.slides.HomeSlide.a4c3f7b7aa', 'Tasks')}
+          subtitle={translate(
+            'auto.components.mobile.slides.HomeSlide.aa44b4a6b2',
+            'Browse your issues and reviews'
+          )}
+        />
+        <HomeSectionRow
+          icon={<CalendarClockIcon />}
+          title={translate('auto.components.mobile.slides.HomeSlide.eda5c8d01b', 'Automations')}
+          subtitle={translate(
+            'auto.components.mobile.slides.HomeSlide.cd2ad5b641',
+            'Schedule agent work and view runs'
+          )}
+        />
       </div>
 
       <div className="mp-home-bottom-bar">
-        <div className="mp-home-bar-button is-secondary">
-          <ListTodoIcon />
-          <span>{translate('auto.components.mobile.slides.HomeSlide.a4c3f7b7aa', 'Tasks')}</span>
-        </div>
         <div className="mp-home-bar-button is-primary">
           <PlusIcon />
           <span>
@@ -143,6 +144,7 @@ export function HomeSlide({ tapping }: { tapping: boolean }): React.JSX.Element 
 }
 
 function JumpBackInRow({
+  className,
   indicator,
   name,
   status,
@@ -150,7 +152,7 @@ function JumpBackInRow({
   time
 }: JumpBackInRowProps): React.JSX.Element {
   return (
-    <div className="mp-home-row">
+    <div className={cn('mp-home-row', className)}>
       <div className="mp-home-status">
         {indicator === 'working' ? (
           <div className="mp-wl-spinner" />
@@ -169,6 +171,35 @@ function JumpBackInRow({
         <ChevronIcon />
       </div>
     </div>
+  )
+}
+
+// Phone Home's Tasks and Automations sections: a heading over a one-row group.
+function HomeSectionRow({
+  icon,
+  title,
+  subtitle
+}: {
+  icon: React.JSX.Element
+  title: string
+  subtitle: string
+}): React.JSX.Element {
+  return (
+    <>
+      <div className="mp-home-heading">{title}</div>
+      <div className="mp-home-group">
+        <div className="mp-home-row">
+          <div className="mp-home-status">{icon}</div>
+          <div className="mp-home-text">
+            <div className="mp-home-title">{title}</div>
+            <div className="mp-home-subtitle">{subtitle}</div>
+          </div>
+          <div className="mp-home-trailing">
+            <ChevronIcon />
+          </div>
+        </div>
+      </div>
+    </>
   )
 }
 
@@ -207,6 +238,19 @@ function ListTodoIcon(): React.JSX.Element {
       <path d="M13 6h8" />
       <path d="M13 12h8" />
       <path d="M13 18h8" />
+    </svg>
+  )
+}
+
+function CalendarClockIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+      <path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5" />
+      <path d="M16 2v4" />
+      <path d="M8 2v4" />
+      <path d="M3 10h5" />
+      <path d="M17.5 17.5 16 16.3V14" />
+      <circle cx="16" cy="16" r="6" />
     </svg>
   )
 }

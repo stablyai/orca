@@ -11,7 +11,7 @@ import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focu
 import { useNativeChatQuestionAutoAdvance } from './use-native-chat-question-auto-advance'
 import { useNativeChatQuestionKeys } from './use-native-chat-question-keys'
 import { isEditableTarget } from '@/lib/editable-target'
-import type { AgentJournalFreeTextInput } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalFreeTextInput } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   askAcceptsEmptyAnswer,
   askConfirmAction,
@@ -199,7 +199,7 @@ export function NativeChatQuestionCard({
       role="group"
       aria-label={q.question}
       tabIndex={-1}
-      className="shrink-0 bg-chat-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      className="shrink-0 bg-chat-pane focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       aria-busy={isSubmitting}
       onKeyDown={(event) => {
         // Why not from a text field: Escape there is editing, and collapsing would hide the draft.
@@ -250,7 +250,7 @@ export function NativeChatQuestionCard({
           <div className="flex items-start gap-2 px-3.5 py-2.5">
             <p
               data-testid="native-chat-question-card-title"
-              className="min-w-0 flex-1 break-words text-sm font-semibold text-foreground"
+              className="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm font-semibold text-foreground"
             >
               {q.question}
             </p>
@@ -335,7 +335,7 @@ export function NativeChatQuestionCard({
                       }}
                       placeholder={answerPlaceholder}
                       className={cn(
-                        'min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60 disabled:cursor-default disabled:opacity-50',
+                        'min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:cursor-default disabled:opacity-50',
                         currentTypedAnswerChosen || !otherText[index]
                           ? 'text-foreground'
                           : 'text-muted-foreground'
@@ -419,7 +419,7 @@ function OptionRow({
         {description ? (
           <span
             className={cn(
-              'block break-words text-xs',
+              'block whitespace-pre-wrap break-words text-xs',
               selected
                 ? 'text-accent-foreground'
                 : 'text-muted-foreground group-hover/option:text-accent-foreground group-focus/option:text-accent-foreground'

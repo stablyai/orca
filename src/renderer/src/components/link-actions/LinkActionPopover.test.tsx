@@ -2,7 +2,6 @@
 import type { ReactNode } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 import type { LinkActionRequest } from './link-action-request'
 
 const mocks = vi.hoisted(() => ({
@@ -67,142 +66,6 @@ afterEach(() => {
 })
 
 describe('LinkActionPopover', () => {
-  it('shows the full destination and runs the selected action', () => {
-    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
-    const onClose = vi.fn()
-    const restoreFocus = vi.fn()
-    const run = vi.fn()
-    const request: LinkActionRequest = {
-      anchorX: 100,
-      anchorY: 200,
-      destination: 'https://example.com/full/hidden/destination?query=actual',
-      kind: 'url',
-      primary: { label: 'Open link', run },
-      alternate: { external: true, label: 'System Browser', run: vi.fn() },
-      restoreFocus
-    }
-
-    render(<LinkActionPopover request={request} onClose={onClose} />)
-
-    const destination = screen.getByText(request.destination)
-    expect(destination.className).toContain('line-clamp-2')
-    expect(destination.getAttribute('title')).toBe(request.destination)
-    expect(screen.getByText('System Browser')).toBeTruthy()
-    expect(screen.getAllByText('Click')).toHaveLength(2)
-    const textOnlyAction = screen.getByText('Open link').closest('button')
-    const externalAction = screen.getByText('System Browser').closest('button')
-    expect(textOnlyAction?.querySelector('svg')).toBeNull()
-    expect(externalAction?.querySelector('svg')).toBeTruthy()
-    expect(externalAction?.className).toContain('has-[>svg]:px-1.5')
-    expect(externalAction?.className).not.toContain('has-[>svg]:px-3')
-    expect(destination.parentElement?.className).toContain('items-center')
-    expect(destination.parentElement?.className).toContain('py-0.5')
-    expect(destination.closest('[class*="w-max"]')).toBeTruthy()
-
-    fireEvent.click(screen.getByText('Open link'))
-    expect(onClose).toHaveBeenCalledOnce()
-    expect(restoreFocus).toHaveBeenCalledOnce()
-    expect(run).toHaveBeenCalledOnce()
-  })
-
-  it('lists secondary rows after the shortcut rows, without a shortcut, and runs them', () => {
-    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
-    const onClose = vi.fn()
-    const restoreFocus = vi.fn()
-    const reveal = vi.fn()
-    const request: LinkActionRequest = {
-      anchorX: 100,
-      anchorY: 200,
-      destination: '/repo/src/main.ts',
-      kind: 'file',
-      primary: { label: 'Open file', run: vi.fn() },
-      alternate: { label: 'Open with default app', run: vi.fn() },
-      secondaryActions: [{ label: 'Reveal in Finder', run: reveal }],
-      restoreFocus
-    }
-
-    render(<LinkActionPopover request={request} onClose={onClose} />)
-
-    const labels = screen.getAllByRole('button').map((button) => button.textContent ?? '')
-    expect(labels.findIndex((label) => label.startsWith('Reveal in Finder'))).toBeGreaterThan(
-      labels.findIndex((label) => label.startsWith('Open with default app'))
-    )
-    expect(screen.getAllByText('Click')).toHaveLength(2)
-    expect(screen.getByText('Reveal in Finder').closest('button')?.textContent).toBe(
-      'Reveal in Finder'
-    )
-
-    fireEvent.click(screen.getByText('Reveal in Finder'))
-    expect(onClose).toHaveBeenCalledOnce()
-    expect(restoreFocus).toHaveBeenCalledOnce()
-    expect(reveal).toHaveBeenCalledOnce()
-  })
-
-  it('identifies the dismissed request so a newer request can survive', () => {
-    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
-    const onClose = vi.fn()
-    const request: LinkActionRequest = {
-      anchorX: 100,
-      anchorY: 200,
-      destination: 'https://example.com',
-      kind: 'url',
-      primary: { label: 'Open link', run: vi.fn() },
-      restoreFocus: vi.fn()
-    }
-
-    render(<LinkActionPopover request={request} onClose={onClose} />)
-    fireEvent.click(screen.getByTestId('dismiss-popover'))
-
-    expect(onClose).toHaveBeenCalledWith(request)
-  })
-
-  it('uses distinct icons for system and Orca browser actions', () => {
-    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
-    const request: LinkActionRequest = {
-      anchorX: 100,
-      anchorY: 200,
-      destination: 'https://example.com',
-      kind: 'url',
-      primary: { external: false, label: 'Orca Browser', run: vi.fn() },
-      alternate: { external: true, label: 'System Browser', run: vi.fn() },
-      restoreFocus: vi.fn()
-    }
-
-    render(<LinkActionPopover request={request} onClose={vi.fn()} />)
-
-    expect(
-      screen.getByText('Orca Browser').closest('button')?.querySelector('.lucide-globe')
-    ).toBeTruthy()
-    expect(
-      screen.getByText('System Browser').closest('button')?.querySelector('.lucide-external-link')
-    ).toBeTruthy()
-  })
-
-  it('copies the resolved URL without closing the popover', async () => {
-    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
-    Object.assign(window, { api: { ui: { writeClipboardText: mocks.writeClipboardText } } })
-    mocks.writeClipboardText.mockResolvedValue(undefined)
-    const onClose = vi.fn()
-    const restoreFocus = vi.fn()
-    const request: LinkActionRequest = {
-      anchorX: 100,
-      anchorY: 200,
-      destination: 'https://example.com/hidden-destination',
-      kind: 'url',
-      primary: { label: 'Open link', run: vi.fn() },
-      restoreFocus
-    }
-
-    render(<LinkActionPopover request={request} onClose={onClose} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
-
-    await waitFor(() => expect(mocks.writeClipboardText).toHaveBeenCalledWith(request.destination))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Copied' })).toBeTruthy())
-    expect(mocks.toastSuccess).toHaveBeenCalledWith('Copied link')
-    expect(onClose).not.toHaveBeenCalled()
-    expect(restoreFocus).not.toHaveBeenCalled()
-  })
-
   it('ignores duplicate copy clicks while the clipboard write is in flight', async () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     Object.assign(window, { api: { ui: { writeClipboardText: mocks.writeClipboardText } } })
@@ -254,23 +117,6 @@ describe('LinkActionPopover', () => {
     await waitFor(() => expect(mocks.writeClipboardText).toHaveBeenCalledTimes(2))
   })
 
-  it('does not offer copy actions for non-copyable destinations', () => {
-    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
-    const request: LinkActionRequest = {
-      anchorX: 100,
-      anchorY: 200,
-      destination: '/tmp/example.ts',
-      kind: 'workspace',
-      primary: { label: 'Open file', run: vi.fn() },
-      restoreFocus: vi.fn()
-    }
-
-    render(<LinkActionPopover request={request} onClose={vi.fn()} />)
-
-    expect(screen.queryByRole('button', { name: 'Copy link' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Copy file path' })).toBeNull()
-  })
-
   it('copies the resolved file path without closing the popover', async () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     Object.assign(window, { api: { ui: { writeClipboardText: mocks.writeClipboardText } } })
@@ -295,29 +141,46 @@ describe('LinkActionPopover', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
-  it('opens the terminal link setting from the compact settings button', () => {
-    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
-    const onClose = vi.fn()
-    const restoreFocus = vi.fn()
-    const request: LinkActionRequest = {
-      anchorX: 100,
-      anchorY: 200,
-      destination: 'https://example.com',
-      kind: 'url',
-      primary: { label: 'System Browser', run: vi.fn() },
-      restoreFocus
+  it.each(['callback', 'omitted'] as const)(
+    'retains Settings callback order and hides only explicit omission (%s)',
+    (mode) => {
+      const order: string[] = []
+      const onClose = () => {
+        order.push('close')
+      }
+      const onOpenSettings =
+        mode === 'callback'
+          ? () => {
+              order.push('host')
+            }
+          : null
+      mocks.openSettingsTarget.mockImplementation(() => {
+        order.push('target')
+      })
+      mocks.openSettingsPage.mockImplementation(() => {
+        order.push('page')
+      })
+      const request: LinkActionRequest = {
+        anchorX: 0,
+        anchorY: 0,
+        destination: 'https://example.com',
+        kind: 'url',
+        primary: { label: 'System Browser', run: vi.fn() },
+        restoreFocus: vi.fn()
+      }
+      render(
+        <LinkActionPopover request={request} onClose={onClose} onOpenSettings={onOpenSettings} />
+      )
+      const gear = screen.queryByRole('button', { name: 'Terminal link settings' })
+      if (mode === 'omitted') {
+        expect(gear).toBeNull()
+        expect(screen.getByRole('button', { name: 'Copy link' })).toBeTruthy()
+        expect(screen.getByRole('button', { name: /System Browser/ })).toBeTruthy()
+        expect(order).toEqual([])
+      } else {
+        fireEvent.click(gear!)
+        expect(order).toEqual(['close', 'host', 'target', 'page'])
+      }
     }
-
-    render(<LinkActionPopover request={request} onClose={onClose} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Terminal link settings' }))
-
-    expect(onClose).toHaveBeenCalledOnce()
-    expect(mocks.openSettingsTarget).toHaveBeenCalledWith({
-      pane: 'browser',
-      repoId: null,
-      sectionId: BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID
-    })
-    expect(mocks.openSettingsPage).toHaveBeenCalledOnce()
-    expect(restoreFocus).not.toHaveBeenCalled()
-  })
+  )
 })

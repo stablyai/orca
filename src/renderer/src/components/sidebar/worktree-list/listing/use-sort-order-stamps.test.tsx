@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { useAppStore } from '@/store'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { makeRepo, makeWorktree } from '../../../worktree-jump-palette-test-fixtures'
+import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { useSidebarWorktreeSortOrder } from './use-sort-order'
 

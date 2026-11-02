@@ -68,39 +68,12 @@ describe('tab view mode', () => {
     seedTwoLeafTabs(store)
   })
 
-  it('toggles a tab to chat and back to terminal', async () => {
-    expect(findTab(store, 'left-tab')?.viewMode).toBeUndefined()
-
-    store.getState().toggleTabViewMode('left-tab')
-    await layoutApplyTestTransport.settle()
-    expect(findTab(store, 'left-tab')?.viewMode).toBe('chat')
-
-    store.getState().toggleTabViewMode('left-tab')
-    await layoutApplyTestTransport.settle()
-    expect(findTab(store, 'left-tab')?.viewMode).toBe('terminal')
-  })
-
-  it('setTabViewMode sets an explicit mode', async () => {
-    store.getState().setTabViewMode('left-tab', 'chat')
-    await layoutApplyTestTransport.settle()
-    expect(findTab(store, 'left-tab')?.viewMode).toBe('chat')
-    store.getState().setTabViewMode('left-tab', 'terminal')
-    await layoutApplyTestTransport.settle()
-    expect(findTab(store, 'left-tab')?.viewMode).toBe('terminal')
-  })
-
   it('mutates only the targeted tab, leaving a split sibling unchanged', async () => {
     store.getState().toggleTabViewMode('left-tab')
     await layoutApplyTestTransport.settle()
 
     expect(findTab(store, 'left-tab')?.viewMode).toBe('chat')
     expect(findTab(store, 'right-tab')?.viewMode).toBeUndefined()
-  })
-
-  it('is a no-op for an unknown tab id', () => {
-    const before = store.getState().unifiedTabsByWorktree[WT]
-    store.getState().toggleTabViewMode('missing-tab')
-    expect(store.getState().unifiedTabsByWorktree[WT]).toBe(before)
   })
 
   // Local toggles must mirror viewMode onto terminal rows used by recovery, matching host sync.

@@ -5,7 +5,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileSourceControlFileList, type FileListState } from './MobileSourceControlFileList'
 
 vi.mock('react-native', () => vi.importActual<typeof import('react-native')>('react-native-web'))
+vi.mock('react-native-gesture-handler', async () => {
+  const chain = new Proxy({}, { get: () => () => chain })
+  return {
+    Gesture: { Pan: () => chain },
+    GestureDetector: ({ children }: { children: unknown }) => children
+  }
+})
+vi.mock('react-native-reanimated', () => ({
+  default: { View: ({ children }: { children: unknown }) => children },
+  Easing: { bezier: () => () => 0 },
+  ReduceMotion: { Never: 'never' },
+  useAnimatedStyle: () => ({}),
+  useReducedMotion: () => false,
+  useSharedValue: (value: number) => ({ value }),
+  withTiming: (value: number) => value
+}))
 vi.mock('lucide-react-native', () => ({
+  Undo2: () => null,
   ArrowDown: () => null,
   ArrowDownUp: () => null,
   ArrowUp: () => null,
@@ -66,16 +83,17 @@ function fileListState(count: number, dirty: boolean): FileListState {
           }
         ]
       : [],
+    status: null,
+    stageablePaths: dirty ? ['src/uncommitted.ts'] : [],
+    unstageablePaths: [],
+    stageAll: vi.fn(async () => {}),
+    unstageAll: vi.fn(async () => {}),
     shouldShowBranchCompareSection: true,
-    branchCompareSummaryText: `${count} files vs main`,
     branchEntries,
     branchCompareState: { kind: 'ready', result: branchCompareResult },
     branchCompareResult,
     busyAction: null,
-    openingPath: null,
-    openingBranchPath: null,
-    openFile: vi.fn(async () => {}),
-    openBranchDiff: vi.fn(async () => {}),
+    openDiffForFile: vi.fn(),
     runGitAction: vi.fn(async () => true),
     resolveConflict: vi.fn(async () => {}),
     setDiscardTarget: vi.fn()
@@ -105,14 +123,19 @@ describe('source-control file virtualization in the mobile web page', () => {
         const state = fileListState(count, dirty)
         await act(async () => {
           root.render(
-            createElement(MobileSourceControlFileList, { key: count, state, bottomInset: 0 })
+            createElement(MobileSourceControlFileList, {
+              key: count,
+              state,
+              header: null,
+              bottomInset: 0
+            })
           )
         })
         const rows = container.querySelectorAll('[aria-label^="Open committed change "]')
         mountedCounts.push(rows.length)
         expect(rows.length).toBeGreaterThan(0)
         expect(rows.length).toBeLessThan(50)
-        expect(container.textContent).toContain(`${count} files vs main`)
+        expect(container.textContent).toContain(`On this branch ${count}`)
         expect(
           container.querySelector('[aria-label="Open committed change src/committed-999.ts"]')
         ).toBeNull()
@@ -126,7 +149,11 @@ describe('source-control file virtualization in the mobile web page', () => {
           throw new Error('No committed change mounted')
         }
         await act(async () => first.click())
-        expect(state.openBranchDiff).toHaveBeenCalledExactlyOnceWith(state.branchEntries[0])
+        expect(state.openDiffForFile).toHaveBeenCalledExactlyOnceWith({
+          kind: 'changes',
+          filePath: state.branchEntries[0]?.path,
+          area: 'branch'
+        })
       }
       expect(mountedCounts[1]).toBe(mountedCounts[0])
     }

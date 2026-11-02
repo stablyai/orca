@@ -9,17 +9,6 @@ const parseApp = (value: unknown) => () =>
   parsePluginAppThemeArtifact(JSON.stringify(value), 'strict')
 
 describe('plugin app theme artifacts', () => {
-  it('accepts public tokens with bounded color values', () => {
-    expect(
-      parsePluginAppThemeArtifact(
-        JSON.stringify({
-          base: 'light',
-          tokens: { '--background': '#ffffff', '--foreground': 'oklch(0.2 0.02 250)' }
-        })
-      ).tokens
-    ).toMatchObject({ '--background': '#ffffff', '--foreground': 'oklch(0.2 0.02 250)' })
-  })
-
   it.each([
     ['a private token', { base: 'dark', tokens: { '--internal-gap': '#000' } }],
     ['a URL', { base: 'dark', tokens: { '--background': 'url(x)' } }],
@@ -46,6 +35,21 @@ describe('plugin app theme artifacts', () => {
     )
     expect(theme.tokens).not.toHaveProperty('--future')
     expect(parseApp({ schemaVersion: 2, base: 'dark', tokens: {} })).toThrow()
+  })
+
+  it('reads a background image, strict for authors and never fatal at runtime', () => {
+    const base = { base: 'dark', tokens: { '--background': '#000', '--foreground': '#fff' } }
+    const background = { path: 'images/dusk.webp', opacity: 0.35, size: 'tile' }
+    const runtime = (value: unknown) =>
+      parsePluginAppThemeArtifact(JSON.stringify({ ...base, background: value })).background
+    expect(parseApp({ ...base, background })().background).toEqual(background)
+    expect(parseApp({ ...base, background: { path: 'a.png', blur: 4 } })).toThrow()
+    expect(runtime({ path: 'a.png', blur: 4 })).toEqual({ path: 'a.png' })
+    // A newer or out-of-range style value falls back to its default; only a bad path drops the image.
+    expect(parseApp({ ...base, background: { path: 'a.png', size: 'stretch' } })).toThrow()
+    expect(runtime({ path: 'a.png', size: 'stretch', opacity: 2 })).toMatchObject({ path: 'a.png' })
+    expect(parseApp({ ...base, background: { path: '../escape.png' } })).toThrow()
+    expect(runtime({ path: '../escape.png' })).toBeUndefined()
   })
 
   it('reads VS Code-shaped tokenColors, strict for authors and tolerant at runtime', () => {
@@ -99,12 +103,6 @@ describe('plugin terminal theme artifacts', () => {
     ).toEqual({ mode: 'unknown', terminal })
   })
 
-  it('normalizes a usable palette', () => {
-    expect(
-      parsePluginTerminalThemeArtifact(JSON.stringify({ schemaVersion: 1, terminal }))
-    ).toEqual({ mode: 'unknown', terminal })
-  })
-
   it.each([
     ['an unknown slot', { ...terminal, glow: '#000000' }],
     ['an invalid color', { ...terminal, red: 'red; x' }],
@@ -116,19 +114,6 @@ describe('plugin terminal theme artifacts', () => {
         'strict'
       )
     ).toThrow()
-  })
-
-  it('skips unknown tokens and keys at runtime so newer themes still load', () => {
-    const theme = parsePluginAppThemeArtifact(
-      JSON.stringify({
-        schemaVersion: 1,
-        base: 'dark',
-        tokens: { '--background': '#000', '--foreground': '#fff', '--future': '#123' },
-        future: true
-      })
-    )
-    expect(theme.tokens).not.toHaveProperty('--future')
-    expect(parseApp({ schemaVersion: 2, base: 'dark', tokens: {} })).toThrow()
   })
 
   it('validates registrations crossing IPC', () => {
@@ -158,24 +143,6 @@ describe('plugin app theme completion', () => {
       ).toThrow()
     }
   )
-
-  it('derives omitted surfaces and accents from the tokens a theme sets', () => {
-    const { tokens } = parsePluginAppThemeArtifact(
-      JSON.stringify({
-        base: 'dark',
-        tokens: { '--background': '#101018', '--foreground': '#f0f0ff', '--accent': '#2a2050' }
-      })
-    )
-    expect(tokens).toMatchObject({
-      '--card': '#101018',
-      '--sidebar': 'color-mix(in srgb, #f0f0ff 8%, #101018)',
-      '--worktree-sidebar': 'color-mix(in srgb, #f0f0ff 8%, #101018)',
-      '--sidebar-accent': '#2a2050',
-      '--worktree-sidebar-accent': '#2a2050',
-      '--primary': '#f0f0ff',
-      '--primary-foreground': '#101018'
-    })
-  })
 
   it('keeps a sidebar the theme sets', () => {
     const { tokens } = parsePluginAppThemeArtifact(

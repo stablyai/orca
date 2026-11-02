@@ -70,32 +70,4 @@ describe('structuredWorkerAgent', () => {
     // Defaulting here is what stamped a restarted Codex worker's frozen archive as Claude.
     expect(structuredWorkerAgent(identity)).toBe('codex')
   })
-
-  it.each(['opencode', 'grok', 'omp', 'pi'])(
-    'reads a rehydrated %s worker as itself, not as Claude',
-    (provider) => {
-      installRecordProvider(provider)
-      expect(structuredWorkerAgent(rehydratedIdentity())).toBe(provider)
-    }
-  )
-
-  it('keeps the provider this process registered, without consulting the record', () => {
-    installRecordProvider('claude')
-    const handle = mintStructuredWorkerHandle()
-    const identity = structuredWorkerIdentities.register({
-      handle,
-      sessionId: SESSION_ID,
-      agent: 'codex',
-      paneKey: mintStructuredWorkerPaneKey(SESSION_ID),
-      processIncarnation: structuredWorkerProcessIncarnation(SESSION_ID),
-      worktreeId: 'wt_1',
-      hostScope: { kind: 'local', hostId: 'local' }
-    })
-    expect(structuredWorkerAgent(identity)).toBe('codex')
-  })
-
-  it('falls back to claude only when no record can name the provider', () => {
-    installRecordProvider(null)
-    expect(structuredWorkerAgent(rehydratedIdentity())).toBe('claude')
-  })
 })

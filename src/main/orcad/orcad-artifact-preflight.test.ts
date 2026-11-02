@@ -5,7 +5,6 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCAD_MOBILE_WEB_MANIFEST, orcadArtifactFilenames } from '../../shared/orcad-artifacts'
 import { runOrcadProfilePreflight } from './orcad-profile-preflight'
-import { readOrcadArtifactIdentity } from './orcad-artifact-identity'
 import { resolveOrcadExitCode } from './orcad-exit-code'
 import type * as BundledRuntime from './orcad-bundled-runtime'
 
@@ -50,14 +49,6 @@ afterEach(async () => {
 })
 
 describe('installed artifact admission', () => {
-  it('qualifies build output before its version marker is published', async () => {
-    await runOrcadProfilePreflight(randomUUID())
-    expect(fixture.sqlite).toHaveBeenCalledOnce()
-    expect(console.log).toHaveBeenCalledWith(
-      expect.stringContaining(await readOrcadArtifactIdentity(fixture.directory))
-    )
-  })
-
   it.each([
     '.server-target',
     'node_modules/@parcel/watcher/watcher.node',

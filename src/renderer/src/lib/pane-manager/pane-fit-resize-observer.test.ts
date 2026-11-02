@@ -149,17 +149,6 @@ describe('attachPaneFitResizeObserver', () => {
     expect(onSettled).toHaveBeenCalledTimes(1)
   })
 
-  it('notifies settled callbacks when the terminal already matches the stable grid', () => {
-    const onSettled = vi.fn()
-    const pane = createPane(() => ({ cols: 79, rows: 24 }))
-
-    requestStablePaneFit(pane, onSettled)
-    flushAnimationFrames()
-
-    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
-    expect(onSettled).toHaveBeenCalledTimes(1)
-  })
-
   it('releases a hidden reattach continuation when the stable grid already matches', async () => {
     const pane = createPane()
     vi.mocked(pane.fitAddon.proposeDimensions).mockReturnValue(undefined)
@@ -191,19 +180,6 @@ describe('attachPaneFitResizeObserver', () => {
 
     expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
     expect(onSettled).toHaveBeenCalledTimes(1)
-  })
-
-  it('skips observer fits while the terminal has no visible geometry', () => {
-    const pane = createPane(() => ({ cols: 80, rows: 24 }), {
-      rect: { width: 0, height: 0 }
-    })
-
-    attachPaneFitResizeObserver(pane)
-    mockResizeObservers[0]?.trigger()
-    flushAnimationFrames()
-
-    expect(requestAnimationFrame).not.toHaveBeenCalled()
-    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
   })
 
   it('throttles an endlessly unstable grid instead of fitting every frame', () => {

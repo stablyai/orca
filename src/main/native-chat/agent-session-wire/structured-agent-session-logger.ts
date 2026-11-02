@@ -1,6 +1,6 @@
 // Require failure reporting for errors hidden from UI; production writes local traces and console.
 
-import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import { isAgentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { startSpan } from '../../observability/tracer'
 import { createStructuredAgentSessionLogRepeats } from './structured-agent-session-log-repeats'
 

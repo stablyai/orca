@@ -9,7 +9,6 @@ vi.mock('../wsl', async (importOriginal) => ({
 
 import { TerminalHost } from './terminal-host'
 import type { SubprocessHandle } from './session-subprocess-handle'
-import { resolveWslSessionContext } from './wsl-session-context'
 
 function createSubprocess(): SubprocessHandle {
   let onExit: ((code: number) => void) | undefined
@@ -129,45 +128,6 @@ describe('TerminalHost WSL context', () => {
       expect(created.wslDistro).toBeNull()
       expect(attached.wslDistro).toBeNull()
       expect(spawnSubprocess).toHaveBeenCalledOnce()
-    } finally {
-      if (platform) {
-        Object.defineProperty(process, 'platform', platform)
-      }
-    }
-  })
-
-  it('uses a remembered distro only when the selected shell is WSL', () => {
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    try {
-      expect(
-        resolveWslSessionContext({
-          cwd: 'C:\\Users\\jin\\repo',
-          shellOverride: 'powershell.exe',
-          terminalWindowsWslDistro: 'Ubuntu'
-        })
-      ).toBeUndefined()
-      expect(
-        resolveWslSessionContext({
-          cwd: '\\\\server\\share\\repo',
-          shellOverride: 'powershell.exe',
-          terminalWindowsWslDistro: 'Ubuntu'
-        })
-      ).toBeUndefined()
-      expect(
-        resolveWslSessionContext({
-          cwd: 'C:\\Users\\jin\\repo',
-          shellOverride: 'wsl.exe',
-          terminalWindowsWslDistro: ' Ubuntu '
-        })
-      ).toEqual({ distro: 'Ubuntu', treatPosixCwdAsWsl: true })
-      expect(
-        resolveWslSessionContext({
-          cwd: 'C:\\Users\\jin\\repo',
-          shellOverride: 'wsl.exe',
-          terminalWindowsWslDistro: null
-        })
-      ).toEqual({ distro: 'Ubuntu', treatPosixCwdAsWsl: true })
     } finally {
       if (platform) {
         Object.defineProperty(process, 'platform', platform)

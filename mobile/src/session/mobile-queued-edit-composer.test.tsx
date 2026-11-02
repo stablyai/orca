@@ -43,15 +43,19 @@ vi.mock('../platform/media-picker', () => ({ useMediaPicker: () => picker }))
 vi.mock('../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
 vi.mock('react-native-reanimated', async () => {
   const { useRef } = await import('react')
+  const { reanimatedPagerStub } = await import('../test-support/reanimated-pager-stub')
   return {
-    default: { ScrollView: 'ScrollView' },
+    ...reanimatedPagerStub(),
+    default: { ScrollView: 'ScrollView', View: 'AnimatedView' },
     useAnimatedRef: () => useRef(null),
     useSharedValue: (value: unknown) => useRef({ value }).current
   }
 })
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
-vi.mock('../components/mounted-bottom-drawer', () => ({ MountedBottomDrawer: 'BottomDrawer' }))
-vi.mock('../components/bottom-drawer-modal-host-scope', () => ({
+vi.mock('../components/bottom-drawer/mounted-bottom-drawer', () => ({
+  MountedBottomDrawer: 'BottomDrawer'
+}))
+vi.mock('../components/bottom-drawer/bottom-drawer-modal-host-scope', () => ({
   useBottomDrawerModalHost: () => null
 }))
 

@@ -5,6 +5,7 @@ import { ORCHESTRATION_DELIVERY_BATCH_LIMIT } from './mailbox-routing-page'
 export const MAILBOX_POINTER_RESERVED = 1
 export const MAILBOX_POINTER_WRITE_ATTEMPTED = 2
 export const MAILBOX_POINTER_ENTER_ATTEMPTED = 3
+const POINTER_WORK_HANDLE_BATCH = 500
 
 export type MailboxPointerReservationTarget = {
   ptyId: string
@@ -35,6 +36,31 @@ export function getPendingMailboxPointerHandles(this: OrchestrationDb): string[]
       )
       .all() as { to_handle: string }[]
   ).map((row) => row.to_handle)
+}
+
+/** The mailboxes among `toHandles` with unread mail that is undelivered or held by a pointer reservation. */
+export function getMailboxesWithPointerWork(
+  this: OrchestrationDb,
+  toHandles: string[]
+): Set<string> {
+  const found = new Set<string>()
+  for (let offset = 0; offset < toHandles.length; offset += POINTER_WORK_HANDLE_BATCH) {
+    const batch = toHandles.slice(offset, offset + POINTER_WORK_HANDLE_BATCH)
+    const rows = this.db
+      .prepare(
+        `SELECT DISTINCT to_handle FROM messages
+         WHERE read = 0 AND delivery_contract = 'current_delivery'
+           AND (delivered_at IS NULL OR pointer_enter_pending > 0)
+           AND to_handle IN (${batch.map(() => '?').join(',')})`
+      )
+      .all(...batch)
+    for (const row of rows) {
+      if (typeof row?.to_handle === 'string') {
+        found.add(row.to_handle)
+      }
+    }
+  }
+  return found
 }
 
 export function stageMailboxPointerEnter(
@@ -208,6 +234,7 @@ function mutatePointerMessages(
 export type MailboxPointerEnterStateMethods = {
   getPendingMailboxPointerMessages: typeof getPendingMailboxPointerMessages
   getPendingMailboxPointerHandles: typeof getPendingMailboxPointerHandles
+  getMailboxesWithPointerWork: typeof getMailboxesWithPointerWork
   stageMailboxPointerEnter: typeof stageMailboxPointerEnter
   markMailboxPointerWriteAttempted: typeof markMailboxPointerWriteAttempted
   markMailboxPointerEnterAttempted: typeof markMailboxPointerEnterAttempted
@@ -220,6 +247,7 @@ export function attachMailboxPointerEnterState(ctor: { prototype: object }): voi
   Object.assign(ctor.prototype, {
     getPendingMailboxPointerMessages,
     getPendingMailboxPointerHandles,
+    getMailboxesWithPointerWork,
     stageMailboxPointerEnter,
     markMailboxPointerWriteAttempted,
     markMailboxPointerEnterAttempted,

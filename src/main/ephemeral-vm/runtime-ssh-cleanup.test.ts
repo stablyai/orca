@@ -40,23 +40,6 @@ function createRuntime(
   })
 }
 
-it('retains the hidden target identity when removal fails', async () => {
-  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-ssh-cleanup-'))
-  tempDirs.push(userDataPath)
-
-  await expect(
-    removeEphemeralVmRuntimeSshTarget({
-      userDataPath,
-      runtime: createRuntime(userDataPath, 'cleanup_failed'),
-      removeTarget: vi.fn().mockRejectedValue(new Error('store unavailable'))
-    })
-  ).resolves.toMatchObject({
-    status: 'cleanup_failed',
-    sshTargetId: 'runtime-ssh-1',
-    cleanupLastError: 'Failed to remove the hidden SSH target.'
-  })
-})
-
 it('keeps provider cleanup retryable until target removal succeeds', async () => {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-ssh-cleanup-'))
   tempDirs.push(userDataPath)

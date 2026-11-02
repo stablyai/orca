@@ -83,6 +83,7 @@ jobs:
             /config/scripts/pr-e2e-source-routing.mjs
             /config/scripts/pr-browser-e2e-source-routes.mjs
             /config/scripts/pr-editor-preview-e2e-source-routes.mjs
+            /config/scripts/pr-feature-area-e2e-source-routes.mjs
             /config/scripts/pr-plugin-e2e-source-routes.mjs
             /config/scripts/pr-wsl-e2e-source-routes.mjs
             /config/scripts/ci-e2e-job-selection.mjs
@@ -273,6 +274,19 @@ jobs:
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
           node node_modules/oxlint/bin/oxlint --config config/oxlint-js-plugins.json --format github src config tests mobile native .github
 
+      # Its single JS-plugin thread ran alone for ~12s as a foreground tail; overlapping it fills idle cores.
+      - name: Reject low-evidence patterns
+        if: '!cancelled()'
+        id: anti-slop
+        background: true
+        env:
+          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+        run: |
+          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          node config/scripts/sync-anti-slop-plugin.mjs
+          bun --smol node_modules/oxlint/bin/oxlint --config config/oxlint-anti-slop.json src config tests mobile --deny-warnings
+
       - name: Enforce ast-grep rules
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: |
@@ -284,13 +298,10 @@ jobs:
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node node_modules/oxfmt/bin/oxfmt --check .
 
-      - name: Reject low-evidence patterns
-        if: needs.code_paths.outputs.static_analysis == 'true'
-        run: |
-          node config/scripts/sync-anti-slop-plugin.mjs
-          bun --smol node_modules/oxlint/bin/oxlint --config config/oxlint-anti-slop.json src config tests mobile --deny-warnings
-
       - wait: root-lint
+
+      # The type-aware pass needs most of the runner memory.
+      - wait: anti-slop
 
       - name: Enforce focused code-quality plugins
         if: '!cancelled()'
@@ -370,6 +381,19 @@ jobs:
             bun config/scripts/verify-localization-extraction.mjs
           fi
 
+      # Runs every config/scripts/check-*-ratchet(s).mjs, so a new ratchet needs no step here.
+      # Starts with the compiler: as a foreground step it made the serial chain outlast typecheck.
+      - name: Enforce ratchets
+        if: '!cancelled()'
+        id: ratchets
+        background: true
+        env:
+          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+        run: |
+          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          node config/scripts/run-ratchets.mjs
+
       - name: Check Zustand selector fan-out budget
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node config/scripts/zustand-selector-fanout-benchmark.mjs --check
@@ -409,11 +433,6 @@ jobs:
           fi
           node config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs \
             config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts
-
-      # Runs every config/scripts/check-*-ratchet(s).mjs, so a new ratchet needs no step here.
-      - name: Enforce ratchets
-        if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node config/scripts/run-ratchets.mjs
 
       - name: Check Node runtime pin
         if: needs.code_paths.outputs.static_analysis == 'true'
@@ -535,6 +554,8 @@ jobs:
 
       - wait: test-file-runners
 
+      - wait: ratchets
+
       - name: Test Mobile CI tools and runtime routing
         if: needs.code_paths.outputs.mobile_ci_tools == 'true'
         env:
@@ -546,7 +567,6 @@ jobs:
           config/scripts/mobile-release-check-scope.test.mjs
           config/scripts/mobile-test-change-scope.test.mjs
           config/scripts/pr-ready-check-reuse.test.mjs
-          config/scripts/ci-dependency-download-cache.test.mjs
           config/scripts/win32-test-lane-registration.test.mjs
           config/scripts/vitest-node-runtime-boundary.test.ts
           config/scripts/vitest-sqlite-runtime-boundary.test.ts
@@ -830,7 +850,7 @@ jobs:
             src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
             src/main/daemon/shell-ready.test.ts \
             src/main/daemon/node-pty-fd-leak.test.ts \
-            src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts \
+            src/main/providers/local-pty/local-pty-shell-ready-zsh-launch-environment.test.ts \
             src/main/pty/codex-shell-launch-preflight.test.ts \
             src/main/pty/codex-shell-no-daemon.test.ts \
             src/main/pty/omp-shell-wrapper-alias-safety.test.ts \

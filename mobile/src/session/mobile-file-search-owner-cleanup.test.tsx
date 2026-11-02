@@ -10,6 +10,7 @@ vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
+    ...(await import('../test-support/react-native-motion-stub')).reactNativeMotionStub(),
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
     Text: 'Text',
@@ -24,6 +25,8 @@ vi.mock('react-native', async () => {
 })
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
+  ListEnd: 'ListEnd',
+  CornerDownRight: 'CornerDownRight',
   Check: 'Check',
   ChevronDown: 'ChevronDown',
   ChevronLeft: 'ChevronLeft',
@@ -38,7 +41,7 @@ vi.mock('lucide-react-native', () => ({
   Square: 'Square',
   X: 'X'
 }))
-vi.mock('../components/BottomDrawer', async () => {
+vi.mock('../components/bottom-drawer/BottomDrawer', async () => {
   const React = await import('react')
   return {
     BottomDrawer: ({ visible, children }: { visible: boolean; children?: ReactNode }) =>

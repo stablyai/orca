@@ -1,3 +1,7 @@
+import {
+  TerminalIdentityRawInputs,
+  TerminalIdentityReadContext
+} from './terminal-identity-read-context'
 import { OrcaRuntimeWithMailboxTerminalIdentity } from '../../orchestration/mailbox-terminal-identity'
 import type {
   RuntimeLeafRecord,
@@ -17,7 +21,6 @@ import type { PtyIncarnationHandleRecord } from '../../orca-runtime-core'
 import type { TerminalHandleRecord } from '../../runtime-terminal-contracts'
 import { readTerminalTail } from '../../terminal-tail-read'
 import { structuredWorkerTerminalRefusal } from '../../structured-worker-terminal-refusal'
-import { randomUUID } from 'node:crypto'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithMailboxTerminalIdentity {
@@ -25,6 +28,16 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     retained: PtyIncarnationHandleRecord,
     leaf: RuntimeLeafRecord
   ): void
+
+  createTerminalIdentityRawInputs(): TerminalIdentityRawInputs {
+    return new TerminalIdentityRawInputs(this.terminalIdentitySources())
+  }
+
+  createTerminalIdentityReadContext(
+    inputs?: TerminalIdentityRawInputs
+  ): TerminalIdentityReadContext {
+    return new TerminalIdentityReadContext(this.terminalIdentitySources(), inputs)
+  }
 
   protected ptySurfaceTopology(): PtySurfaceTopology {
     return {
@@ -132,8 +145,27 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
 
   /** A pane-issued handle outlives the graph (a reload) while its PTY keeps the incarnation it was issued for. */
   protected getRetainedHandlePty(handle: string): RuntimePtyWorktreeRecord | undefined {
-    const [ptyId, retained] =
-      [...this.handleByPtyIncarnation].find(([, r]) => r.handle === handle) ?? []
+    const pty = this.getPaneAliasPty(handle)
+    // Once no pane shows it, the alias only answers exit waits (getExitWaitPtyForHandle).
+    return pty && this.getLeavesForPty(pty.ptyId).length > 0 ? pty : undefined
+  }
+
+  /** An exit wait may name a closed pane's process: the owner's record answers until it is pruned or replaced. */
+  protected getExitWaitPtyForHandle(handle: string): { pty: RuntimePtyWorktreeRecord } {
+    try {
+      return this.getTerminalPtyForHandle(handle)
+    } catch (error) {
+      const pty = this.getPaneAliasPty(handle)
+      if (!pty) {
+        throw error
+      }
+      return { pty }
+    }
+  }
+
+  private getPaneAliasPty(handle: string): RuntimePtyWorktreeRecord | undefined {
+    const ptyId = this.terminalIdentity.firstIncarnationPtyId(handle)
+    const retained = ptyId === undefined ? undefined : this.handleByPtyIncarnation.get(ptyId)
     const pty = ptyId ? this.ptysById.get(ptyId) : undefined
     return retained?.incarnationId && pty?.incarnationId === retained.incarnationId
       ? pty
@@ -146,26 +178,29 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     return this.handles.has(handle) || named !== undefined
   }
 
-  protected getLivePtyForHandle(handle: string): {
+  protected getLivePtyForHandle(
+    handle: string,
+    context?: TerminalIdentityReadContext
+  ): {
     record: TerminalHandleRecord
     pty: RuntimePtyWorktreeRecord
   } | null {
     let record = this.handles.get(handle)
     if (!record) {
-      const ptyId = [...this.handleByPtyId.entries()].find(
-        ([, mappedHandle]) => mappedHandle === handle
-      )?.[0]
+      const ptyId = context
+        ? context.reversePtyIds(handle)[0]
+        : [...this.handleByPtyId.entries()].find(([, mappedHandle]) => mappedHandle === handle)?.[0]
       const pty = ptyId ? this.ptysById.get(ptyId) : null
       if (pty) {
         // Why: graph reload clears renderer handle records, but runtime-owned PTY handles remain the caller's control identity.
-        this.issuePtyHandle(pty)
+        this.issuePtyHandle(pty, context)
         record = this.handles.get(handle)
       }
     }
     if (
       !record ||
       record.runtimeId !== this.runtimeId ||
-      !(record.tabId.startsWith('pty:') || this.mainPaneOwnHandle(handle, record))
+      !(record.tabId.startsWith('pty:') || this.mainPaneOwnHandle(handle, record, context))
     ) {
       return null
     }
@@ -178,11 +213,16 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     }
     // Why: renderer adoption can race with CLI reads; keep ptyId → handle populated so summaries don't mint a second handle for the same terminal.
     this.setPtyHandle(record.ptyId, handle)
+    context?.changedReverseBinding(record.ptyId)
     return { record, pty }
   }
 
   /** Main-owned panes adopt the terminal's original handle; own-handle checks fence epochs because replacement incarnations drop that handle. */
-  private mainPaneOwnHandle(handle: string, record: TerminalHandleRecord): boolean {
+  private mainPaneOwnHandle(
+    handle: string,
+    record: TerminalHandleRecord,
+    context?: TerminalIdentityReadContext
+  ): boolean {
     if (
       !ORCA_LAYOUT_OWNER_IS_MAIN ||
       !record.ptyId ||
@@ -192,8 +232,9 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     ) {
       return false
     }
+    const pty = this.ptysById.get(record.ptyId)
     return (
-      this.paneOfPty(this.ptysById.get(record.ptyId)).paneKey ===
+      (context && pty ? context.paneOf(pty) : this.paneOfPty(pty)).paneKey ===
       makePaneKey(record.tabId, record.leafId)
     )
   }
@@ -221,51 +262,22 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
       limit: opts.limit
     })
   }
-
-  protected issueHandle(leaf: RuntimeLeafRecord): string {
-    const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
-    const existingHandle = this.handleByLeafKey.get(leafKey)
-    if (existingHandle) {
-      const existingRecord = this.handles.get(existingHandle)
-      if (
-        existingRecord &&
-        existingRecord.rendererGraphEpoch === this.rendererGraphEpoch &&
-        existingRecord.ptyId === leaf.ptyId &&
-        existingRecord.ptyGeneration === leaf.ptyGeneration
-      ) {
-        return existingHandle
-      }
+  getTerminalHandleForPaneKey(
+    paneKey: string,
+    context?: TerminalIdentityReadContext
+  ): string | null {
+    const parsed = parsePaneKey(paneKey)
+    const leaf = parsed ? this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId)) : undefined
+    if (leaf?.ptyId && leaf.connected) {
+      return this.issueHandle(leaf, context)
     }
-
-    const preAllocatedHandle = this.adoptPreAllocatedHandle(leaf)
-    if (preAllocatedHandle) {
-      return preAllocatedHandle
+    const panePty = this.getPtyRecordForPaneKey(paneKey, context)
+    if (panePty?.connected) {
+      return this.issuePtyHandle(panePty, context)
     }
-    const incarnationId = leaf.ptyId ? (this.ptysById.get(leaf.ptyId)?.incarnationId ?? null) : null
-    const retained = leaf.ptyId ? this.handleByPtyIncarnation.get(leaf.ptyId) : undefined
-    if (retained && leaf.ptyId && retained.incarnationId !== incarnationId) {
-      this.invalidatePtyIncarnationHandle(leaf.ptyId)
-    } else if (retained) {
-      this.bindPtyIncarnationHandle(retained, leaf)
-      return retained.handle
+    if (leaf?.ptyId) {
+      return this.issueHandle(leaf, context)
     }
-    const handle = `term_${randomUUID()}`
-    this.syntheticTerminalHandles.add(handle)
-    this.handles.set(handle, {
-      handle,
-      runtimeId: this.runtimeId,
-      rendererGraphEpoch: this.rendererGraphEpoch,
-      worktreeId: leaf.worktreeId,
-      tabId: leaf.tabId,
-      leafId: leaf.leafId,
-      ptyId: leaf.ptyId,
-      ptyGeneration: leaf.ptyGeneration
-    })
-    this.handleByLeafKey.set(leafKey, handle)
-    if (leaf.ptyId) {
-      this.handleByPtyIncarnation.set(leaf.ptyId, { handle, incarnationId, leafKey })
-      this.wakeMailForNewPtyHandle(leaf.ptyId)
-    }
-    return handle
+    return panePty ? this.issuePtyHandle(panePty, context) : null
   }
 }

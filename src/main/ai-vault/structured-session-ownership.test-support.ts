@@ -1,10 +1,11 @@
+import { vi } from 'vitest'
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
-import type { AgentSessionProviderHandle } from '../../shared/agent-session-provider-handle'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import type { AgentSessionProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredProviderSessionOwnership } from '../native-chat/agent-session-wire/structured-provider-session-ownership'
@@ -12,7 +13,7 @@ import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../shared/agent-session-provider-handle-encoding'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export const PROVIDER_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 
@@ -20,9 +21,10 @@ export function installOwnership(
   overrides: Partial<Omit<StructuredProviderSessionOwnership, 'role' | 'key'>> & {
     handle?: AgentSessionProviderHandle
     accountHome?: AgentSessionRecord['accountHome']
+    acquiredAccount?: AgentSessionRecord['acquiredAccount']
   } = {}
 ): void {
-  const { handle, accountHome, ...ownershipOverrides } = overrides
+  const { handle, accountHome, acquiredAccount, ...ownershipOverrides } = overrides
   const ownership: Omit<StructuredProviderSessionOwnership, 'role' | 'key'> = {
     sessionId: 'session-alpha',
     workspaceId: 'workspace-1',
@@ -32,40 +34,41 @@ export function installOwnership(
     ownerObservation: agentSessionConversationView(agentSessionRecordFixture()).ownerObservation,
     ...ownershipOverrides
   }
-  const record = agentSessionRecordFixture(
+  const fixture = agentSessionRecordFixture(
     agentSessionLeaseFixture({ sessionId: ownership.sessionId })
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listConversations`; the rest of the host is never reached.
+  const record: AgentSessionRecord = {
+    ...fixture,
+    sessionId: ownership.sessionId,
+    accountHome: accountHome ?? fixture.accountHome,
+    location: {
+      ...fixture.location,
+      workspaceId: ownership.workspaceId,
+      wslDistro: ownership.wslDistro
+    },
+    provider: ownership.provider,
+    providerHandleChain: [
+      {
+        ...fixture.providerHandleChain[0]!,
+        handle:
+          handle ??
+          (ownership.provider === 'claude'
+            ? claudeProviderHandle(ownership.providerSessionId, null)
+            : codexProviderHandle(ownership.providerSessionId))
+      }
+    ],
+    ...(ownership.conversationName ? { conversationName: ownership.conversationName } : {}),
+    ...(acquiredAccount === undefined ? {} : { acquiredAccount })
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listConversations`, `getRecord` and `hostId`; the rest of the host is never reached.
   setStructuredAgentSessionHost({
     deps: {
       store: {
+        hostId: record.lease.ownerProcess?.hostId ?? 'local',
+        getRecord: (sessionId: string) => (sessionId === record.sessionId ? record : null),
         listConversations: () => [
           {
-            ...agentSessionConversationView({
-              ...record,
-              sessionId: ownership.sessionId,
-              accountHome: accountHome ?? record.accountHome,
-              location: {
-                ...record.location,
-                workspaceId: ownership.workspaceId,
-                wslDistro: ownership.wslDistro
-              },
-              provider: ownership.provider,
-              providerHandleChain: [
-                {
-                  ...record.providerHandleChain[0]!,
-                  handle:
-                    handle ??
-                    (ownership.provider === 'claude'
-                      ? claudeProviderHandle(ownership.providerSessionId, null)
-                      : codexProviderHandle(ownership.providerSessionId))
-                }
-              ],
-              lease: record.lease,
-              ...(ownership.conversationName
-                ? { conversationName: ownership.conversationName }
-                : {})
-            }),
+            ...agentSessionConversationView(record),
             ownerObservation: ownership.ownerObservation
           }
         ]
@@ -121,11 +124,17 @@ export function codexChatHolding(sessionId: string, threadIds: string[]): AgentS
   }
 }
 
-export function installChats(records: AgentSessionRecord[]): void {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listConversations`; the rest of the host is never reached.
-  setStructuredAgentSessionHost({
-    deps: { store: { listConversations: () => records.map(agentSessionConversationView) } }
-  } as never)
+/** Returns the fake store's spies so a projection can be held to an operation count. */
+export function installChats(records: AgentSessionRecord[]) {
+  const byId = new Map(records.map((record) => [record.sessionId, record]))
+  const store = {
+    hostId: 'local',
+    getRecord: vi.fn((sessionId: string) => byId.get(sessionId) ?? null),
+    listConversations: vi.fn(() => records.map(agentSessionConversationView))
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listConversations`, `getRecord` and `hostId`; the rest of the host is never reached.
+  setStructuredAgentSessionHost({ deps: { store } } as never)
+  return store
 }
 
 export function listResult(): AiVaultListResult {

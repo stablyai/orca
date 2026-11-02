@@ -79,7 +79,7 @@ vi.mock('sonner', () => ({
 }))
 
 import { PortRow } from './ports-status-popover-rows'
-import { mergeWorkspacePortScans } from '@/lib/workspace-port-actions'
+import { mergeWorkspacePortScans } from '@/lib/workspace-ports/workspace-port-actions'
 
 const externalPort: WorkspacePort = {
   id: '127.0.0.1:63468:1234',

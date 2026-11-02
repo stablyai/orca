@@ -9,6 +9,8 @@ export class PluginBundledBootstrapCoordinator {
   private readonly options: PluginBundledBootstrapRequest & {
     isEnabled: () => boolean
     refreshPlugins: () => Promise<void>
+    /** Turns on shipped plugins that are content only; anything else waits for review. */
+    approveContentPlugins?: (pluginKeys: readonly string[]) => Promise<void>
     bootstrap?: typeof bootstrapBundledPlugins
   }
   private pending: Promise<void> = Promise.resolve()
@@ -37,11 +39,14 @@ export class PluginBundledBootstrapCoordinator {
       hostVersion: this.options.hostVersion,
       ...(this.options.blockedPluginReason
         ? { blockedPluginReason: this.options.blockedPluginReason }
-        : {})
+        : {}),
+      ...(this.options.beforeRetire ? { beforeRetire: this.options.beforeRetire } : {}),
+      ...(this.options.afterRetire ? { afterRetire: this.options.afterRetire } : {})
     })
     if (result.installed.length > 0 || result.retired.length > 0) {
       await this.options.refreshPlugins()
     }
+    await this.options.approveContentPlugins?.([...result.installed, ...result.unchanged])
     return result
   }
 }

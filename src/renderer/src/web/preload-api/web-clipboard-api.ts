@@ -113,6 +113,23 @@ export async function writeWebClipboardText(text: string): Promise<void> {
   }
 }
 
+const PNG_DATA_URL_PREFIX = 'data:image/png;base64,'
+
+export async function writeWebClipboardImage(dataUrl: string): Promise<void> {
+  if (!dataUrl.startsWith(PNG_DATA_URL_PREFIX)) {
+    return
+  }
+  if (typeof ClipboardItem === 'undefined' || typeof navigator.clipboard?.write !== 'function') {
+    throw new Error('Image clipboard is unavailable in this browser context')
+  }
+  const binary = atob(dataUrl.slice(PNG_DATA_URL_PREFIX.length))
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+  assertClipboardImageBlobWithinLimit(new Blob([bytes]))
+  await navigator.clipboard.write([
+    new ClipboardItem({ 'image/png': new Blob([bytes], { type: 'image/png' }) })
+  ])
+}
+
 export async function saveClipboardImageAsTempFileInRuntime(
   contentBase64: string,
   args?: { connectionId?: string | null; runtimeEnvironmentId?: string | null }

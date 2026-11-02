@@ -5,7 +5,7 @@ import {
   hasSeparateHookSessionAdmission,
   readHookSessionContext
 } from './agent-hook-listener/pane-provider-session'
-import { extractAgentProviderSession } from './agent-session-resume'
+import { extractAgentProviderSession } from './agent-session/lifecycle/agent-session-resume'
 import { resolveAgentStatusIdentity } from './agent-status-identity'
 
 /** Refuse before provider folds can mutate prompt, tool or child state. */

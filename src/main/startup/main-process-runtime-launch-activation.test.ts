@@ -18,7 +18,7 @@ vi.mock('../orca-profiles/profile-cloud-auth-config', () => ({
   getOrcaCloudAuthConfig: () => ({ configured: false })
 }))
 vi.mock('../orca-profiles/profile-storage-paths', () => ({ getProfileUserDataPath: vi.fn() }))
-vi.mock('../persistence', () => ({
+vi.mock('../persistence/loading-store/user-data-path', () => ({
   getCanonicalUserDataPath: () => '/tmp/orca-user-data',
   migrateMobilePairingDataToCanonicalUserDataPath: vi.fn()
 }))
@@ -48,7 +48,7 @@ vi.mock('../ipc/runtime-environments/runtime-environment-mobile-relay-hosts', ()
 }))
 vi.mock('../ipc/pty/provider/registry', () => ({ getLocalPtyProvider: vi.fn() }))
 vi.mock('../ipc/pty/register-headless-runtime', () => ({ registerHeadlessPtyRuntime: vi.fn() }))
-vi.mock('../providers/local-pty-provider', () => ({ LocalPtyProvider: class {} }))
+vi.mock('../providers/local-pty/local-pty-provider', () => ({ LocalPtyProvider: class {} }))
 vi.mock('../browser/offscreen-browser-backend', () => ({ OffscreenBrowserBackend: class {} }))
 vi.mock('../browser/browser-manager', () => ({ browserManager: {} }))
 vi.mock('./main-process-relay-status', () => ({

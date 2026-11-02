@@ -29,7 +29,7 @@ vi.mock('../tray/system-tray', async () =>
 )
 
 import { registerNotificationHandlers } from './notifications'
-import { structuredAgentSessionPaneKey } from '../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 
 // These cases exercise foreground behavior against Electron mocks.
 beforeEach(() => {

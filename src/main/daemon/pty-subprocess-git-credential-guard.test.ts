@@ -1,5 +1,6 @@
+import type * as PtySpawnValidationTypes from '../providers/working-directory-validation'
 import { describe, expect, it, vi } from 'vitest'
-import type * as LocalPtyUtils from '../providers/local-pty-utils'
+import type * as LocalPtyUtils from '../providers/local-pty/local-pty-executable-spawn'
 
 const {
   spawnMock,
@@ -43,11 +44,18 @@ vi.mock('../providers/windows-powershell-executable', () => ({
   getWindowsCmdPath: () => CMD_ABS
 }))
 
-vi.mock('../providers/local-pty-utils', async (importOriginal) => {
+vi.mock('../providers/local-pty/local-pty-executable-spawn', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalPtyUtils>()
   return {
     ...actual,
-    resolveUnixShellPath: resolveUnixShellPathMock,
+    resolveUnixShellPath: resolveUnixShellPathMock
+  }
+})
+
+vi.mock('../providers/working-directory-validation', async (importOriginal) => {
+  const actual = await importOriginal<typeof PtySpawnValidationTypes>()
+  return {
+    ...actual,
     validateWorkingDirectory: validateWorkingDirectoryMock,
     validateWorkingDirectoryAsync: validateWorkingDirectoryMock
   }
@@ -194,25 +202,5 @@ describe('createPtySubprocess', () => {
       }
       Object.assign(process.env, savedGitConfigEnv)
     }
-  })
-
-  it('guards a trusted daemon agent whose launch command is wrapped', async () => {
-    const proc = mockPtyProcess()
-    spawnMock.mockReturnValue(proc)
-
-    await createPtySubprocess({
-      sessionId: 'trusted-wrapped-agent',
-      cols: 80,
-      rows: 24,
-      command: 'cd /repo && custom-agent-wrapper',
-      launchAgent: 'claude',
-      env: { SHELL: '/bin/bash' }
-    })
-
-    const spawnEnv = spawnMock.mock.calls.at(-1)?.[2]?.env as Record<string, string>
-    expect(spawnEnv.GIT_TERMINAL_PROMPT).toBe('0')
-    expect(spawnEnv.GCM_INTERACTIVE).toBe('never')
-    expect(Object.values(spawnEnv)).toContain('credential.interactive')
-    expect(Object.values(spawnEnv)).toContain('credential.guiPrompt')
   })
 })

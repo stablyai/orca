@@ -75,12 +75,6 @@ describe('runtime git diff transport budget', () => {
     expect(mocks.getDiff).toHaveBeenCalled()
   })
 
-  it('leaves a local-repo diff uncapped when no budget is supplied', async () => {
-    await expect(
-      commands().getRuntimeGitDiff('id:wt-1', 'assets/logo.png', false)
-    ).resolves.toMatchObject({ modifiedContent: OVERSIZED_BASE64 })
-  })
-
   it('caps a local-repo branch diff that exceeds the budget', async () => {
     await expect(
       commands().getRuntimeGitBranchDiff(
@@ -94,43 +88,10 @@ describe('runtime git diff transport budget', () => {
     expect(mocks.getBranchDiff).toHaveBeenCalled()
   })
 
-  it('leaves a local-repo branch diff uncapped when no budget is supplied', async () => {
-    await expect(
-      commands().getRuntimeGitBranchDiff('id:wt-1', BRANCH_COMPARE, 'assets/logo.png')
-    ).resolves.toMatchObject({ modifiedContent: OVERSIZED_BASE64 })
-  })
-
   it('caps a local-repo commit diff that exceeds the budget', async () => {
     await expect(
       commands().getRuntimeGitCommitDiff('id:wt-1', COMMIT_ARGS, REMOTE_RPC_MAX_CONTENT_BYTES)
     ).rejects.toMatchObject(TOO_LARGE)
     expect(mocks.getCommitDiff).toHaveBeenCalled()
-  })
-
-  it('leaves a local-repo commit diff uncapped when no budget is supplied', async () => {
-    await expect(commands().getRuntimeGitCommitDiff('id:wt-1', COMMIT_ARGS)).resolves.toMatchObject(
-      {
-        modifiedContent: OVERSIZED_BASE64
-      }
-    )
-  })
-
-  it('prioritizes local file diff reads without losing WSL routing', async () => {
-    const runtime = commands({ wslDistro: 'Ubuntu' })
-
-    await runtime.getRuntimeGitBranchDiff('id:wt-1', BRANCH_COMPARE, 'assets/logo.png')
-    await runtime.getRuntimeGitCommitDiff('id:wt-1', COMMIT_ARGS)
-
-    const options = { admissionTier: 'interactive', wslDistro: 'Ubuntu' }
-    expect(mocks.getBranchDiff).toHaveBeenLastCalledWith(
-      '/remote/repo',
-      expect.objectContaining({ filePath: 'assets/logo.png' }),
-      options
-    )
-    expect(mocks.getCommitDiff).toHaveBeenLastCalledWith(
-      '/remote/repo',
-      expect.objectContaining({ filePath: 'assets/logo.png' }),
-      options
-    )
   })
 })

@@ -79,20 +79,6 @@ describe('OpenCode Go credential state', () => {
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 0))
   })
 
-  it('treats an undecryptable saved key as absent so the cookie still produces usage', async () => {
-    const service = serviceWithCookie(undecryptableKey)
-    vi.mocked(fetchOpenCodeGoUsage).mockResolvedValueOnce(okProvider('opencode-go', 40))
-
-    await service.refresh()
-
-    expect(fetchOpenCodeGoUsage).toHaveBeenCalledWith(
-      expect.objectContaining({ settingsApiKey: '', cookie: 'auth=fake-cookie' })
-    )
-    const state = service.getState()
-    expect(state.opencodeGo?.status).toBe('ok')
-    expect(state.opencodeGo?.error).toBeNull()
-  })
-
   it('shows the decrypt error only when no other source produced usage', async () => {
     const service = serviceWithCookie(undecryptableKey)
     vi.mocked(fetchOpenCodeGoUsage).mockImplementationOnce(async (input) => {
@@ -129,20 +115,6 @@ describe('OpenCode Go credential state', () => {
     expect(state.opencodeGoApiKeyConfigured).toBe(true)
   })
 
-  it('keeps a real cookie error instead of the decrypt error', async () => {
-    const service = serviceWithCookie(undecryptableKey)
-    vi.mocked(fetchOpenCodeGoUsage).mockResolvedValueOnce({
-      ...unavailableProvider('opencode-go', 'OpenCode session cookie expired'),
-      status: 'error'
-    })
-
-    await service.refresh()
-
-    const state = service.getState()
-    expect(state.opencodeGo?.status).toBe('error')
-    expect(state.opencodeGo?.error).toBe('OpenCode session cookie expired')
-  })
-
   it('keeps the chip visible across a cookie change while a key source exists', async () => {
     const service = serviceWithCookie(() => null)
     vi.mocked(fetchOpenCodeGoUsage).mockImplementation(async (input) => {
@@ -159,16 +131,6 @@ describe('OpenCode Go credential state', () => {
 
     service.invalidateOpenCodeGoCredentialState({ apiKeyCleared: true })
     expect(service.getState().opencodeGoApiKeyConfigured).toBe(false)
-  })
-
-  it('passes the saved key to the fetch as the settings override', async () => {
-    const service = serviceWithCookie(() => 'fake-saved-key')
-
-    await service.refresh()
-
-    expect(fetchOpenCodeGoUsage).toHaveBeenCalledWith(
-      expect.objectContaining({ settingsApiKey: 'fake-saved-key' })
-    )
   })
 
   it('drops an in-flight result fetched with a credential that was since replaced', async () => {

@@ -19,7 +19,7 @@ import { parsePtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import {
   isAgentSessionExecutionClaim,
   isAgentSessionSurfaceBinding
-} from '../../shared/agent-session-host-authority'
+} from '../../shared/agent-session/agent-session-host-authority'
 import { type DaemonRequest, TerminalAttachCanceledError } from './types'
 
 type CreateOrAttachRequest = Extract<DaemonRequest, { type: 'createOrAttach' }>

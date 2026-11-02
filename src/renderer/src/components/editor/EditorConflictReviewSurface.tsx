@@ -158,8 +158,10 @@ export function EditorConflictReviewSurface({
           <EditorFileLoadErrorView
             message={fileContent.loadError}
             code={fileContent.loadErrorCode}
+            worktreeId={contentFile.worktreeId}
             // Borrowed views reload through their owning workspace.
             onRetry={() => reloadContent(recordView ?? contentFile, USER_RETRY)}
+            onHostStarted={() => reloadContent(recordView ?? contentFile)}
           />
         </div>
       )

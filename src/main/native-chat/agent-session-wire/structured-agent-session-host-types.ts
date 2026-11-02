@@ -17,18 +17,19 @@ import type {
   StructuredAgentSessionContinueInput
 } from './structured-agent-session-input-admission'
 import type { StructuredAgentSessionStatusObserverOptions } from './structured-agent-session-status-observation'
-import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
-import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type {
   AgentSessionNamingError,
-  AgentSessionStatusSummary,
-  AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import type { AgentSessionUserNameWrite } from '../../runtime/agent-session-record-conversation-name'
-import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
+  AgentSessionStatusSummary
+} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionWireRefusal } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import type { AgentSessionUserNameWrite } from '../../runtime/agent-session/records/agent-session-record-conversation-name'
+import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
 import type { AgentSessionSpawnTokenScan } from '../../runtime/agent-session/ownership/agent-session-spawn-token-process-scan'
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -44,13 +45,16 @@ import type { AgentSessionAttachParams } from './structured-agent-session-attach
 import type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-feed'
 import type { AgentModelCatalogService } from '../agent-model-catalog/agent-model-catalog-service'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
-import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { StructuredAgentSessionStartupLimits } from './structured-agent-session-startup-attempt-contract'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import type { AgentSessionSwitchResult } from '../../../shared/agent-session-switch-execution'
 
-export type StructuredAgentSessionCaller = { callerKey: string }
+export type StructuredAgentSessionCaller = {
+  callerKey: string
+  readsOptionsWithoutModel?: boolean
+}
 
 /** Reveal record-authoritative identity; unreadable chats retain tabs for failure display and Retry. */
 export type StructuredAgentSessionReveal = {
@@ -90,8 +94,11 @@ export type StructuredAgentSessionProviderChild = StructuredAgentSessionProvider
   readonly startedFor?: string
   /** Launch-time permission mode, memory-only. */
   readonly permissionMode?: AgentChatPermissionChoice
+  /** The account home it was launched under, in memory only; absent when its adapter reports none. */
+  readonly accountHome?: AgentSessionAccountHome
   /** The launch source that may publish observations for this child. */
   readonly catalogSource?: AgentModelCatalogSource
+  /** Read adapter-held sends at each decision. */
   readonly heldSends?: () => ReadonlySet<string> | undefined
   readonly exitObservation?: DeferredStructuredAgentSessionEventSink['exitObservation']
   close?: StructuredAgentSessionChildClose
@@ -174,7 +181,7 @@ export type StructuredAgentSessionHostDeps = {
   /** Explicit switch admission also includes direct chat assignments, even at rest. */
   hasOwedSwitchWork?: (record: AgentSessionRecord) => boolean
   /** Advisory tab-hidden notice; failures are logged. */
-  onSessionTabHidden?: (sessionId: string) => void
+  onSessionTabHidden?: (sessionId: string, tabId?: string) => void
   /** Throws while a terminal may still write the record's head conversation; run before a spawn. */
   assertNoTerminalWriter?: (record: AgentSessionRecord) => Promise<void>
   /** Where every failure the host carries on past is reported. Required: a host without one would
@@ -190,6 +197,13 @@ export type StructuredAgentSessionHostDeps = {
   statusSink?: StructuredAgentSessionStatusSink
   /** Absent catalog reads return unknown. */
   modelCatalog?: AgentModelCatalogService
+  /** The account home a start of this chat would launch under now, read without side effects;
+   *  null for an agent whose chats keep the account they were created on. The default read may
+   *  throw while that account's folder is missing; `identity` names it regardless. */
+  launchAccountHome?: (
+    record: AgentSessionRecord,
+    purpose?: 'read' | 'identity'
+  ) => Promise<AgentSessionAccountHome | null>
   conversationNaming?: StructuredAgentSessionConversationNaming
   /** Carries the user's chat name into the agent's own conversation; never delays the caller. */
   nameProviderConversation?: (record: AgentSessionRecord) => void

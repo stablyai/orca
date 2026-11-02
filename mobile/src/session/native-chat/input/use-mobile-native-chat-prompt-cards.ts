@@ -1,4 +1,4 @@
-import type { MobileNativeChatController } from '../../mobile-native-chat-controller-contract'
+import type { MobileNativeChatController } from '../mobile-native-chat-controller-contract'
 import type { useMobileStructuredAgentSession } from '../../use-mobile-structured-agent-session'
 import { useNativeChatAcceptedAction } from '../../use-native-chat-action-outcomes'
 import { useMobileNativeChatPromptPresentation } from './use-mobile-native-chat-prompt-presentation'

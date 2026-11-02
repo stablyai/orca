@@ -1,3 +1,5 @@
+import { readAgentOrchestrationProjectionRecords } from '../orchestration-fleet-agent-status-snapshot'
+import { CrewChanges } from '../orchestration/crew/crew-changes'
 import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/structured-mailbox-pointer-delivery'
 
 import { createStructuredMailboxPointerHost } from '../orchestration/structured-mailbox-pointer-host'
@@ -17,12 +19,13 @@ import type {
   RuntimeWorktreeScanCache,
   RuntimeWorktreeScanInFlight
 } from '../orca-runtime-core'
-import type { AgentBrowserBridge } from '../../browser/agent-browser-bridge'
+import type { AgentBrowserBridge } from '../../browser/agent-browser/agent-browser-bridge'
 import type { BrowserBackend } from '../../browser/browser-backend'
 import type { EmulatorBridge } from '../../emulator/emulator-bridge'
 import { RuntimeResolvedWorktreeCache } from '../runtime-resolved-worktree-cache'
 import { RuntimeWorktreeLineageController } from '../runtime-worktree-lineage-controller'
 import { RuntimeAgentOrchestrationProjection } from '../runtime-agent-orchestration-projection'
+import type { RuntimeAgentOrchestrationDependencies } from '../runtime-agent-orchestration-projection'
 import { RuntimeTerminalList } from '../runtime-terminal-list'
 import { RuntimeManagedWorktreeQueries } from '../runtime-managed-worktree-queries'
 import { RuntimePtyForegroundAgent } from '../runtime-pty-foreground-agent'
@@ -45,9 +48,6 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { mainListsEveryPane } from '../terminal/surface/main-terminal-surfaces'
 import { TUI_IDLE_QUIESCENCE_MS } from '../orca-runtime-postlude'
 import { screenClearsBlockedTail } from '../blocked-tail-screen-clear'
-import { conversationRecordReader } from '../orchestration/structured-session-lineage'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { peekOpenedAgentSessionRecordStore } from '../agent-session-record-store-slot'
 
 export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId {
   protected readonly stopRequestedPtyIds = new Set<string>()
@@ -116,25 +116,28 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     showTerminal: (handle) => this.showTerminal(handle)
   })
 
-  protected readonly agentOrchestrationProjection = new RuntimeAgentOrchestrationProjection({
-    getDb: () => this.getOrchestrationDbIfAvailable(),
-    getLeaves: () => this.leaves.values(),
-    getPtys: () => this.ptysById.values(),
-    paneOf: (pty) => this.paneOfPty(pty),
-    issueLeafHandle: (leaf) => this.issueHandle(leaf),
-    issuePtyHandle: (pty) => this.issuePtyHandle(pty),
-    makePaneKey: (leaf) => this.makeRuntimePaneKey(leaf),
-    getWorktreeId: (handle) => this.getTerminalWorktreeIdForHandle(handle),
-    getHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
-    getPaneKey: (handle) => this.getPaneKeyForTerminalHandle(handle),
-    getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle),
-    getAgentStatusSnapshot: () => this.getOrchestrationFleetAgentStatusSnapshot(),
-    getSessionRecords: () => {
-      const store =
-        getStructuredAgentSessionHost()?.deps.store ?? peekOpenedAgentSessionRecordStore()
-      return store ? conversationRecordReader(store) : null
-    }
-  })
+  protected agentOrchestrationDependencies(bound?: Partial<RuntimeAgentOrchestrationDependencies>) {
+    return {
+      getDb: () => this.getOrchestrationDbIfAvailable(),
+      getLeaves: () => this.leaves.values(),
+      getPtys: () => this.ptysById.values(),
+      paneOf: (pty) => this.paneOfPty(pty),
+      issueLeafHandle: (leaf) => this.issueHandle(leaf),
+      issuePtyHandle: (pty) => this.issuePtyHandle(pty),
+      makePaneKey: (leaf) => this.makeRuntimePaneKey(leaf),
+      getWorktreeId: (handle) => this.getTerminalWorktreeIdForHandle(handle),
+      getHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
+      getPaneKey: (handle) => this.getPaneKeyForTerminalHandle(handle),
+      getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle),
+      getAgentStatusSnapshot: () => this.getOrchestrationFleetAgentStatusSnapshot(),
+      getSessionRecords: () => readAgentOrchestrationProjectionRecords(),
+      ...bound
+    } satisfies RuntimeAgentOrchestrationDependencies
+  }
+
+  protected readonly agentOrchestrationProjection = new RuntimeAgentOrchestrationProjection(
+    this.agentOrchestrationDependencies()
+  )
 
   protected readonly terminalList = new RuntimeTerminalList({
     getGraphEpoch: () => (this.graphStatus === 'ready' ? this.rendererGraphEpoch : null),
@@ -238,6 +241,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     }
   })
 
+  readonly crewChanges = new CrewChanges()
   protected _orchestrationDb: OrchestrationDb | null = null
 
   protected readonly orchestrationMailboxOwner = new OrchestrationMailboxOwner({
@@ -285,8 +289,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
       resolveStructuredTarget: (mailboxHandle) =>
         this.resolveStructuredMailboxTarget(mailboxHandle),
       getCliCommand: localOrchestrationCliCommand,
-      senderName: (party, reportedDispatchId) =>
-        this.orchestrationSenderNames.nameOf(party, reportedDispatchId),
+      senderSnapshot: (party, reportedDispatchId) =>
+        this.orchestrationSenderNames.snapshotOf(party, reportedDispatchId),
       host: createStructuredMailboxPointerHost()
     })
 
@@ -297,10 +301,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getTerminalPaneKey: (handle) => this.getTerminalPaneKey(handle),
     getWorkspaceSession: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId),
     getGeneratedTitlesEnabled: () => this.store?.getSettings?.()?.tabAutoGenerateTitle === true,
-    getAgentStatusSnapshotForPane: (paneKey) =>
-      this.getAgentStatusSnapshotForPaneFn?.(paneKey) ??
-      this.getAgentStatusSnapshotFn?.().filter((row) => row.paneKey === paneKey) ??
-      [],
+    getAgentStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
+    getAgentStatusSnapshotForPane: (paneKey) => this.getAgentStatusSnapshotForPaneFn?.(paneKey),
     getTrackedTitle: (ptyId) => this.getTrackedDisplayTitleForPty(ptyId)
   })
 

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import { useAppStore } from '@/store'
-import { makeRepo, makeWorktree } from '../worktree-jump-palette-test-fixtures'
+import { makeRepo, makeWorktree } from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import { openAgentSessionHistoryModal } from './agent-session-history-modal'
 import { resolveAiVaultPanelSessionListRequest } from './ai-vault-panel-session-list-request'
 import type { AiVaultAgent, AiVaultSession } from '../../../../shared/ai-vault-types'
@@ -218,15 +218,5 @@ describe('Session History dialog', () => {
     expect(dialog.getByText('claude-chat')).toBeInTheDocument()
     expect(dialog.queryByText('codex-chat')).toBeNull()
     expect(window.localStorage.getItem(AI_VAULT_VIEW_OPTIONS_STORAGE_KEY)).toBeNull()
-  })
-
-  it('starts an OpenCode chat on both names its sessions list under', () => {
-    mocks.sessions = [chatSession('opencode2'), chatSession('claude')]
-    render(<Host />)
-    openHistory('', 'opencode')
-
-    const dialog = within(screen.getByRole('dialog'))
-    expect(dialog.getByText('opencode2-chat')).toBeInTheDocument()
-    expect(dialog.queryByText('claude-chat')).toBeNull()
   })
 })

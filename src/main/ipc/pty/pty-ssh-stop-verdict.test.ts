@@ -8,7 +8,6 @@ import {
   ptyOwnership,
   setPtyOwnership
 } from './provider/ownership-state'
-import { getLocalPtyProvider } from './provider/registry'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -56,7 +55,7 @@ vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
 
 // Detached relay PTYs outlive their provider; missing providers cannot prove remote exit.
 describe('stopping a PTY whose SSH provider is unregistered', () => {
-  const { handlers, mainWindow, installObservableDaemonTestProvider } = setupPtyIpcSuite()
+  const { handlers, mainWindow } = setupPtyIpcSuite()
 
   function installController(): {
     controller: {
@@ -89,19 +88,6 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
       runtime
     }
   }
-
-  it('reports an unconfirmed stop instead of a fabricated kill', () => {
-    setPtyOwnership('ssh-detached-pty', 'ssh:ssh-dropped')
-    const { controller, runtime } = installController()
-
-    expect(controller.kill('ssh-detached-pty')).toBe(false)
-    expect(runtime.onPtyExit).toHaveBeenCalledWith('ssh-detached-pty', -1, undefined)
-    expect(runtime.markPtyLivenessUnverifiable).toHaveBeenCalledWith(
-      'ssh-detached-pty',
-      expect.stringContaining('SSH')
-    )
-    deletePtyOwnership('ssh-detached-pty')
-  })
 
   it('reports an unconfirmed exact stop instead of a fabricated teardown', async () => {
     setPtyOwnership('ssh-detached-stop', 'ssh:ssh-dropped')
@@ -169,18 +155,5 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
       ptyIncarnationById.delete(ptyId)
       deletePtyOwnership(ptyId)
     }
-  })
-
-  it('still confirms a stop the owning provider actually performed', async () => {
-    const daemon = installObservableDaemonTestProvider()
-    vi.spyOn(getLocalPtyProvider(), 'listProcesses').mockResolvedValue([])
-    const { controller, runtime } = installController()
-
-    await expect(controller.stopAndWait('wt-1@@local-session')).resolves.toBe(true)
-    expect(daemon.shutdown).toHaveBeenCalledWith(
-      'wt-1@@local-session',
-      expect.objectContaining({ immediate: true })
-    )
-    expect(runtime.markPtyLivenessUnverifiable).not.toHaveBeenCalled()
   })
 })

@@ -37,7 +37,11 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
       session.deps.paneMode2031Ref.current.delete(session.pane.id)
       session.deps.paneLastThemeModeRef.current.delete(session.pane.id)
     }
-    if (result.decision !== 'subscribed') {
+    // A repeated DECSET must not overwrite a report still owed after a hold or outage.
+    if (
+      result.decision !== 'subscribed' ||
+      session.deps.paneMode2031Ref.current.get(session.pane.id)
+    ) {
       return
     }
     const settings = useAppStore.getState().settings

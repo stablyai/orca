@@ -10,6 +10,9 @@ const asyncStorage = vi.hoisted(() => ({
   setItem: vi.fn().mockResolvedValue(undefined),
   removeItem: vi.fn().mockResolvedValue(undefined)
 }))
+vi.mock('./DisclosureChevron', () => ({
+  DisclosureChevron: ({ children }: { children: unknown }) => children
+}))
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -40,8 +43,10 @@ vi.mock(
       }
     )
 )
-vi.mock('./BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
-vi.mock('./bottom-drawer-modal-host', () => ({ BottomDrawerModalHost: 'BottomDrawerModalHost' }))
+vi.mock('./bottom-drawer/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
+vi.mock('./bottom-drawer/bottom-drawer-modal-host', () => ({
+  BottomDrawerModalHost: 'BottomDrawerModalHost'
+}))
 vi.mock('./PickerListDrawer', () => ({ PickerListDrawer: 'PickerListDrawer' }))
 vi.mock('./AutoHeight', () => ({ AutoHeight: 'AutoHeight' }))
 vi.mock('./MobileSwitch', () => ({ MobileSwitch: 'MobileSwitch' }))

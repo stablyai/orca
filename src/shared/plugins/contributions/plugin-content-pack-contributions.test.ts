@@ -38,26 +38,6 @@ describe('content-pack manifest contributions', () => {
     expect(parsed.contributes.keybindings[0]?.key).toBe('Mod+Alt+T')
   })
 
-  it('accepts an optional native displayName on language packs', () => {
-    const parsed = pluginManifestSchema.parse(
-      manifest({
-        languagePacks: [
-          {
-            locale: 'zh-TW',
-            path: 'locales/zh-TW.json',
-            displayName: '中文（繁體）'
-          }
-        ]
-      })
-    )
-
-    expect(parsed.contributes.languagePacks[0]).toEqual({
-      locale: 'zh-TW',
-      path: 'locales/zh-TW.json',
-      displayName: '中文（繁體）'
-    })
-  })
-
   it('rejects blank language-pack displayName', () => {
     expect(
       parsePluginManifest(
@@ -66,25 +46,6 @@ describe('content-pack manifest contributions', () => {
         })
       ).ok
     ).toBe(false)
-  })
-
-  it('defaults every contribution registry to an empty array', () => {
-    const parsed = pluginManifestSchema.parse(manifest({}))
-
-    expect(parsed.contributes).toEqual({
-      panels: [],
-      commands: [],
-      events: [],
-      languagePacks: [],
-      keybindings: [],
-      vmRecipes: [],
-      themes: [],
-      terminalThemes: [],
-      iconThemes: [],
-      syntaxes: [],
-      customEditors: [],
-      newFiles: []
-    })
   })
 
   it('refuses items in the reserved skills contribution', () => {

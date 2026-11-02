@@ -8,6 +8,7 @@ import { gitDiffReadDedupe, settledDiffCache } from './git-read-cache-invalidati
 import { readWorktreeDiffStamp } from './worktree-diff-stamp'
 import { buildDiffResult } from './diff-result'
 import {
+  blobConversion,
   type GitBlobReadResult,
   readGitBlobAtIndexPath,
   readGitBlobAtOidPath,
@@ -127,7 +128,9 @@ async function loadDiff(
             innerPath,
             fromOid,
             toOid,
-            options
+            options,
+            // The unstaged route is editable, so it shows checkout bytes.
+            staged ? 'textconv' : 'checkout'
           )
         )
       }
@@ -148,13 +151,30 @@ async function loadDiff(
   let modifiedDeleted = false
   let readFailed = false
   let tooLarge = false
+  const conversion = blobConversion(
+    worktreePath,
+    filePath,
+    options,
+    // The working-tree side is editable, so show the Git side as checkout would write it.
+    staged ? 'textconv' : 'checkout'
+  )
+  const leftConversion =
+    staged && options.oldPath !== undefined
+      ? blobConversion(worktreePath, options.oldPath, options)
+      : conversion
 
   try {
     if (staged) {
       // HEAD and index blobs are independent; read them concurrently.
       const [leftBlob, rightBlob] = await Promise.all([
-        readGitBlobAtOidPath(worktreePath, 'HEAD', options.oldPath ?? filePath, options),
-        readGitBlobAtIndexPath(worktreePath, filePath, options)
+        readGitBlobAtOidPath(
+          worktreePath,
+          'HEAD',
+          options.oldPath ?? filePath,
+          options,
+          leftConversion
+        ),
+        readGitBlobAtIndexPath(worktreePath, filePath, options, conversion)
       ])
       originalContent = leftBlob.content
       originalIsBinary = leftBlob.isBinary
@@ -169,8 +189,8 @@ async function loadDiff(
       const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options)
       const [leftBlob, workingTreeBlob] = await Promise.all([
         compareAgainstHead
-          ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
-          : readUnstagedLeftBlob(worktreePath, filePath, options),
+          ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options, conversion)
+          : readUnstagedLeftBlob(worktreePath, filePath, options, conversion),
         hostWorktreePath
           ? readWorkingTreeFile(path.join(hostWorktreePath, filePath))
           : Promise.resolve(UNSPELLABLE_WORKING_TREE_READ)
@@ -195,11 +215,13 @@ async function loadDiff(
     filePath,
     tooLarge
   )
+  // Converted output depends on config, keys and tools the stamp doesn't cover.
+  const reusable = !readFailed && !(await conversion.hasDriver) && !(await leftConversion.hasDriver)
   // Mark proven deletions so previewers can distinguish them from failed empty reads.
   if (result.kind === 'binary' && modifiedDeleted) {
-    return { result: { ...result, modifiedDeleted: true }, reusable: !readFailed }
+    return { result: { ...result, modifiedDeleted: true }, reusable }
   }
-  return { result, reusable: !readFailed }
+  return { result, reusable }
 }
 
 /** A worktree path with no host spelling is a read failure, never a proven deletion. */

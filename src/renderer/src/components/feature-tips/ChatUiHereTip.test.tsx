@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
 
-import { act, useRef, useState, type ReactNode } from 'react'
+import { act, useCallback, useRef, useState, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FEATURE_TIPS } from '../../../../shared/feature-tips'
 import type { ChatUiLaunchTipVariant } from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
+import type { ChatUiLaunchTipCohort } from '../../../../shared/telemetry-settings-types'
 import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
@@ -57,14 +58,26 @@ afterEach(() => {
   act(() => root.unmount())
 })
 
-function openTip(variant: ChatUiLaunchTipVariant): void {
+function openTip(
+  variant: ChatUiLaunchTipVariant,
+  cohort?: ChatUiLaunchTipCohort,
+  buttonEmphasis?: 'normal' | 'swapped'
+): void {
   useAppStore.setState({
     activeModal: 'feature-tips',
     modalData: { tipId: 'chat-ui-here', source: 'app_open' },
     chatUiLaunchTipVariant: variant,
     settings: createGlobalSettingsFixture({
+      agentDefaultSurface: variant === 'chat-ui-on' ? 'chat' : 'terminal',
       activeRuntimeEnvironmentId: 'paired',
       nativeChatProviders: { codex: false },
+      telemetry: {
+        optedIn: true,
+        installId: 'install',
+        existedBeforeTelemetryRelease: true,
+        chatUiLaunchTipCohort: cohort,
+        chatUiLaunchTipButtonEmphasis: buttonEmphasis
+      },
       aiVaultSearch: { enabled: false, historyDays: null }
     }),
     markFeatureTipsSeen: vi.fn(),
@@ -85,6 +98,11 @@ function SettingsOwner({ retained }: { retained: boolean }): React.JSX.Element {
   const [choice, setSettingsHostChoice] = useState<RuntimeClientTarget | null>(
     retained ? { kind: 'environment', environmentId: 'paired' } : null
   )
+  const consumeSettingsNavigation = useCallback<
+    Parameters<typeof useSettingsPageEffects>[0]['consumeSettingsNavigation']
+  >((target) => {
+    setSettingsHostChoice((previous) => target.hostScope ?? previous)
+  }, [])
   const pendingScrollTargetRef = useRef<string | null>(null)
   const scope = resolveSettingsHostScope({
     choice,
@@ -97,7 +115,7 @@ function SettingsOwner({ retained }: { retained: boolean }): React.JSX.Element {
     {
       settings,
       settingsNavigationTarget,
-      setSettingsHostChoice,
+      consumeSettingsNavigation,
       clearSettingsTarget: useAppStore.getState().clearSettingsTarget,
       fetchSettings: vi.fn(),
       fetchKeybindings: vi.fn(),
@@ -177,38 +195,142 @@ describe('Chat UI is here tip', () => {
     )
   })
 
-  it('makes Chat the default with Use Chat UI, leaving agents set for themselves alone, and nothing with Stay in terminal', async () => {
-    openTip('chat-ui-off')
-    expect(footerButtons().map((button) => button.textContent)).toEqual([
-      'Stay in terminal',
-      'Use Chat UI'
-    ])
-    act(() => footerButtons()[0]?.click())
-    expect(useAppStore.getState().activeModal).toBe('none')
-    expect(track).toHaveBeenLastCalledWith('chat_ui_feature_tip_action', {
-      variant: 'chat_ui_off',
-      action: 'stay_in_terminal'
-    })
+  it.each(['treatment', 'treatment-swapped-buttons'] as const)(
+    'swaps order and emphasis while preserving both actions in %s',
+    async (cohort) => {
+      openTip('chat-ui-off', cohort)
+      const swapped = cohort === 'treatment-swapped-buttons'
+      expect(footerButtons().map((button) => [button.textContent, button.dataset.variant])).toEqual(
+        swapped
+          ? [
+              ['Use Chat UI', 'ghost'],
+              ['Stay in terminal', 'default']
+            ]
+          : [
+              ['Stay in terminal', 'ghost'],
+              ['Use Chat UI', 'default']
+            ]
+      )
+      act(() =>
+        footerButtons()
+          .find((button) => button.textContent === 'Stay in terminal')
+          ?.click()
+      )
+      expect(useAppStore.getState().activeModal).toBe('none')
+      expect(track).toHaveBeenLastCalledWith('chat_ui_feature_tip_action', {
+        variant: 'chat_ui_off',
+        action: 'stay_in_terminal'
+      })
 
-    openTip('chat-ui-off')
-    await act(async () => footerButtons()[1]?.click())
-    expect(useAppStore.getState().activeModal).toBe('none')
-    expect(updateSettingsOrThrow).toHaveBeenCalledExactlyOnceWith({ agentDefaultSurface: 'chat' })
-    expect(updateSettings).not.toHaveBeenCalled()
-    expect(track).toHaveBeenLastCalledWith('chat_ui_feature_tip_action', {
-      variant: 'chat_ui_off',
-      action: 'use_chat_ui'
-    })
-  })
+      expect(updateSettingsOrThrow).not.toHaveBeenCalled()
+      openTip('chat-ui-off', cohort)
+      await act(async () =>
+        footerButtons()
+          .find((button) => button.textContent === 'Use Chat UI')
+          ?.click()
+      )
+      expect(useAppStore.getState().activeModal).toBe('none')
+      expect(updateSettingsOrThrow).toHaveBeenCalledExactlyOnceWith({ agentDefaultSurface: 'chat' })
+      expect(updateSettings).not.toHaveBeenCalled()
+      expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_action', {
+        variant: 'chat_ui_off',
+        action: 'use_chat_ui'
+      })
+      expect(track).toHaveBeenLastCalledWith('agent_default_surface_changed', {
+        from_mode: 'terminal',
+        to_mode: 'chat',
+        source: 'launch_card',
+        launch_tip_shown: true
+      })
+    }
+  )
 
-  it('offers chat users a single Got it that closes without saving', async () => {
+  it.each([
+    'treatment',
+    'treatment-swapped-buttons',
+    'treatment-center',
+    'treatment-live-switch'
+  ] as const)(
+    'always emphasizes Got it for chat users in %s, while allowing a switch to terminal',
+    async (cohort) => {
+      openTip('chat-ui-on', cohort, 'swapped')
+      expect(footerButtons().map((button) => [button.textContent, button.dataset.variant])).toEqual(
+        [
+          ['Switch to terminal', 'ghost'],
+          ['Got it', 'default']
+        ]
+      )
+      await act(async () =>
+        footerButtons()
+          .find((button) => button.textContent === 'Got it')
+          ?.click()
+      )
+      expect(useAppStore.getState().activeModal).toBe('none')
+      expect(updateSettingsOrThrow).not.toHaveBeenCalled()
+      expect(updateSettings).not.toHaveBeenCalled()
+
+      openTip('chat-ui-on', cohort, 'swapped')
+      await act(async () =>
+        footerButtons()
+          .find((button) => button.textContent === 'Switch to terminal')
+          ?.click()
+      )
+      expect(useAppStore.getState().activeModal).toBe('none')
+      expect(updateSettingsOrThrow).toHaveBeenCalledExactlyOnceWith({
+        agentDefaultSurface: 'terminal'
+      })
+      expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_action', {
+        variant: 'chat_ui_on',
+        action: 'switch_to_terminal'
+      })
+      expect(track).toHaveBeenLastCalledWith('agent_default_surface_changed', {
+        from_mode: 'chat',
+        to_mode: 'terminal',
+        source: 'launch_card',
+        launch_tip_shown: true
+      })
+    }
+  )
+
+  it('reports a terminal save failure without recording a successful switch', async () => {
     openTip('chat-ui-on')
-    expect(footerButtons().map((button) => button.textContent)).toEqual(['Got it'])
-    await act(async () => footerButtons()[0]?.click())
-    expect(useAppStore.getState().activeModal).toBe('none')
-    expect(updateSettingsOrThrow).not.toHaveBeenCalled()
-    expect(updateSettings).not.toHaveBeenCalled()
+    updateSettingsOrThrow.mockRejectedValueOnce(new Error('disk unavailable'))
+    await act(async () =>
+      footerButtons()
+        .find((button) => button.textContent === 'Switch to terminal')
+        ?.click()
+    )
+    expect(toast.error).toHaveBeenCalledExactlyOnceWith(
+      'Could not switch to terminal. Choose Terminal in Settings → Agents.'
+    )
+    expect(track).not.toHaveBeenCalledWith(
+      'chat_ui_feature_tip_action',
+      expect.objectContaining({ action: 'switch_to_terminal' })
+    )
+    expect(track).not.toHaveBeenCalledWith('agent_default_surface_changed', expect.anything())
   })
+
+  it.each(['chat-ui-off', 'chat-ui-on'] as const)(
+    'keeps the saved %s button choices when the current default differs',
+    (variant) => {
+      openTip(variant)
+      act(() =>
+        useAppStore.setState((state) => ({
+          settings: state.settings
+            ? {
+                ...state.settings,
+                agentDefaultSurface: variant === 'chat-ui-on' ? 'terminal' : 'chat'
+              }
+            : null
+        }))
+      )
+      expect(footerButtons().map((button) => button.textContent)).toEqual(
+        variant === 'chat-ui-on'
+          ? ['Switch to terminal', 'Got it']
+          : ['Stay in terminal', 'Use Chat UI']
+      )
+    }
+  )
 
   it('renders nothing for a profile outside the audience, even when named', () => {
     openTip('none')

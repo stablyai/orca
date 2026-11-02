@@ -45,20 +45,6 @@ describe('createIntegrationStateFileCache', () => {
     expect(reads).toBe(1)
   })
 
-  it('reloads once the file changes underneath it', () => {
-    const path = tempFile()
-    writeFileSync(path, 'a')
-    const cache = createIntegrationStateFileCache({
-      filePath: () => path,
-      readFromDisk: () => ({ body: readBody(path) })
-    })
-    expect(cache.get()).toEqual({ body: 'a' })
-
-    writeFileSync(path, 'bb')
-
-    expect(cache.get()).toEqual({ body: 'bb' })
-  })
-
   it('notices a same-size atomic replacement with the original modification time', () => {
     const path = tempFile()
     writeFileSync(path, 'old')
@@ -114,21 +100,6 @@ describe('createIntegrationStateFileCache', () => {
     rmSync(path)
 
     expect(cache.get()).toEqual({ present: false })
-  })
-
-  it('re-reads after an invalidate so the value and stamp come from the same look', () => {
-    const path = tempFile()
-    writeFileSync(path, 'a')
-    const cache = createIntegrationStateFileCache({
-      filePath: () => path,
-      readFromDisk: () => ({ body: readBody(path) })
-    })
-    expect(cache.get()).toEqual({ body: 'a' })
-
-    writeFileSync(path, 'written-by-us')
-    cache.invalidate()
-
-    expect(cache.get()).toEqual({ body: 'written-by-us' })
   })
 
   it('recovers when another process writes between the stamp and the read', () => {

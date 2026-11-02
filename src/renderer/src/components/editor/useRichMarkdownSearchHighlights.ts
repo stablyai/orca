@@ -1,3 +1,4 @@
+import { richMarkdownViewport } from './rich-markdown-viewport'
 import { useEffect, useRef, type RefObject } from 'react'
 import type { Editor } from '@tiptap/react'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
@@ -75,19 +76,29 @@ export function useRichMarkdownSearchHighlights({
     if (activeMatch) {
       tr.setSelection(TextSelection.create(tr.doc, activeMatch.from, activeMatch.to))
     }
+    const container = scrollContainerRef.current
+    const viewport = container ? richMarkdownViewport(container) : null
     editor.view.dispatch(tr)
     if (editor.isDestroyed || editor.state.doc !== tr.doc) {
       return
     }
 
     // The editor's scrollIntoView does not reliably reach the outer flex viewport.
-    const container = scrollContainerRef.current
-    if (activeMatch && container) {
-      const coords = editor.view.coordsAtPos(activeMatch.from)
-      const containerRect = container.getBoundingClientRect()
-      const relativeTop = coords.top - containerRect.top
-      const targetScroll = container.scrollTop + relativeTop - containerRect.height / 2
-      container.scrollTo({ top: targetScroll, behavior: 'instant' })
+    if (
+      activeMatch &&
+      container &&
+      viewport?.current() &&
+      container === scrollContainerRef.current
+    ) {
+      viewport.scroll(() => {
+        const coords = editor.view.coordsAtPos(activeMatch.from)
+        const containerRect = container.getBoundingClientRect()
+        const relativeTop = coords.top - containerRect.top
+        const targetScroll = container.scrollTop + relativeTop - containerRect.height / 2
+        if (viewport.current() && container === scrollContainerRef.current) {
+          container.scrollTo({ top: targetScroll, behavior: 'instant' })
+        }
+      })
     }
   }, [
     activeMatchIndex,

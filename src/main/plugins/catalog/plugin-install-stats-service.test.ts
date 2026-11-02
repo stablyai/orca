@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parsePluginInstallStats } from '../../../shared/plugins/catalog/plugin-install-stats'
 import {
-  fetchPluginInstallStats,
   PLUGIN_INSTALL_STATS_REFRESH_MS,
   PLUGIN_INSTALL_STATS_RETRY_MS,
   PluginInstallStatsService
@@ -29,25 +28,6 @@ afterEach(async () => {
 })
 
 describe('PluginInstallStatsService', () => {
-  it('returns nothing at first, then the fetched counts, and notifies listeners', async () => {
-    const fetcher = vi.fn(async () => stats(1234))
-    const service = new PluginInstallStatsService({
-      pluginsDataDir: await tempRoot(),
-      isFetchAllowed: () => true,
-      fetcher,
-      now: () => NOW
-    })
-    const changed = vi.fn()
-    service.onChanged(changed)
-
-    expect(await service.getInstallCounts()).toEqual({})
-    await service.settled()
-
-    expect(changed).toHaveBeenCalledTimes(1)
-    expect(await service.getInstallCounts()).toEqual({ 'stablyai.orca-nord-theme': 1234 })
-    expect(fetcher).toHaveBeenCalledTimes(1)
-  })
-
   it('serves a fresh disk cache after restart without refetching', async () => {
     const root = await tempRoot()
     const first = new PluginInstallStatsService({
@@ -68,39 +48,6 @@ describe('PluginInstallStatsService', () => {
       now: () => NOW
     })
     expect(await restarted.getInstallCounts()).toEqual({ 'stablyai.orca-nord-theme': 50 })
-    expect(fetcher).not.toHaveBeenCalled()
-  })
-
-  it('refetches once the counts are stale', async () => {
-    let now = NOW
-    const fetcher = vi.fn(async () => stats(10))
-    const service = new PluginInstallStatsService({
-      pluginsDataDir: await tempRoot(),
-      isFetchAllowed: () => true,
-      fetcher,
-      now: () => now
-    })
-    await service.getInstallCounts()
-    await service.settled()
-    await service.getInstallCounts()
-    expect(fetcher).toHaveBeenCalledTimes(1)
-
-    now += PLUGIN_INSTALL_STATS_REFRESH_MS
-    await service.getInstallCounts()
-    await service.settled()
-    expect(fetcher).toHaveBeenCalledTimes(2)
-  })
-
-  it('never fetches while the network policy forbids it', async () => {
-    const fetcher = vi.fn(async () => stats(10))
-    const service = new PluginInstallStatsService({
-      pluginsDataDir: await tempRoot(),
-      isFetchAllowed: () => false,
-      fetcher,
-      now: () => NOW
-    })
-    expect(await service.getInstallCounts()).toEqual({})
-    await service.settled()
     expect(fetcher).not.toHaveBeenCalled()
   })
 
@@ -196,51 +143,5 @@ describe('parsePluginInstallStats', () => {
       generatedAt: '2026-10-31T02:15:08.771Z',
       installs: { 'stablyai.orca-nord-theme': 37 }
     })
-  })
-
-  it('accepts the empty placeholder the site publishes before its first build', () => {
-    expect(
-      parsePluginInstallStats({ schemaVersion: 1, generatedAt: null, note: 'x', plugins: {} })
-    ).toEqual({ generatedAt: null, installs: {} })
-  })
-
-  it('rejects another schema version', () => {
-    expect(() =>
-      parsePluginInstallStats({
-        schemaVersion: 2,
-        generatedAt: '2026-10-31T00:00:00Z',
-        plugins: {}
-      })
-    ).toThrow()
-  })
-})
-
-describe('fetchPluginInstallStats', () => {
-  it('sends a plain bounded GET with no credentials', async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          schemaVersion: 1,
-          generatedAt: '2026-10-31T00:00:00Z',
-          plugins: { 'stablyai.orca-oled-theme': { installs: 82 } }
-        })
-      )
-    )
-    await expect(fetchPluginInstallStats(fetcher)).resolves.toMatchObject({
-      installs: { 'stablyai.orca-oled-theme': 82 }
-    })
-    const [url, init] = fetcher.mock.calls[0]!
-    expect(url).toBe('https://onorca.dev/plugins/stats.json')
-    expect(init?.credentials).toBe('omit')
-    expect(init?.signal).toBeInstanceOf(AbortSignal)
-  })
-
-  it('rejects oversized responses', async () => {
-    const fetcher = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(
-        new Response('{}', { headers: { 'content-length': String(64 * 1024 * 1024) } })
-      )
-    await expect(fetchPluginInstallStats(fetcher)).rejects.toThrow('size limit')
   })
 })

@@ -24,19 +24,23 @@ import {
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
-import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'
 import { withLiveCatalogListing } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import { AcpStructuredOptions } from './acp-structured-options'
 import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-options-read'
 import { structuredAgentSessionHandingOver } from '../native-chat/agent-session-wire/structured-agent-session-handing-over'
 
-const recording = JSON.parse(
-  readFileSync(new URL('./fixtures/antigravity-v1.4.3-options.json', import.meta.url), 'utf8')
-)
-const session = NewSessionResponseSchema.parse({
-  ...recording.session,
-  sessionId: PROVIDER_SESSION
-})
+const recorded = (version: string) =>
+  JSON.parse(
+    readFileSync(
+      new URL(`./fixtures/antigravity-v${version}-options.json`, import.meta.url),
+      'utf8'
+    )
+  )
+const sessionOf = (fixture: { session: object }) =>
+  NewSessionResponseSchema.parse({ ...fixture.session, sessionId: PROVIDER_SESSION })
+const recording = recorded('1.4.3')
+const session = sessionOf(recording)
 const response = (key: string) => SetSessionConfigOptionResponseSchema.parse(recording[key])
 const SPEC = acpLaunchSpecFor('antigravity')!
 const FLASH = 'gemini-3.8-flash'
@@ -52,6 +56,7 @@ async function openModels(
     flat?: boolean
     noEffort?: boolean
     timeoutMs?: number
+    recording?: typeof recording
     control?: (agent: AcpScriptedAgent, frame: FakeFrame) => boolean
   } = {}
 ) {
@@ -69,11 +74,13 @@ async function openModels(
   })
   onTestFinished(() => catalog.stop())
   let resumed = false
+  const fixture = settings.recording ?? recording
+  const opened = sessionOf(fixture)
   const spec = settings.flat ? { ...SPEC, permissionModeConfig: undefined } : SPEC
   const rig = await openHostRig({
     spec,
     modelCatalog: catalog,
-    initialize: recording.initialize,
+    initialize: fixture.initialize,
     deps: {
       resolveLaunch: async () => ({
         ...(await launch(() => resumed, spec)()),
@@ -82,7 +89,7 @@ async function openModels(
       optionWriteTimeoutMs: settings.timeoutMs
     },
     script: (agent) => {
-      let native = settings.flat ? [] : (session.configOptions ?? [])
+      let native = settings.flat ? [] : (opened.configOptions ?? [])
       if (settings.noEffort) {
         native = native.filter((row) => row.category !== 'thought_level')
       }
@@ -92,7 +99,7 @@ async function openModels(
             expect(ResumeSessionRequestSchema.parse(frame.params).sessionId).toBe(PROVIDER_SESSION)
           }
           const configOptions = method === 'session/load' || !settings.flat ? native : undefined
-          agent.reply(frame, { ...session, configOptions })
+          agent.reply(frame, { ...opened, configOptions })
         })
       }
       agent.on('session/set_model', (frame) => agent.reply(frame, {}))
@@ -106,7 +113,7 @@ async function openModels(
             value === PRO
               ? response('pro').configOptions
               : value === FLASH
-                ? (session.configOptions ?? [])
+                ? (opened.configOptions ?? [])
                 : response('legacy').configOptions
         } else if (configId === 'thinking_level') {
           const pro = native?.some(
@@ -742,3 +749,59 @@ it.each(['new cycle', 'replacement', 'rest'] as const)(
     )
   }
 )
+
+it('reads and applies the recorded 1.4.1 grouped model and Effort options', async () => {
+  const v141 = recorded('1.4.1')
+  const rig = await openModels({
+    recording: v141,
+    control: (agent, frame) => {
+      const { configId, value } = SetSessionConfigOptionRequestSchema.parse(frame.params)
+      const reply =
+        configId === 'model'
+          ? value === FLASH
+            ? null
+            : 'legacy'
+          : SessionConfigValueIdSchema.parse(value)
+      if (!reply) {
+        return false
+      }
+      agent.reply(frame, SetSessionConfigOptionResponseSchema.parse(v141[reply]))
+      return true
+    }
+  })
+  const expectCurrent = async (current: { model: string; effort: string }) => {
+    const answer = await rig.host.readOptions(SESSION)
+    expect(answer.models.map((row) => row.id)).toEqual([FLASH])
+    expect(answer.models[0]?.efforts.map((row) => row.value)).toEqual(['low', 'medium', 'high'])
+    expect(answer.current).toMatchObject(current)
+  }
+  await expectCurrent({ model: FLASH, effort: 'high' })
+  await rig.deliver('applies the saved model')
+  const legacy = 'gemini-3.8-flash-medium'
+  // A legacy grouped ID gets the recorded legacy reply; the retained Effort is then reapplied.
+  for (const [key, value, sent, model] of [
+    ['effort', 'low', [['thinking_level', 'low']], FLASH],
+    ['effort', 'high', [['thinking_level', 'high']], FLASH],
+    [
+      'model',
+      legacy,
+      [
+        ['model', legacy],
+        ['thinking_level', 'high']
+      ],
+      legacy
+    ]
+  ] as const) {
+    const before = rig.writes().length
+    expect(await rig.picks(key, value)).toMatchObject({ ok: true })
+    await rig.deliver(`${key} ${value}`)
+    expect(
+      rig
+        .writes()
+        .slice(before)
+        .map(({ params }) => SetSessionConfigOptionRequestSchema.parse(params))
+        .map(({ configId, value }) => [configId, value])
+    ).toEqual(sent)
+    await expectCurrent({ model, effort: sent.at(-1)![1] })
+  }
+})

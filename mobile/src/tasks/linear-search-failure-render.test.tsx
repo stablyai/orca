@@ -1,3 +1,4 @@
+import type * as DrawerModalHostModule from '../components/bottom-drawer/bottom-drawer-modal-host'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { useMobileTasksTaskListLoading } from './use-mobile-tasks-task-list-loading'
@@ -28,7 +29,7 @@ vi.mock('react-native', async () => {
     InteractionManager: { runAfterInteractions: () => ({ cancel: () => {} }) }
   }
 })
-vi.mock('../components/BottomDrawer', () => ({
+vi.mock('../components/bottom-drawer/BottomDrawer', () => ({
   BottomDrawer: ({ children }: { children: unknown }) => children
 }))
 vi.mock('../components/SmartSourceModeIcon', () => ({ SmartSourceModeIcon: () => null }))
@@ -130,10 +131,14 @@ vi.mock('./mobile-tasks-dependencies', async () => {
     useMobileColorScheme: () => 'light'
   }
 })
+vi.mock('../transport/host-client-hooks', () => ({ useForceReconnect: () => null }))
 vi.mock('./mobile-tasks-legacy-styles', () => ({ styles: {} }))
 vi.mock('./mobile-tasks-legacy-foundation', () => ({ LINEAR_LIMIT: 100 }))
 vi.mock('./mobile-tasks-screen-chrome', () => ({ renderMobileTasksChrome: () => null }))
-vi.mock('./mobile-tasks-list-surface', () => ({ renderMobileTasksListSurface: () => null }))
+// The list draws the load error itself now; the stub shows it so the check still reads what the user sees.
+vi.mock('./mobile-tasks-list-surface', () => ({
+  renderMobileTasksListSurface: (model: { error: string }) => model.error
+}))
 vi.mock('./mobile-tasks-search-control', () => ({
   mobileTasksSearchVisible: () => true,
   renderMobileTasksSearchControl: () => null
@@ -207,6 +212,8 @@ function Tasks() {
       taskStateHydrated: true,
       provider: 'linear',
       linearConnected: true,
+      linearIssuesForView: [],
+      sortedItems: [],
       linearFilter: 'all',
       selectedLinearWorkspaceId: 'w',
       selectedLinearTeamIds: new Set<string>(),
@@ -218,6 +225,7 @@ function Tasks() {
       setError,
       setLoading,
       setRefreshing: () => {},
+      setTaskListSettled: () => {},
       setItems: () => {}
     }),
     [clientRef, loadGenerationRef, setError, setLoading]
@@ -239,4 +247,11 @@ it('shipping phone Tasks renders the safe server search failure', async () => {
   await mount(<Tasks />)
   await expectText('Unable to load Linear issues. Try again.')
   expect(text()).not.toContain(raw)
+})
+
+vi.mock('../components/bottom-drawer/bottom-drawer-modal-host', async () => {
+  const { BottomDrawerModalHost } = await vi.importMock<
+    Pick<typeof DrawerModalHostModule, 'BottomDrawerModalHost'>
+  >('./mobile-tasks-dependencies')
+  return { BottomDrawerModalHost }
 })

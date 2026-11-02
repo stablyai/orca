@@ -1,11 +1,4 @@
-import {
-  StyleSheet,
-  themedStyleSheet,
-  colors,
-  radii,
-  spacing,
-  typography
-} from './mobile-tasks-dependencies'
+import { themedStyleSheet, colors, radii, spacing, typography } from './mobile-tasks-dependencies'
 import {
   composerInputStyles,
   COMPOSER_TEXT_SIZE
@@ -13,18 +6,6 @@ import {
 import { LIST_ROW_PADDING } from '../components/list/ListGroup'
 
 export const mobileTasksDetailStyles = themedStyleSheet(() => ({
-  groupSeparator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  repoPickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.md
-  },
   repoPickerTextWrap: {
     flex: 1,
     minWidth: 0
@@ -60,8 +41,9 @@ export const mobileTasksDetailStyles = themedStyleSheet(() => ({
     color: colors.textMuted,
     marginTop: 2
   },
+  // Lines the header up with the row text of the groups below it.
   itemHeader: {
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: LIST_ROW_PADDING,
     marginBottom: spacing.md,
     gap: 2
   },
@@ -76,9 +58,9 @@ export const mobileTasksDetailStyles = themedStyleSheet(() => ({
     color: colors.textSecondary
   },
   itemTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '600',
-    lineHeight: 22,
+    lineHeight: 21,
     color: colors.textPrimary
   },
   itemMeta: {
@@ -116,11 +98,6 @@ export const mobileTasksDetailStyles = themedStyleSheet(() => ({
   itemSectionBody: {
     paddingHorizontal: LIST_ROW_PADDING,
     gap: spacing.sm
-  },
-  actionGroup: {
-    backgroundColor: colors.sheetGroup,
-    borderRadius: radii.surface,
-    overflow: 'hidden'
   },
   detailGroup: {
     backgroundColor: colors.sheetGroup,

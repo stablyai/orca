@@ -1,5 +1,5 @@
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
-import type { RuntimeCreateAgentSessionResult } from '../../../../shared/agent-session-host-authority'
+import type { RuntimeCreateAgentSessionResult } from '../../../../shared/agent-session/agent-session-host-authority'
 import {
   createAgentSessionCreateOperation,
   type AgentSessionCreateOperation

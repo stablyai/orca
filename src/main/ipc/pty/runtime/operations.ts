@@ -1,7 +1,7 @@
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { IPtyProvider } from '../../../providers/pty-provider-contract'
-import { LocalPtyProvider } from '../../../providers/local-pty-provider'
+import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { ptyOwnership } from '../provider/ownership-state'
 import { isRendererViewShowingPty, ptySizes } from '../delivery/visibility-state'
 import { isHiddenRendererPty } from '../delivery/pty-hidden-delivery-gate'
@@ -163,9 +163,17 @@ export async function getForegroundProcessFromRuntimeController(ptyId: string) {
   }
 }
 
+export function supportsForegroundObservationFromRuntimeController(ptyId: string): boolean {
+  try {
+    return getProviderForPty(ptyId).supportsForegroundObservation?.(ptyId) === true
+  } catch {
+    return false
+  }
+}
+
 export async function inspectProcessFromRuntimeController(
   ptyId: string,
-  options?: { expectedIncarnationId?: string }
+  options?: { expectedIncarnationId?: string; foregroundOnly?: boolean }
 ) {
   return inspectPtyProviderProcess(getProviderForPty(ptyId), ptyId, options)
 }

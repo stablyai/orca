@@ -59,7 +59,7 @@ vi.mock('../agent-hooks/local-agent-cli-presence', async (importOriginal) => ({
 vi.mock('../agent-hooks/agent-home-login-shell', () => ({
   adoptLoginShellAgentHomes: async () => {}
 }))
-vi.mock('../claude/agent-view-service', () => ({
+vi.mock('../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: async () => {} })
 }))
 vi.mock('../opencode/opencode-status-plugin-startup-refresh', () => ({

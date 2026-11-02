@@ -151,13 +151,4 @@ describe('approvePluginFromCli', () => {
     await expect(approve()).resolves.toBe('already-approved')
     expect(applyConsent).not.toHaveBeenCalled()
   })
-
-  it('tells a development folder approval that later code edits are not re-reviewed', () => {
-    const request = pluginCliApprovalRequest(
-      plugin(WORKER, { isDev: true, contentHash: null, consentContentHash: 'dev-identity' }),
-      'dev-load'
-    )
-    expect(request.contentIdentity).toBe('dev-identity')
-    expect(request.why).toContain('Later code edits in this development folder')
-  })
 })

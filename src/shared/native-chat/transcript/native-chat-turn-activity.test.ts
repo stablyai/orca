@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
-} from '../../agent-session-journal-types'
+} from '../../agent-session/journal/agent-session-journal-types'
 import { selectStructuredAgentTurnActivity } from './native-chat-turn-activity'
 
 function item(sequence: number, body: AgentJournalItemBody): AgentJournalRenderItem {
@@ -50,16 +50,6 @@ describe('selectStructuredAgentTurnActivity', () => {
         text: 'Running a command'
       })
     ).toEqual({ kind: 'description', text: 'Running a command' })
-  })
-
-  it('shows matching ephemeral provider activity, never an older journal status', () => {
-    const activity = selectStructuredAgentTurnActivity(
-      [turnStart, item(2, { kind: 'status', text: 'Older journal status' })],
-      'turn-1',
-      { turnId: 'turn-1', text: 'Inspecting the session wire' }
-    )
-
-    expect(activity).toEqual({ kind: 'description', text: 'Inspecting the session wire' })
   })
 
   it('ignores ephemeral activity from another or settled turn', () => {

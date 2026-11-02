@@ -6,12 +6,12 @@ import { AcpBackgroundTaskTimeline } from '../../acp/acp-background-task-timelin
 import { createProviderTimelineAssembler } from '../agent-session-timeline/provider-timeline-assembler'
 import { providerTimelineSink } from '../agent-session-timeline/provider-timeline-plan'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentTurnTimings
-} from '../../../shared/structured-agent-session-turn-timing'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+} from '../../../shared/agent-session/view/structured-agent-session-turn-timing'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
