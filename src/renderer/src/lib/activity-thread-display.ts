@@ -6,6 +6,7 @@ import type {
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import {
+  getAgentPromptLabel,
   getAgentRowPrimaryText,
   isOrcaDispatchPrompt,
   orchestrationLabelsMatchLiveDispatch
@@ -33,11 +34,11 @@ function taskTitleFromPrompt(prompt: string): string | null {
     const preview = getAgentRowPrimaryText({ prompt })
     return preview || null
   }
-  const trimmed = prompt.trim()
-  if (!trimmed || isTerseAgentFollowUpPrompt(trimmed)) {
+  const label = getAgentPromptLabel(prompt)
+  if (!label || isTerseAgentFollowUpPrompt(label)) {
     return null
   }
-  return trimmed
+  return label
 }
 
 function bestTaskPromptFromHistory(history: readonly AgentStateHistoryEntry[]): string | null {
