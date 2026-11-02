@@ -168,6 +168,7 @@ describeRender('Android chat selection in the hosted page', () => {
       await page.mouse.dblclick(point.x, point.y)
       expect(await page.evaluate(() => window.getSelection().toString())).toBe('Android')
       await page.evaluate(() => globalThis.__orcaChatSelection.update())
+      await page.getByText('Streaming update.', { exact: true }).waitFor({ state: 'attached' })
       expect(await selectedMessage.textContent()).toBe(content)
       expect(await page.evaluate(() => window.getSelection().toString())).toBe('Android')
       const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
