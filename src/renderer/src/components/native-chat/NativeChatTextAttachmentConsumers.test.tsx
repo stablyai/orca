@@ -110,6 +110,8 @@ it('opens draft and sent sources, exports exact bytes and scrolls a giant-line p
   const ending = Promise.withResolvers<void>()
   let heldRange = false
   let viewportHeight = 600
+  let viewportWidth = 390
+  let horizontalOccupation = 0
   let rowHeight = 20
   const nativeRect = HTMLElement.prototype.getBoundingClientRect
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
@@ -134,7 +136,13 @@ it('opens draft and sent sources, exports exact bytes and scrolls a giant-line p
     }
     return arrayBuffer.call(this)
   })
-  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(390)
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    return this.classList.contains('scrollbar-editor')
+      ? Number.parseFloat(this.style.width) || viewportWidth
+      : viewportWidth
+  })
   vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (
     this: HTMLElement
   ) {
@@ -142,9 +150,11 @@ it('opens draft and sent sources, exports exact bytes and scrolls a giant-line p
     return Math.max(
       this.clientWidth,
       track instanceof HTMLElement ? Number.parseFloat(track.style.minWidth) || 0 : 0,
-      ...Array.from(this.querySelectorAll<HTMLElement>('[data-text-segment]')).map(
-        (row) => Array.from(row.textContent || '').length * 8
-      )
+      ...(track instanceof HTMLElement && track.style.overflow === 'clip'
+        ? []
+        : Array.from(this.querySelectorAll<HTMLElement>('[data-text-segment]')).map(
+            (row) => Array.from(row.textContent || '').length * 8
+          ))
     )
   })
   vi.spyOn(HTMLElement.prototype, 'scrollLeft', 'get').mockImplementation(function (
@@ -165,13 +175,13 @@ it('opens draft and sent sources, exports exact bytes and scrolls a giant-line p
     this: HTMLElement
   ) {
     return this.classList.contains('scrollbar-editor')
-      ? Number.parseFloat(this.style.height) || viewportHeight
+      ? this.offsetHeight - (this.scrollWidth > this.clientWidth ? horizontalOccupation : 0)
       : viewportHeight
   })
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
     this: HTMLElement
   ) {
-    return this.clientHeight
+    return Number.parseFloat(this.style.height) || viewportHeight
   })
   vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (
     this: HTMLElement
@@ -180,15 +190,19 @@ it('opens draft and sent sources, exports exact bytes and scrolls a giant-line p
     return Math.max(
       this.clientHeight,
       track instanceof HTMLElement ? Number.parseFloat(track.style.height) || 0 : 0,
-      ...Array.from(this.querySelectorAll<HTMLElement>('[data-text-segment]')).map(
-        (row) => Number.parseFloat(row.style.top) + Number.parseFloat(row.style.height)
-      )
+      ...(track instanceof HTMLElement && track.style.overflow === 'clip'
+        ? []
+        : Array.from(this.querySelectorAll<HTMLElement>('[data-text-segment]')).map(
+            (row) => Number.parseFloat(row.style.top) + Number.parseFloat(row.style.height)
+          ))
     )
   })
   vi.spyOn(HTMLElement.prototype, 'scrollTop', 'get').mockImplementation(function (
     this: HTMLElement
   ) {
-    return Math.min(positions.get(this) || 0, this.scrollHeight - this.clientHeight)
+    const top = Math.min(positions.get(this) || 0, this.scrollHeight - this.clientHeight)
+    positions.set(this, top)
+    return top
   })
   vi.spyOn(HTMLElement.prototype, 'scrollTop', 'set').mockImplementation(function (
     this: HTMLElement,
@@ -435,6 +449,40 @@ it('opens draft and sent sources, exports exact bytes and scrolls a giant-line p
     })
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     await act(async () => heldUpload.resolve(path))
+    view.unmount()
+    viewportHeight = 600
+    viewportWidth = 400
+    rowHeight = 20
+    horizontalOccupation = 6
+    const dense = `HEAD${'X'.repeat(56)}\n${'\n'.repeat(50 * 1024 * 1024 - 61)}`
+    mocks.save.mockReturnValueOnce(new Promise(() => {}))
+    view = render(<Composer />)
+    await act(async () => {
+      expect(paste(dense)).toBe(true)
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Pasted text' }))
+    const classic = document.querySelector('.scrollbar-editor')
+    if (!(classic instanceof HTMLElement)) {
+      throw new Error('Expected native classic-scrollbar host')
+    }
+    await waitFor(() =>
+      expect(classic.querySelector('[data-text-segment]')?.textContent).toContain('HEAD')
+    )
+    act(() => measurements.forEach((notify) => notify()))
+    // Visit real source blocks through the shipping wheel/demand/read path, without a prefilled index.
+    for (let block = 1; block < 100; block++) {
+      await act(async () => {
+        fireEvent.wheel(classic, { deltaY: (block === 1 ? 15348 : 15352) * rowHeight })
+      })
+    }
+    fireEvent.keyDown(classic, { key: 'End' })
+    await waitFor(() => expect(classic.scrollHeight).toBe(8_000_593))
+    await waitFor(() => expect(classic.scrollTop).toBe(7_999_999))
+    const classicEnd = classic.scrollTop
+    viewportWidth = 650
+    expect.soft(classic.scrollTop).toBe(classicEnd)
+    act(() => measurements.forEach((notify) => notify()))
+    await waitFor(() => expect(classic.scrollTop + classic.clientHeight).toBe(classic.scrollHeight))
     view.unmount()
   } finally {
     ending.resolve()

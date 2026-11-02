@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AttachmentTextViewport } from '../../../../shared/attachment-text-viewport'
 import type {
   AttachmentTextSource,
@@ -24,24 +24,48 @@ function TextViewport({
   const scroll = useRef<HTMLDivElement>(null)
   const viewport = useRef<HTMLDivElement>(null)
   const probe = useRef<HTMLDivElement>(null)
-  const [position, setPosition] = useState({ height: 0, boxHeight: 0, rowHeight: 20, cellWidth: 8 })
-  const measured = useMemo(
-    () => new AttachmentTextViewport(source, position.rowHeight, position.height, revision),
-    [source, revision, position.rowHeight, position.height, position.boxHeight]
-  )
-  const [projection, setProjection] = useState(() => ({ layout: measured, top: 0, boxHeight: 0 }))
-  const { layout } = projection
-  // Keep the old host extent until its live position has been read, before the next track can clamp it.
-  useLayoutEffect(() => {
-    if (layout !== measured) {
-      const live = scroll.current?.scrollTop ?? projection.top
-      setProjection({
-        layout: measured,
-        top: measured.restore(layout, live),
-        boxHeight: position.boxHeight
-      })
+  const track = useRef<HTMLDivElement>(null)
+  const [position, setPosition] = useState({
+    rowHeight: 20,
+    cellWidth: 8,
+    style: {
+      height: '0px',
+      width: '0px',
+      fontFamily: '',
+      fontSize: '',
+      fontWeight: '',
+      fontStyle: '',
+      lineHeight: '',
+      letterSpacing: '',
+      paddingLeft: '',
+      paddingRight: ''
     }
-  }, [measured, layout, projection.top, position.boxHeight])
+  })
+  const [projection, setProjection] = useState(() => ({
+    layout: new AttachmentTextViewport(source, position.rowHeight, 0, revision),
+    top: 0,
+    position,
+    contentWidth: 0
+  }))
+  const { layout } = projection
+  // Capture live source position before any host or content change can alter its usable client bounds.
+  useLayoutEffect(() => {
+    const node = scroll.current
+    const content = track.current
+    if (
+      !node ||
+      !content ||
+      (projection.position === position && layout.source === source && layout.revision === revision)
+    ) {
+      return
+    }
+    const live = node.scrollTop
+    const contentWidth = source.displayUnits * position.cellWidth
+    Object.assign(node.style, position.style)
+    content.style.minWidth = `${contentWidth}px`
+    const next = new AttachmentTextViewport(source, position.rowHeight, node.clientHeight, revision)
+    setProjection({ layout: next, top: next.restore(layout, live), position, contentWidth })
+  }, [source, revision, position, projection, layout])
   useLayoutEffect(() => {
     const node = scroll.current
     if (!node) {
@@ -58,18 +82,45 @@ function TextViewport({
       return
     }
     const measure = () => {
-      const boxHeight = node.clientHeight
-      const scrollbar = scroll.current
-        ? scroll.current.offsetHeight - scroll.current.clientHeight
-        : 0
-      const cell = probe.current?.getBoundingClientRect()
-      setPosition((old) => ({
-        ...old,
-        boxHeight,
-        height: Math.max(0, boxHeight - scrollbar),
-        rowHeight: cell?.height || old.rowHeight,
-        cellWidth: cell?.width || old.cellWidth
-      }))
+      const cell = probe.current
+      if (!cell) {
+        return
+      }
+      const bounds = cell.getBoundingClientRect()
+      const computed = getComputedStyle(cell)
+      const style = {
+        height: `${node.clientHeight}px`,
+        width: `${node.clientWidth}px`,
+        fontFamily: computed.fontFamily,
+        fontSize: computed.fontSize,
+        fontWeight: computed.fontWeight,
+        fontStyle: computed.fontStyle,
+        lineHeight: computed.lineHeight,
+        letterSpacing: computed.letterSpacing,
+        paddingLeft: computed.paddingLeft,
+        paddingRight: computed.paddingRight
+      }
+      setPosition((old) => {
+        const rowHeight = bounds.height || old.rowHeight
+        const cellWidth =
+          bounds.width -
+            (Number.parseFloat(style.paddingLeft) || 0) -
+            (Number.parseFloat(style.paddingRight) || 0) || old.cellWidth
+        return old.rowHeight === rowHeight &&
+          old.cellWidth === cellWidth &&
+          old.style.height === style.height &&
+          old.style.width === style.width &&
+          old.style.fontFamily === style.fontFamily &&
+          old.style.fontSize === style.fontSize &&
+          old.style.fontWeight === style.fontWeight &&
+          old.style.fontStyle === style.fontStyle &&
+          old.style.lineHeight === style.lineHeight &&
+          old.style.letterSpacing === style.letterSpacing &&
+          old.style.paddingLeft === style.paddingLeft &&
+          old.style.paddingRight === style.paddingRight
+          ? old
+          : { rowHeight, cellWidth, style }
+      })
     }
     measure()
     const observer = new ResizeObserver(measure)
@@ -121,10 +172,17 @@ function TextViewport({
   return (
     <div ref={viewport} className="min-h-0 flex-1 overflow-hidden">
       <div
+        ref={probe}
+        aria-hidden
+        className="pointer-events-none absolute invisible whitespace-pre px-4 font-mono text-sm"
+      >
+        M
+      </div>
+      <div
         ref={scroll}
         tabIndex={0}
-        className="scrollbar-editor overflow-auto px-4"
-        style={{ height: projection.boxHeight }}
+        className="scrollbar-editor overflow-auto whitespace-pre font-mono text-sm"
+        style={projection.position.style}
         onKeyDown={(event) => {
           const node = event.currentTarget
           const pixels =
@@ -151,24 +209,19 @@ function TextViewport({
         }}
       >
         <div
-          ref={probe}
-          aria-hidden
-          className="pointer-events-none absolute invisible whitespace-pre font-mono text-sm"
-        >
-          M
-        </div>
-        <div
+          ref={track}
           style={{
             height: layout.total,
+            overflow: 'clip',
             position: 'relative',
-            minWidth: source.displayUnits * position.cellWidth
+            minWidth: projection.contentWidth
           }}
         >
           {layout.rows(projection.top).map((row) => (
             <div
               key={row.key}
               data-text-segment
-              className="whitespace-pre font-mono text-sm"
+              className="whitespace-pre"
               style={{ position: 'absolute', top: row.top, height: layout.rowHeight }}
             >
               {row.text.replace(/\n$/, '') || '\u00a0'}
