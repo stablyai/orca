@@ -44,6 +44,7 @@ const {
       pluginMarketplaceInstaller: null,
       desktopRelayService: null,
       isServeMode: false,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the literal seeds a nullable slot, like the real state object.
       stopClaudeUsagePolling: null as (() => void) | null,
       localPtyStartupReady: Promise.resolve(),
       localPtyProviderStartupReady: Promise.resolve()

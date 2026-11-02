@@ -92,6 +92,7 @@ export const mainProcessState = {
   claudeRuntimeAuth: null as ClaudeRuntimeAuthService | null,
   runtime: null as OrcaRuntimeService | null,
   rateLimits: null as RateLimitService | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the literal seeds a nullable slot, like the neighbouring fields.
   stopClaudeUsagePolling: null as (() => void) | null,
   runtimeRpc: null as OrcaRuntimeRpcServer | null,
   serveReadinessPublisher: new ServeReadinessPublisher(),

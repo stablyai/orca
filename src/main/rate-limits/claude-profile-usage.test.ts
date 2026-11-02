@@ -207,7 +207,7 @@ it('uses the credentials file when the keychain denies the read', async () => {
   writeFileSync(
     join(f.home, '.credentials.json'),
     JSON.stringify({
-      claudeAiOauth: { accessToken: 'file-fake', expiresAt: Date.now() + 3_600_000 }
+      claudeAiOauth: { accessToken: 'file-fake', expiresAt: Date.parse('2099-01-01T00:00:00Z') }
     })
   )
   calls.usage.mockResolvedValueOnce({ provider: 'claude', status: 'ok' })
