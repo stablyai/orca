@@ -11,6 +11,8 @@ export function toProcessExitStartup(
         env: startup.env,
         launchConfig: startup.launchConfig,
         resumeProviderSession: startup.resumeProviderSession,
+        resumeOrigin: startup.resumeOrigin,
+        resumeSource: startup.resumeSource,
         launchToken: startup.launchToken,
         launchAgent: startup.agent
       }

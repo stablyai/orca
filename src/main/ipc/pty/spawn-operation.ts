@@ -4,6 +4,7 @@ import { adoptedOutcome, type PtySpawnOutcome } from './spawn-outcome'
 import type { PtySpawnOperationState, PtySpawnExecutionFacts } from './spawn-operation-state'
 import { beginPtySpawn, reportPtyPaneAdoption } from './spawn-begin'
 import { executePtySpawn } from './spawn-execute'
+import { forgetStartedFreshResume } from './saved-resume-fresh/saved-resume-fresh-launch'
 import { prepareSavedPtyResume } from './spawn-resume'
 import { resolveEarlyPaneKey, resolveEarlyPaneSpawnReservationKey } from './spawn-pane-coordinates'
 import { consumeExitedPaneOperation } from './pane/adopt-stable'
@@ -135,7 +136,11 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
       )
     }
     if (!ctx.result.isReattach) {
-      Object.assign(ctx.result, savedResumeResult(ctx.resumeAdmission))
+      Object.assign(
+        ctx.result,
+        savedResumeResult(ctx.resumeAdmission),
+        ctx.savedResumeStartedFresh ? { agentResumeUnavailable: true } : {}
+      )
     }
     const outcome = await adapter.commit()
     if (
@@ -144,18 +149,23 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
     ) {
       const refusal = resumeSpawnRefusal(ctx.resumeAdmission)
       forgetRefusedResume(facts.savedResumePaneKey ?? null, refusal)
+      const startedFresh = ctx.savedResumeStartedFresh && !ctx.result.isReattach
+      if (startedFresh) {
+        forgetStartedFreshResume(facts.savedResumePaneKey ?? null, ctx.resumeAdmission)
+      }
+      const consumed = startedFresh ? ctx.resumeAdmission : refusal
       if (
         args.worktreeId &&
         facts.savedResumePaneKey &&
-        refusal &&
-        refusal.verdict !== 'unverifiable'
+        consumed &&
+        consumed.verdict !== 'unverifiable'
       ) {
         void runtime
           ?.forgetRefusedSavedResume?.(
             args.worktreeId,
             facts.savedResumePaneKey,
-            refusal.refused,
-            refusal.sourceRecord
+            consumed.refused,
+            consumed.sourceRecord
           )
           .catch((error: unknown) => console.warn('[pty] refused resume cleanup failed', error))
       }

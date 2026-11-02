@@ -22,6 +22,7 @@ export type ReattachPayloadSession = Pick<
   | 'rememberReattachPayloadAgentSignal'
   | 'schedulePendingStartupCommandDelivery'
   | 'cancelSavedResumeStartup'
+  | 'reconcileExitStartupAfterFreshStart'
   | 'sendFocusedReattachFocusInAfterReplay'
   | 'setRestoredSnapshotBaseline'
   | 'shouldPreserveAgentReattachModes'

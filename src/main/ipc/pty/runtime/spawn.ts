@@ -32,6 +32,7 @@ export async function spawnPtyFromRuntimeController(
         ctx.launchCommand = undefined
         ctx.env = ctx.spawnOptions.env
       },
+      savedResumeLaunch: { shellOverride: ctx.daemonShellOverride },
       paneKey: ctx.spawnIdentityPaneKey,
       preAllocatedHandle: args.preAllocatedHandle,
       beforeProviderSpawn: () => markRuntimeSpawnHiddenBeforeSpawn(ctx),

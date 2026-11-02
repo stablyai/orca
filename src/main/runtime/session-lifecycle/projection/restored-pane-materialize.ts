@@ -239,6 +239,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
       }
     }
     let dispatched = false
+    let startedFresh = false
     try {
       const startSessionId =
         sessionId ??
@@ -281,13 +282,17 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
             ? {
                 onPtyCreated: (ptyId: string, result: RuntimeTerminalCreate) => {
                   const decision = result.savedResumeDecision
+                  startedFresh =
+                    decision?.verdict === 'admitted' && result.agentResumeUnavailable === true
+                  // A refused resume, or one started fresh instead, holds none of the conversation.
                   if (
                     !result.isReattach &&
                     result.agentSessionDisposition !== 'adopted' &&
                     decision &&
                     decision.agent === resumeStartup?.launchAgent &&
-                    decision.verdict !== 'admitted' &&
-                    decision.verdict === result.agentResumeRefused &&
+                    (decision.verdict === 'admitted'
+                      ? result.agentResumeUnavailable === true
+                      : decision.verdict === result.agentResumeRefused) &&
                     agentProviderSessionsEqual(
                       decision.agent,
                       decision.providerSession,
@@ -307,8 +312,8 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
           ...(resumedRecord ? { resumesSleepingRecord: true as const } : {})
         }
       )
-      // A running resumed agent's record must not remain asleep.
-      if (created.tab.ptyId && resumedRecord) {
+      // A running resumed agent's record must not remain asleep; a fresh start consumed it instead.
+      if (created.tab.ptyId && resumedRecord && !startedFresh) {
         const hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
         void markResumedRecordLive(
           (edit) => this.commitWorkspaceSessionEdit(hostId, edit),
