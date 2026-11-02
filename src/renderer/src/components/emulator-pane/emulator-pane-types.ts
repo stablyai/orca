@@ -2,10 +2,15 @@ import { SIMULATOR_DEFAULT_TAB_LABEL } from '@/lib/simulator-tab-label'
 
 export type SimulatorDeviceRow = {
   name: string
+  backend?: 'ios' | 'android'
   udid: string
   state: string
   runtime?: string
   isAvailable?: boolean
+  lastUsedAt?: string
+  availabilityError?: string
+  osVersion?: string
+  apiLevel?: string
 }
 
 export type EmulatorStreamInfo = {
