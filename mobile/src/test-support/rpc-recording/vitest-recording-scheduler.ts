@@ -24,36 +24,11 @@ type RecordingMode = 'native' | 'page'
 type KnownMainTimer = { delay: number; owner: readonly string[]; modes: readonly RecordingMode[] }
 const BOTH_MODES: readonly RecordingMode[] = ['native', 'page']
 const RECONNECT_WAIT = ['rpc-client-reconnect-wait', 'replay-on-ambiguous-delivery']
-// Traced on the admitted run (check-3949 Job 2): every first-poll reply partition leaves the reveal's one
-// 300 ms poll timer in both modes.
-const REVEAL_FIRST_POLL: Readonly<Record<string, KnownMainTimer>> = Object.fromEntries(
-  [
-    'result-absent',
-    'result-null',
-    'inner-ok-missing',
-    'inner-false-string-error',
-    'inner-false-object-error',
-    'outer-refused',
-    'outer-refused-no-message',
-    'method-not-found',
-    'transport-rejection',
-    'transport-rejection-no-message'
-  ].map((partition) => [
-    `sc-reveal-first-poll.${partition}`,
-    {
-      delay: 300,
-      owner: ['reveal-mobile-source-control-session-diff', 'waitForDelay'],
-      modes: BOTH_MODES
-    }
-  ])
-)
 const TRIAGE_RECONNECT = {
   delay: 20_000,
   owner: [...RECONNECT_WAIT, 'mobile-existing-agent-launch', 'pr-ai-triage-launch']
 }
 const KNOWN_MAIN_TIMERS: Readonly<Record<string, Readonly<Record<string, KnownMainTimer>>>> = {
-  'matrix-session.tab-reveal-session.tabs.list-1': REVEAL_FIRST_POLL,
-  'matrix-session.tab-reveal-session.tabs.activate-1': REVEAL_FIRST_POLL,
   'matrix-worktree.agent-launch-create-agent.launch-1': {
     'tw-create-retry-agent-launched.method-not-found': {
       delay: 20_000,
