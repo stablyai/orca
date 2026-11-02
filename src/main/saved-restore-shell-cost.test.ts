@@ -89,8 +89,7 @@ const FISH_31_SYNTAX = [
   /\bstring (?:collect|pad|shorten)\b/,
   /\bfish_add_path\b/,
   /\bset (?:-f|--function)\b/,
-  /\beval set argv\b/,
-  /\bhistory append\b/
+  /\beval set argv\b/
 ]
 
 describe('fish restore text', () => {

@@ -248,3 +248,17 @@ describe('bash history after a saved restore start', () => {
     )
   })
 })
+
+describe('fish history after a saved restore start', () => {
+  const fish = SHELLS.find((shell) => shell.name === 'fish')
+  it.skipIf(!fish)('records only the plain command where fish has history append', () => {
+    const { run, original } = rig(1)
+    const output = run(fish!, [fish!.start, 'builtin history search --max 5'], {
+      env: ['fish_history=orca_test']
+    })
+    expect(output.filter((line) => line.includes('__orca'))).toEqual([])
+    // Shown once by the action, then listed once by history.
+    expect(output.filter((line) => line === original)).toHaveLength(2)
+    expect(output.at(-1)).toBe(original)
+  })
+})

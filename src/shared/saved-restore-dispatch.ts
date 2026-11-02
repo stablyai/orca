@@ -144,13 +144,14 @@ set -e ${SAVED_RESTORE_ACTION_ENV}
 set -e ${SAVED_RESTORE_SCRIPT_ENV}
 set -e ${SAVED_RESTORE_ORIGINAL_ENV}`
 
-/** fish -C, after Orca's agent functions. fish 3.0 has no supported way to add a history entry,
- *  so the plain command is shown once and not recorded. */
+/** fish -C, after Orca's agent functions. The plain command is recorded with history append where
+ *  fish has it; fish before 3.1 has no supported way to add an entry, so there it is only shown. */
 export const FISH_SAVED_RESTORE_INSTALL = `function __orca_sr_prompt
   functions -e __orca_sr_prompt
   test -n "$__orca_sr_action"; or return 0
   set -l line $__orca_sr_original
   printf '%s\\n' "$line"
+  builtin history append -- "$line" 2>/dev/null
   if test -r "$__orca_sr_script.fish"; and test -r "$__orca_sr_action.fish"; and source "$__orca_sr_script.fish"; and source "$__orca_sr_action.fish"
     set -e __orca_sr_action
     set -e __orca_sr_script
