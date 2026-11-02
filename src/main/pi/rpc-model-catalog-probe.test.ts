@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import { createPiModelCatalogProbe } from './rpc-model-catalog-probe'
 import { readPiRpcSessionOptions, type PiRpcRequester } from './rpc-options'
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   applyStructuredAgentSessionModelCatalog,
   createStructuredAgentSessionOptionState
