@@ -90,6 +90,23 @@ const heldContentOf = (tab: LayoutTab): HeldTabContent & { tab: LayoutTab } => (
   tab
 })
 
+/** Which tab `setTabContent` would change, changing nothing: a switch records its chat's tab
+ *  there before the write that retires the source. */
+export function decideTabContent(
+  workspace: WorkspaceLayout | undefined,
+  command: Pick<SetTabContentCommand, 'tabId' | 'expectSource' | 'content'>
+): { retargeted: boolean; tabId?: string } {
+  const found = workspace
+    ? switchedTab(
+        workspace.tabs.map(heldContentOf),
+        command.tabId,
+        command.expectSource,
+        tabContentRef(command.content)
+      )
+    : null
+  return found ? { retargeted: true, tabId: found.tab.id } : { retargeted: false }
+}
+
 /**
  * The tab takes the switch's destination in place (see `switchedTab`); it answers which tab and
  * whether it did. A retired terminal's panes go in the same write and its id is recorded closed,

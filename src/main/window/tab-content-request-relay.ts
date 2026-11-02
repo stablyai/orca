@@ -14,15 +14,18 @@ import {
 import { addFanoutListener, addFanoutListeners } from '../event-listener-fanout'
 
 const TAB_CONTENT_REPLY_MS = 10_000
+// The window refuses at the deadline and answers in the same task it applies in, so a reply not
+// here by then plus this grace means it changed nothing.
+const TAB_CONTENT_REPLY_GRACE_MS = 2_000
 
 /**
- * Asks the window that owns the layout to change what one tab holds, and waits for its answer:
- * whether the tab now holds the content. A window that never got the request changed nothing; one
- * that didn't answer may have.
+ * Asks the window that owns the layout to change what one tab holds (or which tab it would), and
+ * waits for its answer: whether the tab now holds the content. No answer by the deadline means the
+ * window refused it; only a window that died meanwhile leaves that unknown.
  */
 export function requestTabContentFromRenderer(
   mainWindow: BrowserWindow,
-  request: Omit<WindowTabContentRequest, 'requestId'>
+  request: Omit<WindowTabContentRequest, 'requestId' | 'expiresAt'>
 ): Promise<WindowTabContentOutcome> {
   if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) {
     return Promise.reject(new TerminalNotPlacedError('renderer_unavailable'))
@@ -54,9 +57,10 @@ export function requestTabContentFromRenderer(
       )
     }
     const onGone = (): void => finish(new TerminalRevealUnconfirmedError('renderer_unavailable'))
+    const expiresAt = Date.now() + TAB_CONTENT_REPLY_MS
     const timeout = setTimeout(
-      () => finish(new TerminalRevealUnconfirmedError('Tab content change timed out')),
-      TAB_CONTENT_REPLY_MS
+      () => finish(new TerminalNotPlacedError('Tab content change timed out')),
+      TAB_CONTENT_REPLY_MS + TAB_CONTENT_REPLY_GRACE_MS
     )
     releaseListeners.push(
       addFanoutListener(ipcMain, 'ui:tabContentReply', onReply),
@@ -64,7 +68,7 @@ export function requestTabContentFromRenderer(
       addFanoutListeners(webContents, ['destroyed', 'render-process-gone'], onGone)
     )
     try {
-      webContents.send('ui:setTabContent', { ...request, requestId })
+      webContents.send('ui:setTabContent', { ...request, requestId, expiresAt })
     } catch {
       finish(new TerminalNotPlacedError('renderer_unavailable'))
     }

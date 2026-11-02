@@ -18,7 +18,8 @@ export async function setStructuredAgentSessionTabVisibility(
           visible: boolean,
           tabId?: string,
           check?: () => void,
-          capture?: (tabId: string | null) => void
+          capture?: (tabId: string | null) => void,
+          move?: boolean
         ) => Promise<void>
       }
       onSessionTabHidden?: (sessionId: string, tabId?: string) => void
@@ -29,11 +30,14 @@ export async function setStructuredAgentSessionTabVisibility(
   visible: boolean,
   tabId?: string,
   check?: () => void,
-  capture?: (tabId: string | null) => void
+  capture?: (tabId: string | null) => void,
+  move?: boolean
 ): Promise<void> {
-  await (check || capture
-    ? host.deps.store.setSessionTabVisibility(sessionId, visible, tabId, check, capture)
-    : host.deps.store.setSessionTabVisibility(sessionId, visible, tabId))
+  await (move
+    ? host.deps.store.setSessionTabVisibility(sessionId, visible, tabId, check, capture, move)
+    : check || capture
+      ? host.deps.store.setSessionTabVisibility(sessionId, visible, tabId, check, capture)
+      : host.deps.store.setSessionTabVisibility(sessionId, visible, tabId))
   if (!visible) {
     void host.restartResume.dismiss([sessionId]).catch(() => {
       host.deps.logger.warn('forgetting recovery records on chat close failed', {
@@ -114,6 +118,8 @@ export function createStructuredAgentSessionTabSurface(
         deferHiddenNotice?: boolean
         check?: () => void
         capture?: (tabId: string | null) => void
+        /** A switch: the chat's one record names `tabId`, leaving any tab it had. */
+        move?: boolean
       }
     ): Promise<void> => {
       let actualId: string | null = null
@@ -126,7 +132,8 @@ export function createStructuredAgentSessionTabSurface(
         (id) => {
           actualId = id
           options?.capture?.(id)
-        }
+        },
+        options?.move
       )
       if (!visible) {
         if (!options?.deferHiddenNotice) {

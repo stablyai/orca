@@ -221,7 +221,9 @@ export abstract class AgentSessionRecordTabs extends AgentSessionRecordPublicati
     visible: boolean,
     tabId?: string,
     check?: () => void,
-    capture?: (tabId: string | null) => void
+    capture?: (tabId: string | null) => void,
+    /** A switch: the chat's one record names `tabId`, leaving any tab it had. */
+    move = false
   ): Promise<void> {
     return this.transact((draft) => {
       check?.()
@@ -229,6 +231,15 @@ export abstract class AgentSessionRecordTabs extends AgentSessionRecordPublicati
         effectiveAgentSessionTabs(draft, this.transactions.legacySessionTabIds).tabIdFor(
           sessionId
         ) ?? null
+      if (visible && move) {
+        setAgentSessionTabVisibility(
+          draft,
+          sessionId,
+          false,
+          undefined,
+          this.transactions.legacySessionTabIds
+        )
+      }
       setAgentSessionTabVisibility(
         draft,
         sessionId,

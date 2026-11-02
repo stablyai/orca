@@ -15,15 +15,9 @@ import {
 import { AgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { nativeConversationContent } from '../../../ai-vault/structured-chat-cli-fork'
 import { prepareSwitchCliTranscript } from './structured-agent-session-switch-transcript'
-import { structuredCallerFor } from './structured-agent-session-gate'
-import {
-  prepareStructuredAgentSessionCreateForWorktree,
-  commitStructuredAgentSessionCreate
-} from './structured-agent-session-create'
 import {
   captureStructuredSwitchTerminalSource,
-  recordWorkspace,
-  resolveStructuredSwitchRetainedOwner
+  recordWorkspace
 } from './structured-agent-session-switch-source'
 import { executeStructuredSessionTerminalSwitch } from './structured-agent-session-switch-terminal-execution'
 import { stopStructuredSwitchTerminalSource } from './structured-agent-session-switch-terminal-stop'
@@ -33,8 +27,9 @@ import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { isAiVaultAgent } from '../../../../shared/ai-vault-types'
 import { placeSwitchChat } from './structured-agent-session-switch-chat-placement'
+import { createSwitchDestination } from './structured-agent-session-switch-destination'
 
-type Prepared = Awaited<ReturnType<typeof prepareStructuredSessionSwitch>>
+export type PreparedSwitch = Awaited<ReturnType<typeof prepareStructuredSessionSwitch>>
 
 /**
  * One switch, both directions: stop the exact source with proof, prepare the destination at
@@ -53,6 +48,13 @@ export async function executeStructuredSessionSwitch(
   // A source a failed switch keeps on screen is settled when this switch settles, by its own
   // result or the deadline, even while work it started still runs; a later proven stop settles then.
   let switchSettled = false
+  // Once the chat-tab record changed, the switch happened: a later failure or the deadline
+  // reports it completed and never runs a failed switch's cleanup.
+  let committedSwitch = false
+  const committed = (id: string): void => {
+    committedSwitch = true
+    sessionId = id
+  }
   let settleSource: (() => void) | undefined
   const keepSource = (settle: () => void): void => {
     if (switchSettled) {
@@ -80,10 +82,19 @@ export async function executeStructuredSessionSwitch(
             host,
             sessionId,
             deadline,
-            prepared.providerSessionId
+            prepared.providerSessionId,
+            committed
           )
         }
-        const result = await switchToChat(params, ctx, prepared, sessionId, deadline, keepSource)
+        const result = await switchToChat(
+          params,
+          ctx,
+          prepared,
+          sessionId,
+          deadline,
+          keepSource,
+          committed
+        )
         sessionId = result.sessionId
         return result
       },
@@ -110,7 +121,9 @@ export async function executeStructuredSessionSwitch(
   try {
     return await deadline.wait(operation)
   } catch (error) {
-    return structuredSessionSwitchFailure(error, sessionId)
+    return committedSwitch
+      ? { status: 'completed', sessionId }
+      : structuredSessionSwitchFailure(error, sessionId)
   } finally {
     switchSettled = true
     settleSource?.()
@@ -120,12 +133,13 @@ export async function executeStructuredSessionSwitch(
 async function switchToChat(
   params: z.infer<typeof SwitchToChatParams> | z.infer<typeof SwitchToTerminalParams>,
   ctx: RpcContext,
-  prepared: Prepared,
+  prepared: PreparedSwitch,
   sessionId: string,
   deadline: AgentSessionSwitchDeadline,
-  keepSource: (settle: () => void) => void
+  keepSource: (settle: () => void) => void,
+  committed: (sessionId: string) => void
 ): Promise<AgentSessionSwitchResult> {
-  const { host, execution, create, sourceEvidence, createIdentity } = prepared
+  const { host, execution, create, createIdentity } = prepared
   const { providerSessionId, conversation } = prepared
   deadline.check()
   let replacedBy: string | undefined
@@ -207,45 +221,10 @@ async function switchToChat(
     })
   }
   if (create) {
-    deadline.check()
-    try {
-      const preparedCreate = await prepareStructuredAgentSessionCreateForWorktree({
-        ...create,
-        runtime: ctx.runtime,
-        caller: structuredCallerFor(ctx),
-        atRest: true,
-        ensureHost: async () => host,
-        structuredAgentCliSourceEvidence: sourceEvidence,
-        // Only a stopped, captured source is the switched tab; a pane it could not capture (and a
-        // History open) keeps main's writer check, since nothing proved its CLI stopped.
-        switchedTabOnly: Boolean(close && paneKey),
-        // After a stop, the transcript read before it: the stop's record founds even if it moved.
-        pinnedAdoption:
-          adopt?.transcriptPath && stopped
-            ? { accountHome: createIdentity!.accountHome, transcriptPath: adopt.transcriptPath }
-            : undefined
-      })
-      deadline.check()
-      const created = await commitStructuredAgentSessionCreate({
-        runtime: ctx.runtime,
-        caller: structuredCallerFor(ctx),
-        prepared: { ...preparedCreate, tab: null },
-        activate: false,
-        check: deadline.check,
-        ...(adopt && stopped ? { switchStop: stopped } : {})
-      })
-      if (!created.ok) {
-        throw new AgentSessionRefusalError(created.refusal)
-      }
-      sessionId = created.value.sessionId
-    } catch (error) {
-      sessionId = resolveStructuredSwitchRetainedOwner(
-        error,
-        host,
-        createIdentity,
-        providerSessionId
-      )
-    }
+    sessionId = await createSwitchDestination(ctx, prepared, deadline, {
+      stopped,
+      capturedSource: Boolean(close && paneKey)
+    })
   }
   // The proven stop goes on the turn's own record now, so no later failure can lose it.
   if (stopped) {
@@ -287,6 +266,7 @@ async function switchToChat(
   check()
   const retargeted = await placeSwitchChat(
     ctx,
+    host,
     revealed,
     {
       terminalId: sameWorkspace ? close.source.tabId : undefined,
@@ -298,17 +278,21 @@ async function switchToChat(
         : execution.sourceTabId,
       placement: close?.placement
     },
-    check
+    check,
+    // Committed: the chat's record names the source's tab. A failure after this is no failed
+    // switch, so the stopped source is never kept as if nothing replaced it.
+    () => {
+      replacedBy = sessionId
+      committed(sessionId)
+    }
   )
   replacedBy = retargeted ? sessionId : undefined
-  deadline.check()
   if (sameWorkspace) {
     // Whole tab: its terminal left the tab in the layout owner's write. Split pane: the window
     // retired it on exit, or shows it exited once this switch settles if the stop kept it; main's
     // model closes it here.
     await close.retire(retargeted || !ORCA_LAYOUT_OWNER_IS_MAIN)
   }
-  deadline.check()
   // Publication is complete; a first new send may already own the ordinary start.
   const starting = await host.openSwitchToChat(sessionId, deadline)
   if (starting.owned) {

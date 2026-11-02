@@ -21,7 +21,9 @@ import { sourceTabGroupInView, sourceTabHoldsSelection } from './switch-source-s
  * place, pin and color and now holds the destination (the one condition, `switchedTab`). Answers
  * which tab and whether it does; false changes nothing.
  */
-export function setWindowTabContent(request: Omit<WindowTabContentRequest, 'requestId'>): {
+export function setWindowTabContent(
+  request: Omit<WindowTabContentRequest, 'requestId' | 'expiresAt'>
+): {
   retargeted: boolean
   tabId?: string
 } {
@@ -51,7 +53,7 @@ export function setWindowTabContent(request: Omit<WindowTabContentRequest, 'requ
     expectSource,
     destination
   )
-  if (!found || found.done) {
+  if (!found || found.done || request.decide) {
     return found ? { retargeted: true, tabId: found.tab.id } : { retargeted: false }
   }
   const { tab } = found.tab
@@ -186,9 +188,12 @@ export function registerWindowTabContentRequests(unsubs: (() => void)[]): void {
     return
   }
   unsubs.push(
-    window.api.ui.onSetTabContent(({ requestId, ...request }) => {
+    window.api.ui.onSetTabContent(({ requestId, expiresAt, ...request }) => {
       try {
-        window.api.ui.replyTabContent?.({ requestId, ...setWindowTabContent(request) })
+        // Main stopped waiting at the deadline and took this as refused: change nothing.
+        const outcome =
+          Date.now() >= expiresAt ? { retargeted: false } : setWindowTabContent(request)
+        window.api.ui.replyTabContent?.({ requestId, ...outcome })
       } catch (error) {
         window.api.ui.replyTabContent?.({
           requestId,

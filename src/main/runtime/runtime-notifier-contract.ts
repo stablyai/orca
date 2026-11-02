@@ -110,7 +110,7 @@ export type RuntimeNotifier = {
   /** A switch: the window's tab holding just `expectSource` now holds `content` in place.
    *  Resolves whether a tab does, and which. */
   setTabContent?(
-    request: Omit<WindowTabContentRequest, 'requestId'>
+    request: Omit<WindowTabContentRequest, 'requestId' | 'expiresAt'>
   ): Promise<WindowTabContentOutcome>
   /** Shows an agent launch's tab before its process exists; the pane attaches when it does. */
   publishAgentLaunchTab?(

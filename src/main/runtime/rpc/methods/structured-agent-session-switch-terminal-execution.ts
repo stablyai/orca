@@ -24,7 +24,8 @@ export async function executeStructuredSessionTerminalSwitch(
   host: StructuredAgentSessionHost,
   sessionId: string,
   deadline: AgentSessionSwitchDeadline,
-  providerSessionId?: string | null
+  providerSessionId?: string | null,
+  onCommitted: (sessionId: string) => void = () => {}
 ): Promise<AgentSessionSwitchResult> {
   const agent = record.provider
   if (!isTuiAgent(agent)) {
@@ -106,6 +107,8 @@ export async function executeStructuredSessionTerminalSwitch(
   )
   let placed: Awaited<ReturnType<typeof ctx.runtime.placeSwitchTerminal>>
   let dispatched = false
+  let committed = false
+  let commitFailed = false
   try {
     check()
     dispatched = true
@@ -114,21 +117,33 @@ export async function executeStructuredSessionTerminalSwitch(
       chatSessionId: sessionId,
       chatTabId: switchedTabId,
       activate: true,
-      focusWindow: agentLaunchMovesHostWindow(ctx)
+      focusWindow: agentLaunchMovesHostWindow(ctx),
+      // The commit point, before the layout owner replaces the chat: it leaves the saved chat
+      // tabs. From here the terminal is the conversation's, so no failure discards it.
+      commit: async () => {
+        await host
+          .setSessionTabVisibility(sessionId, false, undefined, { check })
+          .catch((error: unknown) => {
+            commitFailed = true
+            throw error
+          })
+        committed = true
+        onCommitted(sessionId)
+      }
     })
   } catch (error) {
     // Ended only when nothing will show it: a connected client hears this failure and keeps its
-    // chat, and the layout owner never got or refused the placement. A timed-out reveal may have
-    // placed it, and after a lost connection the client's retry adopts it.
-    if (!ctx.signal?.aborted && (!dispatched || error instanceof TerminalNotPlacedError)) {
+    // chat, and the layout owner never got, or refused, the placement (or the chat never left
+    // its tab). A timed-out reveal may have placed it, and after a lost connection the client's
+    // retry adopts it.
+    if (
+      !committed &&
+      !ctx.signal?.aborted &&
+      (!dispatched || commitFailed || error instanceof TerminalNotPlacedError)
+    ) {
       await ctx.runtime.discardSwitchTerminal(terminal)
     }
     throw error
-  }
-  // The commit point: once the layout owner put the terminal in the chat's tab, the chat leaves
-  // the saved chat tabs. A chat tab the owner kept stays listed.
-  if (placed.retargeted) {
-    await host.setSessionTabVisibility(sessionId, false)
   }
   return {
     status: 'completed',

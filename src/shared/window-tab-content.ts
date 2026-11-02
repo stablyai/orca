@@ -24,6 +24,12 @@ export type WindowTabContentRequest = {
   content: WindowTabContent
   /** The switch came from this window: focus moves into the new content if the user is on it. */
   focus: boolean
+  /** Only answer which tab would take the content, changing nothing: main records the chat's
+   *  tab before anything retires the source. */
+  decide?: boolean
+  /** Past this (ms since epoch) the window refuses, so a reply main stopped waiting for changed
+   *  nothing. */
+  expiresAt: number
 }
 
 /** Whether a tab now holds the content, and which; false changed nothing. */

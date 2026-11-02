@@ -13,13 +13,14 @@ vi.mock('@/runtime/structured-agent-session-close', () => ({
 }))
 
 const { createTabsSliceMockApi } = await import('@/store/slices/tabs-slice-test-harness')
-createTabsSliceMockApi()
+const api = createTabsSliceMockApi()
 const { createTestStore, makeTab, makeTabGroup, makeUnifiedTab, makeWorktree, seedStore } =
   await import('@/store/slices/store-test-helpers')
 const store = createTestStore()
 vi.mock('@/store', () => ({ useAppStore: store }))
 
-const { setWindowTabContent } = await import('./switched-tab-content')
+const { registerWindowTabContentRequests, setWindowTabContent } =
+  await import('./switched-tab-content')
 const { applyStructuredSessionTabSnapshots } =
   await import('@/runtime/local-structured-session-tabs-sync/snapshot-apply')
 const { resetLocalStructuredSessionVersionForTests } =
@@ -185,6 +186,39 @@ it('a chat tab takes the switch’s terminal under the terminal’s own id and k
       .map((tab) => tab.id)
   ).toEqual([SWITCHED])
   expect(group()?.tabOrder).toEqual(['before', SWITCHED, 'after'])
+})
+
+it('answers which tab would take the chat without changing it, and refuses a late request', () => {
+  seed(SWITCHED)
+  const before = tabs()
+  const request = {
+    worktreeId: WORKTREE,
+    tabId: SWITCHED,
+    expectSource: { kind: 'terminal', terminalId: SWITCHED },
+    content: { kind: 'agent-session', sessionId: 'session-decide', agent: 'codex' },
+    focus: true
+  } as const
+  expect(setWindowTabContent({ ...request, decide: true })).toEqual({
+    retargeted: true,
+    tabId: SWITCHED
+  })
+  expect(tabs()).toEqual(before)
+  // Main stopped waiting at the deadline and took the request as refused: it changes nothing.
+  let receive: ((request: object) => void) | undefined
+  const reply = vi.fn()
+  Object.assign(api, {
+    ui: {
+      onSetTabContent: (handler: typeof receive) => {
+        receive = handler
+        return () => {}
+      },
+      replyTabContent: reply
+    }
+  })
+  registerWindowTabContentRequests([])
+  receive!({ ...request, requestId: 'late', expiresAt: Date.now() - 1 })
+  expect(reply).toHaveBeenCalledExactlyOnceWith({ requestId: 'late', retargeted: false })
+  expect(tabs()).toEqual(before)
 })
 
 it('changes nothing for a tab that no longer holds just the source', () => {
