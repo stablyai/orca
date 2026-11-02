@@ -24,8 +24,7 @@ import {
 } from './claude-structured-session-publication'
 import type * as sessionState from './claude-structured-session-state'
 import { resolveClaudeAcquisitionError } from './claude-structured-session-close'
-import { withObservedProviderExit } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
-import { claudeAcquisitionStartupError } from './claude-structured-session-startup-exit'
+import { claudeStartupError, claudeStartupExit } from './claude-structured-session-startup-exit'
 import { readClaudeTranscriptEntryUuid } from '../claude-transcript-entry-uuid'
 import { claudeTurnResumePointWriter } from './claude-structured-resume-point'
 import { withAgentSessionCreatePhase } from '../../observability/agent-session-instrumentation'
@@ -35,6 +34,8 @@ import {
   createClaudeSessionJournalTranslator
 } from './journal/claude-structured-session-journal-control'
 import { isRootClaudeFrame } from '../claude-turn-opening'
+import { createClaudeStartupOutcome } from './claude-structured-startup-outcome'
+import { claudeStartupResultError } from '../claude-stream-json-exit-error'
 
 export async function acquireClaudeSession({
   input,
@@ -59,6 +60,13 @@ export async function acquireClaudeSession({
   // Preserve the CLI diagnostic when SDK cleanup reports a generic error.
   let childEnded: Error | null = null
   const initProof = createClaudeInitProof()
+  // Owned by this acquisition alone, so a late frame cannot fail a replacement's open.
+  const startup = createClaudeStartupOutcome()
+  const childFailed = (error: Error, ended?: Promise<unknown>): void => {
+    childEnded ??= error
+    void (ended ? ended.then(startup.fail) : startup.fail(error))
+    initProof.reject(error)
+  }
   const translator = createClaudeSessionJournalTranslator(
     input.events,
     String(input.fence),
@@ -68,7 +76,8 @@ export async function acquireClaudeSession({
       callbacks,
       sessionId
     },
-    () => (liveSession && sessions.get(sessionId) === liveSession ? liveSession : null)
+    () => (liveSession && sessions.get(sessionId) === liveSession ? liveSession : null),
+    (message) => startup.accept(claudeStartupResultError(message))
   )
   const contextActivity = translator?.contextActivity ?? 0
   const recordTurnEnd = claudeTurnResumePointWriter(sessionId, sessions, deps)
@@ -206,20 +215,14 @@ export async function acquireClaudeSession({
           onMessage,
           canUseTool,
           onUserDialog,
-          onFault: (error) => {
-            childEnded ??= error
-            initProof.reject(error)
-          },
+          onFault: childFailed,
           onExit: (error, exit) => {
             if (exit?.expected) {
               naming?.failed()
               callbacks.finishClose(sessionId, attempt)
               return
             }
-            // Mark in place because the fault report may retain this error object.
-            withObservedProviderExit(error)
-            childEnded ??= error
-            initProof.reject(error)
+            childFailed(...claudeStartupExit(error, attempt.connection))
             callbacks.handleExit(sessionId, attempt, error)
           }
         }
@@ -265,6 +268,7 @@ export async function acquireClaudeSession({
         proof: initProof,
         contextActivity,
         onLateRefusal: (error) => callbacks.handleExit(sessionId, attempt, error),
+        startup,
         emit,
         naming
       }
@@ -294,7 +298,7 @@ export async function acquireClaudeSession({
   } catch (error) {
     unbindReadingControl?.()
     throw await resolveClaudeAcquisitionError({
-      error: await claudeAcquisitionStartupError(error, attempt.connection),
+      error: await claudeStartupError(error, attempt.connection),
       sessionId,
       sessions,
       attempt,

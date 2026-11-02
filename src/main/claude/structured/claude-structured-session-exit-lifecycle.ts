@@ -80,7 +80,7 @@ export function observeClaudeSessionExit(
 /** Exited before the host-awaited open returned and before any turn; turns can settle without an Orca dispatch. */
 function claudeStartDied(session: ClaudeSession): boolean {
   // Initialize can answer while a resume open still waits on transcript catch-up.
-  return !session.initialization.opened && !claudeSessionHasTurnWork(session)
+  return !session.initialization.startup.opened() && !claudeSessionHasTurnWork(session)
 }
 
 export function settleClaudeUnexpectedExit(

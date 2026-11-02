@@ -2,7 +2,8 @@ import { isClaudeQueryClosed } from '../claude-agent-sdk-control-requests'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import {
   providerExitObserved,
-  startupAcquisitionRefusal
+  startupAcquisitionRefusal,
+  withObservedProviderExit
 } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import type { ClaudeStreamJsonConnection } from '../claude-stream-json-connection'
 
@@ -24,7 +25,7 @@ export async function claudeStartupAnswerAfterExit(
 }
 
 /** An exit before publication can follow initialize's answer, which only publication reads. */
-export async function claudeAcquisitionStartupError(
+export async function claudeStartupError(
   error: unknown,
   connection: ClaudeStreamJsonConnection | null
 ): Promise<unknown> {
@@ -35,4 +36,14 @@ export async function claudeAcquisitionStartupError(
   return providerExitObserved(error)
     ? claudeStartupAnswerAfterExit(connection, connection.initializationResult(), error)
     : (connection.startupFailure?.() ?? error)
+}
+
+/** An unexpected exit, and when it ends the start: a delivered initialize answer outranks it. */
+export function claudeStartupExit(
+  error: Error,
+  connection: ClaudeStreamJsonConnection | null
+): [exited: Error, ended: Promise<unknown>] {
+  // Mark in place because the fault report may retain this error object.
+  const exited = withObservedProviderExit(error)
+  return [exited, claudeStartupError(exited, connection)]
 }

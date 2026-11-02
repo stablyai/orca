@@ -117,6 +117,7 @@ export const pluginsApi = {
     }
   },
   statusBarState: () => ipcRenderer.invoke('plugins:statusBarState'),
+  editorSaveHook: (event) => ipcRenderer.invoke('plugins:editorSaveHook', event),
   onStatusBarChanged: (callback): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, overrides: PluginStatusBarOverrides) =>
       callback(overrides)

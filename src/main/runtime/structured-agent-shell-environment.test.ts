@@ -363,7 +363,7 @@ describe('createStructuredAgentEnvironmentResolvers', () => {
           served.push((await resolvers.resolveBaseEnvironment()).PATH)
           await new Promise((resolve) => setTimeout(resolve, 20))
         }
-        expect(Number(await readFile(counter, 'utf8'))).toBeGreaterThanOrEqual(3)
+        // Only run 3+ prints /profile/B; reading the counter raced the next background run's rewrite.
         expect(served.at(-1)).toBe('/profile/B')
         // The failed run never served Orca's own env in place of the profile's.
         expect(served.filter((path) => path !== '/profile/A' && path !== '/profile/B')).toEqual([])
