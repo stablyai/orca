@@ -12,7 +12,7 @@ import type {
   NativeChatSubagentGroupBlock,
   NativeChatSubagentState
 } from '../../../../../src/shared/native-chat/native-chat-types'
-import { translate } from '../../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useNow } from '../../../hooks/use-now'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { useMobileNativeChatOpenSubagent } from '../input/mobile-native-chat-open-subagent'
@@ -62,6 +62,7 @@ export function MobileNativeChatSubagentGroup({
   onToggle?: (groupId: string) => void
 }): React.JSX.Element | null {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const onOpenSubagent = useMobileNativeChatOpenSubagent()
   const header = nativeChatSubagentGroupHeader(block.agents, say)
   if (header.total === 0) {
@@ -139,7 +140,7 @@ export function MobileNativeChatSubagentGroup({
                   key={agent.id}
                   testID="native-chat-open-subagent"
                   accessibilityRole="button"
-                  accessibilityLabel={translate('chat.activity.openSubagent', 'Open {{name}}', {
+                  accessibilityLabel={t('chat.activity.openSubagent', 'Open {{name}}', {
                     name: agent.label
                   })}
                   hitSlop={6}
