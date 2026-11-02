@@ -43,6 +43,9 @@ export function TerminalPaneResumeInChatButton({
         )
       : translate('components.tab.bar.switch.toNativeChat', 'Switch to Chat UI')
   const updateRequired = source?.hostUpdateRequired === true
+  // Disabled until the agent reports its conversation, or until the host is updated: the span
+  // carries the reason to pointer and keyboard users alike.
+  const explained = updateRequired || !source
   const tooltip = updateRequired
     ? translate(
         'components.native-chat.resumeInNewChat.hostUpdateRequired',
@@ -63,14 +66,14 @@ export function TerminalPaneResumeInChatButton({
 
   return (
     <Tooltip>
-      {/* A disabled button gets no pointer events, so the span carries the update tooltip. */}
+      {/* A disabled button gets no pointer events, so the span carries the tooltip. */}
       <TooltipTrigger asChild>
-        <span className="inline-flex" tabIndex={updateRequired ? 0 : undefined}>
+        <span className="inline-flex" tabIndex={explained ? 0 : undefined}>
           <Button
             type="button"
             variant="pane-title"
             size="icon-xs"
-            aria-label={updateRequired ? `${label}. ${tooltip}` : label}
+            aria-label={explained ? `${label}. ${tooltip}` : label}
             disabled={!readiness.ready}
             aria-disabled={!readiness.ready || undefined}
             aria-busy={readiness.pending || undefined}

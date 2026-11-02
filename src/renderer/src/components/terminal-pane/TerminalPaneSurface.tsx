@@ -42,7 +42,7 @@ export function TerminalPaneSurface({
     activeAgentId,
     activePane,
     activePaneCanContinueInNewSession,
-    activePaneCanResumeInChat,
+    activePaneSwitchOffer,
     activePaneIsChatLeaf,
     activatePaneTitleInteraction,
     agentSessionContinuation,
@@ -363,7 +363,7 @@ export function TerminalPaneSurface({
         paneTransportsRef={paneTransportsRef}
         canShowTerminal={activePaneIsChatLeaf}
         onShowTerminal={handleToggleNativeChat}
-        canResumeInNewNativeChat={activePaneCanResumeInChat}
+        canResumeInNewNativeChat={activePaneSwitchOffer !== null}
         canContinueAgentSessionInNewSession={activePaneCanContinueInNewSession}
         onContinueAgentSessionInNewSession={(pane) =>
           contextMenu.runForPane(pane.id, contextMenu.onContinueAgentSessionInNewSession)

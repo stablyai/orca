@@ -17,11 +17,24 @@ import {
 } from '../native-chat/native-chat-leaf-routing'
 import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
 import type { TerminalPaneMobileController } from './use-terminal-pane-mobile-actions'
+import type { PaneProcessExit } from './pty-connection-types'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
-import { canPaneOfferResumeInNewChat } from '../tab-bar/tab-session-history-switch'
+import { resolvePaneHeaderSwitchOffer } from '../tab-bar/tab-session-history-switch'
+
+/**
+ * The agent the header's switch offers for: the live one only, since launch and title hints
+ * outlive the agent's exit. A pane a failed switch stopped keeps the control its failure message
+ * points to ("Use Switch to Chat UI to try again").
+ */
+export function paneHeaderSwitchAgent(
+  detected: string | undefined,
+  processExit: PaneProcessExit | undefined
+): string | null {
+  return detected ?? (processExit?.reason === 'switch-stopped' ? (processExit.agent ?? null) : null)
+}
 
 export function useTerminalPaneProjection(controller: TerminalPaneMobileController) {
   const {
@@ -40,6 +53,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     isVisible,
     managerRef,
     toggleNativeChatForLeaf,
+    paneProcessExitsByPaneId,
     paneTitles,
     paneTransportsRef,
     resolveTitleAgentForLeaf,
@@ -174,20 +188,25 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
   const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
   const activeLeafId = activePane?.leafId ?? null
   // One subscription for both reads keeps the pane inside its store listener budget.
-  const { menuAgentSessionId, activePaneCanResumeInChat } = useAppStore(
+  const activeLiveAgent = paneHeaderSwitchAgent(
+    activeLeafId ? tabAgentTypeByLeaf[activeLeafId] : undefined,
+    activePane ? paneProcessExitsByPaneId[activePane.id] : undefined
+  )
+  const { menuAgentSessionId, activePaneSwitchOffer } = useAppStore(
     useShallow((state) => ({
       menuAgentSessionId:
         contextMenu.open && contextMenuLeafId
           ? resolvePaneAgentSessionId(state, makePaneKey(tabId, contextMenuLeafId))
           : null,
       // Cheap stand-in for the tab menu's gate, on this pane's own conversation; the click looks it up.
-      activePaneCanResumeInChat:
-        !activePaneIsChatLeaf &&
-        activeLeafId !== null &&
-        canPaneOfferResumeInNewChat(state, {
-          worktreeId,
-          paneKey: makePaneKey(tabId, activeLeafId)
-        })
+      activePaneSwitchOffer:
+        !activePaneIsChatLeaf && activeLeafId !== null
+          ? resolvePaneHeaderSwitchOffer(state, {
+              worktreeId,
+              paneKey: makePaneKey(tabId, activeLeafId),
+              liveAgent: activeLiveAgent
+            })
+          : null
     }))
   )
   const contextMenuIsChatView = effectiveChatViewMode && contextMenuLeafId === chatLeafId
@@ -224,7 +243,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     resolveAgentForLeaf,
     activePaneCanContinueInNewSession,
     contextMenuCanContinueInNewSession,
-    activePaneCanResumeInChat,
+    activePaneSwitchOffer,
     contextMenuCanToggleChat,
     contextMenuIsChatView,
     handleContextMenuToggleNativeChat

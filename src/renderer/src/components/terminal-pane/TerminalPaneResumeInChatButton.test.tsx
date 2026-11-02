@@ -17,19 +17,19 @@ const mocks = vi.hoisted(() => {
     executionHostId: 'local',
     ptyId: 'pty-1'
   }
-  return { source, resolve: vi.fn(), run: vi.fn(), pending: false }
+  return { source, resolve: vi.fn(), run: vi.fn(), pending: false, noSource: false }
 })
 vi.mock('../tab-bar/cli-chat-resume-source', () => ({
   useCliChatResumeCapability: (_worktreeId: string, agent: string) => agent !== 'omp',
   resolveCliChatResumeSource: (_state: unknown, args: unknown) => {
     mocks.resolve(args)
-    return mocks.source
+    return mocks.noSource ? null : mocks.source
   }
 }))
 vi.mock('@/lib/conversation-surface-switch', () => ({
   runCliChatResume: mocks.run,
   useConversationSwitchReadiness: (args: { source?: CliChatResumeSource } | null) => ({
-    ready: !mocks.pending && !args?.source?.hostUpdateRequired,
+    ready: Boolean(args) && !mocks.pending && !args?.source?.hostUpdateRequired,
     pending: mocks.pending
   }),
   // The real hook only delays the busy look; pending already disables the button.
@@ -40,6 +40,7 @@ beforeEach(() => {
   mocks.source.agent = 'claude'
   delete mocks.source.hostUpdateRequired
   mocks.pending = false
+  mocks.noSource = false
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({ settings: createGlobalSettingsFixture() })
   vi.clearAllMocks()
@@ -99,5 +100,21 @@ it('keeps an older host visible but disabled, telling the user to update it', as
   expect(
     (await screen.findAllByText('Update Orca on this host to continue in Chat UI.')).length
   ).toBeGreaterThan(0)
+  expect(mocks.run).not.toHaveBeenCalled()
+})
+
+// Brennan 11-01: shown as soon as the agent runs, disabled until it reports its conversation.
+it('shows disabled while the agent has not reported its conversation yet', async () => {
+  mocks.noSource = true
+  render(
+    <TooltipProvider delayDuration={0}>
+      <TerminalPaneResumeInChatButton tabId="tab-1" worktreeId="wt-1" paneKey="tab-1:leaf" />
+    </TooltipProvider>
+  )
+  const button = screen.getByRole('button', {
+    name: 'Switch to Chat UI. No saved conversation is available in this terminal yet.'
+  })
+  expect(button.hasAttribute('disabled')).toBe(true)
+  fireEvent.click(button)
   expect(mocks.run).not.toHaveBeenCalled()
 })

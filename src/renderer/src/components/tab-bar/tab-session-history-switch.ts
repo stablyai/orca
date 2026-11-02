@@ -87,24 +87,7 @@ export function resolvePaneResumeInNewChatOffer(
   if (!conversation) {
     return null
   }
-  const hostScope = resolveAiVaultHostScopeDefaults(
-    getAiVaultResumeWorkspaceExecutionHostId(state, conversation.worktreeId),
-    conversation.worktreeId
-  ).defaultExecutionHostScope
-  // The row gate's launch-route half, so a project the chat route refuses (WSL, repair) hides it.
-  if (
-    !canHostOfferTabSessionMove(hostScope) ||
-    !CLI_CONVERSATION_ADOPTING_AGENTS[conversation.agent].some((agent) =>
-      structuredAgentSessionLaunchFeasible(state, {
-        agent,
-        workspace: {
-          kind: workspaceKindForWorktreeId(conversation.worktreeId),
-          worktreeId: conversation.worktreeId
-        },
-        settings: state.settings
-      })
-    )
-  ) {
+  if (!canChatRunAgentIn(state, conversation.worktreeId, conversation.agent)) {
     return null
   }
   if (conversation.executionHostId === LOCAL_EXECUTION_HOST_ID) {
@@ -118,6 +101,50 @@ export function resolvePaneResumeInNewChatOffer(
   return capabilities.includes(STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY)
     ? 'available'
     : 'host-update-required'
+}
+
+/** The row gate's launch-route half, so a project the chat route refuses (WSL, repair) hides it. */
+function canChatRunAgentIn(
+  state: AppState,
+  worktreeId: string,
+  agent: CliConversationRowAgent
+): boolean {
+  const hostScope = resolveAiVaultHostScopeDefaults(
+    getAiVaultResumeWorkspaceExecutionHostId(state, worktreeId),
+    worktreeId
+  ).defaultExecutionHostScope
+  return (
+    canHostOfferTabSessionMove(hostScope) &&
+    CLI_CONVERSATION_ADOPTING_AGENTS[agent].some((adopting) =>
+      structuredAgentSessionLaunchFeasible(state, {
+        agent: adopting,
+        workspace: { kind: workspaceKindForWorktreeId(worktreeId), worktreeId },
+        settings: state.settings
+      })
+    )
+  )
+}
+
+/** The pane header's switch: `conversation-unknown` while the agent hasn't reported one yet. */
+export type PaneHeaderSwitchOffer = PaneResumeInNewChatOffer | 'conversation-unknown'
+
+/**
+ * Shown while the pane runs an agent Chat UI can take over, where Chat UI can run, as Hand Off
+ * shows for any agent (Brennan 11-01); disabled until the agent's conversation is known. Keyed on
+ * the live agent alone, so a pane back at its shell offers nothing, even with a remembered
+ * conversation (Session History still reaches it).
+ */
+export function resolvePaneHeaderSwitchOffer(
+  state: AppState,
+  pane: { worktreeId: string; paneKey: string; liveAgent: string | null }
+): PaneHeaderSwitchOffer | null {
+  if (!adoptsCliConversations(pane.liveAgent)) {
+    return null
+  }
+  if (!canChatRunAgentIn(state, pane.worktreeId, pane.liveAgent)) {
+    return null
+  }
+  return resolvePaneResumeInNewChatOffer(state, pane) ?? 'conversation-unknown'
 }
 
 export function canPaneOfferResumeInNewChat(
