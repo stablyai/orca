@@ -144,7 +144,9 @@ function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
   const statusSummary = result.statuses
     .map(
       (status) =>
-        `${status.agent}: ${status.state}${status.configPath ? ` (${status.configPath})` : ''}`
+        `${status.agent}: ${status.state}${status.configPath ? ` (${status.configPath})` : ''}${
+          status.detail ? ` - ${status.detail}` : ''
+        }`
     )
     .join('\n')
   return [

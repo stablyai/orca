@@ -31,10 +31,12 @@ import {
   readManagedDshHooksConfigPath,
   removeManagedDshPatch
 } from './dsh-home-patch'
+import { describeDshProfilesMissingHookPackages } from './dsh-hook-packages'
 import {
   buildDshManagedHooksFile,
   DSH_HOOK_EVENTS,
   getDshConfigPath,
+  getDshHome,
   getDshManagedCommand,
   getDshManagedCommandMatcher,
   getDshManagedHooksPath,
@@ -153,6 +155,12 @@ function buildStatus(
     : status(configPath, 'partial', `Managed hook missing for events: ${missing.join(', ')}`, true)
 }
 
+/** Orca's files alone do not activate the row: DSH must also load the package it names. */
+function withHookPackages(installed: AgentHookInstallStatus): AgentHookInstallStatus {
+  const detail = describeDshProfilesMissingHookPackages(getDshHome())
+  return detail === null ? installed : { ...installed, state: 'partial', detail }
+}
+
 /** DSH patch-layer and env-scrub constraints: docs/reference/dsh-harness-integration.md. */
 export class DshHookService {
   async refreshManagedScripts(): Promise<void> {
@@ -166,7 +174,13 @@ export class DshHookService {
       return status(configPath, 'error', 'Could not read the DSH home patch file')
     }
     const managedHooksPath = getDshManagedHooksPath()
-    return buildStatus(patchText, managedHooksPath, readTextOrAbsent(managedHooksPath), configPath)
+    const current = buildStatus(
+      patchText,
+      managedHooksPath,
+      readTextOrAbsent(managedHooksPath),
+      configPath
+    )
+    return current.state === 'installed' ? withHookPackages(current) : current
   }
 
   install(): AgentHookInstallStatus {
