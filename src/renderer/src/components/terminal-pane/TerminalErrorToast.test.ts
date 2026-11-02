@@ -804,6 +804,20 @@ describe('TerminalErrorToast resource-limit styling', () => {
     expect(html).toContain('var(--destructive)')
   })
 
+  it.each([
+    'x'.repeat(4_500),
+    Array.from({ length: 30 }, (_, index) => `diagnostic ${index}`).join('\n')
+  ])('retains resource styling after oversized diagnostics discard the hint', (diagnostics) => {
+    let errors = appendPaneTerminalError({}, 1, `${allocationError}\n${diagnostics}`)
+    expect(terminalErrorForPane(null, errors, 1)?.error).not.toContain(PTY_ALLOCATION_HINT)
+    expect(renderPaneError(errors)).toContain('border:1px solid var(--border)')
+
+    errors = appendPaneTerminalError(errors, 1, 'Paste failed.')
+    expect(renderPaneError(errors)).toContain('var(--destructive)')
+    errors = clearPaneTerminalError(errors, 1, 'Paste failed.')
+    expect(renderPaneError(errors)).toContain('border:1px solid var(--border)')
+  })
+
   it('keeps a tab-wide error red beside a pane resource refusal', () => {
     const errors = appendPaneTerminalError({}, 1, allocationError)
     const html = renderPaneError(errors, 'Paste failed.')

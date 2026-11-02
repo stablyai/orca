@@ -11,7 +11,11 @@ function containsWholeLineRun(accumulated: string, message: string): boolean {
   )
 }
 
-export type TerminalErrorsByPaneId = Record<number, readonly string[]>
+type PaneTerminalError = {
+  message: string
+  resourceLimit: boolean
+}
+export type TerminalErrorsByPaneId = Record<number, readonly PaneTerminalError[]>
 type TerminalErrorSurface = {
   error: string
   resourceLimit: boolean
@@ -41,20 +45,25 @@ export function appendPaneTerminalError(
   paneId: number,
   message: string
 ): TerminalErrorsByPaneId {
+  const resourceLimit = isTerminalResourceLimitError(message)
   const boundedMessage = boundTerminalErrorSurface(message)
   const current = errorsByPaneId[paneId] ?? []
   if (
     current.some(
       (entry) =>
-        entry === boundedMessage ||
-        (!boundedMessage.includes('\n') && containsWholeLineRun(entry, boundedMessage))
+        entry.resourceLimit === resourceLimit &&
+        (entry.message === boundedMessage ||
+          (!boundedMessage.includes('\n') && containsWholeLineRun(entry.message, boundedMessage)))
     )
   ) {
     return errorsByPaneId
   }
   return {
     ...errorsByPaneId,
-    [paneId]: [...current.slice(-(MAX_TERMINAL_ERRORS_PER_PANE - 1)), boundedMessage]
+    [paneId]: [
+      ...current.slice(-(MAX_TERMINAL_ERRORS_PER_PANE - 1)),
+      { message: boundedMessage, resourceLimit }
+    ]
   }
 }
 
@@ -68,8 +77,13 @@ export function clearPaneTerminalError(
     return errorsByPaneId
   }
   const boundedMessage = message === undefined ? undefined : boundTerminalErrorSurface(message)
+  const resourceLimit = message === undefined ? undefined : isTerminalResourceLimitError(message)
   const kept =
-    boundedMessage === undefined ? [] : current.filter((entry) => entry !== boundedMessage)
+    boundedMessage === undefined
+      ? []
+      : current.filter(
+          (entry) => entry.message !== boundedMessage || entry.resourceLimit !== resourceLimit
+        )
   if (kept.length === current.length) {
     return errorsByPaneId
   }
@@ -89,7 +103,10 @@ export function mapPaneTerminalErrors(
   let next = errorsByPaneId
   for (const [rawPaneId, messages] of Object.entries(errorsByPaneId)) {
     const paneId = Number(rawPaneId)
-    const mapped = messages.map(mapMessage).filter((message): message is string => message !== null)
+    const mapped = messages.flatMap((entry) => {
+      const message = mapMessage(entry.message)
+      return message === null ? [] : [message === entry.message ? entry : { ...entry, message }]
+    })
     if (
       mapped.length === messages.length &&
       mapped.every((message, index) => message === messages[index])
@@ -119,8 +136,8 @@ export function terminalErrorForPane(
     !tabError &&
     messages !== undefined &&
     messages.length > 0 &&
-    messages.every(isTerminalResourceLimitError)
-  const paneError = messages?.join('\n') || null
+    messages.every((entry) => entry.resourceLimit)
+  const paneError = messages?.map((entry) => entry.message).join('\n') || null
   const error = paneError
     ? tabError
       ? appendTerminalErrorMessage(tabError, paneError)
