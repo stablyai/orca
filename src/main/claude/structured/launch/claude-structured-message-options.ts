@@ -5,6 +5,7 @@ import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-s
 import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
 import { AgentSessionOptionRejectedError } from '../../../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/structured-agent-session-input-admission'
+import { AgentSessionPreDispatchError } from '../../../native-chat/agent-session-wire/structured-agent-session-operation-settlement'
 import {
   createStructuredAgentSessionLogger,
   neverThrowingStructuredAgentSessionLogger,
@@ -101,6 +102,7 @@ export async function dispatchClaudeMessage(
         }
       )
       throw error instanceof AgentSessionOptionRejectedError ||
+        error instanceof AgentSessionPreDispatchError ||
         error instanceof StructuredAgentSessionInputNotAdmitted ||
         isAbortSignalReason(input.signal, error)
         ? error
