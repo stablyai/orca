@@ -50,7 +50,8 @@ export type CustomEditorHost = {
   currentText: () => string
   /** A new document mounted in the frame; it must announce ready again. */
   reset: () => void
-  /** Sends a disk change to a frame whose session merges it into the unsaved edits; false when
-   *  the frame cannot (not ready, binary, or no merge), so the caller keeps the banner. */
-  mergeOutsideChange: (diskText: string, ancestorText: string) => boolean
+  /** Sends a disk change to a frame whose session merges it into the unsaved edits, and resolves
+   *  with the merged text once the session's merged edit is in the buffer; null when the frame
+   *  cannot or does not within the flush deadline, so the caller keeps the banner. */
+  mergeOutsideChange: (diskText: string, ancestorText: string) => Promise<string | null>
 }

@@ -343,8 +343,9 @@ document wins, since an agent may have written the file: the draft is dropped, `
 the outside value, and `flush()` rejects with `conflict`. Pass `merge` to keep both sides. With
 `merge`, a write to the file on disk while the tab has unsaved edits also reaches the editor:
 Orca calls `merge(base, outside, mine)` with `base` the disk content those edits started from,
-the tab keeps the merged result unsaved, and its Reload/Overwrite banner is not shown; without
-`merge` that banner decides. It answers Orca's `editor.flush`
+the tab keeps the merged result unsaved, and its Reload/Overwrite banner is not shown. This
+applies to a local file open in one editor view; elsewhere, without `merge`, or when the editor
+does not answer within a second, that banner decides. It answers Orca's `editor.flush`
 itself before a save. Bytes editors pass both `decode` and `encode`. Check `'session' in
 orca.document` to support older Orca.
 

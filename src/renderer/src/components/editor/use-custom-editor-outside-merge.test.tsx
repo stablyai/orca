@@ -4,17 +4,18 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
+import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 
 vi.mock('./ExternalFileChangeBanner', () => ({
-  keepTabEditsOverExternalChange: vi.fn(),
   ExternalFileChangeBanner: () => <div>banner</div>
 }))
+vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => null }))
 
-import { keepTabEditsOverExternalChange } from './ExternalFileChangeBanner'
 import { CustomEditorExternalChangeBanner } from './CustomEditorExternalChangeBanner'
 import {
+  countCustomEditorMergingView,
   mergeOutsideChangeIntoEditor,
-  setCustomEditorMerging,
+  recordCustomEditorAncestor,
   useCustomEditorOutsideMergeStore
 } from './use-custom-editor-outside-merge'
 
@@ -23,43 +24,86 @@ Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
 const initialState = useAppStore.getState()
 const FILE_ID = '/repo/board.sketch'
 
-function seed(externalMutation: 'changed' | null): void {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the merge reads only the tab's id and externalMutation.
-  useAppStore.setState({
-    openFiles: [{ id: FILE_ID, externalMutation }]
-  } as unknown as Partial<ReturnType<typeof useAppStore.getState>>)
+function openTab(baseline: string): void {
+  useAppStore.getState().openFile({
+    filePath: FILE_ID,
+    relativePath: 'board.sketch',
+    worktreeId: 'wt-1',
+    language: 'plaintext',
+    mode: 'edit'
+  })
+  useAppStore.getState().markFileDirty(FILE_ID, true)
+  useAppStore.getState().setLastKnownDiskSignature(FILE_ID, getDiskBaselineSignature(baseline))
+  useAppStore.getState().setExternalMutation(FILE_ID, 'changed')
+}
+
+const tab = (): OpenFile | undefined =>
+  useAppStore.getState().openFiles.find((file) => file.id === FILE_ID)
+
+/** One merging view of a local tab whose edits started from `a`. */
+function ready(): void {
+  openTab('a')
+  recordCustomEditorAncestor(FILE_ID, 'a')
+  countCustomEditorMergingView(FILE_ID, 1)
 }
 
 afterEach(() => {
   useAppStore.setState(initialState, true)
-  useCustomEditorOutsideMergeStore.setState({ merging: {} })
-  vi.mocked(keepTabEditsOverExternalChange).mockClear()
+  useCustomEditorOutsideMergeStore.setState({ views: {}, busy: {}, ancestors: {} })
 })
 
 describe('custom editor outside merge', () => {
-  it('hands a disk change to an editor that merges, and keeps the merged edits', async () => {
-    seed('changed')
-    setCustomEditorMerging(FILE_ID, true)
-    const host = { mergeOutsideChange: vi.fn().mockReturnValue(true) }
-    await expect(
-      mergeOutsideChangeIntoEditor(FILE_ID, host, 'a', async () => 'a+agent')
-    ).resolves.toBe(true)
+  it('stamps exactly the disk snapshot the acknowledged merge used, and advances the ancestor', async () => {
+    ready()
+    const host = { mergeOutsideChange: vi.fn().mockResolvedValue('a+mine+agent') }
+    await expect(mergeOutsideChangeIntoEditor(FILE_ID, host, async () => 'a+agent')).resolves.toBe(
+      true
+    )
     expect(host.mergeOutsideChange).toHaveBeenCalledWith('a+agent', 'a')
-    expect(keepTabEditsOverExternalChange).toHaveBeenCalledOnce()
+    expect(tab()?.externalMutation).toBeUndefined()
+    expect(tab()?.lastKnownDiskSignature).toBe(getDiskBaselineSignature('a+agent'))
+    expect(useCustomEditorOutsideMergeStore.getState().ancestors[FILE_ID]?.text).toBe('a+agent')
   })
 
-  it('leaves the banner when the editor cannot merge', async () => {
-    seed('changed')
-    setCustomEditorMerging(FILE_ID, true)
-    const host = { mergeOutsideChange: vi.fn().mockReturnValue(false) }
-    await expect(
-      mergeOutsideChangeIntoEditor(FILE_ID, host, 'a', async () => 'a+agent')
-    ).resolves.toBe(false)
-    expect(keepTabEditsOverExternalChange).not.toHaveBeenCalled()
-    expect(useCustomEditorOutsideMergeStore.getState().merging[FILE_ID]).toBeUndefined()
+  it('puts the conflict back for a write that landed while the merge ran', async () => {
+    ready()
+    const reads = ['a+agent', 'a+agent+second']
+    const host = { mergeOutsideChange: vi.fn().mockResolvedValue('merged') }
+    await mergeOutsideChangeIntoEditor(FILE_ID, host, async () => reads.shift() ?? null)
+    // Only the first write is stamped; the second waits for its own merge.
+    expect(tab()).toMatchObject({
+      externalMutation: 'changed',
+      lastKnownDiskSignature: getDiskBaselineSignature('a+agent')
+    })
   })
 
-  it('shows the banner unless the tab’s editor merges', async () => {
+  it('keeps the conflict for the banner when the session never acknowledges', async () => {
+    ready()
+    const host = { mergeOutsideChange: vi.fn().mockResolvedValue(null) }
+    await expect(mergeOutsideChangeIntoEditor(FILE_ID, host, async () => 'a+agent')).resolves.toBe(
+      false
+    )
+    expect(tab()).toMatchObject({
+      externalMutation: 'changed',
+      lastKnownDiskSignature: getDiskBaselineSignature('a')
+    })
+    expect(useCustomEditorOutsideMergeStore.getState().busy[FILE_ID]).toBeUndefined()
+  })
+
+  it('leaves it to the banner with no known ancestor, or two editor views', async () => {
+    const host = { mergeOutsideChange: vi.fn().mockResolvedValue('x') }
+    openTab('a')
+    countCustomEditorMergingView(FILE_ID, 1)
+    // The recorded ancestor is not the disk the tab's baseline names.
+    recordCustomEditorAncestor(FILE_ID, 'older')
+    await expect(mergeOutsideChangeIntoEditor(FILE_ID, host, async () => 'b')).resolves.toBe(false)
+    recordCustomEditorAncestor(FILE_ID, 'a')
+    countCustomEditorMergingView(FILE_ID, 1)
+    await expect(mergeOutsideChangeIntoEditor(FILE_ID, host, async () => 'b')).resolves.toBe(false)
+    expect(host.mergeOutsideChange).not.toHaveBeenCalled()
+  })
+
+  it('hides the banner only while a merge runs', async () => {
     const container = document.createElement('div')
     const root = createRoot(container)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the banner gate reads only the tab's id.
@@ -70,7 +114,7 @@ describe('custom editor outside merge', () => {
       )
     )
     expect(container.textContent).toBe('banner')
-    await act(async () => setCustomEditorMerging(FILE_ID, true))
+    await act(async () => useCustomEditorOutsideMergeStore.setState({ busy: { [FILE_ID]: true } }))
     expect(container.textContent).toBe('')
     await act(async () => root.unmount())
   })

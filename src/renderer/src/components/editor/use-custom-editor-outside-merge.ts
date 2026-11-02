@@ -5,34 +5,82 @@ import { editorTabFileAccess } from '@/lib/local-file-access'
 import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
 import { useAppStore } from '@/store'
-import { keepTabEditsOverExternalChange } from './ExternalFileChangeBanner'
+import type { OpenFile } from '@/store/slices/editor'
+import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
+import { editorModelSiblingTabs, setEditorDiskBaseline } from './editor-save-disk-precondition'
 import type { CustomEditorHost } from './plugin-custom-editor-host-types'
 
 /**
- * Tabs whose live custom editor merges outside changes (its document session has `merge`). For
- * them a disk write under unsaved edits goes to the editor to merge, and Orca shows no banner.
+ * A write to the file on disk while a custom editor tab holds unsaved edits, merged by the editor
+ * instead of Orca's banner. Deliberately narrow, the banner on any doubt: one mounted editor view
+ * of a local file with no other tab on its buffer, a session that merges, a known ancestor, and an
+ * acknowledged merge. Only then is the disk snapshot that merge used stamped as the baseline.
  */
-export const useCustomEditorOutsideMergeStore = create<{ merging: Record<string, true> }>()(() => ({
-  merging: {}
-}))
 
-export function setCustomEditorMerging(fileId: string, merging: boolean): void {
-  useCustomEditorOutsideMergeStore.setState(({ merging: current }) => {
-    if (Boolean(current[fileId]) === merging) {
-      return { merging: current }
-    }
-    const next = { ...current }
-    if (merging) {
-      next[fileId] = true
-    } else {
-      delete next[fileId]
-    }
-    return { merging: next }
-  })
+type OutsideMergeState = {
+  /** Mounted merging editor views per tab; the merge runs only with exactly one. */
+  views: Record<string, number>
+  /** A merge in flight per tab: the banner stays hidden until it settles. */
+  busy: Record<string, true>
+  /** The disk text the tab's unsaved edits started from: recorded while the tab is clean and
+   *  after each acknowledged merge, with its signature to match the tab's disk baseline. */
+  ancestors: Record<string, { text: string; signature: string }>
 }
 
-export function useCustomEditorMerges(fileId: string): boolean {
-  return useCustomEditorOutsideMergeStore((state) => state.merging[fileId] === true)
+export const useCustomEditorOutsideMergeStore = create<OutsideMergeState>()(() => ({
+  views: {},
+  busy: {},
+  ancestors: {}
+}))
+
+const patch = <K extends keyof OutsideMergeState>(
+  key: K,
+  fileId: string,
+  value: OutsideMergeState[K][string] | undefined
+): void =>
+  useCustomEditorOutsideMergeStore.setState((state) => {
+    const next = { ...state[key] }
+    if (value === undefined) {
+      delete next[fileId]
+    } else {
+      next[fileId] = value
+    }
+    return { [key]: next }
+  })
+
+/** A merging editor view of the tab mounted (+1) or went away (-1). */
+export function countCustomEditorMergingView(fileId: string, delta: 1 | -1): void {
+  const count = (useCustomEditorOutsideMergeStore.getState().views[fileId] ?? 0) + delta
+  patch('views', fileId, count > 0 ? count : undefined)
+}
+
+export function recordCustomEditorAncestor(fileId: string, text: string): void {
+  patch('ancestors', fileId, { text, signature: getDiskBaselineSignature(text) })
+}
+
+/** True while the editor is taking a disk change itself, so Orca's banner stays hidden. */
+export function useCustomEditorMerging(fileId: string): boolean {
+  return useCustomEditorOutsideMergeStore((state) => state.busy[fileId] === true)
+}
+
+/** The tab may merge: one merging view, a local file, no other tab sharing its buffer, and an
+ *  ancestor that is exactly the disk the tab's baseline names. */
+function mergeAncestor(file: OpenFile): string | null {
+  const state = useAppStore.getState()
+  const merge = useCustomEditorOutsideMergeStore.getState()
+  const ancestor = merge.ancestors[file.id]
+  const local =
+    !file.runtimeEnvironmentId &&
+    !file.externalSshTargetId &&
+    !getConnectionIdForFile(file.worktreeId, file.filePath)
+  const alone = editorModelSiblingTabs(state, file).length === 1
+  return merge.views[file.id] === 1 &&
+    local &&
+    alone &&
+    ancestor &&
+    file.lastKnownDiskSignature === ancestor.signature
+    ? ancestor.text
+    : null
 }
 
 /** Reads the file as it is on disk now; null when it cannot be read as text. */
@@ -50,64 +98,80 @@ async function readDiskText(fileId: string): Promise<string | null> {
     filePath: file.filePath,
     relativePath: file.relativePath,
     worktreeId: file.worktreeId,
-    connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined,
-    expectedExternalSshTargetId: file.externalSshTargetId,
-    access: editorTabFileAccess(state, file),
-    terminalArtifactGrantId: file.terminalArtifactGrantId
+    access: editorTabFileAccess(state, file)
   })
   return result.isBinary ? null : result.content
 }
 
+const liveTab = (fileId: string): OpenFile | undefined =>
+  useAppStore.getState().openFiles.find((openFile) => openFile.id === fileId)
+
 /**
- * A disk write under the tab's unsaved edits: send the new disk text, with the text those edits
- * started from, to an editor that merges, then keep the tab's (now merged) edits as Orca's
- * "Keep My Edits" does. Anything else falls back to the banner.
+ * One merge of the disk as it is now. On acknowledgement, stamps that exact disk snapshot as the
+ * baseline and its text as the new ancestor; if the disk moved on meanwhile, marks the tab changed
+ * again so the next round merges the newer write. Anything else leaves the conflict for the banner.
  */
 export async function mergeOutsideChangeIntoEditor(
   fileId: string,
   host: Pick<CustomEditorHost, 'mergeOutsideChange'>,
-  /** The disk text the tab's unsaved edits started from (the content it loaded). */
-  ancestor: string,
   readDisk: (fileId: string) => Promise<string | null> = readDiskText
 ): Promise<boolean> {
-  const disk = await readDisk(fileId).catch(() => null)
-  const file = useAppStore.getState().openFiles.find((openFile) => openFile.id === fileId)
-  if (disk === null || file?.externalMutation !== 'changed') {
+  const file = liveTab(fileId)
+  const ancestor = file ? mergeAncestor(file) : null
+  if (!file || ancestor === null || file.externalMutation !== 'changed') {
     return false
   }
-  if (!host.mergeOutsideChange(disk, ancestor)) {
-    setCustomEditorMerging(fileId, false)
-    return false
+  patch('busy', fileId, true)
+  try {
+    const disk = await readDisk(fileId).catch(() => null)
+    const merged = disk === null ? null : await host.mergeOutsideChange(disk, ancestor)
+    if (disk === null || merged === null || liveTab(fileId)?.externalMutation !== 'changed') {
+      return false
+    }
+    const state = useAppStore.getState()
+    setEditorDiskBaseline(state, fileId, getDiskBaselineSignature(disk))
+    state.setExternalMutation(fileId, null)
+    recordCustomEditorAncestor(fileId, disk)
+    // A write that landed after the snapshot is not merged yet: put the conflict back for it.
+    const now = await readDisk(fileId).catch(() => null)
+    if (now !== disk) {
+      useAppStore.getState().setExternalMutation(fileId, 'changed')
+    }
+    return true
+  } finally {
+    patch('busy', fileId, undefined)
   }
-  keepTabEditsOverExternalChange(file)
-  return true
 }
 
-/** Runs the merge each time the tab's file changes on disk under unsaved edits. */
+/** Keeps the ancestor current and runs a merge each time the tab's file changes on disk. */
 export function useCustomEditorOutsideMerge(
   fileId: string | undefined,
   host: Pick<CustomEditorHost, 'mergeOutsideChange'>,
-  ancestor: string | undefined
+  /** The tab's buffer; recorded as the ancestor whenever the tab is clean (disk equals it). */
+  content: string
 ): void {
-  const merges = useCustomEditorMerges(fileId ?? '')
+  const contentRef = useRef(content)
+  useLayoutEffect(() => {
+    contentRef.current = content
+  })
+  const clean = useAppStore((state) =>
+    fileId === undefined
+      ? false
+      : state.openFiles.find((openFile) => openFile.id === fileId)?.isDirty === false
+  )
   const changed = useAppStore(
     (state) =>
       fileId !== undefined &&
       state.openFiles.find((openFile) => openFile.id === fileId)?.externalMutation === 'changed'
   )
-  // The ancestor is read when a change lands; a later load must not rerun the merge.
-  const ancestorRef = useRef(ancestor)
-  useLayoutEffect(() => {
-    ancestorRef.current = ancestor
-  })
   useEffect(() => {
-    const base = ancestorRef.current
-    if (fileId !== undefined && base !== undefined && merges && changed) {
-      void mergeOutsideChangeIntoEditor(fileId, host, base).then((merged) => {
-        if (!merged) {
-          setCustomEditorMerging(fileId, false)
-        }
-      })
+    if (fileId !== undefined && clean) {
+      recordCustomEditorAncestor(fileId, contentRef.current)
     }
-  }, [fileId, merges, changed, host])
+  }, [fileId, clean, content])
+  useEffect(() => {
+    if (fileId !== undefined && changed) {
+      void mergeOutsideChangeIntoEditor(fileId, host)
+    }
+  }, [fileId, changed, host])
 }

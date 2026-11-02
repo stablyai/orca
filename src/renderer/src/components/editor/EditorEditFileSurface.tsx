@@ -296,7 +296,6 @@ export function EditorEditFileSurface({
       onContentChange={handleContentChange}
       onSave={handleSave}
       onDirtyHint={handleDirtyStateHint}
-      diskContent={fileContent.content}
     />
   ) : isMarkdown ? (
     <EditorMarkdownFileSurface

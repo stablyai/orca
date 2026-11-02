@@ -27,6 +27,7 @@ import {
 } from '../../../../shared/plugins/frames/plugin-panel-message-budget'
 
 import { handleCustomEditorFrameEvent } from './plugin-custom-editor-frame-events'
+import { createPendingOutsideMerge } from './plugin-custom-editor-outside-merge'
 import type {
   CustomEditorBinaryDocument,
   CustomEditorEditRefusal,
@@ -62,6 +63,7 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
   let heldTimer: ReturnType<typeof setTimeout> | null = null
   let lostEdit = false
   let mergesOutside = false
+  const outsideMerge = createPendingOutsideMerge()
   // An oversized edit came after the held one, so applying the held one leaves it still lost.
   let lostAfterHeld = false
   let unapplied: CustomEditorUnappliedEdit = null
@@ -152,7 +154,8 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
       options.onBytesEdit?.(frameBinary)
       return null
     }
-    if (content.text !== frameText) {
+    // A merge's result always reaches the buffer, even when it equals the disk text just sent.
+    if (outsideMerge.accept(baseVersion, content.text) || content.text !== frameText) {
       frameText = content.text
       options.onEdit(content.text)
     }
@@ -247,7 +250,9 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
         pushDocument(true)
       },
       onEvent(event, context) {
-        mergesOutside ||= handleCustomEditorFrameEvent(event, context, options)
+        // Every event is handled; announcing merge support only adds the capability.
+        const merges = handleCustomEditorFrameEvent(event, context, options)
+        mergesOutside = mergesOutside || merges
       },
       onResponse(response) {
         pendingFlushes.get(response.id)?.(response.error === undefined)
@@ -259,15 +264,13 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
     },
     mergeOutsideChange(diskText, ancestorText) {
       if (!ready || !mergesOutside || options.getBinaryDocument) {
-        return false
+        return Promise.resolve(null)
       }
-      const { readOnly } = options.getDocument()
-      // The frame now holds the disk text until its merged edit arrives.
-      frameText = diskText
       version += 1
       const ancestor = { kind: 'text' as const, text: ancestorText }
+      const { readOnly } = options.getDocument()
       postDocument({ version, readOnly, content: { kind: 'text', text: diskText }, ancestor })
-      return true
+      return outsideMerge.begin(version, flushTimeoutMs)
     },
     flush() {
       if (!ready) {
@@ -305,6 +308,7 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
       }
       ready = false
       mergesOutside = false
+      outsideMerge.cancel()
       frameText = null
       frameReadOnly = null
       frameBinary = null

@@ -18,7 +18,7 @@ import { usePluginFrameHost } from '../right-sidebar/use-plugin-frame-host'
 import { usePluginFrameEntry } from '../right-sidebar/use-plugin-frame-entry'
 import { editorShortcutMatches } from './editor-shortcuts'
 import {
-  setCustomEditorMerging,
+  countCustomEditorMergingView,
   useCustomEditorOutsideMerge
 } from './use-custom-editor-outside-merge'
 import { registerEditorFrameFlush } from './editor-pending-flush'
@@ -47,8 +47,6 @@ type PluginCustomEditorFrameProps = {
   /** Set for a binary editor: its bytes once loaded (null before). Text props are then unused. */
   binaryDocument?: CustomEditorBinaryDocument | null
   onBytesChange?: (document: CustomEditorBinaryDocument) => void
-  /** The file as last loaded from disk: what unsaved edits started from, for outside merges. */
-  diskContent?: string
 }
 
 function FrameMessage({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -69,8 +67,7 @@ export default function PluginCustomEditorFrame({
   onSave,
   onDirtyHint,
   binaryDocument,
-  onBytesChange,
-  diskContent
+  onBytesChange
 }: PluginCustomEditorFrameProps): React.JSX.Element {
   const [refusal, setRefusal] = useState<CustomEditorEditRefusal | null>(null)
   const [saveBlocked, setSaveBlocked] = useState(false)
@@ -112,6 +109,7 @@ export default function PluginCustomEditorFrame({
   } = usePluginFrameEntry('editor', editor.pluginKey, editor.id)
   const progressRef = useRef<(step: 'delivered' | 'subscribed') => void>(() => {})
   const mergingRef = useRef<(merging: boolean) => void>(() => {})
+  const countedRef = useRef(false)
 
   const host = useMemo(() => {
     const created = createCustomEditorHost({
@@ -176,10 +174,15 @@ export default function PluginCustomEditorFrame({
   )
   useLayoutEffect(() => {
     progressRef.current = reportProgress
-    mergingRef.current = (merging) =>
-      fileId === undefined || isBinary ? undefined : setCustomEditorMerging(fileId, merging)
+    // Counts this view once while its session merges; text editors only.
+    mergingRef.current = (merging) => {
+      if (fileId !== undefined && !isBinary && merging !== countedRef.current) {
+        countedRef.current = merging
+        countCustomEditorMergingView(fileId, merging ? 1 : -1)
+      }
+    }
   })
-  useCustomEditorOutsideMerge(fileId, host, diskContent)
+  useCustomEditorOutsideMerge(isBinary ? undefined : fileId, host, content)
 
   const { onFrameLoad } = usePluginFrameHost({
     surface: 'editor',
