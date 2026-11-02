@@ -36,6 +36,8 @@ export function getManagedScript(
     skipWhenDevinImportsClaude?: boolean
     skipWhenGrokImportsClaude?: boolean
     skipWhenCursorImportsClaude?: boolean
+    // Only Claude Code itself reads PreToolUse decisions; compatible CLIs keep print-then-post.
+    decidesPreToolUse?: boolean
   } = {}
 ): string {
   const source = options.source ?? 'claude'
@@ -67,7 +69,7 @@ export function getManagedScript(
     ].join('\r\n')
   }
 
-  const decides = source === 'claude'
+  const decides = options.decidesPreToolUse === true
   return [
     '#!/bin/sh',
     // Permission hooks fail closed on empty stdout, including skip paths.

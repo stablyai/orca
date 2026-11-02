@@ -29,16 +29,16 @@ export function buildPosixClaudeDecisionModeLines(): string[] {
   ]
 }
 
-/** Captures the post's reply; failures spool as before and fall back to `{}`. */
+/** Captures the post's reply; a failed curl's partial body is dropped, spooled and answered `{}`. */
 export function wrapPosixClaudeDecisionPost(postLines: readonly string[]): string[] {
   return [
     ...postLines.map((line, index) =>
       index === 0
         ? `orca_hook_reply=$(${line}`
         : index === postLines.length - 1
-          ? `${line} 2>/dev/null) || spool_hook_event`
+          ? `${line} 2>/dev/null) || { orca_hook_reply=; spool_hook_event; }`
           : line
     ),
-    'case "$orca_hook_reply" in \'{"hookSpecificOutput":{"hookEventName":"PreToolUse"\'*) orca_hook_answer=$orca_hook_reply ;; esac'
+    'case "$orca_hook_reply" in \'{"hookSpecificOutput":{"hookEventName":"PreToolUse"\'*\'}}\') orca_hook_answer=$orca_hook_reply ;; esac'
   ]
 }

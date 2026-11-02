@@ -5,9 +5,7 @@ import type { PluginHookChainOutcome } from '../../shared/plugins/workers/plugin
 import { setPluginHookRunner } from '../plugins/hooks/plugin-hook-dispatch'
 import {
   answerAgentToolPluginHooks,
-  respondAfterAgentToolPluginHooks,
-  readAgentToolCall,
-  setAgentToolHookTerminalResolver
+  respondAfterAgentToolPluginHooks
 } from './agent-tool-plugin-hooks'
 
 const DECIDES = { 'x-orca-hook-decision': 'claude-pre-tool-use-v1' }
@@ -18,6 +16,12 @@ function installRunner(
   const run = vi.fn(async (_event: PluginHookName, payload: unknown) => decide(payload))
   setPluginHookRunner({ wants: (event) => event.startsWith('agent.tool.'), run })
   return run
+}
+
+function fakeResponse() {
+  const res = { writeHead: vi.fn(), end: vi.fn(), socket: { setTimeout: vi.fn() } }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the responder calls only writeHead, end and socket.setTimeout.
+  return { ...res, response: res as unknown as ServerResponse }
 }
 
 function post(payload: Record<string, unknown>) {
@@ -31,46 +35,17 @@ const PRE = post({
   tool_use_id: 'toolu_1'
 })
 
+const OWNER = { paneKey: 'tab-1:0', worktreeId: 'repo::/w', hookEventName: 'PreToolUse' }
+
 afterEach(() => {
   setPluginHookRunner(null)
-  setAgentToolHookTerminalResolver(null)
   vi.useRealTimers()
-})
-
-describe('readAgentToolCall', () => {
-  it('reads tool calls across agents’ field names and names the terminal', () => {
-    setAgentToolHookTerminalResolver((paneKey) => (paneKey === 'tab-1:0' ? 'term_1' : null))
-    expect(readAgentToolCall('claude', PRE)).toEqual({
-      phase: 'before',
-      payload: {
-        agent: 'claude',
-        workspaceId: 'repo::/w',
-        terminalId: 'term_1',
-        tool: 'Bash',
-        input: { command: 'rm -rf /' },
-        callId: 'toolu_1'
-      }
-    })
-    expect(
-      readAgentToolCall(
-        'gemini',
-        post({
-          hook_event_name: 'AfterTool',
-          tool_name: 'shell',
-          tool_input: 'ls',
-          tool_response: 'ok'
-        })
-      )
-    ).toMatchObject({ phase: 'after', payload: { agent: 'gemini', input: 'ls', output: 'ok' } })
-    expect(readAgentToolCall('claude', post({ hook_event_name: 'Stop' }))).toBeNull()
-    expect(readAgentToolCall('claude', { paneKey: 'p', payload: '{not json' })).toBeNull()
-  })
 })
 
 describe('answerAgentToolPluginHooks', () => {
   it('answers Claude Code with a deny, naming the plugin', async () => {
     installRunner(() => ({ kind: 'deny', pluginKey: 'acme.guard', reason: 'no rm' }))
-    const answer = await answerAgentToolPluginHooks('claude', PRE, DECIDES)
+    const answer = await answerAgentToolPluginHooks('claude', PRE, DECIDES, OWNER)
     expect(JSON.parse(answer ?? 'null')).toEqual({
       hookSpecificOutput: {
         hookEventName: 'PreToolUse',
@@ -86,23 +61,24 @@ describe('answerAgentToolPluginHooks', () => {
       payload: { ...Object(payload), input: { command: 'ls' } }
     }))
     expect(
-      JSON.parse((await answerAgentToolPluginHooks('claude', PRE, DECIDES)) ?? 'null')
+      JSON.parse((await answerAgentToolPluginHooks('claude', PRE, DECIDES, OWNER)) ?? 'null')
     ).toEqual({
       hookSpecificOutput: { hookEventName: 'PreToolUse', updatedInput: { command: 'ls' } }
     })
     installRunner((payload) => ({ kind: 'continue', payload }))
-    await expect(answerAgentToolPluginHooks('claude', PRE, DECIDES)).resolves.toBeNull()
+    await expect(answerAgentToolPluginHooks('claude', PRE, DECIDES, OWNER)).resolves.toBeNull()
   })
 
   it('only observes agents and scripts that cannot take an answer, and after-calls', async () => {
     const run = installRunner(() => ({ kind: 'deny', pluginKey: 'acme.guard', reason: 'x' }))
-    await expect(answerAgentToolPluginHooks('codex', PRE, DECIDES)).resolves.toBeNull()
-    await expect(answerAgentToolPluginHooks('claude', PRE, {})).resolves.toBeNull()
+    await expect(answerAgentToolPluginHooks('codex', PRE, DECIDES, OWNER)).resolves.toBeNull()
+    await expect(answerAgentToolPluginHooks('claude', PRE, {}, OWNER)).resolves.toBeNull()
     await expect(
       answerAgentToolPluginHooks(
         'claude',
         post({ hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: {} }),
-        DECIDES
+        DECIDES,
+        { ...OWNER, hookEventName: 'PostToolUse' }
       )
     ).resolves.toBeNull()
     expect(run.mock.calls.map(([event]) => event)).toEqual([
@@ -115,25 +91,32 @@ describe('answerAgentToolPluginHooks', () => {
   it('fails open when the plugins take longer than the script waits', async () => {
     vi.useFakeTimers()
     installRunner(() => new Promise(() => undefined))
-    const answer = answerAgentToolPluginHooks('claude', PRE, DECIDES)
+    const answer = answerAgentToolPluginHooks('claude', PRE, DECIDES, OWNER)
     await vi.advanceTimersByTimeAsync(6_000)
     await expect(answer).resolves.toBeNull()
   })
 
   it('adds nothing when no plugin lists a tool hook', async () => {
-    await expect(answerAgentToolPluginHooks('claude', PRE, DECIDES)).resolves.toBeNull()
+    await expect(answerAgentToolPluginHooks('claude', PRE, DECIDES, OWNER)).resolves.toBeNull()
   })
 
   it('answers 204 synchronously, without running a chain, when no plugin lists a tool hook', () => {
     const run = vi.fn()
     setPluginHookRunner({ wants: () => false, run })
-    const res = { writeHead: vi.fn(), end: vi.fn(), socket: { setTimeout: vi.fn() } }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the responder calls only writeHead, end and socket.setTimeout.
-    void respondAfterAgentToolPluginHooks(res as unknown as ServerResponse, 'claude', PRE, DECIDES)
+    const res = fakeResponse()
+    void respondAfterAgentToolPluginHooks(res.response, 'claude', PRE, DECIDES, OWNER)
     // Checked before any await: the reply is already written.
     expect(res.writeHead).toHaveBeenCalledWith(204)
     expect(res.end).toHaveBeenCalledOnce()
     expect(res.socket.setTimeout).not.toHaveBeenCalled()
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('skips plugins when status ingestion rejected or fenced the post', () => {
+    const run = installRunner(() => ({ kind: 'deny', pluginKey: 'acme.guard', reason: 'x' }))
+    const res = fakeResponse()
+    void respondAfterAgentToolPluginHooks(res.response, 'claude', PRE, DECIDES, null)
+    expect(res.writeHead).toHaveBeenCalledWith(204)
     expect(run).not.toHaveBeenCalled()
   })
 })

@@ -30,9 +30,13 @@ async function hookServer(reply: (seen: Seen[number]) => string | null) {
   return { port: typeof address === 'object' && address ? address.port : 0, seen }
 }
 
-function runHook(stdin: string, env: Record<string, string>): Promise<string> {
+function runHook(
+  stdin: string,
+  env: Record<string, string>,
+  decidesPreToolUse = true
+): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn('sh', ['-c', getManagedScript('posix')], {
+    const child = spawn('sh', ['-c', getManagedScript('posix', { decidesPreToolUse })], {
       env: {
         PATH: process.env.PATH ?? '',
         ORCA_AGENT_HOOK_TOKEN: 'token',
@@ -85,6 +89,28 @@ describe.skipIf(process.platform === 'win32')(
     it('never prints a reply that is not a PreToolUse decision', async () => {
       const { port } = await hookServer(() => '{"error":"nope"}')
       expect(await runHook(PRE, { ORCA_AGENT_HOOK_PORT: String(port) })).toBe('{}\n')
+    })
+
+    it('prints {} when curl fails after part of a decision arrived', async () => {
+      const server = createServer((req, res) => {
+        req.resume()
+        req.on('end', () => {
+          res.writeHead(200, { 'content-length': String(DENY.length) })
+          res.write(DENY.slice(0, 60), () => res.destroy())
+        })
+      })
+      servers.push(server)
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+      const address = server.address()
+      const port = typeof address === 'object' && address ? address.port : 0
+      expect(await runHook(PRE, { ORCA_AGENT_HOOK_PORT: String(port) })).toBe('{}\n')
+    })
+
+    it('keeps print-then-post for CLIs reusing Claude’s script, such as OpenClaude', async () => {
+      const { port, seen } = await hookServer(() => DENY)
+      expect(await runHook(PRE, { ORCA_AGENT_HOOK_PORT: String(port) }, false)).toBe('{}\n')
+      expect(seen).toHaveLength(1)
+      expect(seen[0]?.headers['x-orca-hook-decision']).toBeUndefined()
     })
   }
 )

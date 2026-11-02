@@ -1,18 +1,13 @@
 import type { IncomingHttpHeaders, ServerResponse } from 'node:http'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
-import { normalizeHookEventName } from '../../shared/agent-hook-listener/provider-event-names'
-import { parseAgentHookJson } from '../../shared/agent-hook-listener/request-body'
-import type { z } from 'zod'
-import {
-  PLUGIN_HOOK_SPECS,
-  type agentToolAfterHookPayloadSchema
-} from '../../shared/plugins/events/plugin-hook-payloads'
+import { PLUGIN_HOOK_SPECS } from '../../shared/plugins/events/plugin-hook-payloads'
 import {
   notifyPluginHook,
   PluginHookDeniedError,
   pluginHookWanted,
   runPluginHook
 } from '../plugins/hooks/plugin-hook-dispatch'
+import { readAgentToolCall, type AgentToolCallOwner } from './agent-tool-call-reader'
 
 /** Sent by hook scripts that print Orca's answer as Claude Code's PreToolUse decision. */
 export const AGENT_TOOL_DECISION_HEADER = 'x-orca-hook-decision'
@@ -20,97 +15,10 @@ export const CLAUDE_PRE_TOOL_USE_DECISION = 'claude-pre-tool-use-v1'
 // Why 6 s: the script waits 8 s at most, so Orca answers (or passes) before it gives up.
 const DECISION_BUDGET_MS = 6_000
 
-const BEFORE_EVENTS = new Set([
-  'pre_tool_use',
-  'before_tool',
-  'pre_tool',
-  'pre_tool_call',
-  'before_shell_execution',
-  'before_mcp_execution'
-])
-const AFTER_EVENTS = new Set([
-  'post_tool_use',
-  'post_tool_use_failure',
-  'after_tool',
-  'post_tool',
-  'post_tool_call'
-])
-
-let terminalForPaneKey: ((paneKey: string) => string | null) | null = null
-
-/** Lets tool events name the terminal (`terminal.sendText`'s id) the agent runs in. */
-export function setAgentToolHookTerminalResolver(
-  resolve: ((paneKey: string) => string | null) | null
-): void {
-  terminalForPaneKey = resolve
-}
-
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? Object.fromEntries(Object.entries(value))
     : null
-}
-
-function firstString(source: Record<string, unknown>, keys: readonly string[]): string | undefined {
-  for (const key of keys) {
-    const value = source[key]
-    if (typeof value === 'string' && value.trim().length > 0) {
-      return value.trim()
-    }
-  }
-  return undefined
-}
-
-function firstValue(source: Record<string, unknown>, keys: readonly string[]): unknown {
-  return keys.map((key) => source[key]).find((value) => value !== undefined)
-}
-
-type AgentToolCall = {
-  phase: 'before' | 'after'
-  payload: z.output<typeof agentToolAfterHookPayloadSchema>
-}
-
-/** The tool call a hook post reports, across agents' field names; null for anything else. */
-export function readAgentToolCall(source: AgentHookSource, body: unknown): AgentToolCall | null {
-  const envelope = record(body)
-  const rawPayload = envelope?.payload
-  let hook: Record<string, unknown> | null = null
-  try {
-    hook = record(typeof rawPayload === 'string' ? parseAgentHookJson(rawPayload) : rawPayload)
-  } catch {
-    return null
-  }
-  if (!envelope || !hook) {
-    return null
-  }
-  const eventName = normalizeHookEventName(
-    firstString(hook, ['hook_event_name', 'hookEventName', 'hook_type', 'event'])
-  )
-  const phase = BEFORE_EVENTS.has(eventName)
-    ? 'before'
-    : AFTER_EVENTS.has(eventName)
-      ? 'after'
-      : null
-  const tool = firstString(hook, ['tool_name', 'toolName', 'tool'])
-  if (!phase || !tool) {
-    return null
-  }
-  const paneKey = firstString(envelope, ['paneKey'])
-  const terminalId = paneKey ? (terminalForPaneKey?.(paneKey) ?? undefined) : undefined
-  const callId = firstString(hook, ['tool_use_id', 'toolUseId', 'tool_call_id', 'call_id'])
-  const output = firstValue(hook, ['tool_response', 'toolResponse', 'tool_output', 'output'])
-  return {
-    phase,
-    payload: {
-      agent: source,
-      workspaceId: firstString(envelope, ['worktreeId']) ?? null,
-      ...(terminalId ? { terminalId } : {}),
-      tool: tool.slice(0, 256),
-      input: firstValue(hook, ['tool_input', 'toolInput', 'input', 'args']) ?? null,
-      ...(callId ? { callId: callId.slice(0, 256) } : {}),
-      ...(phase === 'after' && output !== undefined ? { output } : {})
-    }
-  }
 }
 
 function claudePreToolUse(fields: Record<string, unknown>): string {
@@ -125,13 +33,14 @@ function claudePreToolUse(fields: Record<string, unknown>): string {
 export async function answerAgentToolPluginHooks(
   source: AgentHookSource,
   body: unknown,
-  headers: IncomingHttpHeaders
+  headers: IncomingHttpHeaders,
+  owner: AgentToolCallOwner
 ): Promise<string | null> {
   const wantsBefore = pluginHookWanted('agent.tool.before')
   if (!wantsBefore && !pluginHookWanted('agent.tool.after')) {
     return null
   }
-  const call = readAgentToolCall(source, body)
+  const call = readAgentToolCall(source, body, owner)
   if (!call) {
     return null
   }
@@ -175,22 +84,26 @@ export async function answerAgentToolPluginHooks(
   }
 }
 
-/** Ends a hook post: 200 with the agent's decision when a plugin made one, else 204 as before. */
+/**
+ * Ends a hook post: 200 with the agent's decision when a plugin made one, else 204 as before.
+ * `owner` is the event status ingestion accepted; null (rejected or fenced) skips plugins.
+ */
 export async function respondAfterAgentToolPluginHooks(
   res: ServerResponse,
   source: AgentHookSource,
   body: unknown,
-  headers: IncomingHttpHeaders
+  headers: IncomingHttpHeaders,
+  owner: AgentToolCallOwner | null
 ): Promise<void> {
   // The usual case: no plugin listens, so answer at once without reading the call.
-  if (!pluginHookWanted('agent.tool.before') && !pluginHookWanted('agent.tool.after')) {
+  if (!owner || (!pluginHookWanted('agent.tool.before') && !pluginHookWanted('agent.tool.after'))) {
     res.writeHead(204)
     res.end()
     return
   }
   // Why: the body is read, so the slowloris cap must not cut off a plugin still deciding.
   res.socket?.setTimeout(0)
-  const answer = await answerAgentToolPluginHooks(source, body, headers)
+  const answer = await answerAgentToolPluginHooks(source, body, headers, owner)
   if (answer) {
     res.writeHead(200, { 'content-type': 'application/json' })
     res.end(answer)

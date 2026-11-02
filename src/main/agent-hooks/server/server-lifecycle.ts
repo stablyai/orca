@@ -158,6 +158,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
               launchToken: normalized.event.launchToken
             })
           : 'suppress'
+        let toolCallOwner: typeof normalized.event = null
         if (normalized.event && statusDisposition !== 'suppress') {
           const restartedAuthority =
             statusDisposition === 'restart' && source === 'omp'
@@ -181,6 +182,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
             this.observations.rebind(event.paneKey)
           }
           this.recordCurrentAuthorityObservation(event)
+          toolCallOwner = event
           const enriched = this.applyObservedLocalHook(event, normalized.onAccepted)
           if (enriched) {
             this.checkAgentPresenceAfterHook(event, enriched)
@@ -188,8 +190,8 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
             this.scheduleTranscriptPoll(source, aliasedBody, enriched)
           }
         }
-        // Status is recorded first; plugin tool hooks then answer, or Orca replies 204 as before.
-        await respondAfterAgentToolPluginHooks(res, source, aliasedBody, req.headers)
+        // Plugins see only calls status accepted, so a fenced or reused pane's old agent is skipped.
+        await respondAfterAgentToolPluginHooks(res, source, aliasedBody, req.headers, toolCallOwner)
       } catch (error) {
         if (pathname === OPENCODE_STARTUP_PROMPT_CLAIM_PATH) {
           if (isHookRequestTruncatedError(error) && !destroyedBySlowlorisCap) {

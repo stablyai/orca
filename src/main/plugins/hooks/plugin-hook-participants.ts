@@ -11,7 +11,7 @@ import {
 } from '../../../shared/plugins/workers/plugin-hook-chain'
 import { setPluginHookRunner, type PluginHookRunner } from './plugin-hook-dispatch'
 import type { PluginService } from '../plugin-service'
-import { setAgentToolHookTerminalResolver } from '../../agent-hooks/agent-tool-plugin-hooks'
+import { setAgentToolHookTerminalResolver } from '../../agent-hooks/agent-tool-call-reader'
 import type { PluginWorkerHandle } from '../workers/plugin-host-process'
 import { PLUGIN_WORKER_READY_TIMEOUT_MS } from '../../../shared/plugins/workers/plugin-host-protocol'
 
