@@ -89,7 +89,9 @@ export default function activate(orca: OrcaWorkerApi) {
 Other hooks: `workspace.create.before`/`.after`, `agent.launch.before` (change the command line or
 add `env`; the agent's own environment is never shown) and `agent.prompt.before` (rewrite a prompt
 Orca submits to an agent), and `agent.tool.before`/`.after` (a tool call an agent makes; Claude
-Code waits, so `{ deny }` refuses the call and `next` can change its `input`).
+Code waits, so `{ deny }` refuses the call and `next` can change its `input`), and
+`editor.save.before` (format on save: return `next({ ...event, text: formatted })`, or `{ deny }` to
+stop the save; autosaves are not hooked).
 
 Return `{ deny }` to stop, nothing (or `next(event)`) to pass. Past 2 s or on a throw Orca carries
 on as if the hook passed and logs it (`ORCA plugin logs`); a guard that must fail closed lists the
@@ -138,7 +140,12 @@ test('merges an agent write that lands while an edit waits', async () => {
 })
 ```
 
-Without `merge` an outside write wins and the draft is dropped. `ORCA plugin check <dir> --json`
+`merge` covers both outside writes: one that lands while an edit waits (base: your last accepted
+value), and one made on disk while the tab has unsaved edits (base: the disk text those edits
+started from; the tab stays unsaved with the result and Orca shows no banner, for a local file
+in one editor view). Without `merge` an
+outside write wins and the draft is dropped, and a disk write under unsaved edits gets Orca's
+Reload/Overwrite banner. `ORCA plugin check <dir> --json`
 then reads every file the entry loads without running it, and
 `ORCA plugin open <plugin-key> --editor <file>` shows it on a real file.
 `ORCA plugin shot <plugin-key> --editor <file> --theme dark` saves a PNG of the editor on that
@@ -153,3 +160,12 @@ maxLines })` (`terminal:read`) for its output; `agent.launch({ workspaceId, agen
 (`agent:launch`); `workspace.open({ workspaceId })`, `editor.open({ workspaceId, path })` (a path
 inside it) and `commands.run({ action })` (a built-in `contributes.commands[].action`, never a plugin's
 replacement) need `workspace:write` and the desktop app. Panels get none.
+
+## Replacing one of Orca's own actions
+
+Give a worker command `"replaces": "view.tasks"` (any action a declarative `action` may name;
+`engines.orca` `>=1.4.248`) and register it with `orca.commands.register`. Orca runs it when that
+action fires from its shortcut, the palette or a menu, and its own action when the worker fails or
+takes over 2 s. To wrap Orca's own, call `orca.host.call('commands.run', { action: 'view.tasks' })`
+(`workspace:write`) from the command: it always runs the built-in. The person can switch the
+replacement back on the plugin's page.

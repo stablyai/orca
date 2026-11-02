@@ -218,7 +218,10 @@
       "title": "Run {{distro}} as a host (recommended)",
       "why": "Git, files and terminals then run natively in Linux instead of across the Windows file share.",
       "accept": "Run as host",
-      "projectNotFound": "Could not find the added project to move. Use \"Move to {{distro}} host…\" on the project in the sidebar."
+      "projectNotFound": "Could not find the added project to move. Use \"Move to {{distro}} host…\" on the project in the sidebar.",
+      "existingTitle": "Add on the {{distro}} host (recommended)",
+      "existingWhy": "{{distro}} already runs as a host, so Git, files and terminals run natively in Linux instead of across the Windows file share.",
+      "existingAccept": "Add on host"
     }
   },
   "app": {
@@ -653,7 +656,7 @@
         "inheritFont": "Same as IDE font",
         "fontPreviewLabel": "Chat font preview",
         "fontPreview": "The quick brown fox jumps over the lazy dog.",
-        "title": "Chat",
+        "title": "Chat UI",
         "textSize": "Text size",
         "textSizeDescription": "Messages, tool activity and the message box. {{increase}} / {{decrease}} in a chat change this too.",
         "codeTextSize": "Code text size",
@@ -8071,6 +8074,9 @@
           "browserExtensions": {
             "copy": "Adds Settings › Browser › Extensions for local browser profiles.",
             "toggleLabel": "Toggle browser extensions"
+          },
+          "orchestrationPanel": {
+            "toggleLabel": "Toggle orchestration panel"
           }
         },
         "FloatingWorkspacePane": {
@@ -8216,7 +8222,6 @@
           "9d3e56ca36": "Apply Changes",
           "f96688b6bc": "Cancel",
           "b7ddae600c": "Done",
-          "e4bda7ce6f": "No Ghostty config found on this system.",
           "b58d4c9051": "Unsupported keys",
           "674b5ccd6b": "No new settings to import — your current settings already match.",
           "a4c5dec640": "Settings to update",
@@ -8225,7 +8230,10 @@
           "2763b0c045": "Review the settings that will be imported from your Ghostty config.",
           "d2f33670a9": "Import from Ghostty",
           "273e7e81fe": "Configs",
-          "1f744a72f4": "Config"
+          "1f744a72f4": "Config",
+          "choose_file": "Choose Config File",
+          "not_found_choose_file": "No Ghostty config found on this computer. Choose a config file to import one from another location.",
+          "cleared": "Cleared"
         },
         "WarpThemeImportModal": {
           "title": "Import from Warp",
@@ -9064,7 +9072,9 @@
           "cb330ef7f8": " of {{value0}}",
           "c822571b2e": " matching \"{{value0}}\"",
           "plugin_themes": "Plugins",
-          "from_plugin": "From {{value0}}"
+          "from_plugin": "From {{value0}}",
+          "delete_imported_theme": "Delete {{value0}}",
+          "delete_theme": "Delete theme"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -9321,7 +9331,8 @@
           "048aac8a64": "Terminal Typography",
           "4415beb958": "disabled",
           "4e7d41a9f0": "enabled",
-          "dimUnfocusedPanes": "Dim unfocused panes."
+          "dimUnfocusedPanes": "Dim unfocused panes.",
+          "kitty_import": "Import from Kitty"
         },
         "TerminalAdvancedTypographyControls": {
           "f5fa1a08f1": "Bold Font Weight",
@@ -9460,7 +9471,9 @@
           "match_dark_mode": "Match dark mode",
           "match_dark_mode_description": "Share the dark terminal theme and divider color in light mode.",
           "light_preview_description": "Shows the effective light terminal appearance.",
-          "dark_preview_description": "Shows the effective dark terminal appearance."
+          "dark_preview_description": "Shows the effective dark terminal appearance.",
+          "deleted_imported_theme": "Deleted \"{{value0}}\"",
+          "undo": "Undo"
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI magenta color",
@@ -10276,6 +10289,14 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "password manager"
+            },
+            "orchestrationPanel": {
+              "title": "Orchestration panel",
+              "description": "Shows which agents each agent is working with, beside its chat or terminal.",
+              "orchestration": "orchestration",
+              "agents": "agents",
+              "workers": "workers",
+              "manager": "manager"
             }
           }
         },
@@ -11326,7 +11347,9 @@
             "454df22a5e": "fish",
             "ddd5efe113": "shell",
             "3de504994c": "Shell and arguments used for new local interactive terminal panes",
-            "1733ccd3e9": "Terminal shell"
+            "1733ccd3e9": "Terminal shell",
+            "kitty_import": "Import from Kitty",
+            "kitty_import_description": "One-time import of supported settings from kitty.conf."
           },
           "windows": {
             "search": {
@@ -13311,7 +13334,8 @@
           "newContributions": "Features that act for you",
           "allAccess": "See all access",
           "update": "Update",
-          "review": "Review"
+          "review": "Review",
+          "replacesAction": "{{value0}} runs instead of Orca’s {{value1}}"
         },
         "PluginDetailInfo": {
           "previous": "Previous",
@@ -13352,7 +13376,8 @@
           "replacesShortcut": "{{value0}} ({{value1}}) replaces your shortcut for {{value2}}.",
           "updatesKeepApproval": "Updates ask again only for new access",
           "fullAccessUpdates": "Updates can change its code without asking",
-          "editsFileTypes": "Opens and edits {{value0}} files in Orca. It can read the files it opens."
+          "editsFileTypes": "Opens and edits {{value0}} files in Orca. It can read the files it opens.",
+          "replacesAction": "{{value0}} runs instead of Orca’s {{value1}}. You can switch it back in its plugin page."
         },
         "PluginPageAction": {
           "failedTitle": "Couldn’t install {{value0}}",
@@ -13553,6 +13578,14 @@
         "PluginSettingsSection": {
           "reset": "Reset",
           "title": "Settings"
+        },
+        "FontAutocomplete": {
+          "installedFontsUnavailable": "Couldn’t list installed fonts. Type any installed font name to use it."
+        },
+        "TerminalConfigImportModal": {
+          "kitty_title": "Import from Kitty",
+          "kitty_description": "Review the settings that will be imported from your kitty.conf and the files it includes.",
+          "kitty_not_found": "No kitty.conf found on this computer. Choose a config file to import one from another location."
         }
       },
       "right": {
@@ -16918,7 +16951,8 @@
                 "description": "This file isn't UTF-8 text. Saving it as UTF-8 replaces any characters that aren't valid UTF-8 with �, and the original bytes can't be recovered.",
                 "action": "Save as UTF-8"
               }
-            }
+            },
+            "deniedByPlugin": "The plugin {{plugin}} refused this save: {{reason}}"
           }
         },
         "RichMarkdownTableControls": {
@@ -19142,6 +19176,12 @@
           "Tree": {
             "loading": "Loading…"
           }
+        },
+        "PluginCommandReplacementRow": {
+          "title": "{{value0}} runs instead of Orca’s {{value1}}",
+          "conflict": "Not used: {{value0}}, installed first, replaces it",
+          "detail": "From its shortcut, the palette and menus. If the plugin fails, Orca’s own runs.",
+          "switch": "Use {{value0}} instead of Orca’s {{value1}}"
         }
       }
     },
@@ -19323,6 +19363,7 @@
       "failureWords": {
         "theAgent": "The agent",
         "providerStartFailed": "{{agent}} stopped before it finished starting.",
+        "savedConversationMissing": "{{agent}} couldn't find this chat's saved conversation.",
         "runCommandAgain": "Run /{{command}} again.",
         "sendToTryAgain": "Send your message to try again.",
         "sendAgainToTryOnceMore": "Send your message again to try once more.",
@@ -20825,6 +20866,42 @@
       "stepDownload": "Download",
       "stepUnpack": "Unpack",
       "stepCheck": "Check"
+    },
+    "orchestrationCrew": {
+      "mentionAll": "Mention all",
+      "mentionAgent": "Mention {{name}}:",
+      "mentionInMessage": "Mention in message",
+      "mentionRejected": "The terminal did not accept the agent reference. Try again.",
+      "title": "Orchestration",
+      "sendingUnavailable": "Sending unavailable",
+      "workers_one": "{{count}} worker",
+      "workers_other": "{{count}} workers",
+      "managedBy": "Managed by",
+      "managing": "Managing",
+      "talkingWith": "Talking with",
+      "collapse": "Collapse orchestration panel",
+      "show": "Show orchestration: {{counts}}",
+      "summary": "Orchestration: {{counts}}",
+      "needsYou_one": "{{count}} needs you",
+      "needsYou_other": "{{count}} need you",
+      "waitingPrefix": "Waiting for you · ",
+      "noTask": "No shared task",
+      "open": "Open {{name}}",
+      "more": "More for {{name}}",
+      "openChat": "Open its chat",
+      "copiedAddress": "Copied {{name}}'s address",
+      "copyAddress": "Copy address",
+      "showDetails": "Show {{name}}'s task and latest message",
+      "task": "Task",
+      "asksYou": "Asks you",
+      "openFailed": "{{name}}: {{detail}}",
+      "chatUnavailable": "This host cannot open the chat. Try again.",
+      "terminalExited": "This terminal has exited.",
+      "openOnHost": "Open this agent on {{host}}.",
+      "cannotLocate": "This host cannot locate this agent. Try again.",
+      "latest": "Latest",
+      "to": "To",
+      "from": "From"
     },
     "orchestration": {
       "workerAutoClose": {
@@ -22340,7 +22417,8 @@
       "changed": "Moved earlier, then changed here by an older version of Orca. It is not moved again.",
       "chatsStay": "Existing chats stay on this computer. New chats in this project start on the WSL host.",
       "browserLoginsConflict": "Browser sign-ins won’t carry over, because the host’s browser profile is already in use. Sign in again in the host’s browser tabs after the move.",
-      "browserLoginsNotCarried": "Browser sign-ins won’t carry over to this host. Sign in again in its browser tabs after the move."
+      "browserLoginsNotCarried": "Browser sign-ins won’t carry over to this host. Sign in again in its browser tabs after the move.",
+      "why": "Work then runs inside Linux, next to your files, so terminals, Git and file changes are faster and more reliable. Your projects don’t change, and you can move any project back with “Use on this computer again”."
     },
     "cancel": "Cancel",
     "progress": {
@@ -22958,7 +23036,9 @@
       "importWarpFolder": "Import Warp Theme Folder",
       "images": "Images",
       "repoIconImages": "Repo icon images",
-      "audio": "Audio"
+      "audio": "Audio",
+      "importGhosttyConfig": "Import Ghostty Config",
+      "importKittyConfig": "Import Kitty Config"
     }
   },
   "taskProviders": {
@@ -23099,7 +23179,9 @@
     "toggleArguments": "Toggle Arguments",
     "argumentsTerminalHint": "Only applies to terminal (CLI) launches",
     "searchAgentModels": "Search {{agent}} models…",
-    "legacyModelCount": "{{total}} models"
+    "legacyModelCount": "{{total}} models",
+    "promptPlaceholder": "Add a prompt (optional): / for skills, @ for files",
+    "promptPlaceholderFilesOnly": "Add a prompt (optional): @ for files"
   },
   "automations": {
     "runFailures": {

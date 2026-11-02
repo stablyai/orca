@@ -140,6 +140,8 @@ List each in `contributes.hooks` (`{ "event", "onError"? }`; `main` and `trusted
   event `{ agent: string; workspaceId: string | null; terminalId?: string; tool: string; input: JSON; callId?: string }`; `next` may change `input`; stop with `{ deny: string }`
 - `agent.tool.after` (since 1.4.248): An agent in an Orca terminal finished a tool call (successfully or not). Observe only: Orca does not wait for it.
   event `{ agent: string; workspaceId: string | null; terminalId?: string; tool: string; input: JSON; callId?: string; output?: JSON }`; `next` may change nothing; stop with nothing (observe only)
+- `editor.save.before` (since 1.4.248): The person is about to save a text file from an Orca editor tab (an explicit save, not autosave). Change `text` with `next` (format on save) or return `{ deny }` to refuse the save, which shows your reason. Edits made while the hook ran stay unsaved.
+  event `{ workspaceId: string | null; path: string; languageId?: string; text: string }`; `next` may change `text`; stop with `{ deny: string }`
 
 ## Capabilities
 

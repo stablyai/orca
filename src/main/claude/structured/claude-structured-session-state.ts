@@ -1,4 +1,5 @@
 import type { StructuredAgentSessionChildWorkProducer } from '../../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
+import type { ClaudeStartupOutcome } from './claude-structured-startup-outcome'
 import type { ClaudeCliFlagCheck, ClaudeCliFlagFact } from '../claude-cli-flag-support'
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
@@ -229,6 +230,7 @@ export type ClaudeSession = {
     cwd: string
     history: { leafUuid: string | null; covered: boolean; contextActivity: number }
     onLateRefusal: (error: Error) => void
+    startup: ClaudeStartupOutcome
   }
 }
 
