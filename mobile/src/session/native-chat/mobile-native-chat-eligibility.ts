@@ -5,8 +5,6 @@ import {
   nativeChatAvailabilityAgent
 } from '../../../../src/shared/native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '../../../../src/shared/native-chat/transcript/native-chat-transcript-readability'
-import type { ConnectionState } from '../../transport/types'
-import type { MobileNativeChatInputLockReason } from './MobileNativeChatView'
 
 export type MobileNativeChatResolution = {
   agent: string
@@ -116,18 +114,6 @@ export function withRememberedNativeChatIdentity<
 
 export function isMobileNativeChatAgentConfirmed(tab: MobileNativeChatTab | null): boolean {
   return resolveMobileNativeChat(tab, true)?.agentConfirmed !== false
-}
-
-export function mobileNativeChatOverlayInputLockReason(
-  tab: MobileNativeChatTab | null,
-  connState: ConnectionState,
-  leaseLockReason: MobileNativeChatInputLockReason | null
-): MobileNativeChatInputLockReason | null {
-  if (tab?.type === 'agent-session') {
-    return connState === 'connected' ? null : 'disconnected'
-  }
-  // Why: a chat only this phone remembers may sit on a bare shell; never type into it.
-  return leaseLockReason ?? (isMobileNativeChatAgentConfirmed(tab) ? null : 'waiting')
 }
 
 export function canShowMobileNativeChat(
