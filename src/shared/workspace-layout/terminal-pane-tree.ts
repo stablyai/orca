@@ -15,13 +15,20 @@ export function resolveRootlessTerminalLayoutLeafId(
 export function collectLayoutLeafIdsInOrder(
   node: TerminalPaneLayoutNode | null | undefined
 ): string[] {
-  if (!node) {
-    return []
+  const leaves: string[] = []
+  function collect(current: TerminalPaneLayoutNode | null | undefined): void {
+    if (!current) {
+      return
+    }
+    if (current.type === 'leaf') {
+      leaves.push(current.leafId)
+    } else {
+      collect(current.first)
+      collect(current.second)
+    }
   }
-  if (node.type === 'leaf') {
-    return [node.leafId]
-  }
-  return [...collectLayoutLeafIdsInOrder(node.first), ...collectLayoutLeafIdsInOrder(node.second)]
+  collect(node)
+  return leaves
 }
 
 export function firstLayoutLeafId(node: TerminalPaneLayoutNode | null): string | null {

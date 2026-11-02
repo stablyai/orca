@@ -7,10 +7,13 @@ import { addEnvironmentFromPairingCode } from './environments'
 import { encodePairingOffer } from '../../shared/pairing'
 import { getRuntimeMetadataPath, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
 
-const transport = vi.hoisted(() => ({ local: vi.fn(), remote: vi.fn() }))
+const transport = vi.hoisted(() => ({ local: vi.fn(), remote: vi.fn(), remotePreflight: vi.fn() }))
 
 vi.mock('./transport', () => ({ sendRequest: transport.local }))
-vi.mock('./websocket-transport', () => ({ sendWebSocketRequest: transport.remote }))
+vi.mock('./websocket-transport', () => ({
+  sendWebSocketRequest: transport.remote,
+  sendWebSocketRequestWithStatusPreflight: transport.remotePreflight
+}))
 
 const SELECTORS = ['ORCA_ENVIRONMENT', 'ORCA_PAIRING_CODE', 'ORCA_REMOTE_PAIRING'] as const
 const publicKeyB64 = Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
@@ -30,7 +33,7 @@ const roots: string[] = []
 
 beforeEach(() => {
   vi.clearAllMocks()
-  for (const server of ['local', 'remote'] as const) {
+  for (const server of ['local', 'remote', 'remotePreflight'] as const) {
     transport[server].mockResolvedValue({
       id: 'request-1',
       ok: true,
@@ -106,5 +109,56 @@ it.each(SELECTORS)("routes requests through a person's own %s", async (key) => {
     undefined,
     60_000,
     expect.anything()
+  )
+})
+
+const CALLER_CHAT = 'codex_6cba3e14_b1a0_4b36_8f25_96c0dfa39fbb'
+
+// A native chat's agent has its session id but no terminal handle, pane key or launch token.
+function nativeChatEnv(extra: Record<string, string> = {}): void {
+  vi.stubEnv('ORCA_AGENT_SESSION_ID', CALLER_CHAT)
+  for (const key of ['ORCA_TERMINAL_HANDLE', 'ORCA_PANE_KEY', 'ORCA_AGENT_LAUNCH_TOKEN']) {
+    vi.stubEnv(key, undefined)
+  }
+  for (const [key, value] of Object.entries(extra)) {
+    vi.stubEnv(key, value)
+  }
+}
+
+async function evidenceSent(client: RuntimeClient, method: string): Promise<unknown> {
+  transport.local.mockClear()
+  await client.call(method, {})
+  return transport.local.mock.calls[0]?.[4]?.orchestrationCompatibilityEvidence
+}
+
+it('names the launching chat on launches from a native chat, and on nothing else', async () => {
+  const root = serverProfileWith({})
+  nativeChatEnv()
+  const client = new RuntimeClient(root)
+
+  expect(await evidenceSent(client, 'agent.launchReplay')).toEqual({ agentSessionId: CALLER_CHAT })
+  expect(await evidenceSent(client, 'agent.launch')).toEqual({ agentSessionId: CALLER_CHAT })
+  expect(await evidenceSent(client, 'terminal.list')).toBeUndefined()
+})
+
+it('names no chat from a WSL session, whose id this host cannot resolve', async () => {
+  const root = serverProfileWith({})
+  nativeChatEnv({
+    ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND: 'wsl',
+    ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID: 'wsl-host',
+    ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION: 'Ubuntu'
+  })
+
+  expect(await evidenceSent(new RuntimeClient(root), 'agent.launchReplay')).toBeUndefined()
+})
+
+it('names no chat to a paired server', async () => {
+  serverProfileWith({ ORCA_PAIRING_CODE: pairingCode })
+  nativeChatEnv()
+
+  await new RuntimeClient().call('agent.launchReplay', {})
+  expect(transport.local).not.toHaveBeenCalled()
+  expect(transport.remotePreflight.mock.calls[0]?.[5]).not.toHaveProperty(
+    'orchestrationCompatibilityEvidence'
   )
 })

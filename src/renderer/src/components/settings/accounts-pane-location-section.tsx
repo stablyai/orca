@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
@@ -12,7 +13,7 @@ export function renderAccountsLocationSection(
 ): React.JSX.Element | null {
   const {
     accountRuntime,
-    updateSettings,
+    updateSettingsOrThrow,
     onAccountLocationChange,
     wslAvailable,
     wslCapabilitiesLoading,
@@ -20,9 +21,18 @@ export function renderAccountsLocationSection(
     wslSupportedPlatform
   } = model
   const updateAccountLocation = async (updates: Partial<GlobalSettings>): Promise<void> => {
-    // Keep the current view until the existing settings write publishes the user's choice.
-    await updateSettings(updates)
-    onAccountLocationChange?.()
+    try {
+      // Release the chat-scoped view only after the location preference saves.
+      await updateSettingsOrThrow(updates)
+      onAccountLocationChange?.()
+    } catch {
+      toast.error(
+        translate(
+          'auto.components.settings.AccountsPane.locationSaveFailed',
+          'Account location could not be saved. Try again.'
+        )
+      )
+    }
   }
   const accountRuntimeControls = wslSupportedPlatform ? (
     <SearchableSetting

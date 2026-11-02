@@ -49,6 +49,7 @@ export function createAdapter(
       protocolVersion >= AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
     providesAgentSessionOwnerListings: () =>
       protocolVersion >= AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
+    supportsForegroundObservation: () => protocolVersion >= 55,
     supportsFencedTermination: () => protocolVersion >= FENCED_TERMINATION_PROTOCOL_VERSION,
     killFenced: vi.fn(async () =>
       protocolVersion >= FENCED_TERMINATION_PROTOCOL_VERSION

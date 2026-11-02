@@ -1,5 +1,4 @@
 import { pluginPanelTabKey } from '../../../../../shared/plugins/frames/plugin-tab-key'
-import { toWorktreeRelativePath } from '../../../../../shared/terminal-links'
 import {
   PLUGIN_VIEW_NO_WORKSPACE_CODE,
   PLUGIN_VIEW_NOT_SHOWN_CODE,
@@ -7,17 +6,18 @@ import {
   type PluginViewReply,
   type PluginViewRequest
 } from '../../../../../shared/plugins/view/plugin-view-protocol'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { detectLanguage } from '@/lib/language-detect'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { useAppStore } from '@/store'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { usePluginPanelsStore } from '@/store/plugin-panels'
 import {
   collectActivePluginCustomEditors,
   useCustomEditorViewStore
 } from '@/store/plugin-custom-editors'
 import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
-import { getIndexedWorktreeMap } from '@/store/worktree-repo-index'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import {
   measurePluginPanelGuest,
   measurePluginPanelSurface,
@@ -27,6 +27,17 @@ import {
 } from './plugin-view-panel-settle'
 import { restoreActedPanel, settleAndActOnPanel } from './plugin-view-capture-acts'
 import { pluginPanelNotShownReason } from './plugin-view-shown'
+import { endPluginShotReplay, replayPluginPanel } from './plugin-view-replay'
+import { showWorkspaceForFile } from './plugin-view-editor-workspace'
+import { captureOpenEditor } from './plugin-view-editor-capture'
+import { planEditorShotCleanup, runEditorShotCleanup } from './plugin-view-editor-shot-cleanup'
+import { captureChrome } from './plugin-view-chrome-capture'
+import { pickWorkspaceToShow } from './plugin-view-workspace-pick'
+import {
+  openFolderWorkspace,
+  openWorkspaceFile,
+  runBuiltInAction
+} from './plugin-view-host-actions'
 
 type Failure = Extract<PluginViewReply, { ok: false }>
 
@@ -38,13 +49,27 @@ const fail = (requestId: string, code: string, message: string): Failure => ({
 })
 
 const NO_WORKSPACE_MESSAGE =
-  'Orca shows plugin panels and editors beside an open workspace, and none is showing.'
+  'Orca shows plugin panels and editors beside an open workspace, and none is showing or could be selected.'
+const NO_EDITOR_WORKSPACE_MESSAGE =
+  'No workspace shows the file, and Orca could not open its folder as a folder workspace.'
 
 /** `open` may leave Settings for the workspace behind it; a capture never changes the view. */
 function showWorkspace(requestId: string, leaveSettings: boolean): Failure | null {
   const state = useAppStore.getState()
   if (leaveSettings && state.activeView === 'settings') {
     state.closeSettingsPage()
+  }
+  const shown = useAppStore.getState()
+  const pick =
+    canShowRightSidebarForView(shown.activeView) && !shown.activeWorktreeId
+      ? pickWorkspaceToShow(selectWorktreesByRepo(shown), selectFolderWorkspaces(shown))
+      : null
+  if (pick) {
+    // Renderer state only: the hidden window stays hidden, and no terminal is started.
+    activateAndRevealWorkspace(pick, {
+      providesInitialSurface: true,
+      executionHostId: LOCAL_EXECUTION_HOST_ID
+    })
   }
   const next = useAppStore.getState()
   if (!canShowRightSidebarForView(next.activeView) || !next.activeWorktreeId) {
@@ -95,7 +120,11 @@ async function capturePanel(
   capture: PluginViewCapture
 ): Promise<PluginViewReply> {
   const wantDark = capture.colorScheme === undefined ? null : capture.colorScheme === 'dark'
-  usePluginViewCaptureStore.getState().begin({ panelWidth: capture.width ?? null, dark: wantDark })
+  usePluginViewCaptureStore.getState().begin({
+    panelWidth: capture.width ?? null,
+    dark: wantDark,
+    ...(capture.captureId === undefined ? {} : { owner: capture.captureId })
+  })
   const status = await waitForPluginPanelDraw(tabKey, capture.guestRevision, capture.timeoutMs)
   if (status.value?.failure) {
     return fail(requestId, 'panel_failed', `The plugin panel ${status.value.failure}.`)
@@ -144,7 +173,7 @@ async function capturePanel(
 async function openEditor(
   request: Extract<PluginViewRequest, { kind: 'open-editor' }>
 ): Promise<PluginViewReply> {
-  const { requestId, pluginKey, editorId, filePath } = request
+  const { requestId, pluginKey, editorId, filePath, capture } = request
   await usePluginPanelsStore.getState().fetchPlugins()
   const editor = collectActivePluginCustomEditors(usePluginPanelsStore.getState().plugins).find(
     (entry) => entry.pluginKey === pluginKey && entry.id === editorId
@@ -156,26 +185,37 @@ async function openEditor(
       `This window does not list ${pluginKey}/${editorId} yet.`
     )
   }
-  const blocked = showWorkspace(requestId, true)
-  if (blocked) {
-    return blocked
+  if (useAppStore.getState().activeView === 'settings') {
+    useAppStore.getState().closeSettingsPage()
   }
-  const state = useAppStore.getState()
-  const worktreeId = state.activeWorktreeId ?? ''
-  const worktreePath = getIndexedWorktreeMap(selectWorktreesByRepo(state)).get(worktreeId)?.path
-  const fileId = state.openFile(
+  const previousWorktreeId = useAppStore.getState().activeWorktreeId
+  const paths = [filePath, ...(request.filePathAliases ?? [])]
+  const workspace = await showWorkspaceForFile(paths, request.fallbackFolder)
+  if (!workspace) {
+    return fail(requestId, PLUGIN_VIEW_NO_WORKSPACE_CODE, NO_EDITOR_WORKSPACE_MESSAGE)
+  }
+  const openBefore = new Set(useAppStore.getState().openFiles.map((file) => file.id))
+  const fileId = useAppStore.getState().openFile(
     {
-      filePath,
-      // A file outside the workspace keeps its absolute path, as other opens do.
-      relativePath: (worktreePath && toWorktreeRelativePath(filePath, worktreePath)) || filePath,
-      worktreeId,
-      language: detectLanguage(filePath),
+      filePath: workspace.filePath,
+      relativePath: workspace.relativePath,
+      worktreeId: workspace.worktreeId,
+      language: detectLanguage(workspace.filePath),
       mode: 'edit'
     },
     { preview: false }
   )
   useCustomEditorViewStore.getState().setChoice(fileId, editor.key)
-  return { requestId, ok: true }
+  if (!capture) {
+    return { requestId, ok: true }
+  }
+  planEditorShotCleanup(capture.captureId, {
+    fileId,
+    openedByShot: !openBefore.has(fileId) && !capture.keepOpen,
+    scratchRepoId: capture.scratch ? (workspace.addedRepoId ?? null) : null,
+    previousWorktreeId
+  })
+  return captureOpenEditor(requestId, fileId, capture)
 }
 
 export async function handlePluginViewRequest(
@@ -187,8 +227,20 @@ export async function handlePluginViewRequest(
         return await openPanel(request)
       case 'open-editor':
         return await openEditor(request)
+      case 'replay-panel':
+        return await replayPluginPanel(request)
+      case 'capture-chrome':
+        return await captureChrome(request)
+      case 'open-file':
+        return openWorkspaceFile(request)
+      case 'run-action':
+        return runBuiltInAction(request)
+      case 'open-folder-workspace':
+        return openFolderWorkspace(request)
       case 'end-capture': {
-        usePluginViewCaptureStore.getState().end()
+        endPluginShotReplay()
+        usePluginViewCaptureStore.getState().end(request.captureId)
+        await runEditorShotCleanup(request.captureId)
         const restored = await restoreActedPanel()
         return {
           requestId: request.requestId,

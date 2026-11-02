@@ -29,7 +29,7 @@ import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { CodexAppServerTimeoutError } from '../../codex/codex-app-server-session'
+import { CodexAppServerTimeoutError } from '../../codex/app-server/codex-app-server-session'
 import {
   THREAD_ID as THREAD,
   adapterFor,

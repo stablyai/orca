@@ -28,7 +28,7 @@ export const UNIT_EXCLUDE = [
   'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/main/daemon/shell-ready.test.ts',
   'src/main/daemon/node-pty-fd-leak.test.ts',
-  'src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts',
+  'src/main/providers/local-pty/local-pty-shell-ready-zsh-launch-environment.test.ts',
   'src/main/pty/omp-shell-wrapper-alias-safety.test.ts',
   'src/main/pty/omp-shell-wrapper.node-pty.test.ts',
   'src/main/shell-startup-feature-channel.test.ts',

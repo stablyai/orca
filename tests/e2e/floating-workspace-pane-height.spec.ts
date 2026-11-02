@@ -148,7 +148,7 @@ test('floating panel group bodies and panes own real pixels, single group and sp
   await expect(openPanel.locator(`[data-tab-id="${first.id}"]`)).toBeVisible()
 })
 
-test('single floating title and multiple tabs fill the header before overflowing', async ({
+test('floating tabs keep their preferred width and share constrained space before overflowing', async ({
   orcaPage
 }) => {
   const titles = [
@@ -191,7 +191,7 @@ test('single floating title and multiple tabs fill the header before overflowing
   const firstSlot = panel.locator(`[data-tab-strip-slot="${first}"]`)
   const width = (): Promise<number> =>
     firstSlot.evaluate((element) => element.getBoundingClientRect().width)
-  await expect.poll(width).toBeGreaterThan(384)
+  await expect.poll(width).toBeCloseTo(330, 0)
   const singleWidth = await width()
   const strip = panel.locator('.terminal-tab-strip').first()
 

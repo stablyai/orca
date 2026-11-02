@@ -5,7 +5,7 @@ import {
   type CodexAppServerRpc,
   CodexAppServerUnsupportedError,
   isCodexMethodNotFoundError
-} from './codex-app-server-session'
+} from './app-server/codex-app-server-session'
 import { isRecord } from '../../shared/agent-status-child-work-value-guards'
 
 export const CODEX_SKILLS_LIST_METHOD = 'skills/list'

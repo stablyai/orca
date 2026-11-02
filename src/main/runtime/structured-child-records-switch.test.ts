@@ -12,7 +12,7 @@ import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
 } from '../codex/app-server/codex-app-server-connection-types'
-import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
+import type { openCodexAppServerConnection } from '../codex/app-server/codex-app-server-connection'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { AgentHookServer, _internals } from '../agent-hooks/server'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'

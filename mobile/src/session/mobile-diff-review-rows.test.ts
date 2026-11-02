@@ -12,7 +12,11 @@ function lines(pattern: string): MobileDiffLine[] {
 
 function shape(pattern: string, opened: number[] = []): string[] {
   return buildMobileDiffReviewRows(lines(pattern), new Set(opened)).map((row) =>
-    row.kind === 'fold' ? `fold ${row.hiddenCount}` : row.line.kind.charAt(0)
+    row.kind === 'fold'
+      ? `fold ${row.hiddenCount}`
+      : row.kind === 'line'
+        ? row.line.kind.charAt(0)
+        : 'thread'
   )
 }
 
@@ -58,6 +62,40 @@ describe('buildMobileDiffReviewRows', () => {
       'fold 6',
       ...Array(7).fill('c'),
       'fold 7'
+    ])
+  })
+
+  it('puts a thread under its line and keeps that line out of folds', () => {
+    const thread = {
+      kind: 'thread' as const,
+      threadId: 'T1',
+      root: {
+        id: 1,
+        author: 'nwparker',
+        authorAvatarUrl: '',
+        body: 'Use radii.surface here.',
+        createdAt: '2026-11-01T00:00:00Z',
+        url: 'https://github.com/o/r/pull/1'
+      },
+      replies: []
+    }
+    const rows = buildMobileDiffReviewRows(
+      lines('.'.repeat(20)),
+      new Set(),
+      new Set(),
+      new Map([[10, [thread]]])
+    )
+    expect(rows.map((row) => (row.kind === 'line' ? row.line.newLineNumber : row.kind))).toEqual([
+      'fold',
+      7,
+      8,
+      9,
+      10,
+      'thread',
+      11,
+      12,
+      13,
+      'fold'
     ])
   })
 })

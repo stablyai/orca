@@ -1,4 +1,5 @@
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
+import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
 import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
@@ -75,7 +76,9 @@ export function getKeybindingContext(target: EventTarget | null): KeybindingCont
 export function createAppCommandHandlers(
   state: AppShortcutState,
   input?: ShortcutDispatchInput,
-  keybindingContext: KeybindingContext = 'app'
+  keybindingContext: KeybindingContext = 'app',
+  /** A plugin's `commands.run`: Orca's own action, never a plugin replacement (no loops). */
+  builtInOnly = false
 ): Map<KeybindingActionId, () => boolean> {
   const {
     activeView,
@@ -104,7 +107,12 @@ export function createAppCommandHandlers(
         keybindings
       })
     }
-    run()
+    // A plugin command may replace the action; it falls back to `run`.
+    if (builtInOnly) {
+      run()
+    } else {
+      runBuiltInOrReplacement(actionId, run)
+    }
     return true
   }
   const revealRightSidebarTab = (

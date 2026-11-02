@@ -102,6 +102,8 @@ export function diffReviewActionMountAdapters(
             selectIndex: () => {},
             selectKey: () => {},
             moveSelection: () => {},
+            // Viewed state stays on the phone here; GitHub-viewed files have their own recordings.
+            remoteViewed: () => null,
             setComposerBody: () => {},
             setActionError: (update) => {
               actionError = typeof update === 'function' ? update(actionError) : update

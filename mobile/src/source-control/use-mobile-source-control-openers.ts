@@ -4,7 +4,7 @@ import { buildMobileReviewFileRoute, type MobileReviewRouteArea } from './mobile
 
 // A changed file in the worktree or on the branch, or a file in one commit (diffed against its parent).
 export type MobileDiffFileTarget =
-  | { kind: 'changes'; filePath: string; area: MobileReviewRouteArea }
+  | { kind: 'changes'; filePath: string; area: MobileReviewRouteArea; line?: number }
   | { kind: 'commit'; filePath: string; commitOid: string }
 
 type Params = {
@@ -26,6 +26,7 @@ export function useMobileSourceControlOpeners({ hostId, worktreeId, name }: Para
           worktreeId,
           worktreeName: name,
           filePath: target.filePath,
+          ...(target.kind === 'changes' && target.line !== undefined ? { line: target.line } : {}),
           ...(target.kind === 'commit'
             ? { area: 'commit', commitOid: target.commitOid }
             : { area: target.area })

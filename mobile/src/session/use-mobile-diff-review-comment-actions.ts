@@ -40,6 +40,8 @@ type CommentActionsInput = {
   selectIndex: (index: number) => void
   /** The reader's navigation count; a save that outlasts a newer pick leaves that pick alone. */
   navigationRef: { readonly current: number }
+  /** GitHub's viewed mark for a PR file, or null when the file's viewed state lives on the phone. */
+  remoteViewed: (item: MobileDiffReviewQueueItem, viewed: boolean) => Promise<boolean> | null
   setComposerBody: Dispatch<SetStateAction<string>>
   setActionError: Dispatch<SetStateAction<string | null>>
   sheets: Pick<ReviewSheetIntents, 'openSheet' | 'openSheetWhenIdle' | 'closeSheet'>
@@ -60,6 +62,7 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     setScreenState,
     selectIndex,
     navigationRef,
+    remoteViewed,
     setComposerBody,
     setActionError,
     sheets
@@ -219,24 +222,47 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     closeComposer()
   }, [closeComposer, composer, saveCommentsAndReviewState, screenState])
 
+  // Resolves whether the file is now viewed: on GitHub for a PR file, otherwise in the phone's review state.
+  const setItemViewed = useCallback(
+    async (item: MobileDiffReviewQueueItem, viewed: boolean): Promise<boolean> => {
+      const remote = remoteViewed(item, viewed)
+      if (remote) {
+        return remote
+      }
+      const descriptor = reviewDescriptorFromItem(item)
+      if (!descriptor || screenState.kind !== 'ready') {
+        return false
+      }
+      const now = Date.now()
+      let nextReviewState = viewed
+        ? markMobileDiffReviewFileReviewed(screenState.reviewState, descriptor, now)
+        : {
+            ...clearMobileDiffReviewFileReviewed(screenState.reviewState, item.key, now),
+            completedAt: undefined
+          }
+      if (
+        viewed &&
+        queue.every((candidate) => candidate.key === item.key || candidate.isReviewed)
+      ) {
+        nextReviewState = completeMobileDiffReviewState(nextReviewState, now)
+      }
+      try {
+        await saveCommentsAndReviewState(screenState.comments, nextReviewState)
+        return true
+      } catch {
+        // The failed save already rolled back and showed its error.
+        return false
+      }
+    },
+    [queue, remoteViewed, saveCommentsAndReviewState, screenState]
+  )
+
   const markReviewed = useCallback(async () => {
-    const descriptor = currentItem ? reviewDescriptorFromItem(currentItem) : null
-    if (!currentItem || !descriptor || screenState.kind !== 'ready') {
+    if (!currentItem) {
       return
-    }
-    const now = Date.now()
-    let nextReviewState = markMobileDiffReviewFileReviewed(screenState.reviewState, descriptor, now)
-    if (queue.every((item) => item.key === currentItem.key || item.isReviewed)) {
-      nextReviewState = completeMobileDiffReviewState(nextReviewState, now)
     }
     const navigation = navigationRef.current
-    try {
-      await saveCommentsAndReviewState(screenState.comments, nextReviewState)
-    } catch {
-      // The failed save already rolled back and showed its error.
-      return
-    }
-    if (navigation !== navigationRef.current) {
+    if (!(await setItemViewed(currentItem, true)) || navigation !== navigationRef.current) {
       return
     }
     const nextIndex = nextReviewIndexAfterMarkReviewed({
@@ -256,29 +282,15 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     filteredQueue,
     navigationRef,
     openSheetWhenIdle,
-    queue,
-    saveCommentsAndReviewState,
-    screenState,
-    selectIndex
+    selectIndex,
+    setItemViewed
   ])
 
   const toggleItemViewed = useCallback(
     async (item: MobileDiffReviewQueueItem) => {
-      const descriptor = reviewDescriptorFromItem(item)
-      if (!descriptor || screenState.kind !== 'ready') {
-        return
-      }
-      const now = Date.now()
-      const nextReviewState = item.isReviewed
-        ? {
-            ...clearMobileDiffReviewFileReviewed(screenState.reviewState, item.key, now),
-            completedAt: undefined
-          }
-        : markMobileDiffReviewFileReviewed(screenState.reviewState, descriptor, now)
-      // A failed save already rolled back and showed its error.
-      await saveCommentsAndReviewState(screenState.comments, nextReviewState).catch(() => {})
+      await setItemViewed(item, !item.isReviewed)
     },
-    [saveCommentsAndReviewState, screenState]
+    [setItemViewed]
   )
 
   return {

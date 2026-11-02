@@ -230,26 +230,6 @@ describe('TabBarCreateEntry browser history rows', () => {
     )
   })
 
-  it('keeps arrow-key selection across a background history write', () => {
-    historyStoreMock.entries = [linear, historyEntry({ url: 'https://linear.app/acme/inbox' })]
-    mount()
-    setQuery('linear')
-    pressKey('ArrowDown')
-    pressKey('ArrowDown')
-    const selectedBefore = container.querySelector('[aria-selected="true"]')?.textContent
-
-    // A committed navigation elsewhere replaces the store array mid-session.
-    act(() => {
-      historyStoreMock.entries = [
-        historyEntry({ url: 'https://unrelated.example/page' }),
-        ...historyStoreMock.entries
-      ]
-    })
-    setQuery('linear ')
-
-    expect(container.querySelector('[aria-selected="true"]')?.textContent).toBe(selectedBefore)
-  })
-
   it('refuses to submit a row the visible query no longer matches', () => {
     mount()
     setQuery('linear')

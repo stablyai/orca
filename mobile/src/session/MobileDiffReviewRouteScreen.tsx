@@ -18,6 +18,7 @@ export function MobileDiffReviewRouteScreen() {
     file?: string | string[]
     area?: string | string[]
     commit?: string | string[]
+    line?: string | string[]
   }>()
   const hostId = firstReviewParam(params.hostId)
   const worktreeId = firstReviewParam(params.worktreeId)
@@ -26,6 +27,8 @@ export function MobileDiffReviewRouteScreen() {
   const initialArea = normalizeReviewAreaParam(firstReviewParam(params.area))
   const initialFilter = initialArea ? scopeForTargetArea(initialArea) : 'all'
   const commitOid = firstReviewParam(params.commit) || null
+  const lineParam = Number.parseInt(firstReviewParam(params.line), 10)
+  const initialLine = Number.isInteger(lineParam) && lineParam > 0 ? lineParam : null
   const initialTarget = useMemo(
     () => (initialFile && initialArea ? { filePath: initialFile, area: initialArea } : null),
     [initialArea, initialFile]
@@ -55,6 +58,7 @@ export function MobileDiffReviewRouteScreen() {
     initialFilter,
     initialTarget,
     commitOid,
+    initialLine,
     onOpenSession: openSession,
     onReconnect: forceReconnect
   })

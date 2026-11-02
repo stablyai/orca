@@ -5,7 +5,8 @@ import {
   type StructuredSessionOpenResult,
   type StructuredSessionOpenDeps,
   type StructuredSessionOpenTarget,
-  type StructuredSessionOpenTab
+  type StructuredSessionOpenTab,
+  type StructuredSessionOpenFailure
 } from '../../../shared/open-structured-agent-session'
 import type { OrchestrationPartyLocationResult } from '../../../shared/orchestration-caller-status'
 import {
@@ -28,8 +29,8 @@ const STRUCTURED_SESSION_RESTORE_TIMEOUT_MS = 5_000
 /** Keep distinct remedies: retry unreachable hosts, stop on a confirmed missing record, or update incompatible hosts/adapters. Failure to answer never proves a chat is gone. */
 export type StructuredSessionRevealOutcome =
   | StructuredSessionOpenTarget
+  | StructuredSessionOpenFailure
   | 'gone'
-  | 'workspace-missing'
   | 'host-cannot-open'
   | 'unreachable'
 
@@ -259,7 +260,7 @@ export async function revealStructuredSession(target: {
   }
   // Distinguish a missing record from an existing record the host cannot open; only the first means gone.
   if (result?.refusal?.code === 'agent_session_workspace_removed') {
-    return 'workspace-missing'
+    return structuredSessionOpenFailure(result.refusal)
   }
   return result?.refusal?.code === 'agent_session_identity_required'
     ? 'gone'
@@ -270,7 +271,7 @@ export async function revealStructuredSession(target: {
 
 type AgentSessionRevealReply =
   | { ok: true; sessionId: string; workspaceId: string; agent: string }
-  | { ok: false; refusal: { code?: string } }
+  | { ok: false; refusal: { code?: string; details?: unknown } }
 
 async function refreshStructuredSessionTabs(
   worktreeId: string,
