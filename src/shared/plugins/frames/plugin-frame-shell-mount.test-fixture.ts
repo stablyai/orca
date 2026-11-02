@@ -24,7 +24,28 @@ export type FrameOrca = {
     get: () => Promise<unknown>
     onDidChange: (handler: (document: unknown) => void) => { dispose: () => void }
     applyEdit: (edit: unknown) => Promise<unknown>
+    session: (options?: FrameDocumentSessionOptions) => Promise<FrameDocumentSession>
   }
+}
+
+// Method syntax: a test passes typed callbacks, which method parameters accept bivariantly.
+export type FrameDocumentSessionOptions = {
+  debounceMs?: number
+  decode?(content: unknown): unknown
+  encode?(value: unknown): unknown
+  merge?(base: unknown, outside: unknown, mine: unknown): unknown
+}
+
+/** A host → frame envelope, as tests deliver it. */
+export type FrameHostMessage = { orca: number; kind: string } & Record<string, unknown>
+
+export type FrameDocumentSession = {
+  readonly value: unknown
+  readonly readOnly: boolean
+  change: (next: unknown) => void
+  flush: () => Promise<void>
+  onReplace: (handler: (value: unknown) => void) => { dispose: () => void }
+  dispose: () => void
 }
 
 const realParent = window.parent
