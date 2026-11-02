@@ -10,12 +10,16 @@ import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { NativeChatOrcaStopContext } from './native-chat-orca-stop-context'
 import { useNativeChatUsageLimitAutoContinue } from './use-native-chat-usage-limit-auto-continue'
 
-const mocks = vi.hoisted(() => ({
-  capability: 'supported',
-  summary: undefined as Pick<AgentSessionStatusSummary, 'usageLimitContinue'> | undefined,
-  call: vi.fn(async () => ({ ok: true })),
-  feed: { activate: () => () => {}, subscribe: () => () => {}, getSnapshot: () => new Map() }
-}))
+const mocks = vi.hoisted(() => {
+  const state: {
+    capability: string
+    summary: Pick<AgentSessionStatusSummary, 'usageLimitContinue'> | undefined
+  } = { capability: 'supported', summary: undefined }
+  return Object.assign(state, {
+    call: vi.fn(async () => ({ ok: true })),
+    feed: { activate: () => () => {}, subscribe: () => () => {}, getSnapshot: () => new Map() }
+  })
+})
 vi.mock('@/runtime/structured-agent-session-host-capability', () => ({
   useStructuredAgentSessionHostCapabilityState: () => mocks.capability
 }))
