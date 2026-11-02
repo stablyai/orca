@@ -11,6 +11,7 @@ import {
   mobileSnapshotIdentityUnchanged
 } from '../mobile-session-snapshot-equality'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import type { RuledScreen } from '../screen-input-veto'
 import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import type { RuntimeStore } from '../runtime-store-contract'
@@ -73,6 +74,7 @@ import { RuntimeConstructionServices } from './runtime-construction-services'
 
 export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServices {
   protected abstract claimIdleShellPromptForPty(ptyId: string): Promise<boolean>
+  protected abstract readWithheldTuiIdleScreen(ptyId: string): Promise<RuledScreen | null> | null
   protected readonly runtimeId = randomUUID()
 
   protected readonly startedAt = Date.now()
@@ -360,6 +362,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
             (screen) => screen?.lines.join('\n') ?? null
           )
         : null,
+    readWithheldRuledScreen: (ptyId) => this.readWithheldTuiIdleScreen(ptyId),
     resolve: (waiter, result) => this.terminalWaiters.resolve(waiter, result)
   })
 
