@@ -4,6 +4,9 @@ import { describe, expect, it, vi } from 'vitest'
 import type { GitHubPrMutationOutcome } from './github-pr-mutations'
 import { useMobilePrTextAction, type MobilePrTextAction } from './use-mobile-pr-text-action'
 
+// Haptics import react-native, which the node test runner can't parse.
+vi.mock('../platform/haptics', () => ({ triggerError: () => {}, triggerSuccess: () => {} }))
+
 describe('useMobilePrTextAction', () => {
   it('rereads after every attempted save while the write decides the result', async () => {
     const updateBody = vi.fn<() => Promise<GitHubPrMutationOutcome>>()

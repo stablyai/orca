@@ -22,6 +22,8 @@ vi.mock('./github-pr-rpc', async (importOriginal) => ({
   ...(await importOriginal<typeof GitHubPrRpc>()),
   ...rpc
 }))
+// The text action's haptics import react-native, which the node test runner can't parse.
+vi.mock('../platform/haptics', () => ({ triggerError: () => {}, triggerSuccess: () => {} }))
 vi.mock('../source-control/mobile-pr-link', () => ({
   fetchWorktreeGitHubPRLink: vi.fn(async () => ({
     linkedPR: null,
@@ -174,7 +176,9 @@ describe('useMobilePrSidebarController write reconciliation', () => {
     await act(async () => {
       renderer = create(createElement(SidebarHarness, { branch }))
     })
-    await act(async () => sidebar!.controller.refetchPRSidebar({ includeDetails: false }))
+    await act(async () => {
+      await sidebar!.controller.refetchPRSidebar({ includeDetails: false })
+    })
     if (withDetails) {
       await act(async () => sidebar!.controller.ensurePrSidebarDetails())
     }
@@ -311,7 +315,9 @@ describe('useMobilePrSidebarController write reconciliation', () => {
     await act(async () => {
       renderer!.update(createElement(SidebarHarness, { branch: 'topic-b' }))
     })
-    await act(async () => sidebar!.controller.refetchPRSidebar({ includeDetails: false }))
+    await act(async () => {
+      await sidebar!.controller.refetchPRSidebar({ includeDetails: false })
+    })
     expect(sidebar?.controller.prSidebarState).toMatchObject({ data: { pr: { number: 8 } } })
     rpc.fetchPRForBranch.mockClear()
 

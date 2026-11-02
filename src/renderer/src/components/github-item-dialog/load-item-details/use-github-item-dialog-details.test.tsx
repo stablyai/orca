@@ -162,7 +162,7 @@ describe('useGitHubItemDialogDetails reconciliation', () => {
 
     await act(async () => latest!.appendOptimisticComment(comment('during-read')))
     act(() => {
-      touchWorkItemDetailsCache('other-key', { details, fetchedAt: Date.now() })
+      touchWorkItemDetailsCache('other-key', { details, fetchedAt: 1 })
       invalidateWorkItemDetailsCacheForKey('other-key')
     })
     const merged = { ...details, item: { ...workItem, state: 'merged' } }

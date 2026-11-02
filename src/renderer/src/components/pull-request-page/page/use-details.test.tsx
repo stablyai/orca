@@ -128,7 +128,7 @@ describe('usePullRequestDetails reconciliation', () => {
 
     await act(async () => result.current.appendOptimisticComment(comment('during-read')))
     act(() => {
-      touchWorkItemDetailsCache('other-key', { details: loaded, fetchedAt: Date.now() })
+      touchWorkItemDetailsCache('other-key', { details: loaded, fetchedAt: 1 })
       invalidateWorkItemDetailsCacheForKey('other-key')
     })
     const merged = { ...loaded, item: { ...workItem, state: 'merged' } }
