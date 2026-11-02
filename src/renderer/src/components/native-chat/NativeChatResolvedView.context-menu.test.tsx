@@ -32,7 +32,9 @@ vi.mock('../orchestration-crew/NativeChatCrewPanel', () => ({
   NativeChatCrewFrame: ({ panel, children }: ComponentProps<typeof NativeChatCrewFrame>) => {
     mocks.crewVisibility(isValidElement<{ isVisible?: boolean }>(panel) && panel.props.isVisible)
     return children
-  },
+  }
+}))
+vi.mock('../orchestration-crew/TerminalChatCrewPanel', () => ({
   TerminalChatCrewPanel: () => null
 }))
 

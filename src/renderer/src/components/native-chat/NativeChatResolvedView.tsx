@@ -1,5 +1,5 @@
 import { NativeChatCrewFrame } from '../orchestration-crew/NativeChatCrewPanel'
-import { TerminalChatCrewPanel } from '../orchestration-crew/NativeChatCrewPanel'
+import { TerminalChatCrewPanel } from '../orchestration-crew/TerminalChatCrewPanel'
 import { cn } from '@/lib/utils'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from './use-native-chat-store-appearance-style'
