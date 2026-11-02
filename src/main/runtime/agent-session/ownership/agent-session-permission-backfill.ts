@@ -1,5 +1,5 @@
 import { newChatPermissionMode } from '../../../../shared/agent-chat-permission-mode'
-import type { AgentSessionStoreTransactions } from '../../agent-session-store-transactions'
+import type { AgentSessionStoreTransactions } from '../records/agent-session-store-transactions'
 
 /** Backfill once as the chat host installs; legacy chats used their agent's Arguments. */
 export function backfillAgentSessionPermissionModes(

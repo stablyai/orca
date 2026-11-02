@@ -12,7 +12,7 @@ import { NativeChatResumeOnRestartModal } from './NativeChatResumeRuntimeModal'
 import { chatBox } from './native-chat-resume-on-restart-modal.test-support'
 import { NativeChatResumeStatusSegment } from './status-bar/NativeChatResumeStatusSegment'
 import type { ResumeCandidate, ResumeFailure } from './native-chat-resume-on-restart-grouping'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import { requestNativeChatResumeOnRestartDialog } from './native-chat-resume-on-restart-dialog'
 import {
   continueNativeChatRestartOffer,

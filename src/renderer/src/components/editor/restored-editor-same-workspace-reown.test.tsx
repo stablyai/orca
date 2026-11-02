@@ -148,12 +148,14 @@ describe('a restored tab re-owned inside its own workspace, layout-owner build',
   let root: Root
   let load: EditorPanelFileContentLoader | null
   let fileContents: Record<string, FileContent>
+  let outstanding: { current: Record<string, number> }
 
   beforeEach(() => {
     mocks.readRuntimeFileContent.mockReset()
     mocks.readRuntimeFileContent.mockResolvedValue({ content: '# a', isBinary: false })
     fileContents = {}
     load = null
+    outstanding = { current: {} }
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -167,7 +169,7 @@ describe('a restored tab re-owned inside its own workspace, layout-owner build',
             return useAppStore.getState().openFiles
           }
         },
-        outstandingFileReadsRef: { current: {} },
+        outstandingFileReadsRef: outstanding,
         setFileContents: (updater) => {
           fileContents = typeof updater === 'function' ? updater(fileContents) : updater
         }
@@ -195,6 +197,62 @@ describe('a restored tab re-owned inside its own workspace, layout-owner build',
     expect(fileContents[id]).toMatchObject({ content: '# a' })
     expect(layoutCommands()).toEqual([])
   })
+
+  it.each([
+    [false, 'resource'],
+    [true, 'resource'],
+    [false, 'owner'],
+    [true, 'owner']
+  ] as const)(
+    'drops a delayed read after the same tab ID changes (failure=%s, change=%s) and clears its owning read',
+    async (failure, change) => {
+      seedNestedLocalWorkspaces()
+      const id = await drawFromMain(openAbsoluteTabInFolder)
+      let finish!: () => void
+      mocks.readRuntimeFileContent.mockImplementationOnce(
+        () =>
+          new Promise((resolve, reject) => {
+            finish = () =>
+              failure
+                ? reject(new Error("ENOENT: no such file or directory, open '/repo-a/pkg/a.md'"))
+                : resolve({ content: 'obsolete', isBinary: false })
+          })
+      )
+      const baseline = useAppStore
+        .getState()
+        .openFiles.find((file) => file.id === id)?.lastKnownDiskSignature
+      let pending!: Promise<void>
+      await act(async () => {
+        pending = load!(FILE_PATH, id, FOLDER, FILE_PATH)
+        await Promise.resolve()
+      })
+      expect(mocks.readRuntimeFileContent).toHaveBeenCalledOnce()
+      if (change === 'resource') {
+        useAppStore.setState((state) => ({
+          openFiles: state.openFiles.map((file) =>
+            file.id === id
+              ? { ...file, filePath: '/repo-a/pkg/new.md', relativePath: 'new.md' }
+              : file
+          )
+        }))
+      } else {
+        useAppStore.setState((state) => ({
+          folderWorkspaces: state.folderWorkspaces.map((folder) => ({
+            ...folder,
+            folderPath: '/repo-a/moved'
+          }))
+        }))
+      }
+      finish()
+      await act(async () => pending)
+      expect(fileContents[id]).toBeUndefined()
+      expect(
+        useAppStore.getState().openFiles.find((file) => file.id === id)?.lastKnownDiskSignature
+      ).toBe(baseline)
+      expect(outstanding.current[id]).toBeUndefined()
+      expect(useAppStore.getState().openFiles[0]?.externalMutation).toBeUndefined()
+    }
+  )
 
   it("tells main when a parent workspace's conflict review re-owns a local tab in place", async () => {
     seedNestedLocalWorkspaces()

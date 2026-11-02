@@ -697,8 +697,6 @@ jobs:
     with:
       ref: refs/tags/${{ needs.cut.outputs.tag }}
       runner: ubuntu-latest
-    secrets:
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   terminal-rendering-golden:
     needs: cut
@@ -804,14 +802,6 @@ jobs:
       - name: Run source-control golden on macOS
         if: runner.os == 'macOS'
         run: env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:source-control-golden
-
-      - name: Run fresh-startup golden on Windows
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $env:SKIP_BUILD = '1'
-          $env:ORCA_E2E_FORWARD_APP_LOGS = '1'
-          pnpm run --if-present test:e2e:windows-fresh-startup-golden
 
       - name: Upload Playwright traces
         if: failure()

@@ -1,5 +1,5 @@
+import { AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import {
-  AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../../shared/protocol-version'

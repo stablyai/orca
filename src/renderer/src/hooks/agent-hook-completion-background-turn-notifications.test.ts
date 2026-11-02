@@ -1,6 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtemp, mkdir, readFile, writeFile, appendFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude-helper-kill-poller'
+import {
+  createHookListenerState,
+  seedLegacyAgentStatusForTests
+} from '../../../shared/agent-hook-listener/listener-state'
+import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
+import { createTestStore, makeTab } from '../store/slices/store-test-helpers'
+import { buildRunningAgentChildRowModels } from '../../../shared/running-agent-child-rows'
+import { worktreeAgentChildRows } from '../../../../mobile/src/worktree/worktree-agent-child-rows'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
-import { createHookListenerState } from '../../../shared/agent-hook-listener/listener-state'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 
@@ -30,10 +41,14 @@ type MockStoreState = {
 }
 
 let mockStoreState: MockStoreState
+let actualStore: ReturnType<typeof createTestStore> | undefined
 
 vi.mock('@/store', () => ({
   useAppStore: {
-    getState: () => mockStoreState
+    getState: () =>
+      actualStore
+        ? { ...actualStore.getState(), settings: mockStoreState.settings }
+        : mockStoreState
   }
 }))
 
@@ -60,6 +75,7 @@ function pinStateStartedAt(
 
 describe('Claude background-turn completion notifications', () => {
   beforeEach(() => {
+    actualStore = undefined
     vi.resetModules()
     vi.useFakeTimers()
     vi.setSystemTime(1_700_000_000_000)
@@ -139,41 +155,90 @@ describe('Claude background-turn completion notifications', () => {
     return { banners, rows }
   }
 
-  it('announces a subagent turn at Stop with that turn’s text, not when the child later drains', async () => {
-    const { banners, rows } = await play([
+  // Real Claude 2.1.287 PTY hooks (see the fixture's scenarios): every background-subagent run announces once, after the wake-up turn that consumes the last result.
+  it.each([
+    'one-subagent',
+    'two-subagents-together',
+    'subagent-resumed',
+    'subagent-with-own-shell',
+    'subagent-idle-ctrl-c'
+  ])('announces the %s capture once, when everything has drained', async (scenario) => {
+    const records: {
+      scenario: string
+      t: number
+      kind: string
+      payload?: Record<string, unknown>
+    }[] = (
+      await readFile(
+        new URL(
+          '../../../shared/__fixtures__/claude-task-notification-hooks.jsonl',
+          import.meta.url
+        ),
+        'utf8'
+      )
+    )
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line))
+    const events = records.flatMap((record) =>
+      record.scenario === scenario && record.kind === 'hook' && record.payload
+        ? [{ at: 1_700_000_000_000 + Math.round(record.t * 1000), payload: record.payload }]
+        : []
+    )
+    const lastStop = events.findLast((event) => event.payload.hook_event_name === 'Stop')
+
+    const { banners } = await play(events)
+
+    // A plain done waits out the quiet window before it is announced.
+    expect(banners.map((banner) => banner.at)).toEqual([(lastStop?.at ?? 0) + HOOK_DONE_QUIET_MS])
+  })
+
+  it('announces a coordinator waiting on workers in the background once, at its final turn', async () => {
+    const wait = 'orca orchestration check --wait --types worker_done,escalation --json'
+    const waitFor = (id: string, at: number) => [
       {
-        at: 1_700_000_000_000,
-        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'review the PR' }
-      },
-      {
-        at: 1_700_000_001_000,
+        at,
         payload: {
-          hook_event_name: 'SubagentStart',
-          agent_id: 'a1',
-          agent_type: 'general-purpose'
+          hook_event_name: 'PostToolUse',
+          tool_name: 'Bash',
+          tool_input: { command: wait, run_in_background: true },
+          tool_response: { backgroundTaskId: id }
         }
       },
       {
-        at: 1_700_000_006_000,
+        at: at + 1_000,
         payload: {
           hook_event_name: 'Stop',
-          last_assistant_message: 'Which cells need hand-verification?',
-          background_tasks: [{ id: 'a1', type: 'subagent', status: 'running' }]
+          last_assistant_message: 'Waiting for workers.',
+          background_tasks: [{ id, type: 'shell', status: 'running', command: wait }]
         }
-      },
+      }
+    ]
+    const wake = (id: string, at: number) => ({
+      at,
+      payload: {
+        hook_event_name: 'UserPromptSubmit',
+        prompt: `<task-notification>\n<task-id>${id}</task-id>\n<status>completed</status>\n</task-notification>`
+      }
+    })
+
+    const { banners } = await play([
+      { at: 1_700_000_000_000, payload: { hook_event_name: 'UserPromptSubmit', prompt: 'run it' } },
+      ...waitFor('w1', 1_700_000_001_000),
+      wake('w1', 1_700_000_060_000),
+      ...waitFor('w2', 1_700_000_061_000),
+      wake('w2', 1_700_000_120_000),
       {
-        at: 1_700_000_055_000,
-        payload: { hook_event_name: 'SubagentStop', agent_id: 'a1' }
+        at: 1_700_000_121_000,
+        payload: {
+          hook_event_name: 'Stop',
+          last_assistant_message: 'All workers done.',
+          background_tasks: []
+        }
       }
     ])
 
-    const stop = rows.find((row) => row.lastAssistantMessage?.includes('hand-verification'))
-    expect(stop?.state).toBe('working')
-    expect(stop?.turnCompletedAt).toBe(1_700_000_006_000)
-    expect(banners).toHaveLength(1)
-    expect(banners[0]?.at).toBe(1_700_000_006_000)
-    expect(banners[0]?.body).toBe('Which cells need hand-verification?')
-    expect(banners[0]?.stateStartedAt).toBe(1_700_000_006_000)
+    expect(banners).toEqual([expect.objectContaining({ body: 'All workers done.' })])
   })
 
   it('notifies each background-shell turn with a distinct notification identity', async () => {
@@ -216,5 +281,154 @@ describe('Claude background-turn completion notifications', () => {
       stateStartedAt: 1_700_000_011_000
     })
     expect(banners[0]?.stateStartedAt).not.toBe(banners[1]?.stateStartedAt)
+  })
+
+  it('applies the provider retirement to visible rows and quit capture, announcing the parent once it is done', async () => {
+    const { observeAgentHookCompletionForNotification } =
+      await import('./agent-hook-completion-notifications')
+    actualStore = createTestStore()
+    const store = actualStore
+    store.setState({
+      tabsByWorktree: {
+        [WORKTREE_ID]: [makeTab({ id: 'tab-1', worktreeId: WORKTREE_ID, ptyId: 'pty-1' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+    const dir = await mkdtemp(join(tmpdir(), 'helper-consumers-'))
+    const path = join(dir, 'session.jsonl')
+    await mkdir(join(dir, 'session', 'subagents'), { recursive: true })
+    const child = await readFile(
+      new URL(
+        '../../../shared/__fixtures__/claude-helper-kill-2.1.310-child.jsonl',
+        import.meta.url
+      ),
+      'utf8'
+    )
+    const kill = { type: 'system', subtype: 'agents_killed', timestamp: '2026-10-29T11:38:18.695Z' }
+    vi.setSystemTime(Date.parse(kill.timestamp) - 1_000)
+    await writeFile(path, '')
+    await writeFile(join(dir, 'session', 'subagents', 'agent-a123.jsonl'), child)
+    const state = createHookListenerState()
+    let current: AgentHookEventPayload | undefined
+    const apply = (event: AgentHookEventPayload) => {
+      current = event
+      seedLegacyAgentStatusForTests(state, event)
+      store.getState().setAgentStatus(
+        PANE_KEY,
+        event.payload,
+        'Claude',
+        {
+          updatedAt: Date.now(),
+          stateStartedAt: Date.now(),
+          turnEndedAt: event.turnEndedAt,
+          turnEndDisposition: event.turnEndDisposition
+        },
+        { tabId: 'tab-1', worktreeId: WORKTREE_ID },
+        { providerSession: event.providerSession }
+      )
+      observeAgentHookCompletionForNotification({
+        paneKey: PANE_KEY,
+        worktreeId: WORKTREE_ID,
+        payload: { ...event.payload, stateStartedAt: Date.now() }
+      })
+    }
+    const poller = new ClaudeHelperKillPoller(state, {
+      current: () => current,
+      publish: apply,
+      listening: () => true
+    })
+    try {
+      for (const payload of [
+        { hook_event_name: 'UserPromptSubmit', prompt: 'work' },
+        { hook_event_name: 'SubagentStart', agent_id: 'a123' },
+        {
+          hook_event_name: 'Stop',
+          last_assistant_message: 'READY',
+          background_tasks: [{ id: 'a123', type: 'subagent', status: 'running' }]
+        }
+      ]) {
+        const event = normalizeHookPayload(
+          state,
+          'claude',
+          {
+            paneKey: PANE_KEY,
+            payload: { session_id: 'session', transcript_path: path, ...payload }
+          },
+          'production'
+        )
+        if (!event) {
+          throw new Error('hook declined')
+        }
+        apply(event)
+      }
+      const before = store.getState().agentStatusByPaneKey[PANE_KEY]!
+      const beforeEvent = current!
+      expect(beforeEvent.payload.turnCompletedAt).toBeUndefined()
+      expect(before.turnEndedAt).toBeUndefined()
+      expect(before.turnEndDisposition).toBeUndefined()
+      expect(before.subagents?.[0]?.id).toBe('a123')
+      poller.schedule(current!)
+      vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+      await poller.poll(PANE_KEY)
+      expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+      await appendFile(path, `${JSON.stringify(kill)}\n`)
+      await poller.poll(PANE_KEY)
+      vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+      const after = store.getState().agentStatusByPaneKey[PANE_KEY]!
+      expect(after.state).toBe('done')
+      expect(after.subagents ?? []).toEqual([])
+      expect(after.mainAgent).toEqual(before.mainAgent)
+      expect(current?.hookEventName).toBe('SubagentStop')
+      expect(current?.toolAgentId).toBe('a123')
+      expect(after.turnEndedAt).toBeUndefined()
+      expect(after.turnEndDisposition).toBeUndefined()
+      expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
+      expect(
+        buildRunningAgentChildRowModels(after, {
+          parentEvidenceFresh: true,
+          transportObservation: 'live',
+          parentObservedAt: after.updatedAt,
+          hostClockOffsetMs: 0
+        })
+      ).toEqual([])
+      expect(
+        worktreeAgentChildRows(
+          {
+            paneKey: PANE_KEY,
+            parentPaneKey: null,
+            state: after.state,
+            agentType: 'claude',
+            prompt: after.prompt,
+            taskTitle: null,
+            displayName: null,
+            lastAssistantMessage: after.lastAssistantMessage ?? null,
+            toolName: null,
+            toolInput: null,
+            interrupted: false,
+            stateStartedAt: after.stateStartedAt,
+            updatedAt: after.updatedAt,
+            subagents: after.subagents,
+            subagentObservation: 'live'
+          },
+          true
+        )
+      ).toEqual([])
+      store.getState().captureAllSleepingAgentSessions('quit')
+      expect(store.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]).toMatchObject({
+        origin: 'live',
+        providerSession: { id: 'session', transcriptPath: path }
+      })
+    } finally {
+      poller.clearAll()
+      await rm(dir, { recursive: true, force: true })
+      actualStore = undefined
+    }
   })
 })

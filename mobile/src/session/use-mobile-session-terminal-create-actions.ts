@@ -18,7 +18,7 @@ import { useMobileTerminalCreateRouteOwner } from './use-mobile-terminal-create-
 import { launchMobileSessionQuickCommand } from './mobile-session-quick-command-launch'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import { requestMobileSessionTerminalCreate } from './mobile-session-terminal-create-request'
-import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
 import { createMobileStructuredAgentSession } from './mobile-structured-agent-session-launch'
 import { launchesThroughHost, launchNewTabAgentThroughHost } from './new-tab-agent-host-launch'
 import {

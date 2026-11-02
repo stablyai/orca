@@ -10,7 +10,7 @@ import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 import {
   spawnCodexAppServerProcess,
   type CodexAppServerSpawn
-} from './codex-app-server-process-tree-kill'
+} from './app-server/codex-app-server-process-tree-kill'
 import {
   spawnCodexBackfillRecoveryProcess,
   stopCodexBackfillRecoveryProcess

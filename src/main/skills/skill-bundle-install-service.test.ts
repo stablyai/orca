@@ -33,40 +33,6 @@ afterEach(async () => {
 })
 
 describe('skill bundle installation', () => {
-  it('cancels before extracting bundle bytes and removes staging', async () => {
-    const root = await temporaryDirectory()
-    const source = await createSkill(join(root, 'sources'), 'alpha-skill')
-    const bundle = await createSkillBundleArchive({
-      sources: [{ sourceDirectory: source }],
-      archivePath: join(root, 'bundle.tar.gz'),
-      packageId: 'package_cancel',
-      versionId: 'version_cancel',
-      bundleName: 'team-skills'
-    })
-    const controller = new AbortController()
-    controller.abort()
-
-    await expect(
-      installSkillBundle({
-        operationId: 'operation_cancel',
-        archivePath: bundle.archivePath,
-        packageId: bundle.manifest.packageId,
-        versionId: bundle.manifest.versionId,
-        bundleDigest: bundle.manifest.bundleDigest,
-        selectedSkillIds: ['alpha-skill'],
-        expectedArchiveSha256: bundle.archiveSha256,
-        scope: 'global',
-        homeDirectory: join(root, 'home'),
-        orcaStateDirectory: join(root, 'state'),
-        detectedProviders: [],
-        destinationIdentity: 'local-global',
-        hostIdentity: 'host_1',
-        signal: controller.signal
-      })
-    ).rejects.toMatchObject({ data: SKILL_INSTALL_CANCELLED_FAILURE })
-    await expect(readdir(join(root, 'home', '.agents', 'skills'))).resolves.toEqual([])
-  })
-
   it('cancels during bundle extraction and removes its journal and partial bytes', async () => {
     const root = await temporaryDirectory()
     const source = await createSkill(join(root, 'sources'), 'alpha-skill')

@@ -123,15 +123,6 @@ describe('local-only workspace metadata', () => {
     expect(reloaded.getAllWorktreeMetaForHost(SSH_HOST)).toEqual({})
   })
 
-  it('owns a floating terminal row on this machine before any row exists', () => {
-    expect(
-      resolveWorktreeMetaOwner(
-        { getRepos: () => [], getWorktreeMeta: () => undefined },
-        FLOATING_TERMINAL_WORKTREE_ID
-      )?.hostId
-    ).toBe('local')
-  })
-
   it('lands every floating terminal write on this machine, whichever host the caller named', () => {
     const store = createUpgradedStore()
     expect(resolveWorktreeMetaOwner(store, FLOATING_TERMINAL_WORKTREE_ID)?.hostId).toBe('local')

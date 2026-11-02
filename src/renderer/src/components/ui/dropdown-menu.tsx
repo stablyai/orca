@@ -5,6 +5,7 @@ import * as DropdownMenuPrimitive from 'radix-ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { keepFocusWhileMenuCloses } from './menu-item-closing-focus'
+import { useMenuPointerHighlight } from './menu-pointer-highlight'
 
 function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
   return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />
@@ -28,18 +29,20 @@ function DropdownMenuContent({
   style,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+  const pointerHighlight = useMenuPointerHighlight(props)
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         className={cn(
-          'z-[70] max-h-(--radix-dropdown-menu-content-available-height) min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto scrollbar-sleek rounded-[11px] border border-black/10 bg-[rgba(255,255,255,0.78)] p-[4px] text-black dark:text-white shadow-[0_6px_16px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-xl backdrop-saturate-150 supports-[not_(backdrop-filter:blur(1px))]:bg-popover dark:supports-[not_(backdrop-filter:blur(1px))]:bg-popover [@media(prefers-reduced-transparency:reduce)]:bg-popover dark:[@media(prefers-reduced-transparency:reduce)]:bg-popover [@media(prefers-reduced-transparency:reduce)]:backdrop-filter-none dark:border-black/60 dark:bg-popover/75 dark:shadow-[0_16px_34px_rgba(0,0,0,0.40),inset_0_0_0_1px_rgba(255,255,255,0.12)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
+          'z-[70] max-h-(--radix-dropdown-menu-content-available-height) min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto scrollbar-sleek rounded-[11px] border border-black/10 bg-[rgba(255,255,255,0.78)] p-[4px] text-black dark:text-white shadow-[0_6px_16px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-xl backdrop-saturate-150 supports-[not_(backdrop-filter:blur(1px))]:bg-popover dark:supports-[not_(backdrop-filter:blur(1px))]:bg-popover reduce-effects:bg-popover dark:reduce-effects:bg-popover dark:border-black/60 dark:bg-popover/75 dark:shadow-[0_16px_34px_rgba(0,0,0,0.40),inset_0_0_0_1px_rgba(255,255,255,0.12)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
           className
         )}
         // Disable native dragging: titlebar drag regions intercept menu clicks regardless of z-index.
         style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         {...props}
+        {...pointerHighlight}
         onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       />
     </DropdownMenuPrimitive.Portal>
@@ -64,7 +67,7 @@ function DropdownMenuItem({
       data-inset={inset}
       data-variant={variant}
       className={cn(
-        "relative flex cursor-default items-center gap-2 rounded-md px-2.5 py-1 text-[13px] leading-4 font-normal outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-40 data-[inset]:pl-8 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5 [&_svg:not([class*='text-'])]:text-muted-foreground data-[variant=destructive]:*:[svg]:text-destructive! data-[variant=launch]:rounded-[7px] data-[variant=launch]:px-2 data-[variant=launch]:text-[12px] data-[variant=launch]:py-1.5 data-[variant=launch]:leading-5 data-[variant=launch]:font-medium",
+        "relative flex cursor-default items-center gap-2 rounded-md px-2.5 py-1 text-[13px] leading-4 font-normal outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-40 data-[inset]:pl-8 data-[current=true]:bg-accent data-[current=true]:data-[disabled]:opacity-100 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5 [&_svg:not([class*='text-'])]:text-muted-foreground data-[variant=destructive]:*:[svg]:text-destructive! data-[variant=launch]:rounded-[7px] data-[variant=launch]:px-2 data-[variant=launch]:text-[12px] data-[variant=launch]:py-1.5 data-[variant=launch]:leading-5 data-[variant=launch]:font-medium",
         className
       )}
       onPointerMove={keepFocusWhileMenuCloses(onPointerMove)}
@@ -213,8 +216,10 @@ function DropdownMenuSubContent({
   className,
   style,
   alignOffset = -5,
+  scrollable = false,
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent> & { scrollable?: boolean }) {
+  const pointerHighlight = useMenuPointerHighlight(props)
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.SubContent
@@ -222,12 +227,15 @@ function DropdownMenuSubContent({
         // Level the first submenu row with its trigger (border + padding).
         alignOffset={alignOffset}
         className={cn(
-          'z-[70] min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-[11px] border border-black/10 bg-[rgba(255,255,255,0.78)] p-[4px] text-black dark:text-white shadow-[0_6px_16px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-xl backdrop-saturate-150 supports-[not_(backdrop-filter:blur(1px))]:bg-popover dark:supports-[not_(backdrop-filter:blur(1px))]:bg-popover [@media(prefers-reduced-transparency:reduce)]:bg-popover dark:[@media(prefers-reduced-transparency:reduce)]:bg-popover [@media(prefers-reduced-transparency:reduce)]:backdrop-filter-none dark:border-black/60 dark:bg-popover/75 dark:shadow-[0_16px_34px_rgba(0,0,0,0.40),inset_0_0_0_1px_rgba(255,255,255,0.12)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
+          'z-[70] min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-[11px] border border-black/10 bg-[rgba(255,255,255,0.78)] p-[4px] text-black dark:text-white shadow-[0_6px_16px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-xl backdrop-saturate-150 supports-[not_(backdrop-filter:blur(1px))]:bg-popover dark:supports-[not_(backdrop-filter:blur(1px))]:bg-popover reduce-effects:bg-popover dark:reduce-effects:bg-popover dark:border-black/60 dark:bg-popover/75 dark:shadow-[0_16px_34px_rgba(0,0,0,0.40),inset_0_0_0_1px_rgba(255,255,255,0.12)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
+          scrollable &&
+            'max-h-(--radix-dropdown-menu-content-available-height) overflow-x-hidden overflow-y-auto scrollbar-sleek',
           className
         )}
         // Disable native dragging where submenu content overlaps the titlebar.
         style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         {...props}
+        {...pointerHighlight}
         onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       />
     </DropdownMenuPrimitive.Portal>

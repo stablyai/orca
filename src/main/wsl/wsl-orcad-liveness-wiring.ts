@@ -16,11 +16,11 @@ import {
   readSettledConfirmedRunningWslDistros
 } from '../wsl-background-distro-gate'
 import type { WslDistroHolder } from './wsl-distro-holder'
-import { wslDistroHolderKey } from './wsl-distro-holder-record'
 import { readWslGuestIdentity } from './wsl-guest-process-identity'
 import type { WslOrcadConnection, WslOrcadConnectionManager } from './wsl-orcad-connection'
 import { defaultWslOrcadEnvironmentId } from './wsl-orcad-deploy'
-import { confirmsRunning, EXIT_SETTLE_MS } from './wsl-orcad-liveness-evidence'
+import { EXIT_SETTLE_MS } from './wsl-orcad-liveness-evidence'
+import { requireConfirmedRunning } from './wsl-orcad-connection-errors'
 import { WslOrcadLivenessSupervisor } from './wsl-orcad-liveness-supervisor'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { openWslOrcadWatch } from './wsl-orcad-watch'
@@ -70,18 +70,12 @@ export function createWslOrcadLivenessSupervisor(options: {
     hasUserVisibleWork: options.hasUserVisibleWork,
     deferUntilRunning: deferUntilWslDistroRunning,
     requireRunning: async (distro) =>
-      confirmsRunning(
-        await readSettledConfirmedRunningWslDistros(distro),
-        wslDistroHolderKey(distro)
-      ),
+      requireConfirmedRunning(await readSettledConfirmedRunningWslDistros(distro), distro),
     // Liveness is background work: the holder may re-spawn only into a distro that runs (E9).
     ensureHolder: (distro) =>
       options.holder.ensureHeld(distro, {
         requireRunning: async () =>
-          confirmsRunning(
-            await readSettledConfirmedRunningWslDistros(distro),
-            wslDistroHolderKey(distro)
-          )
+          requireConfirmedRunning(await readSettledConfirmedRunningWslDistros(distro), distro)
       }),
     subscribePower: subscribeSystemPowerLifecycle
   })

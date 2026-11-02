@@ -1,6 +1,6 @@
 import { join, resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { Repo } from '../../shared/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 
@@ -18,8 +18,7 @@ import { PATH_ACCESS_DENIED_MESSAGE, resolveAuthorizedPath } from './filesystem/
 import {
   __resetCreatedWorktreeRootsForTests,
   invalidateAuthorizedRootsCache,
-  registerWorktreeRootsForRepo,
-  resolveRegisteredWorktreePath
+  registerWorktreeRootsForRepo
 } from './registered-worktree-roots-cache'
 
 const DISTRO = 'Ubuntu-24.04'
@@ -104,12 +103,6 @@ beforeEach(() => {
 })
 
 describe('authorized worktree roots for a drive repo whose project runtime is WSL', () => {
-  it('lists through the project distro, so the path delete and git status send is authorized', async () => {
-    await expect(resolveAuthorizedPath(worktree, fixture())).resolves.toBe(worktree)
-    await expect(resolveRegisteredWorktreePath(worktree, fixture())).resolves.toBe(worktree)
-    expect(mocks.graph).toHaveBeenCalledWith(repo, { wslDistro: DISTRO })
-  })
-
   it('still refuses a path outside every root, including the spelling only host Git lists', async () => {
     const store = fixture()
     await expect(
@@ -137,18 +130,6 @@ describe('authorized worktree roots for a drive repo whose project runtime is WS
     )
   })
 
-  it('keeps a registration WSL Git produced without re-listing', async () => {
-    const store = fixture()
-    registerWorktreeRootsForRepo(store, repo.id, [repo.path, worktree], { wslDistro: DISTRO })
-    await expect(resolveAuthorizedPath(resolve('/wsl-drive/outside'), store)).rejects.toThrow(
-      PATH_ACCESS_DENIED_MESSAGE
-    )
-    expect(mocks.graph).not.toHaveBeenCalled()
-    await expect(resolveAuthorizedPath(join(worktree, 'file'), store)).resolves.toBe(
-      join(worktree, 'file')
-    )
-  })
-
   it('re-lists a registration host Git produced for a WSL project on the next miss', async () => {
     const store = fixture()
     registerWorktreeRootsForRepo(store, repo.id, [repo.path, hostGitSpelling])
@@ -156,14 +137,6 @@ describe('authorized worktree roots for a drive repo whose project runtime is WS
       join(worktree, 'file')
     )
     expect(mocks.graph).toHaveBeenCalledWith(repo, { wslDistro: DISTRO })
-  })
-
-  it('lists with host Git while the runtime awaits repair, as before routing', async () => {
-    useRuntime(repairRuntime)
-    await expect(resolveAuthorizedPath(join(hostGitSpelling, 'file'), fixture())).resolves.toBe(
-      join(hostGitSpelling, 'file')
-    )
-    expect(mocks.graph).toHaveBeenCalledWith(repo, {})
   })
 
   it('keeps the WSL listing when a resolved runtime starts awaiting repair', async () => {

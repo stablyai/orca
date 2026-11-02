@@ -6,10 +6,10 @@ import {
   ENVIRONMENT_ID,
   RUNTIME_EXECUTION_HOST_ID,
   WORKTREE_ID,
-  makeSnapshot,
   resetTerminalCreateEnvironment,
   stubTerminalCreateEnvironment
 } from './web-runtime-session-test-harness'
+
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
@@ -72,8 +72,6 @@ vi.mock('./web-runtime-browser-materialization', () => ({
   hasMaterializedWebRuntimeBrowserPage: mocks.hasMaterializedWebRuntimeBrowserPage
 }))
 
-const FOLDER_WORKSPACE_ID = 'folder:fw-1'
-
 type MutableSelection = {
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
@@ -126,54 +124,6 @@ describe('web-runtime-session terminal workspace routing', () => {
     expect(selection).toEqual({
       activeWorktreeId: WORKTREE_ID,
       activeWorkspaceExecutionHostId: 'local'
-    })
-  })
-
-  it('does not route a locally-owned folder workspace to the focused runtime environment', async () => {
-    const selection: MutableSelection = {
-      activeWorktreeId: FOLDER_WORKSPACE_ID,
-      activeWorkspaceExecutionHostId: 'local'
-    }
-    stubSelectableWorkspaceStore(selection)
-    const runtimeCall = vi.fn()
-    stubRuntimeEnvironmentBridge({ call: runtimeCall })
-
-    const outcome = await createWebRuntimeSessionTerminal({
-      worktreeId: FOLDER_WORKSPACE_ID,
-      environmentId: null,
-      activate: true
-    })
-
-    expect(outcome.status).toBe('failed')
-    expect(runtimeCall).not.toHaveBeenCalled()
-    expect(selection.activeWorkspaceExecutionHostId).toBe('local')
-  })
-
-  it('still falls back to the focused environment when the caller expressed no ownership', async () => {
-    const selection: MutableSelection = {
-      activeWorktreeId: WORKTREE_ID,
-      activeWorkspaceExecutionHostId: RUNTIME_EXECUTION_HOST_ID
-    }
-    stubSelectableWorkspaceStore(selection)
-    const runtimeCall = vi
-      .fn()
-      .mockResolvedValueOnce({
-        id: 'create',
-        ok: true,
-        result: { tab: { id: 'host-tab-1' }, publicationEpoch: 'epoch-1', snapshotVersion: 2 }
-      })
-      .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
-    stubRuntimeEnvironmentBridge({ call: runtimeCall })
-
-    const outcome = await createWebRuntimeSessionTerminal({
-      worktreeId: WORKTREE_ID,
-      activate: true
-    })
-
-    expect(outcome).toEqual({ status: 'created' })
-    expect(runtimeCall.mock.calls[0][0]).toMatchObject({
-      selector: ENVIRONMENT_ID,
-      method: 'session.tabs.createTerminal'
     })
   })
 

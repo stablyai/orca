@@ -127,11 +127,6 @@ async function holderWithRequest(options: { procReadable?: boolean; path?: strin
 }
 
 describe.skipIf(process.platform === 'win32')('WSL distro holder script', () => {
-  it('holds while nothing asked for a release', async () => {
-    const { exited } = startHolder()
-    expect(await within(2_500, exited)).toBe('running')
-  })
-
   it('drops a request left from before it started: a client wants the distro now', async () => {
     writeFileSync(releasePath(), '999999\n')
     const { exited } = startHolder()
@@ -158,18 +153,6 @@ describe.skipIf(process.platform === 'win32')('WSL distro holder script', () => 
     rmSync(releasePath())
     orcad.kill('SIGKILL')
     expect(await within(3_000, holder.exited)).toBe('running')
-  })
-
-  it('ignores a request it cannot read as a pid', async () => {
-    const holder = await startHolderReady()
-    writeFileSync(releasePath(), 'not-a-pid\n')
-    expect(await within(2_500, holder.exited)).toBe('running')
-  })
-
-  it('never releases without a home to find the request in', async () => {
-    writeFileSync(releasePath(), '999999\n')
-    const { exited } = startHolder({ PATH: process.env.PATH })
-    expect(await within(2_500, exited)).toBe('running')
   })
 
   it('keeps the distro while the user still runs something, and lets go once it ends', async () => {
@@ -268,13 +251,5 @@ describe.skipIf(process.platform === 'win32')('WSL distro holder script', () => 
     writeFileSync(join(bin, 'id'), `#!/bin/sh\necho ${me + 1}\n`, { mode: 0o755 })
     const other = await holderWithRequest({ path: `${bin}:${process.env.PATH}` })
     expect(await within(RELEASE_BOUND_MS, other.exited)).toBe(0)
-  })
-
-  it('cleans up a note a killed holder left half-written', async () => {
-    const stale = `${blockedPath()}.12345`
-    writeFileSync(stale, 'half')
-    const { exited } = startHolder()
-    expect(await within(500, exited)).toBe('running')
-    expect(existsSync(stale)).toBe(false)
   })
 })

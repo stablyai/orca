@@ -18,7 +18,7 @@ type PlacementSettings = {
   agentDefaultArgs: Record<string, string>
   agentDefaultEnv: Record<string, Record<string, string>>
   activeRuntimeEnvironmentId: string | null
-  experimentalNativeChat?: boolean
+  nativeChatProviders?: Record<string, boolean>
   nativeChatSessionOptions?: Record<
     string,
     { model?: string; valuesByModel?: Record<string, Record<string, string>> }
@@ -81,7 +81,7 @@ vi.mock('@/lib/telemetry', () => ({
   tuiAgentToAgentKind: (agent: string) => agent
 }))
 
-vi.mock('@/components/native-chat/native-chat-session-option-cache', () => ({
+vi.mock('../../../shared/native-chat/input/native-chat-session-option-cache', () => ({
   seedNativeChatAppliedSessionOptions: mockSeedNativeChatAppliedSessionOptions
 }))
 

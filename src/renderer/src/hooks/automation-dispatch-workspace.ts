@@ -1,7 +1,8 @@
+import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
+import { findAutomationRepo } from '../../../shared/automation-repo-target'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import type {
   Automation,
   AutomationDispatchResult,
@@ -13,15 +14,15 @@ import {
   didAutomationPrecheckPass,
   formatAutomationPrecheckFailure
 } from '../../../shared/automation-precheck'
-import {
-  getRepoExecutionHostId,
-  parseExecutionHostId,
-  toSshExecutionHostId
-} from '../../../shared/execution-host'
+import { getRepoSshConnectionId, parseExecutionHostId } from '../../../shared/execution-host'
+import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspace-execution-host'
 import { buildClientAutomationWorkspaceProvenance } from '../../../shared/automation-workspace-provenance'
-import { resolveFolderWorkspaceHost } from '../../../shared/folder-workspace-execution-host'
 import type { Worktree } from '../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  createRepoRowExecutionHostLookup,
+  resolveWorktreeExecutionHost
+} from '../../../shared/worktree-execution-host-resolution'
 
 type AutomationDispatchStoreState = ReturnType<typeof useAppStore.getState>
 type MarkDispatchResult = (result: AutomationDispatchResult) => Promise<void>
@@ -30,6 +31,7 @@ export type AutomationDispatchWorkspaceContext = {
   workspaceId: string | null
   workspaceDisplayName: string | null
   precheckResult: AutomationPrecheckResult | null
+  sshTargetId?: string | null
 }
 
 export function resolveAutomationDispatchWorkspace(
@@ -38,19 +40,39 @@ export function resolveAutomationDispatchWorkspace(
   run: AutomationRun
 ) {
   const runRepoId = getAutomationRunRepoId(automation)
-  const repo = state.repos.find((entry) => entry.id === runRepoId)
+  const repo = findAutomationRepo(state.repos, runRepoId, automation.runContext)
   const automationWorkspaceScope = parseWorkspaceKey(automation.workspaceId ?? '')
+  const folderTarget =
+    automationWorkspaceScope?.type === 'folder'
+      ? resolveQualifiedFolderWorkspaceResult(state, automationWorkspaceScope.folderWorkspaceId)
+      : null
+  const expectedHostId = automation.runContext?.hostId
+  const repoOwners = createRepoRowExecutionHostLookup(state.repos)
   const automationWorktree = automation.workspaceId
-    ? automationWorkspaceScope?.type === 'folder'
-      ? state.getKnownWorktreeById(automation.workspaceId)
-      : state.allWorktrees().find((entry) => entry.id === automation.workspaceId)
+    ? folderTarget
+      ? folderTarget.kind === 'selected'
+        ? folderWorkspaceToWorktree({
+            ...folderTarget.value.workspace,
+            executionHostId: folderTarget.value.hostId
+          })
+        : null
+      : state.allWorktrees().find((entry) => {
+          if (entry.id !== automation.workspaceId) {
+            return false
+          }
+          if (!automation.runContext) {
+            return true
+          }
+          const owner = resolveWorktreeExecutionHost(repoOwners, entry)
+          return owner.kind === 'resolved' && owner.hostId === expectedHostId
+        })
     : null
   const context: AutomationDispatchWorkspaceContext = {
     workspaceId: automation.workspaceId,
     workspaceDisplayName: automationWorktree?.displayName ?? run.workspaceDisplayName ?? null,
     precheckResult: null
   }
-  return { runRepoId, repo, automationWorkspaceScope, automationWorktree, context }
+  return { runRepoId, repo, automationWorkspaceScope, automationWorktree, folderTarget, context }
 }
 
 type ResolvedAutomationDispatchWorkspace = ReturnType<typeof resolveAutomationDispatchWorkspace>
@@ -66,88 +88,59 @@ export async function prepareAutomationDispatchWorkspace(args: {
   markDispatchResult: MarkDispatchResult
 }): Promise<Worktree | null> {
   const { state, automation, run, dispatchToken, resolved, markDispatchResult } = args
-  const { repo, runRepoId, automationWorkspaceScope, automationWorktree, context } = resolved
-  const folderWorkspaceHost =
+  const { repo, runRepoId, automationWorkspaceScope, context } = resolved
+  const folderTarget =
     automationWorkspaceScope?.type === 'folder'
-      ? resolveFolderWorkspaceHost(state, automationWorkspaceScope.folderWorkspaceId)
+      ? resolved.automationWorktree?.hostId
+        ? resolveQualifiedFolderWorkspaceResult(
+            state,
+            automationWorkspaceScope.folderWorkspaceId,
+            resolved.automationWorktree.hostId
+          )
+        : resolved.folderTarget
       : null
-  const folderWorkspaceConnectionId =
-    folderWorkspaceHost?.kind === 'ssh' ? folderWorkspaceHost.targetId : null
-  // A workspace whose host does not resolve to one place is refused, not guessed at.
-  const folderWorkspaceHostUnresolved =
-    folderWorkspaceHost !== null && folderWorkspaceHost.kind === 'ambiguous'
-  const folderWorkspaceHostId =
-    folderWorkspaceHost && automationWorktree
-      ? folderWorkspaceConnectionId
-        ? toSshExecutionHostId(folderWorkspaceConnectionId)
-        : folderWorkspaceHost.kind === 'local' || folderWorkspaceHost.kind === 'runtime'
-          ? getResolvedExecutionHostIdForWorktree(state, automationWorktree.id)
-          : null
-      : null
-  const runHostId =
-    parseExecutionHostId(automation.runContext?.hostId)?.id ?? getRepoExecutionHostId(repo)
+  const folder = folderTarget?.kind === 'selected' ? folderTarget.value : null
+  const automationWorktree = folder
+    ? folderWorkspaceToWorktree({ ...folder.workspace, executionHostId: folder.hostId })
+    : folderTarget
+      ? null
+      : resolved.automationWorktree
+  const workspaceOwner = automationWorktree
+    ? resolveWorktreeExecutionHost(
+        createRepoRowExecutionHostLookup(state.repos),
+        automationWorktree
+      )
+    : null
   const workspaceMatchesRunTarget =
     automationWorkspaceScope?.type === 'folder'
-      ? folderWorkspaceHostId !== null && folderWorkspaceHostId === runHostId
+      ? !!folder
       : !automation.runContext?.repoId ||
-        automationWorktree?.repoId === automation.runContext.repoId
+        (automationWorktree?.repoId === automation.runContext.repoId &&
+          workspaceOwner?.kind === 'resolved' &&
+          workspaceOwner.hostId === automation.runContext.hostId)
   if (automation.workspaceMode === 'existing' && automationWorktree && !workspaceMatchesRunTarget) {
     await markDispatchResult({
       runId: run.id,
       status: 'skipped_unavailable',
       workspaceId: automation.workspaceId,
       workspaceDisplayName: context.workspaceDisplayName,
-      error: folderWorkspaceHostUnresolved
-        ? translate(
-            'auto.hooks.useAutomationDispatchEvents.workspaceHostUnresolved',
-            'The target workspace spans more than one host, so this run has no single host to use.'
-          )
-        : translate(
-            'auto.hooks.useAutomationDispatchEvents.3ad7d77f57',
-            'The target workspace is on a different host than this automation run target.'
-          )
+      error: translate(
+        'auto.hooks.useAutomationDispatchEvents.3ad7d77f57',
+        'The target workspace is on a different host than this automation run target.'
+      )
     })
     return null
   }
   const sshTargetId =
     automationWorkspaceScope?.type === 'folder'
-      ? (folderWorkspaceConnectionId ?? null)
-      : (repo.connectionId ?? null)
-  if (sshTargetId) {
-    const needsPrompt = await window.api.ssh.needsPassphrasePrompt({
-      targetId: sshTargetId
-    })
-    if (needsPrompt) {
-      await markDispatchResult({
-        runId: run.id,
-        status: 'skipped_needs_interactive_auth',
-        workspaceId: context.workspaceId,
-        workspaceDisplayName: context.workspaceDisplayName,
-        error: translate(
-          'auto.hooks.useAutomationDispatchEvents.16a21d6413',
-          'SSH reconnect requires interactive credentials.'
-        )
-      })
-      return null
-    }
-    const sshState = await window.api.ssh.getState({ targetId: sshTargetId })
-    if (sshState?.status !== 'connected') {
-      try {
-        const connected = await window.api.ssh.connect({ targetId: sshTargetId, automatic: true })
-        if (connected?.status !== 'connected') {
-          throw new Error('SSH target is unavailable.')
-        }
-      } catch (error) {
-        await markDispatchResult({
-          runId: run.id,
-          status: 'skipped_unavailable',
-          workspaceId: context.workspaceId,
-          workspaceDisplayName: context.workspaceDisplayName,
-          error: error instanceof Error ? error.message : String(error)
-        })
-        return null
-      }
-    }
+      ? (folder?.connectionId ?? null)
+      : getRepoSshConnectionId(repo)
+  context.sshTargetId = sshTargetId
+  if (
+    automation.workspaceMode === 'new_per_run' &&
+    !(await connectAutomationDispatchWorkspace({ run, context, markDispatchResult }))
+  ) {
+    return null
   }
 
   if (automation.workspaceMode === 'existing' && !automationWorktree) {
@@ -156,10 +149,16 @@ export async function prepareAutomationDispatchWorkspace(args: {
       status: 'skipped_unavailable',
       workspaceId: automation.workspaceId,
       workspaceDisplayName: context.workspaceDisplayName,
-      error: translate(
-        'auto.hooks.useAutomationDispatchEvents.59718b120b',
-        'The target workspace is no longer available.'
-      )
+      error:
+        folderTarget?.kind === 'ambiguous'
+          ? translate(
+              'auto.hooks.useAutomationDispatchEvents.workspaceHostUnresolved',
+              'The target workspace spans more than one host, so this run has no single host to use.'
+            )
+          : translate(
+              'auto.hooks.useAutomationDispatchEvents.59718b120b',
+              'The target workspace is no longer available.'
+            )
     })
     return null
   }
@@ -257,4 +256,51 @@ function buildAutomationWorkspaceName(runTitle: string, scheduledFor: number): s
     .slice(0, 40)
   const stamp = new Date(scheduledFor).toISOString().replace(/[-:]/g, '').slice(0, 13)
   return `auto-${slug || 'run'}-${stamp}`
+}
+
+export async function connectAutomationDispatchWorkspace(args: {
+  run: AutomationRun
+  context: AutomationDispatchWorkspaceContext
+  markDispatchResult: MarkDispatchResult
+}): Promise<boolean> {
+  const { run, context, markDispatchResult } = args
+  const sshTargetId = context.sshTargetId
+  if (sshTargetId) {
+    const needsPrompt = await window.api.ssh.needsPassphrasePrompt({
+      targetId: sshTargetId
+    })
+    if (needsPrompt) {
+      await markDispatchResult({
+        runId: run.id,
+        status: 'skipped_needs_interactive_auth',
+        workspaceId: context.workspaceId,
+        workspaceDisplayName: context.workspaceDisplayName,
+        error: translate(
+          'auto.hooks.useAutomationDispatchEvents.16a21d6413',
+          'SSH reconnect requires interactive credentials.'
+        )
+      })
+      return false
+    }
+    const sshState = await window.api.ssh.getState({ targetId: sshTargetId })
+    if (sshState?.status !== 'connected') {
+      try {
+        const connected = await window.api.ssh.connect({ targetId: sshTargetId, automatic: true })
+        if (connected?.status !== 'connected') {
+          throw new Error('SSH target is unavailable.')
+        }
+      } catch (error) {
+        await markDispatchResult({
+          runId: run.id,
+          status: 'skipped_unavailable',
+          workspaceId: context.workspaceId,
+          workspaceDisplayName: context.workspaceDisplayName,
+          error: error instanceof Error ? error.message : String(error)
+        })
+        return false
+      }
+    }
+  }
+
+  return true
 }

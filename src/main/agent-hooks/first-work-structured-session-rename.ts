@@ -1,4 +1,4 @@
-import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
 import {
   maybeAutoRenameBranchOnFirstWork,
   type FirstWorkBranchRenameDeps

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { literalPathspec } from './git-pathspec'
+import { gitReportedPath, literalPathspec } from './git-pathspec'
 
 describe('literalPathspec', () => {
   afterEach(() => {
@@ -16,5 +16,21 @@ describe('literalPathspec', () => {
   it('leaves a host path untouched', () => {
     vi.stubGlobal('process', { ...process, platform: 'win32' })
     expect(literalPathspec('src\\index.ts', 'C:\\repo', {})).toBe(':(literal)src\\index.ts')
+  })
+})
+
+describe('gitReportedPath', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('matches Git status output for a native Windows path', () => {
+    vi.stubGlobal('process', { ...process, platform: 'win32' })
+    expect(gitReportedPath('src\\app.ts', 'C:\\repo', {})).toBe('src/app.ts')
+  })
+
+  it('keeps a POSIX filename backslash, which Git prints literally', () => {
+    vi.stubGlobal('process', { ...process, platform: 'linux' })
+    expect(gitReportedPath('dir\\file.txt', '/repo', {})).toBe('dir\\file.txt')
   })
 })

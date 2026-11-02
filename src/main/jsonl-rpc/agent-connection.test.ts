@@ -6,6 +6,8 @@ import { ROOT_ONLY_GRACEFUL_EXIT_MS } from '../provider-process/provider-process
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
 import type { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
 import { JsonlRpcAgentConnection, type JsonlRpcAgentConnectionOptions } from './agent-connection'
+import { PROVIDER_SPAWN_FAILURE_MARKER } from '../provider-process/provider-spawn-failure-report'
+import { providerExecutableMissing } from '../provider-process/provider-executable-missing'
 
 const teardown = vi.hoisted(() =>
   vi.fn<typeof terminateProviderProcessTree>(async () => 'unverifiable')
@@ -14,12 +16,18 @@ vi.mock('../provider-process/provider-process-teardown', () => ({
   terminateProviderProcessTree: teardown
 }))
 const opened: { connection: JsonlRpcAgentConnection; exit: () => void }[] = []
+/** What the supervisor writes when it cannot spawn the agent's CLI. */
+const SPAWN_ENOENT_REPORT = `${PROVIDER_SPAWN_FAILURE_MARKER}${JSON.stringify({
+  thrown: false,
+  code: 'ENOENT',
+  message: 'spawn fixture-rpc-agent ENOENT'
+})}\n`
 const grace =
   process.platform === 'win32' ? ROOT_ONLY_GRACEFUL_EXIT_MS : PROVIDER_SUPERVISOR_MAX_STOP_MS
 
 function fixture(
   options: JsonlRpcAgentConnectionOptions = {},
-  behavior: { exitOnEnd?: boolean; processless?: boolean } = {}
+  behavior: { exitOnEnd?: boolean; processless?: boolean; cwd?: string } = {}
 ) {
   const child = Object.assign(createFakePipedChild(), {
     pid: behavior.processless ? undefined : 9_999_999,
@@ -38,7 +46,7 @@ function fixture(
     {
       command: 'fixture-rpc-agent',
       args: ['--mode', 'rpc'],
-      cwd: '/execution-host/folder',
+      cwd: behavior.cwd ?? '/execution-host/folder',
       env: { PI_CODING_AGENT_DIR: '/host/account', STRIPPED: 'overlay' },
       envToDelete: ['STRIPPED']
     },
@@ -58,6 +66,25 @@ afterEach(async () => {
 })
 
 describe('JSON-lines RPC process ownership', () => {
+  // The supervisor (POSIX only) reports the failed spawn on stderr and exits 127.
+  it.skipIf(process.platform === 'win32')(
+    'marks the exit of a CLI the supervisor could not spawn as a missing executable',
+    async () => {
+      const onExit = vi.fn()
+      const { connection, child } = fixture({ onExit }, { cwd: process.cwd() })
+      const pending = connection.request('get_state').catch((error: unknown) => error)
+      child.stderr.write(SPAWN_ENOENT_REPORT)
+      await new Promise((resolve) => setImmediate(resolve))
+      child.emit('exit', 127, null)
+      child.stdout.end()
+      child.emit('close', 127, null)
+      await vi.waitFor(() => expect(onExit).toHaveBeenCalledOnce())
+      expect(providerExecutableMissing(onExit.mock.calls[0][0])).toBe(true)
+      expect(providerExecutableMissing(await pending)).toBe(true)
+      expect(connection.spawnAbsence).toBe('executable')
+    }
+  )
+
   it('uses host-resolved launch data and exposes ordinary RPC replies', async () => {
     const { connection, child, spawn } = fixture()
     expect(spawn).toHaveBeenCalledExactlyOnceWith(

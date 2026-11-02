@@ -25,7 +25,7 @@ import type { StoreRuntimeState } from './store-runtime-state'
 
 type StateSerializationSecretHandlingOperationsRuntime = Pick<
   StoreRuntimeState,
-  'protectedSecrets' | 'state'
+  'protectedSecrets' | 'state' | 'originalExperimentalNativeChat'
 >
 
 export class StateSerializationSecretHandlingOperations {
@@ -109,6 +109,7 @@ export class StateSerializationSecretHandlingOperations {
           break
         case 'sshRemotePtyLeases':
         case 'remoteLayoutSnapshots':
+        case 'hostRepoCatalogSnapshots':
         case 'legacyPaneKeyAliasEntries':
         case 'migrationUnsupportedPtyEntries':
           stateToSave[domain] = this.runtime.state[domain]
@@ -240,6 +241,7 @@ export class StateSerializationSecretHandlingOperations {
   private buildSettingsToSave(encrypt: (slot: string, plaintext: string) => string) {
     return {
       ...stripRetiredGlobalSettings(this.runtime.state.settings),
+      ...this.runtime.originalExperimentalNativeChat,
       opencodeSessionCookie: encrypt(
         PROTECTED_SECRET_SLOT.opencodeSessionCookie,
         this.runtime.state.settings.opencodeSessionCookie
