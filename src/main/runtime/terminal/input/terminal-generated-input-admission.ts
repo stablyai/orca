@@ -1,29 +1,47 @@
 import {
+  GENERATED_AGENT_INPUT_QUIET_MS,
   GENERATED_AGENT_INPUT_TIMEOUT_MS,
   signalAllowsCompatibilityEvidence,
-  waitForGeneratedAgentInput
+  waitForGeneratedAgentInput,
+  type GeneratedInputIntent
 } from '../../../../shared/generated-agent-input-readiness'
 import type { DraftPasteReadySignal } from '../../../../shared/tui-agent-config'
 import type { RuntimeAgentPromptWriteOptions } from '../../runtime-terminal-contracts'
-import { admitsGeneratedInput } from '../../../../shared/generated-agent-input-admission'
+import {
+  admitsGeneratedInput,
+  screenRefusesGeneratedInput,
+  type GeneratedInputScreen
+} from '../../../../shared/generated-agent-input-admission'
 import { showsAgentComposer } from '../../../../shared/agent-input-dialog'
 import { resolvePasteReadySignal } from '../../../../shared/draft-paste-ready-scanner'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { RuledScreen } from '../../../../shared/screen-input-veto'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess
 } from '../../../../shared/agent-process-recognition'
 import { generatedInputAgentName } from '../../../../shared/generated-agent-input-notice'
 import { isKnownReadyPromptBody } from '../../terminal-wait-detection'
+import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../../shared/agent-prompt-injection'
 import { OrcaRuntimeWithTitlelessPaneAgentIdentity } from '../wait/titleless-pane-agent-identity'
 import { GeneratedAgentInputNotices } from '../../generated-agent-input-notices'
+
+/** Resolves with `fallback` once the operation's deadline passes, so no read outlives it. */
+export function boundedByDeadline<T>(read: Promise<T>, deadline: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  return Promise.race([
+    read.finally(() => clearTimeout(timer)),
+    new Promise<T>((resolve) => {
+      timer = setTimeout(() => resolve(fallback), Math.max(0, deadline - Date.now()))
+    })
+  ])
+}
 
 export type GeneratedInputWait = {
   agent: TuiAgent | null
   deadline: number
   submit: boolean
+  intent: GeneratedInputIntent
   signal?: AbortSignal
   /** A launch's own readiness wait already saw this composer; still subject to every veto. */
   observedReady?: boolean
@@ -46,14 +64,57 @@ export abstract class OrcaRuntimeWithGeneratedInputAdmission extends OrcaRuntime
     return isTuiAgent(resolved) ? resolved : (expected ?? null)
   }
 
-  /** The caught-up host grid, else the current provider screen; null while neither is current. */
-  protected async readGeneratedInputScreen(ptyId: string): Promise<RuledScreen | null> {
+  /** The caught-up host grid, else the current provider screen; null while a model this host
+   *  holds has not caught up, 'unknown' when it holds none to observe. */
+  protected async readGeneratedInputScreen(ptyId: string): Promise<GeneratedInputScreen> {
     const caughtUp = this.readCaughtUpRuledScreen(ptyId)
     if (caughtUp) {
       return caughtUp
     }
     const screen = await this.readCurrentTerminalWaitScreen(ptyId)
-    return screen ? { lines: screen.lines, alternateScreen: screen.isAlternateScreen } : null
+    if (screen) {
+      return { lines: screen.lines, alternateScreen: screen.isAlternateScreen }
+    }
+    return this.headlessTerminals.has(ptyId) || this.providerSnapshotPreferredPtys.has(ptyId)
+      ? null
+      : 'unknown'
+  }
+
+  /** Immediately before a provider write, with nothing awaited after it: deadline and the caught-up
+   *  grid. A grid that lags is left to the awaited recheck just before. */
+  protected assertGeneratedInputCommit(
+    ptyId: string,
+    agent: TuiAgent | null,
+    deadline: number,
+    typedText?: string,
+    enterReserveMs = -1
+  ): void {
+    const grid = this.readCaughtUpRuledScreen(ptyId)
+    // Text is refused up front when the budget left cannot also cover the Enter that follows it.
+    const reserve =
+      enterReserveMs < 0 ? 0 : AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS + enterReserveMs
+    if (
+      Date.now() + reserve >= deadline ||
+      (grid && screenRefusesGeneratedInput(agent, grid, typedText))
+    ) {
+      throw this.generatedInputRefusal(ptyId)
+    }
+  }
+
+  /** A caller's own guard (a foreground read) shares the operation's deadline. */
+  protected async withinGeneratedDeadline(
+    ptyId: string,
+    deadline: number,
+    guard: Promise<unknown>
+  ): Promise<void> {
+    const finished = await boundedByDeadline(
+      guard.then(() => true),
+      deadline,
+      false
+    )
+    if (!finished) {
+      throw this.generatedInputRefusal(ptyId)
+    }
   }
 
   private async readGeneratedInputProcess(ptyId: string) {
@@ -69,34 +130,43 @@ export abstract class OrcaRuntimeWithGeneratedInputAdmission extends OrcaRuntime
     return { known: true, foreground, hasChildProcesses } as const
   }
 
-  /** Current admission; the screen is read after the awaited process read so it is the latest. */
+  /** Current admission; the screen is read after the awaited process read so it is the latest.
+   *  Both reads end at the deadline; an unanswered read is no admission. */
   protected async generatedInputAdmitted(
     ptyId: string,
     agent: TuiAgent | null,
     quiet: boolean,
+    deadline: number,
     typedText?: string
   ): Promise<boolean> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
-    const process = await this.readGeneratedInputProcess(ptyId)
-    const screen = await this.readGeneratedInputScreen(ptyId)
+    const process = await boundedByDeadline(this.readGeneratedInputProcess(ptyId), deadline, {
+      known: false
+    } as const)
+    const screen = await boundedByDeadline(this.readGeneratedInputScreen(ptyId), deadline, null)
     return (
       this.getPtyLifecycleGeneration(ptyId) === generation &&
       admitsGeneratedInput({ agent, screen, process, quiet, typedText })
     )
   }
 
-  /** Positive evidence on the current screen, which no consumed startup byte can take away. */
+  /** Positive evidence on the current screen, which no consumed startup byte can take away. Idle
+   *  rules that settle only after quiet read the waiter's measured quiet, so a late observer of an
+   *  idle Codex or OpenCode grid still sees it ready. */
   private async generatedInputComposerVisible(
     ptyId: string,
     agent: TuiAgent | null,
-    signal: DraftPasteReadySignal
+    signal: DraftPasteReadySignal,
+    quietMs: number,
+    deadline: number
   ): Promise<boolean> {
-    const screen = await this.readGeneratedInputScreen(ptyId)
-    if (!screen) {
+    const screen = await boundedByDeadline(this.readGeneratedInputScreen(ptyId), deadline, null)
+    if (!screen || screen === 'unknown') {
       return false
     }
     const text = screen.lines.join('\n')
-    if (isKnownReadyPromptBody(text, agent, () => screen.lines, true)) {
+    const outputClock = quietMs < GENERATED_AGENT_INPUT_QUIET_MS
+    if (isKnownReadyPromptBody(text, agent, () => screen.lines, outputClock)) {
       return true
     }
     // A painted composer counts once the expected agent is proven in front, so a streaming turn
@@ -107,7 +177,9 @@ export abstract class OrcaRuntimeWithGeneratedInputAdmission extends OrcaRuntime
     ) {
       return false
     }
-    const process = await this.readGeneratedInputProcess(ptyId)
+    const process = await boundedByDeadline(this.readGeneratedInputProcess(ptyId), deadline, {
+      known: false
+    } as const)
     return (
       process.known &&
       agent !== null &&
@@ -130,15 +202,25 @@ export abstract class OrcaRuntimeWithGeneratedInputAdmission extends OrcaRuntime
         replay: () => this.recentPtyOutputById.get(ptyId)?.read(),
         bracketedPaste: () =>
           this.headlessTerminals.get(ptyId)?.emulator.getModes().bracketedPaste === true,
-        composerReady: async () =>
+        composerReady: async (quietMs) =>
           wait.observedReady === true ||
-          (await this.generatedInputComposerVisible(ptyId, wait.agent, signal)),
+          (await this.generatedInputComposerVisible(
+            ptyId,
+            wait.agent,
+            signal,
+            quietMs,
+            wait.deadline
+          )),
         accept: async (quiet) =>
           this.getPtyLifecycleGeneration(ptyId) === generation &&
-          (await this.generatedInputAdmitted(ptyId, wait.agent, quiet))
+          (await this.generatedInputAdmitted(ptyId, wait.agent, quiet, wait.deadline))
       },
       signal,
-      { signal: wait.signal, timeoutMs: Math.max(0, wait.deadline - Date.now()) }
+      {
+        signal: wait.signal,
+        timeoutMs: Math.max(0, wait.deadline - Date.now()),
+        intent: wait.intent
+      }
     )
   }
 
@@ -147,14 +229,16 @@ export abstract class OrcaRuntimeWithGeneratedInputAdmission extends OrcaRuntime
     ptyId: string,
     options: Pick<
       RuntimeAgentPromptWriteOptions,
-      'submit' | 'generatedAgent' | 'inputDeadline' | 'observedReady'
+      'submit' | 'generatedAgent' | 'inputDeadline' | 'observedReady' | 'generatedIntent'
     >,
     signal: AbortSignal | undefined
   ): Promise<{ agent: TuiAgent | null; deadline: number; submit: boolean }> {
     const agent = this.generatedInputAgent(ptyId, options.generatedAgent)
     const deadline = options.inputDeadline ?? Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS
     const submit = options.submit !== false
-    const wait = { agent, deadline, submit, signal, observedReady: options.observedReady }
+    // A caller that names no intent is sending to an agent already running, as main sent directly.
+    const intent = options.generatedIntent ?? 'running'
+    const wait = { agent, deadline, submit, intent, signal, observedReady: options.observedReady }
     if (!(await this.waitForGeneratedTerminalInput(ptyId, wait))) {
       throw this.generatedInputRefusal(ptyId)
     }

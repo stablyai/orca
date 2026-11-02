@@ -1,14 +1,16 @@
 import type { DraftPasteReadySignal } from '../../../shared/tui-agent-config'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import type { RuledScreen } from '../../../shared/screen-input-veto'
 import {
   signalAllowsCompatibilityEvidence,
-  waitForGeneratedAgentInput
+  waitForGeneratedAgentInput,
+  type GeneratedInputIntent
 } from '../../../shared/generated-agent-input-readiness'
+import { stripAnsiEscapeSequences } from '../../../shared/ansi-escape-sequences'
 import {
   admitsGeneratedInput,
-  type GeneratedInputProcess
+  type GeneratedInputProcess,
+  type GeneratedInputScreen
 } from '../../../shared/generated-agent-input-admission'
 import { showsAgentComposer } from '../../../shared/agent-input-dialog'
 import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
@@ -28,29 +30,65 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 // the host's one admission rule to what this client can see; an old host can still open a dialog
 // after this read, which no client can prevent.
 
-/** The mounted pane's grid, else the host's own current screen; never a stream posing as one. */
-async function readLegacyInputScreen(ptyId: string): Promise<RuledScreen | null> {
+/**
+ * The one decision point for a legacy host that offers no observation at all: no mounted pane, no
+ * screen from the host and no streamed text since the agent's last handoff. 'deliver' keeps main's
+ * behavior and the common pattern's unknown-endpoint rule (any dialog seen anywhere still vetoes);
+ * 'refuse' waits out the budget and offers Copy instead. Pending coordinator decision.
+ */
+export const LEGACY_BLIND_POLICY: 'deliver' | 'refuse' = 'deliver'
+
+type LegacyEvidence = { screen: GeneratedInputScreen; grid: boolean }
+
+// Text an older host streamed to this client since the agent's last handoff, per PTY. It is veto
+// and marker evidence only, never a grid; each legacy delivery clears it when it ends.
+const legacyTails = new Map<string, string>()
+const LEGACY_TAIL_CHARS = 8 * 1024
+// oxlint-disable-next-line no-control-regex -- PTY mode resets end the agent's current input region.
+const LEGACY_HANDOFF = /\x1b\[\?(?:2004|2031|1049)l/g
+
+function observeLegacyTail(ptyId: string, data: string): void {
+  const handoffs = [...data.matchAll(LEGACY_HANDOFF)]
+  const last = handoffs.at(-1)
+  const text = stripAnsiEscapeSequences(
+    last ? data.slice(last.index + last[0].length) : data
+  ).replace(/\r\n?/g, '\n')
+  const kept = last ? text : (legacyTails.get(ptyId) ?? '') + text
+  legacyTails.set(ptyId, kept.slice(-LEGACY_TAIL_CHARS))
+}
+
+export function forgetLegacyTail(ptyId: string): void {
+  legacyTails.delete(ptyId)
+}
+
+/** The mounted pane's grid, else the host's own screen, else the streamed tail as veto evidence;
+ *  with none of them, the blind policy decides. */
+async function readLegacyEvidence(ptyId: string): Promise<LegacyEvidence> {
   const mounted = await readPtyInputScreen(ptyId)
   if (mounted) {
-    return mounted
+    return { screen: mounted, grid: true }
   }
   const owner = getRemoteRuntimePtyOwner(ptyId)
-  if (!owner) {
-    return null
+  if (owner) {
+    try {
+      const read = await callRuntimeRpc<{ terminal: { tail: string[]; source?: string } }>(
+        owner.target,
+        'terminal.read',
+        { terminal: owner.terminal, screen: true },
+        { timeoutMs: 5_000 }
+      )
+      if (read.terminal.source === 'screen') {
+        return { screen: { lines: read.terminal.tail, alternateScreen: false }, grid: true }
+      }
+    } catch {
+      // An unanswered read is no observation; the tail or blind policy decides below.
+    }
   }
-  try {
-    const read = await callRuntimeRpc<{ terminal: { tail: string[]; source?: string } }>(
-      owner.target,
-      'terminal.read',
-      { terminal: owner.terminal, screen: true },
-      { timeoutMs: 5_000 }
-    )
-    return read.terminal.source === 'screen'
-      ? { lines: read.terminal.tail, alternateScreen: false }
-      : null
-  } catch {
-    return null
+  const tail = legacyTails.get(ptyId)
+  if (tail?.trim()) {
+    return { screen: { lines: tail.split('\n'), alternateScreen: false }, grid: false }
   }
+  return { screen: LEGACY_BLIND_POLICY === 'deliver' ? 'unknown' : null, grid: false }
 }
 
 async function readLegacyProcess(ptyId: string): Promise<GeneratedInputProcess> {
@@ -72,7 +110,7 @@ export async function agentInputIsAdmitted(
   typedText?: string
 ): Promise<boolean> {
   const process = await readLegacyProcess(ptyId)
-  const screen = await readLegacyInputScreen(ptyId)
+  const { screen } = await readLegacyEvidence(ptyId)
   return admitsGeneratedInput({ agent, screen, process, quiet, typedText })
 }
 
@@ -86,10 +124,13 @@ async function legacyComposerVisible(
     return false
   }
   const process = await readLegacyProcess(ptyId)
-  const screen = await readLegacyInputScreen(ptyId)
+  const { screen, grid } = await readLegacyEvidence(ptyId)
+  // Only a grid can show a painted composer; streamed text is veto evidence alone.
   return (
     process.known &&
+    grid &&
     screen !== null &&
+    screen !== 'unknown' &&
     isExpectedAgentProcess(process.foreground, TUI_AGENT_CONFIG[agent].expectedProcess) &&
     showsAgentComposer(screen.lines.join('\n'))
   )
@@ -101,12 +142,17 @@ export function waitForAgentDraftInputReady(
   readySignal: DraftPasteReadySignal,
   agent?: TuiAgent,
   signal?: AbortSignal,
-  initialData = ''
+  initialData = '',
+  intent: GeneratedInputIntent = 'startup'
 ): Promise<boolean> {
   let replay = initialData
   return waitForGeneratedAgentInput(
     {
-      subscribe: async (observe) => {
+      subscribe: async (onData) => {
+        const observe = (data: string): void => {
+          observeLegacyTail(ptyId, data)
+          onData(data)
+        }
         if (isRemoteRuntimePtyId(ptyId)) {
           return subscribeToRuntimeTerminalData(ptyId, `desktop:paste-ready:${ptyId}`, observe)
         }
@@ -122,6 +168,6 @@ export function waitForAgentDraftInputReady(
       accept: (quiet) => agentInputIsAdmitted(ptyId, agent, quiet)
     },
     readySignal,
-    { timeoutMs, signal }
+    { timeoutMs, signal, intent }
   )
 }

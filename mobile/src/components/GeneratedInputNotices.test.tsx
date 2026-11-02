@@ -7,8 +7,9 @@ import { GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY } from '../../../src/shared
 
 const writeText = vi.hoisted(() => vi.fn(async () => {}))
 vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText }) }))
+type BannerProps = { message: string; action: { onPress: () => void }; onDismiss: () => void }
 vi.mock('./HostRouteNoticeBanner', () => ({
-  HostRouteNoticeBanner: (props: object) => createElement('notice', props)
+  HostRouteNoticeBanner: (props: BannerProps) => createElement('notice', props)
 }))
 
 const frame = (chunk: string, offset: number, textLength: number) => ({
@@ -69,11 +70,10 @@ it('pages, copies only complete text, and dismisses on the runtime that owns the
   await act(async () => {
     banners()[0].props.onDismiss()
   })
-  expect(sendRequest).toHaveBeenCalledWith(
+  expect(sendRequest.mock.calls.map((call) => call.slice(0, 2))).toContainEqual([
     'terminal.dismissGeneratedInputNotice',
-    { id: 'refused' },
-    undefined
-  )
+    { id: 'refused' }
+  ])
   expect(banners()).toHaveLength(1)
   await act(async () => {
     emit({ type: 'dismissed', session: 's', revision: 3, id: 'refused' })

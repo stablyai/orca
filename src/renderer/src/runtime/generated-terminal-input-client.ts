@@ -7,6 +7,7 @@ import {
 } from '../../../shared/generated-terminal-input'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import { getRemoteRuntimePtyOwner } from './runtime-terminal-stream'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 type SendResult = { delivery?: { outcome: GeneratedInputOutcome }; part?: 'accepted' }
 
@@ -14,43 +15,54 @@ type SendResult = { delivery?: { outcome: GeneratedInputOutcome }; part?: 'accep
 const TRANSPORT_MARGIN_MS = 15_000
 
 /** Hand generated text to the host that owns the PTY, which admits and writes it in one
- *  transaction. Null: that host predates the transaction, so the caller's legacy adapter runs. */
+ *  transaction. Null only when that host predates the transaction, so the caller's legacy adapter
+ *  runs; every other answer, target-gone included, is the host's own outcome. */
 export async function sendGeneratedTerminalInput(
   ptyId: string,
   request: GeneratedInputRequest
 ): Promise<GeneratedInputOutcome | null> {
   const owner = getRemoteRuntimePtyOwner(ptyId)
+  return owner
+    ? sendGeneratedTerminalInputToHandle(owner.target, owner.terminal, request)
+    : sendToHost({ kind: 'local' }, { ptyId }, request)
+}
+
+/** The same operation for a caller that names a runtime terminal handle (notes). */
+export async function sendGeneratedTerminalInputToHandle(
+  target: RuntimeClientTarget,
+  terminal: string,
+  request: GeneratedInputRequest
+): Promise<GeneratedInputOutcome | null> {
+  if (
+    target.kind === 'environment' &&
+    !(await runtimeEnvironmentSupportsCapability(
+      target.environmentId,
+      GENERATED_INPUT_RUNTIME_CAPABILITY
+    ))
+  ) {
+    return null
+  }
+  return sendToHost(target, { terminal }, request)
+}
+
+async function sendToHost(
+  target: RuntimeClientTarget,
+  address: { ptyId: string } | { terminal: string },
+  request: GeneratedInputRequest
+): Promise<GeneratedInputOutcome> {
   const timeoutMs = (request.timeoutMs ?? 0) + TRANSPORT_MARGIN_MS
+  // The local runtime is this renderer's own version and takes the text in one request.
+  const parts = target.kind === 'local' ? [request.text] : splitGeneratedInputText(request.text)
+  const id = createBrowserUuid()
   try {
-    if (!owner) {
-      // The local runtime is this renderer's own version; an id it cannot name is left to the adapter.
-      const result = await callRuntimeRpc<SendResult>(
-        { kind: 'local' },
-        'terminal.sendGeneratedInput',
-        { ptyId, ...request },
-        { timeoutMs }
-      )
-      const outcome = result.delivery?.outcome ?? 'unconfirmed'
-      return outcome === 'target-gone' ? null : outcome
-    }
-    if (
-      !(await runtimeEnvironmentSupportsCapability(
-        owner.target.environmentId,
-        GENERATED_INPUT_RUNTIME_CAPABILITY
-      ))
-    ) {
-      return null
-    }
-    const parts = splitGeneratedInputText(request.text)
-    const id = createBrowserUuid()
     let result: SendResult = {}
     for (const [index, text] of parts.entries()) {
       result = await callRuntimeRpc<SendResult>(
-        owner.target,
+        target,
         'terminal.sendGeneratedInput',
         {
           ...request,
-          terminal: owner.terminal,
+          ...address,
           text,
           ...(parts.length > 1 ? { part: { id, index, final: index === parts.length - 1 } } : {})
         },

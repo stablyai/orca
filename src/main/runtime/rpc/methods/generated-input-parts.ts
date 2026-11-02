@@ -3,7 +3,13 @@ import { TERMINAL_INPUT_MAX_BYTES } from '../../../../shared/terminal-input'
 import { InvalidArgumentError } from '../core'
 
 type Part = { id: string; index: number; final: boolean }
-type Staged = { text: string; next: number; deadline: number; timer: ReturnType<typeof setTimeout> }
+type Staged = {
+  text: string
+  next: number
+  deadline: number
+  binding: string
+  timer: ReturnType<typeof setTimeout>
+}
 
 const MAX_STAGED_OPERATIONS = 32
 
@@ -14,7 +20,9 @@ export class GeneratedInputParts {
 
   accept(
     caller: string,
-    params: { text: string; timeoutMs?: number; part?: Part }
+    params: { text: string; timeoutMs?: number; part?: Part },
+    /** Target and intent fixed by the first part; a later part naming others is refused. */
+    binding = ''
   ): { kind: 'pending' } | { kind: 'complete'; text: string; deadline: number } {
     const budget = Math.min(params.timeoutMs ?? Infinity, GENERATED_AGENT_INPUT_TIMEOUT_MS)
     if (!params.part) {
@@ -31,12 +39,13 @@ export class GeneratedInputParts {
         text: '',
         next: 0,
         deadline,
+        binding,
         timer: setTimeout(() => this.staged.delete(key), Math.max(0, budget))
       }
       entry.timer.unref?.()
       this.staged.set(key, entry)
     }
-    if (!entry || entry.next !== params.part.index) {
+    if (!entry || entry.next !== params.part.index || entry.binding !== binding) {
       this.drop(key)
       throw new InvalidArgumentError('Generated input part out of order')
     }

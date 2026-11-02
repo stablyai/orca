@@ -8,7 +8,9 @@ export const TerminalSendGeneratedInputParams = z
     ptyId: z.string().min(1).optional(),
     text: z.string(),
     submit: z.boolean(),
-    agent: z.string().min(1).optional(),
+    // A caller with no known agent sends null.
+    agent: z.string().min(1).nullable().optional(),
+    intent: z.enum(['startup', 'running']).optional(),
     timeoutMs: z.number().int().min(0).max(GENERATED_AGENT_INPUT_TIMEOUT_MS).optional(),
     inputKind: z.enum(['launch', 'driving']).optional(),
     part: z

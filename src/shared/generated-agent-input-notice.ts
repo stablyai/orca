@@ -33,10 +33,18 @@ export type GeneratedInputNoticesPage = {
   next: { cursor: number; offset: number } | null
 }
 
-// A UTF-16 unit costs at most 6 bytes once JSON-escaped, so a frame stays well under the 4 MiB
-// paired-transport cap whatever the text; pages hold at most this many units across frames.
+// A UTF-16 unit costs at most 6 bytes once JSON-escaped. A live frame holds at most this many
+// units; a snapshot page is bounded by the encoded bytes of every frame in it, metadata included,
+// far under the 4 MiB paired-transport cap however many notices or however large the text.
 export const GENERATED_INPUT_NOTICE_CHUNK_UNITS = 96 * 1024
-export const GENERATED_INPUT_NOTICE_PAGE_UNITS = 160 * 1024
+export const GENERATED_INPUT_NOTICE_PAGE_BYTES = 1024 * 1024
+// Room for the page envelope and a frame's offset digits beyond the measured metadata.
+const FRAME_SLACK_BYTES = 64
+
+const encoder = new TextEncoder()
+export function encodedJsonBytes(value: unknown): number {
+  return encoder.encode(JSON.stringify(value)).length
+}
 
 /** End of the chunk starting at offset, never splitting a surrogate pair. */
 export function generatedInputNoticeChunkEnd(text: string, offset: number, units: number): number {
@@ -47,26 +55,31 @@ export function generatedInputNoticeChunkEnd(text: string, offset: number, units
   return end
 }
 
+/** Ordered frames of one notice from `from`, within `budgetBytes` of encoded JSON. `next` is the
+ *  offset to resume at when the budget ran out first. */
 export function generatedInputNoticeFrames(
   notice: GeneratedAgentInputNotice,
   from = 0,
-  budgetUnits = Infinity
-): { frames: GeneratedInputNoticeFrame[]; next: number | null } {
+  budgetBytes = Infinity
+): { frames: GeneratedInputNoticeFrame[]; next: number | null; bytes: number } {
   const { text, ...meta } = notice
+  const metaBytes =
+    encodedJsonBytes({ ...meta, textLength: text.length, offset: 0, chunk: '' }) + FRAME_SLACK_BYTES
   const frames: GeneratedInputNoticeFrame[] = []
   let offset = from
-  let spent = 0
+  let bytes = 0
   do {
-    const units = Math.min(GENERATED_INPUT_NOTICE_CHUNK_UNITS, budgetUnits - spent)
-    if (units <= 0) {
-      return { frames, next: offset }
+    const room = budgetBytes - bytes - metaBytes
+    const units = Math.min(GENERATED_INPUT_NOTICE_CHUNK_UNITS, Math.floor(room / 6))
+    if (room < 0 || (units < 1 && offset < text.length)) {
+      return { frames, next: offset, bytes }
     }
-    const end = generatedInputNoticeChunkEnd(text, offset, units)
+    const end = units < 1 ? offset : generatedInputNoticeChunkEnd(text, offset, units)
     frames.push({ ...meta, textLength: text.length, offset, chunk: text.slice(offset, end) })
-    spent += end - offset
+    bytes += metaBytes + (end - offset) * 6
     offset = end
   } while (offset < text.length)
-  return { frames, next: null }
+  return { frames, next: null, bytes }
 }
 
 /** The agent's display name for notices and refusals; never a raw id. */

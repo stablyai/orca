@@ -20,9 +20,19 @@ const frameSchema = z.object({
 })
 
 const messageSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('ready'), session: z.string().min(1) }),
-  z.object({ type: z.literal('notice'), session: z.string(), frame: frameSchema }),
-  z.object({ type: z.literal('dismissed'), session: z.string(), id: z.string() }),
+  z.object({ type: z.literal('ready'), session: z.string().min(1), revision: z.number() }),
+  z.object({
+    type: z.literal('notice'),
+    session: z.string(),
+    revision: z.number(),
+    frame: frameSchema
+  }),
+  z.object({
+    type: z.literal('dismissed'),
+    session: z.string(),
+    revision: z.number(),
+    id: z.string()
+  }),
   z.object({ type: z.literal('end') })
 ])
 
@@ -47,10 +57,20 @@ export function createGeneratedInputNoticeFeed(deps: {
 }): GeneratedInputNoticeFeed {
   const projection = new GeneratedInputNoticeProjection()
   let stopped = false
+  let published = -1
+  let revision = 0
+  // Only a complete snapshot speaks for the host, and only a change in complete notices is news.
   const publish = (): void => {
-    if (!stopped && projection.currentSession) {
-      deps.onChange(projection.complete(), projection.currentSession)
+    if (
+      stopped ||
+      !projection.currentSession ||
+      !projection.isSynced ||
+      projection.version === published
+    ) {
+      return
     }
+    published = projection.version
+    deps.onChange(projection.complete(), projection.currentSession)
   }
   const readSnapshot = async (token: number): Promise<void> => {
     let from: { cursor: number; offset: number } | undefined
@@ -69,6 +89,9 @@ export function createGeneratedInputNoticeFeed(deps: {
     projection.finish(token)
     publish()
   }
+  const resync = (session: string): void => {
+    void readSnapshot(projection.begin(session)).catch(() => {})
+  }
   return {
     receive: (raw) => {
       const parsed = messageSchema.safeParse(raw)
@@ -77,11 +100,21 @@ export function createGeneratedInputNoticeFeed(deps: {
       }
       const message = parsed.data
       if (message.type === 'ready') {
-        void readSnapshot(projection.begin(message.session)).catch(() => {})
-      } else if (message.type === 'notice') {
-        projection.applyFrame(message.session, message.frame)
-      } else if (message.type === 'dismissed') {
-        projection.dismiss(message.session, message.id)
+        revision = message.revision
+        resync(message.session)
+      } else if (message.type === 'notice' || message.type === 'dismissed') {
+        // A skipped revision lost a change (a dropped frame): read the host's state again.
+        if (message.revision > revision + 1) {
+          revision = message.revision
+          resync(message.session)
+          return
+        }
+        revision = Math.max(revision, message.revision)
+        if (message.type === 'notice') {
+          projection.applyFrame(message.session, message.frame)
+        } else {
+          projection.dismiss(message.session, message.id)
+        }
       }
       publish()
     },

@@ -23,6 +23,12 @@ export default defineConfig({
         )
       },
       {
+        find: 'expo-clipboard',
+        replacement: fileURLToPath(
+          new URL('./src/test-support/expo-clipboard-node.ts', import.meta.url)
+        )
+      },
+      {
         find: 'expo-haptics',
         replacement: fileURLToPath(
           new URL('./src/test-support/expo-haptics-node.ts', import.meta.url)

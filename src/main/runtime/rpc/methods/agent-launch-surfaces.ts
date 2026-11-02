@@ -18,6 +18,7 @@ import { structuredCallerFor } from './structured-agent-session-gate'
 import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
 import { structuredAgentRuntimeMetadata } from '../../structured-agent-runtime-metadata'
 import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt'
+import { readsUnconfirmedLaunchPrompt } from './agent-launch-replay'
 import { AgentLaunchSessionAlreadyExistsError } from '../../../../shared/agent-launch-session-already-exists'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
 import { createStructuredAgentSessionId } from '../../../../shared/agent-session/structured-agent-session-create'
@@ -205,23 +206,35 @@ export function agentLaunchSurfaceFactory(
       signal
     }) => {
       const { runtime } = context
-      // A stdin-after-start prompt cannot ride a Windows launch line, so it needs the startup path's Windows proof (#10336).
-      if (freshLaunch && typeof runtime.deliverStartupFollowup === 'function') {
-        return runtime.deliverStartupFollowup(
-          handle,
-          { agent, prompt: prompt.text },
-          { agentLaunch: true, terminalCreation, ...(signal ? { signal } : {}) }
-        )
+      // Text that may have reached the agent is unconfirmed, never "not delivered", or the caller
+      // would offer to send it again.
+      const refusal: { certainty: 'not-sent' | 'unconfirmed' } = { certainty: 'not-sent' }
+      const onRefused = (certainty: 'not-sent' | 'unconfirmed'): void => {
+        refusal.certainty = certainty
       }
-      return deliverTerminalAgentLaunchPrompt({
-        runtime,
-        handle,
-        agent,
-        freshLaunch,
-        terminalCreation,
-        text: prompt.text,
-        ...(signal ? { signal } : {})
-      })
+      // A stdin-after-start prompt cannot ride a Windows launch line, so it needs the startup path's Windows proof (#10336).
+      const delivered =
+        freshLaunch && typeof runtime.deliverStartupFollowup === 'function'
+          ? await runtime.deliverStartupFollowup(
+              handle,
+              { agent, prompt: prompt.text },
+              { agentLaunch: true, terminalCreation, onRefused, ...(signal ? { signal } : {}) }
+            )
+          : await deliverTerminalAgentLaunchPrompt({
+              runtime,
+              handle,
+              agent,
+              freshLaunch,
+              terminalCreation,
+              text: prompt.text,
+              onRefused,
+              ...(signal ? { signal } : {})
+            })
+      if (delivered || refusal.certainty !== 'unconfirmed') {
+        return delivered
+      }
+      // A client that cannot read the word learns the text reached the terminal: never resend.
+      return readsUnconfirmedLaunchPrompt(context) ? 'unconfirmed' : true
     }
   }
 }

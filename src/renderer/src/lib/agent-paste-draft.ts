@@ -15,7 +15,11 @@ import {
 import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/terminal-pty-input-transaction'
 import { sendAgentDraftPasteContentNow } from './agent-draft-paste-content'
 import { agentDeliversDraftViaNativePrefill } from './agent-native-draft-prefill'
-import { agentInputIsAdmitted, waitForAgentDraftInputReady } from './agent-draft-readiness'
+import {
+  agentInputIsAdmitted,
+  forgetLegacyTail,
+  waitForAgentDraftInputReady
+} from './agent-draft-readiness'
 import { showGeneratedInputNotice } from './launch-agent-paste-timeout-notice'
 export {
   AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES,
@@ -70,6 +74,7 @@ export async function pasteDraftWhenAgentReady(args: {
     submit: submit === true,
     agent,
     inputKind: 'launch',
+    intent: 'startup',
     deadline
   })
   return reportGeneratedPaste(outcome, { agent, content, onTimeout })
@@ -86,6 +91,8 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
   onUnconfirmedDelivery?: () => void
   /** The legacy adapter's last check after readiness; false retains the prompt for recovery. */
   beforePaste?: () => Promise<boolean>
+  /** Default startup: the agent was just launched. A running agent refuses only on blocking evidence. */
+  intent?: 'startup' | 'running'
 }): Promise<boolean> {
   const { ptyId, content, agent, submit, forcePaste, timeoutMs, onTimeout } = args
   if (agentDeliversDraftViaNativePrefill(agent, forcePaste)) {
@@ -97,6 +104,7 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
     submit: submit === true,
     agent,
     inputKind: 'launch',
+    intent: args.intent ?? 'startup',
     deadline: Date.now() + (timeoutMs ?? GENERATED_AGENT_INPUT_TIMEOUT_MS),
     ...(args.beforePaste ? { beforePaste: args.beforePaste } : {})
   })
@@ -116,6 +124,7 @@ export async function submitPromptToAgentPty(args: {
     submit: true,
     agent: args.agent,
     inputKind: 'driving',
+    intent: 'running',
     deadline: Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS
   })
 }
@@ -124,7 +133,12 @@ export async function sendBracketedPasteToRunningAgent(args: {
   ptyId: string
   content: string
 }): Promise<boolean> {
-  return await pasteDraftToAgentPtyWhenReady({ ...args, submit: true, forcePaste: true })
+  return await pasteDraftToAgentPtyWhenReady({
+    ...args,
+    submit: true,
+    forcePaste: true,
+    intent: 'running'
+  })
 }
 
 function reportGeneratedPaste(
@@ -149,6 +163,8 @@ export type GeneratedPaste = {
   submit: boolean
   agent?: TuiAgent
   inputKind: Extract<TerminalInputKind, 'launch' | 'driving'>
+  /** startup waits for positive readiness; running (main's direct sends) refuses only on blocking evidence. */
+  intent: 'startup' | 'running'
   deadline: number
   beforePaste?: () => Promise<boolean>
 }
@@ -160,6 +176,7 @@ export async function deliverGeneratedPaste(paste: GeneratedPaste): Promise<Gene
     submit: paste.submit,
     agent: paste.agent ?? null,
     inputKind: paste.inputKind,
+    intent: paste.intent,
     timeoutMs: Math.max(0, paste.deadline - Date.now())
   })
   return hosted ?? (await pasteThroughLegacyHost(paste))
@@ -167,10 +184,32 @@ export async function deliverGeneratedPaste(paste: GeneratedPaste): Promise<Gene
 
 /** Legacy adapter: the host's rule on this client's evidence, rechecked before every frame. */
 async function pasteThroughLegacyHost(paste: GeneratedPaste): Promise<GeneratedInputOutcome> {
-  const { ptyId, content, submit, agent, inputKind, deadline } = paste
+  const { ptyId, submit, agent, deadline } = paste
   const readySignal = resolvePasteReadySignal(agent ? TUI_AGENT_CONFIG[agent] : null, submit)
   const remaining = Math.max(0, deadline - Date.now())
-  if (!(await waitForAgentDraftInputReady(ptyId, remaining, readySignal, agent))) {
+  try {
+    return await pasteAfterLegacyReadiness(paste, readySignal, remaining)
+  } finally {
+    forgetLegacyTail(ptyId)
+  }
+}
+
+async function pasteAfterLegacyReadiness(
+  paste: GeneratedPaste,
+  readySignal: ReturnType<typeof resolvePasteReadySignal>,
+  remaining: number
+): Promise<GeneratedInputOutcome> {
+  const { ptyId, content, submit, agent, inputKind, deadline } = paste
+  const ready = await waitForAgentDraftInputReady(
+    ptyId,
+    remaining,
+    readySignal,
+    agent,
+    undefined,
+    '',
+    paste.intent
+  )
+  if (!ready) {
     return 'not-sent'
   }
   if (paste.beforePaste && !(await paste.beforePaste())) {

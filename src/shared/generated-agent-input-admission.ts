@@ -15,9 +15,13 @@ export type GeneratedInputProcess =
   | { known: false }
   | { known: true; foreground: string | null; hasChildProcesses: boolean }
 
+/** A grid (or, legacy, a stream tail) is checked for dialogs; 'unknown' means nothing could be
+ *  observed and is not a dialog; null means the host's model has not caught up yet. */
+export type GeneratedInputScreen = RuledScreen | 'unknown' | null
+
 export type GeneratedInputObservation = {
   agent: TuiAgent | null | undefined
-  screen: RuledScreen | null
+  screen: GeneratedInputScreen
   process: GeneratedInputProcess
   /** Admission rests on compatibility quiet rather than a positive composer marker. */
   quiet: boolean
@@ -25,12 +29,15 @@ export type GeneratedInputObservation = {
   typedText?: string
 }
 
-/** The current screen gives input to a dialog or overlay, or cannot be read. */
+/** The current screen gives input to a dialog or overlay, or has not caught up yet. */
 export function screenRefusesGeneratedInput(
   agent: TuiAgent | null | undefined,
-  screen: RuledScreen | null,
+  screen: GeneratedInputScreen,
   typedText = ''
 ): boolean {
+  if (screen === 'unknown') {
+    return false
+  }
   return (
     screen === null ||
     readScreenInputVeto(agent, () => screen) === true ||

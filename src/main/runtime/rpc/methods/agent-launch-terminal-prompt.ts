@@ -144,6 +144,8 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
       submit: true,
       agent: args.agent,
       timeoutMs: Math.max(0, deadline - clock.now()),
+      // A fresh launch must prove its composer; a reused agent is already reading input.
+      intent: args.freshLaunch ? 'startup' : 'running',
       observedReady: wait?.satisfied === true,
       // A fresh launch's composer was just seen ready; a reused pane's state is only inferred.
       composerReady: args.freshLaunch,

@@ -1,6 +1,9 @@
 import type { RuntimeTerminalSend } from '../../../shared/runtime-types'
 import { sanitizeTerminalPasteText } from '@/components/terminal-pane/terminal-bracketed-paste'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { sendGeneratedTerminalInputToHandle } from '@/runtime/generated-terminal-input-client'
+import type { GeneratedInputOutcome } from '../../../shared/generated-terminal-input'
+import { GENERATED_AGENT_INPUT_TIMEOUT_MS } from '../../../shared/generated-agent-input-readiness'
 import {
   BRACKETED_PASTE_BEGIN,
   BRACKETED_PASTE_END,
@@ -67,6 +70,18 @@ export async function sendPromptWithGuardedPasteAndEnter(
     }
   }
 
+  // A capable host admits and writes the notes in one operation; only an older host gets the
+  // status-guarded paste and Enter below.
+  const hosted = await sendGeneratedTerminalInputToHandle(runtimeTarget, terminalHandle, {
+    text: prompt,
+    submit: true,
+    inputKind: 'driving',
+    intent: 'running',
+    timeoutMs: GENERATED_AGENT_INPUT_TIMEOUT_MS
+  })
+  if (hosted !== null) {
+    return notesResultForOutcome(hosted)
+  }
   const pastePayload = `${BRACKETED_PASTE_BEGIN}${sanitizeTerminalPasteText(prompt)}${BRACKETED_PASTE_END}`
   try {
     const { send } = await callRuntimeRpc<{ send: RuntimeTerminalSend }>(
@@ -148,5 +163,19 @@ export async function sendPromptWithGuardedPasteAndEnter(
       return { status: 'partial-submit-failed', code: 'submit-send-error' }
     }
     throw error
+  }
+}
+
+function notesResultForOutcome(outcome: GeneratedInputOutcome): ActiveAgentNotesSendResult {
+  switch (outcome) {
+    case 'delivered':
+    case 'staged':
+      return { status: 'sent' }
+    case 'target-gone':
+      return { status: 'no-active-terminal', code: 'terminal_gone' }
+    case 'unconfirmed':
+      return { status: 'partial-submit-failed', code: 'submit-readiness-lost' }
+    case 'not-sent':
+      return { status: 'not-ready', code: 'terminal_wait_blocked' }
   }
 }

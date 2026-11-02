@@ -7,8 +7,9 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { HostStatusGatesContext } from './host-protocol-gates-context'
-import { GeneratedInputNotices } from './GeneratedInputNotices'
+import { GeneratedInputNotices, PairedServerGeneratedInputNotices } from './GeneratedInputNotices'
 import { ProtocolBlockScreen } from './ProtocolBlockScreen'
+import { GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY } from '../../../src/shared/terminal-runtime-capabilities'
 
 type Props = {
   hostId: string | undefined
@@ -83,6 +84,10 @@ export function HostProtocolGate({
           importantForAccessibility={covered ? 'no-hide-descendants' : 'auto'}
         >
           <GeneratedInputNotices client={client} capabilities={gates.hostCapabilities} />
+          {/* An older desktop cannot relay the notice methods to its servers. */}
+          {gates.hostCapabilities.includes(GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY) ? (
+            <PairedServerGeneratedInputNotices client={client} />
+          ) : null}
           {children}
         </View>
         {covered ? (

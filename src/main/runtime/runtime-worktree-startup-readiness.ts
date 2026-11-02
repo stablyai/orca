@@ -80,6 +80,8 @@ export async function deliverStartupFollowupPrompt(
           submit: true,
           agent,
           framing: 'typed',
+          // Main typed this once the agent was in front; only a seen dialog or shell refuses.
+          intent: 'running',
           ...(signal ? { signal } : {})
         })
         const refused = generatedInputRefusalCertainty(outcome)

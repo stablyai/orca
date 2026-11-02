@@ -19,7 +19,15 @@ export const GENERATED_INPUT_METHODS = [
     permission: 'workspace',
     params: TerminalSendGeneratedInputParams,
     handler: async (params, { runtime, signal, connectionId }) => {
-      const staged = parts.accept(connectionId ?? 'inproc', params)
+      const binding = JSON.stringify([
+        params.terminal,
+        params.ptyId,
+        params.submit,
+        params.agent,
+        params.intent,
+        params.inputKind
+      ])
+      const staged = parts.accept(connectionId ?? 'inproc', params, binding)
       if (staged.kind === 'pending') {
         return { part: 'accepted' as const }
       }
@@ -33,6 +41,7 @@ export const GENERATED_INPUT_METHODS = [
         agent: params.agent && isTuiAgent(params.agent) ? params.agent : null,
         timeoutMs: Math.max(0, staged.deadline - Date.now()),
         ...(params.inputKind ? { inputKind: params.inputKind } : {}),
+        ...(params.intent ? { intent: params.intent } : {}),
         // A caller that went away no longer holds the text, so its queued write must not land later.
         ...(signal ? { signal } : {})
       })

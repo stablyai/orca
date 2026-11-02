@@ -20,6 +20,8 @@ type PtyConnectionTestMocks = {
   scheduleRuntimeGraphSync: Mock
   shouldSeedCacheTimerOnInitialTitle: Mock<() => boolean>
   toastInfo: Mock
+  toastMessage: Mock
+  sendGeneratedTerminalInput: Mock
   notifyCodexPaneBoundForStaleSweep: Mock
 }
 
@@ -32,6 +34,9 @@ const fixture = vi.hoisted(() => {
       scheduleRuntimeGraphSync: vi.fn(),
       shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
       toastInfo: vi.fn(),
+      toastMessage: vi.fn(),
+      // The PTY's host admits and stages startup drafts; tests answer for it.
+      sendGeneratedTerminalInput: vi.fn(async () => 'staged'),
       notifyCodexPaneBoundForStaleSweep: vi.fn()
     },
     bind(next: PtyConnectionTestBindings): void {
@@ -102,8 +107,14 @@ vi.mock('./cache-timer-seeding', () => ({
 
 vi.mock('sonner', () => ({
   toast: {
-    info: fixture.mocks.toastInfo
+    info: fixture.mocks.toastInfo,
+    message: fixture.mocks.toastMessage,
+    dismiss: vi.fn()
   }
+}))
+
+vi.mock('@/runtime/generated-terminal-input-client', () => ({
+  sendGeneratedTerminalInput: fixture.mocks.sendGeneratedTerminalInput
 }))
 
 vi.mock('@/lib/codex-stale-pane-sweep', () => ({

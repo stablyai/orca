@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { OrcaRuntimeService } from './orca-runtime'
 import {
-  GENERATED_INPUT_NOTICE_PAGE_UNITS,
+  GENERATED_INPUT_NOTICE_PAGE_BYTES,
   generatedInputNoticeFrames,
   type GeneratedAgentInputNotice,
   type GeneratedInputNoticesPage
@@ -18,7 +18,11 @@ export class GeneratedAgentInputNotices {
   private revisionCounter = 0
   // Insertion order is add order; each notice keeps the revision that added it as its page cursor.
   private readonly notices = new Map<string, { notice: GeneratedAgentInputNotice; added: number }>()
+  // Add order as a seekable index: a page binary-searches its cursor instead of rescanning.
+  private order: { added: number; id: string }[] = []
   private readonly listeners = new Set<(change: GeneratedInputNoticeChange) => void>()
+  /** Records a page touched, for the operation-count contract (linear in what was sent). */
+  pageVisits = 0
 
   get revision(): number {
     return this.revisionCounter
@@ -39,6 +43,7 @@ export class GeneratedAgentInputNotices {
     const record = { ...notice, id: randomUUID() }
     this.revisionCounter += 1
     this.notices.set(record.id, { notice: record, added: this.revisionCounter })
+    this.order.push({ added: this.revisionCounter, id: record.id })
     this.publish({ kind: 'added', revision: this.revisionCounter, notice: record })
   }
 
@@ -57,6 +62,10 @@ export class GeneratedAgentInputNotices {
 
   dismiss(id: string): void {
     if (this.notices.delete(id)) {
+      // Compact once dismissed entries outnumber live ones, so the index stays linear in notices.
+      if (this.order.length > 2 * this.notices.size + 16) {
+        this.order = this.order.filter((entry) => this.notices.has(entry.id))
+      }
       this.revisionCounter += 1
       this.publish({ kind: 'dismissed', revision: this.revisionCounter, id })
     }
@@ -70,26 +79,36 @@ export class GeneratedAgentInputNotices {
       frames: [],
       next: null
     }
+    let low = 0
+    let high = this.order.length
+    while (low < high) {
+      const mid = (low + high) >> 1
+      if (this.order[mid].added < cursor) {
+        low = mid + 1
+      } else {
+        high = mid
+      }
+    }
     let spent = 0
-    for (const { notice, added } of this.notices.values()) {
-      if (added < cursor) {
+    for (let index = low; index < this.order.length; index += 1) {
+      const { added, id } = this.order[index]
+      const record = this.notices.get(id)
+      this.pageVisits += 1
+      if (!record) {
         continue
       }
       // A notice dismissed between pages restarts its successor from the beginning.
       const from = added === cursor ? offset : 0
-      const { frames, next } = generatedInputNoticeFrames(
-        notice,
+      const { frames, next, bytes } = generatedInputNoticeFrames(
+        record.notice,
         from,
-        GENERATED_INPUT_NOTICE_PAGE_UNITS - spent
+        GENERATED_INPUT_NOTICE_PAGE_BYTES - spent
       )
       page.frames.push(...frames)
-      spent += frames.reduce((units, frame) => units + frame.chunk.length, 0)
+      spent += bytes
       if (next !== null) {
+        // The first notice of a page always fits its metadata, so every page makes progress.
         page.next = { cursor: added, offset: next }
-        return page
-      }
-      if (spent >= GENERATED_INPUT_NOTICE_PAGE_UNITS) {
-        page.next = { cursor: added + 1, offset: 0 }
         return page
       }
     }

@@ -110,6 +110,7 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
       submit: false,
       agent: session.startupDraftAgent ?? undefined,
       inputKind: 'launch',
+      intent: 'startup',
       deadline: Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS
     }).then((outcome) => {
       if (outcome === 'staged' || outcome === 'delivered') {

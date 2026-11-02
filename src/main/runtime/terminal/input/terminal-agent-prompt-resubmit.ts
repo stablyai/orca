@@ -19,6 +19,8 @@ type HeldAgentPrompt = {
   readActivity: () => AgentPromptActivity
   prompt: string | undefined
   heldBudgetMs: number
+  /** Synchronous last check immediately before each retry's write. */
+  commit?: () => void
 }
 
 export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntimeWithGeneratedInputAdmission {
@@ -89,6 +91,7 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
         if (await agentPromptSettledWithin(held, 0, options.signal)) {
           return resubmits
         }
+        held.commit?.()
         if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)) {
           return resubmits
         }

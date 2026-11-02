@@ -108,17 +108,12 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     // Every frame rechecks the current screen; after the paste its own rows are composer text.
     const beforeWrite = async (signal: AbortSignal, typedText?: string): Promise<void> => {
       assertWritable(signal)
-      await waitForAgentPromptPromise(
-        Promise.resolve().then(() => {
-          assertWritable(signal)
-          return options.beforeWrite?.(ptyId)
-        }),
-        signal
-      )
-      if (
-        Date.now() >= deadline ||
-        !(await this.generatedInputAdmitted(ptyId, agent, false, typedText))
-      ) {
+      const guard = Promise.resolve().then(() => {
+        assertWritable(signal)
+        return options.beforeWrite?.(ptyId)
+      })
+      await this.withinGeneratedDeadline(ptyId, deadline, waitForAgentPromptPromise(guard, signal))
+      if (!(await this.generatedInputAdmitted(ptyId, agent, false, deadline, typedText))) {
         throw this.generatedInputRefusal(ptyId)
       }
       assertWritable(signal)
@@ -141,6 +136,9 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       renderGate?.arm()
       const initialWrite = submitWithPaste ? pastePayload + AGENT_PROMPT_SUBMIT : pastePayload
       assertTerminalInputAdmitted(this, ptyId, options.inputSource)
+      // Nothing is awaited from here to the write; text is refused if Enter could not follow in time.
+      const enterReserveMs = submit && !submitWithPaste ? pasteIngestMs : -1
+      this.assertGeneratedInputCommit(ptyId, agent, deadline, undefined, enterReserveMs)
       if (!this.ptyController?.write(ptyId, initialWrite, options.inputKind)) {
         throw new Error('terminal_not_writable')
       }
@@ -183,6 +181,9 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       assertWritable(deliverySignal)
       baseline = preSubmitBaseline ?? this.getAgentPromptActivity(handle, ptyId, waitTextCache)
       this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
+      if (!submitWithPaste) {
+        this.assertGeneratedInputCommit(ptyId, agent, deadline, options.promptForSchedule)
+      }
       if (
         !submitWithPaste &&
         !this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)
@@ -213,6 +214,8 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
             baseline,
             readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
             prompt: options.promptForSchedule,
+            commit: () =>
+              this.assertGeneratedInputCommit(ptyId, agent, deadline, options.promptForSchedule),
             heldBudgetMs: getAgentPromptHeldSubmitBudgetMs(
               writeHostPlatform,
               this.getPtyAgent(ptyId),

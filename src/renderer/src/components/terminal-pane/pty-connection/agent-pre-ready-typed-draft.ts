@@ -54,6 +54,7 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
   let phase: DraftPhase = 'capturing'
   let draft = ''
   let wrote = false
+  let observation: AbortController | null = null
   let liveInputSinceBind = false
   let agent: TuiAgent | null | undefined
 
@@ -124,7 +125,7 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
   }
 
   /** The pane's readiness is only when to offer the keys; the PTY's host still admits and writes. */
-  const pasteDraft = (ptyId: string, draftAgent: TuiAgent): void => {
+  const pasteDraft = (ptyId: string, draftAgent: TuiAgent, deadline: number): void => {
     if (session.disposed || session.transport.getPtyId() !== ptyId) {
       recoverDraft(draftAgent)
       return
@@ -141,7 +142,9 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       submit: false,
       agent: draftAgent,
       inputKind: 'driving',
-      deadline: Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS
+      intent: 'startup',
+      // The same deadline the readiness observation spent: no second, fresh budget.
+      deadline
     }).then((outcome) => {
       if (outcome === 'staged' || outcome === 'delivered') {
         draft = ''
@@ -176,17 +179,22 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       return
     }
     liveInputSinceBind = false
+    const deadline = Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS
+    // Disposal ends the observation; the held keys are then recovered, never dropped.
+    observation = new AbortController()
     void waitForAgentDraftInputReady(
       ptyId,
       GENERATED_AGENT_INPUT_TIMEOUT_MS,
       TUI_AGENT_CONFIG[draftAgent].draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste',
-      draftAgent
+      draftAgent,
+      observation.signal
     )
-      .then((ready) => (ready ? pasteDraft(ptyId, draftAgent) : recoverDraft(draftAgent)))
+      .then((ready) => (ready ? pasteDraft(ptyId, draftAgent, deadline) : recoverDraft(draftAgent)))
       .catch(() => recoverDraft(draftAgent))
   }
 
   session.discardAgentPreReadyDraft = (): void => {
+    observation?.abort()
     const draftAgent = resolveAgent()
     if (draftAgent) {
       recoverDraft(draftAgent)

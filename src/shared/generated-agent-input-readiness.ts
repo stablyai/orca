@@ -7,7 +7,9 @@ export const GENERATED_AGENT_INPUT_QUIET_MS = 1500
 export type GeneratedAgentInputHost = {
   subscribe: (observe: (data: string) => void) => (() => void) | Promise<() => void>
   replay?: () => string | undefined
-  composerReady?: () => boolean | Promise<boolean>
+  /** Current positive evidence; `quietMs` is how long output has been silent, for idle rules
+   *  that settle only after quiet. */
+  composerReady?: (quietMs: number) => boolean | Promise<boolean>
   /** The terminal's current bracketed-paste mode, when the host's model knows it. */
   bracketedPaste?: () => boolean
   accept: (quiet: boolean) => boolean | Promise<boolean>
@@ -23,12 +25,22 @@ export function signalAllowsCompatibilityEvidence(signal: DraftPasteReadySignal)
   )
 }
 
+/** startup: the agent was just launched and must prove it reads input. running: it already does,
+ *  so only blocking evidence refuses, as a direct send would have been written. */
+export type GeneratedInputIntent = 'startup' | 'running'
+
 /** Compatibility quiet is live evidence, never a deadline's permission to write. */
 export function waitForGeneratedAgentInput(
   host: GeneratedAgentInputHost,
   signal: DraftPasteReadySignal,
-  options: { timeoutMs?: number; requireComposerMarker?: boolean; signal?: AbortSignal } = {}
+  options: {
+    timeoutMs?: number
+    requireComposerMarker?: boolean
+    signal?: AbortSignal
+    intent?: GeneratedInputIntent
+  } = {}
 ): Promise<boolean> {
+  const running = options.intent === 'running'
   const deadline = Date.now() + (options.timeoutMs ?? GENERATED_AGENT_INPUT_TIMEOUT_MS)
   const permitsQuiet = !options.requireComposerMarker && signalAllowsCompatibilityEvidence(signal)
   return new Promise((resolve) => {
@@ -94,15 +106,16 @@ export function waitForGeneratedAgentInput(
         const marker =
           ready ||
           (graceAt !== null && Date.now() >= graceAt) ||
-          (await host.composerReady?.()) === true
+          (await host.composerReady?.(Date.now() - lastOutput)) === true
         const quiet =
           permitsQuiet &&
           (quietArmed || host.bracketedPaste?.() === true) &&
           Date.now() - lastOutput >= GENERATED_AGENT_INPUT_QUIET_MS
         // Output during the read voids only quiet; a positive composer survives a busy footer, and
         // the writer rechecks the current screen before every byte.
-        if ((marker || quiet) && (await host.accept(!marker))) {
-          if (!settled && (marker || observedSequence === sequence) && Date.now() < deadline) {
+        const quietOnly = quiet && !marker && !running
+        if ((marker || quiet || running) && (await host.accept(quietOnly))) {
+          if (!settled && (!quietOnly || observedSequence === sequence) && Date.now() < deadline) {
             finish(true)
           }
         }

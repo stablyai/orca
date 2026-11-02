@@ -13,6 +13,9 @@ import type { RpcClient } from '../transport/rpc-client'
 import { useClipboardWriter } from '../platform/clipboard'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { HostRouteNoticeBanner } from './HostRouteNoticeBanner'
+import { useRelayHosts } from '../worktree/relay-hosts-feed'
+import { scopeRpcClientToExecutionHost } from '../transport/execution-host-scoped-rpc-client'
+import { useHostStatusGates } from '../transport/host-status-gates'
 
 const dismissNotice = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -33,9 +36,6 @@ const readNoticePage = bindDeferredRpcOperation(
   })
 )
 
-// Stacked workspace routes for one server each subscribe; a notice renders in the first only.
-const claims = new Map<string, symbol>()
-
 type Shown = { key: string; notice: GeneratedAgentInputNotice }
 
 /** Notices of the one runtime `client` reaches: the paired desktop, or a server workspace's host. */
@@ -54,29 +54,12 @@ export function GeneratedInputNotices({
     if (!client || !capable) {
       return
     }
-    const owner = Symbol('generated-input-notices')
-    const release = (): void => {
-      for (const [key, holder] of claims) {
-        if (holder === owner) {
-          claims.delete(key)
-        }
-      }
-    }
     const feed = createGeneratedInputNoticeFeed({
       // A refused page throws; the feed then keeps what it has rather than deleting anything.
       readPage: async (from) =>
         readNoticePage.interpret(await readNoticePage.request(client, from ?? {})),
       onChange: (notices, session) => {
-        release()
-        const next: Shown[] = []
-        for (const notice of notices) {
-          const key = `${session}:${notice.id}`
-          if (!claims.has(key)) {
-            claims.set(key, owner)
-            next.push({ key, notice })
-          }
-        }
-        setShown(next)
+        setShown(notices.map((notice) => ({ key: `${session}:${notice.id}`, notice })))
       }
     })
     const unsubscribe = client.subscribe(
@@ -87,7 +70,6 @@ export function GeneratedInputNotices({
     return () => {
       feed.stop()
       unsubscribe()
-      release()
       setShown([])
     }
   }, [client, capable])
@@ -135,4 +117,34 @@ export function GeneratedInputNotices({
       })}
     </>
   )
+}
+
+/** Each reachable server's notices, read, copied and dismissed on that server through this
+ *  desktop's relay: one feed per host, shown on the host surface whichever screen is open. */
+export function PairedServerGeneratedInputNotices({ client }: { client: RpcClient | null }) {
+  const hosts = useRelayHosts(client)
+  if (!client) {
+    return null
+  }
+  return (
+    <>
+      {(hosts ?? [])
+        .filter((host) => host.relay === 'ready')
+        .map((host) => (
+          <ServerGeneratedInputNotices key={host.hostId} client={client} hostId={host.hostId} />
+        ))}
+    </>
+  )
+}
+
+function ServerGeneratedInputNotices({
+  client,
+  hostId
+}: {
+  client: RpcClient
+  hostId: `runtime:${string}`
+}) {
+  const scoped = scopeRpcClientToExecutionHost(client, hostId)
+  const gates = useHostStatusGates({ hostId: undefined, client: scoped, connState: 'connected' })
+  return <GeneratedInputNotices client={scoped} capabilities={gates.hostCapabilities} />
 }

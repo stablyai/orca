@@ -10,6 +10,8 @@ export const EXECUTION_HOST_METHODS = [
   'terminal.generatedInputNotices.page',
   'terminal.generatedInputNotices.subscribe',
   'terminal.generatedInputNotices.unsubscribe',
+  // Generated text is admitted and written by the host that owns the terminal.
+  'terminal.sendGeneratedInput',
   'ui.getJiraQuickFilters',
   'ui.setJiraQuickFilters',
   'ui.getJiraSavedFilters',

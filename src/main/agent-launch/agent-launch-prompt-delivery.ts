@@ -94,6 +94,9 @@ export async function deliverTerminalLaunchPrompt(
     prompt: intent.prompt,
     ...(signal ? { signal } : {})
   })
+  if (delivered === 'unconfirmed') {
+    return UNCONFIRMED
+  }
   return delivered ? HANDED_TO_TERMINAL : NOT_DELIVERED
 }
 

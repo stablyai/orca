@@ -11,10 +11,15 @@ import { showGeneratedInputNotice } from '@/lib/launch-agent-paste-timeout-notic
 
 const SUBSCRIBE = 'terminal.generatedInputNotices.subscribe'
 
+// Shown toasts belong to the runtime environment, not to one subscription: a replaced or replayed
+// subscription reconciles the same toasts once its snapshot is complete instead of stranding them.
+const shownByEnvironment = new Map<string, Map<string, string>>()
+
 /** Project one runtime's notices as persistent toasts; that runtime owns them and their dismissal. */
 function projectNotices(target: RuntimeClientTarget) {
   const environment = target.kind === 'local' ? 'local' : target.environmentId
-  const shown = new Map<string, string>()
+  const shown = shownByEnvironment.get(environment) ?? new Map<string, string>()
+  shownByEnvironment.set(environment, shown)
   const show = (notice: GeneratedAgentInputNotice, toastId: string): void => {
     showGeneratedInputNotice({
       ...notice,
@@ -73,6 +78,10 @@ export function subscribeLocalGeneratedInputNotices(): () => void {
   const feed = feedFor({ kind: 'local' })
   let stopped = false
   let unsubscribe: (() => void) | undefined
+  // A preload without runtime subscriptions has no local notices to show.
+  if (typeof window.api?.runtime?.subscribe !== 'function') {
+    return () => {}
+  }
   void window.api.runtime
     .subscribe({ method: SUBSCRIBE }, (response) => receive(feed, response))
     .then((subscription) => {

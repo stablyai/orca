@@ -19,6 +19,8 @@ export type GeneratedInputRequest = {
   agent?: TuiAgent | null
   timeoutMs?: number
   inputKind?: 'launch' | 'driving'
+  /** startup waits for positive readiness; running (default) refuses only on blocking evidence. */
+  intent?: 'startup' | 'running'
 }
 
 /** Text over one remote request's budget travels as ordered parts the host joins before admitting. */

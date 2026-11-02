@@ -298,6 +298,8 @@ export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, '
   framing?: 'paste' | 'typed'
   /** A launch's readiness wait already saw the composer; admission still applies every veto. */
   observedReady?: boolean
+  /** startup waits for positive readiness; running (the default) refuses only on blocking evidence. */
+  generatedIntent?: 'startup' | 'running'
   /** See buildAgentPromptPasteBytes. */
   leadLine?: string
   /** Return an accepted receipt as soon as input lands, instead of waiting for the turn. */

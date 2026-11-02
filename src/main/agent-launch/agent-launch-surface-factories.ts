@@ -56,7 +56,8 @@ export type AgentLaunchSurfaceFactory = {
     terminalCreation?: RuntimeTerminalCreate
     promptRodeLaunchCommand?: boolean
   }>
-  /** Paste into a live PTY; return false on failure without failing the running launch. */
+  /** Paste into a live PTY; false on failure without failing the running launch, 'unconfirmed'
+   *  when text may have reached the agent (never resend). */
   deliverTerminalPrompt?(args: {
     handle: string
     agent: TuiAgent
@@ -66,7 +67,7 @@ export type AgentLaunchSurfaceFactory = {
     prompt: AgentLaunchPrompt
     /** Abort readiness waits and refuse pending pastes. */
     signal?: AbortSignal
-  }): Promise<boolean>
+  }): Promise<boolean | 'unconfirmed'>
 }
 
 /** The created chat and its committed opening submission. */

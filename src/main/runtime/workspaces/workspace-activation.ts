@@ -211,7 +211,8 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     void deliverGeneratedTerminalInput(this, handle, {
       text: draft.content,
       submit: false,
-      agent: draft.agent
+      agent: draft.agent,
+      intent: 'startup'
     }).then((outcome) => {
       const refused = generatedInputRefusalCertainty(outcome)
       if (refused) {
