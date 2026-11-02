@@ -32,20 +32,28 @@ export function acceptedPendingStart(
   value: WorkerStartAgentReceipt
 ): PendingWorkerStart | undefined {
   const pending = value.pending
-  if (value.state !== 'outcome_unknown' || typeof pending !== 'object' || pending === null) {
+  if (
+    value.state !== 'outcome_unknown' ||
+    typeof pending !== 'object' ||
+    pending === null ||
+    !('operationId' in pending) ||
+    !('fingerprint' in pending) ||
+    !('daemonGeneration' in pending) ||
+    !('reservationGeneration' in pending)
+  ) {
     return undefined
   }
-  const read = (key: keyof PendingWorkerStart): string | undefined => {
-    const field: unknown = Reflect.get(pending, key)
-    return typeof field === 'string' && field.length > 0 ? field : undefined
-  }
-  const operationId = read('operationId')
-  const fingerprint = read('fingerprint')
-  const daemonGeneration = read('daemonGeneration')
-  const reservationGeneration = read('reservationGeneration')
-  return operationId && fingerprint && daemonGeneration && reservationGeneration
+  const { operationId, fingerprint, daemonGeneration, reservationGeneration } = pending
+  return isFilled(operationId) &&
+    isFilled(fingerprint) &&
+    isFilled(daemonGeneration) &&
+    isFilled(reservationGeneration)
     ? { operationId, fingerprint, daemonGeneration, reservationGeneration }
     : undefined
+}
+
+function isFilled(field: unknown): field is string {
+  return typeof field === 'string' && field.length > 0
 }
 
 // A hook-capable agent that has not shown its turn yet is usually slow, not dead; a resend duplicates the task.
