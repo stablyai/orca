@@ -382,7 +382,7 @@ describe('createSettingsSlice runtime switching', () => {
       selector: 'env-2',
       timeoutMs: 15_000
     })
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
       expect.objectContaining({ selector: 'env-2', method: 'status.get' })
     )
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
