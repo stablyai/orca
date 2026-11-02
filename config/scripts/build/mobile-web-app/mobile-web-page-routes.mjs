@@ -28,6 +28,16 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     pathname: '/h/[hostId]/accounts',
     grants: ['navigate', 'storage', 'externalLink', 'haptics']
   },
+  // Resource Manager needs navigate/storage/externalLink for Back/shared layout wall; haptics census requires seam grant.
+  {
+    pathname: '/h/[hostId]/resource-manager',
+    grants: ['navigate', 'storage', 'externalLink', 'haptics']
+  },
+  // Usage Panel needs navigate/storage/externalLink for Back/shared layout wall; haptics census requires seam grant.
+  {
+    pathname: '/h/[hostId]/usage-panel',
+    grants: ['navigate', 'storage', 'externalLink', 'haptics']
+  },
   // Create Workspace overlay needs navigate to close/open session; shared form/layout supply other grants.
   {
     pathname: '/h/[hostId]/new-workspace',

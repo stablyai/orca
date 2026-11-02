@@ -37,6 +37,8 @@ export async function startHeadlessPairingRuntime({
         ...process.env,
         ORCA_E2E_USER_DATA_DIR: userData,
         ORCA_E2E_HOME_DIR: homeDir,
+        // Serve preflight resolves the profile from this env; without it a running packaged Orca owns it.
+        ORCA_USER_DATA_PATH: userData,
         HOME: homeDir,
         USERPROFILE: homeDir
       },

@@ -44,6 +44,8 @@ export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequest
 export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcRequestPortEntry[] = [
   // Accounts recording needs useFocusEffect/ScrollView substitutes and an accounts.subscribe stream scenario.
   { file: 'src/accounts/MobileAccountsScreen.tsx', references: 2 },
+  // Usage panel reuses accounts snapshots over the raw port until typed operations land.
+  { file: 'src/usage-panel/MobileUsagePanelScreen.tsx', references: 2 },
 
   // callAgentSession accepts dynamic methods and generic results; typed operations require restructuring its callers.
   { file: 'src/session/mobile-structured-agent-session-rpc.ts', references: 1 },

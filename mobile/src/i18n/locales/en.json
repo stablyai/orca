@@ -4576,5 +4576,23 @@
         }
       }
     }
+  },
+  "resourceManager": {
+    "hostNotFound": "Host not found",
+    "title": "Resource Manager",
+    "loading": "Loading resources…",
+    "desktopHint": "Manage terminals and processes from the desktop Resource Manager."
+  },
+  "usagePanel": {
+    "hostNotFound": "Host not found",
+    "invalidSnapshot": "Invalid usage snapshot from host",
+    "title": "Usage",
+    "refresh": "Refresh usage",
+    "connectingTo": "Connecting to {{name}}…",
+    "connecting": "Connecting to host…",
+    "loading": "Loading usage…",
+    "connectionFailed": "Could not connect to host",
+    "disconnected": "Disconnected from host",
+    "noUsage": "No usage data available"
   }
 }
