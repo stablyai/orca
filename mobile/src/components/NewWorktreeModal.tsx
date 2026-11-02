@@ -16,7 +16,7 @@ import {
   buildRetiredWorktreeNamesRefreshKey,
   useRetiredWorktreeNames
 } from '../worktree/use-retired-worktree-names'
-import { BottomDrawerModalHost } from './bottom-drawer-modal-host'
+import { BottomDrawerModalHost } from './bottom-drawer/bottom-drawer-modal-host'
 import {
   getMobileWorkspaceRepoBadgeColor,
   type MobileWorkspaceRepo,

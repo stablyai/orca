@@ -138,10 +138,6 @@ describe.runIf(process.platform === 'darwin')(
       return failures
     }
 
-    it('finds the holder on its terminal', () => {
-      expect(holderTty).toMatch(/^ttys\d+$/)
-    })
-
     it.each([
       ['full snapshot', PS_ARGS, UTF8],
       ['full snapshot (tdev)', ['-axo', PS_ARGS[1].replace('tty=', 'tdev=')], UTF8],

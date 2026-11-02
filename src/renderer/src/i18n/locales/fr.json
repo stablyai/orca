@@ -4314,7 +4314,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "Aucun autre compte",
-            "9332ba8684": "Basculer vers",
             "d450654fa2": "Compte Claude",
             "11e2354daf": "Runtime d'utilisation Claude",
             "3dd7ddfae1": "Ouvrir les détails Claude et le sélecteur de compte",
@@ -6251,11 +6250,7 @@
           "93cbea12c2": "Notes",
           "dbe2d18972": "Plus d'actions {{value0}}",
           "2c67730e07": "Ouvrir dans Orca",
-          "e42941631a": "Voir sur Linear",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "Modifier l'issue",
-          "b22f058067": "Voir sur GitHub",
-          "e97d8f2876": "Ticket #{{value0}}",
           "moreIssueActions": "Plus d'actions d'issue",
           "copyLink": "Copier le lien",
           "copyLinkSuccess": "{{value0}} copié",
@@ -6278,8 +6273,6 @@
           "cliCreatedFromShell": "Créé via `orca worktree create`",
           "cliStartupAgent": "Démarré avec {{value0}}",
           "cliCreated": "Créé par Orca CLI",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "Voir sur Jira",
           "linkedJira": "Lié à Jira {{value0}}",
           "openInOrcaBrowser": "Ouvrir dans le navigateur Orca"
         },
@@ -22162,7 +22155,8 @@
       "showLinked_many": "Afficher {{count}} revues et tâches liées",
       "linkedCount_one": "{{count}} lié",
       "linkedCount_other": "{{count}} liés",
-      "linkedCount_many": "{{count}} liés"
+      "linkedCount_many": "{{count}} liés",
+      "labels": "Libellés : {{labels}}"
     },
     "attachments": {
       "updateRuntime": "Mettez à jour le runtime distant pour modifier les liens de l'espace de travail",

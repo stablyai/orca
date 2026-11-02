@@ -47,7 +47,7 @@ vi.mock('lucide-react-native', () => ({
   WifiOff: 'Icon'
 }))
 // The pager's slide is Reanimated; render the main list and the open page side by side.
-vi.mock('../components/BottomDrawer', async () => {
+vi.mock('../components/bottom-drawer/BottomDrawer', async () => {
   const { createElement: h, useCallback, useState } = await import('react')
   return {
     useOptionPager: () => {

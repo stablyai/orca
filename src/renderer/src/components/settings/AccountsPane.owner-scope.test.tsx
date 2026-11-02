@@ -79,13 +79,14 @@ vi.mock('@/store', () => ({
         minimax: null,
         cursor: { updatedAt: 0 },
         grok: { updatedAt: 0 },
-        inactiveClaudeAccounts: {},
+        inactiveClaudeAccounts: [],
         claudeTarget: { runtime: 'host', wslDistro: null }
       },
       runtimeEnvironments: [],
       runtimeStatusByEnvironmentId: new Map(),
       recordFeatureInteraction: fake.write,
-      fetchSettings: fake.write
+      fetchSettings: fake.write,
+      fetchInactiveClaudeAccountUsage: fake.write
     })
 }))
 vi.mock('@/runtime/runtime-antigravity-accounts-client', () => ({

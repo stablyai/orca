@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
+import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
 import { useNativeChatComposerSubmit } from './use-native-chat-composer-submit'
 import { updateNativeChatComposerDraft } from './native-chat-composer-draft-store'
 import { nativeChatPastedTextOperations } from './native-chat-pasted-text-reference'
@@ -26,6 +27,15 @@ const GOAL_ITEM: NativeChatPickerItem = {
   token: '/goal',
   skillCollision: false
 }
+// Claude's initialize descriptor marks its own goal `builtin: true`; a user skill named goal replaces it unmarked.
+const BUILTIN_GOAL_ITEM: NativeChatPickerItem = {
+  kind: 'command',
+  id: 'goal',
+  name: 'goal',
+  token: '/goal',
+  skillCollision: false,
+  builtin: true
+}
 const MODEL_ITEM: NativeChatPickerItem = {
   ...GOAL_ITEM,
   id: 'model',
@@ -38,16 +48,19 @@ function harness(options: {
   caret?: number
   threadGoal?: NativeChatStructuredComposerTransport['threadGoal']
   imageAttachments?: NativeChatComposerImageAttachment[]
+  nativeAdmission?: boolean | 'queued'
   lane?: 'pty'
   capturePresentation?: NativeChatStructuredComposerTransport['capturePresentation']
 }) {
   const onError = vi.fn()
   const onSubmitted = vi.fn()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: submit reads only threadGoal, onError and onSubmitted.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture provides the submit and native-send paths it exercises.
   const structuredTransport = {
     capturePresentation: options.capturePresentation ?? (() => () => true),
     onError,
     onSubmitted,
+    send: vi.fn(() => options.nativeAdmission ?? true),
+    dispatchCommand: vi.fn(async () => ({ handled: false, accepted: false, error: null })),
     ...(options.threadGoal ? { threadGoal: options.threadGoal } : {})
   } as unknown as NativeChatStructuredComposerTransport
   const calls = {
@@ -58,26 +71,72 @@ function harness(options: {
   }
   writeNativeChatDraftCache(SCOPE, options.draft)
   const hook = renderHook(
-    (props: { draft: string; caret: number }) =>
-      useNativeChatComposerSubmit({
+    (props: { draft: string; caret: number }) => {
+      const nativeSend = useNativeChatStructuredComposerSend({
+        agent: 'claude',
+        draftScopeKey: SCOPE,
+        imageAttachments: [],
+        structuredTransport,
+        isComposing: () => false,
+        clearSkillOrigin: vi.fn(),
+        setDraft: (value) => writeNativeChatDraftCache(SCOPE, value),
+        setCaret: calls.setCaret
+      })
+      return useNativeChatComposerSubmit({
         structuredTransport: options.lane === 'pty' ? undefined : structuredTransport,
         draftScopeKey: SCOPE,
         draft: props.draft,
         caret: props.caret,
         imageAttachments: options.imageAttachments ?? [],
         disabled: false,
-        ...calls
-      }),
+        ...calls,
+        sendStructured: options.nativeAdmission !== undefined ? nativeSend : calls.sendStructured
+      })
+    },
     { initialProps: { draft: options.draft, caret: options.caret ?? options.draft.length } }
   )
   const type = (draft: string, caret: number): void => {
     writeNativeChatDraftCache(SCOPE, draft)
     hook.rerender({ draft, caret })
   }
-  return { hook, calls, onError, onSubmitted, type }
+  return { hook, calls, onError, onSubmitted, type, structuredTransport }
 }
 
 describe('composer goal mode', () => {
+  it.each([true, false, 'queued'] as const)(
+    'sends native goal commands through ordinary admission (%s), retaining refused drafts',
+    async (admission) => {
+      const fixture = harness({ draft: '/go', nativeAdmission: admission })
+      act(() => fixture.hook.result.current.goalMode.interceptPick(vi.fn())(BUILTIN_GOAL_ITEM))
+      expect(fixture.hook.result.current.goalMode.active).toBe(true)
+      expect(fixture.hook.result.current.messageDelivery).toBe(true)
+      fixture.type('/goal fix tests\nand lint', 0)
+      await act(async () => fixture.hook.result.current.send({ alternate: true }))
+      expect(fixture.structuredTransport.send).toHaveBeenCalledExactlyOnceWith(
+        '/goal fix tests\nand lint',
+        [],
+        { alternate: true }
+      )
+      expect(fixture.hook.result.current.goalMode.active).toBe(admission === false)
+      expect(readNativeChatDraftCache(SCOPE)).toBe(
+        admission === false ? '/goal fix tests\nand lint' : ''
+      )
+    }
+  )
+
+  it('keeps a goal edited during native command dispatch in goal mode', async () => {
+    const dispatched = Promise.withResolvers<{ handled: false; accepted: false; error: null }>()
+    const fixture = harness({ draft: '/go', nativeAdmission: true })
+    vi.mocked(fixture.structuredTransport.dispatchCommand).mockReturnValue(dispatched.promise)
+    act(() => fixture.hook.result.current.goalMode.interceptPick(vi.fn())(BUILTIN_GOAL_ITEM))
+    fixture.type('Ship it', 7)
+    act(() => fixture.hook.result.current.send())
+    fixture.type('Ship it and test it', 19)
+    await act(async () => dispatched.resolve({ handled: false, accepted: false, error: null }))
+    expect(readNativeChatDraftCache(SCOPE)).toBe(' and test it')
+    expect(fixture.hook.result.current.goalMode.active).toBe(true)
+  })
+
   it.each([false, true])(
     'admits the actual ordinary/goal candidate only after completion, goal=%s',
     async (goal) => {
@@ -129,7 +188,7 @@ describe('composer goal mode', () => {
     expect(hook.result.current.goalMode.active).toBe(false)
   })
 
-  it('leaves other picks, and /goal on a host without goals, to the picker', () => {
+  it('leaves other picks, and an unmarked /goal on a host without goals, to the picker', () => {
     const withGoals = harness({ draft: '/mo', threadGoal: { setObjective: vi.fn() } })
     const pick = vi.fn()
     act(() => withGoals.hook.result.current.goalMode.interceptPick(pick)(MODEL_ITEM))
@@ -201,7 +260,7 @@ describe('composer goal mode', () => {
     expect(calls.setDraft).toHaveBeenCalledWith('')
     expect(hook.result.current.goalMode.active).toBe(true)
 
-    // With an objective it is the host command, and without goals it is message text.
+    // With an objective it is the host command; without host goals, bare /goal asks the agent itself.
     const withObjective = harness({ draft: '/goal ship it', threadGoal: { setObjective: vi.fn() } })
     act(() => withObjective.hook.result.current.send())
     expect(withObjective.calls.sendStructured).toHaveBeenCalledWith('/goal ship it', [])

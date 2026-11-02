@@ -19,7 +19,7 @@ import {
 import {
   restoreUserDataPathAfterEach,
   setTestUserDataPath
-} from './local-pty-shell-ready-test-harness'
+} from './local-pty/local-pty-shell-ready-test-harness'
 
 function findZsh(): string {
   if (process.platform === 'win32') {
@@ -60,10 +60,11 @@ async function typeIntoZsh(text: string, userConfigSeconds: number): Promise<str
   }
   const out = join(home, 'out.txt')
   const done = join(home, 'done.txt')
-  const { ensureShellReadyWrappers } = await import('./local-pty-shell-ready-wrapper-generation')
-  const { getShellLaunchConfig } = await import('./local-pty-shell-ready')
+  const { ensureShellReadyWrappers } =
+    await import('./local-pty/local-pty-shell-ready-wrapper-generation')
+  const { getShellLaunchConfig } = await import('./local-pty/local-pty-shell-ready')
   const { writeStartupCommandWhenShellReady, STARTUP_COMMAND_READY_MAX_WAIT_MS } =
-    await import('./local-pty-shell-ready-startup-command')
+    await import('./local-pty/local-pty-shell-ready-startup-command')
   ensureShellReadyWrappers()
   const env: Record<string, string> = { PATH: '/usr/bin:/bin', HOME: home }
   const launch = getShellLaunchConfig(

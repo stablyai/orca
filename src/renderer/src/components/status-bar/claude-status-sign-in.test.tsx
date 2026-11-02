@@ -130,9 +130,7 @@ async function openAccounts(): Promise<void> {
       iconOnly: false
     })
   )
-  // A remote server's roster arrives with the snapshot, not settings.
-  fireEvent.click(await screen.findByText('old@example.com'))
-  await waitFor(() => expect(screen.getAllByText('old@example.com').length).toBe(2))
+  await screen.findByRole('menuitem', { name: /old@example.com/ })
 }
 
 describe('status bar Claude account that needs a sign-in', () => {
@@ -228,7 +226,6 @@ describe('status bar Claude account that needs a sign-in', () => {
         })
       )
     )
-    fireEvent.click(await screen.findByText('old@example.com'))
     expect(await screen.findByText('Sign in again to use this account')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /Sign in/ }))
     await waitFor(() => expect(reauthenticate).toHaveBeenCalledWith({ accountId: 'old' }))

@@ -13,6 +13,8 @@ export type PluginServiceOptions = {
   getKeybindings?: () => KeybindingOverrides
   getPluginKillListEntry?: (pluginKey: string) => PluginKillListEntry | null
   hostEntryPath?: string
+  /** Where this release's bundled plugins live; absent where nothing is shipped. */
+  bundledPluginRoot?: string
   workerFactory?: PluginWorkerFactory
   maxActiveWorkers?: number
   idleReapMs?: number

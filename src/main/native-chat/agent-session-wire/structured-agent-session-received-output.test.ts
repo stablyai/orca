@@ -27,9 +27,11 @@ it('saves every tool result past 1,024 in one received Claude message, through r
     database: openTestJournalHostDatabase(root)
   })
   const onFailed = vi.fn()
+  const readingControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
   const deferred = createDeferredStructuredAgentSessionEventSink({
     ...testEventSinkLogging(),
-    onFailed
+    onFailed,
+    readingControl
   })
   deferred.bind({ journal, fence: 1, publish: () => {} })
   const translator = createClaudeJournalTranslator({ sink: deferred.sink })
@@ -54,6 +56,8 @@ it('saves every tool result past 1,024 in one received Claude message, through r
     })
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
     expect(onFailed).not.toHaveBeenCalled()
+    expect(readingControl.pauseReading).toHaveBeenCalledOnce()
+    expect(readingControl.resumeReading).toHaveBeenCalledOnce()
     await journal.close()
     await closeTestJournalHostDatabase(root)
     journal = await openAgentSessionJournal({

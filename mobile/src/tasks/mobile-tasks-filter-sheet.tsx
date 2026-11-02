@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { translate as t } from '../i18n/mobile-i18n'
-import { BottomDrawer, Linking, Text, View, type PickerOption } from './mobile-tasks-dependencies'
+import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
+import { Linking, Text, View, type PickerOption } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
 import {
   LINEAR_GROUP_OPTIONS,

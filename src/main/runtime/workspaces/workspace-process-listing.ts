@@ -1,4 +1,3 @@
-import { structuredNativeWorkReaders } from '../structured-native-work-readers'
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
 import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
@@ -44,7 +43,10 @@ import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-path
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { chatWorkerTurnStopReporter } from '../orchestration/chat-worker-turn-stops'
 import { buildWorktreeListingPage } from '../worktree-listing-host-scope'
-import { structuredWorkerOpenTaskTitle } from '../structured-worker-custody'
+import {
+  structuredWorkerOpenTaskTitle,
+  structuredWorkerOwesWork
+} from '../structured-worker-custody'
 import { preModeChatGetsFullAccess } from '../../../shared/agent-chat-permission-mode'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { nativeChatShellEnvironmentPolicy } from '../../../shared/native-chat/native-chat-shell-environment'
@@ -306,10 +308,9 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
         now: () => Date.now()
       }),
       onTurnAttention: chatWorkerTurnStopReporter(this.workerTurnStopReportDeps),
-      ...structuredNativeWorkReaders(
-        () => this.getOrchestrationDbIfAvailable?.() ?? null,
-        () => this.getExistingOrchestrationDb()
-      )
+      // Re-read dispatch ownership each sweep; absence of a database cannot keep the worker alive.
+      hasOpenDispatch: (record) =>
+        structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
     })
   }
 }

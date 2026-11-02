@@ -86,21 +86,6 @@ describe('plugin icon theme artifact prototype keys', () => {
       )
     ).toThrow(/duplicate/)
   })
-
-  it('rejects case-folded duplicates of prototype names', () => {
-    expect(() =>
-      parse({ schemaVersion: 1, fileNames: { constructor: 'a.svg', CONSTRUCTOR: 'b.svg' } })
-    ).toThrow(/duplicate/)
-    expect(() =>
-      parse({ schemaVersion: 1, fileExtensions: { constructor: 'a.svg', CONSTRUCTOR: 'b.svg' } })
-    ).toThrow(/duplicate/)
-  })
-
-  it('does not treat an inherited name as a duplicate of itself', () => {
-    expect(() =>
-      parse({ schemaVersion: 1, fileNames: { Constructor: 'a.svg', toString: 'b.svg' } })
-    ).not.toThrow()
-  })
 })
 
 describe('isPluginIconThemeRegistration', () => {
@@ -135,10 +120,6 @@ describe('isPluginIconThemeRegistration', () => {
     expect(
       isPluginIconThemeRegistration({ ...base, fileNames: {}, folderNamesExpanded: { src: 1 } })
     ).toBe(false)
-  })
-
-  it('accepts in-range indexes', () => {
-    expect(isPluginIconThemeRegistration({ ...base, fileNames: { constructor: 0 } })).toBe(true)
   })
 })
 

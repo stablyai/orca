@@ -21,11 +21,7 @@ import type {
   PluginInstallSource,
   PluginLockEntry
 } from '../../../shared/plugins/installation/plugin-install-lockfile'
-import {
-  validateDeclaredPluginArtifacts,
-  validatePluginInstallContent,
-  type PluginArtifactValidationResult
-} from '../plugin-artifact-validation'
+import { validatePluginInstallTree } from '../plugin-artifact-validation'
 import { renamePluginFileWithWindowsRetry } from './plugin-atomic-file-write'
 import { hashPluginTree } from '../plugin-content-hash'
 import { publishPluginInstall } from './plugin-install-publication'
@@ -54,14 +50,6 @@ export type PluginInstallInspection =
       consentFingerprint: string
     }
   | { ok: false; error: string }
-
-async function validatePluginInstallTree(
-  rootDir: string,
-  manifest: PluginManifest
-): Promise<PluginArtifactValidationResult> {
-  const declared = await validateDeclaredPluginArtifacts(rootDir, manifest)
-  return declared.ok ? validatePluginInstallContent(rootDir, manifest) : declared
-}
 
 async function readInstallManifest(
   rootDir: string,

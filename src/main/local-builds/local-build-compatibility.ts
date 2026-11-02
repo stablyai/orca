@@ -7,7 +7,7 @@ import { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provide
 import { getDaemonProvider } from '../daemon/daemon-provider-state'
 import { getAllDaemonAdapters } from '../daemon/daemon-provider-routing'
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
-import { LocalPtyProvider } from '../providers/local-pty-provider'
+import { LocalPtyProvider } from '../providers/local-pty/local-pty-provider'
 
 export type LocalBuildCompatibilityResult = {
   liveTerminalCount: number

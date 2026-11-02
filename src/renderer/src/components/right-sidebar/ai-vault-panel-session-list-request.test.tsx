@@ -3,7 +3,11 @@ import { cleanup, render, screen, fireEvent } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ComponentProps } from 'react'
 import { useAppStore } from '@/store'
-import { makeFolderWorkspace, makeRepo, makeWorktree } from '../worktree-jump-palette-test-fixtures'
+import {
+  makeFolderWorkspace,
+  makeRepo,
+  makeWorktree
+} from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { searchHit } from '../../../../shared/ai-vault-search-test-fixture'
 import {

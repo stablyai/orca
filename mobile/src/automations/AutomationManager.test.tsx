@@ -44,7 +44,7 @@ vi.mock('lucide-react-native', () => ({
   ChevronRight: 'ChevronRight'
 }))
 vi.mock('../components/PickerModal', () => ({ PickerModal: 'PickerModal' }))
-vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
+vi.mock('../components/bottom-drawer/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
 vi.mock('../components/ConfirmModal', () => ({ ConfirmModal: 'ConfirmModal' }))
 vi.mock('../navigation/route-handoff', () => ({
   useRouteHandoff: () => ({ push: inventory.push })

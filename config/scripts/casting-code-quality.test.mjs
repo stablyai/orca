@@ -122,6 +122,7 @@ it('rejects a casting suppression on an added line that omits the SAFETY: ration
     )
 
     expect(findings.map((finding) => finding.labels[0].span.line)).toEqual([1])
+    expect(findings[0].message).toContain(directive('SAFETY:'))
 
     expect(
       findCastingDirectivesMissingSafety(root, new Map([[relative, [{ start: 3, end: 4 }]]]))
