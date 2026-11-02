@@ -25,6 +25,8 @@ export type SwitchTerminalSpawn = {
   resumeSupported?: boolean
   /** Another worktree's terminal holds the conversation's claim: open this one without it. */
   unclaimed?: boolean
+  /** The chat being switched; its admission tells this switch's own terminal from another tab's. */
+  chatSessionId?: string
 }
 
 /** Another worktree's terminal, or several, own the conversation's claim. The switch checks only
@@ -121,9 +123,10 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
       : undefined
     try {
       const preparing = claim ? this.ptyController?.prepareAgentSessionOwner?.(claim) : undefined
-      if (preparing) {
-        // A join waits on another create; the switch's deadline bounds it, as nothing stopped yet.
-        await waitForPromiseWithSignal(preparing, args.signal)
+      // A join waits on another create; the switch's deadline bounds it, as nothing stopped yet.
+      const owner = preparing ? await waitForPromiseWithSignal(preparing, args.signal) : null
+      if (owner && this.isOtherTabsTerminal(workspace.id, owner, args.chatSessionId)) {
+        return { resumeSupported, unclaimed: true }
       }
     } catch (error) {
       if (isClaimHeldElsewhere(error)) {
@@ -132,6 +135,30 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
       throw error
     }
     return { resumeSupported }
+  }
+
+  /**
+   * A terminal another tab shows: adopting it by the claim would pull that tab into the chat's
+   * slot. The switch checks only its own tab (Brennan 11-01), so it opens its own terminal beside
+   * it instead. Its own terminal from an attempt whose answer was lost is parked (no viewer) or
+   * already sits in this chat's slot.
+   */
+  private isOtherTabsTerminal(
+    workspaceId: string,
+    owner: { ptyId: string; surface: { tabId: string } },
+    chatSessionId: string | undefined
+  ): boolean {
+    return (
+      this.hasTerminalViewer(owner.ptyId) &&
+      !(
+        chatSessionId &&
+        this.switchSlotAnchors.replaced(
+          workspaceId,
+          owner.surface.tabId,
+          `agent-session:${chatSessionId}`
+        )
+      )
+    )
   }
 
   private async switchTerminalLaunch(workspaceId: string, args: SwitchTerminalSpawn) {

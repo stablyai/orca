@@ -178,6 +178,12 @@ export function executionOwnerRig(
     })
   install()
   const spawned: RuntimeTerminalCreate[] = []
+  // Terminals a tab shows, beside those the runtime itself sees viewed.
+  const viewed = new Set<string>()
+  const hasTerminalViewer = runtime.hasTerminalViewer.bind(runtime)
+  vi.spyOn(runtime, 'hasTerminalViewer').mockImplementation(
+    (ptyId) => viewed.has(ptyId) || hasTerminalViewer(ptyId)
+  )
   const spawnSwitchTerminal = runtime.spawnSwitchTerminal.bind(runtime)
   vi.spyOn(runtime, 'spawnSwitchTerminal').mockImplementation(async (...args) => {
     const terminal = await spawnSwitchTerminal(...args)
@@ -185,7 +191,9 @@ export function executionOwnerRig(
     return terminal
   })
   return {
+    runtime,
     spawned,
+    view: (ptyId: string) => viewed.add(ptyId),
     place: vi.spyOn(runtime, 'placeSwitchTerminal'),
     stop: vi.spyOn(chat.host, 'stopForSwitch'),
     started: () => started,

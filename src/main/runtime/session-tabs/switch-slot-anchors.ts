@@ -56,6 +56,12 @@ export class SwitchSlotAnchors {
     }
   }
 
+  /** Whether a switch put this destination in that tab's slot. */
+  replaced(workspaceId: string, destinationTabId: string, tabId: string): boolean {
+    const anchor = this.byWorkspace.get(workspaceId)?.get(destinationTabId)?.anchor
+    return anchor !== undefined && 'replaces' in anchor && anchor.replaces.tabId === tabId
+  }
+
   /** Withdraws an anchor whose destination no frame has shown. */
   forget(workspaceId: string, destinationTabId: string): void {
     const entries = this.byWorkspace.get(workspaceId)

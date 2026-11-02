@@ -39,13 +39,15 @@ export async function executeStructuredSessionTerminalSwitch(
       : undefined
   // Admission before the chat stops: the create's own ownership decision. The switch checks only
   // its own tab (Brennan 11-01, temporary; a cross-tab check is a follow-up), so a terminal
-  // elsewhere holding this conversation refuses nothing; the new terminal then opens unclaimed.
+  // elsewhere holding this conversation refuses nothing and is never moved: the new terminal then
+  // opens unclaimed.
   const adoption = providerSessionId
     ? await ctx.runtime.switchTerminalAdoption(record.location.workspaceId, {
         agent,
         source: saved,
         commandOverride: execution?.commandOverride,
-        signal: deadline.signal
+        signal: deadline.signal,
+        chatSessionId: sessionId
       })
     : {}
   deadline.check()

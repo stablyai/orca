@@ -281,6 +281,37 @@ it.each([
   expect(r.owners().some((listed) => listed.ptyId === 'switch-pty-1')).toBe(c.claimed)
 })
 
+// Ruling D: a terminal another tab shows is never pulled into the chat's slot by the claim; the
+// switch opens its own beside it. Its own terminal, placed by an attempt whose answer was lost,
+// is still adopted.
+it('leaves another tab\u2019s terminal holding the claim in its tab and opens its own', async () => {
+  const r = await switchRig({
+    seed: (claim) => {
+      r.list(ownerOf(claim, 'other-pty'))
+      r.view('other-pty')
+    }
+  })
+  expect(await r.run('to-terminal-other-tab')).toMatchObject({ status: 'completed', sessionId: id })
+  expect(r.started()).toBe(1)
+  expect(r.spawned.map((terminal) => terminal.ptyId)).toEqual(['switch-pty-1'])
+  expect(r.owners().map((listed) => listed.ptyId)).toEqual(['other-pty'])
+})
+
+it('a retry adopts its own terminal that the lost attempt already put in the chat\u2019s slot', async () => {
+  const r = await switchRig()
+  const t1 = await lostFirstAttempt(r)
+  r.view(t1.ptyId!)
+  r.runtime.switchSlotAnchors.record(WORKTREE_ID, t1.tabId!, {
+    replaces: { tabId: `agent-session:${id}` }
+  })
+  expect(await r.run('to-terminal-retry')).toMatchObject({
+    status: 'completed',
+    terminal: t1.tabId
+  })
+  expect(r.started()).toBe(1)
+  expect(r.spawned.map((terminal) => terminal.ptyId)).toEqual([t1.ptyId, t1.ptyId])
+})
+
 it.each([
   { control: 'another live holder beside that terminal', supportsClaims: true, started: 1 },
   // No claim to adopt by: the retry starts a second CLI, which the user can close.
