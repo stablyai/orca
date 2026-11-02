@@ -1,3 +1,5 @@
+import { GITHUB_REPO_WORK_ITEM_METHODS } from '../rpc/methods/github-repo-work-item-methods'
+import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../shared/github/work-item-target'
 import { GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY } from '../../../shared/task-source-runtime-capabilities'
 import { randomUUID } from 'node:crypto'
 import { publishHostDescriptor } from '../host-descriptor'
@@ -156,6 +158,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
       methods: [
         ...STATUS_METHODS,
         ...GITHUB_ISSUE_METHODS,
+        ...GITHUB_REPO_WORK_ITEM_METHODS,
         ...(locator ? ORCHESTRATION_CALLER_METHODS : []),
         ...TERMINAL_METHODS,
         ...BROWSER_CORE_METHODS,
@@ -724,7 +727,13 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
         TARGET,
         expectedA
       )
-      expect((await phone.next('intent-old-executor')).ok).toBe(false)
+      expect(await phone.next('intent-old-executor')).toMatchObject({
+        ok: false,
+        error: {
+          code: 'remote_runtime_unavailable',
+          message: GITHUB_EXACT_OPERATION_UNSUPPORTED
+        }
+      })
       expect(details).not.toHaveBeenCalled()
       expect(authorityReplies()).toHaveLength(beforeIntent + 1)
       status.mockRestore()

@@ -1,6 +1,7 @@
 import '../../../../../main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { act } from 'react'
 import type * as GitRunner from '../../../../../main/git/runner'
+import type * as GitHubClient from '../../../../../main/github/client'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 // @vitest-environment happy-dom
 import type {
@@ -133,7 +134,8 @@ vi.mock('../../../../../main/github/rate-limit', () => ({
   noteRepositoryRateLimitSpend: vi.fn(),
   spendsSharedGitHubComQuota: () => false
 }))
-vi.mock('../../../../../main/github/client', async () => ({
+vi.mock('../../../../../main/github/client', async (importOriginal) => ({
+  ...(await importOriginal<typeof GitHubClient>()),
   ...(await import('../../../../../main/github/client/fetch/get-work-item')),
   ...(await import('../../../../../main/github/client/check/get-pr-checks')),
   ...(await import('../../../../../main/github/client/fetch/get-pr-comments'))
