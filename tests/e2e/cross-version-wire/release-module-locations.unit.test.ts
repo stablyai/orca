@@ -1,25 +1,32 @@
 import { describe, expect, it } from 'vitest'
-import { releaseModuleLocation } from './release-module-locations'
+import { releaseModuleLocation, type ReleaseTree } from './release-module-locations'
 
-const RECORD = 'src/shared/agent-session/lifecycle/agent-session-record.ts'
-const EARLIER_RECORD = 'src/shared/agent-session-record.ts'
-const holding =
-  (...paths: string[]) =>
-  (path: string) =>
-    paths.some((held) => path.endsWith(held))
+const CURRENT = 'src/shared/agent-session/lifecycle/agent-session-record.ts'
+const SHIPPED = 'src/shared/agent-session-record.ts'
+const release = (...files: string[]): ReleaseTree => ({
+  exists: (path) => files.includes(path),
+  list: (directory) => files.filter((file) => file.startsWith(`${directory}/`))
+})
 
 describe('release module locations', () => {
   it('loads a moved module from wherever the release defines it, whichever path a suite names', () => {
-    for (const named of [RECORD, EARLIER_RECORD, `/${EARLIER_RECORD}`]) {
-      expect(releaseModuleLocation('/release', named, holding(EARLIER_RECORD))).toBe(EARLIER_RECORD)
-      expect(releaseModuleLocation('/release', named, holding(RECORD))).toBe(RECORD)
+    for (const named of [CURRENT, SHIPPED, `/${SHIPPED}`]) {
+      expect(releaseModuleLocation('/release', named, release(SHIPPED))).toBe(SHIPPED)
+      expect(releaseModuleLocation('/release', named, release(CURRENT))).toBe(CURRENT)
     }
   })
 
-  it('passes through paths it does not know or no release defines', () => {
-    expect(releaseModuleLocation('/release', 'src/shared/other.ts', holding())).toBe(
-      'src/shared/other.ts'
-    )
-    expect(releaseModuleLocation('/release', RECORD, holding())).toBe(RECORD)
+  it('stays inside the named source root and passes ambiguous or absent names through', () => {
+    expect(
+      releaseModuleLocation('/release', CURRENT, release('src/main/agent-session-record.ts'))
+    ).toBe(CURRENT)
+    expect(
+      releaseModuleLocation(
+        '/release',
+        CURRENT,
+        release(SHIPPED, 'src/shared/old/agent-session-record.ts')
+      )
+    ).toBe(CURRENT)
+    expect(releaseModuleLocation('/release', CURRENT, release())).toBe(CURRENT)
   })
 })

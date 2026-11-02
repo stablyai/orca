@@ -1,102 +1,53 @@
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readdirSync } from 'node:fs'
+import { join, posix } from 'node:path'
 
-// Modules main has moved, current location first. A release defines each at whichever path it
-// shipped, so suites can name either one and still load the rolling baseline and older pinned refs.
-// Add an entry when a move would otherwise break the next cut's checkout.
-const MOVED_MODULES: readonly (readonly string[])[] = [
-  [
-    'src/main/claude/structured/journal/claude-structured-journal-translation.ts',
-    'src/main/claude/claude-structured-journal-translation.ts'
-  ],
-  [
-    'src/main/runtime/agent-session/records/agent-session-record-rows.ts',
-    'src/main/runtime/agent-session-record-rows.ts'
-  ],
-  [
-    'src/main/runtime/agent-session/records/agent-session-recovery-capsule.ts',
-    'src/main/runtime/agent-session-recovery-capsule.ts'
-  ],
-  [
-    'src/main/runtime/agent-session/records/agent-session-store-draft.ts',
-    'src/main/runtime/agent-session-store-draft.ts'
-  ],
-  [
-    'src/main/runtime/agent-session/records/agent-session-store-state.ts',
-    'src/main/runtime/agent-session-store-state.ts'
-  ],
-  [
-    'src/shared/agent-session/agent-session-context-usage-schema.ts',
-    'src/shared/agent-session-context-usage-schema.ts'
-  ],
-  [
-    'src/shared/agent-session/failures/agent-session-failure-words.ts',
-    'src/shared/agent-session-failure-words.ts'
-  ],
-  [
-    'src/shared/agent-session/failures/agent-session-failure.ts',
-    'src/shared/agent-session-failure.ts'
-  ],
-  [
-    'src/shared/agent-session/failures/agent-session-refusal-notice.ts',
-    'src/shared/agent-session-refusal-notice.ts'
-  ],
-  [
-    'src/shared/agent-session/failures/structured-agent-session-read-refusal.ts',
-    'src/shared/structured-agent-session-read-refusal.ts'
-  ],
-  [
-    'src/shared/agent-session/journal/agent-session-journal-schemas.ts',
-    'src/shared/agent-session-journal-schemas.ts'
-  ],
-  [
-    'src/shared/agent-session/lifecycle/agent-session-lease-adjudication.ts',
-    'src/shared/agent-session-lease-adjudication.ts'
-  ],
-  [
-    'src/shared/agent-session/lifecycle/agent-session-record.ts',
-    'src/shared/agent-session-record.ts'
-  ],
-  [
-    'src/shared/agent-session/lifecycle/agent-session-turn-record.ts',
-    'src/shared/agent-session-turn-record.ts'
-  ],
-  [
-    'src/shared/agent-session/structured-agent-session-reducer.ts',
-    'src/shared/structured-agent-session-reducer.ts'
-  ],
-  [
-    'src/shared/agent-session/view/structured-agent-session-agent-status.ts',
-    'src/shared/structured-agent-session-agent-status.ts'
-  ],
-  [
-    'src/shared/agent-session/view/structured-agent-session-message-projection.ts',
-    'src/shared/structured-agent-session-message-projection.ts'
-  ],
-  [
-    'src/shared/agent-session/view/structured-agent-session-projection.ts',
-    'src/shared/structured-agent-session-projection.ts'
-  ],
-  [
-    'src/shared/agent-session/view/structured-agent-session-status-block.ts',
-    'src/shared/structured-agent-session-status-block.ts'
-  ],
-  [
-    'src/shared/agent-session/view/structured-agent-session-tab.ts',
-    'src/shared/structured-agent-session-tab.ts'
-  ]
-]
+export type ReleaseTree = {
+  exists: (rootRelativePath: string) => boolean
+  /** Root-relative forward-slash paths of every file under `directory`. */
+  list: (directory: string) => readonly string[]
+}
 
-/** Where the release under `root` defines the module a suite names; unknown or absent paths pass through. */
+const listings = new Map<string, readonly string[]>()
+
+function checkoutTree(root: string): ReleaseTree {
+  return {
+    exists: (path) => existsSync(join(root, path)),
+    list: (directory) => {
+      const key = join(root, directory)
+      let files = listings.get(key)
+      if (!files) {
+        files = existsSync(key)
+          ? readdirSync(key, { recursive: true, encoding: 'utf8' }).map((entry) =>
+              posix.join(directory, entry.split('\\').join('/'))
+            )
+          : []
+        listings.set(key, files)
+      }
+      return files
+    }
+  }
+}
+
+/**
+ * Where the release under `root` defines the module a suite names. Suites name main's path; a
+ * release cut before a folder move ships the module elsewhere under the same source root, so the
+ * one file there with its name is that module. Missing or ambiguous names pass through and fail
+ * at import, naming the path the suite asked for.
+ */
 export function releaseModuleLocation(
   root: string,
   rootRelativePath: string,
-  exists: (path: string) => boolean = existsSync
+  tree: ReleaseTree = checkoutTree(root)
 ): string {
-  const named = rootRelativePath.replace(/^[/\\]+/, '')
-  if (exists(join(root, named))) {
+  const named = rootRelativePath
+    .replace(/^[/\\]+/, '')
+    .split('\\')
+    .join('/')
+  const sourceRoot = named.split('/').slice(0, 2).join('/')
+  if (tree.exists(named) || !sourceRoot.startsWith('src/')) {
     return named
   }
-  const locations = MOVED_MODULES.find((candidates) => candidates.includes(named))
-  return locations?.find((candidate) => exists(join(root, candidate))) ?? named
+  const name = posix.basename(named)
+  const moved = tree.list(sourceRoot).filter((path) => posix.basename(path) === name)
+  return moved.length === 1 ? moved[0]! : named
 }
