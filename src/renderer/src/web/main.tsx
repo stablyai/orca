@@ -24,6 +24,7 @@ import { translate } from '../i18n/i18n'
 import { installOsFileDropCancellationGuard } from '../lib/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from '../lib/body-overlay-attributes'
 import { installAppKeyboardRouter } from '../lib/app-keyboard-router'
+import { isMobileRemotePath } from './remote-shell/mobile-route'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
@@ -31,6 +32,9 @@ const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
 import.meta.hot?.dispose(disposeBodyOverlayAttributes)
 installAppKeyboardRouter()
 const App = lazy(() => import('../App'))
+const MobileRemoteApp = lazy(() =>
+  import('./remote-shell/MobileRemoteApp').then((module) => ({ default: module.MobileRemoteApp }))
+)
 
 function WebRoot(): React.JSX.Element {
   const initialPairingInput = useMemo(() => readPairingInputFromLocation(window.location), [])
@@ -106,9 +110,12 @@ function WebRootBoundary(): React.JSX.Element {
 void initWebDeviceKeySupport()
   .catch((error: unknown) => console.warn('[web] Device key probe failed', error))
   .finally(() => {
+    const Root = isMobileRemotePath(window.location.pathname) ? MobileRemoteApp : WebRootBoundary
     ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
       <I18nProvider>
-        <WebRootBoundary />
+        <Suspense fallback={<div className="min-h-dvh bg-background" />}>
+          <Root />
+        </Suspense>
       </I18nProvider>
     )
   })

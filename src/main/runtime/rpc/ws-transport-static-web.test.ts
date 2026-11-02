@@ -42,6 +42,20 @@ describe('WebSocketTransport static web client', () => {
     await expect(assetResponse.text()).resolves.toBe('console.log("web")')
   })
 
+  it('serves the mobile remote shell entry from the same bundle', async () => {
+    const staticRoot = mkdtempSync(join(tmpdir(), 'ws-transport-static-'))
+    writeFileSync(join(staticRoot, 'web-index.html'), '<html>remote</html>')
+    const transport = createStaticTransport(staticRoot)
+
+    await transport.start()
+
+    for (const path of ['/remote', '/remote/', '/orca/remote']) {
+      const response = await fetch(`http://127.0.0.1:${transport.resolvedPort}${path}`)
+      expect(response.status).toBe(200)
+      await expect(response.text()).resolves.toBe('<html>remote</html>')
+    }
+  })
+
   it('serves web assets when a reverse-proxy path prefix is forwarded', async () => {
     const staticRoot = mkdtempSync(join(tmpdir(), 'ws-transport-static-'))
     mkdirSync(join(staticRoot, 'assets'))

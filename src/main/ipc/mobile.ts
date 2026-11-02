@@ -5,6 +5,8 @@ import { classifyRemotePairingHostname } from '../../shared/remote-pairing-addre
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import type { DeviceEntry } from '../runtime/device-registry'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../runtime/network-exposure-guidance'
+import type { CloudflareTunnelManager } from '../runtime/tunnel/cloudflare-tunnel-manager'
+import { registerPublicTunnelHandlers } from './mobile-public-tunnel'
 import {
   getDefaultPairingAddress,
   getPairingNetworkInterfaces,
@@ -48,6 +50,8 @@ export type MobileHandlerDependencies = {
   consumePendingUnpairedDeviceAuthFailure?: (webContentsId: number) => boolean
   encodePairingQr?: (pairingUrl: string) => Promise<MobilePairingQrResult>
   getDefaultRouteInterfaceNames?: DefaultRouteInterfaceLookup
+  /** Injectable so IPC tests never spawn a real cloudflared. */
+  publicTunnelManager?: CloudflareTunnelManager
 }
 
 export function registerMobileHandlers(
@@ -186,6 +190,14 @@ export function registerMobileHandlers(
       }
     }
   )
+
+  registerPublicTunnelHandlers({
+    rpcServer,
+    encodePairingQr: dependencies.encodePairingQr ?? encodeMobilePairingQr,
+    ...(dependencies.publicTunnelManager
+      ? { publicTunnelManager: dependencies.publicTunnelManager }
+      : {})
+  })
 
   ipcMain.handle('mobile:listDevices', () => {
     const registry = rpcServer.getDeviceRegistry()

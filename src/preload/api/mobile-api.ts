@@ -3,6 +3,7 @@ import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-co
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import type { MobileRelayMintFailure } from '../../shared/mobile-relay-mint-failure'
 import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
+import type { PublicTunnelState } from '../../shared/public-tunnel-types'
 
 export type MobileApi = {
   listNetworkInterfaces: () => Promise<{
@@ -79,6 +80,11 @@ export type MobileApi = {
   revokeRuntimeAccess: (args: { deviceId: string }) => Promise<{ revoked: boolean }>
   getRelayStatus: () => Promise<MobileRelayStatusDetail>
   onRelayStatusChanged: (callback: (detail: MobileRelayStatusDetail) => void) => () => void
+  /** Start a Cloudflare Quick Tunnel and mint a mobile pairing link for it. */
+  startPublicTunnel: (args?: { rotate?: boolean }) => Promise<PublicTunnelState>
+  stopPublicTunnel: () => Promise<PublicTunnelState>
+  getPublicTunnelStatus: () => Promise<PublicTunnelState>
+  onPublicTunnelStatusChanged: (callback: (state: PublicTunnelState) => void) => () => void
   consumePendingUnpairedDeviceAuthFailure?: () => Promise<boolean>
   /** Fires (throttled, once per session) when an unpaired phone repeatedly fails direct-transport auth. */
   onUnpairedDeviceAuthFailure?: (callback: () => void) => () => void

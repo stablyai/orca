@@ -3,6 +3,7 @@ import type { MobileRelayStatusDetail } from '../../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import type { MobileRelayMintFailure } from '../../shared/mobile-relay-mint-failure'
+import type { PublicTunnelState } from '../../shared/public-tunnel-types'
 import type { PreloadApi } from '../api-types'
 
 export const mobileApi = {
@@ -76,6 +77,21 @@ export const mobileApi = {
       callback(detail)
     ipcRenderer.on('mobile:relayStatusChanged', listener)
     return () => ipcRenderer.removeListener('mobile:relayStatusChanged', listener)
+  },
+
+  startPublicTunnel: (args?: { rotate?: boolean }): Promise<PublicTunnelState> =>
+    ipcRenderer.invoke('mobile:startPublicTunnel', args),
+
+  stopPublicTunnel: (): Promise<PublicTunnelState> =>
+    ipcRenderer.invoke('mobile:stopPublicTunnel'),
+
+  getPublicTunnelStatus: (): Promise<PublicTunnelState> =>
+    ipcRenderer.invoke('mobile:getPublicTunnelStatus'),
+
+  onPublicTunnelStatusChanged: (callback: (state: PublicTunnelState) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: PublicTunnelState) => callback(state)
+    ipcRenderer.on('mobile:publicTunnelStatusChanged', listener)
+    return () => ipcRenderer.removeListener('mobile:publicTunnelStatusChanged', listener)
   },
 
   consumePendingUnpairedDeviceAuthFailure: (): Promise<boolean> =>

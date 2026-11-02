@@ -154,6 +154,11 @@ function mapProxyPrefixedStaticPathname(pathname: string): string {
   if (pathname === '/web-index.html' || pathname.endsWith('/web-index.html')) {
     return '/web-index.html'
   }
+  // The mobile shell is the same bundle, routed before App mounts. Serving the
+  // index here also supports a reverse proxy prefix such as /orca/remote.
+  if (pathname === '/remote' || pathname === '/remote/' || pathname.endsWith('/remote')) {
+    return '/web-index.html'
+  }
   const prefixIndex = STATIC_WEB_ALLOWED_PREFIXES.reduce(
     (deepest, prefix) => Math.max(deepest, pathname.indexOf(prefix)),
     -1

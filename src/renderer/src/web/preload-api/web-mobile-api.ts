@@ -1,5 +1,19 @@
 import type { PreloadApi } from '../../../../preload/api-types'
+import { idlePublicTunnelState } from '../../../../shared/public-tunnel-types'
 import { noopUnsubscribe } from './web-storage'
+
+// A browser page cannot own the desktop's cloudflared child. The desktop tunnel is
+// started from Settings in the Electron window, so the web surface reports why.
+function unsupportedPublicTunnel(): ReturnType<typeof idlePublicTunnelState> {
+  return {
+    ...idlePublicTunnelState(),
+    status: 'error',
+    error: {
+      code: 'unsupported',
+      message: 'Public tunnels can only be started from the Orca desktop app.'
+    }
+  }
+}
 
 export function createWebMobileApi(): Partial<PreloadApi> {
   return {
@@ -16,6 +30,10 @@ export function createWebMobileApi(): Partial<PreloadApi> {
       revokeRuntimeAccess: () => Promise.resolve({ revoked: false }),
       getRelayStatus: () => Promise.resolve({ status: 'offline' as const }),
       onRelayStatusChanged: () => noopUnsubscribe,
+      startPublicTunnel: () => Promise.resolve(unsupportedPublicTunnel()),
+      stopPublicTunnel: () => Promise.resolve(unsupportedPublicTunnel()),
+      getPublicTunnelStatus: () => Promise.resolve(unsupportedPublicTunnel()),
+      onPublicTunnelStatusChanged: () => noopUnsubscribe,
       consumePendingUnpairedDeviceAuthFailure: () => Promise.resolve(false),
       onUnpairedDeviceAuthFailure: () => noopUnsubscribe
     }

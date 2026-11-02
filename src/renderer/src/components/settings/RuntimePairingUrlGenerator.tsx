@@ -6,6 +6,7 @@ import { Label } from '../ui/label'
 import { RuntimeAccessGrantList } from './RuntimeAccessGrantList'
 import { translate } from '@/i18n/i18n'
 import { RuntimePairingGeneratorForm } from './RuntimePairingGeneratorForm'
+import { RuntimePublicTunnelSection } from './RuntimePublicTunnelSection'
 import {
   RUNTIME_PAIRING_LOOPBACK_ADDRESS,
   cacheGeneratedRuntimePairingLink,
@@ -386,6 +387,7 @@ export function RuntimePairingUrlGenerator({
           </p>
         </div>
       ) : null}
+      {showGeneratorForm ? <RuntimePublicTunnelSection /> : null}
       {showGeneratorForm ? (
         <RuntimePairingGeneratorForm
           intent={intent}
