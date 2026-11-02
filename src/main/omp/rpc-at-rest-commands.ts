@@ -1,5 +1,5 @@
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
-import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { AtRestCommandCatalog } from '../native-chat/agent-session-wire/at-rest-command-catalog'
 import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
 import type { StructuredAgentModelCatalogContext } from '../runtime/structured-agent-runtime-registration-types'

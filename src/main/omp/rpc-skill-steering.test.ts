@@ -1,8 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
-import { projectStructuredItemsToNativeChat } from '../../shared/structured-agent-session-projection'
-import { nativeChatTurnMembership } from '../../shared/native-chat-turn-membership'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { projectStructuredItemsToNativeChat } from '../../shared/agent-session/view/structured-agent-session-projection'
+import { nativeChatTurnMembership } from '../../shared/native-chat/transcript/native-chat-turn-membership'
 import { nativeChatRowsInDrawOrder } from '../../shared/native-chat/transcript/native-chat-turn-grouping'
 import { closeOmpRpcAdapterFixtures, setupOmpRpcAdapter } from './rpc-session-adapter.test-fixture'
 

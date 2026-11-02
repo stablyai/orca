@@ -73,7 +73,8 @@ export class RuntimeHostedReviewCommands {
     fallbackPRNumber?: number | null,
     acceptMergedFallbackPR?: boolean,
     currentHeadOid?: string | null,
-    reason?: GitHubPRRefreshReason
+    reason?: GitHubPRRefreshReason,
+    userRefresh?: boolean
   ): Promise<PRRefreshOutcome> {
     const repo = await this.deps.resolveRepo(repoSelector)
     const lookupOptions: GitHubPRBranchLookupOptions = {
@@ -81,6 +82,9 @@ export class RuntimeHostedReviewCommands {
         repo,
         reason ? admissionTierForRefreshReason(reason) : undefined
       )
+    }
+    if (userRefresh === true) {
+      lookupOptions.userRefresh = true
     }
     if (acceptMergedFallbackPR === true) {
       lookupOptions.acceptMergedFallbackPR = true

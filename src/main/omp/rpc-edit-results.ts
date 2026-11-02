@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { boundedDiffPatch } from '../native-chat/bounded-diff-patch'
 import { ompNativeToolResults } from './rpc-tool-results'
-import type { NativeChatBlock } from '../../shared/native-chat-types'
+import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types'
 import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { journalPayload } from '../native-chat/agent-session-journal/journal-payload-bounds'

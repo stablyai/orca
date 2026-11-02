@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WslModule from './wsl'
-import type { Store } from './persistence'
+import type { Store } from './persistence/loading-store/store'
 import type { Repo } from '../shared/repo-types'
 
 // Keep root resolvers real to catch preparation/consume key mismatches hidden by worktree-logic mocks.

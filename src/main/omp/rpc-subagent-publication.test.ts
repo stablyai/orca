@@ -2,13 +2,13 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import { isSubagentBlock } from '../../shared/native-chat-types'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { isSubagentBlock } from '../../shared/native-chat/native-chat-types'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
 import { structuredSessionBackgroundTasksView } from '../../shared/structured-session-background-tasks-view'
 import { acpChildWorkStatusSink } from '../acp/acp-structured-child-work.test-support'
 import { FakeConnection } from '../pi/rpc-session-adapter.test-fixture'
-import { openTestAgentSessionRecordStore } from '../runtime/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase

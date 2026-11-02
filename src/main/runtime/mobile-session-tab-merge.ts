@@ -5,7 +5,7 @@ import type {
 } from '../../shared/runtime-types'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
 import { collectTabGroupLayoutGroupIds } from '../../shared/workspace-layout/tab-group-moves'
-import { isStructuredAgentSessionHostTabId } from '../../shared/structured-agent-session-host-tab-id'
+import { isStructuredAgentSessionHostTabId } from '../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import {
   collectHeadlessParentTabOrder,
   getHeadlessMobileSessionGroupId

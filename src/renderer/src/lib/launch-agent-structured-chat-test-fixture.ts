@@ -17,10 +17,10 @@ import type { AppState } from '@/store/types'
 import type { pasteDraftWhenAgentReady } from './agent-paste-draft'
 import type { waitForAgentReady } from './agent-ready-wait'
 import type { createStructuredAgentSessionLaunchIntent as create } from './launch-structured-agent-session'
-import type { launchStructuredAgentSession as launch } from './structured-agent-session-launch-create-call'
+import type { launchStructuredAgentSession as launch } from './agent-session/launch/structured-agent-session-launch-create-call'
 import type { refreshLocalStructuredSessionTabs as refreshTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import type { toast } from 'sonner'
-import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
+import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 
 const mockCreateTab = vi.hoisted(() => vi.fn<AppState['createTab']>())
 const mockWaitForAgentReady = vi.hoisted(() => vi.fn<typeof waitForAgentReady>())
@@ -145,12 +145,12 @@ const launchErrorMocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
-  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-errors', async (original) => ({
+  ...(await original<typeof LaunchErrors>()),
   ...launchErrorMocks
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-create-call', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-create-call', () => ({
   launchStructuredAgentSession: mockLaunchStructuredCodexSession
 }))
 

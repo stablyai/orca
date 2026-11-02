@@ -8,7 +8,7 @@ import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { projectAgentLaunchSettings } from '../../src/shared/agent-launch-settings'
 import { retainedPrefillHost } from './terminal-agent-fork-retained-prefill.test-fixture'
-import { AGENT_SESSION_HOST_AUTHORITY_CAPABILITY } from '../../src/shared/agent-session-host-authority'
+import { AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
 import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../src/shared/agent-launch-runtime-capability'
 import type * as SessionSnapshot from '@/runtime/web-runtime-session-snapshot'
 
@@ -100,7 +100,7 @@ it.skipIf(process.platform === 'win32')(
     store.projectGroups = host.store.getProjectGroups()
     mocks.capability.mockImplementation(
       async (_environment, capability) =>
-        capability === AGENT_SESSION_HOST_AUTHORITY_CAPABILITY ||
+        capability === AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY ||
         capability === AGENT_LAUNCH_CHOICES_CAPABILITY
     )
     mocks.hostRpc.mockResolvedValue({

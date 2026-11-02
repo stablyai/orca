@@ -18,7 +18,7 @@ import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
-import type { AgentSessionExecutionOptions } from '../../shared/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../shared/agent-session/options/agent-session-execution-options'
 
 export type PiRpcConnection = Pick<
   JsonlRpcAgentConnection,

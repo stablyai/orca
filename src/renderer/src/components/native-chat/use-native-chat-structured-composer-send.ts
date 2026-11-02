@@ -2,15 +2,14 @@ import { getAgentLabel } from '@/lib/agent-catalog'
 import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { MAX_SKILL_REFS } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
-import { SkillRefLimitError } from '../../../../shared/structured-agent-session-send-mutation'
+import { SkillRefLimitError } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { promptSkillRefs } from './native-chat-prompt-document'
 import { useCallback } from 'react'
 import { completeNativeChatStructuredUserAction } from './native-chat-structured-user-action'
 import {
-  isStructuredAgentSessionComposerCommand,
-  isStructuredAgentSessionGoalCommand,
+  isStructuredAgentSessionHostCommand,
   structuredAgentSessionCommandChangesConversation
-} from '../../../../shared/structured-agent-session-composer'
+} from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'
 import type {
@@ -44,23 +43,11 @@ export type UseNativeChatStructuredComposerSendArgs = {
   setCaret: (caret: number) => void
 }
 
-/** A command the host runs itself (and `/goal` where the host sets goals), never a message. */
-function isNativeChatStructuredHostCommand(
-  text: string,
-  agent: AgentType,
-  transport: NativeChatStructuredComposerTransport
-): boolean {
-  return (
-    isStructuredAgentSessionComposerCommand(text, agent, transport.sessionCommands) ||
-    (transport.threadGoal !== undefined && isStructuredAgentSessionGoalCommand(text))
-  )
-}
-
 export type NativeChatStructuredComposerSend = (
   text: string,
   attachments?: readonly NativeChatComposerImageAttachment[],
   intent?: NativeChatComposerSendIntent
-) => Promise<void>
+) => Promise<boolean>
 
 /** Clear submitted composer content only after structured transport acceptance. */
 export function useNativeChatStructuredComposerSend({
@@ -74,28 +61,31 @@ export function useNativeChatStructuredComposerSend({
   setCaret
 }: UseNativeChatStructuredComposerSendArgs): NativeChatStructuredComposerSend {
   return useCallback<NativeChatStructuredComposerSend>(
-    async (text, attachments = imageAttachments, intent): Promise<void> => {
+    async (text, attachments = imageAttachments, intent): Promise<boolean> => {
       // Picked commands must also wait for pending attachments to acquire paths.
       if (!structuredTransport || attachments.some((attachment) => attachment.pending)) {
-        return
+        return false
       }
       if (!admitNativeChatPastedText(draftScopeKey, text, structuredTransport.onError)) {
-        return
+        return false
       }
       text = resolveNativeChatPastedText(draftScopeKey, text)
-      const hostCommand = isNativeChatStructuredHostCommand(text, agent, structuredTransport)
+      const hostCommand = isStructuredAgentSessionHostCommand(
+        text,
+        structuredTransport.threadGoal !== undefined
+      )
       // Blocked hosts cannot take turns/conversation commands; option commands only configure later turns.
       if (
         structuredTransport.sendBlockedReason !== undefined &&
         (!hostCommand || structuredAgentSessionCommandChangesConversation(text))
       ) {
-        return
+        return false
       }
       // A command picked while images await re-attaching would send them without a file.
       const attachAgain = nativeChatAttachImagesAgainReason(attachments)
       if (attachAgain) {
         structuredTransport.onError(attachAgain)
-        return
+        return false
       }
       if (attachments.length > 0 && hostCommand) {
         structuredTransport.onError(
@@ -104,7 +94,7 @@ export function useNativeChatStructuredComposerSend({
             'Remove attachments before using a chat-session command.'
           )
         )
-        return
+        return false
       }
       // A conversation command reveals at the press, not after its round trip; options move nothing.
       if (hostCommand && structuredAgentSessionCommandChangesConversation(text)) {
@@ -121,7 +111,7 @@ export function useNativeChatStructuredComposerSend({
           }
         }
       )
-      await dispatchNativeChatStructuredComposerText(
+      return dispatchNativeChatStructuredComposerText(
         structuredTransport,
         text,
         attachments,
@@ -133,7 +123,7 @@ export function useNativeChatStructuredComposerSend({
             structuredTransport.onError(error, refusedWhile ? { refusedWhile } : undefined)
           }
           if (!accepted) {
-            return
+            return false
           }
           completeNativeChatStructuredUserAction(
             agent,
@@ -146,7 +136,7 @@ export function useNativeChatStructuredComposerSend({
             submitted
           )
           if (!left) {
-            return
+            return true
           }
           if (completeAddition) {
             updateNativeChatComposerDraft(
@@ -163,7 +153,7 @@ export function useNativeChatStructuredComposerSend({
                 'immediate'
               )
             }
-            return
+            return true
           }
           updateNativeChatComposerDraft(draftScopeKey, { images: left.images }, 'immediate')
           // A live composition owns the field, which keeps only what it composed once cleared.
@@ -171,10 +161,11 @@ export function useNativeChatStructuredComposerSend({
           setDraft(composing ? '' : left.text)
           setCaret(composing ? 0 : left.text.length)
           clearSkillOrigin()
+          return true
         })
         .catch((error) => {
           if (hostCommand && !isCurrent()) {
-            return
+            return false
           }
           const notice = nativeChatNoticeFromError(
             error,
@@ -190,6 +181,7 @@ export function useNativeChatStructuredComposerSend({
               : agentSessionWriteNoticeText([hostCommand ? 'notDoneCommand' : 'notDoneSend'])
           )
           structuredTransport.onError(notice.text, { errorText: notice.errorText })
+          return false
         })
         .finally(stopObservingAppend)
     },

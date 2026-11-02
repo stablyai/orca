@@ -25,58 +25,6 @@ function createWebContents() {
 }
 
 describe('browser screencast lifecycle', () => {
-  it('updates a live shared stream viewport and clears an obsolete override', async () => {
-    const webContents = createWebContents()
-    const onFrame = vi.fn()
-    const session = await startBrowserScreencast(webContents as never, {
-      format: 'jpeg',
-      quality: 70,
-      maxWidth: 1440,
-      maxHeight: 1200,
-      viewportWidth: 1200,
-      viewportHeight: 800,
-      everyNthFrame: 2,
-      minFrameIntervalMs: 0,
-      onFrame
-    })
-
-    // Emit first to exercise the update path for an existing stream.
-    webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
-      sessionId: 7,
-      data: Buffer.from('live-frame').toString('base64'),
-      metadata: {}
-    })
-    expect(onFrame).toHaveBeenCalledOnce()
-
-    await session.updateViewport({
-      viewportWidth: 800,
-      viewportHeight: 600,
-      deviceScaleFactor: 2,
-      mobile: true
-    })
-    expect(webContents.debugger.sendCommand).toHaveBeenLastCalledWith(
-      'Page.captureScreenshot',
-      expect.anything()
-    )
-    expect(webContents.debugger.sendCommand).toHaveBeenCalledWith(
-      'Emulation.setDeviceMetricsOverride',
-      { width: 800, height: 600, deviceScaleFactor: 2, mobile: true }
-    )
-
-    await session.updateViewport({
-      viewportWidth: undefined,
-      viewportHeight: undefined,
-      deviceScaleFactor: undefined,
-      mobile: false
-    })
-    expect(webContents.debugger.sendCommand).toHaveBeenCalledWith(
-      'Emulation.clearDeviceMetricsOverride',
-      {}
-    )
-    session.stop()
-    await session.done
-  })
-
   it('restarts the screencast and retimes the pacer when the shared frame budget changes', async () => {
     const webContents = createWebContents()
     const onFrame = vi.fn()

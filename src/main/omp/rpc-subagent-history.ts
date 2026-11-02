@@ -2,11 +2,9 @@ import { readFile, readdir } from 'node:fs/promises'
 import { basename, dirname, extname, join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import { legacyItemBody } from '../native-chat/agent-session-journal/journal-legacy-import'
 import { decodeOmpTranscriptLine } from '../native-chat/transcript-line-decoders-omp'
 import {

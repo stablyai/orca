@@ -13,9 +13,9 @@ vi.mock('./mobile-diff-review-loaders', () => ({
 }))
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-haptics', () => ({
-  impactAsync: vi.fn(),
-  notificationAsync: vi.fn(),
-  selectionAsync: vi.fn(),
+  impactAsync: vi.fn(async () => {}),
+  notificationAsync: vi.fn(async () => {}),
+  selectionAsync: vi.fn(async () => {}),
   performAndroidHapticsAsync: vi.fn(),
   AndroidHaptics: {},
   ImpactFeedbackStyle: {},
@@ -57,6 +57,7 @@ describe('useMobileDiffReviewController', () => {
       name: 'review',
       initialFilter: 'all',
       initialTarget: null,
+      commitOid: null,
       onOpenSession: () => {},
       onReconnect: () => {}
     })
@@ -136,5 +137,80 @@ describe('useMobileDiffReviewController', () => {
 
     await update('disconnected')
     expect(screenState).toMatchObject({ kind: 'error', message: 'Waiting for desktop...' })
+  })
+
+  describe('Stage · next file', () => {
+    let controller: ReturnType<typeof useMobileDiffReviewController> | null = null
+
+    function unstaged(paths: string[]): ReviewScreenState {
+      const ready = readySnapshot('feature/one')
+      return ready.kind === 'ready'
+        ? {
+            ...ready,
+            status: {
+              ...ready.status,
+              entries: paths.map((path) => ({ path, status: 'modified', area: 'unstaged' }))
+            }
+          }
+        : ready
+    }
+
+    function StageProbe(): null {
+      controller = useMobileDiffReviewController({
+        client,
+        connState: 'connected',
+        hostCapabilities: [],
+        hostStatusPending: false,
+        hostStatusReadable: true,
+        hostId: 'host-1',
+        worktreeId: 'wt-1',
+        name: 'review',
+        initialFilter: 'unstaged',
+        initialTarget: { filePath: 'c.ts', area: 'unstaged' },
+        commitOid: null,
+        onOpenSession: () => {},
+        onReconnect: () => {}
+      })
+      return null
+    }
+
+    async function stageCurrent(whileStaging?: () => void): Promise<void> {
+      loadSnapshot.mockResolvedValueOnce(unstaged(['a.ts', 'b.ts', 'c.ts']))
+      await act(async () => {
+        renderer = create(createElement(StageProbe))
+        await Promise.resolve()
+      })
+      expect(controller?.currentItem?.filePath).toBe('c.ts')
+      loadSnapshot.mockResolvedValueOnce(unstaged(['a.ts', 'b.ts']))
+      let staging: Promise<void> | undefined
+      act(() => {
+        staging = controller?.stageAndOpenNext()
+      })
+      act(() => whileStaging?.())
+      const stage = client.requests.find((request) => request.method === 'git.stage')
+      await act(async () => {
+        stage?.resolve({
+          id: 'stage',
+          ok: true,
+          result: { staged: true },
+          _meta: { runtimeId: 'r' }
+        })
+        await staging
+      })
+    }
+
+    beforeEach(() => {
+      client.requests.length = 0
+    })
+
+    it('wraps to the first file after staging the last one', async () => {
+      await stageCurrent()
+      expect(controller?.currentItem?.filePath).toBe('a.ts')
+    })
+
+    it('keeps a file the reader picked while the stage was running', async () => {
+      await stageCurrent(() => controller?.moveFile('previous'))
+      expect(controller?.currentItem?.filePath).toBe('b.ts')
+    })
   })
 })

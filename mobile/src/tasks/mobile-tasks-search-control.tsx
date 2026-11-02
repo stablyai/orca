@@ -123,7 +123,7 @@ export function renderMobileTasksSearchControl(
 }
 
 // Project Clear means unfiltered, GitHub restores its preset, and Linear persists an empty resume.
-function clearMobileTasksSearch(model: ConnectionPresentationModel) {
+export function clearMobileTasksSearch(model: ConnectionPresentationModel) {
   const {
     githubPreset,
     githubProjectTable,

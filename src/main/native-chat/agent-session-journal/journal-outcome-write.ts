@@ -1,3 +1,6 @@
+import { journalInputAcceptance } from './journal-input-provenance'
+import { copyJournalNativeState } from './journal-input-conversion'
+import { journalInputOrder } from './journal-input-order'
 import type Database from '../../sqlite/sync-database'
 import { createJournalReducerState, type JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
@@ -16,13 +19,20 @@ export function prepareJournalOutcomeWrite(
   rows: readonly JournalRow[],
   savedAt: number
 ): { adopt: () => JournalReducerState } {
+  const previous = journalOutcomeSource(db, live.sessionId, live.epoch)
   const source =
-    journalOutcomeSource(db, live.sessionId, live.epoch) ??
-    startJournalOutcomeLog(db, live.sessionId, live.epoch, live.lastSequence, savedAt)
+    previous ?? startJournalOutcomeLog(db, live.sessionId, live.epoch, live.lastSequence, savedAt)
   if (source.through !== live.lastSequence) {
     throw new Error('journal outcome writer has stale coverage')
   }
-  const transition = persistJournalOutcomeRows(db, live, source, rows, savedAt)
+  const transition = persistJournalOutcomeRows(
+    db,
+    live,
+    source,
+    rows,
+    savedAt,
+    !previous || previous.format < 2
+  )
   advanceJournalOutcomeSource(db, live.sessionId, live.epoch, transition.state.lastSequence)
   return { adopt: transition.adopt }
 }
@@ -32,15 +42,33 @@ export function publishJournalOutcomeEpoch(
   db: Database.Database,
   sessionId: string,
   epoch: string,
-  rows: readonly JournalRow[]
+  rows: readonly JournalRow[],
+  previous?: JournalReducerState
 ): { adopt: () => JournalReducerState } {
   const first = rows[0]
   if (!first || first.seq !== 1 || first.kind !== 'epoch') {
     throw new Error('missing founding epoch')
   }
   const source = startJournalOutcomeLog(db, sessionId, epoch, 0, first.ts)
-  const initial = createJournalReducerState(sessionId, epoch)
-  const transition = persistJournalOutcomeRows(db, initial, source, rows)
+  const initial = createJournalReducerState(sessionId, epoch, (id) =>
+    journalInputAcceptance(db, sessionId, id)
+  )
+  if (previous) {
+    copyJournalNativeState(previous, initial)
+  }
+  journalInputOrder(initial).beginReconstruction()
+  const transition = persistJournalOutcomeRows(
+    db,
+    initial,
+    source,
+    rows,
+    undefined,
+    true,
+    (state) => {
+      journalInputOrder(state).restore(state)
+      journalInputOrder(state).finishReconstruction(state)
+    }
+  )
   advanceJournalOutcomeSource(db, sessionId, epoch, transition.state.lastSequence)
   return { adopt: transition.adopt }
 }

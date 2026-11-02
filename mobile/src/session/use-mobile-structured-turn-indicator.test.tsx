@@ -2,11 +2,11 @@ import { createElement } from 'react'
 import { snapshotEvent } from './use-mobile-structured-agent-session-queued.test-fixture'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
-} from '../../../src/shared/agent-session-wire'
+} from '../../../src/shared/agent-session/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
@@ -67,13 +67,15 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
   function Harness(): null {
     hook = useMobileStructuredAgentSession({
       client,
+      pairedHostClient: client,
       sessionId: 'session-1',
       sourceIdentity: 'host-a\0workspace-a',
       enabled: true,
       connected: true,
+      hostSupport: null,
       agent: 'codex',
       onSendError
-    } as never)
+    })
     return null
   }
 
@@ -246,6 +248,7 @@ describe("useMobileStructuredAgentSession and the host's Stopping", () => {
   function Harness({ statusFeed }: { statusFeed: boolean }): null {
     hook = useMobileStructuredAgentSession({
       client,
+      pairedHostClient: client,
       sessionId: 'session-1',
       sourceIdentity: 'host-a\0workspace-a',
       enabled: true,

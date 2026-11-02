@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import {
   requireLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
-} from '../../shared/agent-session-account-home'
+} from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { runAgentModelCatalogSession } from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 import {
   assertStructuredAgentResolutionCurrent,

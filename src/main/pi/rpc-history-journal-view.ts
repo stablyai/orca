@@ -2,8 +2,8 @@ import { z } from 'zod'
 import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
-} from '../../shared/agent-session-journal-item-key'
-import { isQueuedAgentJournalSubmission } from '../../shared/agent-session-queued-submission'
+} from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { isQueuedAgentJournalSubmission } from '../../shared/agent-session/requests/agent-session-queued-submission'
 import type { StructuredAgentSessionHistoryJournal } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 
 /** Pi entries through entry are accounted for through this journal epoch/sequence; encoded in the Pi resume cursor. */

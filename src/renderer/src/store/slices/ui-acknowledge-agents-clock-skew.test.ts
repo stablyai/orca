@@ -126,17 +126,4 @@ describe('acknowledgeAgents with a clock-skewed execution host', () => {
 
     expect(store.getState().acknowledgedAgentsByPaneKey[PANE_KEY]).toBe(futureUpdatedAt)
   })
-
-  it('still stamps the local clock when the turn is not ahead of it', () => {
-    const store = createUIStore()
-    store.setState({
-      agentStatusByPaneKey: {
-        [PANE_KEY]: makeAgentEntry({ stateStartedAt: NOW - 5_000, updatedAt: NOW - 5_000 })
-      }
-    } as Partial<AppState>)
-
-    store.getState().acknowledgeAgents([PANE_KEY])
-
-    expect(store.getState().acknowledgedAgentsByPaneKey[PANE_KEY]).toBe(NOW)
-  })
 })

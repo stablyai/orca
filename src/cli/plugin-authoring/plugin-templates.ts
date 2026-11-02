@@ -2,6 +2,9 @@
 
 import { iconTheme, languagePack, syntax, terminalTheme, theme } from './plugin-content-templates'
 import { editor, panel } from './plugin-frame-templates'
+import { components } from './plugin-components-template'
+import { workerPanel } from './plugin-worker-panel-template'
+import { hook } from './plugin-hook-template'
 import type { PluginTemplate, PluginTemplateInput } from './plugin-template-files'
 import type { PluginTemplateName } from './plugin-template-names'
 
@@ -12,7 +15,10 @@ const TEMPLATES: Record<PluginTemplateName, (input: PluginTemplateInput) => Plug
   syntax,
   'language-pack': languagePack,
   editor,
-  panel
+  panel,
+  components,
+  'worker-panel': workerPanel,
+  hook
 }
 
 export function renderPluginTemplate(

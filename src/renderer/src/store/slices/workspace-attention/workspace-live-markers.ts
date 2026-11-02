@@ -1,5 +1,5 @@
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
-import { structuredAgentSessionPaneKey } from '../../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
 import type { Tab } from '../../../../../shared/tab-types'
 

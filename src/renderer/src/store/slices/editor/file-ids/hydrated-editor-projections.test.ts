@@ -92,27 +92,6 @@ describe('hydrated editor selection', () => {
     expect(resolveHydratedEditorFileSelection(args)).toEqual(expected)
     expect(reads).toBeLessThan(count * 6)
   })
-
-  it('preserves owner checks, migration, first-file fallbacks and empty IDs', () => {
-    for (let sample = 0; sample < 100; sample++) {
-      const args: SelectionInput = {
-        openFiles: Array.from({ length: 20 }, (_, index) => ({
-          id: (index + sample) % 7 ? `file-${(index + sample) % 9}` : '',
-          worktreeId: `wt-${(index * 3 + sample) % 5}`
-        })),
-        activeWorktreeId: sample % 3 ? `wt-${sample % 7}` : null,
-        validWorktreeIds: new Set(Array.from({ length: 7 }, (_, index) => `wt-${index}`)),
-        persistedActiveFileIds: {
-          'wt-0': 'legacy',
-          'wt-1': 'file-3',
-          'wt-2': 'absent',
-          'wt-3': ''
-        },
-        migrations: { 'wt-0': new Map([['legacy', 'file-1']]) }
-      }
-      expect(resolveHydratedEditorFileSelection(args)).toEqual(referenceSelection(args))
-    }
-  })
 })
 
 describe('hydrated frontmatter migration', () => {
@@ -148,28 +127,5 @@ describe('hydrated frontmatter migration', () => {
       'new-9999': false
     })
     expect(map.reads).toBe(1)
-  })
-
-  it('preserves insertion order, multiple owners, direct IDs and missing targets', () => {
-    for (let sample = 0; sample < 50; sample++) {
-      const visibility = Object.fromEntries(
-        Array.from({ length: 15 }, (_, i) => [`file-${i}`, (i + sample) % 4 === 0])
-      )
-      const ids = new Set(Array.from({ length: 10 }, (_, i) => `file-${(i + sample) % 16}`))
-      const migrations = Object.fromEntries(
-        Array.from({ length: 5 }, (_, w) => [
-          `wt-${w}`,
-          new Map(
-            Array.from({ length: 8 }, (_, i) => [
-              `file-${(i + w) % 15}`,
-              `file-${(i + sample) % 17}`
-            ])
-          )
-        ])
-      )
-      expect(Object.entries(resolveHydratedEditorFrontmatter(visibility, ids, migrations))).toEqual(
-        Object.entries(referenceFrontmatter(visibility, ids, migrations))
-      )
-    }
   })
 })

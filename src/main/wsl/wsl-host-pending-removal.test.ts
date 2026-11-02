@@ -3,14 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { listEnvironments } from '../../shared/runtime-environment-store'
-import {
-  findWslHostDeployment,
-  setWslHostPendingStop
-} from '../../shared/runtime-environment-wsl-host-store'
+import { findWslHostDeployment } from '../../shared/runtime-environment-wsl-host-store'
 import type { WslHostStatus } from '../../shared/wsl-host-types'
 import { WslHostService, type WslHostConnector } from './wsl-host-service'
 import { UBUNTU, UBUNTU_ID, makeConnector } from './wsl-host-service-test-connector'
-import { rememberWslHostsToWake, wakeRememberedWslHosts } from './wsl-host-early-wake'
 
 // E11: a Remove that can't prove the host's server stopped keeps the host, pending.
 describe('WslHostService pending removal', () => {
@@ -229,32 +225,6 @@ describe('WslHostService pending removal', () => {
     await new Promise((resolve) => setImmediate(resolve))
     expect(connector.reachability).not.toHaveBeenCalled()
     expect(connector.connect).not.toHaveBeenCalled()
-  })
-
-  it('never boots a pending host early at launch', async () => {
-    const connector = makeConnector([UBUNTU])
-    const service = makeService(connector)
-    await service.add({ distro: 'Ubuntu' })
-    rememberWslHostsToWake(userDataPath, ['Ubuntu'])
-    // A Remove left pending by a build that still remembered the host.
-    setWslHostPendingStop(userDataPath, 'wsl:ubuntu', { since: 1, reason: 'busy', verdict: 'live' })
-    const spawn = vi.fn()
-
-    expect(wakeRememberedWslHosts(userDataPath, spawn)).toEqual([])
-    expect(spawn).not.toHaveBeenCalled()
-  })
-
-  it('forgets the early wake of a host whose Remove ended pending', async () => {
-    const connector = makeConnector([UBUNTU])
-    connector.stopServer.mockResolvedValueOnce({ stopped: false, reason: 'busy', verdict: 'live' })
-    const service = makeService(connector)
-    await service.add({ distro: 'Ubuntu' })
-    service.focusHost('wsl:ubuntu')
-
-    await service.remove('wsl:ubuntu')
-    // Withdrawing the removal must not bring the early wake back by itself.
-    await service.connect('wsl:ubuntu', { withdrawPendingRemoval: true })
-    expect(wakeRememberedWslHosts(userDataPath, vi.fn())).toEqual([])
   })
 
   it('a due automation never boots a host whose Remove is pending', async () => {

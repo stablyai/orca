@@ -1,3 +1,4 @@
+import type * as ProviderAccountsClient from '@/runtime/runtime-provider-accounts-client'
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import React from 'react'
@@ -39,7 +40,8 @@ function snapshot(): ClaudeRateLimitAccountsState {
 }
 
 vi.mock('sonner', () => ({ toast: { error: toastError, info: vi.fn(), success: vi.fn() } }))
-vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
+vi.mock('@/runtime/runtime-provider-accounts-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof ProviderAccountsClient>()),
   fetchProviderAccountsSnapshot: vi.fn(async () => ({
     claude: snapshot(),
     codex: { accounts: [], activeAccountId: null },
@@ -128,9 +130,7 @@ async function openAccounts(): Promise<void> {
       iconOnly: false
     })
   )
-  // A remote server's roster arrives with the snapshot, not settings.
-  fireEvent.click(await screen.findByText('old@example.com'))
-  await waitFor(() => expect(screen.getAllByText('old@example.com').length).toBe(2))
+  await screen.findByRole('menuitem', { name: /old@example.com/ })
 }
 
 describe('status bar Claude account that needs a sign-in', () => {
@@ -226,7 +226,6 @@ describe('status bar Claude account that needs a sign-in', () => {
         })
       )
     )
-    fireEvent.click(await screen.findByText('old@example.com'))
     expect(await screen.findByText('Sign in again to use this account')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /Sign in/ }))
     await waitFor(() => expect(reauthenticate).toHaveBeenCalledWith({ accountId: 'old' }))

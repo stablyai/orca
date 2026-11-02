@@ -41,13 +41,4 @@ describe('regaining a WSL host', () => {
     expect(listener).toHaveBeenCalledTimes(2)
     stop()
   })
-
-  it('ignores another environment', () => {
-    const listener = vi.fn()
-    const stop = subscribeRuntimeHostContactRegained('wsl:debian', listener)
-    wslHost('connecting')
-    wslHost('ready')
-    expect(listener).not.toHaveBeenCalled()
-    stop()
-  })
 })

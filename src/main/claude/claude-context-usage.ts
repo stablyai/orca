@@ -5,7 +5,7 @@ import {
   type AgentSessionContextReport,
   type AgentSessionContextUsageCategory,
   type AgentSessionTokenUsage
-} from '../../shared/agent-session-context-usage'
+} from '../../shared/agent-session/agent-session-context-usage'
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 

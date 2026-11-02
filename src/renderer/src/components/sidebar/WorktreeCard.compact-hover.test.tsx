@@ -294,7 +294,7 @@ describe('WorktreeCard compact hover details', () => {
     expectIdentityBodyIsHoverTrigger(markup)
     expect(markup).toContain('Issue #123')
     expect(markup).toContain('ENG-123</span>')
-    expect(markup).toContain('· Linear')
+    expect(markup).toContain('aria-label="Linear"')
     expect(markup).toContain('Reviewer handoff note')
     expect(markup).toContain('Live Ports')
     expect(markup).toContain('58941')

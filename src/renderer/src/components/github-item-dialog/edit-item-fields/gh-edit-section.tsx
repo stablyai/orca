@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
@@ -27,6 +27,18 @@ import { GHEditSectionTopColumns } from './gh-edit-section-top-columns'
 import { GHEditSectionHorizontal } from './gh-edit-section-horizontal'
 import { useGitHubDuplicateIssueCandidates } from '@/components/github/github-duplicate-issue-candidates'
 
+function sameLogins(a: string[] | undefined, b: string[]): boolean {
+  const key = (list: string[]) =>
+    list
+      .map((value) => value.toLowerCase())
+      .sort()
+      .join('\0')
+  return !!a && key(a) === key(b)
+}
+
+// One shared empty list, so callbacks that read the unknown-assignee case keep their identity.
+const NO_ASSIGNEES: string[] = []
+
 export function GHEditSection(props: GitHubItemDialogEditSectionProps): React.JSX.Element | null {
   const { item, projectOrigin } = props
   const repository = projectOrigin ?? parseOwnerRepoFromItemUrl(item.url)
@@ -46,6 +58,7 @@ function GHEditSectionItem({
   onLabelsChange,
   onMutated,
   assignees,
+  acceptedRefresh = 0,
   onUse,
   onOpenOrUse,
   attachedWorkspaceLabel,
@@ -58,18 +71,19 @@ function GHEditSectionItem({
   const [duplicatePickerOpen, setDuplicatePickerOpen] = useState(false)
   const [duplicateSearch, setDuplicateSearch] = useState('')
   const [duplicateError, setDuplicateError] = useState<string | null>(null)
-  const [localAssignees, setLocalAssignees] = useState<string[]>(assignees)
-  const editedAssigneesItemKeyRef = useRef<string | null>(null)
+  const [assigneeEdit, setAssigneeEdit] = useState<{
+    value: string[]
+    input: string[] | undefined
+    acceptedRefresh: number
+  } | null>(null)
   const mountedRef = useMountedRef()
-  const assigneesItemKey = `${item.repoId}\0${item.id}`
-  const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
   const duplicateIssueCandidates = useGitHubDuplicateIssueCandidates(item, duplicatePickerOpen)
   const ownerTarget = useAppStore(
     useShallow((s) => getGitHubRepoRoutingTarget(s, item.repoId ?? null, sourceContext))
   )
   const { isPending, run } = useImmediateMutation()
-  // Patch Project rows too; patchWorkItem updates only workItemsCache, leaving projectViewCache stale.
+  // The origin Project row shows this edit even where no task record projects it (untracked, another host's view).
   const patchProjectRowIfNeeded = useCallback(
     (patch: Parameters<typeof patchProjectRowContent>[2]) => {
       if (!projectOrigin) {
@@ -151,21 +165,35 @@ function GHEditSectionItem({
     onUse(item)
   }, [item, onOpenOrUse, onUse])
 
-  // Sync resolved assignees unless an optimistic edit for this item is still in flight.
-  useEffect(() => {
-    if (editedAssigneesItemKeyRef.current === assigneesItemKey) {
-      return
-    }
-    setLocalAssignees(assignees)
-  }, [assigneesItemKey, assignees])
+  // The selection holds until a new reading changes the logins (or Refresh lands); unknown input keeps it.
+  const staleEdit =
+    assigneeEdit &&
+    !isPending('assignees') &&
+    (assigneeEdit.acceptedRefresh !== acceptedRefresh ||
+      (assignees !== undefined && !sameLogins(assigneeEdit.input, assignees)))
+  if (staleEdit) {
+    setAssigneeEdit(null)
+  }
+  const localAssignees =
+    !staleEdit && assigneeEdit ? assigneeEdit.value : (assignees ?? NO_ASSIGNEES)
+  const setLocalAssignees = useCallback(
+    (value: string[]) => {
+      setAssigneeEdit((current) => ({
+        value,
+        input: current ? current.input : assignees,
+        acceptedRefresh: current?.acceptedRefresh ?? acceptedRefresh
+      }))
+    },
+    [assignees, acceptedRefresh]
+  )
 
   const handleStateChange = useCallback(
     (newState: 'open' | 'closed', closeAction?: TaskPageGitHubCloseAction) => {
       runGHEditStateChange({
+        item,
         newState,
         closeAction,
         localState,
-        itemId: item.id,
         itemNumber: item.number,
         itemRepoId: item.repoId,
         repoPath,
@@ -178,21 +206,17 @@ function GHEditSectionItem({
             onStateChange(state)
           }
         },
-        patchWorkItem,
         patchProjectRowIfNeeded,
         onMutated
       })
     },
     [
-      item.id,
-      item.number,
-      item.repoId,
+      item,
       localState,
       repoPath,
       sourceContext,
       projectOrigin,
       issueRepo,
-      patchWorkItem,
       patchProjectRowIfNeeded,
       run,
       mountedRef,
@@ -236,9 +260,9 @@ function GHEditSectionItem({
   const handleLabelToggle = useCallback(
     (label: string) => {
       runGHEditLabelToggle({
+        item,
         label,
         localLabels,
-        itemId: item.id,
         itemNumber: item.number,
         itemRepoId: item.repoId,
         repoPath,
@@ -251,21 +275,17 @@ function GHEditSectionItem({
             onLabelsChange(labels)
           }
         },
-        patchWorkItem,
         patchProjectRowIfNeeded,
         onMutated
       })
     },
     [
-      item.id,
-      item.number,
-      item.repoId,
+      item,
       localLabels,
       repoPath,
       sourceContext,
       projectOrigin,
       issueRepo,
-      patchWorkItem,
       patchProjectRowIfNeeded,
       run,
       mountedRef,
@@ -277,10 +297,9 @@ function GHEditSectionItem({
   const handleAssigneeToggle = useCallback(
     (login: string) => {
       runGHEditAssigneeToggle({
+        item,
         login,
         localAssignees,
-        assigneesItemKey,
-        editedAssigneesItemKeyRef,
         itemNumber: item.number,
         itemRepoId: item.repoId,
         repoPath,
@@ -294,14 +313,13 @@ function GHEditSectionItem({
       })
     },
     [
-      item.number,
-      item.repoId,
-      assigneesItemKey,
+      item,
       repoPath,
       sourceContext,
       projectOrigin,
       issueRepo,
       localAssignees,
+      setLocalAssignees,
       patchProjectRowIfNeeded,
       run,
       onMutated

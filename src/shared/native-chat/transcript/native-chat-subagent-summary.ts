@@ -7,7 +7,7 @@ import {
   type NativeChatSubagentEntry,
   type NativeChatSubagentGroupBlock,
   type NativeChatSubagentState
-} from '../../native-chat-types'
+} from '../native-chat-types'
 
 /** Only working is in flight; producers collapse started/interacted/pending/running/paused before writing the roster. */
 const TERMINAL_SUBAGENT_STATES: ReadonlySet<string> = new Set([

@@ -27,14 +27,14 @@ import { buildNewTabAgentMenuRows } from '../../../shared/agent-launch-picker-ro
 import type * as StructuredLaunch from './launch-structured-agent-session'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as registry from './agent-session/launch/structured-agent-session-launch-registry'
-import { cancelStructuredAgentLaunch } from './structured-agent-session-launch'
-import { structuredLaunchSelectionController } from './structured-agent-session-launch-options'
+import { cancelStructuredAgentLaunch } from './agent-session/launch/structured-agent-session-launch'
+import { structuredLaunchSelectionController } from './agent-session/launch/structured-agent-session-launch-options'
 import { forgetStructuredSessionSelection } from './structured-agent-session-selection-controller'
 import * as rpc from '@/runtime/runtime-rpc-client'
 import { isPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { nativeChatComposerDraftWritesSettled } from '@/components/native-chat/native-chat-composer-draft-persistence'
-import type { SelectionOperation } from '../../../shared/structured-agent-session-selection-operations'
+import type { SelectionOperation } from '../../../shared/agent-session/options/structured-agent-session-selection-operations'
 
 // No initial chat mode proves availability rejection preceded terminal-tab adoption.
 describe('structured chat adoption guard on the launch path', () => {
@@ -273,7 +273,8 @@ describe('structured chat adoption guard on the launch path', () => {
         rows,
         [agent],
         (selected) => agentPickerChoiceSeeds(selected, store.getState().settings),
-        (selected) => selected
+        (selected) => selected,
+        undefined
       )[0]
       expect(entry.defaultSurface).toBe('terminal')
       expect(entry.surfaces).toEqual(['chat', 'terminal'])

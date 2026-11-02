@@ -2,7 +2,7 @@ import { ActivityIndicator, Pressable } from 'react-native'
 import { ArrowUp, type LucideIcon } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { composerInputStyles as styles } from './composer-input-styles'
+import { COMPOSER_CONTROL_HIT_SLOP, composerInputStyles as styles } from './composer-input-styles'
 
 export function ComposerSendButton({
   onPress,
@@ -38,6 +38,7 @@ export function ComposerSendButton({
       onPress={onPress}
       onLongPress={onLongPress}
       disabled={!enabled}
+      hitSlop={COMPOSER_CONTROL_HIT_SLOP}
     >
       {sending ? (
         <ActivityIndicator size="small" color={colors.bgBase} />

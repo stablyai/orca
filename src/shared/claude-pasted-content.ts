@@ -1,4 +1,4 @@
-import type { NativeChatBlock } from './native-chat-types'
+import type { NativeChatBlock } from './native-chat/native-chat-types'
 
 // Claude wraps a whole pasted text block; prose around it is still literal user text.
 export function unwrapClaudePastedContent(text: string): string {

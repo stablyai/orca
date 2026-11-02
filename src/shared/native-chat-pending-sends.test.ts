@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from './native-chat-types'
+import type { NativeChatMessage } from './native-chat/native-chat-types'
 import {
-  isPendingMessageId,
   pendingSendsAsMessages,
   prunePendingSends,
   type NativeChatPendingSend
@@ -527,19 +526,6 @@ describe('pendingSendsAsMessages', () => {
     expect(pendingSendsAsMessages(pending, unreadableHistory)).toEqual([])
   })
 
-  it('maps pending sends to prefixed scrape-source user messages sorted by sentAt', () => {
-    const messages = pendingSendsAsMessages([{ id: 'p1', text: 'queued text', sentAt: 42 }])
-    expect(messages).toEqual([
-      {
-        id: 'pending:p1',
-        role: 'user',
-        blocks: [{ type: 'text', text: 'queued text' }],
-        timestamp: 42,
-        source: 'scrape'
-      }
-    ])
-  })
-
   it('includes image refs for pending attachment sends', () => {
     const messages = pendingSendsAsMessages([
       { id: 'p1', text: 'what do you see?', imagePaths: ['/tmp/shot.png'], sentAt: 42 }
@@ -636,12 +622,5 @@ describe('pendingSendsAsMessages', () => {
     expect(pendingSendsAsMessages(pending, [userMessage('u1', 'repeat')]).map((m) => m.id)).toEqual(
       ['pending:p2']
     )
-  })
-})
-
-describe('isPendingMessageId', () => {
-  it('recognizes the pending id prefix', () => {
-    expect(isPendingMessageId('pending:p1')).toBe(true)
-    expect(isPendingMessageId('transcript-123')).toBe(false)
   })
 })

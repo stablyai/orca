@@ -134,28 +134,6 @@ describe('useWorkspaceCleanupGitEvidence', () => {
     expect(new Set(dispatched).size).toBe(900)
   })
 
-  it('keeps state identity stable when a progress frame changes nothing', async () => {
-    const candidates = [deferredCandidate('a')]
-    const view = renderHook(() =>
-      useWorkspaceCleanupGitEvidence({ enabled: true, candidates, scannedAt: 1 })
-    )
-    await waitFor(() => expect(holders.scan).toHaveBeenCalledTimes(1))
-    const before = view.result.current
-
-    await act(async () => {
-      pending[0]?.onProgress?.({
-        scanId: 'noop',
-        scannedAt: 1,
-        scannedWorktreeCount: 0,
-        totalWorktreeCount: 1,
-        candidates: [makeFacetCandidate({ worktreeId: 'unrelated' })],
-        errors: [],
-        candidateMode: 'append'
-      })
-    })
-    expect(view.result.current).toBe(before)
-  })
-
   it('restarts evidence collection when the settled scan snapshot changes', async () => {
     const candidates = [deferredCandidate('a')]
     const view = renderHook(

@@ -1,7 +1,7 @@
 import * as runner from './structured-agent-session-restart-resume-runner'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
-import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
+import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
 import {
   interruptedRestart,
   continuationUnanswered,

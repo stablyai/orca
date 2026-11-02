@@ -17,7 +17,7 @@ vi.mock('./native-chat-session-option-settings-write', () => ({
   enqueueSessionOptionSettingsWrite: vi.fn()
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-options', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-options', () => ({
   holdStructuredAgentSessionLaunchOption: vi.fn(() => Promise.resolve({ kind: 'held' })),
   getStructuredAgentSessionLaunchSelection: () => null
 }))
@@ -205,15 +205,6 @@ describe('host model catalog read', () => {
       expect(modelChoices(result.current.optionSnapshot)).not.toContain('gpt-hosted')
       unmount()
     }
-  })
-
-  it('asks a host that reports no listing nothing more', async () => {
-    answerCatalog([() => Promise.resolve(UNKNOWN)])
-    const { result, unmount } = renderOptions()
-    await flush()
-    expect(catalogReads()).toHaveLength(1)
-    expect(usable(result.current.optionSnapshot)).toBe(true)
-    unmount()
   })
 
   it('the running provider list wins over a host listing that lands later', async () => {

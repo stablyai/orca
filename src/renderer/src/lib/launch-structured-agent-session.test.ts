@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
+import { structuredAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { useAppStore } from '@/store'
 import {
@@ -11,7 +11,7 @@ import {
   StructuredAgentSessionCreateUnknownOutcomeError,
   StructuredAgentSessionOwnerUnresolvedError
 } from './launch-structured-agent-session'
-import { admitStructuredLaunchOnHost } from './structured-agent-session-host-admission'
+import { admitStructuredLaunchOnHost } from './agent-session/launch/structured-agent-session-host-admission'
 import {
   clearWebSessionFocusIntent,
   peekWebSessionFocusIntent
