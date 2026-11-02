@@ -18,8 +18,16 @@ import {
 } from '@/components/native-chat/native-chat-prompt-editor.test-support'
 import {
   readNativeChatComposerDraft,
-  clearNativeChatComposerDraftsForTests
+  clearNativeChatComposerDraftsForTests,
+  hydrateNativeChatComposerDrafts,
+  nativeChatComposerDraftWritesSettled,
+  flushNativeChatComposerDrafts
 } from '@/components/native-chat/native-chat-composer-draft-store'
+import { moveNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-move'
+import {
+  createMemoryNativeChatComposerDraftStorage,
+  setNativeChatComposerDraftStorageForTests
+} from '@/components/native-chat/native-chat-composer-draft-storage'
 import {
   nativeChatComposerSelection,
   waitForNativeChatComposerHandoff
@@ -48,11 +56,25 @@ vi.mock('./WorktreeSetupSteps', () => ({ WorktreeSetupSteps: () => null }))
 vi.mock('./WorktreeCreationTabStrip', () => ({ default: () => null }))
 
 const initialState = useAppStore.getState()
+const request: WorktreeCreationRequest = {
+  repoId: 'repo',
+  name: 'feature',
+  setupDecision: 'skip',
+  agent: 'codex',
+  agentLaunchRoute: 'structured-native-chat',
+  pendingFirstAgentMessageRename: false,
+  note: '',
+  startupPlan: null,
+  quickPrompt: '',
+  quickTelemetry: null,
+  suppressTerminalFocusOnCompletion: true
+}
 afterEach(() => {
   cleanup()
   useAppStore.setState(initialState, true)
   composer.props = null
   clearNativeChatComposerDraftsForTests()
+  vi.restoreAllMocks()
 })
 
 function Destination({
@@ -97,19 +119,6 @@ function Destination({
 it.each(['commit', 'blur', 'unmount'])(
   'keeps editable input until a ready replacement and IME %s',
   async (settle) => {
-    const request: WorktreeCreationRequest = {
-      repoId: 'repo',
-      name: 'feature',
-      setupDecision: 'skip',
-      agent: 'codex',
-      agentLaunchRoute: 'structured-native-chat',
-      pendingFirstAgentMessageRename: false,
-      note: '',
-      startupPlan: null,
-      quickPrompt: '',
-      quickTelemetry: null,
-      suppressTerminalFocusOnCompletion: true
-    }
     useAppStore.setState({
       pendingWorktreeCreations: {
         creation: {
@@ -227,4 +236,76 @@ it('cancels a handoff whose destination never mounts', async () => {
   abort.abort()
   await handoff
   expect(completed).toBe(true)
+})
+
+it('keeps typing visible in the replacement while its draft write is slow or refused', async () => {
+  const storage = createMemoryNativeChatComposerDraftStorage()
+  setNativeChatComposerDraftStorageForTests(storage)
+  await hydrateNativeChatComposerDrafts()
+  const scope = 'pending-worktree-creation:creation'
+  useAppStore.setState({
+    pendingWorktreeCreations: {
+      creation: {
+        creationId: 'creation',
+        phase: 'creating',
+        status: 'creating',
+        startedAt: 1,
+        indeterminate: false,
+        loaderVisible: true,
+        request
+      }
+    }
+  })
+  const pending = render(
+    <TooltipProvider>
+      <PendingNativeChatCreation creationId="creation" />
+    </TooltipProvider>
+  )
+  changePrompt(screen.getByRole('textbox'), 'Half a prompt')
+  flushNativeChatComposerDrafts()
+  await nativeChatComposerDraftWritesSettled()
+  const props = composer.props
+  if (!props) {
+    throw new Error('Pending composer did not mount')
+  }
+  const committed = Promise.withResolvers<void>()
+  const write = storage.write
+  storage.write = async (key, draft) => {
+    if (key === 'destination') {
+      await committed.promise
+    }
+    await write(key, draft)
+  }
+  vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+    throw new DOMException('refused', 'QuotaExceededError')
+  })
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  render(<Destination props={props} ready mounted />)
+  await waitForNativeChatComposerHandoff(scope, 'destination', new AbortController().signal)
+  act(() => moveNativeChatComposerDraft(scope, 'destination'))
+  pending.unmount()
+
+  const replacement = screen.getByRole('textbox')
+  expect(promptValue(replacement)).toBe('Half a prompt')
+  changePrompt(replacement, 'Half a prompt, finished in the replacement')
+  expect(storage.drafts.get(scope)?.text).toBe('Half a prompt')
+  storage.refuseWrites = true
+  await act(async () => {
+    committed.resolve()
+    await nativeChatComposerDraftWritesSettled()
+  })
+
+  expect(screen.getByRole('textbox')).toBe(replacement)
+  expect(replacement.getAttribute('contenteditable')).toBe('true')
+  expect(promptValue(replacement)).toBe('Half a prompt, finished in the replacement')
+  expect(
+    screen.getByRole('img', { name: "This draft couldn't be saved yet. Orca keeps trying." })
+  ).toBeTruthy()
+  storage.refuseWrites = false
+  await act(async () => {
+    flushNativeChatComposerDrafts()
+    await nativeChatComposerDraftWritesSettled()
+  })
+  expect(storage.drafts.get('destination')?.text).toBe('Half a prompt, finished in the replacement')
+  expect(storage.drafts.has(scope)).toBe(false)
 })

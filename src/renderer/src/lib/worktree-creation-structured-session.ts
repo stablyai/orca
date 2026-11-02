@@ -150,7 +150,7 @@ export async function launchStructuredWorktreeSession(
     const executionHostId =
       tab.executionHostId ?? getStructuredAgentSessionLaunchOwner(tab.entityId)
     if (executionHostId) {
-      await moveStructuredAgentLaunchDraft(
+      moveStructuredAgentLaunchDraft(
         { sessionId: tab.entityId, worktreeId: args.worktreeId, executionHostId },
         sourceScope,
         selection

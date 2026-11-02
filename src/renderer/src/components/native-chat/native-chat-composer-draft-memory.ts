@@ -68,6 +68,8 @@ export function installNativeChatDraftRecord(
 // Changed in memory with no write issued yet; a refused write comes back here for the next flush.
 export const dirtyScopes = new Set<string>()
 export const unconfirmed = new Map<string, UnconfirmedDraftChange>()
+/** Source deletions wait for a write containing the moved draft, including later retries. */
+export const deferredRemovals = new Map<string, { destinationScope: string; savedAt: number }>()
 // Drafts whose last write storage refused; shown so the user knows they are held in memory only.
 export const refusedScopes = new Set<string>()
 export type DraftImageCheck = {
@@ -166,6 +168,7 @@ export function clearDraftMemoryForTests(): void {
   records.clear()
   dirtyScopes.clear()
   unconfirmed.clear()
+  deferredRemovals.clear()
   refusedScopes.clear()
   restoredImageChecks.clear()
   lastSavedAt = 0
