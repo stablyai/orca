@@ -1,4 +1,4 @@
-import type { AgentBrowserBridge } from '../../browser/agent-browser-bridge'
+import type { AgentBrowserBridge } from '../../browser/agent-browser/agent-browser-bridge'
 import type { BrowserCommandTargetParams } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 /** Keep JSON results stable across CLI payload versions. */

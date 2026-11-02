@@ -1521,21 +1521,6 @@
       "showMore": "再顯示 {{count}} 則",
       "title": "留言"
     },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "落後 {{count}} 個提交（基底提交：{{baseCommit}}）",
-      "commitsBehind_other": "落後 {{count}} 個提交（基底提交：{{baseCommit}}）",
-      "copyCommands": "複製命令",
-      "copyFailed": "無法複製文字",
-      "copyRefreshCommands": "複製重新判斷是否可合併的命令",
-      "detailsUnavailable": "無法取得衝突檔案的詳細資訊",
-      "filesHeading": "衝突的檔案",
-      "localMergeClean": "GitHub 回報有衝突，但本機 Git 未重現這些衝突。請重新整理 PR 或推送分支，以重新判斷是否可合併。",
-      "mustResolve": "此分支有必須解決的衝突",
-      "refreshing": "正在重新整理衝突詳細資訊…",
-      "resolveWithAi": "使用 AI 解決衝突",
-      "runFromWorktree": "從此工作樹執行",
-      "title": "衝突"
-    },
     "linkPrForm": {
       "linkButton": "連結 PR",
       "linkNumber": "連結 #{{number}}",

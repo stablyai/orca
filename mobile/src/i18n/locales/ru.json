@@ -1611,23 +1611,6 @@
       "showMore": "Показать ещё {{count}}",
       "title": "Комментарии"
     },
-    "conflictingFilesSection": {
-      "commitsBehind_few": "Отставание на {{count}} коммита (базовый коммит: {{baseCommit}})",
-      "commitsBehind_many": "Отставание на {{count}} коммитов (базовый коммит: {{baseCommit}})",
-      "commitsBehind_one": "Отставание на {{count}} коммит (базовый коммит: {{baseCommit}})",
-      "commitsBehind_other": "Отставание на {{count}} коммита (базовый коммит: {{baseCommit}})",
-      "copyCommands": "Скопировать команды",
-      "copyFailed": "Не удалось скопировать текст",
-      "copyRefreshCommands": "Скопировать команды для повторной проверки возможности слияния",
-      "detailsUnavailable": "Сведения о конфликтующих файлах недоступны",
-      "filesHeading": "Конфликтующие файлы",
-      "localMergeClean": "GitHub сообщает о конфликтах, но локальный Git их не воспроизвёл. Обновите PR или отправьте ветку, чтобы повторно проверить возможность слияния.",
-      "mustResolve": "В этой ветке есть конфликты, которые нужно разрешить",
-      "refreshing": "Обновление сведений о конфликтах…",
-      "resolveWithAi": "Разрешить конфликты с помощью ИИ",
-      "runFromWorktree": "Выполните в этом рабочем дереве",
-      "title": "Конфликты"
-    },
     "linkPrForm": {
       "linkButton": "Привязать пул-реквест",
       "linkNumber": "Привязать #{{number}}",

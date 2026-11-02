@@ -6,8 +6,8 @@ import {
   buildWslInteractiveLoginShellCommand
 } from '../../shared/wsl-login-shell-command'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
-import { getBashWrapperLaunchArgs } from './local-pty-shell-ready'
-import { ensureShellReadyWrappersAt } from './local-pty-shell-ready-wrapper-generation'
+import { getBashWrapperLaunchArgs } from './local-pty/local-pty-shell-ready'
+import { ensureShellReadyWrappersAt } from './local-pty/local-pty-shell-ready-wrapper-generation'
 import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap,

@@ -1521,21 +1521,6 @@
       "showMore": "{{count}}개 더 보기",
       "title": "댓글"
     },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "커밋 {{count}}개 뒤처짐 (기준 커밋: {{baseCommit}})",
-      "commitsBehind_other": "커밋 {{count}}개 뒤처짐 (기준 커밋: {{baseCommit}})",
-      "copyCommands": "명령 복사",
-      "copyFailed": "텍스트 복사 실패",
-      "copyRefreshCommands": "병합 가능성 새로 고침 명령 복사",
-      "detailsUnavailable": "충돌 파일 세부정보를 사용할 수 없습니다.",
-      "filesHeading": "충돌하는 파일",
-      "localMergeClean": "GitHub에서는 충돌이 있다고 보고하지만 로컬 Git에서는 충돌이 재현되지 않았습니다. PR을 새로고침하거나 브랜치를 푸시해 병합 가능성을 다시 계산하세요.",
-      "mustResolve": "이 브랜치에는 해결해야 할 충돌이 있습니다.",
-      "refreshing": "충돌 세부정보 새로고침 중…",
-      "resolveWithAi": "AI로 충돌 해결",
-      "runFromWorktree": "이 워크트리에서 실행",
-      "title": "충돌"
-    },
     "linkPrForm": {
       "linkButton": "PR 연결",
       "linkNumber": "#{{number}} 연결",

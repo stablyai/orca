@@ -1568,22 +1568,6 @@
       "showMore": "Mostrar mais {{count}}",
       "title": "Comentários"
     },
-    "conflictingFilesSection": {
-      "commitsBehind_many": "{{count}} commits atrás (commit base: {{baseCommit}})",
-      "commitsBehind_one": "{{count}} commit atrás (commit base: {{baseCommit}})",
-      "commitsBehind_other": "{{count}} commits atrás (commit base: {{baseCommit}})",
-      "copyCommands": "Copiar comandos",
-      "copyFailed": "Falha ao copiar o texto",
-      "copyRefreshCommands": "Copiar comandos de atualização de possibilidade de merge",
-      "detailsUnavailable": "Os detalhes dos arquivos em conflito não estão disponíveis",
-      "filesHeading": "Arquivos em conflito",
-      "localMergeClean": "O GitHub informa conflitos, mas o Git local não os reproduziu. Atualize o PR ou faça push da branch para recalcular a possibilidade de merge.",
-      "mustResolve": "Esta branch tem conflitos que precisam ser resolvidos",
-      "refreshing": "Atualizando os detalhes do conflito…",
-      "resolveWithAi": "Resolver conflitos com IA",
-      "runFromWorktree": "Executar a partir desta worktree",
-      "title": "Conflitos"
-    },
     "linkPrForm": {
       "linkButton": "Vincular pull request",
       "linkNumber": "Vincular #{{number}}",

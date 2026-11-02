@@ -1521,21 +1521,6 @@
       "showMore": "さらに {{count}} 件を表示",
       "title": "コメント"
     },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "{{count}} コミット遅れ（ベースコミット: {{baseCommit}}）",
-      "commitsBehind_other": "{{count}} コミット遅れ（ベースコミット: {{baseCommit}}）",
-      "copyCommands": "コマンドをコピー",
-      "copyFailed": "テキストのコピーに失敗しました",
-      "copyRefreshCommands": "マージ可否を再取得するコマンドをコピー",
-      "detailsUnavailable": "競合ファイルの詳細は利用できません",
-      "filesHeading": "競合するファイル",
-      "localMergeClean": "GitHub では競合が報告されていますが、ローカルの Git では再現されませんでした。PR を更新するか、ブランチをプッシュしてマージ可否を再計算してください。",
-      "mustResolve": "このブランチには解決する必要のある競合があります",
-      "refreshing": "競合の詳細を更新しています…",
-      "resolveWithAi": "AI で競合を解決",
-      "runFromWorktree": "このワークツリーから実行",
-      "title": "競合"
-    },
     "linkPrForm": {
       "linkButton": "PR をリンク",
       "linkNumber": "#{{number}} をリンク",

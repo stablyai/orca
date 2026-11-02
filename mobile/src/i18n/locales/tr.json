@@ -1525,21 +1525,6 @@
       "showMore": "{{count}} tane daha göster",
       "title": "Yorumlar"
     },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "{{count}} commit geride (temel commit: {{baseCommit}})",
-      "commitsBehind_other": "{{count}} commit geride (temel commit: {{baseCommit}})",
-      "copyCommands": "Komutları kopyala",
-      "copyFailed": "Metin kopyalanamadı",
-      "copyRefreshCommands": "Merge edilebilirlik yenileme komutlarını kopyala",
-      "detailsUnavailable": "Conflict'li dosyaların ayrıntıları kullanılamıyor",
-      "filesHeading": "Conflict'li dosyalar",
-      "localMergeClean": "GitHub conflict bildiriyor ama yerel Git bunları yeniden oluşturamadı. Merge edilebilirliği yeniden hesaplamak için PR görünümünü yenileyin veya branch'i push edin.",
-      "mustResolve": "Bu branch'in çözülmesi gereken conflict'leri var",
-      "refreshing": "Conflict ayrıntıları yenileniyor…",
-      "resolveWithAi": "Conflict'leri AI ile çöz",
-      "runFromWorktree": "Bu worktree'den çalıştır",
-      "title": "Conflict'ler"
-    },
     "linkPrForm": {
       "linkButton": "Pull request'i bağla",
       "linkNumber": "Bağla: #{{number}}",

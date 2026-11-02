@@ -23,7 +23,7 @@ import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
 import { MobileSourceControlHubCommitsPage } from './MobileSourceControlHubCommitsPage'
 import { MobileSourceControlNextStepBar } from './MobileSourceControlNextStepBar'
 import { useMobileSourceControlNextStep } from './use-mobile-source-control-next-step'
-import { OptionPager } from '../components/BottomDrawer'
+import { OptionPager } from '../components/bottom-drawer/BottomDrawer'
 import { useSourceControlHubNavigation } from './use-source-control-hub-navigation'
 import { styles } from './mobile-source-control-styles'
 import { hubStyles } from './mobile-source-control-hub-styles'
@@ -362,8 +362,6 @@ export function MobileSourceControlPanel({
             bottomInset={barInset}
             onOpenChanges={() => selectTab('changes')}
             branchCompare={branchCompare}
-            // The bar offers Create and the review steps; on a local step Merge stays reachable here.
-            showBottomAction={!nextStep.offersMerge && prTab.state.kind === 'ready'}
           />
         </View>
       ) : activeTab === 'pr' ? (
@@ -373,7 +371,7 @@ export function MobileSourceControlPanel({
       {ready ? (
         <MobileSourceControlNextStepBar
           view={nextStep.view}
-          notice={nextStep.notice}
+          notice={nextStep.notice ?? prTab.unlinkError}
           agentNotice={nextStep.agentNotice}
           mergeConfirm={nextStep.mergeConfirm}
           composer={state}

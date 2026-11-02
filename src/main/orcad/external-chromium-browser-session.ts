@@ -8,13 +8,13 @@ import {
   agentBrowserBatchInput,
   isAgentBrowserStaleRefError,
   parseAgentBrowserJsonOutput
-} from '../browser/agent-browser-batch-command'
+} from '../browser/agent-browser/agent-browser-batch-command'
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../shared/runtime-types'
 import { Screenshot } from '../../shared/rpc-contract/browser-observation-params'
 import {
   agentBrowserScreenshotArgs,
   readAgentBrowserScreenshot
-} from '../browser/agent-browser-screenshot-arguments'
+} from '../browser/agent-browser/agent-browser-screenshot-arguments'
 import { runProcess } from '@orca/process-host'
 
 const COMMAND_TIMEOUT_MS = 90_000
