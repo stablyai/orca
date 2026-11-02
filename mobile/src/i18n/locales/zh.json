@@ -2036,8 +2036,7 @@
       "promptUnconfirmed": "智能体已启动，但无法确认提示词是否已发送。"
     },
     "prActionsEngine": {
-      "mergeFailed": "合并 PR 失败。",
-      "refreshFailed": "刷新 PR 失败。"
+      "mergeFailed": "合并 PR 失败。"
     },
     "prAiTriageLaunch": {
       "agentStarted": "智能体已启动",

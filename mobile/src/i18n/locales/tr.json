@@ -2040,8 +2040,7 @@
       "promptUnconfirmed": "Ajan başlatıldı, ancak istemin gönderildiği doğrulanamadı."
     },
     "prActionsEngine": {
-      "mergeFailed": "Pull request merge edilemedi.",
-      "refreshFailed": "Pull request yenilenemedi."
+      "mergeFailed": "Pull request merge edilemedi."
     },
     "prAiTriageLaunch": {
       "agentStarted": "Ajan başlatıldı",

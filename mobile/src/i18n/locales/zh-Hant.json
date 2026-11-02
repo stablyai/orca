@@ -2036,8 +2036,7 @@
       "promptUnconfirmed": "代理程式已啟動，但無法確認提示詞是否已傳送。"
     },
     "prActionsEngine": {
-      "mergeFailed": "合併 PR 失敗。",
-      "refreshFailed": "重新整理 PR 失敗。"
+      "mergeFailed": "合併 PR 失敗。"
     },
     "prAiTriageLaunch": {
       "agentStarted": "代理程式已啟動",

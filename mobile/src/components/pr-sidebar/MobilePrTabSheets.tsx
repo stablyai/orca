@@ -181,7 +181,10 @@ function PrEditTextSheet({ tab, field }: { tab: MobilePrTab; field: 'title' | 'b
       <View style={sheetStyles.body}>
         <FieldTextInput
           value={draft}
-          onChangeText={setDraft}
+          onChangeText={(value) => {
+            textAction.touch()
+            setDraft(value)
+          }}
           editable={!textAction.saving}
           autoFocus
           multiline={field === 'body'}

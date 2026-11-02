@@ -117,13 +117,12 @@ export function useHostedReviewActions({
             })
         if (!result.ok) {
           setActionError(codeHostErrorText(result))
-        } else {
-          await onRefreshReview()
         }
       } catch (err) {
         setActionError(err instanceof Error ? err.message : 'Merge failed')
       } finally {
         setMerging(false)
+        await onRefreshReview().catch(() => {})
       }
     },
     [
@@ -157,15 +156,12 @@ export function useHostedReviewActions({
       })
       if (!result.ok) {
         setActionError(codeHostErrorText(result))
-        // Refresh stale eligibility without replacing the provider's mutation error.
-        await onRefreshReview().catch(() => {})
-      } else {
-        await onRefreshReview()
       }
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Auto-merge update failed')
     } finally {
       setMerging(false)
+      await onRefreshReview().catch(() => {})
     }
   }, [
     githubPR?.prRepo,
@@ -239,7 +235,6 @@ export function useHostedReviewActions({
                   { value0: shortLabel }
                 )
           )
-          await onRefreshReview()
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : copy.failure
@@ -247,6 +242,7 @@ export function useHostedReviewActions({
         toast.error(message)
       } finally {
         setStateUpdating(null)
+        await onRefreshReview().catch(() => {})
       }
     },
     [

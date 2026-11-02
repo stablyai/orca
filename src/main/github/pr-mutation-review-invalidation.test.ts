@@ -131,15 +131,21 @@ describe('PR mutation review-lookup fencing', () => {
     }
   })
 
-  it.each(mutations)('$label keeps sharing the in-flight lookup after failure', async ({ run }) => {
+  it.each(mutations)('$label starts a fresh lookup after failure', async ({ label, run }) => {
     mocks.exec.mockRejectedValue(new Error('denied'))
     const held = holdLookup(local)
     await vi.waitFor(() => expect(mocks.resolve).toHaveBeenCalledTimes(1))
     await run(local)
+    if (label === 'IPC merge') {
+      expect(mocks.exec).toHaveBeenCalledWith(
+        expect.arrayContaining(['pr', 'merge', '7']),
+        expect.anything()
+      )
+    }
     const after = getPRForBranchOutcome(local.path, 'topic', null, null)
     finishHeld(stale)
-    expect(await Promise.all([held, after])).toEqual([stale, stale])
-    expect(mocks.resolve).toHaveBeenCalledTimes(1)
+    expect(await Promise.all([held, after])).toEqual([stale, fresh])
+    expect(mocks.resolve).toHaveBeenCalledTimes(2)
   })
 
   it('turns a PR back into a draft with gh pr ready --undo', async () => {

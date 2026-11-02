@@ -5,6 +5,7 @@ import type {
   GitHubPRFileViewedState
 } from '../../../../../shared/github/pull-request-types'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
+import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import { getGitHubSourceRuntimeHost } from '@/lib/github-source-runtime-context'
@@ -19,6 +20,8 @@ export type WorkItemDetailsCacheEntry = {
   fetchedAt: number
   pending?: Promise<GitHubWorkItemDetails | null>
   error?: string
+  // Why: invalidation keeps the shown details (patches keep landing on them) but owes one fresh read; the read's start clears it.
+  rereadOwed?: true
 }
 export const workItemDetailsCache = new Map<string, WorkItemDetailsCacheEntry>()
 
@@ -73,7 +76,7 @@ export function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCac
 
 export function invalidateWorkItemDetailsCacheForKey(key: string): void {
   workItemDetailsCacheGeneration += 1
-  const existed = workItemDetailsCache.delete(key)
+  const existed = markWorkItemDetailsRereadOwed(key)
   if (existed) {
     notifyWorkItemDetailsCache()
   }
@@ -81,6 +84,24 @@ export function invalidateWorkItemDetailsCacheForKey(key: string): void {
 
 // Fence pending fetches on every invalidation so pre-mutation results cannot restore stale entries.
 export let workItemDetailsCacheGeneration = 0
+
+// Retire the pending read and owe one replacement read, keeping loaded details; an entry without details goes cold.
+function markWorkItemDetailsRereadOwed(key: string): boolean {
+  const prev = workItemDetailsCache.get(key)
+  if (!prev) {
+    return false
+  }
+  if (prev.details) {
+    workItemDetailsCache.set(key, {
+      details: prev.details,
+      fetchedAt: prev.fetchedAt,
+      rereadOwed: true
+    })
+  } else {
+    workItemDetailsCache.delete(key)
+  }
+  return true
+}
 
 // Without an exact key, invalidate matching repo/type/number entries across source preferences.
 export function invalidateWorkItemDetailsCacheByMatch(args: {
@@ -103,7 +124,7 @@ export function invalidateWorkItemDetailsCacheByMatch(args: {
     const [keyRepoId, keyRepoPath] = key.split('\0')
     const matches = args.repoId ? keyRepoId === args.repoId : keyRepoPath === args.repoPath
     if (matches) {
-      workItemDetailsCache.delete(key)
+      markWorkItemDetailsRereadOwed(key)
       removed = true
     }
   }
@@ -113,78 +134,83 @@ export function invalidateWorkItemDetailsCacheByMatch(args: {
   }
 }
 
+// Why: field writers change only the payload; the entry's request ownership (an owed reread, the current pending
+// read) is copied by construction, so a local update can neither cancel nor orphan the whole-payload read.
+function patchWorkItemDetailsPayload(
+  key: string,
+  update: (details: GitHubWorkItemDetails) => GitHubWorkItemDetails | null,
+  fetchedAt?: number
+): boolean {
+  const prev = workItemDetailsCache.get(key)
+  const details = prev?.details ? update(prev.details) : null
+  if (!prev || !details) {
+    return false
+  }
+  touchWorkItemDetailsCache(key, {
+    details,
+    fetchedAt: fetchedAt ?? prev.fetchedAt,
+    pending: prev.pending,
+    rereadOwed: prev.rereadOwed,
+    error: undefined
+  })
+  return true
+}
+
 export function patchCachedPRFileViewedState(
   cacheKey: string,
   path: string,
   viewerViewedState: GitHubPRFileViewedState
 ): GitHubPRFileViewedState | undefined {
-  const prev = workItemDetailsCache.get(cacheKey)
-  const files = prev?.details?.files
-  if (!prev?.details || !files) {
-    return undefined
-  }
   let previousState: GitHubPRFileViewedState | undefined
-  const nextFiles = files.map((file) => {
-    if (file.path !== path) {
-      return file
+  patchWorkItemDetailsPayload(cacheKey, (details) => {
+    const files = details.files
+    const file = files?.find((candidate) => candidate.path === path)
+    if (!files || !file) {
+      return null
     }
     previousState = file.viewerViewedState ?? 'UNVIEWED'
-    return { ...file, viewerViewedState }
-  })
-  if (previousState === undefined || previousState === viewerViewedState) {
-    return previousState
-  }
-  touchWorkItemDetailsCache(cacheKey, {
-    ...prev,
-    details: { ...prev.details, files: nextFiles },
-    error: undefined
+    if (previousState === viewerViewedState) {
+      return null
+    }
+    return {
+      ...details,
+      files: files.map((candidate) =>
+        candidate.path === path ? { ...candidate, viewerViewedState } : candidate
+      )
+    }
   })
   return previousState
 }
 
 export function patchCachedPRChecks(cacheKey: string, checks: PRCheckDetail[]): void {
-  const prev = workItemDetailsCache.get(cacheKey)
-  if (!prev?.details) {
-    return
-  }
-  touchWorkItemDetailsCache(cacheKey, {
-    ...prev,
-    details: { ...prev.details, checks },
-    fetchedAt: Date.now(),
-    error: undefined
-  })
+  patchWorkItemDetailsPayload(cacheKey, (details) => ({ ...details, checks }), Date.now())
 }
 
 export function patchCachedPRReviewRequests(
   cacheKey: string,
   reviewRequests: GitHubAssignableUser[]
 ): void {
-  const prev = workItemDetailsCache.get(cacheKey)
-  if (!prev?.details) {
-    return
-  }
-  touchWorkItemDetailsCache(cacheKey, {
-    ...prev,
-    details: {
-      ...prev.details,
-      item: { ...prev.details.item, reviewRequests }
-    },
-    fetchedAt: Date.now(),
-    error: undefined
-  })
+  patchWorkItemDetailsPayload(
+    cacheKey,
+    (details) => ({ ...details, item: { ...details.item, reviewRequests } }),
+    Date.now()
+  )
 }
 
 export function patchCachedWorkItemBody(cacheKey: string, body: string): void {
-  const prev = workItemDetailsCache.get(cacheKey)
-  if (!prev?.details) {
-    return
-  }
-  touchWorkItemDetailsCache(cacheKey, {
-    ...prev,
-    details: { ...prev.details, body },
-    fetchedAt: Date.now(),
-    error: undefined
-  })
+  patchWorkItemDetailsPayload(cacheKey, (details) => ({ ...details, body }), Date.now())
+}
+
+// Expire fetchedAt so a reopen refreshes server fields; a comment alone starts no read. False: nothing loaded or a duplicate.
+export function appendCachedWorkItemComment(cacheKey: string, comment: PRComment): boolean {
+  return patchWorkItemDetailsPayload(
+    cacheKey,
+    (details) =>
+      details.comments.some((existing) => existing.id === comment.id)
+        ? null
+        : { ...details, comments: [...details.comments, comment] },
+    0
+  )
 }
 
 // Share event listeners across dialogs and unsubscribe on HMR to avoid accumulating subscriptions.

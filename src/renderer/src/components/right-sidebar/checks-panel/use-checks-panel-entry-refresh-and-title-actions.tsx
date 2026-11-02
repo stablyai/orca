@@ -41,6 +41,8 @@ type ChecksPanelEntryRefreshAndTitleActionsInput = Pick<
     | 'fetchPRForBranch'
     | 'isPanelVisible'
     | 'mountedRef'
+    | 'panelContextKey'
+    | 'panelContextKeyRef'
     | 'pollIntervalRef'
     | 'prevChecksRef'
     | 'repo'
@@ -84,6 +86,8 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     linkedGitLabMR,
     linkedPR,
     mountedRef,
+    panelContextKey,
+    panelContextKeyRef,
     pollIntervalRef,
     pr,
     prCacheKey,
@@ -207,6 +211,9 @@ export function useChecksPanelEntryRefreshAndTitleActions(
       return
     }
     // The read must start after the write rather than join an older poll; its failure is not the write's.
+    // Details read the panel's live model, so a write that settles after a repo/link switch must not reuse its MR number.
+    const requestContextKey = panelContextKey
+    const isRequestCurrent = (): boolean => panelContextKeyRef.current === requestContextKey
     if (activeReview?.provider === 'gitlab') {
       const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
         repoPath: repo.path,
@@ -227,7 +234,9 @@ export function useChecksPanelEntryRefreshAndTitleActions(
         await fetchGitLabDetails({
           mrNumberOverride: refreshedGitLabReview.number,
           headShaOverride: refreshedGitLabReview.headSha,
-          commitAsCurrent: true
+          // Why: not commitAsCurrent — an old or fallback MR must not claim the review the panel now shows; the
+          // result-key check lets details land only on the selected review, and a new selection loads its own.
+          isRequestCurrent
         })
       }
       return
@@ -268,6 +277,8 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     linkedGiteaPR,
     linkedGitLabMR,
     linkedPR,
+    panelContextKey,
+    panelContextKeyRef,
     repo
   ])
 
@@ -319,23 +330,18 @@ export function useChecksPanelEntryRefreshAndTitleActions(
         })
         if (!result.ok) {
           toast.error(codeHostErrorText(result))
-          return
         }
-        await refreshHostedReviewAfterMutation()
       } else {
         if (!pr) {
           return
         }
-        const ok = await window.api.gh.updatePRTitle({
+        await window.api.gh.updatePRTitle({
           repoPath: repo.path,
           repoId: repo.id,
           prNumber: pr.number,
           title: nextTitle,
           prRepo: pr.prRepo ?? null
         })
-        if (ok) {
-          await refreshHostedReviewAfterMutation()
-        }
       }
     } finally {
       clearTitleInputFocusTimer()
@@ -343,6 +349,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
         setTitleSaving(false)
         setEditingTitle(false)
       }
+      await refreshHostedReviewAfterMutation().catch(() => {})
     }
   }, [
     activeReview,

@@ -204,7 +204,11 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         targetMRNumber,
         targetHeadSha
       )
-      if (isRequestCurrent?.() === false) {
+      // Without commitAsCurrent the caller only reads for the selected review; skip a target the panel doesn't own.
+      if (
+        isRequestCurrent?.() === false ||
+        (!commitAsCurrent && !isCurrentAsyncResult(requestKey))
+      ) {
         return
       }
       if (commitAsCurrent) {

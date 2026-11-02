@@ -9,6 +9,7 @@ import type {
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import {
   WORK_ITEM_DETAILS_FRESH_MS,
+  appendCachedWorkItemComment,
   WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE,
   getWorkItemDetailsCacheKey,
   subscribeWorkItemDetailsCache,
@@ -110,10 +111,14 @@ export function usePullRequestDetails(args: {
   const error = cachedEntry?.error && !cachedEntry?.details ? cachedEntry.error : null
   const detailsLoaded = Boolean(cachedEntry?.details)
 
-  // Cross-window invalidation can drop an open entry without changing fetch dependencies; trigger refetch explicitly.
+  // Invalidation drops or marks an open entry without changing fetch dependencies; a tick starts its one owed read.
   const [refetchTick, setRefetchTick] = useState(0)
   useEffect(() => {
-    if (workItem && detailsCacheKey && !cachedEntry) {
+    if (
+      workItem &&
+      detailsCacheKey &&
+      (!cachedEntry || (cachedEntry.rereadOwed && !cachedEntry.pending))
+    ) {
       setRefetchTick((n) => n + 1)
     }
   }, [workItem, detailsCacheKey, cachedEntry])
@@ -130,7 +135,9 @@ export function usePullRequestDetails(args: {
 
     const cached = workItemDetailsCache.get(detailsCacheKey)
     const now = Date.now()
-    const hasFreshData = cached?.details && now - cached.fetchedAt <= WORK_ITEM_DETAILS_FRESH_MS
+    // A local field patch refreshes fetchedAt but is not the whole-payload read an invalidation owes.
+    const hasFreshData =
+      cached?.details && !cached.rereadOwed && now - cached.fetchedAt <= WORK_ITEM_DETAILS_FRESH_MS
 
     if (hasFreshData) {
       return
@@ -216,23 +223,9 @@ export function usePullRequestDetails(args: {
     (comment: PRComment) => {
       // Why: skip refreshDetails() — gh api --cache 60s returns stale data that would overwrite the optimistic comment.
       optimisticCommentsRef.current.push(comment)
-      // Notify through cache writes and expire fetchedAt so reopening refreshes server-side fields.
-      if (detailsCacheKey) {
-        const prev = workItemDetailsCache.get(detailsCacheKey)
-        if (prev?.details) {
-          const ids = new Set(prev.details.comments.map((c) => c.id))
-          if (!ids.has(comment.id)) {
-            touchWorkItemDetailsCache(detailsCacheKey, {
-              details: {
-                ...prev.details,
-                comments: [...prev.details.comments, comment]
-              },
-              fetchedAt: 0,
-              error: undefined
-            })
-            return
-          }
-        }
+      // Notify through a payload-only cache patch that keeps any owed or running read.
+      if (detailsCacheKey && appendCachedWorkItemComment(detailsCacheKey, comment)) {
+        return
       }
       // Cold-loading cache has no details to patch/notify; tick the optimistic shell instead.
       setOptimisticTick((n) => n + 1)

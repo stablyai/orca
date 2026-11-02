@@ -9,6 +9,7 @@ import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import { gitHubPRToChecksPanelReview } from './checks-panel-review'
 
 const actionMocks = vi.hoisted(() => ({
+  actionError: null as string | null,
   handleMarkReadyForReview: vi.fn(),
   handleCloseReview: vi.fn()
 }))
@@ -19,7 +20,7 @@ vi.mock('./use-hosted-review-actions', () => ({
     merging: false,
     readying: false,
     stateUpdating: null,
-    actionError: null,
+    actionError: actionMocks.actionError,
     handleMerge: vi.fn(),
     handleAutoMerge: vi.fn(),
     handleMarkReadyForReview: actionMocks.handleMarkReadyForReview,
@@ -166,6 +167,32 @@ describe('HostedReviewActions GitHub merge selection', () => {
     )
     if (scenario.label === 'Checking' || scenario.label === 'Conflicts') {
       expect(markup).toMatch(/<button[^>]*disabled=""/)
+    }
+  })
+})
+
+describe('HostedReviewActions merged state', () => {
+  it('keeps a failed merge error visible when the reread shows the review merged', () => {
+    actionMocks.actionError = 'Connection lost'
+    try {
+      const markup = renderToStaticMarkup(
+        <HostedReviewActions
+          review={{
+            provider: 'github',
+            number: 42,
+            state: 'merged',
+            status: 'success',
+            mergeable: 'UNKNOWN'
+          }}
+          repo={repo}
+          worktree={worktree}
+          onRefreshReview={vi.fn().mockResolvedValue(undefined)}
+        />
+      )
+      expect(markup).toContain('Delete Workspace')
+      expect(markup).toContain('Connection lost')
+    } finally {
+      actionMocks.actionError = null
     }
   })
 })

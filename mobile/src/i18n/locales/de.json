@@ -2040,8 +2040,7 @@
       "promptUnconfirmed": "Der Agent wurde gestartet, aber der Versand des Prompts konnte nicht bestätigt werden."
     },
     "prActionsEngine": {
-      "mergeFailed": "Pull Request konnte nicht gemergt werden.",
-      "refreshFailed": "Pull Request konnte nicht aktualisiert werden."
+      "mergeFailed": "Pull Request konnte nicht gemergt werden."
     },
     "prAiTriageLaunch": {
       "agentStarted": "Agent gestartet",

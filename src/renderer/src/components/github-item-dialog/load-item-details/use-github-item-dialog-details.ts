@@ -20,6 +20,7 @@ import {
 import type { GitHubItemDialogProjectOrigin } from './github-item-dialog-types'
 import {
   WORK_ITEM_DETAILS_FRESH_MS,
+  appendCachedWorkItemComment,
   getWorkItemDetailsCacheKey,
   invalidateWorkItemDetailsCacheByMatch,
   invalidateWorkItemDetailsCacheForKey,
@@ -154,10 +155,14 @@ export function useGitHubItemDialogDetails({
   const error = cachedEntry?.error && !cachedEntry?.details ? cachedEntry.error : null
   const detailsLoaded = Boolean(cachedEntry?.details)
 
-  // Invalidation can remove an open entry without changing fetch dependencies; a tick forces refetch.
+  // Invalidation drops or marks an open entry without changing fetch dependencies; a tick starts its one owed read.
   const [refetchTick, setRefetchTick] = useState(0)
   useEffect(() => {
-    if (workItem && detailsCacheKey && !cachedEntry) {
+    if (
+      workItem &&
+      detailsCacheKey &&
+      (!cachedEntry || (cachedEntry.rereadOwed && !cachedEntry.pending))
+    ) {
       setRefetchTick((n) => n + 1)
     }
   }, [workItem, detailsCacheKey, cachedEntry])
@@ -174,7 +179,9 @@ export function useGitHubItemDialogDetails({
 
     const cached = workItemDetailsCache.get(detailsCacheKey)
     const now = Date.now()
-    const hasFreshData = cached?.details && now - cached.fetchedAt <= WORK_ITEM_DETAILS_FRESH_MS
+    // A local field patch refreshes fetchedAt but is not the whole-payload read an invalidation owes.
+    const hasFreshData =
+      cached?.details && !cached.rereadOwed && now - cached.fetchedAt <= WORK_ITEM_DETAILS_FRESH_MS
 
     if (hasFreshData) {
       return
@@ -246,23 +253,9 @@ export function useGitHubItemDialogDetails({
       const optimisticKey = detailsCacheKey ?? ''
       const optimisticComments = optimisticCommentsRef.current.get(optimisticKey) ?? []
       optimisticCommentsRef.current.set(optimisticKey, [...optimisticComments, comment])
-      // Notify concurrent drawers through the cache; mark stale so reopening fetches server fields.
-      if (detailsCacheKey) {
-        const prev = workItemDetailsCache.get(detailsCacheKey)
-        if (prev?.details) {
-          const ids = new Set(prev.details.comments.map((c) => c.id))
-          if (!ids.has(comment.id)) {
-            touchWorkItemDetailsCache(detailsCacheKey, {
-              details: {
-                ...prev.details,
-                comments: [...prev.details.comments, comment]
-              },
-              fetchedAt: 0,
-              error: undefined
-            })
-            return
-          }
-        }
+      // Notify concurrent drawers through the cache (a payload-only patch that keeps any owed or running read).
+      if (detailsCacheKey && appendCachedWorkItemComment(detailsCacheKey, comment)) {
+        return
       }
       // Without a cache entry to notify subscribers, wake the memo through local state.
       setOptimisticTick((n) => n + 1)
