@@ -10,7 +10,7 @@ import {
   type PrSidebarControllerInput,
   type PrSidebarSelection
 } from './mobile-pr-sidebar-observation'
-import { backgroundReadFailed, useForegroundFirstLoad } from './pr-sidebar-load-result'
+import { pollChecksReadFailed, useForegroundFirstLoad } from './pr-sidebar-load-result'
 import { fetchGithubRepoSlug } from './github-pr-rpc'
 import {
   prSidebarResourceKey,
@@ -144,11 +144,8 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       if (!owner.live || !shouldApplyResult(seq, owner.loadSeq)) {
         return 'stale'
       }
-      // A poll keeps what is on screen when its read fails and backs off; it marks nothing.
-      if (options?.background && backgroundReadFailed(owner.latest, next)) {
-        return 'failed'
-      }
-      // A failed refresh is not a departure: keep the accepted PR or no-PR result and mark it until a good read.
+      // A failed discovery, from any caller (a poll too), is not a departure: keep the accepted PR or no-PR result
+      // and mark it until a current discovery succeeds; the poll backs off on 'failed'.
       const accepted = owner.latest
       if (
         (next.kind === 'error' || next.kind === 'blocked') &&
@@ -159,25 +156,40 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         }
         return 'failed'
       }
+      // A poll whose discovery succeeded but whose checks read failed for the same PR lands its discovery (clearing
+      // an older warning) and keeps the checks it had; it reports 'failed' once, for the backoff.
+      const checksOnlyFailure = options?.background === true && pollChecksReadFailed(accepted, next)
+      const settled: typeof next =
+        checksOnlyFailure && next.kind === 'ready' && accepted.kind === 'ready'
+          ? {
+              ...next,
+              data: {
+                ...next.data,
+                checks: accepted.data.checks,
+                checksError: accepted.data.checksError
+              }
+            }
+          : next
+      const result = checksOnlyFailure ? 'failed' : 'applied'
 
       // Keep prior details across phase one so refresh cannot blank the comment tree.
       const priorDetails =
-        next.kind === 'ready' &&
+        settled.kind === 'ready' &&
         owner.latest.kind === 'ready' &&
         owner.latest.data.details != null &&
-        prSidebarResourceKey(owner.latest.data.pr) === prSidebarResourceKey(next.data.pr)
+        prSidebarResourceKey(owner.latest.data.pr) === prSidebarResourceKey(settled.data.pr)
           ? owner.latest.data.details
           : null
 
-      if (next.kind === 'ready' && priorDetails != null) {
-        publishState({ kind: 'ready', data: { ...next.data, details: priorDetails } })
+      if (settled.kind === 'ready' && priorDetails != null) {
+        publishState({ kind: 'ready', data: { ...settled.data, details: priorDetails } })
         if (!includeDetails) {
-          return 'applied'
+          return result
         }
       } else {
-        publishState(next)
-        if (next.kind !== 'ready' || !includeDetails) {
-          return next.kind === 'ready' || next.kind === 'none' ? 'applied' : 'failed'
+        publishState(settled)
+        if (settled.kind !== 'ready' || !includeDetails) {
+          return settled.kind === 'ready' || settled.kind === 'none' ? result : 'failed'
         }
       }
 
@@ -185,9 +197,9 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       owner.detailsSeq = detailsSeq
       owner.detailsInFlight = {
         seq: detailsSeq,
-        resourceKey: prSidebarResourceKey(next.data.pr)
+        resourceKey: prSidebarResourceKey(settled.data.pr)
       }
-      const fetchedDetails = await loadPrSidebarDetails(deps, worktreeId, next.data.pr)
+      const fetchedDetails = await loadPrSidebarDetails(deps, worktreeId, settled.data.pr)
       // Release only this details claim; a newer load may already own it.
       if (owner.detailsInFlight?.seq === detailsSeq) {
         owner.detailsInFlight = null
@@ -197,9 +209,9 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         detailsSeq !== owner.detailsSeq ||
         !owner.live ||
         owner.latest.kind !== 'ready' ||
-        prSidebarResourceKey(owner.latest.data.pr) !== prSidebarResourceKey(next.data.pr)
+        prSidebarResourceKey(owner.latest.data.pr) !== prSidebarResourceKey(settled.data.pr)
       ) {
-        return 'applied'
+        return result
       }
       // Replace nonfatal null with a placeholder so details cannot spin forever.
       const details = resolvePrSidebarDetailsAfterPhase2({
@@ -209,7 +221,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       })
       // Details cannot certify the PR read, so a refresh failure stays marked.
       publishState({ ...owner.latest, data: { ...owner.latest.data, details } })
-      return 'applied'
+      return result
     },
     [buildDeps, branch, headSha, identity, worktreeId, owner, publishState]
   )
@@ -296,7 +308,10 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
   // Desktop's patchCachedPRFileViewedState: a viewed tick shows at once, and a failed write puts the old state back.
   const patchPrFileViewed = useCallback(
     (pullRequestId: string, path: string, viewed: GitHubPRFileViewedState) => {
-      const next = prSidebarWithFileViewed(owner.latest, pullRequestId, path, viewed)
+      // A callback from a departed observation or for another PR changes nothing.
+      const next = owner.live
+        ? prSidebarWithFileViewed(owner.latest, pullRequestId, path, viewed)
+        : null
       if (next) {
         publishState(next)
       }
