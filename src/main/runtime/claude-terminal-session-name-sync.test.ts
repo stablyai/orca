@@ -5,7 +5,8 @@ import {
 } from './claude-terminal-session-name-sync'
 import {
   claudeTitleShowsName,
-  latestClaudeCustomTitle
+  latestClaudeCustomTitle,
+  normalizeClaudeSessionName
 } from '../claude/claude-terminal-session-name'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
@@ -172,6 +173,43 @@ describe('ClaudeTerminalSessionNameSync', () => {
     expect(renamed).toEqual(['first', 'second'])
   })
 
+  it('drops a queued rename when sync is turned off or a second Claude pane joins', async () => {
+    let enabled = true
+    let rows = [{ paneKey: PANE, agentType: 'claude' as const }]
+    const waits: (() => void)[] = []
+    const sendCommand = vi.fn(async () => {})
+    const { sync } = harness({
+      isEnabled: () => enabled,
+      listRows: () => rows,
+      sendCommand,
+      waitForEmptyComposer: () => new Promise((resolve) => waits.push(() => resolve(true)))
+    })
+    sync.tabRenamed('tab-1', 'while busy')
+    enabled = false
+    waits.shift()?.()
+    await settle()
+    enabled = true
+    sync.tabRenamed('tab-1', 'joined')
+    rows = [...rows, { paneKey: `tab-1:${OTHER_LEAF}`, agentType: 'claude' }]
+    waits.shift()?.()
+    await settle()
+    expect(sendCommand).not.toHaveBeenCalled()
+  })
+
+  it('rechecks a title shown before its transcript path was known', async () => {
+    let path: string | null = null
+    const { sync, renamed } = harness({
+      readTranscriptPath: () => path,
+      readCustomTitle: async () => 'early'
+    })
+    sync.observeTitle(PANE, '✳ early')
+    await settle()
+    path = '/t.jsonl'
+    sync.observeTurnChange(PANE)
+    await settle()
+    expect(renamed).toEqual(['early'])
+  })
+
   it('does not name a tab with several Claude panes from one of them', async () => {
     const { claudeRenames, renamed } = harness({
       listRows: () => [
@@ -203,6 +241,10 @@ describe('ClaudeTerminalSessionNameSync', () => {
 })
 
 describe('Claude transcript names', () => {
+  it('keeps control characters out of a session name', () => {
+    expect(normalizeClaudeSessionName('fix\u0003 login\u001b[2J')).toBe('fix login [2J')
+  })
+
   it('reads the newest custom title and skips a torn last line', () => {
     const tail = [
       '{"type":"custom-title","customTitle":"old","sessionId":"s"}',

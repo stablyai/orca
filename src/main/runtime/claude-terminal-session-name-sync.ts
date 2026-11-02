@@ -95,6 +95,12 @@ export class ClaudeTerminalSessionNameSync {
     return paneKeys.size === 1 ? [...paneKeys][0] : null
   }
 
+  /** Rechecked when a delayed rename commits: the setting or the tab's panes may have changed. */
+  private canCommit(paneKey: string): boolean {
+    const tabId = parsePaneKey(paneKey)?.tabId
+    return this.deps.isEnabled() && !!tabId && this.soleClaudePane(tabId) === paneKey
+  }
+
   private renameSession(paneKey: string, name: string): void {
     const pending = this.pendingRenames.get(paneKey)
     if (pending?.name === name || (!pending && this.agreed.get(paneKey) === name)) {
@@ -121,7 +127,7 @@ export class ClaudeTerminalSessionNameSync {
       if (!(await this.deps.waitForEmptyComposer(handle, rename.abort.signal))) {
         return
       }
-      if (rename.abort.signal.aborted) {
+      if (rename.abort.signal.aborted || !this.canCommit(paneKey)) {
         return
       }
       this.agreed.set(paneKey, rename.name)
@@ -147,6 +153,8 @@ export class ClaudeTerminalSessionNameSync {
   private async confirmTitle(paneKey: string, title: string): Promise<void> {
     const transcriptPath = this.deps.readTranscriptPath(paneKey)
     if (!transcriptPath) {
+      // The hook row may not carry the transcript yet; recheck at the pane's next turn change.
+      this.unconfirmedTitles.set(paneKey, title)
       return
     }
     let name: string | null
@@ -165,8 +173,7 @@ export class ClaudeTerminalSessionNameSync {
       return
     }
     this.unconfirmedTitles.delete(paneKey)
-    const tabId = parsePaneKey(paneKey)?.tabId
-    if (!tabId || this.soleClaudePane(tabId) !== paneKey) {
+    if (!this.canCommit(paneKey)) {
       return
     }
     const pending = this.pendingRenames.get(paneKey)

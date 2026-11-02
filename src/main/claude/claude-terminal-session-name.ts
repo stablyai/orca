@@ -7,7 +7,8 @@ const TRANSCRIPT_TAIL_BYTES = 256 * 1024
 
 /** One line, as `/rename` takes it; null when nothing is left to name. */
 export function normalizeClaudeSessionName(name: string | null | undefined): string | null {
-  const normalized = name?.replace(/\s+/g, ' ').trim()
+  // Control characters (e.g. ^C) would act on Claude's prompt instead of naming the session.
+  const normalized = name?.replace(/[\p{Cc}\s]+/gu, ' ').trim()
   return normalized ? normalized : null
 }
 
