@@ -11,10 +11,10 @@ import {
   inflightWorkItemsRequests,
   releaseProviderRequestSlot as releaseWorkItemSlot
 } from './request-coordination'
-import { findRepoForGitHubOwner } from './repository-routing'
 import {
   countGitHubWorkItemsForRepo,
   getGitHubWorkItemRequestContext,
+  findGitHubWorkItemRepo,
   getGitHubWorkItemSourceCacheScope,
   getGitHubSourceTarget
 } from './work-item-routing'
@@ -28,7 +28,10 @@ export const createWorkItemCountActions = (
     }
     const owner = get().githubSourceCollections
     const attempts = repos.map((r) =>
-      owner.capture(findRepoForGitHubOwner(get(), r.repoId, r.path), r.sourceContext)
+      owner.capture(
+        findGitHubWorkItemRepo(get(), r.repoId, r.path, r.sourceContext),
+        r.sourceContext
+      )
     )
     const key = owner.countKey(
       attempts.map((attempt) => attempt.scope),
@@ -58,7 +61,7 @@ export const createWorkItemCountActions = (
           attempt.repo && githubTaskBinding(attempt.repo)
         )
         const inflightKey = `${workItemsInflightRequestKey(cacheKey, requestContext.target)}::${attempt.binding ? requestState.githubTaskCache.bindingIdentity(attempt.binding) : ''}`
-        const discovery = inflightWorkItemsRequests.get(inflightKey)?.promise
+        const discovery = () => inflightWorkItemsRequests.get(inflightKey)?.promise
         let count: number
         await acquireWorkItemSlot()
         try {
@@ -74,7 +77,7 @@ export const createWorkItemCountActions = (
         } finally {
           releaseWorkItemSlot()
         }
-        await discovery?.catch(() => undefined)
+        await discovery()?.catch(() => undefined)
         const evidence = owner.verified(attempt, query)
         if (
           !owner.current(attempt) ||

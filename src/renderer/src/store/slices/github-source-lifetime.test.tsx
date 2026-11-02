@@ -215,6 +215,23 @@ describe('GitHub source collection lifetime', () => {
     ).toEqual([row('parent').url])
   })
 
+  it('detaches only the selected host when two copies share both id and path', async () => {
+    const store = setup()
+    const ssh = { ...repo, executionHostId: 'ssh:box' as const, connectionId: 'box' }
+    store.setState({ repos: [repo, ssh] })
+    const localSource = getTaskPageRepoSourceContext(repo, 'github')
+    const sshSource = getTaskPageRepoSourceContext(ssh, 'github')
+    await store
+      .getState()
+      .fetchWorkItems(repo.id, repo.path, 20, '', { sourceContext: localSource })
+    await store.getState().fetchWorkItems(repo.id, repo.path, 20, '', { sourceContext: sshSource })
+    await store.getState().setIssueSourcePreference(ssh.id, ssh.path, 'origin', 'ssh:box')
+    expect(store.getState().getCachedWorkItems(ssh.id, 20, '', ssh.path, sshSource)).toBeNull()
+    expect(
+      store.getState().getCachedWorkItems(repo.id, 20, '', repo.path, localSource)
+    ).toHaveLength(1)
+  })
+
   it('returns obsolete for a served-source contradiction rather than wrong-source rows', async () => {
     const store = setup()
     await store.getState().setIssueSourcePreference(repo.id, repo.path, 'origin', 'local')
@@ -241,8 +258,8 @@ describe('source mapping and estimate retirement', () => {
     const held = Promise.withResolvers<ReturnType<typeof envelope>>()
     mockApi.gh.listWorkItems.mockReturnValueOnce(held.promise)
     mockApi.gh.countWorkItems.mockResolvedValue(60)
-    const list = store.getState().fetchWorkItems(repo.id, repo.path, 20, '')
     const counting = store.getState().countWorkItemsAcrossRepos(args, '', 20)
+    const list = store.getState().fetchWorkItems(repo.id, repo.path, 20, '')
     await flush()
     expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(1)
     held.resolve(envelope('parent'))

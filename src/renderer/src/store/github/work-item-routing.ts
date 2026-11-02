@@ -1,3 +1,4 @@
+import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
 import { githubTaskBinding } from '@/lib/github-task-observation'
 import type { AppState } from '../types'
 import type { RuntimeFocusSettings } from '../../../../shared/github/github-cache-key'
@@ -79,6 +80,18 @@ function settingsForGitHubTaskSource(
       ? sourceHost.environmentId
       : getHostlessSourceRepoOwnerEnvironmentId(state.repos, repo?.id)
   )
+}
+
+/** A source names its host even when two registered copies share an id and path. */
+export function findGitHubWorkItemRepo(
+  state: Partial<Pick<AppState, 'repos'>>,
+  repoId: string,
+  repoPath: string,
+  source?: TaskSourceContext | null
+): Repo | undefined {
+  return source?.provider === 'github'
+    ? getGitHubRepoLookupIndex(state.repos).findOnHost(source.hostId, repoId, repoPath)
+    : findRepoForGitHubOwner(state, repoId, repoPath)
 }
 
 export function getWorkItemsCacheKeyForOwner(

@@ -18,9 +18,9 @@ import {
   ownsInflightRequest,
   releaseProviderRequestSlot as releaseWorkItemSlot
 } from './request-coordination'
-import { findRepoForGitHubOwner } from './repository-routing'
 import {
   getGitHubWorkItemRequestContext,
+  findGitHubWorkItemRepo,
   getGitHubWorkItemSourceCacheScope,
   getGitHubWorkItemRowHostId,
   getGitHubWorkItemSourceHostId,
@@ -52,7 +52,7 @@ export const createWorkItemFetchActions = (
             query,
             getTaskSourceCacheScope(sourceContext),
             (() => {
-              const repo = findRepoForGitHubOwner(state, repoId, repoPath ?? '')
+              const repo = findGitHubWorkItemRepo(state, repoId, repoPath ?? '', sourceContext)
               return repo && githubTaskBinding(repo)
             })()
           )
@@ -99,7 +99,7 @@ export const createWorkItemFetchActions = (
       return []
     }
     const requestState = get()
-    const repo = findRepoForGitHubOwner(requestState, repoId, repoPath)
+    const repo = findGitHubWorkItemRepo(requestState, repoId, repoPath, options?.sourceContext)
     const ownerHostId = getGitHubWorkItemSourceHostId(repo, options?.sourceContext)
     const cacheScope = getGitHubWorkItemSourceCacheScope(repo, options?.sourceContext)
     const key = workItemsCacheKey(repoId, limit, query, cacheScope, repo && githubTaskBinding(repo))
@@ -158,7 +158,7 @@ export const createWorkItemFetchActions = (
           ...(options?.noCache ? { noCache: true } : {}),
           ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
         })
-        const currentRepo = findRepoForGitHubOwner(get(), repoId, repoPath)
+        const currentRepo = findGitHubWorkItemRepo(get(), repoId, repoPath, options?.sourceContext)
         const currentHostId = getGitHubWorkItemSourceHostId(currentRepo, options?.sourceContext)
         // Why: repo ownership changed, so this response belongs to an older execution-host bucket (host focus changes alone are fine).
         if ((currentHostId ?? null) !== (ownerHostId ?? null)) {

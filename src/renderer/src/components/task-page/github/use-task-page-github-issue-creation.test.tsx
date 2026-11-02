@@ -1,8 +1,15 @@
 // @vitest-environment happy-dom
 import { act, useRef } from 'react'
-import { cleanup, renderHook } from '@testing-library/react'
+import '@testing-library/jest-dom/vitest'
+import { cleanup, renderHook, render, screen, fireEvent, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useStore } from 'zustand'
+import { toast } from 'sonner'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { TaskPageGitHubIssueDialog } from './IssueDialog'
+import { useTaskPageWorkItemsCacheSelection } from './use-task-page-work-items-cache-selection'
+import { buildTaskPageRepoSourceState } from '../task-page-cache-selectors'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { createGitHubSlice } from '@/store/slices/github'
 import { createRepoUpdateActions } from '@/store/repos/repo-update'
 import { createGlobalSettingsFixture } from '../../../../../shared/global-settings-test-fixture'
@@ -28,6 +35,9 @@ vi.mock('@/store/index', async () => {
   }
 })
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('@/components/github/GitHubMarkdownComposer', () => ({
+  GitHubMarkdownComposer: () => null
+}))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }))
 
 function item(number: number): GitHubWorkItem {
@@ -220,7 +230,82 @@ describe('New Issue source-save dependency', () => {
       if (!saved) {
         expect(setter).not.toHaveBeenCalledWith('')
         expect(setter).toHaveBeenLastCalledWith(false)
+        expect(toast.error).toHaveBeenCalledTimes(1)
       }
     }
   )
+  it('rechecks the target owner immediately before create even with no pending save', async () => {
+    const { store, result, setter } = setup()
+    await act(async () => {
+      const creating = result.current.handleCreateNewIssue()
+      store.setState({ repos: [] })
+      await creating
+    })
+    expect(mocks.createIssue).not.toHaveBeenCalled()
+    expect(setter).not.toHaveBeenCalledWith('')
+    expect(setter).toHaveBeenLastCalledWith(false)
+  })
+
+  it('keeps the mounted New Issue selector and draft across a held source save', async () => {
+    const { store, repo, result } = setup()
+    const origin = { owner: 'fork', repo: 'project' }
+    const upstream = { owner: 'parent', repo: 'project' }
+    Object.assign(window.api.gh, {
+      listWorkItems: vi.fn().mockResolvedValue({
+        items: [],
+        sources: {
+          issues: upstream,
+          prs: upstream,
+          originCandidate: origin,
+          upstreamCandidate: upstream
+        }
+      })
+    })
+    await act(async () => {
+      await store.getState().fetchWorkItems(repo.id, repo.path, 20, '')
+    })
+    function Composer() {
+      const repos = useStore(store, (s) => s.repos)
+      const selected = useTaskPageWorkItemsCacheSelection(repos, 20, '')
+      const fields = {
+        ...result.current,
+        selectedRepos: repos,
+        newIssueTargetRepo: repos[0],
+        githubSourceDisplayState: buildTaskPageRepoSourceState(
+          repos,
+          selected.sourceDisplayWorkItemsCacheEntries
+        ),
+        newIssueOpen: true,
+        setIssueSourcePreference: store.getState().setIssueSourcePreference,
+        submitShortcutLabel: 'Ctrl+Enter',
+        newIssueRepoId: repo.id,
+        setNewIssueRepoId: vi.fn(),
+        newIssueRepoLabels: { data: [], loading: false, error: null },
+        newIssueRepoAssignees: { data: [], loading: false, error: null }
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these fields cover every IssueDialog input; later provider/composer stages add no fields read by this dialog.
+      return (
+        <TooltipProvider>
+          <TaskPageGitHubIssueDialog model={fields as unknown as TaskPageComposerActionsModel} />
+        </TooltipProvider>
+      )
+    }
+    render(<Composer />)
+    const dialog = within(screen.getByRole('dialog'))
+    const picker = dialog.getByRole('group', { name: 'Issue source' })
+    const title = dialog.getByDisplayValue('Created issue')
+    const held = Promise.withResolvers<Repo>()
+    mocks.updateRepo.mockReturnValueOnce(held.promise)
+    await act(async () => {
+      fireEvent.click(dialog.getByRole('button', { name: 'Origin' }))
+      await Promise.resolve()
+    })
+    expect(dialog.getByRole('group', { name: 'Issue source' })).toBe(picker)
+    expect(dialog.getByDisplayValue('Created issue')).toBe(title)
+    expect(dialog.getByRole('button', { name: 'Origin' })).toHaveAttribute('aria-pressed', 'true')
+    await act(async () => {
+      held.resolve({ ...repo, issueSourcePreference: 'origin' })
+      await held.promise
+    })
+  })
 })

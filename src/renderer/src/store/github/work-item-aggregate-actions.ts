@@ -19,9 +19,9 @@ import {
   inflightWorkItemsRequests,
   releaseProviderRequestSlot as releaseWorkItemSlot
 } from './request-coordination'
-import { findRepoForGitHubOwner } from './repository-routing'
 import {
   getGitHubWorkItemRequestContext,
+  findGitHubWorkItemRepo,
   getWorkItemsCacheKeyForOwner,
   isGitHubUnavailableWorkItemsError,
   listGitHubWorkItemsForRepo,
@@ -74,7 +74,7 @@ export const createWorkItemAggregateActions = (
                   query,
                   getTaskSourceCacheScope(r.sourceContext),
                   (() => {
-                    const repo = findRepoForGitHubOwner(get(), r.repoId, r.path)
+                    const repo = findGitHubWorkItemRepo(get(), r.repoId, r.path, r.sourceContext)
                     return repo && githubTaskBinding(repo)
                   })()
                 )
@@ -119,7 +119,7 @@ export const createWorkItemAggregateActions = (
     const perProjectResults = await Promise.all(
       repos.map(async (r) => {
         const requestState = get()
-        const repo = findRepoForGitHubOwner(requestState, r.repoId, r.path)
+        const repo = findGitHubWorkItemRepo(requestState, r.repoId, r.path, r.sourceContext)
         const requestContext = getGitHubWorkItemRequestContext(
           requestState,
           getGitHubSourceTarget(requestState, repo, r.sourceContext),
@@ -209,7 +209,7 @@ export const createWorkItemAggregateActions = (
       return
     }
     const requestState = get()
-    const repo = findRepoForGitHubOwner(requestState, repoId, repoPath)
+    const repo = findGitHubWorkItemRepo(requestState, repoId, repoPath, options?.sourceContext)
     const key =
       options?.sourceContext?.provider === 'github'
         ? workItemsCacheKey(

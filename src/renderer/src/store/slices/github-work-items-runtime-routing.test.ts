@@ -257,16 +257,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     })
     expect(
       store.getState().workItemsCache[
-        workItemsCacheKey(
-          'caller-repo-id',
-          24,
-          'is:open',
-          getTaskSourceCacheScope(sourceContext),
-          (() => {
-            const repo = findRepoForGitHubOwner(store.getState(), 'caller-repo-id', '/server/repo')
-            return repo && githubTaskBinding(repo)
-          })()
-        )
+        workItemsCacheKey('caller-repo-id', 24, 'is:open', getTaskSourceCacheScope(sourceContext))
       ]?.data?.[0]
     ).toMatchObject({ repoId: 'caller-repo-id', number: 19 })
     expect(
