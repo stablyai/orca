@@ -1,6 +1,7 @@
 import '../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GhUtils from './gh-utils'
+import type * as GitRunner from '../git/runner'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -31,6 +32,23 @@ vi.mock('./gh-utils', async (original) => ({
   ...(await original<typeof GhUtils>()),
   ghExecFileAsync: exec
 }))
+vi.mock('../git/runner', async (original) => {
+  const actual = await original<typeof GitRunner>()
+  return {
+    ...actual,
+    gitExecFileAsync: vi.fn<typeof GitRunner.gitExecFileAsync>(async (args, options) => {
+      if (
+        options.cwd === '/repo' &&
+        args[0] === 'remote' &&
+        args[1] === 'get-url' &&
+        args[2] === 'origin'
+      ) {
+        return { stdout: 'https://github.com/acme/widgets.git', stderr: '' }
+      }
+      return actual.gitExecFileAsync(args, options)
+    })
+  }
+})
 vi.mock('electron', () => ({
   ipcMain: { handle },
   ipcRenderer: { invoke },

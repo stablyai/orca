@@ -653,6 +653,7 @@ it('keeps the captured account through held status, real host selection, metadat
       const original = runtime.getStatus()
       const snapshot = {
         ...original,
+        runtimeId: runtime.getRuntimeId(),
         capabilities: original.capabilities?.filter(
           (capability) =>
             advertiseAccount || capability !== GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY
