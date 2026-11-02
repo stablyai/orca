@@ -55,7 +55,7 @@ export function WslMovePreviewBody(props: WslMovePreviewBodyProps): React.JSX.El
         <p data-testid="wsl-move-why">
           {translate(
             'wslMove.preview.why',
-            'Work then runs inside Linux, next to your files, so terminals, git and file changes are faster and more reliable. Your projects don’t change, and you can move any project back with “Use on this computer again”.'
+            'Work then runs inside Linux, next to your files, so terminals, Git and file changes are faster and more reliable. Your projects don’t change, and you can move any project back with “Use on this computer again”.'
           )}
         </p>
         <p className="text-muted-foreground">
