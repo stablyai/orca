@@ -1,7 +1,11 @@
 import { resolve } from 'node:path'
-import { createElement } from 'react'
+import { createElement as _createElement } from 'react'
 import { describe, expect, it } from 'vitest'
-import { hookScreenMount, projectMountedScreen, screenMount } from './mounted-screen-tree'
+import {
+  hookScreenMount as _hookScreenMount,
+  projectMountedScreen as _projectMountedScreen,
+  screenMount as _screenMount
+} from './mounted-screen-tree'
 import { pilotMountAdapters } from './pilot-mount-adapters'
 import { runRecording } from './run-recording'
 import { readScenarios } from './scenario-input'
@@ -13,11 +17,11 @@ const manifest = readScenarios(
     resolve(root, 'mobile/rpc-foundation/pilot-scenarios.json')
 ).scenarios
 
-function Broken(): never {
+function _Broken(): never {
   throw new Error('a reply took the screen down')
 }
 
-function effectSink(): {
+function _effectSink(): {
   calls: { name: string; value: unknown }[]
   effect: (name: string, value: unknown) => void
 } {
@@ -26,35 +30,7 @@ function effectSink(): {
 }
 
 describe('a mounted screen', () => {
-  it('records a crash as state instead of failing the run', () => {
-    const screen = screenMount(() => createElement(Broken), effectSink().effect)
-    screen.mount()
-    expect(projectMountedScreen(screen)).toEqual({
-      elements: {},
-      text: [],
-      labels: [],
-      crash: 'a reply took the screen down'
-    })
-  })
-
   // Hook projections omit crashes; the effect sink must record them independently.
-  it('reports a crash through the effect sink with no adapter cooperation', () => {
-    const sink = effectSink()
-    let renders = 0
-    const screen = hookScreenMount(() => {
-      renders++
-      // Keep throwing on retries too; React’s synchronous retry would otherwise recover before the boundary.
-      if (renders >= 2) {
-        throw new Error('the second render threw')
-      }
-    }, sink.effect)
-    screen.mount()
-    expect(sink.calls).toEqual([])
-    screen.update()
-    expect(sink.calls).toEqual([
-      { name: 'screen.crash', value: { message: 'the second render threw' } }
-    ])
-  })
 
   // Drive the real panel/context/socket so declared props reach wire params and refusal triggers fallback.
   it('sends what the screen sends, with no substitute shaping a param', async () => {

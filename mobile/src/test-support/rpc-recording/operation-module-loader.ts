@@ -33,6 +33,10 @@ export function operationModuleLoader(
   let natives: Map<string, unknown> | undefined
   const sharedModulePath = resolve(root, SHARED_MODULE)
   let mutationCount = 0
+  function readSource(file: string): string {
+    const source = readFileSync(file, 'utf8')
+    return source
+  }
   function pathFor(base: string): string {
     const file = ['', '.ts', '.tsx', '/index.ts']
       .map((suffix) => base + suffix)
@@ -67,7 +71,7 @@ export function operationModuleLoader(
       // Catalogs and other data modules carry no behavior; hand over their parsed value.
       return {
         __esModule: true,
-        default: JSON.parse(readFileSync(resolve(dirname(base), name), 'utf8'))
+        default: JSON.parse(readSource(resolve(dirname(base), name)))
       }
     }
     const file = pathFor(resolve(dirname(base), name))
@@ -115,7 +119,7 @@ export function operationModuleLoader(
               }
             } else if (!statement.exportClause) {
               const target = pathFor(resolve(dirname(file), name))
-              const text = readFileSync(target, 'utf8')
+              const text = readSource(target)
               if (
                 new RegExp(`export (?:async )?(?:function|const|class) ${String(key)}\\b`).test(
                   text
@@ -147,7 +151,7 @@ export function operationModuleLoader(
     if (cached) {
       return cached
     }
-    let source = readFileSync(file, 'utf8')
+    let source = readSource(file)
     const sourceIdentity = file.replaceAll('\\', '/')
     if (/mobile-tasks-(dependencies|legacy-foundation)\.tsx?$/.test(file)) {
       const result = barrel(file, source)

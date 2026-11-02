@@ -1,3 +1,6 @@
+import type * as GithubReplyMergeModule from '../../../tasks/use-mobile-tasks-github-reply-merge-actions'
+import type * as HostedCommentReviewModule from '../../../tasks/use-mobile-tasks-hosted-comment-review-actions'
+import { useTaskActionMountOwners } from '../task-action-mount-owners'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
@@ -11,6 +14,8 @@ const GITHUB_PR_ITEM = {
   title: 'A pull request',
   source: {
     id: 'github:pr:12',
+    url: 'https://github.com/owner/repo/pull/12',
+    prRepo: { owner: 'owner', repo: 'repo', host: 'github.com' },
     repoId: REPO_ID,
     number: 12,
     type: 'pr',
@@ -27,6 +32,7 @@ const GITHUB_ISSUE_ITEM = {
   title: 'An issue',
   source: {
     id: 'github:issue:9',
+    url: 'https://github.com/owner/repo/issues/9',
     repoId: REPO_ID,
     number: 9,
     type: 'issue',
@@ -154,12 +160,14 @@ type ModelHookSpec<Actions> = {
 }
 
 function mountModelHook<Actions>(
+  modules: ReturnType<typeof operationModuleLoader>,
   context: MountContext,
   spec: ModelHookSpec<Actions>
 ): MountedOperation {
   const model = observableModel(context, { client: context.client, ...spec.fixture })
   let actions!: Actions
   const hook = hookMount(() => {
+    useTaskActionMountOwners(modules, context, model, spec.fixture)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies every member the hook reads.
     actions = spec.useHook(model as unknown as never)
   })
@@ -193,9 +201,13 @@ export function taskItemConversationMountAdapters(
   const load = <T>(file: string): T => modules.load<T>(`mobile/src/tasks/${file}`)
   function commentReview(item: Record<string, unknown>, payload: Record<string, unknown>) {
     return (context: Parameters<MountAdapter>[0]) =>
-      mountModelHook(context, {
-        useHook: (model) =>
-          load<typeof import('../../../tasks/use-mobile-tasks-hosted-comment-review-actions')>(
+      mountModelHook(modules, context, {
+        useHook: (
+          model: Parameters<
+            typeof HostedCommentReviewModule.useMobileTasksHostedCommentReviewActions
+          >[0]
+        ) =>
+          load<typeof HostedCommentReviewModule>(
             'use-mobile-tasks-hosted-comment-review-actions.tsx'
           ).useMobileTasksHostedCommentReviewActions(model),
         fixture: {
@@ -225,9 +237,11 @@ export function taskItemConversationMountAdapters(
   }
   function replyMerge(item: Record<string, unknown>) {
     return (context: Parameters<MountAdapter>[0]) =>
-      mountModelHook(context, {
-        useHook: (model) =>
-          load<typeof import('../../../tasks/use-mobile-tasks-github-reply-merge-actions')>(
+      mountModelHook(modules, context, {
+        useHook: (
+          model: Parameters<typeof GithubReplyMergeModule.useMobileTasksGithubReplyMergeActions>[0]
+        ) =>
+          load<typeof GithubReplyMergeModule>(
             'use-mobile-tasks-github-reply-merge-actions.tsx'
           ).useMobileTasksGithubReplyMergeActions(model),
         fixture: {

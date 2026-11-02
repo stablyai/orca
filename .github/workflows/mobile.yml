@@ -23,6 +23,12 @@ on:
       - 'src/main/runtime/device-registry.ts'
       - 'src/main/runtime/orca-runtime.ts'
       - 'src/main/runtime/agent-session-*.ts'
+      # The phone/host contract program's unmocked desktop sources and its declaration owner's inputs.
+      - 'src/main/runtime/runtime-github-repository-query-commands.ts'
+      - 'src/main/github/issue-field-options.ts'
+      - 'config/tsconfig.test.mobile-host-declarations.json'
+      - 'config/tsconfig.node.json'
+      - 'src/types/build-constants.d.ts'
       - 'src/main/native-chat/agent-session-wire/**'
       - 'src/main/runtime/structured-attention-original-delivery.test-fixture.ts'
       # Rerun the only Fastfile-loading checks for release-workflow/Fastfile edits.
@@ -71,6 +77,12 @@ on:
       - 'src/main/runtime/device-registry.ts'
       - 'src/main/runtime/orca-runtime.ts'
       - 'src/main/runtime/agent-session-*.ts'
+      # The phone/host contract program's unmocked desktop sources and its declaration owner's inputs.
+      - 'src/main/runtime/runtime-github-repository-query-commands.ts'
+      - 'src/main/github/issue-field-options.ts'
+      - 'config/tsconfig.test.mobile-host-declarations.json'
+      - 'config/tsconfig.node.json'
+      - 'src/types/build-constants.d.ts'
       - 'src/main/native-chat/agent-session-wire/**'
       - 'src/main/runtime/structured-attention-original-delivery.test-fixture.ts'
       - '.github/workflows/mobile.yml'
@@ -197,7 +209,8 @@ jobs:
       # Why a ratchet and not the raw typecheck: mobile/tsconfig.json excludes test files, so until
       # tsconfig.test.json existed nothing checked them, and at introduction 127 of the 632 had
       # drifted. This fails when a test file that checks today stops checking, when a test leaves
-      # the program, and on @ts-nocheck; the baseline may only shrink.
+      # the program, and on @ts-nocheck; the baseline may only shrink. It then emits phone and host
+      # declarations and strictly checks the phone/host contract tests against them.
       - name: Typecheck tests (ratchet)
         id: test-types
         background: true
@@ -222,14 +235,17 @@ jobs:
           bun-version-file: config/.bun-version
           no-cache: true
 
+      # Compiler work (including the ratchet's declaration emission) finishes before Vitest workers start.
+      - wait: [production-types, test-types]
+
       - name: Test
         if: steps.test-scope.outputs.should_run != 'false'
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
         run: node ../config/scripts/run-mobile-ci-tests.mjs
 
-      # All checks read the completed install; compilers need not hold up test workers.
-      - wait: [production-types, test-types, ruby-tools]
+      # The Ruby checks below read the completed fastlane install.
+      - wait: ruby-tools
 
       # Decode hash-addressed golden behavior changes for review, including after failed tests; advisory only.
       - name: Summarize RPC recording changes
@@ -354,9 +370,9 @@ jobs:
           bun-version-file: config/.bun-version
           no-cache: true
 
+      - wait: [production-types, test-types]
+
       - name: Test
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
         run: node ../config/scripts/run-mobile-ci-tests.mjs
-
-      - wait: [production-types, test-types]

@@ -1,3 +1,4 @@
+import { useRef, useCallback } from 'react'
 import { useBottomDrawerFollowUp } from '../components/use-bottom-drawer-follow-up'
 import type { RouteAndItemStateModel } from './use-mobile-tasks-route-and-item-state'
 import type { WorkspaceSshRecord } from './workspace-ssh-gate'
@@ -81,7 +82,7 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   > | null>(null)
   const [setupPrompt, setSetupPrompt] = useState<SetupPrompt | null>(null)
   const [creatingKey, setCreatingKey] = useState<string | null>(null)
-  const [mutatingStatus, setMutatingStatus] = useState(false)
+  const { mutatingStatus, tryBeginMutation } = useMobileTasksMutation()
   const [linearStates, setLinearStates] = useState<LinearState[]>([])
   const [linearStatesLoading, setLinearStatesLoading] = useState(false)
   const [linearCommentDraft, setLinearCommentDraft] = useState('')
@@ -219,7 +220,7 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
     creatingKey,
     setCreatingKey,
     mutatingStatus,
-    setMutatingStatus,
+    tryBeginMutation,
     linearStates,
     setLinearStates,
     linearStatesLoading,
@@ -328,3 +329,25 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
 export type WorkspaceAndProjectStateModel = ReturnType<
   typeof useMobileTasksWorkspaceAndProjectState
 >
+
+export function useMobileTasksMutation() {
+  const inFlight = useRef(false)
+  const [mutatingStatus, setMutatingStatus] = useState(false)
+  const tryBeginMutation = useCallback(() => {
+    if (inFlight.current) {
+      return null
+    }
+    inFlight.current = true
+    setMutatingStatus(true)
+    let finished = false
+    return () => {
+      if (finished) {
+        return
+      }
+      finished = true
+      inFlight.current = false
+      setMutatingStatus(false)
+    }
+  }, [])
+  return { mutatingStatus, tryBeginMutation }
+}

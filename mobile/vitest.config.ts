@@ -12,7 +12,10 @@ export default defineConfig({
     alias: {
       'expo-crypto': fileURLToPath(
         new URL('./src/test-support/expo-crypto-node.ts', import.meta.url)
-      )
+      ),
+      // Phone/host contract tests import original sources at runtime; only their Node type check reads declarations.
+      '@orca/test-mobile': fileURLToPath(new URL('./src', import.meta.url)),
+      '@orca/test-host': fileURLToPath(new URL('../src', import.meta.url))
     }
   },
   test: {

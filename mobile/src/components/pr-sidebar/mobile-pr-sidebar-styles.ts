@@ -238,6 +238,19 @@ export const mobilePrSidebarStyles = themedStyleSheet(() => ({
     textAlign: 'center',
     lineHeight: 20
   },
+  refreshFailedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm
+  },
+  refreshFailedText: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: typography.bodySize,
+    lineHeight: 20
+  },
   retryButton: {
     minHeight: 44,
     flexDirection: 'row',

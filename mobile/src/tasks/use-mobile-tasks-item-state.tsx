@@ -4,7 +4,7 @@ import {
   type DetailPayload,
   groupDetailComments
 } from './mobile-tasks-legacy-foundation'
-import { useMemo, useRef, useState } from './mobile-tasks-dependencies'
+import { useCallback, useMemo, useRef, useState } from './mobile-tasks-dependencies'
 
 export function useMobileTasksItemState() {
   const [detailPayload, setDetailPayload] = useState<DetailPayload | null>(null)
@@ -29,6 +29,47 @@ export function useMobileTasksItemState() {
   const [expandedPrFilePath, setExpandedPrFilePath] = useState<string | null>(null)
   const [prFileContents, setPrFileContents] = useState<Record<string, GitHubPRFileContents>>({})
   const [prFileLoadingPath, setPrFileLoadingPath] = useState<string | null>(null)
+  const fileRequest = useRef<{ reload: () => void } | null>(null)
+  const interruptedFileRequest = useRef<{ reload: () => void } | null>(null)
+  const resetPrFiles = useCallback(() => {
+    fileRequest.current = null
+    interruptedFileRequest.current = null
+    setPrFileContents({})
+    setPrFileLoadingPath(null)
+    setExpandedPrFilePath(null)
+  }, [])
+  // Every connection change retires the open file read but keeps accepted contents and expansion; once connected it reads again.
+  const reconcilePrFileConnection = useCallback((connected: boolean) => {
+    if (fileRequest.current) {
+      interruptedFileRequest.current = fileRequest.current
+      fileRequest.current = null
+      setPrFileLoadingPath(null)
+    }
+    if (!connected) {
+      return
+    }
+    const interrupted = interruptedFileRequest.current
+    interruptedFileRequest.current = null
+    interrupted?.reload()
+  }, [])
+  const beginFileLoad = useCallback(
+    (path: string, canObserve: () => boolean, reload: () => void) => {
+      const request = { reload }
+      fileRequest.current = request
+      interruptedFileRequest.current = null
+      setPrFileLoadingPath(path)
+      return {
+        canPublish: () => fileRequest.current === request && canObserve(),
+        finish: () => {
+          if (fileRequest.current === request) {
+            fileRequest.current = null
+            setPrFileLoadingPath(null)
+          }
+        }
+      }
+    },
+    []
+  )
   const [prFileCommentDrafts, setPrFileCommentDrafts] = useState<Record<string, string>>({})
   const [copiedLinkKey, setCopiedLinkKey] = useState<string | null>(null)
   const copiedLinkResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -83,7 +124,9 @@ export function useMobileTasksItemState() {
     prFileContents,
     setPrFileContents,
     prFileLoadingPath,
-    setPrFileLoadingPath,
+    beginFileLoad,
+    resetPrFiles,
+    reconcilePrFileConnection,
     prFileCommentDrafts,
     setPrFileCommentDrafts,
     copiedLinkKey,

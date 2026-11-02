@@ -42,6 +42,7 @@ export class RpcClientRequestTracker {
       })
     }
 
+    requestOptions?.beforeSend?.()
     return this.sendConnectedRequest(
       method,
       params,

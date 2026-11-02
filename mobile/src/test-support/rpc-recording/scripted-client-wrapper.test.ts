@@ -1,35 +1,54 @@
 import { describe, expect, it } from 'vitest'
 import { ScriptedRpcTransport } from './scripted-rpc-transport'
+import { vitestRecordingScheduler } from './vitest-recording-scheduler'
 
-// Require one physical send per logical name in call order; dropped sends must fail before mislabelling later payloads.
-describe('a wrapper between the operation and the scripted transport', () => {
-  it('is caught when it swallows a send, rather than mislabelling the next payload', () => {
-    const transport = new ScriptedRpcTransport(
-      () => 0,
-      undefined,
-      (client) => ({
-        ...client,
-        sendRequest: (...args) =>
-          args[0] === 'alpha.one'
-            ? Promise.reject(new Error('the wrapper kept this one'))
-            : client.sendRequest(...args)
-      })
-    )
-    void transport.client.sendRequest('alpha.one').catch(() => undefined)
-    expect(() => transport.client.sendRequest('beta.two')).toThrow(/beta\.two.*alpha\.one#1/)
+describe('a transparent wrapper between the operation and the scripted transport', () => {
+  it('keeps the sibling identity and still rejects a swallowed invocation', async () => {
+    const clock = vitestRecordingScheduler()
+    await clock.start()
+    const transport = new ScriptedRpcTransport(clock.elapsed, undefined, (client) => ({
+      ...client,
+      sendRequest: (...args) =>
+        args[0] === 'alpha.one'
+          ? Promise.reject(new Error('the wrapper kept this one'))
+          : client.sendRequest(...args)
+    }))
+    try {
+      const swallowed = transport.client.sendRequest('alpha.one').catch(() => undefined)
+      const sibling = transport.client.sendRequest('beta.two')
+      await clock.flush()
+      expect(transport.payloads.map(({ name }) => name)).toEqual(['beta.two#1'])
+      transport.complete('beta.two#1', undefined, { ok: true, result: 'B' })
+      await Promise.all([swallowed, sibling])
+      await transport.dispose()
+      await clock.flush()
+      expect(() => transport.causality.assertTransparentCalls()).toThrow('swallowed alpha.one#1')
+    } finally {
+      await transport.dispose()
+      await clock.flush()
+      transport.causality.close()
+      clock.stop()
+    }
   })
 
-  it('is caught when it invents a send the operation never made', () => {
-    let inner: ((method: string) => Promise<unknown>) | null = null
-    new ScriptedRpcTransport(
-      () => 0,
-      undefined,
-      (client) => {
-        inner = (method) => client.sendRequest(method)
-        return client
-      }
-    )
-    expect(inner).not.toBeNull()
-    expect(() => inner?.('alpha.one')).toThrow(/cannot take the name \(no logical request\)/)
+  it('rejects an invented call before allocation', async () => {
+    const clock = vitestRecordingScheduler()
+    await clock.start()
+    let invented: (() => Promise<unknown>) | undefined
+    const transport = new ScriptedRpcTransport(clock.elapsed, undefined, (client) => {
+      invented = () => client.sendRequest('alpha.one')
+      return client
+    })
+    try {
+      expect(() => invented?.()).toThrow('no causal parent')
+      expect(transport.requests).toEqual([])
+      expect(transport.payloads).toEqual([])
+      expect(() => transport.check()).toThrow('no causal parent')
+    } finally {
+      await transport.dispose()
+      await clock.flush()
+      transport.causality.close()
+      clock.stop()
+    }
   })
 })

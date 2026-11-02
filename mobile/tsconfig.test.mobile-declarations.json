@@ -1,0 +1,36 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "incremental": false,
+    "noEmit": false,
+    "noEmitOnError": true,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "declarationMap": false,
+    "rootDir": "..",
+    "outDir": "./node_modules/.cache/phone-host-contract-types"
+  },
+  "files": [
+    "src/components/MobilePRSidebar.tsx",
+    "src/mobile-web-shell/bridge-host-test-fakes.ts",
+    "src/transport/stable-logical-rpc-client.ts",
+    "src/mobile-web-shell/bridge/bridge-port-pair-test-harness.ts",
+    "src/transport/rpc-client.ts",
+    "src/transport/rpc-delivery-ambiguity.ts",
+    "src/mobile-web-shell/bridge/bridge-client-errors.ts",
+    "src/test-support/rpc-recording/scenario-execution-mode.ts",
+    "src/test-support/rpc-recording/pilot-mount-adapters.ts",
+    "src/test-support/rpc-recording/recording-mismatch.ts",
+    "src/test-support/rpc-recording/run-recording.ts",
+    "src/test-support/rpc-recording/vitest-recording-scheduler.ts",
+    "src/test-support/rpc-recording/recording-scenario.ts",
+    "src/test-support/rpc-recording/recording-values.ts",
+    "src/test-support/bridged-parity/divergence-evidence.ts",
+    "src/test-support/rpc-recording/derived-goldens.ts",
+    "src/test-support/rpc-recording/golden-recording.ts",
+    "src/test-support/rpc-recording/scenario-input.ts"
+  ],
+  "include": ["**/*.d.ts"],
+  "exclude": ["node_modules"]
+}

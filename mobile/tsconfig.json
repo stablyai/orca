@@ -7,7 +7,9 @@
       "@noble/hashes/*": ["./node_modules/@noble/hashes/*"],
       "tweetnacl": ["./node_modules/tweetnacl"],
       "ws": ["./node_modules/@types/ws"],
-      "zod": ["./node_modules/zod"]
+      "zod": ["./node_modules/zod"],
+      "@orca/test-mobile/*": ["./src/*"],
+      "@orca/test-host/*": ["../src/*"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],

@@ -47,7 +47,7 @@ export function githubPrMountAdapters(
           })
         }
         if (name === 'assignable') {
-          return reads.fetchAssignableUsers(client, WORKTREE)
+          return reads.fetchAssignableUsers(client, WORKTREE, prRepo)
         }
         throw new Error(`Unknown pr read action: ${name}`)
       }

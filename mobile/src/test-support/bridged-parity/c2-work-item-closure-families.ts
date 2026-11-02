@@ -10,87 +10,90 @@ export const C2_WORK_ITEM_CLOSURE_FAMILIES: PageClosurePins = {
     'schedules-b3': 'identical'
   },
   'tasks.item-checks-files': {
-    'matrix-tasks.item-checks-files-github.addprreviewcomment-1': 'params-undefined',
-    'matrix-tasks.item-checks-files-github.prfilecontents-1': 'params-undefined',
-    'matrix-tasks.item-checks-files-github.rerunprchecks-1': 'params-undefined',
-    'matrix-tasks.item-checks-files-github.resolvereviewthread-1': 'params-undefined',
-    'matrix-tasks.item-checks-files-github.setprfileviewed-1': 'params-undefined',
-    'tk-item-checks-files': 'params-undefined'
+    'matrix-tasks.item-checks-files-github.addprreviewcomment-1': { verdict: 'bridge-contract' },
+    'matrix-tasks.item-checks-files-github.prfilecontents-1': { verdict: 'bridge-contract' },
+    'matrix-tasks.item-checks-files-github.rerunprchecks-1': { verdict: 'bridge-contract' },
+    'matrix-tasks.item-checks-files-github.resolvereviewthread-1': { verdict: 'bridge-contract' },
+    'matrix-tasks.item-checks-files-github.setprfileviewed-1': { verdict: 'bridge-contract' },
+    'tk-item-checks-files': { verdict: 'bridge-contract' }
   },
   'tasks.item-comment-github': {
-    'matrix-tasks.item-comment-github-github.addissuecomment-1': 'result-absent-settlement',
-    'tk-item-comment-github': 'identical'
+    'matrix-tasks.item-comment-github-github.addissuecomment-1': { verdict: 'bridge-contract' },
+    'tk-item-comment-github': { verdict: 'bridge-contract' }
   },
   'tasks.item-comment-gitlab': {
-    'matrix-tasks.item-comment-gitlab-gitlab.addissuecomment-1': 'result-absent-settlement',
-    'tk-item-comment-gitlab': 'identical'
+    'matrix-tasks.item-comment-gitlab-gitlab.addissuecomment-1': { verdict: 'bridge-contract' },
+    'tk-item-comment-gitlab': { verdict: 'bridge-contract' }
   },
   'tasks.item-comment-gitlab-mr': {
-    'matrix-tasks.item-comment-gitlab-mr-gitlab.addmrcomment-1': 'result-absent-settlement',
-    'tk-item-comment-gitlab-mr': 'identical'
+    'matrix-tasks.item-comment-gitlab-mr-gitlab.addmrcomment-1': { verdict: 'bridge-contract' },
+    'tk-item-comment-gitlab-mr': { verdict: 'bridge-contract' }
   },
   'tasks.item-detail-github': {
-    'matrix-tasks.item-detail-github-github.workitemdetails-1': 'result-absent-settlement',
-    'tk-item-detail-github': 'identical',
-    'tk-item-detail-github-reactions': 'identical'
+    'matrix-tasks.item-detail-github-status.get-1': { verdict: 'bridge-contract' },
+    'matrix-tasks.item-detail-github-github.workitemdetails-1': { verdict: 'bridge-contract' },
+    'tk-item-detail-github': { verdict: 'bridge-contract' },
+    'tk-item-detail-github-reactions': { verdict: 'bridge-contract' }
   },
   'tasks.item-detail-gitlab': {
-    'matrix-tasks.item-detail-gitlab-gitlab.workitemdetails-1': 'result-absent-settlement',
-    'tk-item-detail-gitlab': 'identical',
-    'tk-item-detail-gitlab-reactions': 'identical'
+    'matrix-tasks.item-detail-gitlab-gitlab.workitemdetails-2': { verdict: 'bridge-contract' },
+    'matrix-tasks.item-detail-gitlab-gitlab.workitemdetails-1': { verdict: 'bridge-contract' },
+    'tk-item-detail-gitlab': { verdict: 'bridge-contract' },
+    'tk-item-detail-gitlab-reactions': { verdict: 'bridge-contract' }
   },
   'tasks.item-detail-linear': {
-    'matrix-tasks.item-detail-linear-linear.getissue-1': 'result-absent-settlement',
-    'matrix-tasks.item-detail-linear-linear.issuecomments-1': 'result-absent-settlement',
-    'tk-item-detail-linear': 'identical'
+    'matrix-tasks.item-detail-linear-linear.getissue-1': { verdict: 'bridge-contract' },
+    'matrix-tasks.item-detail-linear-linear.issuecomments-1': { verdict: 'bridge-contract' },
+    'tk-item-detail-linear': { verdict: 'bridge-contract' }
   },
   'tasks.item-detail-metadata': {
-    'matrix-tasks.item-detail-metadata-github.listassignableusers-1': 'result-absent-settlement',
-    'matrix-tasks.item-detail-metadata-github.listlabels-1': 'result-absent-settlement',
-    'tk-item-detail-metadata': 'identical'
+    'tk-item-detail-metadata': { verdict: 'bridge-contract' }
   },
   'tasks.item-merge-gitlab': {
-    'matrix-tasks.item-merge-gitlab-gitlab.mergemr-1': 'result-absent-settlement',
-    'tk-item-merge-gitlab': 'identical'
+    'matrix-tasks.item-merge-gitlab-gitlab.mergemr-1': { verdict: 'bridge-contract' },
+    'tk-item-merge-gitlab': { verdict: 'bridge-contract' }
   },
   'tasks.item-metadata-github': {
-    'matrix-tasks.item-metadata-github-github.updatepr-1': 'result-absent-settlement',
-    'tk-item-metadata-github': 'identical'
+    'matrix-tasks.item-metadata-github-github.updatepr-1': { verdict: 'bridge-contract' },
+    'tk-item-metadata-github': { verdict: 'bridge-contract' }
   },
   'tasks.item-metadata-gitlab': {
-    'matrix-tasks.item-metadata-gitlab-gitlab.updateissue-1': 'result-absent-settlement',
-    'tk-item-metadata-gitlab': 'identical'
+    'matrix-tasks.item-metadata-gitlab-gitlab.updateissue-1': { verdict: 'bridge-contract' },
+    'tk-item-metadata-gitlab': { verdict: 'bridge-contract' }
   },
   'tasks.item-metadata-gitlab-mr': {
-    'matrix-tasks.item-metadata-gitlab-mr-gitlab.updatemr-1': 'params-undefined',
-    'tk-item-metadata-gitlab-mr': 'params-undefined'
+    'matrix-tasks.item-metadata-gitlab-mr-gitlab.updatemr-1': { verdict: 'bridge-contract' },
+    'tk-item-metadata-gitlab-mr': { verdict: 'bridge-contract' }
   },
   'tasks.item-reply-merge': {
-    'matrix-tasks.item-reply-merge-github.addissuecomment-1': 'result-absent-settlement',
-    'matrix-tasks.item-reply-merge-github.addprreviewcommentreply-1': 'result-absent-settlement',
-    'matrix-tasks.item-reply-merge-github.mergepr-1': 'result-absent-settlement',
-    'matrix-tasks.item-reply-merge-linear.updateissue-1': 'result-absent-settlement',
-    'tk-item-reply-merge': 'identical'
+    'matrix-tasks.item-reply-merge-github.addissuecomment-1': { verdict: 'bridge-contract' },
+    'matrix-tasks.item-reply-merge-github.addprreviewcommentreply-1': {
+      verdict: 'bridge-contract'
+    },
+    'matrix-tasks.item-reply-merge-github.mergepr-1': { verdict: 'bridge-contract' },
+    'matrix-tasks.item-reply-merge-linear.updateissue-1': { verdict: 'bridge-contract' },
+    'tk-item-reply-merge': { verdict: 'bridge-contract' }
   },
   'tasks.item-review-github': {
-    'matrix-tasks.item-review-github-github.prchecks-1': 'result-absent-settlement',
-    'matrix-tasks.item-review-github-github.requestprreviewers-1': 'result-absent-settlement',
-    'tk-item-review-github': 'identical'
+    'matrix-tasks.item-review-github-github.prchecks-1': { verdict: 'bridge-contract' },
+    'matrix-tasks.item-review-github-github.requestprreviewers-1': { verdict: 'bridge-contract' },
+    'tk-item-review-github': { verdict: 'bridge-contract' }
   },
   'tasks.item-status-gitlab': {
-    'matrix-tasks.item-status-gitlab-github.updateissue-1': 'result-absent-settlement',
-    'matrix-tasks.item-status-gitlab-gitlab.updateissue-1': 'result-absent-settlement',
-    'tk-item-status-gitlab': 'identical'
+    'matrix-tasks.item-status-gitlab-status.get-1': { verdict: 'bridge-contract' },
+    'matrix-tasks.item-status-gitlab-github.updateissue-1': { verdict: 'bridge-contract' },
+    'matrix-tasks.item-status-gitlab-gitlab.updateissue-1': { verdict: 'bridge-contract' },
+    'tk-item-status-gitlab': { verdict: 'bridge-contract' }
   },
   'tasks.item-status-gitlab-mr': {
-    'matrix-tasks.item-status-gitlab-mr-gitlab.updatemrstate-1': 'result-absent-settlement',
-    'tk-item-status-gitlab-mr': 'identical'
+    'matrix-tasks.item-status-gitlab-mr-gitlab.updatemrstate-1': { verdict: 'bridge-contract' },
+    'tk-item-status-gitlab-mr': { verdict: 'bridge-contract' }
   },
   'tasks.linear-item': {
-    'matrix-tasks.linear-item-linear.addissuecomment-1': 'result-absent-settlement',
-    'matrix-tasks.linear-item-linear.createissue-1': 'result-absent-settlement',
-    'matrix-tasks.linear-item-linear.getissue-1': 'result-absent-settlement',
-    'tk-linear-item': 'identical'
+    'matrix-tasks.linear-item-linear.addissuecomment-1': { verdict: 'bridge-contract' },
+    'matrix-tasks.linear-item-linear.createissue-1': { verdict: 'bridge-contract' },
+    'matrix-tasks.linear-item-linear.getissue-1': { verdict: 'bridge-contract' },
+    'tk-linear-item': { verdict: 'bridge-contract' }
   },
   'tasks.project-row-comments-issue': {
     'matrix-tasks.project-row-comments-issue-github.project.addissuecommentbyslug-1':
@@ -107,9 +110,10 @@ export const C2_WORK_ITEM_CLOSURE_FAMILIES: PageClosurePins = {
     'tk-project-row-comments-pr': 'identical'
   },
   'tasks.project-row-detail': {
-    'matrix-tasks.project-row-detail-github.project.workitemdetailsbyslug-1':
-      'result-absent-settlement',
-    'tk-project-row-detail': 'identical'
+    'matrix-tasks.project-row-detail-github.project.workitemdetailsbyslug-1': {
+      verdict: 'bridge-contract'
+    },
+    'tk-project-row-detail': { verdict: 'bridge-contract' }
   },
   'tasks.project-row-fields': {
     'matrix-tasks.project-row-fields-github.project.clearitemfield-1': 'result-absent-settlement',
@@ -119,12 +123,15 @@ export const C2_WORK_ITEM_CLOSURE_FAMILIES: PageClosurePins = {
     'tk-project-row-fields': 'identical'
   },
   'tasks.project-row-files-merge': {
-    'matrix-tasks.project-row-files-merge-github.addprreviewcomment-1': 'params-undefined',
-    'matrix-tasks.project-row-files-merge-github.mergepr-1': 'params-undefined',
-    'matrix-tasks.project-row-files-merge-github.prfilecontents-1': 'params-undefined',
-    'matrix-tasks.project-row-files-merge-github.updateissue-1': 'params-undefined',
-    'matrix-tasks.project-row-files-merge-github.updateprstate-1': 'params-undefined',
-    'tk-project-row-files-merge': 'params-undefined'
+    'matrix-tasks.project-row-files-merge-status.get-1': { verdict: 'bridge-contract' },
+    'matrix-tasks.project-row-files-merge-github.addprreviewcomment-1': {
+      verdict: 'bridge-contract'
+    },
+    'matrix-tasks.project-row-files-merge-github.mergepr-1': { verdict: 'bridge-contract' },
+    'matrix-tasks.project-row-files-merge-github.prfilecontents-1': { verdict: 'bridge-contract' },
+    'matrix-tasks.project-row-files-merge-github.updateissue-1': { verdict: 'bridge-contract' },
+    'matrix-tasks.project-row-files-merge-github.updateprstate-1': { verdict: 'bridge-contract' },
+    'tk-project-row-files-merge': { verdict: 'bridge-contract' }
   },
   'tasks.project-row-metadata-load': {
     'matrix-tasks.project-row-metadata-load-github.project.listassignableusersbyslug-1':

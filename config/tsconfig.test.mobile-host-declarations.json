@@ -1,0 +1,30 @@
+{
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": {
+    "composite": false,
+    "incremental": false,
+    "noEmit": false,
+    "noEmitOnError": true,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "declarationMap": false,
+    "rootDir": "..",
+    "outDir": "../mobile/node_modules/.cache/phone-host-contract-types"
+  },
+  "files": [
+    "../src/main/runtime/runtime-github-repository-query-commands.ts",
+    "../src/main/runtime/rpc/methods/github-repo-work-item-methods.ts",
+    "../src/main/runtime/orca-runtime.ts",
+    "../src/main/runtime/rpc/core.ts",
+    "../src/main/runtime/rpc/dispatcher-request-parsing.ts",
+    "../src/main/github/issue-field-options.ts",
+    "../src/types/build-constants.d.ts"
+  ],
+  "include": ["../src/shared/**/*.ts", "../src/shared/**/*.tsx"],
+  "exclude": [
+    "../src/shared/**/*.test.ts",
+    "../src/shared/**/*.test.tsx",
+    "../src/shared/**/*.spec.ts",
+    "../src/shared/**/*.spec.tsx"
+  ]
+}

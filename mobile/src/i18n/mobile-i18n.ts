@@ -1,4 +1,4 @@
-import i18next, { type TOptions } from 'i18next'
+import i18next, { type i18n, type TOptions } from 'i18next'
 import { resolvePluralFamilyKey } from '../../../src/shared/i18n-plural-family'
 import { pseudoLocalizeString } from '../../../src/shared/pseudo-localization'
 import { DEFAULT_UI_LOCALE, type SupportedUiLocale } from '../../../src/shared/ui-locale'
@@ -7,7 +7,7 @@ import { importLocaleCatalog } from './locale-catalog-imports'
 
 export type Translate = (key: string, fallback: string, options?: TOptions) => string
 
-export const mobileI18n = i18next.createInstance()
+export const mobileI18n: i18n = i18next.createInstance()
 
 void mobileI18n.init({
   lng: DEFAULT_UI_LOCALE,
