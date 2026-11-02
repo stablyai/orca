@@ -21,6 +21,7 @@ const COMMAND_IDENTITY: AgentJournalItemIdentity = {
   clientMessageId: 'command-turn:cmd-1'
 }
 const COMMAND_KEY = agentJournalItemKey(COMMAND_IDENTITY)
+const QUOTA_RESET_S = Math.floor(Date.now() / 1000) + 3600
 const IN_COMMAND: AgentJournalTurnScope = { kind: 'turn', turnItemId: COMMAND_KEY }
 const RUNNING = {
   kind: 'turn' as const,
@@ -113,6 +114,97 @@ function harness() {
 }
 
 describe('a captured /compact as the open Claude turn', () => {
+  it.each(['success', 'error_during_execution'])(
+    'retains account quota on a failed command with a %s envelope, before composing its result',
+    (subtype) => {
+      const h = harness()
+      h.begin('compact-input')
+      // Structured quota/compact sequence from the provider contract; not a new live capture.
+      h.frame({
+        type: 'rate_limit_event',
+        rate_limit_info: { status: 'rejected', rateLimitType: 'five_hour', resetsAt: QUOTA_RESET_S }
+      })
+      h.frame({ type: 'system', subtype: 'status', compact_result: 'failed' })
+      h.frame({
+        type: 'result',
+        subtype,
+        is_error: subtype !== 'success',
+        local_command: 'compact',
+        terminal_reason: null,
+        result: '',
+        num_turns: 0,
+        user_message_uuid: 'compact-input'
+      })
+      expect(h.commandTurn()).toMatchObject({ state: 'completed', outcome: 'failure' })
+      expect(h.drawn()).toEqual([
+        expect.objectContaining({
+          key: agentJournalItemKey({
+            provider: 'orca',
+            clientMessageId: `terminal-failure:claude:${COMMAND_KEY}`
+          }),
+          turnScope: IN_COMMAND,
+          body: expect.objectContaining({
+            kind: 'status',
+            tone: 'warning',
+            failure: {
+              kind: 'usageLimitReached',
+              usageLimit: { window: 'session', resetsAt: QUOTA_RESET_S * 1000 }
+            }
+          })
+        })
+      ])
+    }
+  )
+
+  it.each(['success', 'stop', 'unconfirmed', 'allowed', 'expired', 'other-error'])(
+    'does not turn %s into quota failure from an account observation',
+    (control) => {
+      const h = harness()
+      h.begin('compact-input')
+      h.frame({
+        type: 'rate_limit_event',
+        rate_limit_info: {
+          status: 'rejected',
+          rateLimitType: 'five_hour',
+          resetsAt: control === 'expired' ? 1 : QUOTA_RESET_S
+        }
+      })
+      if (control === 'success') {
+        h.frame({ type: 'system', subtype: 'compact_boundary' })
+      } else if (control !== 'unconfirmed') {
+        h.frame({ type: 'system', subtype: 'status', compact_result: 'failed' })
+      }
+      if (control === 'stop') {
+        h.translator.commandInterruptRequested(RUNNING.turnId)
+      }
+      if (control === 'allowed') {
+        h.frame({
+          type: 'rate_limit_event',
+          rate_limit_info: { status: 'allowed', rateLimitType: 'five_hour' }
+        })
+      }
+      h.frame({
+        type: 'result',
+        subtype: control === 'other-error' ? 'error_during_execution' : 'success',
+        is_error: control === 'other-error',
+        user_message_uuid: 'compact-input',
+        ...(control === 'other-error'
+          ? { api_error_status: 403, terminal_reason: 'api_error' }
+          : {})
+      })
+      expect(
+        h
+          .drawn()
+          .some(
+            (row) => row.body.kind === 'status' && row.body.failure?.kind === 'usageLimitReached'
+          )
+      ).toBe(false)
+      expect(h.commandTurn()?.outcome).toBe(
+        control === 'success' ? 'success' : control === 'stop' ? 'cancellation' : 'failure'
+      )
+    }
+  )
+
   it('ends a finished compaction as a success, drawing only the compaction separator', () => {
     const { replay, commandTurn, drawn, translator } = harness()
     replay(CAPTURED_COMPACT_SUCCEEDS)

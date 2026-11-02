@@ -72,7 +72,11 @@ export class AcpPromptTurns {
     return prompt !== undefined && absorbAcpCompactionFrame(prompt, extension, update)
   }
 
-  endCompaction(turn: string, ending: AcpTurnEnding): ProviderTimelineEvent[] | undefined {
+  endCompaction(
+    turn: string,
+    ending: AcpTurnEnding,
+    failureShown: boolean
+  ): ProviderTimelineEvent[] | undefined {
     const prompt = this.compacting(turn)
     if (!prompt?.compaction) {
       return undefined
@@ -80,6 +84,7 @@ export class AcpPromptTurns {
     return acpCompactionEnd({
       ...prompt,
       ...ending,
+      failureShown,
       compaction: prompt.compaction,
       thread: this.sessionId,
       dialect: this.dialect,

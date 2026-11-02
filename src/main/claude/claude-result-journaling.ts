@@ -1,6 +1,6 @@
 import { writeClaudeTerminalFailure } from './claude-terminal-failure'
 import type { ClaudeContextFacts } from './claude-context-facts'
-import { claudeCommandResultEnd } from './claude-command-turn'
+import { claudeCommandEnd } from './claude-command-turn'
 import type { ClaudeMessageJournalContext } from './claude-message-journaling'
 import type { ClaudeJournalPrompts } from './structured/journal/claude-structured-journal-prompts'
 import {
@@ -59,14 +59,28 @@ export function journalClaudeResult(
   if (settlesTurn) {
     prompts.retryPendingCancellations()
   }
-  const commandEnd = settlesTurn ? claudeCommandResultEnd(turn, sink, message, observedAt) : null
-  if (commandEnd === 'another-input') {
+  const command = settlesTurn ? turn.command : null
+  const commandResult = command ? claudeCommandEnd(command, message, observedAt) : null
+  if (command && !commandResult) {
     return
   }
   const failure = claudeResultFailure(message, leftToStop)
   const usageLimit = settlesTurn
-    ? usageLimits.result(message, failure !== null, usageEvidence)
+    ? usageLimits.result(
+        message,
+        failure !== null,
+        usageEvidence,
+        command &&
+          commandResult?.end.outcome === 'failure' &&
+          !leftToStop &&
+          (command.failed !== null || failure !== null)
+          ? (command.failed ?? {})
+          : undefined
+      )
     : null
+  if (command && commandResult?.row && !usageLimit) {
+    sink.appendItem(command.resultIdentity, commandResult.row, { turnScope: endedTurnScope })
+  }
   if (usageLimit && endedTurnIdentity) {
     writeClaudeTerminalFailure(sink, endedTurnIdentity, usageLimit)
   }
@@ -74,7 +88,10 @@ export function journalClaudeResult(
     turn.suppressReopenOnFailure(message.is_error === true)
     corrections.abandon()
     streamedText.finish({ completedAt: observedAt })
-    context.settle(message, commandEnd ?? claudeTurnEndForResult(message, observedAt, leftToStop))
+    context.settle(
+      message,
+      commandResult?.end ?? claudeTurnEndForResult(message, observedAt, leftToStop)
+    )
     streamedBlocks.clear()
     streamedText.settle()
   }

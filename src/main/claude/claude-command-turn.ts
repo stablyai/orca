@@ -15,8 +15,6 @@ import { claudeText } from './structured/journal/claude-structured-item-translat
 import { claudeResultFailure } from './structured/launch/claude-structured-provider-fallback'
 import type { ClaudeCurrentTurn, ClaudeTurnEnd } from './claude-turn-lifecycle-item'
 import { isRootClaudeFrame } from './claude-turn-opening'
-import type { ClaudeOpenTurn } from './claude-open-turn'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 
 export type ClaudeCommandTurn = {
   identity: AgentJournalItemIdentity
@@ -118,25 +116,4 @@ export function claudeCommandEnd(
         }
       }
     : { end, row: null }
-}
-
-/** Write the command result row before returning its turn end. */
-export function claudeCommandResultEnd(
-  turn: Pick<ClaudeOpenTurn, 'command' | 'turnScope'>,
-  sink: Pick<StructuredAgentSessionEventSink, 'appendItem'>,
-  message: Record<string, unknown>,
-  completedAt: number
-): ClaudeTurnEnd | 'another-input' | null {
-  const { command } = turn
-  if (!command) {
-    return null
-  }
-  const ended = claudeCommandEnd(command, message, completedAt)
-  if (!ended) {
-    return 'another-input'
-  }
-  if (ended.row) {
-    sink.appendItem(command.resultIdentity, ended.row, { turnScope: turn.turnScope })
-  }
-  return ended.end
 }

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   agentJournalTurnBody,
@@ -197,19 +198,137 @@ describe('ACP compaction settlement', () => {
 
   it("fails a compaction the agent answered with an error, in the agent's words", async () => {
     const { rig, command, prompt } = await compact(OPENCODE)
-    // -32000 means signed out to ACP; any other error code is the compaction's own failure.
-    rig.child().agent.fail(prompt, -32603, 'Summarization failed: 500')
+    const recorded = (await readAcpFixture('opencode-v1-provider-error')).find(
+      (frame) => frame.message.error !== undefined
+    )
+    const error = z
+      .object({ code: z.number(), message: z.string(), data: z.unknown() })
+      .parse(recorded?.message.error)
+    rig.child().agent.fail(prompt, error.code, error.message, error.data)
     const { turn, inside } = await ended(rig, command)
     expect(turn).toMatchObject({ state: 'completed', outcome: 'failure' })
     expect(inside).toEqual([
-      expect.objectContaining({
-        tone: 'error',
-        failure: expect.objectContaining({
-          kind: 'compactionFailed',
-          detail: { text: 'Summarization failed: 500', audience: 'person' }
+      { kind: 'status', tone: 'error', text: 'Internal error: CAPTURE_PROVIDER_400' }
+    ])
+  })
+
+  it.each(['turn_completed', 'prompt_complete'])(
+    'retains Grok quota classification from %s before its generic RPC error',
+    async (source) => {
+      const { rig, command, prompt } = await compact(GROK)
+      const { agent } = rig.child()
+      // Existing captured failure ordering; the reduced prompt-complete case has no diagnostic.
+      if (source === 'turn_completed') {
+        agent.notify('_x.ai/session_notification', {
+          sessionId: PROVIDER_SESSION,
+          update: {
+            sessionUpdate: 'retry_state',
+            type: 'failed',
+            error_type: 'api',
+            message: 'API failure'
+          },
+          _meta: { agentTimestampMs: 1 }
         })
+        agent.notify('_x.ai/session_notification', {
+          sessionId: PROVIDER_SESSION,
+          update: {
+            sessionUpdate: 'turn_completed',
+            prompt_id: command.turnId,
+            stop_reason: 'rate_limit',
+            elapsed_ms: 729
+          }
+        })
+      }
+      agent.notify('_x.ai/session/prompt_complete', {
+        sessionId: PROVIDER_SESSION,
+        promptId: command.turnId,
+        stopReason: 'rate_limit',
+        agentResult: null
+      })
+      agent.fail(prompt, -32603, 'Internal error')
+      const { turn, inside } = await ended(rig, command)
+      expect(turn).toMatchObject({ outcome: 'failure' })
+      expect(inside).toEqual([
+        expect.objectContaining({
+          kind: 'status',
+          tone: 'warning',
+          failure: {
+            kind: 'usageLimitReached',
+            detail: {
+              text: source === 'turn_completed' ? 'API failure' : 'Internal error',
+              audience: 'person'
+            }
+          }
+        })
+      ])
+      expect((await rig.rig.rows()).filter((row) => row.body.kind === 'status')).toHaveLength(1)
+    }
+  )
+
+  it('preserves OpenCode quota reset metadata in one ordinary failure row in the command turn', async () => {
+    const { rig, command, prompt } = await compact(OPENCODE)
+    const resetsAt = 65_000
+    rig.child().agent.fail(prompt, -32603, 'Rate limit exceeded. Please try again later.', {
+      service: 'session',
+      errorName: 'provider.rate-limit',
+      retryAfterMs: 60_000
+    })
+    const { turn, inside } = await ended(rig, command)
+    expect(turn).toMatchObject({ outcome: 'failure' })
+    expect(inside).toEqual([
+      expect.objectContaining({
+        tone: 'warning',
+        failure: expect.objectContaining({ kind: 'usageLimitReached', usageLimit: { resetsAt } })
       })
     ])
+    expect((await rig.rig.rows()).filter((row) => row.body.kind === 'status')).toHaveLength(1)
+  })
+
+  it('keeps a no-detail rate-limit result distinct from a command refusal', async () => {
+    const { rig, command, prompt } = await compact(GROK)
+    rig.child().agent.reply(prompt, { stopReason: 'rate_limit' })
+    const { turn, inside } = await ended(rig, command)
+    expect(turn).toMatchObject({ outcome: 'failure' })
+    expect(inside).toEqual([expect.objectContaining({ failure: { kind: 'usageLimitReached' } })])
+  })
+
+  it('ignores named late compaction failures after another prompt settles, preserving its original scope', async () => {
+    const { rig, command, prompt } = await compact(GROK)
+    const { agent } = rig.child()
+    agent.fail(prompt, -32603, 'Provider failed')
+    const original = await ended(rig, command)
+    for (const [index, clientMessageId] of ['next', 'barrier'].entries()) {
+      if (index === 1) {
+        agent.notify('_x.ai/session/prompt_complete', {
+          sessionId: PROVIDER_SESSION,
+          promptId: command.turnId,
+          stopReason: 'rate_limit',
+          agentResult: 'Late cause'
+        })
+        agent.notify('_x.ai/session_notification', {
+          sessionId: PROVIDER_SESSION,
+          update: {
+            sessionUpdate: 'turn_completed',
+            prompt_id: command.turnId,
+            stop_reason: 'rate_limit'
+          }
+        })
+      }
+      await rig.adapter.dispatch({
+        sessionId: SESSION,
+        clientMessageId,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: clientMessageId }] },
+        fence: 1
+      })
+      agent.reply(await rig.frame('session/prompt', index + 1), { stopReason: 'end_turn' })
+      await waitFor(async () => {
+        const turns = await rig.rig.turns()
+        expect(turns).toHaveLength(index + 2)
+        expect(turns.at(-1)).toMatchObject({ outcome: 'success' })
+      })
+    }
+    expect((await ended(rig, command)).inside).toEqual(original.inside)
+    expect((await rig.rig.rows()).filter((row) => row.body.kind === 'status')).toHaveLength(1)
   })
 
   it.each([

@@ -138,8 +138,15 @@ function notification(
     const detail = parsed.success
       ? failureDetail(parsed.data.stopReason, parsed.data.agentResult)
       : undefined
-    return parsed.success && detail
-      ? { disposition: 'map', turn: parsed.data.promptId, failureDetail: detail }
+    return parsed.success && FAILED_STOP_REASONS.includes(parsed.data.stopReason)
+      ? {
+          disposition: 'map',
+          turn: parsed.data.promptId,
+          failure: {
+            stopReason: parsed.data.stopReason,
+            ...(detail ? { failureDetail: detail } : {})
+          }
+        }
       : { disposition: 'ignore' }
   }
   if (canonical === 'x.ai/queue/changed') {

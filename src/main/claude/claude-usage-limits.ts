@@ -1,6 +1,7 @@
 import {
   agentSessionFailureFact,
-  providerDiagnostic
+  providerDiagnostic,
+  type ProviderDiagnostic
 } from '../../shared/agent-session/failures/agent-session-failure'
 import {
   agentSessionFailureWords,
@@ -81,9 +82,10 @@ export class ClaudeUsageLimits {
   result(
     message: Record<string, unknown>,
     failed: boolean,
-    evidence: ClaudeUsageLimitEvidence | null
+    evidence: ClaudeUsageLimitEvidence | null,
+    compactionFailure?: { detail?: ProviderDiagnostic }
   ): ClaudeUsageLimitRow | null {
-    if (!failed || evidence?.cause === 'other') {
+    if ((!failed && !compactionFailure) || evidence?.cause === 'other') {
       return null
     }
     const status = message.api_error_status
@@ -92,11 +94,17 @@ export class ClaudeUsageLimits {
       evidence?.cause === 'quota' ||
       (evidence?.cause === 'untyped' &&
         (status == null || status === 429) &&
-        (reason === null || LIMIT_TERMINAL_REASONS.includes(reason)))
+        (reason === null || LIMIT_TERMINAL_REASONS.includes(reason))) ||
+      (compactionFailure !== undefined &&
+        (status == null || status === 429) &&
+        (reason === null || LIMIT_TERMINAL_REASONS.includes(reason) || reason === 'blocking_limit'))
     if (!limited) {
       return null
     }
-    return this.row(claudeText(message.result) ?? '', evidence?.cause === 'quota')
+    return this.row(
+      compactionFailure?.detail?.text ?? claudeText(message.result) ?? '',
+      evidence?.cause === 'quota'
+    )
   }
 
   private record(info: Record<string, unknown> | null): void {
