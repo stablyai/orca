@@ -1,3 +1,4 @@
+import { insertAgentReferences, NativeChatAgentReference } from './native-chat-agent-reference'
 import { nativeChatDraftPositions } from './native-chat-composer-draft-memory'
 import { createNativeChatPastedTextHistory } from './native-chat-pasted-text-history'
 import { resolveNativeChatPastedText } from './native-chat-composer-pasted-text-references'
@@ -97,6 +98,7 @@ function NativePromptEditor({
           underline: false,
           trailingNode: false
         }),
+        NativeChatAgentReference,
         NativeChatSkill,
         NativeChatFileReference,
         NativeChatImageReference,
@@ -234,14 +236,13 @@ function NativePromptEditor({
     return subscribeToNativeChatComposerDraft(scopeKey, capture)
   }, [editor, scopeKey, historyPaths])
 
-  useLayoutEffect(() => {
-    editor?.setEditable(!disabled, false)
-  }, [disabled, editor])
+  useLayoutEffect(() => editor?.setEditable(!disabled, false), [disabled, editor])
 
   const input = useMemo<NativeChatComposerInput | null>(
     () =>
       editor
         ? {
+            insertAgentReferences: (references) => insertAgentReferences(editor, references),
             insertText: (text) => {
               const content = editor.schema.nodeFromJSON(promptTextContent(text))
               editor.view.dispatch(

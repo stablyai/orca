@@ -1,14 +1,37 @@
 import '../../../../../main/runtime/rpc/unused-default-rpc-methods.test-fixture'
+import {
+  workItemDetailsProvider,
+  accountCaptureProvider,
+  accountCaptureAccounts,
+  accountCaptureRepo,
+  workItemDetailsItem,
+  useWorkItemDetailsProbe,
+  response
+} from './work-item-details-provider.test-fixture'
 import { act } from 'react'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  createStore,
+  closeTestStores,
+  makeRepo,
+  testState
+} from '../../../../../main/persistence/persistence-test-harness'
+import { installGitHubProjectAccounts } from '../../../../../main/github/github-project-account'
+import { GITHUB_PULL_REQUEST_METHODS } from '../../../../../main/runtime/rpc/methods/github-pull-request-methods'
+import { clearRuntimeCompatibilityCache } from '@/runtime/runtime-compatibility-cache'
+
 import type * as GitRunner from '../../../../../main/git/runner'
-import type { PRComment } from '../../../../../shared/github/comment-types'
+import type * as GitHubClient from '../../../../../main/github/client'
+import type { WorkItemDetailsPublished as Published } from './work-item-details-provider.test-fixture'
 // @vitest-environment happy-dom
 import type {
   GitHubWorkItemDetails,
   GitHubWorkItem
 } from '../../../../../shared/github/work-item-types'
 import { listLabels } from '../../../../../main/github/issue-field-options'
-import { useRepoLabels } from '@/hooks/useGitHubRepoMetadata'
+import { useRepoLabels, useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
 import { GitHubWorkItemTargetContext } from './github-work-item-target-context'
 import { updateIssue } from '../../../../../main/github/issue-update'
 import { updatePullRequestBySlug } from '../../../../../main/github/project-view/pull-request-mutation'
@@ -19,7 +42,7 @@ import {
   runIssueUpdate
 } from '@/components/github/github-work-item-edit-mutations'
 import { createRoot } from 'react-dom/client'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import { WorkItemDetails } from '../../../../../shared/rpc-contract/github-repo-work-item-params'
 import { getWorkItemDetails } from '../../../../../main/github/work-item-details'
@@ -28,7 +51,8 @@ import { useGitHubWorkItemDetails } from './use-github-work-item-details'
 import {
   workItemDetailsCache,
   patchCachedWorkItemBody,
-  subscribeWorkItemDetailsCache
+  subscribeWorkItemDetailsCache,
+  invalidateWorkItemDetailsCacheForKey
 } from './work-item-details-cache'
 import { useAppStore } from '@/store'
 import { RpcDispatcher } from '../../../../../main/runtime/rpc/dispatcher'
@@ -36,19 +60,16 @@ import { OrcaRuntimeService } from '../../../../../main/runtime/orca-runtime'
 import { RuntimeGitHubRepositoryQueryCommands } from '../../../../../main/runtime/runtime-github-repository-query-commands'
 import { GITHUB_REPO_WORK_ITEM_METHODS } from '../../../../../main/runtime/rpc/methods/github-repo-work-item-methods'
 import { RPC_PARAMS_BY_METHOD } from '../../../../../shared/rpc-contract/rpc-params-catalog.generated'
-import { TASK_SOURCE_RUNTIME_CAPABILITIES } from '../../../../../shared/task-source-runtime-capabilities'
+import {
+  TASK_SOURCE_RUNTIME_CAPABILITIES,
+  GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY
+} from '../../../../../shared/task-source-runtime-capabilities'
 import { buildTaskSourceContextFromRepo } from '../../../../../shared/task-source-context'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 
-type Published = {
-  onCommentAdded: (comment: PRComment) => void
-  body: string
-  details: GitHubWorkItemDetails | null
-  detailsCacheKey: string | null
-  appendOptimisticComment: (comment: PRComment) => void
-}
 const published = vi.hoisted(() => new Map<string, Published>())
 vi.mock('@/store/selectors', () => ({ useAllWorktrees: () => [] }))
 vi.mock('@/lib/github-work-item-workspace-attachment', () => ({
@@ -133,7 +154,8 @@ vi.mock('../../../../../main/github/rate-limit', () => ({
   noteRepositoryRateLimitSpend: vi.fn(),
   spendsSharedGitHubComQuota: () => false
 }))
-vi.mock('../../../../../main/github/client', async () => ({
+vi.mock('../../../../../main/github/client', async (importOriginal) => ({
+  ...(await importOriginal<typeof GitHubClient>()),
   ...(await import('../../../../../main/github/client/fetch/get-work-item')),
   ...(await import('../../../../../main/github/client/check/get-pr-checks')),
   ...(await import('../../../../../main/github/client/fetch/get-pr-comments'))
@@ -152,51 +174,26 @@ vi.mock('@/runtime/local-runtime-capabilities', () => ({
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 
-function response(value: unknown) {
-  return { stdout: JSON.stringify(value) }
-}
 function item(owner: string): GitHubWorkItem {
-  return {
-    id: 'pr:93',
-    repoId: 'clone',
-    type: 'pr',
-    number: 93,
-    title: owner,
-    url: `https://${io.host}/${owner}/widgets/pull/93`,
-    prRepo: { owner, repo: 'widgets', host: io.host },
-    state: 'open',
-    labels: [],
-    author: null,
-    updatedAt: ''
-  }
-}
-function Metadata({ enabled }: { enabled: boolean }) {
-  useRepoLabels(enabled ? '/clone' : null, enabled ? 'clone' : null)
-  return null
+  return workItemDetailsItem(owner, io.host)
 }
 let view: ReturnType<typeof useGitHubWorkItemDetails>
 let root: ReturnType<typeof createRoot>
-function Probe({
-  opened,
-  sourceContext,
-  metadataEnabled = true
-}: {
-  opened: GitHubWorkItem
-  sourceContext?: TaskSourceContext
-  metadataEnabled?: boolean
-}) {
-  view = useGitHubWorkItemDetails({
-    workItem: opened,
-    repoPath: '/clone',
-    effectiveRepoId: 'clone',
-    sourceContext
+function Probe(args: Omit<Parameters<typeof useWorkItemDetailsProbe>[0], 'publish'>) {
+  return useWorkItemDetailsProbe({
+    ...args,
+    publish: (next) => {
+      view = next
+    }
   })
-  return (
-    <GitHubWorkItemTargetContext.Provider value={view.targetContext}>
-      <Metadata enabled={metadataEnabled} />
-    </GitHubWorkItemTargetContext.Provider>
-  )
 }
+
+let actualCallRuntimeRpc: typeof RuntimeRpcClient.callRuntimeRpc
+beforeAll(async () => {
+  actualCallRuntimeRpc = (
+    await vi.importActual<typeof RuntimeRpcClient>('@/runtime/runtime-rpc-client')
+  ).callRuntimeRpc
+})
 
 beforeEach(() => {
   useAppStore.setState({
@@ -222,199 +219,7 @@ beforeEach(() => {
   io.upstreamIsIssue = false
   io.unexpected.length = 0
   io.rpc.mockReset()
-  io.gh.mockReset().mockImplementation(async (args: string[]) => {
-    const owner =
-      args.includes('fork/widgets') ||
-      args.includes('owner=fork') ||
-      args.some((a) => a.startsWith('repos/fork/'))
-        ? 'fork'
-        : 'upstream'
-    const query = args.find((a) => a.startsWith('query=')) ?? ''
-    if (args.some((a) => a.endsWith('/labels'))) {
-      return { stdout: `${owner}-label` }
-    }
-    const issueReply = {
-      number: 93,
-      title: `${owner} issue`,
-      state: 'open',
-      html_url: `https://${io.host}/${owner}/widgets/issues/93`,
-      updated_at: '2026-10-28T00:00:00Z',
-      user: null,
-      labels: [],
-      assignees: [],
-      body: `${owner} issue body`
-    }
-    if (args[0] === 'issue' && args[1] === 'view') {
-      return response({
-        number: 93,
-        title: issueReply.title,
-        state: 'OPEN',
-        url: issueReply.html_url,
-        updatedAt: issueReply.updated_at,
-        author: null,
-        labels: []
-      })
-    }
-    if (args[0] === 'issue' && ['close', 'reopen', 'edit'].includes(args[1])) {
-      return { stdout: '' }
-    }
-    if (args[0] === 'api' && args.includes('PATCH')) {
-      if (args.some((arg) => /^repos\/(fork|upstream)\/widgets\/(issues|pulls)\/93$/.test(arg))) {
-        return response({ number: 93 })
-      }
-    }
-    if (args[0] === 'pr' && args[1] === 'view') {
-      if (io.upstreamIsIssue && owner === 'upstream') {
-        throw new Error('HTTP 404: Not Found')
-      }
-      return response({
-        number: 93,
-        title: owner,
-        state: 'OPEN',
-        url: item(owner).url,
-        labels: [],
-        updatedAt: '2026-10-28T00:00:00Z',
-        author: null,
-        isDraft: false,
-        headRefName: 'feature',
-        baseRefName: 'main',
-        headRefOid: `${owner}-head`,
-        reviewRequests: [],
-        latestReviews: []
-      })
-    }
-    if (args.some((arg) => /^repos\/(fork|upstream)\/widgets\/issues\/93$/.test(arg))) {
-      return response(issueReply)
-    }
-    if (query.includes('viewerViewedState')) {
-      return response({
-        data: {
-          repository: {
-            pullRequest: { participants: { nodes: [] } },
-            viewedPullRequest: {
-              id: `PR_${owner}`,
-              files: {
-                nodes: [{ path: `${owner}.ts`, viewerViewedState: 'UNVIEWED' }],
-                pageInfo: { hasNextPage: false }
-              }
-            }
-          }
-        }
-      })
-    }
-    if (query.includes('reviewThreads')) {
-      return response({
-        data: {
-          repository: {
-            pullRequest: {
-              comments: {
-                nodes: [
-                  {
-                    id: `COMMENT_${owner}`,
-                    databaseId: 1,
-                    author: null,
-                    body: `${owner} conversation`,
-                    createdAt: '2026-10-28',
-                    url: item(owner).url
-                  }
-                ]
-              },
-              reviews: { nodes: [] },
-              reviewThreads: { nodes: [] }
-            }
-          }
-        }
-      })
-    }
-    if (query.includes('statusCheckRollup')) {
-      return response({
-        data: {
-          repository: {
-            pullRequest: {
-              commits: {
-                nodes: [
-                  {
-                    commit: {
-                      statusCheckRollup: {
-                        contexts: {
-                          nodes: [
-                            {
-                              __typename: 'CheckRun',
-                              name: `${owner} check`,
-                              status: 'COMPLETED',
-                              conclusion: 'SUCCESS'
-                            }
-                          ]
-                        }
-                      }
-                    }
-                  }
-                ]
-              }
-            }
-          }
-        }
-      })
-    }
-    if (args.some((a) => a.includes('/files?'))) {
-      return response([
-        {
-          filename: `${owner}.ts`,
-          status: 'modified',
-          additions: 1,
-          deletions: 0,
-          changes: 1,
-          patch: '@@ -1 +1 @@\n-a\n+b'
-        }
-      ])
-    }
-    if (args.some((a) => a.endsWith('/pulls/93'))) {
-      if (io.upstreamIsIssue && owner === 'upstream') {
-        throw new Error('HTTP 404: Not Found')
-      }
-      return response({
-        number: 93,
-        title: owner,
-        state: 'open',
-        html_url: item(owner).url,
-        updated_at: '2026-10-28T00:00:00Z',
-        user: null,
-        labels: [],
-        assignees: [],
-        draft: false,
-        body: `${owner} body`,
-        head: { sha: `${owner}-head`, ref: 'feature', repo: { owner: { login: owner } } },
-        base: { sha: `${owner}-base`, ref: 'main', repo: { owner: { login: owner } } }
-      })
-    }
-    if (query.includes('viewerDefaultMergeMethod')) {
-      return response({
-        data: {
-          repository: {
-            viewerDefaultMergeMethod: 'SQUASH',
-            mergeCommitAllowed: true,
-            rebaseMergeAllowed: true,
-            squashMergeAllowed: true,
-            autoMergeAllowed: false,
-            mergeQueue: null,
-            ref: { rules: { nodes: [] } }
-          }
-        }
-      })
-    }
-    if (query.includes('participants(first: 100)')) {
-      return response({
-        data: {
-          repository: {
-            pullRequest: { participants: { nodes: [] } },
-            issue: { participants: { nodes: [] } }
-          }
-        }
-      })
-    }
-    io.unexpected.push(JSON.stringify(args))
-    throw new Error(`Unexpected gh command: ${JSON.stringify(args)}`)
-  })
+  io.gh.mockReset().mockImplementation(workItemDetailsProvider(io, item))
   io.setViewed.mockReset().mockResolvedValue(true)
   Object.defineProperty(window, 'api', {
     configurable: true,
@@ -430,11 +235,12 @@ beforeEach(() => {
             {},
             io.preference,
             parsed.ownerRepo,
-            parsed.canonical
+            parsed.canonical,
+            parsed.expectedGhAccount
           )
         },
         listLabels: async (args: Parameters<typeof window.api.gh.listLabels>[0]) =>
-          listLabels(args.repoPath, 'upstream', null, {}, args.ownerRepo),
+          listLabels(args.repoPath, 'upstream', null, {}, args.ownerRepo, args.expectedGhAccount),
         updateIssue: async (args: Parameters<typeof window.api.gh.updateIssue>[0]) =>
           updateIssue(
             args.repoPath,
@@ -664,7 +470,8 @@ it('carries actual ordinary and Refresh intent through the registered full aggre
         number: 93,
         type: 'issue',
         ownerRepo,
-        canonical: parsed.canonical
+        canonical: parsed.canonical,
+        expectedGhAccount: registered.ghAccount
       })
       expect(typeof parsed.canonical).toBe('boolean')
       intents.push(parsed.canonical === true)
@@ -799,5 +606,211 @@ it('carries actual ordinary and Refresh intent through the registered full aggre
   for (const [args] of strictComments.slice(2)) {
     expect(args).not.toContain('--cache')
     expect(args).toEqual(expect.arrayContaining(['--paginate', '--slurp']))
+  }
+  const changedAccount = { ...registered, ghAccount: { host: 'github.com', user: 'bob' } }
+  const releaseAccount = installGitHubProjectAccounts({ getRepos: () => [changedAccount] })
+  try {
+    io.gh.mockClear()
+    const priorMismatch = current.details
+    const failures = io.toastError.mock.calls.length
+    await act(async () => current.refreshTask())
+    expect(intents.at(-1)).toBe(true)
+    expect(io.gh).not.toHaveBeenCalled()
+    expect(current.details).toBe(priorMismatch)
+    expect(current.refreshing).toBe(false)
+    expect(io.toastError).toHaveBeenCalledTimes(failures + 1)
+  } finally {
+    releaseAccount()
+  }
+})
+
+it('keeps the captured account through held status, real host selection, metadata and Viewed settlement', async () => {
+  const { alice, bob } = accountCaptureAccounts
+  const registered = accountCaptureRepo
+  const source = buildTaskSourceContextFromRepo({
+    provider: 'github',
+    projectId: 'clone',
+    repo: registered
+  })!
+  testState.dir = mkdtempSync(join(tmpdir(), 'orca-pr36172-capture-'))
+  const hostStore = createStore()
+  hostStore.addRepo(makeRepo({ id: 'clone', path: '/clone', ghAccount: alice }))
+  const releaseAccount = installGitHubProjectAccounts(hostStore)
+  const runtime = new OrcaRuntimeService(hostStore)
+  vi.spyOn(runtime, 'getRuntimeId').mockReturnValue('capture-runtime')
+  const dispatcher = new RpcDispatcher({
+    runtime,
+    methods: [...GITHUB_REPO_WORK_ITEM_METHODS, ...GITHUB_PULL_REQUEST_METHODS]
+  })
+  io.rpc.mockImplementation(actualCallRuntimeRpc)
+  clearRuntimeCompatibilityCache()
+  let statusGate: ReturnType<typeof Promise.withResolvers<void>> | undefined =
+    Promise.withResolvers<void>()
+  let statusEntered = Promise.withResolvers<void>()
+  let advertiseAccount = true
+  const remote = vi.fn(async (args: Parameters<typeof window.api.runtimeEnvironments.call>[0]) => {
+    if (args.method === 'status.get') {
+      const original = runtime.getStatus()
+      const snapshot = {
+        ...original,
+        runtimeId: runtime.getRuntimeId(),
+        capabilities: original.capabilities?.filter(
+          (capability) =>
+            advertiseAccount || capability !== GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY
+        )
+      }
+      const gate = statusGate
+      statusEntered.resolve()
+      await gate?.promise
+      return { id: 'status', ok: true, result: snapshot }
+    }
+    expect(args.expectedEnvironmentRuntimeId).toBe('capture-runtime')
+    return dispatcher.dispatch({
+      id: 'capture',
+      authToken: 'fixture',
+      method: args.method,
+      params: args.params
+    })
+  })
+  Object.defineProperty(window.api, 'runtimeEnvironments', {
+    configurable: true,
+    value: { call: remote }
+  })
+  const terminal = io.gh.getMockImplementation()!
+  io.gh.mockImplementation(accountCaptureProvider(terminal))
+  let current!: ReturnType<typeof useGitHubWorkItemDetails>
+  let labels!: ReturnType<typeof useRepoLabels>
+  let assignees!: ReturnType<typeof useRepoAssignees>
+  const opened = item('fork')
+  function Options() {
+    labels = useRepoLabels('/clone', 'clone')
+    assignees = useRepoAssignees('/clone', 'clone')
+    return null
+  }
+  function Dialog() {
+    current = useGitHubWorkItemDetails({
+      workItem: opened,
+      repoPath: '/clone',
+      effectiveRepoId: 'clone',
+      sourceContext: source
+    })
+    return (
+      <GitHubWorkItemTargetContext.Provider value={current.targetContext}>
+        <Options />
+      </GitHubWorkItemTargetContext.Provider>
+    )
+  }
+  try {
+    useAppStore.setState({ repos: [registered] })
+    await act(async () => root.render(<Dialog />))
+    await statusEntered.promise
+    const aKey = current.detailsCacheKey!
+    hostStore.updateRepo({ id: 'clone' }, { ghAccount: bob })
+    await act(async () => {
+      statusGate?.resolve()
+      statusGate = undefined
+    })
+    expect(current.error).toContain('GitHub account changed')
+    expect(current.details).toBeNull()
+    expect(labels.error).toContain('GitHub account changed')
+    expect(assignees.error).toContain('GitHub account changed')
+    expect(labels.data).toEqual([])
+    expect(assignees.data).toEqual([])
+    expect(io.gh).not.toHaveBeenCalled()
+    expect(
+      remote.mock.calls
+        .filter(([args]) => args.method !== 'status.get')
+        .map(([args]) => args.params)
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'pr', canonical: false, expectedGhAccount: alice }),
+        expect.objectContaining({ expectedGhAccount: alice, ownerRepo: opened.prRepo })
+      ])
+    )
+    await act(async () => useAppStore.setState({ repos: [{ ...registered, ghAccount: bob }] }))
+    const bKey = current.detailsCacheKey!
+    expect(current.details?.body).toBe('fork body')
+    expect(current.error).toBeNull()
+    expect(labels.data).toEqual(['fork-label'])
+    expect(assignees.data).toEqual([{ login: 'assignee', name: null, avatarUrl: '' }])
+    expect(io.gh.mock.calls.every(([, options]) => options.ghAccount?.user === 'bob')).toBe(true)
+
+    // A new legitimate A demand captures A before the provider is held; later B cannot cancel it.
+    const providerEntered = Promise.withResolvers<void>()
+    const providerGate = Promise.withResolvers<void>()
+    const nextTerminal = io.gh.getMockImplementation()!
+    io.gh.mockImplementationOnce(async (...args) => {
+      providerEntered.resolve()
+      await providerGate.promise
+      return nextTerminal(...args)
+    })
+    hostStore.updateRepo({ id: 'clone' }, { ghAccount: alice })
+    await act(async () => {
+      invalidateWorkItemDetailsCacheForKey(aKey)
+      useAppStore.setState({ repos: [registered] })
+    })
+    await providerEntered.promise
+    hostStore.updateRepo({ id: 'clone' }, { ghAccount: bob })
+    await act(async () => useAppStore.setState({ repos: [{ ...registered, ghAccount: bob }] }))
+    const bDetails = current.details
+    await act(async () => providerGate.resolve())
+    expect(workItemDetailsCache.get(aKey)?.details?.body).toBe('fork body')
+    expect(workItemDetailsCache.get(aKey)?.pending).toBeUndefined()
+    expect(current.detailsCacheKey).toBe(bKey)
+    expect(current.details).toBe(bDetails)
+
+    // Viewed selects its payload after its existing compatibility wait, then uses the same capture guard.
+    clearRuntimeCompatibilityCache()
+    statusGate = Promise.withResolvers<void>()
+    statusEntered = Promise.withResolvers<void>()
+    let click!: Promise<boolean>
+    await act(async () => {
+      click = current.handlePRFileViewedChange('fork.ts', true)
+      await statusEntered.promise
+    })
+    expect(current.details?.files?.[0].viewerViewedState).toBe('VIEWED')
+    const readsBeforeRelease = remote.mock.calls.length
+    hostStore.updateRepo({ id: 'clone' }, { ghAccount: alice })
+    io.gh.mockClear()
+    await act(async () => {
+      statusGate?.resolve()
+      statusGate = undefined
+      expect(await click).toBe(false)
+    })
+    expect(io.gh).not.toHaveBeenCalled()
+    expect(remote.mock.calls.slice(readsBeforeRelease).map(([args]) => args.method)).toEqual([
+      'github.setPRFileViewed'
+    ])
+    expect(remote.mock.calls.at(-1)?.[0].params).toMatchObject({ expectedGhAccount: bob })
+    expect(current.details?.files?.[0].viewerViewedState).toBe('UNVIEWED')
+    expect(current.pendingViewedPaths.size).toBe(0)
+    expect(io.toastError).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('GitHub account changed')
+    )
+    hostStore.updateRepo({ id: 'clone' }, { ghAccount: bob })
+    await act(async () => {
+      expect(await current.handlePRFileViewedChange('fork.ts', true)).toBe(true)
+    })
+    expect(current.details?.files?.[0].viewerViewedState).toBe('VIEWED')
+    expect(current.pendingViewedPaths.size).toBe(0)
+    expect(io.gh).toHaveBeenCalled()
+    expect(io.gh.mock.calls.every(([, options]) => options.ghAccount?.user === 'bob')).toBe(true)
+    // Undeclared servers keep working, with the approved existing account-switch limitation.
+    advertiseAccount = false
+    clearRuntimeCompatibilityCache()
+    hostStore.updateRepo({ id: 'clone' }, { ghAccount: alice })
+    io.gh.mockClear()
+    await act(async () => {
+      expect(await current.handlePRFileViewedChange('fork.ts', false)).toBe(true)
+    })
+    expect(remote.mock.calls.at(-1)?.[0].params).not.toHaveProperty('expectedGhAccount')
+    expect(io.gh.mock.calls.every(([, options]) => options.ghAccount?.user === 'alice')).toBe(true)
+    expect(current.pendingViewedPaths.size).toBe(0)
+  } finally {
+    statusGate?.resolve()
+    releaseAccount()
+    clearRuntimeCompatibilityCache()
+    await closeTestStores()
+    rmSync(testState.dir, { recursive: true, force: true })
   }
 })

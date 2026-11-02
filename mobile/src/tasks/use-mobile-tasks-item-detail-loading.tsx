@@ -37,6 +37,7 @@ function gitLabHydrationUnchanged(
     current.failed === summary.failed &&
     current.pending === summary.pending &&
     current.neutral === summary.neutral &&
+    current.scope === summary.scope &&
     (status.mergeable === undefined || source.mergeable === status.mergeable) &&
     (status.reviewDecision === undefined || source.reviewDecision === status.reviewDecision) &&
     (status.reviewerCount === undefined || source.reviewerCount === status.reviewerCount)
@@ -153,7 +154,10 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
             assignees: details.assignees ?? [],
             pipelineJobs: details.pipelineJobs ?? []
           })
-          const checksSummary = buildGitLabCheckSummary(details.pipelineJobs ?? [])
+          const checksSummary = buildGitLabCheckSummary(
+            details.pipelineJobs ?? [],
+            details.pipeline
+          )
           const reviewDecision: Exclude<HostedReviewDecision, null> | undefined =
             details.approvalState?.approvalsRequired && details.approvalState.approvalsLeft === 0
               ? 'approved'

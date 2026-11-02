@@ -113,7 +113,7 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   ).runtimeRpcClientWithLayoutApply({
     ...(await importOriginal<typeof RpcClientModule>()),
     callRuntimeRpc: mocks.callRuntimeRpc,
-    ensureRuntimeEnvironmentCompatible: vi.fn(async () => undefined)
+    ensureRuntimeEnvironmentCompatible: vi.fn(async () => null)
   })
 )
 vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>

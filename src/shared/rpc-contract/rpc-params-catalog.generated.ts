@@ -330,7 +330,7 @@ import {
   RepoIssueCommandRead,
   RepoSelector,
   RepoShow,
-  RepoWithGitHubTarget,
+  RepoWithGitHubAccountExpectation,
   SlugRepo
 } from './github-repo-target-params'
 import {
@@ -520,6 +520,8 @@ import {
   PluginRpcConsentParams,
   PluginSetEnabledParams,
   PluginSetSystemEnabledParams,
+  PluginShotChromeParams,
+  PluginShotEditorParams,
   PluginShotParams,
   PluginShotReplayParams,
   PluginsPanelActionParams
@@ -683,6 +685,7 @@ import {
   UsageCredentialApiKeyParams,
   UsageCredentialSessionCookieParams
 } from './usage-credentials-params'
+import { CancelUsageLimitContinueParams } from './usage-limit-continue-params'
 import { LayoutReopenHeldPanesParams } from './workspace-layout-held-panes-params'
 import {
   LayoutApplyParams,
@@ -779,6 +782,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,
   'agentSession.agents': AgentsParams,
   'agentSession.cancel': CancelParams,
+  'agentSession.cancelUsageLimitContinue': CancelUsageLimitContinueParams,
   'agentSession.close': OptionsParams,
   'agentSession.commands': OptionsParams,
   'agentSession.continuationContext': ContinuationContextParams,
@@ -1079,10 +1083,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'github.countWorkItems': WorkItemsCount,
   'github.createIssue': CreateIssue,
   'github.issue': Issue,
-  'github.listAssignableUsers': RepoWithGitHubTarget,
+  'github.listAssignableUsers': RepoWithGitHubAccountExpectation,
   'github.listBindableAccounts': BindableAccounts,
   'github.listIssues': IssuesList,
-  'github.listLabels': RepoWithGitHubTarget,
+  'github.listLabels': RepoWithGitHubAccountExpectation,
   'github.listWorkItems': WorkItemsList,
   'github.markPRDraft': MarkPrDraft,
   'github.markPRReadyForReview': MarkPrReadyForReview,
@@ -1329,6 +1333,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,
   'plugins.consent': PluginRpcConsentParams,
   'plugins.devEmit': PluginDevEmitParams,
+  'plugins.devHook': PluginDevEmitParams,
   'plugins.devInspect': PluginDevInspectParams,
   'plugins.devLoad': PluginDevLoadParams,
   'plugins.devRequest': PluginDevRequestParams,
@@ -1344,6 +1349,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'plugins.setEnabled': PluginSetEnabledParams,
   'plugins.setSystemEnabled': PluginSetSystemEnabledParams,
   'plugins.shot': PluginShotParams,
+  'plugins.shotChrome': PluginShotChromeParams,
+  'plugins.shotEditor': PluginShotEditorParams,
   'plugins.shotReplay': PluginShotReplayParams,
   'preflight.check': PreflightCheck,
   'preflight.detectAgents': PreflightProjectAgentDetection,

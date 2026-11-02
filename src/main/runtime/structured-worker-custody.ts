@@ -1,7 +1,7 @@
 /** Custody uses worker-terminal state rather than process liveness: mail can start an agent at rest.
  * Only released ends addressability; pending/unknown releases still route. Reclaimable workers owe no work and may rest. */
 
-import type { AgentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { buildOrchestrationTaskDisplayMetadata } from '../../shared/orchestration-task-display'
 import { isOrcaSessionId } from '../../shared/orca-session-address'
 import { canonicalOrcaSessionId } from './orchestration/canonical-orca-session-id'

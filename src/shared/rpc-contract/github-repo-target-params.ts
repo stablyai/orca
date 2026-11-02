@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { normalizeGhAccountBinding } from '../github/account-binding'
 import { OptionalBoolean, OptionalString, requiredString } from './rpc-param-primitives'
 import { OptionalExecutionHostId } from './worktree-params'
 
@@ -20,3 +21,22 @@ export const SlugRepo = z.object({
 })
 
 export const RepoWithGitHubTarget = RepoSelector.extend({ ownerRepo: SlugRepo.optional() })
+
+export const OptionalGhAccountExpectation = z
+  .unknown()
+  .transform((value, ctx) => {
+    if (value === undefined || value === null) {
+      return value
+    }
+    const binding = normalizeGhAccountBinding(value)
+    if (!binding) {
+      ctx.addIssue({ code: 'custom', message: 'Invalid GitHub account expectation' })
+      return z.NEVER
+    }
+    return binding
+  })
+  .optional()
+
+export const RepoWithGitHubAccountExpectation = RepoWithGitHubTarget.extend({
+  expectedGhAccount: OptionalGhAccountExpectation
+})

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { RepoSelector, SlugRepo } from './github-repo-target-params'
+import { OptionalGhAccountExpectation, RepoSelector, SlugRepo } from './github-repo-target-params'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 
 export const WorkItemsList = RepoSelector.extend({
@@ -31,7 +31,8 @@ export const WorkItemByOwnerRepo = RepoSelector.extend({
 
 export const WorkItemDetails = WorkItem.extend({
   ownerRepo: SlugRepo.optional(),
-  canonical: z.boolean().optional()
+  canonical: z.boolean().optional(),
+  expectedGhAccount: OptionalGhAccountExpectation
 })
 
 export const WorkItemsCount = RepoSelector.extend({

@@ -18,12 +18,12 @@ import type {
   AgentJournalCursor,
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-identity'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentJournalItemBody,
   AgentJournalProducerLinkage
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLoad } from './journal-open'
@@ -79,6 +79,8 @@ export function replaceJournalEpoch(input: {
   reason: AgentJournalEpochReason
   fence: number
   items: readonly JournalReplacementItem[]
+  /** The caller's completion receipt writes after the new epoch's records, in the same
+   * transaction, so it can restore the replaced conversation on `db`. */
   receipt?: (cursor: AgentJournalCursor) => JournalOperationReceipt
   isLiveGoal?: (id: string) => boolean
   claimAttachments?: JournalAttachmentClaim
@@ -257,8 +259,15 @@ export function replaceJournalEpoch(input: {
       }
       input.queue.receipt.write(db)
       publishJournalSessionEpoch(db, input.identity, epoch)
+      const publication = publishJournalOutcomeEpoch(
+        db,
+        sessionId,
+        state.epoch,
+        rows,
+        input.previous
+      )
       receipt?.write(db)
-      return publishJournalOutcomeEpoch(db, sessionId, state.epoch, rows, input.previous)
+      return publication
     },
     false,
     (publication) => {

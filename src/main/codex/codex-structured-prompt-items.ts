@@ -3,7 +3,7 @@ import type {
   AgentJournalPromptOption,
   AgentJournalQuestionItem
 } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import { boundInlineText } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { boundJournalPromptText } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
 import {

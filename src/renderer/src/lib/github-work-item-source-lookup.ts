@@ -1,3 +1,4 @@
+import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import { getWorkItemRepo } from './work-item-repo-row'
 import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
@@ -43,6 +44,7 @@ type GitHubWorkItemDetailsLookupArgs = {
   ownerRepo?: GitHubOwnerRepo | null
   target?: RuntimeClientTarget
   canonical?: boolean
+  expectedGhAccount?: GhAccountBinding | null
   accepts?: () => boolean
   rpcOptions?: Parameters<typeof callRuntimeRpc>[3]
 }
@@ -163,6 +165,7 @@ export async function lookupGitHubWorkItemDetailsForSource(
           ? { kind: 'environment', environmentId: runtimeHost.environmentId }
           : { kind: 'local' }),
       ownerRepo: args.ownerRepo,
+      expectedGhAccount: args.expectedGhAccount,
       canonical: args.canonical ?? false,
       read: true,
       method: 'github.workItemDetails',

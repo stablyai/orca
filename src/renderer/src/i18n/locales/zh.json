@@ -173,7 +173,7 @@
         "inheritFont": "与 IDE 字体相同",
         "fontPreviewLabel": "聊天字体预览",
         "fontPreview": "这段文字用于预览聊天字体。",
-        "title": "聊天",
+        "title": "聊天界面",
         "textSize": "文字大小",
         "textSizeDescription": "消息、工具活动和消息输入框。在聊天中按 {{increase}} / {{decrease}} 也会更改此设置。",
         "codeTextSize": "代码文字大小",
@@ -7434,7 +7434,6 @@
           "9d3e56ca36": "应用更改",
           "f96688b6bc": "取消",
           "b7ddae600c": "完成",
-          "e4bda7ce6f": "在此系统上未找到 Ghostty 配置。",
           "b58d4c9051": "不支持的按键",
           "674b5ccd6b": "无需导入新设置 — 您当前设置已经匹配。",
           "a4c5dec640": "要更新的设置",
@@ -13357,6 +13356,7 @@
                 "baseCommitLabel": "基础提交：",
                 "failingChecks_one": "{{count}} 项检查失败",
                 "failingChecks_other": "{{count}} 项检查失败",
+                "pipelineFailed": "{{name}} 失败",
                 "pendingChecks_one": "{{count}} 项检查待处理",
                 "pendingChecks_other": "{{count}} 项检查待处理",
                 "unresolvedChecks_one": "{{count}} 项检查未解决",
@@ -18374,6 +18374,7 @@
       "failureWords": {
         "theAgent": "智能体",
         "providerStartFailed": "{{agent}} 在完成启动前已停止。",
+        "savedConversationMissing": "{{agent}} 找不到此聊天已保存的对话。",
         "runCommandAgain": "请重新运行 /{{command}}。",
         "sendToTryAgain": "请发送您的消息以重试。",
         "sendAgainToTryOnceMore": "请重新发送您的消息，再试一次。",
@@ -19268,6 +19269,13 @@
         "switchAccount": "切换账号",
         "addAccount": "添加账号…",
         "accountUnavailable": "此聊天无法切换到其他账户。请将其移交给其他智能体。"
+      },
+      "usageLimitAutoContinue": {
+        "cancelFailed": "无法取消自动继续。请重试。",
+        "openSetting": "额度重置后自动继续",
+        "cancelled": "Orca 不会自动继续此聊天。",
+        "scheduled": "Orca 将在 {{time}} 继续此聊天。",
+        "cancel": "不要继续"
       }
     },
     "tab": {
@@ -19696,7 +19704,12 @@
         "queueSearchSteer": "立即发送",
         "shellEnvSearchVariables": "环境变量",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "代理"
+        "shellEnvSearchProxy": "代理",
+        "usageLimitContinueTitle": "使用额度重置后自动继续聊天",
+        "usageLimitContinueCopy": "额度重置后，Orca 会发送“Continue where you left off.”。适用于所有已知重置时间的聊天。",
+        "usageLimitContinueSearchLimit": "使用额度",
+        "usageLimitContinueSearchReset": "重置",
+        "usageLimitContinueToggleLabel": "切换使用额度重置后自动继续聊天"
       }
     },
     "agentChildRow": {
@@ -19736,7 +19749,23 @@
     },
     "newWorkspace": {
       "agentOptional": "智能体 [可选]",
-      "createDescription": "选择项目和工作区名称。如果想启动智能体，请选择一个。"
+      "createDescription": "选择项目和工作区名称。如果想启动智能体，请选择一个。",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "选择是否在创建此工作区前运行设置。",
+        "cancel": "取消",
+        "retry": "重试",
+        "setupScript": "设置脚本",
+        "defaultTabCommands": "默认标签页命令",
+        "setupAndDefaultTabs": "设置及默认标签页命令",
+        "askRunSetup": "立即运行设置？",
+        "askRunDefaultTabs": "立即运行默认标签页命令？",
+        "askRunSetupAndDefaultTabs": "立即运行设置及默认标签页命令？",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + 本地",
+        "localSource": "本地设置"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "另一个议题更改正在进行中。"
@@ -20302,7 +20331,10 @@
       "title": "将 {{distro}} 作为主机运行（推荐）",
       "why": "Git、文件和终端将在 Linux 中原生运行，而不是通过 Windows 文件共享。",
       "accept": "作为主机运行",
-      "projectNotFound": "找不到要移动的已添加项目。请在侧边栏的项目上使用“移到 {{distro}} 主机…”。"
+      "projectNotFound": "找不到要移动的已添加项目。请在侧边栏的项目上使用“移到 {{distro}} 主机…”。",
+      "existingTitle": "添加到 {{distro}} 主机（推荐）",
+      "existingWhy": "{{distro}} 已作为主机运行，因此 Git、文件和终端将在 Linux 中原生运行，而不是通过 Windows 文件共享。",
+      "existingAccept": "添加到主机"
     }
   },
   "editor": {
@@ -20829,6 +20861,7 @@
     "scanIssues": {
       "issuesOmitted": "已省略其他扫描问题。",
       "sessionMetadataUnreadable": "本次扫描未能读取会话元数据。",
+      "transcriptTooLarge": "有一个 {{label}} 会话过大，无法在会话历史中加载。请尝试直接在 {{label}} 中恢复该会话。",
       "openCodeScannerUnavailable": "由于无法启动后台扫描器，已跳过 OpenCode 历史记录；应用仍可正常响应。",
       "openCodeScanIncomplete": "OpenCode 历史记录扫描未完成：{{detail}}",
       "openCodeWslReaderPreparing": "正在准备 WSL SQLite 读取器。设置完成后请刷新 Vault。",
@@ -22280,7 +22313,9 @@
     "toggleArguments": "切换参数显示",
     "argumentsTerminalHint": "仅适用于终端（CLI）启动",
     "searchAgentModels": "搜索 {{agent}} 模型…",
-    "legacyModelCount": "{{total}} 个模型"
+    "legacyModelCount": "{{total}} 个模型",
+    "promptPlaceholder": "添加提示词（可选）：/ 选择技能，@ 选择文件",
+    "promptPlaceholderFilesOnly": "添加提示词（可选）：@ 选择文件"
   },
   "wslMove": {
     "entry": {
@@ -22310,7 +22345,8 @@
       "changed": "之前已移动，之后又被旧版 Orca 在此处更改。不会再次移动。",
       "chatsStay": "现有聊天保留在此电脑上。此项目中的新聊天将在 WSL 主机上开始。",
       "browserLoginsConflict": "浏览器登录状态不会迁移，因为主机的浏览器配置文件已在使用中。移动后，请在主机的浏览器标签页中重新登录。",
-      "browserLoginsNotCarried": "浏览器登录状态不会迁移到此主机。移动后，请在其浏览器标签页中重新登录。"
+      "browserLoginsNotCarried": "浏览器登录状态不会迁移到此主机。移动后，请在其浏览器标签页中重新登录。",
+      "why": "之后工作会在 Linux 中、紧挨着你的文件运行，因此终端、Git 和文件更改会更快、更可靠。你的项目不会改变，也可以随时用“重新在此电脑上使用”把任意项目移回来。"
     },
     "cancel": "取消",
     "progress": {

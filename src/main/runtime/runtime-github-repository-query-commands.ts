@@ -1,3 +1,4 @@
+import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { ListWorkItemsResult } from '../../shared/github/work-item-types'
 import type { Repo } from '../../shared/repo-types'
@@ -106,22 +107,23 @@ export class RuntimeGitHubRepositoryQueryCommands {
     number: number,
     type?: 'issue' | 'pr',
     ownerRepo?: GitHubOwnerRepo,
-    canonical?: boolean
+    canonical?: boolean,
+    expectedGhAccount?: GhAccountBinding | null
   ): Promise<Awaited<ReturnType<typeof getWorkItemDetails>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
-    return getWorkItemDetails(
+    const args = [
       repo.path,
       number,
       type,
       getRepoRoutingConnectionId(repo),
       this.deps.getLocalGitArgs(repo)[0] ?? {},
       repo.issueSourcePreference,
-      ...(canonical !== undefined
-        ? ([ownerRepo, canonical] as const)
-        : ownerRepo
-          ? ([ownerRepo] as const)
-          : ([] as const))
-    )
+      ownerRepo,
+      canonical === true
+    ] as const
+    return expectedGhAccount === undefined
+      ? getWorkItemDetails(...args)
+      : getWorkItemDetails(...args, expectedGhAccount)
   }
 
   async countRepoWorkItems(repoSelector: string, query?: string): Promise<number> {
@@ -137,9 +139,20 @@ export class RuntimeGitHubRepositoryQueryCommands {
 
   async listRepoLabels(
     repoSelector: string,
-    ownerRepo?: GitHubOwnerRepo
+    ownerRepo?: GitHubOwnerRepo,
+    expectedGhAccount?: GhAccountBinding | null
   ): Promise<Awaited<ReturnType<typeof listLabels>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+    if (expectedGhAccount !== undefined) {
+      return listLabels(
+        repo.path,
+        repo.issueSourcePreference,
+        getRepoRoutingConnectionId(repo),
+        this.deps.getLocalGitArgs(repo)[0] ?? {},
+        ownerRepo,
+        expectedGhAccount
+      )
+    }
     return ownerRepo
       ? listLabels(
           repo.path,
@@ -158,9 +171,20 @@ export class RuntimeGitHubRepositoryQueryCommands {
 
   async listRepoAssignableUsers(
     repoSelector: string,
-    ownerRepo?: GitHubOwnerRepo
+    ownerRepo?: GitHubOwnerRepo,
+    expectedGhAccount?: GhAccountBinding | null
   ): Promise<Awaited<ReturnType<typeof listAssignableUsers>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+    if (expectedGhAccount !== undefined) {
+      return listAssignableUsers(
+        repo.path,
+        repo.issueSourcePreference,
+        getRepoRoutingConnectionId(repo),
+        this.deps.getLocalGitArgs(repo)[0] ?? {},
+        ownerRepo,
+        expectedGhAccount
+      )
+    }
     return ownerRepo
       ? listAssignableUsers(
           repo.path,

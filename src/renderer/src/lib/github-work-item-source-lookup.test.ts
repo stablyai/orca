@@ -1,5 +1,6 @@
 import { WorkItemDetails } from '../../../shared/rpc-contract/github-repo-work-item-params'
 import {
+  GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY,
   GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY,
   GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY
 } from '../../../shared/task-source-runtime-capabilities'
@@ -320,7 +321,7 @@ describe('GitHub source lookup routing', () => {
       body: 'matching full result',
       comments: []
     }
-    const oldSchema = WorkItemDetails.omit({ canonical: true })
+    const oldSchema = WorkItemDetails.omit({ canonical: true, expectedGhAccount: true })
     expect(
       oldSchema.parse({
         repo: 'runtime-repo',
@@ -352,7 +353,8 @@ describe('GitHub source lookup routing', () => {
         ownerRepo,
         number: 42,
         type: 'issue',
-        canonical
+        canonical,
+        expectedGhAccount: { host: 'github.com', user: 'Alice' }
       })
     await expect(read(false)).resolves.toEqual(details)
     await expect(read(true)).resolves.toEqual(details)
@@ -374,5 +376,26 @@ describe('GitHub source lookup routing', () => {
       { repo: 'runtime-repo', number: 42, type: 'issue', ownerRepo, canonical: true }
     ])
     expect(callRuntimeRpc).toHaveBeenCalledTimes(9)
+    capabilities.push(GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY)
+    await expect(read(false)).resolves.toEqual(details)
+    await expect(read(true)).resolves.toEqual(details)
+    expect(delivered.slice(4)).toEqual([
+      {
+        repo: 'runtime-repo',
+        number: 42,
+        type: 'issue',
+        ownerRepo,
+        canonical: false,
+        expectedGhAccount: { host: 'github.com', user: 'Alice' }
+      },
+      {
+        repo: 'runtime-repo',
+        number: 42,
+        type: 'issue',
+        ownerRepo,
+        canonical: true,
+        expectedGhAccount: { host: 'github.com', user: 'Alice' }
+      }
+    ])
   })
 })

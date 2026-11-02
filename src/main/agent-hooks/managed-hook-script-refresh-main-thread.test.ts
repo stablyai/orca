@@ -120,7 +120,9 @@ describe('managed hook script refresh stays off the main thread', () => {
     expect(syncCallsUnderHome()).toEqual([])
     const refreshed = await readFile(claudeScript, 'utf8')
     expect(refreshed).not.toBe('stale')
-    expect(refreshed).toContain(process.platform === 'win32' ? 'echo {}' : 'printf "{}\\n"')
+    expect(refreshed).toContain(
+      process.platform === 'win32' ? 'echo {}' : 'trap orca_hook_finish EXIT'
+    )
     await expect(readFile(modScript, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
     for (const mod of profileMods) {
       await expect(readFile(mod, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })

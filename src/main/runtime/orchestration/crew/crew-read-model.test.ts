@@ -8,7 +8,7 @@ import { buildCrewSnapshot, CrewReadModel } from './crew-read-model'
 import { subscribeCrew } from './crew-stream'
 import type { OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 
 import { fixture } from './crew-read-model.test-fixture'
 
@@ -105,6 +105,50 @@ describe('public crew read and stream', () => {
       sendAddress: 'term_worker'
     })
     expect(reopened).not.toHaveProperty('pendingQuestion')
+  })
+})
+
+it("keeps a worker's last real message over Orca's own records", () => {
+  const { db, deps, assign } = fixture()
+  const worker = assign('term_worker')
+  db.insertMessage({
+    from: 'term_worker',
+    to: 'term_coord',
+    subject: 'Update',
+    body: 'Read 3 files'
+  })
+  // Orca's notice as QA recorded it, an agent's own escalation, an empty setup receipt and a rejected report.
+  db.insertMessage({
+    from: 'term_worker',
+    to: 'term_coord',
+    subject: 'Worker stopped without reporting',
+    body: 'Worker term_698aff42-fca8-4378-b317-029b98be48dc ended its turn without sending worker_done for task "W4: list files then wait" (task_b7063456179a). The Dispatch is still open. Answer it with your Orca CLI\'s `orchestration send --to dispatch:ctx_e99c0e270caf --subject "<topic>" --body "<guidance>"`, retry it, or stop the worker.',
+    type: 'escalation',
+    priority: 'high'
+  })
+  db.insertMessage({
+    from: 'term_worker',
+    to: 'term_coord',
+    subject: 'Blocked: no database credentials',
+    body: 'I need credentials for the staging database.',
+    type: 'escalation'
+  })
+  db.insertMessage({ from: `dispatch:${worker.id}`, to: 'term_coord', subject: 'Setup ready' })
+  const report = db.insertMessage({
+    from: 'term_worker',
+    to: 'term_coord',
+    subject: 'Done',
+    body: 'Finished',
+    type: 'worker_done'
+  })
+  db.convertLifecycleMessageToRejection(
+    report.id,
+    'payload_required',
+    'worker_done requires a JSON object payload'
+  )
+  expect(buildCrewSnapshot('term_coord', deps).sections.managing[0]?.latest).toMatchObject({
+    direction: 'from',
+    preview: 'Read 3 files'
   })
 })
 

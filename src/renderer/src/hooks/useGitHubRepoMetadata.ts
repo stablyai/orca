@@ -58,6 +58,7 @@ export function useRepoLabels(
       return callGitHubTargetOperation<string[]>({
         target,
         ownerRepo,
+        expectedGhAccount: owner.expectedGhAccount,
         method: 'github.listLabels',
         params: { repo: repoSelector },
         timeoutMs: 15_000,
@@ -116,6 +117,7 @@ export function useRepoAssignees(
       return callGitHubTargetOperation<GitHubAssignableUser[]>({
         target,
         ownerRepo,
+        expectedGhAccount: owner.expectedGhAccount,
         method: 'github.listAssignableUsers',
         params: { repo: repoSelector },
         timeoutMs: 15_000,
