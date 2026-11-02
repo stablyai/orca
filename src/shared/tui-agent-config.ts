@@ -22,6 +22,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   claude: {
     detectCmd: 'claude',
     promptInjectionMode: 'argv',
+    // Why: process-table argv loses quoting, so prompt text like `mkdir -p` reads as headless `claude -p`; -- ends that scan.
+    argvPromptSeparator: '--',
     pasteNeedsTypedRequest: true,
     // Native --prefill avoids paste-after-ready races (https://github.com/stablyai/orca/pull/926).
     draftPromptFlag: '--prefill',
@@ -162,10 +164,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'flag-prompt-interactive',
     preflightTrust: 'qoder-cn'
   },
-  gemini: {
-    detectCmd: 'gemini',
-    promptInjectionMode: 'flag-prompt-interactive'
-  },
+  gemini: { detectCmd: 'gemini', promptInjectionMode: 'flag-prompt-interactive' },
   antigravity: {
     detectCmd: 'agy',
     promptInjectionMode: 'flag-prompt-interactive',

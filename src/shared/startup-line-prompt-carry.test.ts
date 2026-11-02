@@ -37,10 +37,10 @@ function linesOf(count: number, bytes: number): string {
   )
 }
 
-/** A prompt that brings the quoted `claude '<prompt>'` line to exactly `bytes`. */
+/** A prompt that brings Claude's quoted startup line to exactly `bytes`. */
 function promptForClaudeLineOf(bytes: number): string {
-  const base = offer('claude', '').plan?.launchCommand ?? ''
-  return 'x'.repeat(bytes - base.length - 3)
+  const overhead = (offer('claude', 'x').plan?.launchCommand ?? '').length - 1
+  return 'x'.repeat(bytes - overhead)
 }
 
 describe('whether a launch prompt rides the typed startup line', () => {

@@ -63,7 +63,7 @@ describe('submitFolderWorkspaceCreate on an Orca server', () => {
     expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith(
       'folder-workspace-1',
       expect.objectContaining({
-        startup: expect.objectContaining({ command: "claude 'Use Bob''s server startup'" })
+        startup: expect.objectContaining({ command: "claude -- 'Use Bob''s server startup'" })
       })
     )
   })
