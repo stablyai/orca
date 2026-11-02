@@ -48,11 +48,50 @@ describe('main health transitions', () => {
     expect(decideTransition(run(1, 'failure'), [run(1, 'failure')]).action).toBe('broken')
   })
 
-  it('recovers when a red run passes on re-run', () => {
+  it('recovers when a red run passes on re-run, and stays quiet when a re-run stays red', () => {
     const runs = [run(1, 'success'), run(2, 'success')]
     expect(decideTransition(run(2, 'success'), runs, { conclusion: 'failure' }).action).toBe(
       'recovered'
     )
+    const red = [run(1, 'success'), run(2, 'failure')]
+    expect(decideTransition(run(2, 'failure'), red, { conclusion: 'failure' }).action).toBe('none')
+  })
+
+  it.each([
+    ['#6 settles first', 100, 90],
+    ['#5 settles first', 90, 100]
+  ])(
+    'sends exactly one alert for a burst of reds, whichever handler queries when: %s',
+    (_name, fifthDone, sixthDone) => {
+      const green = run(4, 'success', { updated_at: new Date(10_000).toISOString() })
+      const fifth = run(5, 'failure', { updated_at: new Date(fifthDone * 1000).toISOString() })
+      const sixth = run(6, 'failure', { updated_at: new Date(sixthDone * 1000).toISOString() })
+      const unsettled = (pending) => ({ ...pending, status: 'in_progress', conclusion: null })
+      // Each handler sees the runs that settled no later than itself, or every run if it queried late.
+      const views = (current) => {
+        const done = (other) => Date.parse(other.updated_at) <= Date.parse(current.updated_at)
+        const early = [green, fifth, sixth].map((other) => (done(other) ? other : unsettled(other)))
+        return [early, [green, fifth, sixth]]
+      }
+      for (const fifthView of views(fifth)) {
+        for (const sixthView of views(sixth)) {
+          const actions = [
+            decideTransition(fifth, fifthView).action,
+            decideTransition(sixth, sixthView).action
+          ]
+          expect(actions.filter((action) => action === 'broken')).toHaveLength(1)
+        }
+      }
+    }
+  )
+
+  it('keeps a slow older red from reopening a state a newer green settled', () => {
+    const runs = [
+      run(4, 'success', { updated_at: '2026-01-01T00:00:00Z' }),
+      run(6, 'success', { updated_at: '2026-01-01T00:05:00Z' }),
+      run(5, 'failure', { updated_at: '2026-01-01T00:09:00Z' })
+    ]
+    expect(decideTransition(runs[2], runs).action).toBe('none')
   })
 })
 
@@ -62,7 +101,11 @@ describe('Slack mentions', () => {
     expect(mention('octocat', ids)).toBe('<@U0123ABC>')
     expect(mention('someone', ids)).toBe('<https://github.com/someone|@someone>')
     expect(parseSlackUserIds('')).toEqual({})
-    expect(() => parseSlackUserIds('[]')).toThrow()
+    const warn = vi.fn()
+    for (const malformed of ['[]', '{not json', '"U1"']) {
+      expect(parseSlackUserIds(malformed, warn)).toEqual({})
+    }
+    expect(warn).toHaveBeenCalledTimes(3)
   })
 
   it('names the merger and author, the failed jobs and the run', () => {
