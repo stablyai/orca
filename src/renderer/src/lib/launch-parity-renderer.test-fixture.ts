@@ -1,5 +1,6 @@
 // Load each renderer client OS against a real one-workspace store; suites own their vi.mock declarations.
 import { vi } from 'vitest'
+import { useStore } from 'zustand'
 import type * as StoreHelpersNamespace from '@/store/slices/store-test-helpers'
 import type * as CapabilitiesNamespace from '@/runtime/local-runtime-capabilities'
 import {
@@ -30,11 +31,15 @@ export function launchStoreModuleMock(holder: LaunchStoreHolder): Record<string,
     return holder.store
   }
   return {
-    useAppStore: {
-      getState: () => live().getState(),
-      setState: (...args: Parameters<LaunchTestStore['setState']>) => live().setState(...args),
-      subscribe: (...args: Parameters<LaunchTestStore['subscribe']>) => live().subscribe(...args)
-    }
+    useAppStore: Object.assign(
+      <T>(selector: (state: ReturnType<LaunchTestStore['getState']>) => T): T =>
+        useStore(live(), selector),
+      {
+        getState: () => live().getState(),
+        setState: (...args: Parameters<LaunchTestStore['setState']>) => live().setState(...args),
+        subscribe: (...args: Parameters<LaunchTestStore['subscribe']>) => live().subscribe(...args)
+      }
+    )
   }
 }
 

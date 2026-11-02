@@ -356,11 +356,28 @@ it('pr35802 retains ordinary W1 accepted Low/verbose after parent echo then W2 C
   expect(evidence.submit).not.toHaveBeenCalled()
 })
 
-it('pr35802 preserves the genuine same-target authority replacement reset control', async () => {
+it('pr35802 retains authored Args through same-target Settings acquisition refresh', async () => {
   render(<NewWorkspaceComposerModal />, { wrapper: TooltipProvider })
   await open('Claude')
   const before = snapshot('before-reset')
   fireEvent.change(textarea(), { target: { value: '--verbose' } })
+  await closeMenu()
+  act(() =>
+    useAppStore.setState((state) => ({
+      settings: { ...state.settings!, agentDefaultArgs: { claude: '--debug' } }
+    }))
+  )
+  await open('Claude')
+  expect(last('claude').target).toBe(before.target)
+  expect(last('claude').authority).not.toBe(before.authority)
+  expect(textarea().value).toBe('--verbose')
+  expect(evidence.submit).not.toHaveBeenCalled()
+})
+
+it('pr35802 derives untouched Args from current same-target Settings defaults', async () => {
+  render(<NewWorkspaceComposerModal />, { wrapper: TooltipProvider })
+  await open('Claude')
+  const before = snapshot('before-reset')
   await closeMenu()
   act(() =>
     useAppStore.setState((state) => ({

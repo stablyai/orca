@@ -23115,6 +23115,8 @@
     "select": "Agent auswählen",
     "openIn": "Öffnen in",
     "chat": "Chat",
-    "terminal": "Terminal"
+    "terminal": "Terminal",
+    "promptPlaceholder": "Prompt hinzufügen (optional): / für Skills, @ für Dateien",
+    "promptPlaceholderFilesOnly": "Prompt hinzufügen (optional): @ für Dateien"
   }
 }

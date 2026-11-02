@@ -2,6 +2,7 @@
 
 import {
   dirtyScopes,
+  isNativeChatSetupDraft,
   installNativeChatDraftRecord,
   load,
   nextSavedAt,
@@ -9,6 +10,7 @@ import {
   notifyScope,
   records,
   reconcileRestoredImageChecks,
+  type AppendBeforeLoad,
   type NativeChatDraftPosition
 } from './native-chat-composer-draft-memory'
 import {
@@ -26,6 +28,18 @@ import {
   removeLegacyLocalStorageNativeChatComposerDrafts,
   type StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
+
+export type LoadBookkeeping = {
+  hydrated: boolean
+  /** Sequence of the last append made before the load landed. */
+  appendSequence: number
+  readonly editedBeforeLoad: Set<string>
+  readonly appendsBeforeLoad: Map<string, AppendBeforeLoad[]>
+  readonly deletionsBeforeLoad: ((
+    scopeKey: string,
+    draft: StoredNativeChatComposerDraft
+  ) => boolean)[]
+}
 
 // Bound database-open retries; after exhaustion retain memory changes and expose refused saves.
 const RETRY_DELAYS_MS = [1_000, 5_000, 30_000]
@@ -67,7 +81,9 @@ function applyLoaded(
 ): void {
   const drafts = new Map<string, StoredNativeChatComposerDraft | null>()
   for (const [scopeKey, value] of loaded) {
-    drafts.set(scopeKey, parseStoredNativeChatComposerDraft(value))
+    if (!isNativeChatSetupDraft(scopeKey)) {
+      drafts.set(scopeKey, parseStoredNativeChatComposerDraft(value))
+    }
   }
   for (const scopeKey of replayNativeChatComposerDraftJournal(drafts, journal)) {
     dirtyScopes.add(scopeKey)
@@ -134,7 +150,9 @@ export function hydrateNativeChatComposerDrafts(): Promise<void> {
     installNativeChatComposerDraftBroadcast()
     // Why read here: storage applies changes in order, so this load reads every append made so far.
     const readAtSequence = load.appendSequence
-    const journal = snapshotNativeChatComposerDraftJournal()
+    const journal = snapshotNativeChatComposerDraftJournal().filter(
+      (entry) => !isNativeChatSetupDraft(entry.scopeKey)
+    )
     applyLoaded(await nativeChatComposerDraftStorage().loadAll(), readAtSequence, journal)
   })().catch(retryLater)
   return hydration

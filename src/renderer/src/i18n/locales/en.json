@@ -9331,7 +9331,8 @@
           "048aac8a64": "Terminal Typography",
           "4415beb958": "disabled",
           "4e7d41a9f0": "enabled",
-          "dimUnfocusedPanes": "Dim unfocused panes."
+          "dimUnfocusedPanes": "Dim unfocused panes.",
+          "kitty_import": "Import from Kitty"
         },
         "TerminalAdvancedTypographyControls": {
           "f5fa1a08f1": "Bold Font Weight",
@@ -11346,7 +11347,9 @@
             "454df22a5e": "fish",
             "ddd5efe113": "shell",
             "3de504994c": "Shell and arguments used for new local interactive terminal panes",
-            "1733ccd3e9": "Terminal shell"
+            "1733ccd3e9": "Terminal shell",
+            "kitty_import": "Import from Kitty",
+            "kitty_import_description": "One-time import of supported settings from kitty.conf."
           },
           "windows": {
             "search": {
@@ -13578,6 +13581,11 @@
         },
         "FontAutocomplete": {
           "installedFontsUnavailable": "Couldn’t list installed fonts. Type any installed font name to use it."
+        },
+        "TerminalConfigImportModal": {
+          "kitty_title": "Import from Kitty",
+          "kitty_description": "Review the settings that will be imported from your kitty.conf and the files it includes.",
+          "kitty_not_found": "No kitty.conf found on this computer. Choose a config file to import one from another location."
         }
       },
       "right": {
@@ -23030,7 +23038,8 @@
       "images": "Images",
       "repoIconImages": "Repo icon images",
       "audio": "Audio",
-      "importGhosttyConfig": "Import Ghostty Config"
+      "importGhosttyConfig": "Import Ghostty Config",
+      "importKittyConfig": "Import Kitty Config"
     }
   },
   "taskProviders": {
@@ -23185,7 +23194,9 @@
     "select": "Select agent",
     "openIn": "Open in",
     "chat": "Chat",
-    "terminal": "Terminal"
+    "terminal": "Terminal",
+    "promptPlaceholder": "Add a prompt (optional): / for skills, @ for files",
+    "promptPlaceholderFilesOnly": "Add a prompt (optional): @ for files"
   },
   "automations": {
     "runFailures": {

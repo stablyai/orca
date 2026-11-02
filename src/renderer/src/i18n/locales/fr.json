@@ -23004,7 +23004,9 @@
     "select": "Choisir un agent",
     "openIn": "Ouvrir dans",
     "chat": "Chat",
-    "terminal": "Terminal"
+    "terminal": "Terminal",
+    "promptPlaceholder": "Ajouter un prompt (facultatif) : / pour les skills, @ pour les fichiers",
+    "promptPlaceholderFilesOnly": "Ajouter un prompt (facultatif) : @ pour les fichiers"
   },
   "wslMove": {
     "entry": {

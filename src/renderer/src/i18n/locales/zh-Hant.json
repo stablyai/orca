@@ -22783,6 +22783,8 @@
     "select": "選擇代理程式",
     "openIn": "開啟方式",
     "chat": "聊天",
-    "terminal": "終端機"
+    "terminal": "終端機",
+    "promptPlaceholder": "新增提示詞（選填）：/ 選擇技能，@ 選擇檔案",
+    "promptPlaceholderFilesOnly": "新增提示詞（選填）：@ 選擇檔案"
   }
 }

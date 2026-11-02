@@ -22314,7 +22314,9 @@
     "select": "Agent を選択",
     "openIn": "起動先",
     "chat": "チャット",
-    "terminal": "ターミナル"
+    "terminal": "ターミナル",
+    "promptPlaceholder": "プロンプトを追加 (オプション): / でスキル、@ でファイル",
+    "promptPlaceholderFilesOnly": "プロンプトを追加 (オプション): @ でファイル"
   },
   "wslMove": {
     "entry": {

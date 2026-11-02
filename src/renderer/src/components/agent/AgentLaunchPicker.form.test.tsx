@@ -1,4 +1,8 @@
 // @vitest-environment happy-dom
+import { clearNativeChatComposerDraftsForTests } from '../native-chat/native-chat-composer-draft-store'
+import { launchDraftSource } from '../native-chat/native-chat-launch-draft-source'
+import { acceptAgentPickerArguments } from '../../../../shared/agent-launch-picker-edits'
+import { agentLaunchPromptScopeKey } from './AgentLaunchPromptComposer'
 import { act, createElement, useState } from 'react'
 import { fireEvent, render, renderHook, waitFor } from '@testing-library/react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -92,6 +96,7 @@ function show(value: AgentPickerEntry, others: AgentPickerEntry[] = []) {
   )
 }
 beforeEach(() => {
+  clearNativeChatComposerDraftsForTests()
   entry.ownerKey = `menu-test-${owner++}`
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   launch.mockClear()
@@ -223,7 +228,14 @@ it.each([3, 30])(
       let catalogEntry: AgentPickerEntry = entry
       function Form({ inventory }: { inventory: AgentPickerEntry }) {
         scope = useAgentPickerDraftScope()
-        return <AgentLaunchPickerMenu draftScope={scope} entries={[inventory]} runLaunch={launch} />
+        return (
+          <AgentLaunchPickerMenu
+            mode="select"
+            draftScope={scope}
+            entries={[inventory]}
+            runLaunch={launch}
+          />
+        )
       }
       const membershipReads = { models: 0, efforts: 0 }
       const showGeneration = (
@@ -359,7 +371,7 @@ it.each([3, 30])(
       expect(document.body.textContent).toContain('private/unlisted')
       close()
       expect(snapshots!.size).toBe(2)
-      // A genuine authority replacement retires old snapshots; a new draft belongs to its new owner.
+      // Acquisition refresh preserves the bounded authored identities, with current attribution.
       for (let generation = 1; generation <= generations; generation++) {
         showGeneration(generation, true, `authority-${generation}`)
         query('Live high')
@@ -369,7 +381,7 @@ it.each([3, 30])(
         })
         close()
       }
-      expect(snapshots!.size).toBe(1)
+      expect(snapshots!.size).toBe(2)
       expect(readScope!()).toBe(snapshots)
       act(() => root.render(<div />))
       await waitFor(() => expect(readScope!()).toBeUndefined())
@@ -487,18 +499,15 @@ it.each([3, 30])(
       ensureDetectedAgents: async () => ['codex']
     })
     let generation = 0
-    let scope: AgentPickerDraftOwner
-    let records: Map<unknown, unknown> | undefined
-    let readScope: (() => unknown) | undefined
-    const originalGet = WeakMap.prototype.get
-    WeakMap.prototype.get = function (this: WeakMap<object, unknown>, key: AgentPickerDraftOwner) {
-      const result = originalGet.call(this, key)
-      if (key === scope && result instanceof Map) {
-        readScope = () => originalGet.call(this, scope!)
-        records = result
-      }
-      return result
-    }
+    const retainedSource = () =>
+      launchDraftSource(
+        agentLaunchPromptScopeKey({
+          ...entry,
+          worktreeId: worktree.id,
+          rows: [{ agent: 'codex', kind: 'cli', executionHostId: 'local' }]
+        })
+      )
+    const records = () => retainedSource()?.options
     const setCatalog = () => {
       entry.catalog = {
         origin: 'probe',
@@ -524,7 +533,6 @@ it.each([3, 30])(
     }
     setCatalog()
     function Owner({ open }: { open: boolean }) {
-      scope = useAgentPickerDraftScope()
       const menu = useNewTabAgentMenuRows(worktree.id, open, { kind: 'local', contextKey: 'host' })
       const entries = useAgentLaunchPickerInventory(worktree.id, menu, open)
       return createElement(
@@ -539,7 +547,6 @@ it.each([3, 30])(
             null,
             createElement(AgentLaunchPickerMenu, {
               entries,
-              draftScope: scope,
               runLaunch: () => {}
             })
           )
@@ -592,13 +599,13 @@ it.each([3, 30])(
           target: { value: '--inactive-current' }
         })
         fireEvent.keyDown(document.querySelector('textarea')!, { key: 'Escape' })
-        expect(records!.size).toBe(2)
+        expect(records()!.size).toBe(2)
         await openSetup('Live', `phase${generation}`)
         fireEvent.change(document.querySelector('textarea')!, {
           target: { value: '--inactive-effort' }
         })
         fireEvent.keyDown(document.querySelector('textarea')!, { key: 'Escape' })
-        expect(records!.size).toBe(3)
+        expect(records()!.size).toBe(3)
         view.rerender(createElement(Owner, { open: false }))
         await act(async () => {})
       }
@@ -608,10 +615,9 @@ it.each([3, 30])(
       expect(document.querySelector('textarea')).toHaveProperty('value', '--latest-live')
       expect(document.body.textContent).toContain('private/opaque')
       view.unmount()
-      expect(readScope!()).toBeUndefined()
+      expect(records()!.size).toBe(3)
     } finally {
       view.unmount()
-      WeakMap.prototype.get = originalGet
       entry.catalog = originalCatalog
       useAppStore.setState(previous, true)
     }
@@ -640,6 +646,7 @@ it('uses definitive inactive model/effort evidence only and fences retired owner
     }) =>
       useAgentPickerSetup({
         entry: current,
+        mode: 'select',
         initial,
         draftScope: scope,
         draftId: 'live:high',
@@ -651,7 +658,8 @@ it('uses definitive inactive model/effort evidence only and fences retired owner
   const accepted = {
     ...initial,
     choices: { model: 'private/opaque', options: { effort: 'high' } },
-    pendingArguments: '--latest'
+    pendingArguments: '--latest',
+    argumentsOwner: source.ownerKey
   }
   act(() => result.current.change(accepted))
   const active = result.current
@@ -676,16 +684,23 @@ it('uses definitive inactive model/effort evidence only and fences retired owner
       ]
     }
   })
-  act(() => retireAgentPickerDrafts([catalog([])], scope))
+  act(() => retireAgentPickerDrafts([catalog([])], scope, undefined, 'select'))
   expect(active.getDraft()).toEqual(accepted)
   rerender({ current: source, initial, open: false })
-  act(() => retireAgentPickerDrafts([{ ...source, catalog: { origin: 'unknown' } }], scope))
+  act(() =>
+    retireAgentPickerDrafts(
+      [{ ...source, catalog: { origin: 'unknown' } }],
+      scope,
+      undefined,
+      'select'
+    )
+  )
   expect(result.current.getDraft()).toEqual(accepted)
-  act(() => retireAgentPickerDrafts([catalog([], false)], scope))
+  act(() => retireAgentPickerDrafts([catalog([], false)], scope, undefined, 'select'))
   expect(result.current.getDraft()).toEqual(accepted)
-  act(() => retireAgentPickerDrafts([catalog([], true, true)], scope))
+  act(() => retireAgentPickerDrafts([catalog([], true, true)], scope, undefined, 'select'))
   expect(result.current.getDraft()).toEqual(accepted)
-  act(() => retireAgentPickerDrafts([catalog([])], scope))
+  act(() => retireAgentPickerDrafts([catalog([])], scope, undefined, 'select'))
   expect(result.current.getDraft()).toBeUndefined()
   act(() => {
     active.activate()
@@ -695,14 +710,25 @@ it('uses definitive inactive model/effort evidence only and fences retired owner
   expect(result.current.getDraft()).toBeUndefined()
   rerender({ current: source, initial, open: true })
   expect(result.current.getDraft()).toEqual(initial)
+  act(() => result.current.change(accepted))
   const beforeAuthority = result.current
-  rerender({ current: { ...source, ownerKey: 'successor' }, initial, open: true })
+  rerender({
+    current: { ...source, ownerKey: 'successor', defaultsPending: true },
+    initial,
+    open: true
+  })
   act(() => {
     beforeAuthority.activate()
     beforeAuthority.change(accepted)
     expect(beforeAuthority.accept(accepted)).toBe(false)
   })
-  expect(result.current.getDraft()).toEqual(initial)
+  expect(result.current.getDraft()).toEqual({ ...accepted, argumentsOwner: 'successor' })
+  const current = acceptAgentPickerArguments(
+    { ...source, ownerKey: 'successor', defaultsPending: true },
+    result.current.getDraft()!
+  )
+  expect(current.pendingArguments).toBeUndefined()
+  expect(current.arguments).toBe('--latest')
   const beforeDiscard = result.current
   act(() => invalidateAgentPickerDrafts(scope))
   act(() => {
@@ -712,7 +738,7 @@ it('uses definitive inactive model/effort evidence only and fences retired owner
   expect(beforeDiscard.getDraft()).toBeUndefined()
   rerender({ current: source, initial, open: true })
   const beforeTargetDeath = result.current
-  act(() => retireAgentPickerDrafts([source], scope, () => false))
+  act(() => retireAgentPickerDrafts([source], scope, () => false, 'select'))
   act(() => {
     beforeTargetDeath.activate()
     beforeTargetDeath.change(accepted)

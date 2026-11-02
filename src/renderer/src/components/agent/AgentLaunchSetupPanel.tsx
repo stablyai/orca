@@ -2,8 +2,8 @@ import {
   agentLaunchSetupOptionRows,
   agentLaunchSetupCatalogState as catalogState
 } from './agent-launch-setup-option-rows'
-import { useState } from 'react'
-import { Check, ChevronDown, ChevronLeft, ChevronRight, CornerDownLeft } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import { Button } from '@/components/ui/button'
 import {
@@ -21,6 +21,7 @@ import { NativeChatSessionOptionRows } from '../native-chat/NativeChatSessionOpt
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { AgentPermissionMenu } from '../settings/AgentPermissionChoiceControls'
+import { AgentLaunchSetupFooter, type AgentLaunchSetupFooterHandle } from './AgentLaunchSetupFooter'
 import { agentPickerPanelArguments } from '../../../../shared/agent-launch-picker-arguments'
 import {
   acceptAgentPickerArguments,
@@ -28,7 +29,6 @@ import {
   type AgentPickerEdit
 } from '../../../../shared/agent-launch-picker-edits'
 import {
-  agentPickerButtonOrder,
   agentPickerArgumentsKnown,
   agentPickerEffectiveChoices,
   agentPickerModels,
@@ -54,8 +54,9 @@ export function AgentLaunchSetupPanel({
   mode?: 'launch' | 'select'
   disabled?: boolean
   onDraftChange: (draft: AgentPickerDraft) => void
-  onUse: (draft: AgentPickerDraft) => void
+  onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
 }) {
+  const footer = useRef<AgentLaunchSetupFooterHandle>(null)
   const editDraft = (edit: AgentPickerEdit) => {
     const current = getDraft()
     if (current) {
@@ -125,9 +126,12 @@ export function AgentLaunchSetupPanel({
   const handleUse = (surface: AgentPickerSurface) => {
     const current = getDraft()
     if (current) {
-      onUse({ ...acceptAgentPickerArguments(entry, current), surface })
+      return onUse({ ...acceptAgentPickerArguments(entry, current), surface })
     }
+    return false
   }
+  const use = (surface: AgentPickerSurface) =>
+    mode === 'select' ? handleUse(surface) : footer.current?.launch(surface)
   const choiceChips = agentModelChoiceChips(
     entry.agent,
     entry.label,
@@ -175,7 +179,7 @@ export function AgentLaunchSetupPanel({
           (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
         ) {
           event.preventDefault()
-          handleUse(mode === 'select' ? draft.surface : entry.defaultSurface)
+          use(mode === 'select' ? draft.surface : entry.defaultSurface)
         }
       }}
     >
@@ -192,7 +196,7 @@ export function AgentLaunchSetupPanel({
           ) {
             event.preventDefault()
             event.stopPropagation()
-            handleUse(mode === 'select' ? draft.surface : entry.defaultSurface)
+            use(mode === 'select' ? draft.surface : entry.defaultSurface)
           }
         }}
         onKeyDown={(event) => {
@@ -367,8 +371,8 @@ export function AgentLaunchSetupPanel({
           </div>
         ) : null}
       </div>
-      <div className="flex items-center justify-end gap-2 border-t border-border px-2.5 py-2">
-        {mode === 'select' ? (
+      {mode === 'select' ? (
+        <div className="flex items-center justify-end gap-2 border-t border-border px-2.5 py-2">
           <Button
             type="button"
             size="xs"
@@ -377,26 +381,24 @@ export function AgentLaunchSetupPanel({
           >
             {translate('agentPicker.use', 'Use')}
           </Button>
-        ) : (
-          agentPickerButtonOrder(entry).map((surface) => (
-            <Button
-              key={surface}
-              type="button"
-              size="xs"
-              disabled={disabled}
-              variant={surface === entry.defaultSurface ? 'default' : 'outline'}
-              onClick={() => handleUse(surface)}
-            >
-              {surface === 'chat'
-                ? translate('agentPicker.launchChat', 'Launch chat')
-                : translate('agentPicker.launchTerminal', 'Launch terminal')}
-              {surface === entry.defaultSurface ? (
-                <CornerDownLeft className="size-3 opacity-60" />
-              ) : null}
-            </Button>
-          ))
-        )}
-      </div>
+        </div>
+      ) : (
+        <AgentLaunchSetupFooter
+          ref={footer}
+          entry={entry}
+          disabled={disabled}
+          onLaunch={(surface, prompt) => {
+            const current = getDraft()
+            return current
+              ? onUse({
+                  ...acceptAgentPickerArguments(entry, current),
+                  surface,
+                  ...(prompt ? { prompt } : {})
+                })
+              : false
+          }}
+        />
+      )}
     </div>
   )
 }

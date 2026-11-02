@@ -22989,7 +22989,9 @@
     "select": "Selecionar agente",
     "openIn": "Abrir em",
     "chat": "Chat",
-    "terminal": "Terminal"
+    "terminal": "Terminal",
+    "promptPlaceholder": "Adicione um prompt (opcional): / para skills, @ para arquivos",
+    "promptPlaceholderFilesOnly": "Adicione um prompt (opcional): @ para arquivos"
   },
   "wslMove": {
     "entry": {

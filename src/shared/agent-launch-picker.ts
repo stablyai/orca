@@ -47,6 +47,8 @@ export type AgentPickerEntry = {
   catalogRead?: 'pending' | 'settled' | 'failed' | 'unsupported'
   ownerKey?: string
   draftTarget?: { key: string; worktreeId?: string; repoId?: string; executionHostId: string }
+  /** The workspace the agent launches in, whose files and skills its first prompt can name. */
+  worktreeId?: string
   defaultsPending?: boolean
   structuredDefaultsPending?: boolean
 }
@@ -65,6 +67,8 @@ export type AgentPickerDraft = {
     changed: boolean
     argumentsAuthored: boolean
   }
+  /** The first prompt typed in the panel, set only on the launch: never part of a kept setup. */
+  prompt?: string
 }
 export type AgentPickerSetup = {
   entry: AgentPickerEntry

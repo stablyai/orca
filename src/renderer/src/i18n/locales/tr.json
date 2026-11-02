@@ -23098,6 +23098,8 @@
     "select": "Aracı seç",
     "openIn": "Açılacağı yer",
     "chat": "Sohbet",
-    "terminal": "Terminal"
+    "terminal": "Terminal",
+    "promptPlaceholder": "İstem ekleyin (isteğe bağlı): beceriler için /, dosyalar için @",
+    "promptPlaceholderFilesOnly": "İstem ekleyin (isteğe bağlı): dosyalar için @"
   }
 }

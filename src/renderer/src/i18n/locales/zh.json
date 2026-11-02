@@ -22315,7 +22315,9 @@
     "select": "选择智能体",
     "openIn": "打开方式",
     "chat": "聊天",
-    "terminal": "终端"
+    "terminal": "终端",
+    "promptPlaceholder": "添加提示词（可选）：/ 选择技能，@ 选择文件",
+    "promptPlaceholderFilesOnly": "添加提示词（可选）：@ 选择文件"
   },
   "wslMove": {
     "entry": {

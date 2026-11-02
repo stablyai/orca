@@ -22314,7 +22314,9 @@
     "select": "에이전트 선택",
     "openIn": "열기 위치",
     "chat": "채팅",
-    "terminal": "터미널"
+    "terminal": "터미널",
+    "promptPlaceholder": "프롬프트 추가(선택사항): 스킬은 /, 파일은 @",
+    "promptPlaceholderFilesOnly": "프롬프트 추가(선택사항): 파일은 @"
   },
   "wslMove": {
     "entry": {
