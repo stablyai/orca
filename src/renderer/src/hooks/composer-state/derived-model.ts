@@ -21,7 +21,7 @@ export type ComposerDerivedModel = {
   /** False for a folder project whose host predates folder setup; its setup controls stay hidden. */
   setupSupport: FolderSetupSupport
   setupPolicy: SetupRunPolicy
-  linkedWorkItemProvider: 'github' | 'gitlab' | 'linear' | 'jira' | null
+  linkedWorkItemProvider: 'github' | 'gitlab' | 'linear' | 'jira' | 'plane' | null
   requiresExplicitSetupChoice: boolean
   resolvedSetupDecision: 'skip' | 'run' | null
   isSetupCheckPending: boolean

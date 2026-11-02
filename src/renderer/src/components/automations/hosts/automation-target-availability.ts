@@ -161,23 +161,17 @@ export function getRuntimeAutomationAvailability(
   t?: Translate
 ): AutomationTargetAvailability {
   const entry = runtimeStatusByEnvironmentId?.get(environmentId)
-  if (!entry) {
-    return unavailable(
-      'runtime-checking',
-      'Checking the selected remote server before running manually.'
-    )
-  }
-  if (!entry.status) {
-    return unavailable(
-      'runtime-unavailable',
-      'Reconnect this remote server before running manually.'
-    )
-  }
-  if (entry.status.graphStatus !== 'ready') {
-    return unavailable(
-      'runtime-unavailable',
-      'The selected remote server is not ready to run automations yet.'
-    )
+  if (!entry?.status || entry.status.graphStatus !== 'ready') {
+    if (!entry) {
+      return unavailable(
+        'runtime-checking',
+        'Checking the selected remote server before running manually.'
+      )
+    }
+    const message = !entry.status
+      ? 'Reconnect this remote server before running manually.'
+      : 'The selected remote server is not ready to run automations yet.'
+    return unavailable('runtime-unavailable', message)
   }
   const compat = evaluateRuntimeCompat({
     clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,
@@ -197,10 +191,8 @@ function getAutomationSshTargetId(automation: Automation, repo: Repo): string | 
   if (parsedHost?.kind === 'ssh') {
     return parsedHost.targetId
   }
-  if (automation.executionTargetType === 'ssh' && automation.executionTargetId.trim()) {
-    return automation.executionTargetId
-  }
-  return repo.connectionId?.trim() || null
+  const isSshTarget = automation.executionTargetType === 'ssh' && automation.executionTargetId.trim()
+  return isSshTarget ? automation.executionTargetId : repo.connectionId?.trim() || null
 }
 
 function unavailable(
