@@ -6,7 +6,7 @@ import {
   consumePendingTccPromptNotice,
   dismissTccPromptNotice,
   releasePendingTccPromptNotice
-} from '../macos-tcc-prompt-notice'
+} from '../macos-permissions/macos-tcc-prompt-notice'
 import { registerRepoHandlers } from '../ipc/repos'
 import { setRepoRemoteClientNotifier } from '../ipc/repos/repos-changed-notification'
 import { setWorktreeCatalogRemoteClientNotifier } from '../ipc/watched-worktree-catalog-notification'

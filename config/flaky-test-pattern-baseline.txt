@@ -829,8 +829,8 @@
 2 test-no-wall-clock:src/main/ipc/worktree-git-status-attribution-real-git.test.ts
 5 test-no-wall-clock:src/main/ipc/worktrees-orphan-directory-cleanup.test.ts
 2 test-no-wall-clock:src/main/local-worktree-removal-recovery-live.test.ts
-1 test-no-wall-clock:src/main/macos-press-and-hold-default.defaults-domain.test.ts
-2 test-no-wall-clock:src/main/macos-tcc-log-stream-orphans.test.ts
+1 test-no-wall-clock:src/main/window/desktop-integration/macos-press-and-hold-default.defaults-domain.test.ts
+2 test-no-wall-clock:src/main/macos-permissions/macos-tcc-log-stream-orphans.test.ts
 1 test-no-wall-clock:src/main/managed-server/host-state/orcad-state-mutation-fence-heartbeat.test.ts
 3 test-no-wall-clock:src/main/managed-server/host-state/orcad-state-snapshot-shell.test.ts
 3 test-no-wall-clock:src/main/managed-server/host-state/orcad-windows-host-fence-ops.test.ts

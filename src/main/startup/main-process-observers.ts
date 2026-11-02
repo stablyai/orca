@@ -1,8 +1,8 @@
 import { app, powerMonitor } from 'electron'
 import { join } from 'node:path'
-import { AgentAwakeService } from '../agent-awake-service'
+import { AgentAwakeService } from '../power/agent-awake-service'
 import { normalizeComputerAwakeMode } from '../../shared/computer-awake-mode'
-import { registerSystemResumeBroadcast } from '../system-resume-broadcast'
+import { registerSystemResumeBroadcast } from '../power/system-resume-broadcast'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import {
   listCapableSharedControlSockets,

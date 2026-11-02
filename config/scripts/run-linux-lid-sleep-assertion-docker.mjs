@@ -7,7 +7,7 @@ import { build } from 'esbuild'
 
 const repo = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const fixture = join(repo, 'config/docker/linux-lid-sleep-assertion')
-const sourcePath = join(repo, 'src/main/linux-lid-sleep-assertion.ts')
+const sourcePath = join(repo, 'src/main/power/linux-lid-sleep-assertion.ts')
 const args = process.argv.slice(2)
 const options = new Map()
 for (let index = 0; index < args.length; index += 2) {
@@ -63,7 +63,7 @@ function runDocker(command, allowFailure = false) {
 
 async function bundle(mode, ref) {
   const oldSource = ref
-    ? execFileSync('git', ['show', `${ref}:src/main/linux-lid-sleep-assertion.ts`], {
+    ? execFileSync('git', ['show', `${ref}:src/main/power/linux-lid-sleep-assertion.ts`], {
         cwd: repo,
         encoding: 'utf8'
       })

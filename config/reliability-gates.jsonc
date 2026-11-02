@@ -4109,19 +4109,19 @@
       "invariant": "A non-empty SSH file stream that produces no valid frame for 30 seconds must cancel at its authoritative stream reader and release all local lifecycle state. System suspend is sticky across metadata and subscription races, resume grants every still-live stream one fresh inactivity window, one failing consumer cannot block the others, and the sole Electron bridge survives a vetoed before-quit without retaining a per-stream Electron listener.",
       "oracle": "Publish suspend before stream metadata resolves, jump wall time by one hour, and require the late-subscribing stream to remain pending until resume grants a fresh 30-second window. Deliver a valid final chunk and end frame, require exact content, then publish another resume and require zero timers, multiplexer listeners, or renewed work; separately require stalled cancellation at 30 seconds, atomic state replay, failure-isolated fanout, and bridge disposal only after the committed will-quit gate.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/system-resume-broadcast.test.ts src/main/system-power-lifecycle.test.ts --reporter=dot --maxWorkers=2"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/power/system-resume-broadcast.test.ts src/main/power/system-power-lifecycle.test.ts --reporter=dot --maxWorkers=2"
       ],
       "testFiles": [
-        "src/main/system-resume-broadcast.test.ts",
-        "src/main/system-power-lifecycle.test.ts"
+        "src/main/power/system-resume-broadcast.test.ts",
+        "src/main/power/system-power-lifecycle.test.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/main/system-resume-broadcast.test.ts",
+          "file": "src/main/power/system-resume-broadcast.test.ts",
           "assertions": ["publishes suspend and resume to main-process lifecycle consumers"]
         },
         {
-          "file": "src/main/system-power-lifecycle.test.ts",
+          "file": "src/main/power/system-power-lifecycle.test.ts",
           "assertions": [
             "replays suspended state to a late subscriber",
             "atomically replays a transition to a subscriber added during publication",

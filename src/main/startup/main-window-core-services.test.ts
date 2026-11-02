@@ -59,7 +59,9 @@ vi.mock('../window/attach-main-window-services', () => ({
 vi.mock('../ipc/ssh/ssh-host-user-disconnect', () => ({
   holdLaunchReconnectOptOuts: holdLaunchReconnectOptOutsMock
 }))
-vi.mock('../macos-tcc-prompt-notice', () => ({ initTccPromptNotice: initTccPromptNoticeMock }))
+vi.mock('../macos-permissions/macos-tcc-prompt-notice', () => ({
+  initTccPromptNotice: initTccPromptNoticeMock
+}))
 vi.mock('../updater', () => ({ resolveUpdateInstallMode: vi.fn(() => 'interactive') }))
 vi.mock('./main-process-state', () => ({ mainProcessState: state }))
 vi.mock('../agent-auth-restart-preservation', () => ({
