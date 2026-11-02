@@ -53,7 +53,8 @@ describe('"+" saved default args at the window planner', () => {
       launchSource: 'tab_bar_quick_launch'
     })
 
-    expect(result !== null).toBe(launches)
+    // A refused launch returns its refusal; only a launch that opened a surface has one.
+    expect(result !== null && !('refused' in result)).toBe(launches)
     const tabs = store.getState().tabsByWorktree[worktreeId] ?? []
     expect(tabs).toHaveLength(launches ? 1 : 0)
     expect(Object.keys(store.getState().pendingStartupByTabId)).toHaveLength(launches ? 1 : 0)
