@@ -57,6 +57,8 @@ export type CommitMessageAgentSpec = {
     model: string
     thinkingLevel?: string
     strictMcp?: boolean
+    /** Claude only: the tool-policy syntax older CLIs accept. */
+    legacyToolPolicy?: boolean
     userArgs?: readonly string[]
   }) => string[]
   /** User recipe args replace generated singleton alias groups; repeats make yargs parse arrays and crash. Default: model flag only. */

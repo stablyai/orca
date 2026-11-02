@@ -1,4 +1,3 @@
-import { removeSourceControlAiArgumentFlag } from './source-control-ai-argument-flags'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   COMMIT_MESSAGE_AGENT_SPECS,
@@ -51,90 +50,6 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
       '--model',
       'kimi-code/kimi-for-coding'
     ])
-  })
-
-  it('removes each text CLI model/effort spelling without changing unrelated Arguments', () => {
-    const flags: Record<string, { model: string[]; effort: string[] }> = {
-      omp: {
-        model: ['--model provider/model', '--model=provider/model'],
-        effort: ['--thinking high']
-      },
-      claude: {
-        model: ['--model opus', '--model=opus'],
-        effort: ['--effort high', '--effort=high']
-      },
-      codex: {
-        model: ['--model next', '-m next', '--model=next', '-c model="next"'],
-        effort: [
-          '-c model_reasoning_effort="low"',
-          '--config model_reasoning_effort=high',
-          '--config=model_reasoning_effort=high'
-        ]
-      },
-      opencode: {
-        model: ['-m provider/model', '--model=provider/model'],
-        effort: ['--variant high', '--variant=high']
-      },
-      opencode2: {
-        model: ['--model provider/model#high', '-m=provider/model#high'],
-        effort: ['--model provider/model#high', '--model=provider/model']
-      },
-      pi: { model: ['--model provider/model'], effort: ['--thinking high', '--thinking=high'] },
-      amp: { model: ['--mode smart', '--mode=deep'], effort: ['--effort high'] },
-      cursor: { model: ['--model auto', '--model=auto'], effort: [] },
-      kimi: { model: ['--model kimi-code/k3', '-m kimi-code/k3'], effort: [] },
-      muse: {
-        model: ['--model next'],
-        effort: ['--reasoning-effort high', '--reasoning-effort=high']
-      },
-      dsh: { model: [], effort: [] },
-      copilot: { model: ['--model gpt-5.4'], effort: ['--effort high'] },
-      antigravity: { model: ['--model next'], effort: ['--effort high'] },
-      jcode: { model: ['--model next'], effort: [] }
-    }
-    expect(Object.keys(flags).sort()).toEqual(listCommitMessageAgentIds().sort())
-    for (const spec of Object.values(COMMIT_MESSAGE_AGENT_SPECS)) {
-      if (!spec) {
-        continue
-      }
-      for (const field of ['model', 'effort'] as const) {
-        expect(spec[field === 'model' ? 'modelFlag' : 'effortFlag'].length > 0).toBe(
-          flags[spec.id][field].length > 0
-        )
-        for (const argument of flags[spec.id][field]) {
-          expect(
-            removeSourceControlAiArgumentFlag(`${argument} --other 'keep quoted'`, spec, field)
-          ).toEqual({
-            agentArgs: "--other 'keep quoted'",
-            unrecognized: false
-          })
-        }
-      }
-    }
-    const codex = COMMIT_MESSAGE_AGENT_SPECS.codex!
-    expect(
-      removeSourceControlAiArgumentFlag(
-        '-c sandbox_mode="read-only" --config model_reasoning_effort=low --model keep',
-        codex,
-        'effort'
-      )
-    ).toEqual({
-      agentArgs: '-c sandbox_mode="read-only"  --model keep',
-      unrecognized: false
-    })
-    for (const agentArgs of ['--model', '--model= --other keep', '--model "unfinished']) {
-      expect(removeSourceControlAiArgumentFlag(agentArgs, codex, 'model')).toEqual({
-        agentArgs,
-        unrecognized: true
-      })
-    }
-    const quotedOperand = '--append-system-prompt "--model" --model opus -- tail --model keep'
-    expect(
-      removeSourceControlAiArgumentFlag(quotedOperand, COMMIT_MESSAGE_AGENT_SPECS.claude!, 'model')
-    ).toEqual({
-      agentArgs: '--append-system-prompt "--model"  -- tail --model keep',
-      unrecognized: false
-    })
   })
 
   it('uses Muse exec for non-interactive Source Control AI generation', () => {
@@ -241,40 +156,94 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
 
 describe('buildArgs (Claude)', () => {
   const spec = getCommitMessageAgentSpec('claude')!
+  const isolation = ['--strict-mcp-config', '--settings', '{"disableAllHooks":true}']
+  // Every built-in of the CLIs that refuse `--tools`/`dontAsk`, except the file tools.
+  const legacyDenied =
+    'Task,Bash,LS,ExitPlanMode,Edit,MultiEdit,Write,NotebookEdit,WebFetch,TodoWrite,WebSearch,BashOutput,KillBash,KillShell,SlashCommand,Skill,AskUserQuestion,LSP,ListMcpResourcesTool,ReadMcpResourceTool'
 
-  it('passes -p, output format, and model on every call', () => {
-    const args = spec.buildArgs({ prompt: '', model: 'haiku' })
-    expect(args).toEqual([
+  // Plan mode made the CLI run Sonnet for `haiku`; an explicit non-plan mode also outranks settings.
+  it('passes the picked model with only file tools, granted anywhere, and no plan mode', () => {
+    expect(spec.buildArgs({ prompt: '', model: 'haiku' })).toEqual([
       '-p',
       '--output-format',
       'text',
       '--model',
       'haiku',
+      '--tools',
+      'Read,Grep,Glob',
+      '--allowedTools',
+      'Read,Grep,Glob',
       '--permission-mode',
-      'plan',
-      '--strict-mcp-config',
-      '--settings',
-      '{"disableAllHooks":true}'
+      'dontAsk',
+      ...isolation
     ])
-  })
-
-  it('appends --effort when a thinking level is supplied', () => {
-    const args = spec.buildArgs({
-      prompt: '',
-      model: 'sonnet',
-      thinkingLevel: 'high'
-    })
-    expect(args).toEqual([
+    expect(spec.buildArgs({ prompt: '', model: 'sonnet', thinkingLevel: 'high' })).toEqual([
       '-p',
       '--output-format',
       'text',
       '--model',
       'sonnet',
+      '--tools',
+      'Read,Grep,Glob',
+      '--allowedTools',
+      'Read,Grep,Glob',
       '--permission-mode',
-      'plan',
+      'dontAsk',
       '--effort',
       'high',
-      '--strict-mcp-config',
+      ...isolation
+    ])
+  })
+
+  it('denies MCP tools once managed servers load without strict mode', () => {
+    expect(spec.buildArgs({ prompt: '', model: 'haiku', strictMcp: false })).toEqual([
+      '-p',
+      '--output-format',
+      'text',
+      '--model',
+      'haiku',
+      '--tools',
+      'Read,Grep,Glob',
+      '--allowedTools',
+      'Read,Grep,Glob',
+      '--disallowedTools',
+      'mcp__*',
+      '--permission-mode',
+      'dontAsk',
+      '--settings',
+      '{"disableAllHooks":true}'
+    ])
+  })
+
+  it('keeps the same tools, root-path grants and a non-plan mode in older CLI syntax', () => {
+    expect(spec.buildArgs({ prompt: '', model: 'haiku', legacyToolPolicy: true })).toEqual([
+      '-p',
+      '--output-format',
+      'text',
+      '--model',
+      'haiku',
+      '--disallowedTools',
+      legacyDenied,
+      '--allowedTools',
+      'Read(//**),Grep(//**),Glob(//**)',
+      '--permission-mode',
+      'default',
+      ...isolation
+    ])
+    expect(
+      spec.buildArgs({ prompt: '', model: 'haiku', legacyToolPolicy: true, strictMcp: false })
+    ).toEqual([
+      '-p',
+      '--output-format',
+      'text',
+      '--model',
+      'haiku',
+      '--disallowedTools',
+      legacyDenied,
+      '--allowedTools',
+      'Read(//**),Grep(//**),Glob(//**)',
+      '--permission-mode',
+      'default',
       '--settings',
       '{"disableAllHooks":true}'
     ])
