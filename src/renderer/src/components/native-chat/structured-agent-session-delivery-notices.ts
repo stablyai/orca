@@ -17,7 +17,7 @@ import type { StructuredAgentSessionPendingSend } from './structured-agent-sessi
 const STRUCTURED_AGENT_SESSION_DELIVERY_SENDING: NativeChatDeliveryNotice = { sending: true }
 const NO_COMMANDS: ReadonlySet<string> = new Set()
 
-/** Show sending until host rows arrive and host-worded rejections afterward; unconfirmed sends explain their return in the composer instead. */
+/** Show sending until provider acknowledgement, then any host-worded rejection. */
 export function structuredAgentSessionDeliveryNotices(args: {
   pending: readonly StructuredAgentSessionPendingSend[]
   submissions: readonly AgentJournalSubmission[]
@@ -43,7 +43,9 @@ export function structuredAgentSessionDeliveryNotices(args: {
   )
   for (const submission of submissions) {
     const id = agentJournalSubmissionKey(submission.clientMessageId)
-    if (submission.dispatchState === 'rejected' && shown.has(id)) {
+    if (submission.dispatchState === 'pending') {
+      notices.set(id, STRUCTURED_AGENT_SESSION_DELIVERY_SENDING)
+    } else if (submission.dispatchState === 'rejected' && shown.has(id)) {
       // A failed start's words, unless its row carries them; other sentences quote their own.
       const fact = readWholeAgentSessionFailureFact(submission.rejection)
       const detail =

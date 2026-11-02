@@ -170,7 +170,8 @@ describe('the line under each of the chat own messages', () => {
           })
         )
       ).toEqual({
-        [agentJournalSubmissionKey('first')]: 'Your message was not sent.'
+        [agentJournalSubmissionKey('first')]: 'Your message was not sent.',
+        [agentJournalSubmissionKey('later')]: SENDING
       })
       expect(texts(notices({ submissions: [recorded('first')] }))).toEqual({
         [agentJournalSubmissionKey('first')]: "Claude couldn't start. Start a new chat to continue."
