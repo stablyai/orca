@@ -26,7 +26,7 @@ import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../src/shared/runtime-types'
-import { collectionVisits, fieldReads } from '../../src/main/runtime/collection-visits.test-fixture'
+import { collectionVisits, fieldReads } from '../../src/shared/collection-visits.test-fixture'
 import type { WorkspaceSessionState } from '../../src/shared/workspace-session-state-types'
 import {
   retired,

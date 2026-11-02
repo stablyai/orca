@@ -67,6 +67,9 @@ import * as sleepingResume from '@/lib/resume-sleeping-agent-session'
 import * as openExistingStructuredSession from '@/lib/open-existing-structured-session'
 import { structuredSessionOpenFeedback } from '@/lib/activate-ai-vault-structured-session'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import * as droppedRows from '@/store/repos/dropped-repo-worktree-rows'
+import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import { collectionVisits } from '../../../../shared/collection-visits.test-fixture'
 import type { Repo } from '../../../../shared/repo-types'
 import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
@@ -451,6 +454,149 @@ it('finishes the click once server-1 lists the workspace this window had not loa
   expect(calls('agentSession.reveal')).toBe(0)
 })
 
+// Each population gets its own store, so the 20 and 200 cases compare their store updates here.
+const staleUpdates = new Map<number, number>()
+it.each([20, 200])(
+  "prepares server-1's cold catalog once per open beside %i stale registrations, keeping other owners",
+  async (stale) => {
+    seed(false, false, ['local'])
+    // server-1 no longer registers `stale` projects this window still lists, each with a listed and
+    // a detected checkout there, nor `shared`, which this machine still registers too. `foreign`
+    // is this machine's alone.
+    const remote = (id: string, path: string): Repo => ({
+      ...REPO,
+      id,
+      path,
+      executionHostId: 'runtime:server-1'
+    })
+    const staleRepos = Array.from({ length: stale }, (_, i) => remote(`stale-${i}`, `/stale/${i}`))
+    const checkout = (repoId: string, path: string, hostId: 'local' | 'runtime:server-1') =>
+      makeWorktree({ id: `${repoId}::${path}`, repoId, path, hostId })
+    const detected = (repoId: string, worktrees: ReturnType<typeof checkout>[]) => ({
+      repoId,
+      authoritative: true,
+      source: 'git' as const,
+      worktrees: worktrees.map((entry) => ({
+        ...entry,
+        ownership: 'orca-managed' as const,
+        selectedCheckout: false,
+        visible: true
+      }))
+    })
+    const foreignRows = [checkout('foreign', '/foreign', 'local')]
+    const foreignDetected = detected('foreign', foreignRows)
+    const sharedLocal = checkout('shared', '/shared', 'local')
+    const seeded = useAppStore.getState()
+    useAppStore.setState({
+      repos: [
+        ...seeded.repos,
+        { ...REPO, id: 'foreign', path: '/foreign' },
+        { ...REPO, id: 'shared', path: '/shared' },
+        remote('shared', '/shared'),
+        ...staleRepos
+      ],
+      worktreesByRepo: {
+        ...seeded.worktreesByRepo,
+        foreign: foreignRows,
+        shared: [sharedLocal, checkout('shared', '/shared-remote', 'runtime:server-1')],
+        ...Object.fromEntries(
+          staleRepos.map((repo) => [repo.id, [checkout(repo.id, repo.path, 'runtime:server-1')]])
+        )
+      },
+      detectedWorktreesByRepo: {
+        foreign: foreignDetected,
+        ...Object.fromEntries(
+          staleRepos.map((repo) => [
+            repo.id,
+            detected(repo.id, [checkout(repo.id, `${repo.path}-detected`, 'runtime:server-1')])
+          ])
+        )
+      }
+    })
+    // The pruner the catalog's adoption runs, with what it is given. Its body checks every dropped
+    // project for each one with detected checkouts (dropped-repo-worktree-rows.ts:66-73), an
+    // unchanged main cost: its visits are reported, not bounded here.
+    const pruner = { calls: 0, previous: 0, next: 0, dropped: 0, detected: 0, rows: 0, visits: 0 }
+    const prune = droppedRows.dropWorktreeRowsOfDroppedRepos
+    vi.spyOn(droppedRows, 'dropWorktreeRowsOfDroppedRepos').mockImplementation(
+      (rows, previous, next) => {
+        const kept = new Set(next.map(getRepoHostIdentity))
+        const dropped = new Set(
+          previous.filter((repo) => !kept.has(getRepoHostIdentity(repo))).map((repo) => repo.id)
+        )
+        pruner.calls++
+        pruner.previous += previous.length
+        pruner.next += next.length
+        pruner.dropped += dropped.size
+        for (const repoId of dropped) {
+          pruner.detected += rows.detectedWorktreesByRepo[repoId]?.worktrees.length ?? 0
+          pruner.rows += rows.worktreesByRepo[repoId]?.length ?? 0
+        }
+        const pruned = collectionVisits(() => prune(rows, previous, next))
+        pruner.visits += pruned.visits
+        return pruned.value
+      }
+    )
+    let release = () => {}
+    transport.catalog = new Promise((resolve) => (release = resolve))
+    const opens = vi.spyOn(openExistingStructuredSession, 'openDesktopStructuredSessionInteraction')
+    await mount()
+    const before = useAppStore.getState()
+    let updates = 0
+    const unsubscribe = useAppStore.subscribe(() => updates++)
+    await act(async () => fireEvent.click(remoteLink()))
+    await vi.waitFor(() => expect(calls('repo.list')).toBe(1))
+    await act(async () => release())
+    await act(async () => {
+      await opens.mock.results[0]!.value
+    })
+    unsubscribe()
+    const after = useAppStore.getState()
+    console.log('S4_PRUNER_MAIN_COST', JSON.stringify({ stale, ...pruner, updates }))
+    // The open prepared server-1 once: one catalog, one adoption pruning it, one listing.
+    expect({
+      refreshes: calls('repo.list'),
+      listings: calls('worktree.detectedList'),
+      prunes: pruner.calls
+    }).toEqual({ refreshes: 1, listings: 1, prunes: 1 })
+    // What the pruner was given: the store's projects and the catalog's, and the dropped ones'
+    // rows; nothing per chat or per stale row.
+    expect({ dropped: pruner.dropped, detected: pruner.detected, rows: pruner.rows }).toEqual({
+      dropped: stale + 1,
+      detected: stale,
+      rows: stale + 2
+    })
+    expect(pruner.previous).toBe(before.repos.length)
+    expect(pruner.next).toBeLessThanOrEqual(before.repos.length)
+    // The exact chat on its own host.
+    expect(after.activateTab).toHaveBeenLastCalledWith('remote-sender', { worktreeId: WORKSPACE })
+    expect(after.activeWorkspaceExecutionHostId).toBe('runtime:server-1')
+    expect(wakes).toHaveBeenCalledOnce()
+    // server-1's stale rows are gone; this machine's rows stay, and `foreign` is untouched.
+    for (const repo of staleRepos) {
+      expect(after.worktreesByRepo[repo.id] ?? []).toEqual([])
+      expect(after.detectedWorktreesByRepo[repo.id]?.worktrees ?? []).toEqual([])
+    }
+    expect(after.worktreesByRepo.shared).toEqual([sharedLocal])
+    expect(after.worktreesByRepo.foreign).toBe(foreignRows)
+    expect(after.detectedWorktreesByRepo.foreign).toBe(foreignDetected)
+    staleUpdates.set(stale, updates)
+    if (stale === 200) {
+      // The open's store updates do not grow with the stale registrations.
+      expect(updates).toBe(staleUpdates.get(20) ?? updates)
+    }
+    // Opening the same chat again finds it listed: no second preparation.
+    await act(async () => fireEvent.click(remoteLink()))
+    await act(async () => {
+      await opens.mock.results[1]!.value
+    })
+    expect({ refreshes: calls('repo.list'), prunes: pruner.calls }).toEqual({
+      refreshes: 1,
+      prunes: 1
+    })
+  }
+)
+
 it('lists the destination a reveal returns before showing it', async () => {
   seed(false, false, ['local'])
   // The host still records the chat under its old project until the reveal places it.
@@ -484,27 +630,47 @@ it('wakes and selects nothing when server-1 cannot list the workspace', async ()
   expect(calls('repo.list')).toBe(1)
 })
 
-it('leaves the user where they went while server-1 was still listing the workspace', async () => {
-  seed(false, false, ['local'])
-  let release = () => {}
-  transport.catalog = new Promise((resolve) => (release = resolve))
-  const unavailable = vi.spyOn(structuredSessionOpenFeedback, 'unavailable')
-  const opens = vi.spyOn(openExistingStructuredSession, 'openDesktopStructuredSessionInteraction')
-  await mount()
-  await act(async () => fireEvent.click(remoteLink()))
-  await vi.waitFor(() => expect(calls('repo.list')).toBe(1))
-  act(() => useAppStore.setState({ activeWorktreeId: 'repo-1::/elsewhere' }))
-  await act(async () => release())
-  // The open itself settles; nothing it did afterwards can move the user.
-  await act(async () => {
-    await opens.mock.results[0]!.value
-  })
-  expect(calls('worktree.detectedList')).toBe(1)
-  const state = useAppStore.getState()
-  expect(state.activeWorktreeId).toBe('repo-1::/elsewhere')
-  expect(state.activeWorkspaceExecutionHostId).toBe('local')
-  expect(state.activateTab).not.toHaveBeenCalled()
-  expect(wakes).not.toHaveBeenCalled()
-  expect(unavailable).not.toHaveBeenCalled()
-  expect(calls('agentSession.reveal')).toBe(0)
-})
+it.each([
+  {
+    went: 'another workspace',
+    go: () => useAppStore.setState({ activeWorktreeId: 'repo-1::/elsewhere' }),
+    view: 'terminal',
+    worktree: 'repo-1::/elsewhere'
+  },
+  // Settings changes only the page shown, not the workspace, its host or a dialog.
+  {
+    went: 'Settings',
+    go: () => useAppStore.getState().openSettingsPage(),
+    view: 'settings',
+    worktree: WORKSPACE
+  }
+])(
+  'leaves the user in $went, where they went while server-1 was still listing the workspace',
+  async ({ go, view, worktree }) => {
+    seed(false, false, ['local'])
+    let release = () => {}
+    transport.catalog = new Promise((resolve) => (release = resolve))
+    const unavailable = vi.spyOn(structuredSessionOpenFeedback, 'unavailable')
+    const opens = vi.spyOn(openExistingStructuredSession, 'openDesktopStructuredSessionInteraction')
+    await mount()
+    await act(async () => fireEvent.click(remoteLink()))
+    await vi.waitFor(() => expect(calls('repo.list')).toBe(1))
+    act(go)
+    await act(async () => release())
+    // The open itself settles; nothing it did afterwards can move the user.
+    await act(async () => {
+      await opens.mock.results[0]!.value
+    })
+    expect(calls('worktree.detectedList')).toBe(1)
+    const state = useAppStore.getState()
+    expect({
+      view: state.activeView,
+      worktree: state.activeWorktreeId,
+      host: state.activeWorkspaceExecutionHostId,
+      activated: vi.mocked(state.activateTab).mock.calls.length,
+      woken: wakes.mock.calls.length
+    }).toEqual({ view, worktree, host: 'local', activated: 0, woken: 0 })
+    expect(unavailable).not.toHaveBeenCalled()
+    expect(calls('agentSession.reveal')).toBe(0)
+  }
+)

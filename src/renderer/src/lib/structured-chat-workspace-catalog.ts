@@ -7,18 +7,28 @@ import {
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { withStructuredSessionRestoreTimeout } from './structured-session-restore-timeout'
+import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-focus-intent'
 
 /** Load the chat's host's own listing of its workspace, which a cold or reconnecting window may
- *  not hold yet, through the store's catalog loads. False when the user navigated meanwhile, so
- *  this open must not move them. A failed or slow load proves nothing: the caller's fresh check
- *  decides, and its existing message reports a workspace still unlisted. */
+ *  not hold yet, through the store's catalog loads. False when the user navigated meanwhile
+ *  (another page, dialog, workspace or tab), so this open must not move them. A failed or slow
+ *  load proves nothing: the caller's fresh check decides, and its existing message reports a
+ *  workspace still unlisted. */
 export async function loadStructuredChatWorkspaceListing(
   worktreeId: string,
   executionHostId: ExecutionHostId
 ): Promise<boolean> {
+  // Everything the user can move to while waiting: the page shown (Settings, Tasks…), a dialog,
+  // the workspace and its host, and the tab shown there.
   const navigation = () => {
     const state = useAppStore.getState()
-    return [state.activeWorktreeId, state.activeWorkspaceExecutionHostId, state.activeModal]
+    return [
+      state.activeView,
+      state.activeModal,
+      state.activeWorktreeId,
+      state.activeWorkspaceExecutionHostId,
+      state.activeWorktreeId ? resolveWebSessionVisibleTabId(state, state.activeWorktreeId) : null
+    ]
   }
   const origin = navigation()
   try {
