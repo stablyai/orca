@@ -664,7 +664,20 @@ describe('runPsInProcess', () => {
       })
     })
 
+    it('fresh recipient reads bypass recovered argv cached before the request', async () => {
+      pid = 5700
+      let argv = 'node /opt/claude/cli.js'
+      psAnswers(() => argv)
+      await runPsInProcess(args, BUDGET)
+      argv = 'node /srv/server.js'
+      await vi.advanceTimersByTimeAsync(1)
+      const observed = await runPsInProcess(args, { ...BUDGET, freshArgv: true })
+      expect(observed?.stdout).toContain('/srv/server.js')
+      expect(observed?.stdout).not.toContain('/opt/claude/cli.js')
+    })
+
     it('ages a capture by the cached argv it reused, so a same-comm re-exec cannot read as fresh', async () => {
+      pid = 5500
       let argv = 'node /opt/claude/cli.js'
       psAnswers(() => argv)
       const reader = strictReader()

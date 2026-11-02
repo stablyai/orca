@@ -45,6 +45,7 @@
       "scannerStopped": "The session scanner stopped unexpectedly. Refresh to try again.",
       "scopePathsTruncated": "Only the first {{limit}} project paths were scanned.",
       "sessionMetadataUnreadable": "Session metadata could not be read this scan.",
+      "transcriptTooLarge": "A {{label}} conversation is too large to load in Session History. Try resuming it in {{label}} directly.",
       "wslDistroNotRunning": "WSL transcript files are unavailable because WSL distro '{{distro}}' is not running. Open a terminal in it to start it.",
       "wslDistroUnverifiable": "WSL transcript files are unavailable because WSL didn't answer whether '{{distro}}' is running. Try again shortly.",
       "wslSessionsFromLastScan": "WSL could not be checked; its sessions are from the last scan.",
@@ -1613,6 +1614,7 @@
         "runCommandAgain": "Run /{{command}} again.",
         "runCommandWhenDone": "Run /{{command}} when it's done.",
         "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
+        "savedConversationMissing": "{{agent}} couldn't find this chat's saved conversation.",
         "sendAgainToTryOnceMore": "Send your message again to try once more.",
         "sendToTryAgain": "Send your message to try again.",
         "sessionNotRestored": "{{agent}} couldn't reopen its earlier session, so this chat continues in a new one. {{agent}} doesn't remember the earlier messages.",
@@ -1858,6 +1860,7 @@
         "reattachFile": "Remove it and attach it again.",
         "recordFailed": "Orca couldn't save this to the chat's history.",
         "recordUnreadable": "Orca couldn't read this chat's saved state.",
+        "mailOwnerUnconfirmed": "Orca couldn't confirm this message is still meant for this chat.",
         "reopenChat": "Reopen the chat to check again.",
         "restartFailed": "The agent couldn't restart.",
         "runClearWhenDone": "Run /clear when it's done.",
@@ -1881,26 +1884,6 @@
         "waitForStart": "Wait for the agent to finish starting.",
         "waitForTurn": "Wait for the agent to finish responding, or stop it.",
         "waitMoment": "Wait a moment."
-      },
-      "usageLimitActions": {
-        "continueNow": "Continue Now",
-        "leadIn": "Continue this chat without waiting:",
-        "switchAccount": "Switch Account",
-        "addAccount": "Add Account…",
-        "accountUnavailable": "This chat cannot move to another account. Hand it off to another agent instead."
-      },
-      "resumeInNewChat": {
-        "historyUnavailable": "Orca couldn't read the conversation",
-        "chatHeld": "another chat or terminal is using it",
-        "startFailedAfterClose": "{{agent}}'s terminal was closed, but the chat couldn't open: {{reason}}. Your conversation is saved. Open it from Session History.",
-        "notSavedAfterClose": "{{agent}}'s terminal was closed, but {{agent}} hadn't saved this conversation yet, so it can't continue in chat. Start a new chat instead.",
-        "otherTerminalAfterClose": "{{agent}}'s terminal was closed, but {{agent}} is running this conversation in another terminal. Quit it there or close that terminal, then open the conversation from Session History.",
-        "chatFailedAfterClose": "{{agent}}'s terminal was closed, but the chat couldn't open. Your conversation is saved. Open it from Session History.",
-        "terminalChanged": "The terminal running {{agent}} changed before it closed, so Orca left it open. Try again.",
-        "terminalExitUnproven": "Orca closed {{agent}}'s terminal but couldn't confirm it stopped, so the chat didn't open. Check the host connection, then open the conversation from Session History.",
-        "resumeFailed": "{{agent}} couldn't continue in chat. Check this terminal and the host connection, then try again.",
-        "exitUnconfirmedFromTerminal": "{{agent}} is still running this conversation in this terminal. Quit {{agent}} here, then open this conversation from Session History.",
-        "exitUnconfirmed": "{{agent}} is running this conversation in another terminal. Quit it there or close that terminal, then try again."
       }
     },
     "onboarding": {
@@ -1912,6 +1895,12 @@
           "startWorkspaceFromIssue": "Start a workspace from any GitHub issue or pull request, prefilled with its title and context"
         }
       }
+    },
+    "orchestrationCrew": {
+      "needsYou_one": "{{count}} needs you",
+      "needsYou_other": "{{count}} need you",
+      "workers_one": "{{count}} worker",
+      "workers_other": "{{count}} workers"
     },
     "tab": {
       "bar": {
@@ -1985,6 +1974,7 @@
       "androidSdkMissing": "Android SDK not found. Install Android Studio and set ANDROID_HOME.",
       "avdBootTimeout": "AVD \"{{avdName}}\" did not finish booting in time.",
       "avdExitedBeforeBoot": "AVD \"{{avdName}}\" stopped before it finished booting: {{detail}}",
+      "deviceHubInputBlocked": "Xcode's Device Hub has taken over input for this simulator, so taps and typing won't reach it. Quit Device Hub, then attach the simulator again.",
       "disabled": "Mobile Emulator is disabled in Settings.",
       "noAndroidDevices": "No Android devices or AVDs found. Create one in Android Studio.",
       "noDeviceSpecified": "No emulator device specified. Choose a default device in Settings > Mobile Emulator or pass a device.",

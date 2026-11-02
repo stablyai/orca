@@ -96,6 +96,44 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
     )
   }
 
+  protected hasExactTerminalSurfaceIdentity(expected: {
+    worktreeId: string
+    tabId: string
+    leafId: string
+    ptyId: string
+    terminalHandle: string
+    incarnationId: string
+  }): boolean {
+    if (this.graphStatus !== 'ready') {
+      return false
+    }
+    const pty = this.ptysById.get(expected.ptyId)
+    if (
+      !pty?.connected ||
+      pty.incarnationId !== expected.incarnationId ||
+      this.paneOfPty(pty).tabId !== expected.tabId ||
+      this.paneOfPty(pty).paneKey !== makePaneKey(expected.tabId, expected.leafId) ||
+      !worktreeIdsEqual(pty.worktreeId, expected.worktreeId) ||
+      this.handleByPtyId.get(expected.ptyId) !== expected.terminalHandle
+    ) {
+      return false
+    }
+    const tab = this.tabs.get(expected.tabId)
+    const leaf = this.leaves.get(this.getLeafKey(expected.tabId, expected.leafId))
+    const ptyLeaves = this.getLeavesForPty(expected.ptyId)
+    return (
+      Boolean(tab && worktreeIdsEqual(tab.worktreeId, expected.worktreeId)) &&
+      Boolean(
+        leaf &&
+        leaf.ptyId === expected.ptyId &&
+        worktreeIdsEqual(leaf.worktreeId, expected.worktreeId)
+      ) &&
+      ptyLeaves.length === 1 &&
+      ptyLeaves[0]?.tabId === expected.tabId &&
+      ptyLeaves[0]?.leafId === expected.leafId
+    )
+  }
+
   protected rollbackLegacyWorkerTerminalSurface(
     candidate: LegacyWorkerTerminalRecoveryPlan['candidates'][number]
   ): void {

@@ -19,7 +19,7 @@ import type {
   RuntimeWorktreeScanCache,
   RuntimeWorktreeScanInFlight
 } from '../orca-runtime-core'
-import type { AgentBrowserBridge } from '../../browser/agent-browser-bridge'
+import type { AgentBrowserBridge } from '../../browser/agent-browser/agent-browser-bridge'
 import type { BrowserBackend } from '../../browser/browser-backend'
 import type { EmulatorBridge } from '../../emulator/emulator-bridge'
 import { RuntimeResolvedWorktreeCache } from '../runtime-resolved-worktree-cache'
@@ -286,8 +286,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     new OrchestrationStructuredMailboxPointerDelivery<RuntimeMessageWaiter>({
       getDb: () => this._orchestrationDb,
       getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
-      resolveStructuredTarget: (mailboxHandle) =>
-        this.resolveStructuredMailboxTarget(mailboxHandle),
+      resolveStructuredTarget: (handle) => this.resolveStructuredMailboxTarget(handle),
+      redeliver: (handle) => this.deliverPendingMessagesForHandle(handle),
       getCliCommand: localOrchestrationCliCommand,
       senderSnapshot: (party, reportedDispatchId) =>
         this.orchestrationSenderNames.snapshotOf(party, reportedDispatchId),

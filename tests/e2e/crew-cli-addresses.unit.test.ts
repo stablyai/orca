@@ -10,7 +10,7 @@ import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../sr
 import { dispatch } from '../../src/cli/dispatch'
 import { RuntimeClient, RuntimeClientError } from '../../src/cli/runtime-client'
 import { buildCrewSnapshot } from '../../src/main/runtime/orchestration/crew/crew-read-model'
-import { agentSessionConversationView } from '../../src/shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../src/shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   createSessionCallerHarness,
   orchestrationRequest,

@@ -59,12 +59,15 @@ describe('settings historical acceptance', () => {
     { nativeChatQueueFollowUps: false },
     { nativeChatQueueFollowUps: 'false' }
   ])(
-    'reads the existing queue boolean without treating false as missing (%j)',
+    'distinguishes an explicit queue boolean from a missing older-host report (%j)',
     async (settings) => {
       const response = await nativeChatQueueFollowUpsRead.request(replyWith(success({ settings })))
       expect(nativeChatQueueFollowUpsRead.interpret(response)).toEqual({
         accepted: true,
-        value: settings?.nativeChatQueueFollowUps !== false
+        value:
+          typeof settings?.nativeChatQueueFollowUps === 'boolean'
+            ? settings.nativeChatQueueFollowUps
+            : null
       })
       expect(
         nativeChatQueueFollowUpsRead.interpret(

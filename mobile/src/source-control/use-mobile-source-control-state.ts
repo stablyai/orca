@@ -15,8 +15,7 @@ import { useMobileSourceControlKeyboardLift } from './use-mobile-source-control-
 import type { RuntimeGitLocalBranches } from '../../../src/shared/runtime-types'
 import {
   buildMobileBranchCompareSection,
-  canOpenMobileBranchCompareDiff,
-  formatMobileBranchCompareSummary
+  canOpenMobileBranchCompareDiff
 } from './mobile-branch-compare'
 
 import {
@@ -89,9 +88,6 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     () => buildMobileBranchCompareSection(branchCompareResult?.entries ?? []),
     [branchCompareResult, t]
   )
-  const branchCompareSummaryText = branchCompareResult
-    ? formatMobileBranchCompareSummary(branchCompareResult.summary)
-    : null
   const branchCompareCanOpen = branchCompareResult
     ? canOpenMobileBranchCompareDiff(branchCompareResult.summary)
     : false
@@ -124,12 +120,6 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const branchLabel = formatBranchLabel(status?.branch, status?.head)
   const upstream = status?.upstreamStatus
   const upstreamKnown = upstream !== undefined
-  const syncLabel =
-    upstream && upstream.hasUpstream
-      ? t('sourceControl.state.syncStatus', '{{ahead}} ahead, {{behind}} behind', upstream)
-      : upstream && !upstream.hasUpstream
-        ? t('sourceControl.state.noUpstream', 'No upstream')
-        : null
 
   const { sendGitRequest, sendCommitRequest, runGitSyncSteps } = useMobileGitRequests({
     client,
@@ -239,7 +229,6 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     status,
     sections,
     branchCompareResult,
-    branchCompareSummaryText,
     branchEntries,
     shouldShowBranchCompareSection,
     hasVisibleChanges,
@@ -249,7 +238,6 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     unstagedCount,
     branchLabel,
     upstreamKnown,
-    syncLabel,
     primaryActionArgs,
     createPrAction,
     loadStatus,

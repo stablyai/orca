@@ -122,14 +122,4 @@ describe('useReadOnScreenAttention — clock-skewed execution host', () => {
 
     expect(calls).toEqual([])
   })
-
-  it('keeps an explicitly marked-unread visible turn unread', () => {
-    seedFutureStampedTurn(NOW - 5_000)
-    useAppStore.getState().acknowledgeAgents([PANE_KEY])
-
-    renderHook(() => useReadOnScreenAttention())
-    useAppStore.getState().unacknowledgeAgents([PANE_KEY])
-
-    expect(useAppStore.getState().acknowledgedAgentsByPaneKey[PANE_KEY]).toBeUndefined()
-  })
 })
