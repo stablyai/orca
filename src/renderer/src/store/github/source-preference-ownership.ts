@@ -235,6 +235,10 @@ export abstract class GitHubSourceOwnership {
   context(repo: Repo) {
     return this.owners.get(bindingKey(repo))?.id ?? 0
   }
+  /** True while the repo's latest source save is held: its collection has no answer yet, not an empty one. */
+  saving(repo: Repo) {
+    return !!this.writes.get(bindingKey(repo))?.pending
+  }
   capture(repo: Repo | undefined, source?: TaskSourceContext | null): Attempt {
     const write = repo && this.writes.get(bindingKey(repo))
     const owner = repo ? this.owners.get(bindingKey(repo)) : undefined

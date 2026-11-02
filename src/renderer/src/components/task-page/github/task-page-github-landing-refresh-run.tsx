@@ -165,6 +165,9 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
   setGithubUnavailable(false)
   setTasksLoading(targetPage > 0 ? cachedTargetPage === null : anyUncached)
 
+  // Why: a held source save makes an answer obsolete, not empty; its settle bumps the nonce that reruns this.
+  const sourceSaveHeld = () =>
+    selectedRepos.some((r) => useAppStore.getState().githubSourceCollections.saving(r))
   const forceRefresh = taskRefreshNonce !== lastFetchedNonceRef.current
   lastFetchedNonceRef.current = taskRefreshNonce
   // Why: treat a preference-flip nonce bump as a forced refresh so it bypasses the dedupe map and can't reuse pre-flip data.
@@ -267,7 +270,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
         if (!cancelled && paginationGenerationRef.current === requestGeneration) {
           setPaginationLoading(false)
           setLoadingTargetPage(null)
-          setTasksLoading(false)
+          setTasksLoading(sourceSaveHeld())
         }
       })
   }
@@ -299,7 +302,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
         return
       }
       if (!result) {
-        setTasksLoading(false)
+        setTasksLoading(sourceSaveHeld())
         setTasksRefreshing(false)
         setTasksFiltering(false)
         return

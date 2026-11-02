@@ -32,9 +32,13 @@ import { useTaskPageGitHubDetail } from './github/use-task-page-github-detail'
 import { useTaskPageGitHubCacheReconciliation } from './github/use-task-page-github-cache-reconciliation'
 import { useTaskPageSourceDisplay } from './use-task-page-source-display'
 import { TaskPageGitHubFilters } from './github/Filters'
+import { TaskPageGitHubList } from './github/List'
+import { useTaskPageGitHubListProjection } from './github/use-task-page-github-list-projection'
 import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'
 
 vi.mock('@/components/github/PRFilterDropdowns', () => ({ default: () => null }))
+// The list's own states are under test; mounted-rows shows the row titles.
+vi.mock('./github/Rows', () => ({ TaskPageGitHubRows: () => null }))
 // Count the source reader's own work at its boundary; writers keep the uninstrumented cache.
 const readerWork = vi.hoisted(() => ({
   invocations: 0,
@@ -172,8 +176,21 @@ function useMountedSourceDisplay(runRequests = false) {
   return useTaskPageSourceDisplay(sourceDisplayInput)
 }
 let view: ReturnType<typeof useMountedSourceDisplay>
+const NO_ROW_MUTATIONS = { softHiddenItemKeys: new Set<string>() }
+// A child, so the list's own subscriptions never count as Harness renders.
+function MountedList() {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the projection reads stage 1-8 state and the kind; of stages 9-23 it reads only row mutations, stubbed with none hidden.
+  const listInput = { ...view, githubWorkItemMutation: NO_ROW_MUTATIONS } as unknown as Parameters<
+    typeof useTaskPageGitHubListProjection
+  >[0]
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: List reads stage 1-8 state, refs and the projection; Rows, the only reader of later stages, is stubbed.
+  const listModel = useTaskPageGitHubListProjection(
+    listInput
+  ) as unknown as TaskPageComposerActionsModel
+  return <TaskPageGitHubList model={listModel} />
+}
 let harnessRenders = 0
-function Harness({ runRequests = false }: { runRequests?: boolean }) {
+function Harness({ runRequests = false, list = false }: { runRequests?: boolean; list?: boolean }) {
   harnessRenders += 1
   view = useMountedSourceDisplay(runRequests)
   const filtersFields = {
@@ -196,6 +213,7 @@ function Harness({ runRequests = false }: { runRequests?: boolean }) {
         {view.pages[view.currentPage]?.map((row) => row.title).join(',') ?? ''}
       </output>
       <output data-testid="mounted-count">{view.countedTotalPages ?? 'unknown'}</output>
+      {list ? <MountedList /> : null}
     </TooltipProvider>
   )
 }
@@ -663,21 +681,27 @@ describe('mounted Tasks source lifetime', () => {
     items: [item(owner.owner)],
     sources: sources(owner)
   })
-  it('keeps the mounted picker across a held save/list and ends an inverted A→B→A with its own rows and count', async () => {
+  // One selected repo on Upstream, its first list answered and the resume step done.
+  async function mountUpstream(list = false) {
     useAppStore.setState({
       repos: [repo],
       settings: createGlobalSettingsFixture({ defaultRepoSelection: [repo.id] }),
       taskPageData: { taskSource: 'github' }
     })
-    const list = vi.mocked(window.api.gh.listWorkItems).mockResolvedValue(answer(upstream))
-    const count = vi.mocked(window.api.gh.countWorkItems).mockResolvedValue(180)
+    let mounted!: ReturnType<typeof render>
     await act(async () => {
-      render(<Harness runRequests />)
+      mounted = render(<Harness runRequests list={list} />)
     })
     await act(async () => {
       view.setTaskResumeApplied(true)
       await flush()
     })
+    return mounted
+  }
+  it('keeps the mounted picker across a held save/list and ends an inverted A→B→A with its own rows and count', async () => {
+    const list = vi.mocked(window.api.gh.listWorkItems).mockResolvedValue(answer(upstream))
+    const count = vi.mocked(window.api.gh.countWorkItems).mockResolvedValue(180)
+    await mountUpstream()
     expect(screen.getByTestId('mounted-rows')).toHaveTextContent(upstream.owner)
     const knownA = screen.getByTestId('mounted-count').textContent
     expect(knownA).not.toBe('unknown')
@@ -740,25 +764,43 @@ describe('mounted Tasks source lifetime', () => {
     })
     expect(screen.getByTestId('mounted-count').textContent).not.toBe(currentCount)
   })
-  it('rejects a held numbered page after a flip and retires mounted/resume data on origin replacement with upstream fixed', async () => {
-    useAppStore.setState({
-      repos: [repo],
-      settings: createGlobalSettingsFixture({ defaultRepoSelection: [repo.id] }),
-      taskPageData: { taskSource: 'github' }
+  it('shows the loading rows, never the empty state, from a held source click until that source answers', async () => {
+    const list = vi.mocked(window.api.gh.listWorkItems).mockResolvedValue(answer(upstream))
+    vi.mocked(window.api.gh.countWorkItems).mockResolvedValue(180)
+    const { container } = await mountUpstream(true)
+    expect(screen.getByTestId('mounted-rows')).toHaveTextContent(upstream.owner)
+    const save = Promise.withResolvers<Repo>()
+    vi.mocked(window.api.repos.update).mockReturnValueOnce(save.promise)
+    const origin = Promise.withResolvers<Awaited<ReturnType<typeof window.api.gh.listWorkItems>>>()
+    list.mockReturnValue(origin.promise)
+    const expectLoading = (loading: boolean) => {
+      expect(screen.queryByText('No matching GitHub work')).toBeNull()
+      expect(container.querySelector('.animate-pulse') !== null).toBe(loading)
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Origin' }))
+    expectLoading(true)
+    await act(flush)
+    expectLoading(true)
+    await act(async () => {
+      save.resolve({ ...repo, issueSourcePreference: 'origin' })
+      await flush()
     })
+    expectLoading(true)
+    await act(async () => {
+      origin.resolve(answer(fork))
+      await flush()
+    })
+    expectLoading(false)
+    expect(screen.getByTestId('mounted-rows')).toHaveTextContent(fork.owner)
+  })
+  it('rejects a held numbered page after a flip and retires mounted/resume data on origin replacement with upstream fixed', async () => {
     const list = vi.mocked(window.api.gh.listWorkItems).mockResolvedValue(answer(upstream))
     vi.mocked(window.api.gh.countWorkItems).mockResolvedValue(120)
     vi.mocked(window.api.repos.update).mockImplementation(async ({ updates }) => ({
       ...repo,
       ...updates
     }))
-    await act(async () => {
-      render(<Harness runRequests />)
-    })
-    await act(async () => {
-      view.setTaskResumeApplied(true)
-      await flush()
-    })
+    await mountUpstream()
     const initialContext = view.githubResumeContextKey
     expect(taskPageGitHubResumeCache.read(initialContext, 0)?.items[0].title).toBe(upstream.owner)
     const picker = screen.getByRole('group', { name: 'Issue source' })
