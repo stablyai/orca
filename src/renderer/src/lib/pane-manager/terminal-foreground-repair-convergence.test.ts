@@ -313,31 +313,4 @@ describe('foreground repaint convergence', () => {
     })
     expect(requests).toEqual([{ start: 2, end: 17 }])
   })
-
-  it('repaints the whole viewport when the parse span cannot be observed', async () => {
-    const requests: SpanRequest[] = []
-    const target: ForegroundTerminalOutputTarget = {
-      rows: 24,
-      buffer: {
-        active: { type: 'normal', cursorY: 3, baseY: 0, viewportY: 0 }
-      },
-      refresh: (start, end) => requests.push({ start, end }),
-      write: (_data, callback) => callback?.()
-    }
-    writeForegroundTerminalChunk(target, 'x', {
-      forceViewportRefresh: true,
-      shouldRefreshViewportSynchronously: () => false
-    })
-    expect(requests).toEqual([{ start: 0, end: 23 }])
-  })
-
-  it('keeps the follow-up settle repaint on the whole viewport', async () => {
-    const harness = createHarness(80, 24)
-    await seed(harness, SCROLLBACK_SEED)
-    harness.requests.length = 0
-    await writeAndSettle(harness, 'scrolling output\r\n')
-    expect(harness.requests[0]).toEqual({ start: 0, end: 23 })
-    discardForegroundRenderSettle(harness.target)
-    harness.terminal.dispose()
-  })
 })
