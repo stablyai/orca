@@ -408,6 +408,7 @@ describe('completed deferred updater setup ownership', () => {
       'setPendingUpdateNudgeId',
       'setDismissedUpdateNudgeId',
       'getReleaseChannelOverride',
+      'getUpdateDelayDays',
       'onBeforeQuitFailure',
       'installMode'
     ])
@@ -415,6 +416,9 @@ describe('completed deferred updater setup ownership', () => {
     expect(options.getPendingUpdateNudgeId?.()).toBe('pending')
     expect(options.getDismissedUpdateNudgeId?.()).toBe('dismissed')
     expect(options.getReleaseChannelOverride?.()).toBe('rc')
+    expect(options.getUpdateDelayDays?.()).toBe(0)
+    owner.store.getSettings.mockReturnValue({ updateDelayDays: 7 })
+    expect(options.getUpdateDelayDays?.()).toBe(7)
     owner.store.getUI.mockReturnValue({ ...owner.store.getUI(), lastUpdateCheckAt: 456 })
     expect(options.getLastUpdateCheckAt?.()).toBe(456)
     options.setLastUpdateCheckAt?.(789)

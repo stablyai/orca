@@ -128,7 +128,10 @@ export const AgentLaunchPicker = memo(
               <ChevronDown className="size-3.5 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="min-w-64">
+          <DropdownMenuContent
+            align="start"
+            className="w-(--radix-dropdown-menu-trigger-width) min-w-(--radix-dropdown-menu-trigger-width)"
+          >
             {children}
             {model.state === 'settled' ? (
               <AgentLaunchPickerMenu

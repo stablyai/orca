@@ -1,5 +1,5 @@
 import React from 'react'
-import { ChevronDown, Settings2 } from 'lucide-react'
+import { ChevronDown, Settings2, Terminal } from 'lucide-react'
 import type AgentCombobox from '@/components/agent/AgentCombobox'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
@@ -92,6 +92,7 @@ export function NewWorkspaceComposerAgentSection({
           onPick={(agent, draft, entry) => onQuickAgentChange(agent, draft?.surface, draft, entry)}
         >
           <DropdownMenuItem onSelect={() => onQuickAgentChange(null)}>
+            <Terminal className="size-3.5" />
             {translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
           </DropdownMenuItem>
           {onQuickSetupOnlySelect ? (
