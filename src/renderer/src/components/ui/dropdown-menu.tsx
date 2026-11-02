@@ -7,8 +7,40 @@ import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { keepFocusWhileMenuCloses } from './menu-item-closing-focus'
 import { useMenuPointerHighlight } from './menu-pointer-highlight'
 
-function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
-  return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />
+const DropdownMenuCloseContext = React.createContext<() => void>(() => {})
+
+function DropdownMenu({
+  open: openProp,
+  defaultOpen = false,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
+  // Owned here, as Radix would own it, so a control that is not a menu item can close the menu.
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen)
+  const open = openProp ?? uncontrolledOpen
+  const changeOpen = React.useCallback(
+    (next: boolean) => {
+      setUncontrolledOpen(next)
+      onOpenChange?.(next)
+    },
+    [onOpenChange]
+  )
+  const close = React.useCallback(() => changeOpen(false), [changeOpen])
+  return (
+    <DropdownMenuCloseContext.Provider value={close}>
+      <DropdownMenuPrimitive.Root
+        data-slot="dropdown-menu"
+        open={open}
+        onOpenChange={changeOpen}
+        {...props}
+      />
+    </DropdownMenuCloseContext.Provider>
+  )
+}
+
+/** Closes the enclosing menu the way choosing one of its items does. */
+function useCloseDropdownMenu(): () => void {
+  return React.useContext(DropdownMenuCloseContext)
 }
 
 function DropdownMenuPortal({
@@ -249,6 +281,7 @@ export {
   DropdownMenuContent,
   DropdownMenuLabel,
   DropdownMenuItem,
+  useCloseDropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,

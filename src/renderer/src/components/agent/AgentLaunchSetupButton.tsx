@@ -7,6 +7,7 @@ import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/compon
 import { translate } from '@/i18n/i18n'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
 import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import { returnToLaunchItem } from './agent-launch-row'
 
 // The menu and its popovers unmount on dismissal; authored setups live for this app session.
 const sessionDrafts = new Map<string, AgentPickerDraft>()
@@ -16,16 +17,8 @@ function setupKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
     event.preventDefault()
     event.stopPropagation()
     event.currentTarget.click()
-  } else if (['ArrowLeft', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
-    const row = event.currentTarget.closest<HTMLElement>('[role="menuitem"]')
-    if (row) {
-      event.preventDefault()
-      event.stopPropagation()
-      row.focus()
-      if (event.key !== 'ArrowLeft') {
-        row.dispatchEvent(new window.KeyboardEvent('keydown', { key: event.key, bubbles: true }))
-      }
-    }
+  } else {
+    returnToLaunchItem(event)
   }
 }
 

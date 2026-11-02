@@ -224,7 +224,8 @@ it.each([
           )
         )
       }
-      if (element.matches('[role="menuitem"]')) {
+      // The row the setup anchors to: its launch item with Configure beside it.
+      if (element.matches('[role="menuitem"], [data-agent-launch-row]')) {
         return element.isConnected ? row : new DOMRect()
       }
       if (element.matches('[data-slot="popover-trigger"]')) {
@@ -574,7 +575,7 @@ it('opens a searched setup only from its chevron and launches the alternate way 
     )
     input?.dispatchEvent(new Event('input', { bubbles: true }))
   })
-  const row = document.querySelector<HTMLElement>('[role="menuitem"]')!
+  const row = document.querySelector<HTMLElement>('[data-agent-launch-row]')!
   expect(row.querySelectorAll('button')).toHaveLength(1)
   expect(document.querySelector('button[aria-label="Launch terminal"]')).toBeNull()
   act(() => row.querySelector<HTMLButtonElement>('button')?.click())
@@ -594,7 +595,9 @@ it('opens a searched setup only from its chevron and launches the alternate way 
 it('shows only the chevron and keeps a plain row click free of setup overrides', () => {
   const row = document.querySelector<HTMLElement>('[role="menuitem"]')!
   expect(
-    [...row.querySelectorAll('button')].map((button) => button.getAttribute('aria-label'))
+    [...row.parentElement!.querySelectorAll('button')].map((button) =>
+      button.getAttribute('aria-label')
+    )
   ).toEqual(['Configure Codex'])
   act(() => row.click())
   expect(launch).toHaveBeenCalledExactlyOnceWith(entry.rows[0], undefined)
@@ -615,7 +618,7 @@ it('launches the row default with Enter once, without opening setup', () => {
 it('still launches today’s default when the row is clicked while its setup is open', async () => {
   const user = userEvent.setup()
   const row = document.querySelector<HTMLElement>('[role="menuitem"]')!
-  await user.click(row.querySelector<HTMLButtonElement>('button')!)
+  await user.click(row.parentElement!.querySelector<HTMLButtonElement>('button')!)
   expect(launch).not.toHaveBeenCalled()
   await user.click(row)
   expect(launch).toHaveBeenCalledExactlyOnceWith(entry.rows[0], undefined)

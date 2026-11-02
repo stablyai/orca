@@ -1,13 +1,17 @@
-import React, { useRef } from 'react'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import React, { useId, useRef } from 'react'
+import { DropdownMenuItem, useCloseDropdownMenu } from '@/components/ui/dropdown-menu'
 import { AgentSurfaceLaunchButton } from '@/components/agent/AgentSurfaceLaunchButton'
+import {
+  keepLaunchItemHighlight,
+  LAUNCH_ROW_ATTRIBUTE,
+  LAUNCH_ROW_REVEAL,
+  returnToLaunchItem
+} from '@/components/agent/agent-launch-row'
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch-picker-rows'
 import { rowTitle } from './tab-agent-row-presentation'
 import { terminalPendingReason } from './new-tab-agent-menu-model'
 
-const ROW_NAVIGATION_KEYS = new Set(['ArrowLeft', 'ArrowUp', 'ArrowDown', 'Home', 'End'])
-
-// Why: the row starts its own surface; its trailing button (or ArrowRight, then Enter) opens the other.
+// Why: the row starts its own surface; the button beside it (or ArrowRight, then Enter) opens the other.
 export function SurfaceChoiceRow({
   row,
   other,
@@ -26,84 +30,88 @@ export function SurfaceChoiceRow({
   children: React.ReactNode
 }): React.JSX.Element {
   const otherButton = useRef<HTMLButtonElement>(null)
-  const releaseTarget = useRef<{ event: PointerEvent; target: EventTarget } | null>(null)
+  // Radix chooses the item a press-and-drag releases on; the button beside it does the same.
+  const pressed = useRef(false)
+  const closeMenu = useCloseDropdownMenu()
+  const reasonId = useId()
   const title = rowTitle(row, label)
-  const selectedOther = useRef(false)
   const unavailable = terminalPendingReason(terminalPending, row)
   const otherUnavailable = terminalPendingReason(terminalPending, other)
   return (
-    <DropdownMenuItem
-      variant="launch"
-      disabled={disabled || (!!unavailable && !!otherUnavailable)}
-      aria-disabled={disabled || !!unavailable}
-      onSelect={(event) => {
-        if (unavailable && !selectedOther.current) {
-          event.preventDefault()
-        }
-      }}
-      title={unavailable ?? title}
-      aria-label={title}
-      onPointerUp={(event) => {
-        // Radix synchronously clicks the row on drag release, discarding the release target.
-        const release = { event: event.nativeEvent, target: event.target }
-        releaseTarget.current = release
-        queueMicrotask(() => {
-          if (releaseTarget.current === release) {
-            releaseTarget.current = null
-          }
-        })
-      }}
-      onClick={(event) => {
-        const release = releaseTarget.current
-        releaseTarget.current = null
-        if (disabled) {
-          return
-        }
-        const target =
-          event.target === event.currentTarget && release && release.event.eventPhase !== Event.NONE
-            ? release.target
-            : event.target
-        selectedOther.current = target instanceof Node && !!otherButton.current?.contains(target)
-        if (selectedOther.current ? !otherUnavailable : !unavailable) {
-          runLaunch(selectedOther.current ? other : row)
-        }
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'ArrowRight' && !otherUnavailable) {
-          event.preventDefault()
-          otherButton.current?.focus()
-        }
-      }}
+    <div
+      {...LAUNCH_ROW_ATTRIBUTE}
+      className="flex items-center rounded-[7px] pr-2 has-[[data-highlighted]]:bg-black/8 dark:has-[[data-highlighted]]:bg-white/14"
     >
-      {children}
-      {unavailable ? (
-        <span className="font-normal text-muted-foreground">{unavailable}</span>
-      ) : null}
+      <DropdownMenuItem
+        variant="launch"
+        className="min-w-0 flex-1 focus:bg-transparent aria-disabled:opacity-40 dark:focus:bg-transparent"
+        disabled={disabled}
+        // A waiting launch stays focusable so arrow keys still reach it and the other surface.
+        aria-disabled={disabled || !!unavailable || undefined}
+        aria-describedby={unavailable ? reasonId : undefined}
+        onSelect={(event) => {
+          if (unavailable) {
+            event.preventDefault()
+            return
+          }
+          runLaunch(row)
+        }}
+        title={unavailable ?? title}
+        aria-label={title}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowRight' && !otherUnavailable) {
+            event.preventDefault()
+            otherButton.current?.focus()
+          }
+        }}
+        onPointerLeave={keepLaunchItemHighlight}
+      >
+        {children}
+        {unavailable ? (
+          <span id={reasonId} className="font-normal text-muted-foreground">
+            {unavailable}
+          </span>
+        ) : null}
+      </DropdownMenuItem>
       <AgentSurfaceLaunchButton
         ref={otherButton}
         surface={other.kind === 'chat' ? 'chat' : 'terminal'}
         disabled={disabled}
         reason={otherUnavailable}
         title={rowTitle(other, label)}
-        className="hover:bg-accent focus-visible:bg-accent [[data-highlighted]_&]:opacity-100"
+        className={`hover:bg-accent focus-visible:bg-accent ${LAUNCH_ROW_REVEAL}`}
+        onPointerDown={() => {
+          pressed.current = true
+          // A press released anywhere else must not swallow the next drag release here.
+          window.addEventListener(
+            'pointerup',
+            () => {
+              pressed.current = false
+            },
+            { once: true }
+          )
+        }}
+        onPointerUp={(event) => {
+          if (!pressed.current) {
+            event.currentTarget.click()
+          }
+        }}
+        onClick={() => {
+          if (!disabled && !otherUnavailable) {
+            runLaunch(other)
+            closeMenu()
+          }
+        }}
         onKeyDown={(event) => {
-          // Stopped so the row's own Enter handling does not start the row's surface instead.
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault()
             event.stopPropagation()
             event.currentTarget.click()
-          } else if (ROW_NAVIGATION_KEYS.has(event.key)) {
-            event.preventDefault()
-            event.stopPropagation()
-            const item = event.currentTarget.closest<HTMLElement>('[role="menuitem"]')
-            item?.focus()
-            // Why: roving focus ignores keys from inside an item, so the row replays the move.
-            if (event.key !== 'ArrowLeft') {
-              item?.dispatchEvent(new KeyboardEvent('keydown', { key: event.key, bubbles: true }))
-            }
+          } else {
+            returnToLaunchItem(event)
           }
         }}
       />
-    </DropdownMenuItem>
+    </div>
   )
 }

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
@@ -49,22 +49,31 @@ it('keeps the terminal launch shown but waiting while the host connects, with ch
   )
   const view = render(menu(true))
   const row = screen.getByRole('menuitem', { name: /Codex/ })
-  // The row's launch waits and says why, without disabling Configure inside it.
-  expect(row.getAttribute('aria-disabled')).toBeNull()
-  const reason = document.getElementById(row.getAttribute('aria-describedby') ?? '')
-  expect(reason?.textContent).toBe('Connecting…')
-  const configure = screen.getByRole('button', { name: 'Configure Codex' })
-  expect(configure.closest('[aria-disabled="true"], [disabled]')).toBeNull()
+  // The waiting launch reads as unavailable, says why, and stays focusable.
+  expect(row.getAttribute('aria-disabled')).toBe('true')
+  expect(document.getElementById(row.getAttribute('aria-describedby') ?? '')?.textContent).toBe(
+    'Connecting…'
+  )
+  act(() => row.focus())
+  expect(document.activeElement).toBe(row)
+  fireEvent.keyDown(row, { key: 'Enter' })
   fireEvent.click(row)
   expect(launch).not.toHaveBeenCalled()
+  expect(screen.queryByRole('menu')).not.toBeNull()
+  // Configure sits beside it with its own enabled state, reached from the row by ArrowRight.
+  const configure = screen.getByRole('button', { name: 'Configure Codex' })
+  expect(configure.closest('[aria-disabled="true"], [disabled]')).toBeNull()
+  fireEvent.keyDown(row, { key: 'ArrowRight' })
+  expect(document.activeElement).toBe(configure)
   // One reason per row: the wait, not also the missing chat.
   const reasons = () =>
     [...screen.getByRole('menuitem', { name: /Claude/ }).querySelectorAll('.text-xs')].map(
       (node) => node.textContent
     )
   expect(reasons()).toEqual(['Connecting…'])
+  fireEvent.keyDown(configure, { key: 'Enter' })
+  expect(screen.getByRole('dialog', { name: 'Configure Codex' })).not.toBeNull()
   const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: 'Configure Codex' }))
   const buttons = () =>
     screen.getAllByRole('button', { name: /^Launch / }).map((button) => ({
       name: button.textContent,
@@ -93,4 +102,6 @@ it('keeps the terminal launch shown but waiting while the host connects, with ch
     expect.objectContaining({ surface: 'chat' }),
     expect.anything()
   )
+  // The chat closes the menu as a chosen item would, without the waiting row being chosen.
+  expect(screen.queryByRole('menu')).toBeNull()
 })

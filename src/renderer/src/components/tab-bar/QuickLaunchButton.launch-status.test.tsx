@@ -107,9 +107,10 @@ function reopenMenu(): void {
   })
 }
 
-function choiceModel(kind: 'cli' | 'chat'): menuRows.NewTabAgentMenuModel {
+function choiceModel(kind: 'cli' | 'chat', terminalPending?: true): menuRows.NewTabAgentMenuModel {
   return {
     state: 'settled',
+    ...(terminalPending ? { terminalPending } : {}),
     rows: [
       kind === 'cli'
         ? { kind, agent: 'codex', chat: true, executionHostId: 'runtime:server' }
@@ -247,7 +248,7 @@ it.each(['cli', 'chat'] as const)(
 )
 
 it.each(['cli', 'chat'] as const)(
-  'keeps %s drag release exact-once, expires unused release, and respects disabled',
+  'keeps %s drag release exact-once and respects disabled',
   async (kind) => {
     for (const alternate of [true, false]) {
       const { row, button } = renderChoice(kind, false, false)
@@ -258,24 +259,16 @@ it.each(['cli', 'chat'] as const)(
       )
       cleanup()
     }
-    for (const deferred of [false, true]) {
+    // As on any menu item, a press that starts on the row and is released on the button chooses
+    // the button, once.
+    {
       const { row, button } = renderChoice(kind)
       hover(button)
       act(() => {
         fireEvent.pointerDown(row, { pointerType: 'mouse' })
         fireEvent.pointerUp(button, { pointerType: 'mouse' })
-        expect(launchMock).not.toHaveBeenCalled()
-        if (!deferred) {
-          row.click()
-        }
       })
-      if (deferred) {
-        await act(async () => {
-          await Promise.resolve()
-          row.click()
-        })
-      }
-      expectLaunch(kind === 'cli' ? 'terminal' : 'chat')
+      expectLaunch(kind === 'cli' ? 'chat' : 'terminal')
       cleanup()
     }
     const { row, button } = renderChoice(kind, true)
@@ -289,6 +282,33 @@ it.each(['cli', 'chat'] as const)(
     expect(screen.queryByRole('menu')).not.toBeNull()
   }
 )
+
+it('keeps the chat beside a waiting terminal row usable while its host connects', () => {
+  vi.spyOn(menuRows, 'useNewTabAgentMenuRows').mockReturnValue(choiceModel('cli', true))
+  launchMock.mockReset().mockReturnValue({ surface: { kind: 'host-published' } })
+  render(
+    <QuickLaunchAgentMenuItems
+      worktreeId={WORKTREE_ID}
+      groupId="group-1"
+      onFocusTerminal={vi.fn()}
+    />
+  )
+  const row = screen.getByRole('menuitem', { name: 'Launch Codex in a new terminal' })
+  expect(row.getAttribute('aria-disabled')).toBe('true')
+  expect(document.getElementById(row.getAttribute('aria-describedby') ?? '')?.textContent).toBe(
+    'Connecting…'
+  )
+  act(() => row.focus())
+  fireEvent.keyDown(row, { key: 'Enter' })
+  act(() => row.click())
+  expect(launchMock).not.toHaveBeenCalled()
+  fireEvent.keyDown(row, { key: 'ArrowRight' })
+  const chat = screen.getByRole('button', { name: 'Start a chat with Codex' })
+  expect(document.activeElement).toBe(chat)
+  expect(chat.closest('[aria-disabled="true"], [disabled]')).toBeNull()
+  fireEvent.keyDown(chat, { key: 'Enter' })
+  expectLaunch('chat')
+})
 
 it.each(['chat', 'cli'] as const)(
   'preserves notes inputs and failure outcomes on the %s row chat action',
