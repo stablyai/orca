@@ -98,6 +98,7 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
   session.writeReplayData = (data: string): void => {
     // Drain old background bytes before replay so deferred writes cannot overwrite the new image.
     flushTerminalOutput(session.pane.terminal)
+    session.resumeEscapeGap.reset()
     data = session.idleCursorReset.processOutput(data)
     replayIntoTerminal(session.pane, session.deps.replayingPanesRef, data, {
       breadcrumbIdentity: {
@@ -113,6 +114,7 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
   session.writeReplayDataAsync = (data: string): Promise<void> => {
     // Rebuild WebGL after replay parses, rather than when it is merely queued.
     flushTerminalOutput(session.pane.terminal)
+    session.resumeEscapeGap.reset()
     data = session.idleCursorReset.processOutput(data)
     return replayIntoTerminalAsync(session.pane, session.deps.replayingPanesRef, data, {
       breadcrumbIdentity: {

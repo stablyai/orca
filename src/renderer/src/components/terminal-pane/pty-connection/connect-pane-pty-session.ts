@@ -2,6 +2,7 @@ import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyConnectionDeps } from '../pty-connection-types'
 import type { PtyTransport } from '../pty-transport-types'
 import type { TerminalIdleCursorReset } from '../terminal-idle-cursor-reset'
+import type { TerminalResumeEscapeGap } from '../terminal-resume-escape-gap'
 
 // Extracted installers share the closure’s mutable bindings through this bag without changing call order.
 export type ConnectPanePtySession = {
@@ -12,6 +13,7 @@ export type ConnectPanePtySession = {
   transport: PtyTransport
   hiddenOutputRestoreUnhideSeq: number | null
   idleCursorReset: TerminalIdleCursorReset
+  resumeEscapeGap: TerminalResumeEscapeGap
   // oxlint-disable-next-line typescript/no-explicit-any -- session bag for mechanical extract
   [key: string]: any
 }
