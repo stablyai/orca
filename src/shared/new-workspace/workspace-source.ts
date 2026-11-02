@@ -37,6 +37,11 @@ export type JiraWorkspaceSource = WorkspaceSourceLinkedItem & {
   type: 'issue'
 }
 
+export type PlaneWorkspaceSource = WorkspaceSourceLinkedItem & {
+  provider: 'plane'
+  type: 'issue'
+}
+
 export type WorkspaceSourceItemLike = Omit<WorkspaceSourceLinkedItem, 'provider'> & {
   provider?: WorkspaceSourceProvider
 }
@@ -49,6 +54,7 @@ export type WorkspaceSourceSelectionKind =
   | 'branch'
   | 'linear'
   | 'jira'
+  | 'plane'
 
 export type WorkspaceSourceSelection = {
   kind: WorkspaceSourceSelectionKind

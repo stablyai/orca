@@ -13,6 +13,7 @@ export type SettingsNavigationBuildOptions = {
   mobileEmulatorCreationEnabled: boolean
   isDev: boolean
   isLinearConnected: boolean
+  isPlaneConnected: boolean
   repos: readonly Repo[]
   projectGrouping?: ProjectGroupingModel
 }

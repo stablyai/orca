@@ -258,3 +258,4 @@ function ProviderAccountScopeRow({ scope }: { scope: ProviderHostScope }) {
 }
 
 export { JiraIntegrationCard } from './jira-integration-card'
+export { PlaneIntegrationCard } from './plane-integration-card'

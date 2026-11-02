@@ -171,7 +171,7 @@
         "inheritFont": "IDE と同じフォント",
         "fontPreviewLabel": "チャットフォントのプレビュー",
         "fontPreview": "この文章でチャットのフォントを確認できます。",
-        "title": "チャット UI",
+        "title": "チャット",
         "textSize": "テキストサイズ",
         "textSizeDescription": "メッセージ、ツールの動作、メッセージ入力欄。チャット内の {{increase}} / {{decrease}} でも変更できます。",
         "codeTextSize": "コードのテキストサイズ",
@@ -854,7 +854,9 @@
         "jira": {
           "856083302c": "Jira 接続は新規リクエストに置き換えられました。"
         },
-        "linear": {},
+        "linear": {
+          "37d36984d0": "Linear 接続は新規リクエストに置き換えられました。"
+        },
         "orca": {
           "profiles": {
             "612f7f6861": "プロファイルの作成に失敗しました",
@@ -1324,7 +1326,8 @@
       },
       "file": {
         "preview": {
-          "webClientUnavailable": "Web クライアントではドキュメントのプレビューを利用できません。"
+          "webClientUnavailable": "Web クライアントではドキュメントのプレビューを利用できません。",
+          "pairedOutsideWorktree": "ワークスペース外のファイルは、ペアリングされたサーバーではまだプレビューできません。"
         }
       },
       "clipboardWriteFailure": {
@@ -1411,6 +1414,27 @@
         "title": "Windows ドライブ上のフォルダーはこのコンピューターで追加してください",
         "descriptionWithPath": "{{value0}} は Windows ドライブ上にあります。WSL の Git はそこで誤った改行コードの変更を報告し、Windows から行った編集を見逃し、検索も遅くなります。",
         "description": "このフォルダーは Windows ドライブ上にあります。WSL の Git はそこで誤った改行コードの変更を報告し、Windows から行った編集を見逃し、検索も遅くなります。"
+      },
+      "plane": {
+        "usage": {
+          "examples": {
+            "readTicket": "リンクされた Issue を確認",
+            "readTicketSummary": "作業を開始する前に、リンクされた Plane Issue の完全なコンテキストを取得します。",
+            "readTicketPrompt": "{{value0}} を使用してこのワークツリーにリンクされた Plane Issue を確認し、開始前にゴールと受け入れ基準を要約してください。",
+            "postUpdate": "進捗状況を投稿",
+            "postUpdateSummary": "進捗状況または完了の概要を Plane Issue にコメントします。",
+            "postUpdatePrompt": "{{value0}} を使用して、何が変更されどのように検証されたかを含む完了報告を、リンクされた Plane Issue に投稿してください。",
+            "moveState": "Issue のステータスを進める",
+            "moveStateSummary": "作業の進行に合わせて Plane のワークフローステータスを進めます。",
+            "moveStatePrompt": "変更作業が進行中になったため、{{value0}} を使用してリンクされた Plane Issue を In Progress または In Review に移動してください。",
+            "triagePriority": "トリアージして優先度を設定",
+            "triagePrioritySummary": "スコープの明確化に合わせて Plane Issue の優先度やステータスを更新します。",
+            "triagePriorityPrompt": "{{value0}} を使用してリンクされた Plane Issue をトリアージし、優先度を urgent/high/medium/low に更新してステータスを調整してください。",
+            "createFollowup": "フォローアップ Issue を作成",
+            "createFollowupSummary": "開発中に見つかった後回しの作業や関連するバグについて、新しい Plane Issue を起票します。",
+            "createFollowupPrompt": "{{value0}} を使用して、後回しになったフォローアップ作業用の新しい Plane Issue を作成してください。"
+          }
+        }
       }
     },
     "hooks": {
@@ -1541,7 +1565,9 @@
         "automationsDescription": "Agent の作業をスケジュールし、自動化をサイドバーに表示するかどうかを選択します。",
         "shareSkillsTitle": "スキルを共有する",
         "shareSkillsDescription": "非公開リンクを使用してスキルを共有してください。持っている人なら誰でもインストールできます。",
-        "floatingWorkspaceWebDescription": "グローバルターミナルと markdown タブ。"
+        "floatingWorkspaceWebDescription": "グローバルターミナルと markdown タブ。",
+        "planeTitle": "Plane",
+        "planeDescription": "Orca での Plane の仕組み、セットアップチェックリスト、Agent スキル、プロンプト例。"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "貼り付け内容が大きすぎます。"
@@ -4045,7 +4071,8 @@
             "hiddenUsageProviders": "ほかに: {{value0}}",
             "zcodeUsageMenu": "ZCode の使用量",
             "rateLimitResetsAvailable_other": "レート制限リセットが {{count}} 回利用可能",
-            "staleCodexSessions_other": "{{count}} 件の Codex セッションがまだ以前のアカウントを使用しています。"
+            "staleCodexSessions_other": "{{count}} 件の Codex セッションがまだ以前のアカウントを使用しています。",
+            "9332ba8684": "切り替え先"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "アカウントを接続する",
@@ -5572,7 +5599,8 @@
           "fee535205b": "タスク",
           "d599269755": "サイドバーから非表示",
           "artifacts": "アーティファクト",
-          "skills": "スキル"
+          "skills": "スキル",
+          "openPlaneTasks": "Plane タスクを開く"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "クリア",
@@ -5776,7 +5804,13 @@
           "cliStartupAgent": "{{value0}} で開始",
           "cliCreated": "Orca CLI が作成",
           "linkedJira": "リンク済み Jira {{value0}}",
-          "openInOrcaBrowser": "Orca ブラウザで開く"
+          "openInOrcaBrowser": "Orca ブラウザで開く",
+          "e42941631a": "Linear で見る",
+          "5e982e6128": "Linear {{value0}}",
+          "b22f058067": "GitHub で見る",
+          "e97d8f2876": "Issue #{{value0}}",
+          "jiraIssue": "Jira {{value0}}",
+          "viewOnJira": "Jira で表示"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "状態: オープン",
@@ -5905,7 +5939,9 @@
           "pathLaunchFailedDetail": "このマシンで設定されているエディターのコマンドを確認してください。",
           "wsl": "WSL",
           "remoteEditorHint": "SSH ホスト上のフォルダーを開くことができるのは VS Code、Cursor、Zed のみです。",
-          "remoteRuntimeEditorHint": "このコンピュータ上のアプリは、Orca が SSH を介してサーバーに到達した場合にのみ、このサーバーのファイルを開くことができます。"
+          "remoteRuntimeEditorHint": "このコンピュータ上のアプリは、Orca が SSH を介してサーバーに到達した場合にのみ、このサーバーのファイルを開くことができます。",
+          "remoteLaunchFailed": "エディターでパスを開けませんでした。",
+          "remoteLaunchFailedDetail": "このマシンで設定されているエディターのコマンドを確認してください。"
         },
         "WorktreeTitleInlineRename": {
           "2f42ae024f": "未読:",
@@ -6524,7 +6560,8 @@
           "refresh": "更新",
           "wsl1Reason": "WSL 1 では Orca ホストを実行できません。{{command}} で変換してください",
           "noWsl2Title": "WSL 2 ディストリビューションが見つかりません",
-          "noWsl2Install": "Windows ターミナルで {{command}} を実行してインストールし、[更新] を選択してください。"
+          "noWsl2Install": "Windows ターミナルで {{command}} を実行してインストールし、[更新] を選択してください。",
+          "none": "WSL ディストリビューションが見つかりません。次のコマンドでインストールできます: wsl --install"
         },
         "wslHostRowStatus": {
           "connecting": "起動中",
@@ -6937,7 +6974,9 @@
             "tintColorDescription": "左サイドバーの表面に混ぜる色です。",
             "tintOpacity": "色合いの強さ",
             "tintOpacityDescription": "サイドバーに色合いをどの程度強く混ぜるかを調整します。",
-            "tintDescription": "左サイドバーをデフォルトのままにするか、色合いを付けます。ターミナルに合わせるには、ライトまたはダークのテーマで「ターミナルに合わせる」を選択します。"
+            "tintDescription": "左サイドバーをデフォルトのままにするか、色合いを付けます。ターミナルに合わせるには、ライトまたはダークのテーマで「ターミナルに合わせる」を選択します。",
+            "rowDescription": "左サイドバーをターミナルに合わせるか、既定のままにするか、色合いを加えます。",
+            "matchTerminal": "ターミナルに合わせる"
           },
           "2edf606c46": "閉じるときにトレイへ最小化",
           "b707773a0d": "有効にすると、ウィンドウを閉じても Orca は終了せず、システムトレイで実行を続けます。",
@@ -7275,7 +7314,11 @@
             "shellEnvToggleLabel": "シェル環境の使用の切り替え",
             "resumeTitle": "再起動後に作業中のチャットを自動的に再開する",
             "resumeCopy": "Orca が終了するかアップデートをインストールすると、Orca が再度開かれたときに作業中だったチャットが自動的に再開されます。",
-            "resumeToggleLabel": "再起動後の自動再開の切り替え"
+            "resumeToggleLabel": "再起動後の自動再開の切り替え",
+            "title": "Chat UI",
+            "toggleLabel": "Chat UI の切り替え",
+            "description": "チャット UI でサポートされている新規 Agent を開きます。",
+            "copy": "サポートされている新規 Agent は構造化チャットで開きます。他の Agent はターミナルで開きます。既存のチャットは引き続き利用可能です。"
           },
           "agentDashboard": {
             "title": "Agent ダッシュボード",
@@ -7444,7 +7487,8 @@
           "2763b0c045": "Ghostty 構成からインポートされる設定を確認します。",
           "d2f33670a9": "Ghostty からインポート",
           "273e7e81fe": "構成",
-          "1f744a72f4": "構成"
+          "1f744a72f4": "構成",
+          "e4bda7ce6f": "このシステムには Ghostty 構成が見つかりません。"
         },
         "WarpThemeImportModal": {
           "title": "Warp からインポート",
@@ -7764,7 +7808,20 @@
           "workerAutoReleaseTitle": "完了したワーカーを自動的に閉じる",
           "workerAutoReleaseDescription": "「開いたままにする」を選ばない限り、ワーカーの終了から2分後にターミナルまたはチャットを閉じます。再び作業を開始した場合、終了時に2分のカウントがやり直されます。",
           "workerAutoReleaseKeywordClose": "閉じる",
-          "workerAutoReleaseKeywordRelease": "解放"
+          "workerAutoReleaseKeywordRelease": "解放",
+          "chatErrorEscalationTitle": "チャットのエラーをコーディネーターに知らせる",
+          "chatErrorEscalationDescription": "割り当てられた Agent がターンを終了させるエラーに遭遇したとき、そのエラーをそのまま割り当て元のコーディネーターに送ります。タスクは Agent に割り当てられたままです。チャット UI で動作する Agent でのみ機能します。",
+          "chatErrorEscalationNeedsChat": "使用するには、試験的機能の設定でチャット UI をオンにしてください。",
+          "chatErrorEscalationKeywordError": "エラー",
+          "chatErrorEscalationKeywordChat": "チャット",
+          "heartbeatTitle": "ワーカーのハートビート",
+          "heartbeatDescription": "割り当てられたワーカーが数分ごとに状況を知らせるので、コーディネーターは作業中の Agent と応答しなくなった Agent を見分けられます。オフにするとコーディネーターへのメッセージは減りますが、その定期連絡がなくなります。変更後に割り当てられたワーカーに適用されます。",
+          "heartbeatKeywordHeartbeat": "ハートビート",
+          "heartbeatKeywordStalled": "停止",
+          "heartbeatKeywordInterval": "間隔",
+          "heartbeatIntervalTitle": "ハートビートの間隔",
+          "heartbeatIntervalDescription": "間隔を短くするとコーディネーターへの定期連絡が増えますが、メッセージも増えます。長くするとメッセージは減りますが、連絡の間隔が空きます。変更後に割り当てられたワーカーに適用されます。",
+          "heartbeatIntervalSuffix": "分"
         },
         "OrchestrationSetupCard": {
           "e7d2a5146c": "Agent がコンテキストを引き継ぎ、Orca を通じて作業を調整できるようにします。",
@@ -8255,7 +8312,9 @@
           "linearDescription": "Orca での Linear の仕組み、セットアップチェックリスト、Agent スキル、プロンプト例。",
           "tasksDescription": "プロバイダーを接続し、Linear スキルをインストールして、タスクに表示する項目を選択します。",
           "remoteServersDescription": "別のマシンで Orca を実行し、ここから作業します。",
-          "noSettingsFoundForQuery": "検索条件に一致する設定が見つかりませんでした:「{{value0}}」"
+          "noSettingsFoundForQuery": "検索条件に一致する設定が見つかりませんでした:「{{value0}}」",
+          "planeTitle": "Plane",
+          "planeDescription": "Orca での Plane の仕組み、セットアップチェックリスト、Agent スキル、プロンプト例。"
         },
         "SettingsFormControls": {
           "42a4d15a30": "一致するフォントがありません。",
@@ -8498,7 +8557,9 @@
           "integrationsHint": "すべてのプロバイダーの認証情報は次の場所でも管理できます：",
           "integrationsLink": "連携",
           "skillHint": "。Linear の接続後、使用例は設定 → Linear で確認できます。",
-          "incompleteBannerBodyWithLinear": "使用しないプロバイダーを非表示にするか、カードを展開して手順を完了してください。Linear では API アクセス、Agent スキル、タスクへの表示が必要です。"
+          "incompleteBannerBodyWithLinear": "使用しないプロバイダーを非表示にするか、カードを展開して手順を完了してください。Linear では API アクセス、Agent スキル、タスクへの表示が必要です。",
+          "plane": "Plane",
+          "planeDescription": "Plane Cloud またはセルフホストの Plane を接続し、タスクに表示します。"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "ペイン分割線の太さ。",
@@ -8738,7 +8799,11 @@
           "color_overrides_dark_description": "ダークターミナルテーマの個々の色をオーバーライドします。",
           "color_overrides_light_description": "ライトターミナルテーマの個々の色をオーバーライドします。",
           "reset_dark_color_overrides": "ダークテーマの色のオーバーライドをリセット",
-          "reset_light_color_overrides": "ライトテーマの色のオーバーライドをリセット"
+          "reset_light_color_overrides": "ライトテーマの色のオーバーライドをリセット",
+          "53ce336e15": "Orca を再起動して、ウィンドウのぼかしの変更を適用します。",
+          "97950bb087": "ターミナルウィンドウに背景のぼかしを適用します。再起動が必要です。",
+          "2b82242f43": "ウィンドウのぼかし",
+          "03c855d15f": "すべての色のオーバーライドをリセット"
         },
         "UIZoomControl": {
           "c2c64b24d0": "リセット"
@@ -9109,7 +9174,9 @@
               "project": "プロジェクト",
               "background": "背景",
               "tint": "色合い",
-              "tintDescription": "左サイドバーをデフォルトのままにするか、色合いを付けます。ターミナルに合わせるには、ライトまたはダークのテーマで「ターミナルに合わせる」を選択します。"
+              "tintDescription": "左サイドバーをデフォルトのままにするか、色合いを付けます。ターミナルに合わせるには、ライトまたはダークのテーマで「ターミナルに合わせる」を選択します。",
+              "description": "左サイドバーをターミナルに合わせるか、既定のままにするか、色合いを加えます。",
+              "terminal": "ターミナル"
             },
             "workspaceCardLayout": {
               "title": "ワークスペースカードのレイアウト",
@@ -9483,6 +9550,19 @@
               "extension": "拡張機能",
               "chrome": "クローム",
               "password": "パスワードマネージャー"
+            },
+            "nativeChat": {
+              "title": "Chat UI",
+              "grok": "grok",
+              "native": "ネイティブ",
+              "chat": "チャット",
+              "claude": "claude",
+              "codex": "codex",
+              "openclaude": "openclaude",
+              "omp": "ああ",
+              "terminal": "ターミナル",
+              "agent": "Agent",
+              "description": "チャット UI でサポートされている新規 Agent を開きます。"
             }
           }
         },
@@ -9790,7 +9870,10 @@
             "7166b9090c": "gh CLI を介した GitHub 認証。",
             "f16e41cc72": "GitHub 連携",
             "760e2446e0": "保存された API トークンまたは環境変数を使用した Bitbucket クラウド認証。",
-            "af5ae87847": "アクセストークン"
+            "af5ae87847": "アクセストークン",
+            "plane_title": "Plane 連携",
+            "plane_description": "Plane Cloud またはセルフホストを接続して Issue を参照・リンクします。",
+            "plane_keyword": "Plane"
           }
         },
         "jira": {
@@ -10282,7 +10365,8 @@
             "setup": "セットアップ",
             "apiKey": "APIキー",
             "skill": "スキル",
-            "connect": "接続"
+            "connect": "接続",
+            "plane": "Plane"
           }
         },
         "terminal": {
@@ -10532,7 +10616,9 @@
             "454df22a5e": "fish",
             "ddd5efe113": "シェル",
             "3de504994c": "新規ローカル対話型ターミナルペインで使用するシェルと引数",
-            "1733ccd3e9": "ターミナルのシェル"
+            "1733ccd3e9": "ターミナルのシェル",
+            "bc2054657a": "ターミナルウィンドウに背景のぼかしを適用します。再起動が必要です。",
+            "72d0482137": "ウィンドウのぼかし"
           },
           "windows": {
             "search": {
@@ -10741,7 +10827,9 @@
                 "connectedSiteSingular": "{{count}} 件のサイトに接続済み",
                 "connectedSitePlural": "{{count}} 件のサイトに接続済み",
                 "connectedWorkspaceSingular": "{{count}} 件のワークスペースに接続済み",
-                "connectedWorkspacePlural": "{{count}} 件のワークスペースに接続済み"
+                "connectedWorkspacePlural": "{{count}} 件のワークスペースに接続済み",
+                "checkingPlane": "設定アクションを表示する前に Plane のアクセス権を確認しています。",
+                "addPlaneAccess": "API トークンを使用して Plane Cloud またはセルフホスト環境に接続します。"
               }
             }
           }
@@ -11316,7 +11404,8 @@
           "resolvedTag": "{{value0}} (コミット {{value1}}) をインストールします。",
           "resolvedBranch": "ブランチ {{value0}} の現在の状態 (コミット {{value1}}) をインストールします。",
           "resolvedCommit": "コミット {{value0}} をインストールします。",
-          "resolvedDefaultBranch": "バージョンタグが見つからないため、最新のコミット {{value0}} をインストールします。"
+          "resolvedDefaultBranch": "バージョンタグが見つからないため、最新のコミット {{value0}} をインストールします。",
+          "gitRefRequired": "#tag または #commit を追加してください (例: #v0.1.0)。"
         },
         "PluginKeybindingConsentPreview": {
           "worktree": "ワークスペース内のみ"
@@ -11431,7 +11520,8 @@
           "useForDark": "ダークで使う:",
           "assignedLight": "{{value0}} をライトテーマに設定しました",
           "assignedDark": "{{value0}} をダークテーマに設定しました",
-          "saveFailed": "テーマを保存できませんでした。もう一度お試しください。"
+          "saveFailed": "テーマを保存できませんでした。もう一度お試しください。",
+          "useName": "今すぐ使う: {{value0}}"
         },
         "PluginContributionActionCommand": {
           "run": "実行",
@@ -12565,7 +12655,8 @@
           "hashCopied": "コンテンツハッシュをコピーしました",
           "hashCopyFailed": "ハッシュをコピーできませんでした。",
           "readme": "{{value0}} で README を読む",
-          "installs": "インストール数"
+          "installs": "インストール数",
+          "homepage": "ホームページ"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "これらのフィルターに一致するプラグインはありません",
@@ -12734,6 +12825,72 @@
         },
         "PluginContributionActionNewFile": {
           "create": "作成"
+        },
+        "PlaneAgentSkillPane": {
+          "title": "Plane",
+          "description": "Orca で Plane の Issue を参照し、リンク済みワークスペースを開始して、/orca-plane で Agent から更新できます。",
+          "skillTitle": "Plane スキル",
+          "howToUse": "プロンプト例",
+          "howToUseDescription": "カードをクリックするとプロンプトをコピーできます。スキルのインストール後、Plane にリンクしたワークツリーで使用してください。",
+          "manageConnectionHint": "接続済みの Plane ワークスペースと API キーは次の場所で確認できます：",
+          "manageConnectionLink": "連携"
+        },
+        "PlaneAgentSkillGuide": {
+          "setupConnectTitle": "1. Plane に接続",
+          "setupConnectBody": "Orca が Issue を一覧表示し、リンク済みワークスペースを開くための個人 API キー。",
+          "manageKeys": "キーを管理",
+          "addAccess": "アクセスを追加",
+          "setupSkillTitle": "2. Agent スキルをインストール",
+          "setupSkillBody": "Agent が /orca-plane で課題の参照、更新、トリアージ、プル／MR の添付を行えるようにします。",
+          "setupVisibleTitle": "3. タスクに Plane を表示",
+          "setupVisibleBody": "Plane をタスクのソース選択とサイドバーのショートカットに表示します。",
+          "openTaskSources": "タスクソース",
+          "setupTitle": "セットアップチェックリスト",
+          "setupBody": "タスクと Agent の一連の流れには 3 つの手順が必要です。初回設定はタスクソースでも行えます。",
+          "setupReady": "設定完了",
+          "setupProgress": "{{total}} 件中 {{done}} 件が完了",
+          "notesTitle": "知っておくと便利",
+          "notesIntro": "Plane の接続とスキルのインストール後に役立つポイントです。",
+          "noteLinkedTitle": "Plane の Issue から開始",
+          "noteLinkedBody": "チケット操作は、タスクから作成したワークツリーで最も効果的です。Issue がコンテキストとしてリンクされたままになります。",
+          "noteSlashTitle": "/orca-plane を指定",
+          "noteSlashBody": "チャットで /orca-plane を使うか自然言語で依頼すると、そのターンで Agent がスキルを読み込みます。",
+          "noteInstanceTitle": "Cloud とセルフホスト",
+          "noteInstanceBody": "Plane Cloud（app.plane.so）とカスタムセルフホストの Plane インスタンスの両方をサポートします。",
+          "noteVisibilityTitle": "非表示にしても接続は維持",
+          "noteVisibilityBody": "タスクソースで Plane を非表示にしても、選択肢から外れるだけで、キーやスキルは削除されません。",
+          "setupChecking": "確認中…"
+        },
+        "TaskSourcePlaneSetup": {
+          "connectTitle": "Plane に接続",
+          "connectDescription": "Orca が Issue を参照し、そのコンテキストでワークスペースを開けるように個人 API キーを追加します。",
+          "manageAccess": "キーを管理",
+          "addAccess": "Plane アクセスを追加",
+          "connectedHint": "ワークスペースとキーはアクティブな実行環境に保存されます。アクセスはいつでも追加できます。",
+          "recheck": "接続を再確認",
+          "skillTitle": "Plane Agent スキルをインストール",
+          "skillDescription": "Agent が /orca-plane で課題の参照、更新の投稿、状態変更、プル／MR の添付を行えるようにします。",
+          "skillBlocked": "先に Plane に接続してから、Agent 用スキルをインストールしてください。",
+          "skillPanelTitle": "Plane スキル",
+          "showDescription": "Plane をタスクのソース選択とサイドバーのショートカットに表示します。"
+        },
+        "plane": {
+          "agent": {
+            "skill": {
+              "search": {
+                "title": "Plane",
+                "description": "Plane スキルの状態、使用例、タスクソース設定へのリンク。",
+                "plane": "Plane",
+                "tickets": "チケット",
+                "issues": "Issue",
+                "skill": "スキル",
+                "orcaPlane": "orca-plane"
+              }
+            }
+          },
+          "cloud": "Plane Cloud",
+          "connectionFailed": "接続に失敗しました",
+          "cardFooter": "Plane Cloud またはセルフホスト環境から直接、Issue の参照やチケットのコンテキストを持つワークツリーを開きます。"
         }
       },
       "right": {
@@ -14639,7 +14796,24 @@
             "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "デスクトップ",
             "af761a0c0d": "設定",
-            "5d94e8ddcc": "Orca"
+            "5d94e8ddcc": "Orca",
+            "a7d9e2c44d": "7日",
+            "a3d5476811": "5時間",
+            "8a350a4784": "アカウントの使用状況",
+            "e27fdaee51": "新規ワークスペース",
+            "4405f3c440": "デスクトップのペアリング",
+            "0b00c98506": "クイック操作",
+            "0bad5b07c8": "GitHub と Linear",
+            "d047197480": "GitHub · Linear",
+            "d33d7a9c29": "orca  ·  feat/mobile-page",
+            "25d6e8a491": "feat/mobile-page",
+            "c791677f2f": "再開",
+            "091355da3d": "M1ミニ・ホーム",
+            "0bc1881bc4": "接続済み · 40 ワークツリー · 5 アクティブ",
+            "156db8a68a": "作成された PR",
+            "4a40af029b": "Agent 時間",
+            "00a6903322": "Agent が生成されました",
+            "c0e2e9dcd9": "おかえり"
           },
           "TerminalSlide": {
             "0bb39f8fe6": "送信",
@@ -15495,7 +15669,9 @@
           "d9d2944855": "ファイルプレビューのロードに失敗しました",
           "fitToView": "画面に合わせる",
           "actualSize": "実際のサイズ",
-          "expand": "画像を拡大表示"
+          "expand": "画像を拡大表示",
+          "6c89c73d9f": "ズームをリセットする",
+          "77bfc9b35a": "ポップアップで画像を開く"
         },
         "IpynbViewer": {
           "859bf9fc21": "セルを実行する",
@@ -16171,6 +16347,11 @@
           "tooLarge": "{{value0}} は大きすぎるため {{value1}} で開けません（{{value2}}、上限は {{value3}}）。",
           "unsupported": "{{value0}} はこのファイルの保存場所から読み取れません。ホストしている Orca サーバーをアップデートするか、ソースに切り替えてください。",
           "readFailed": "{{value1}} 用に {{value0}} を読み取れませんでした。{{value2}}"
+        },
+        "ImageViewerPopup": {
+          "0ef78475e7": "Escを押して閉じます",
+          "535f4e2b56": "閉じる",
+          "9e27b2ecaf": "フルサイズの画像プレビュー"
         }
       },
       "diff": {
@@ -17575,6 +17756,20 @@
                 }
               }
             }
+          },
+          "plane": {
+            "connectTitle": "Plane ワークスペースを接続",
+            "connectDescription": "独立したワークツリーで Plane の Issue を直接参照、追跡、作業開始できます。",
+            "connectButton": "Plane に接続",
+            "selectWorkspace": "ワークスペースを選択",
+            "allProjects": "すべてのプロジェクト",
+            "refreshIssues": "Issue を更新",
+            "openInPlane": "Plane で開く",
+            "noIssuesFound": "Issue が見つかりません",
+            "createIssueHint": "Plane で Issue を作成するとここに表示されます。",
+            "backlog": "バックログ",
+            "openInWorktree": "ワークツリーで開く",
+            "viewInPlane": "Plane で表示"
           }
         }
       },
@@ -18236,6 +18431,23 @@
           "add": "カタログを追加",
           "body": "リンクがこのカタログの {{value0}} の表示を求めています。カタログは信頼できる相手からのものだけを追加してください。"
         }
+      },
+      "plane": {
+        "connect": {
+          "dialog": {
+            "title": "Plane に接続",
+            "description": "Plane ワークスペースを接続して、Issue の参照やチケットのコンテキストを持つワークツリーを開きます。",
+            "deploymentType": "デプロイタイプ",
+            "planeCloud": "Plane Cloud",
+            "selfHosted": "セルフホスト",
+            "instanceUrl": "インスタンス URL",
+            "instanceUrlPlaceholder": "https://plane.yourcompany.com",
+            "personalApiToken": "個人用 API トークン",
+            "createApiToken": "API トークンを作成",
+            "apiTokenPlaceholder": "plane_api_...",
+            "connecting": "接続中..."
+          }
+        }
       }
     },
     "i18n": {
@@ -18813,7 +19025,9 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "チャット UI で続けるには、このホストの Orca を更新してください。",
-        "notSavedYet": "{{agent}} はまだこの会話を保存していません。応答してから再度お試しください。"
+        "notSavedYet": "{{agent}} はまだこの会話を保存していません。応答してから再度お試しください。",
+        "exitUnconfirmedFromTerminal": "{{agent}} は別のターミナルですでにこの会話を実行しています。そちらの {{agent}} を終了するか、そのターミナルを閉じてから、セッション履歴でこの会話を開いてください。",
+        "exitUnconfirmed": "{{agent}} は別のターミナルでこの会話を実行しています。そちらで終了するか、そのターミナルを閉じてから、もう一度お試しください。"
       },
       "state": {
         "loading": {
@@ -19093,7 +19307,8 @@
         "clearAll": "すべてクリア",
         "moveChanged": "移動の前にキューが変更されました。もう一度メッセージをドラッグしてください。",
         "reorderHint": "ドラッグするか、上下の矢印キーを使って並べ替えます。",
-        "reorderMessage": "メッセージを並べ替え"
+        "reorderMessage": "メッセージを並べ替え",
+        "turnOffQueueing": "キューへの追加をオフにする"
       },
       "thought": "考えました",
       "thoughtForDuration": "{{duration}} 考えました",
@@ -19710,7 +19925,10 @@
         "usageLimitContinueCopy": "上限がリセットされると、Orca が「Continue where you left off.」を送信します。リセット時刻がわかっているすべてのチャットに適用されます。",
         "usageLimitContinueSearchLimit": "使用量の上限",
         "usageLimitContinueSearchReset": "リセット",
-        "usageLimitContinueToggleLabel": "使用量の上限リセット時にチャットを続けるかを切り替える"
+        "usageLimitContinueToggleLabel": "使用量の上限リセット時にチャットを続けるかを切り替える",
+        "queueFollowUpsTitle": "フォローアップをキューに入れる",
+        "queueFollowUpsCopy": "Agent の作業中に送信したメッセージは、今すぐ送信・編集・削除できるカードとして待機します。画像付きのメッセージはすぐに送信されます。",
+        "queueFollowUpsToggleLabel": "フォローアップのキューを切り替え"
       }
     },
     "agentChildRow": {
@@ -20246,7 +20464,8 @@
       "quitDuringMoveConfirm": "終了する"
     },
     "startupWorktreeRefresh": {
-      "loading": "ワークスペースを検出中…"
+      "loading": "ワークスペースを検出中…",
+      "description": "ローカルおよびリモートのプロジェクトを読み込む間に、さらにワークスペースが表示されることがあります。"
     },
     "createProject": {
       "errors": {
@@ -20459,6 +20678,18 @@
       "demoApp": "アプリ",
       "demoPassword": "パスワード",
       "demoCookie": "Cookie"
+    },
+    "nativeChatUpgrade": {
+      "eyebrow": "新機能",
+      "title": "ネイティブチャットを刷新",
+      "intro": "対応 Agent の新しいチャットはアップグレード版のチャットビューで開きます。チャットと CLI の切り替えは右サイドバーの{{panel}}から:",
+      "resumeInNativeChat": "{{action}}: 対応する CLI の会話をネイティブチャットで開きます。",
+      "resumeInCli": "{{action}}: Claude/Codex のチャットを新しい CLI セッションに複製します。元のチャットは残ります。",
+      "gotIt": "OK",
+      "leaveOff": "オフのままにする",
+      "enableNow": "今すぐ有効にする",
+      "enableError": "チャットモードを有効にできませんでした。",
+      "manageInSettings": "<link>設定 → 実験的機能</link>で Chat UI を管理できます。"
     }
   },
   "quickOpen": {
@@ -20894,7 +21125,9 @@
   },
   "common": {
     "retry": "再試行",
-    "cancel": "キャンセル"
+    "cancel": "キャンセル",
+    "connect": "接続",
+    "disconnect": "切断"
   },
   "fileExplorer": {
     "root": {
@@ -21739,7 +21972,11 @@
       "endHint": "このターミナルとその子プロセスを終了します。",
       "claimed": "このターミナルは Agent が所有しています。再試行する前に更新してください。",
       "attached": "このターミナルにはクライアントが接続されています。再試行する前に更新してください。",
-      "unverifiableEnd": "検証不可: ホストが結果を確認できませんでした。ターミナルはまだ実行中の可能性があります。"
+      "unverifiableEnd": "検証不可: ホストが結果を確認できませんでした。ターミナルはまだ実行中の可能性があります。",
+      "endTitle": "{{terminal}} を終了しますか？",
+      "endDescription": "このターミナルとその子プロセスを終了します。未保存の作業が失われる可能性があります。",
+      "cancel": "キャンセル",
+      "end": "ターミナルを終了"
     },
     "resources": "リソース",
     "ptys": "PTY",
@@ -22208,7 +22445,12 @@
         "viewIssues_other": "ビューの Issue を最初の {{count}} 件表示しています。全件を確認するには、検索するか Linear を開いてください。",
         "views_one": "最初の {{count}} 件のビューを表示しています。全件を確認するには、検索するか Linear を開いてください。",
         "views_other": "最初の {{count}} 件のビューを表示しています。全件を確認するには、検索するか Linear を開いてください。"
-      }
+      },
+      "projectsLoadFailed": "プロジェクトを読み込めませんでした。",
+      "projectLoadFailed": "プロジェクトを読み込めませんでした。",
+      "projectIssuesLoadFailed": "プロジェクトの Issue を読み込めませんでした。",
+      "viewsLoadFailed": "ビューを読み込めませんでした。",
+      "viewContentsLoadFailed": "ビューの内容を読み込めませんでした。"
     },
     "jira": {
       "connectionFailed": "接続に失敗しました",

@@ -177,51 +177,48 @@ function getAutomationSourceAvailability(
     return null
   }
   const providerLabel = getAutomationSourceProviderLabel(sourceContext.provider)
-  switch (availability.reason) {
-    case undefined:
-      break
-    case 'missing-provider-auth':
-      return unavailable(
-        'source-auth-needed',
-        `Connect the saved ${providerLabel} source account before running manually.`
-      )
-    case 'unavailable-source-tool':
-      return unavailable(
-        'source-tool-unavailable',
-        `Install or configure the ${providerLabel} source tool before running manually.`
-      )
-    case 'unsupported-provider':
-    case 'missing-task-source-capability':
-      return unavailable(
-        'source-provider-unsupported',
-        `The saved ${providerLabel} source is not supported on this automation host.`
-      )
-    case 'checking-task-source-capability':
-      return unavailable(
-        'source-host-unavailable',
-        `Checking the saved ${providerLabel} source host before running manually.`
-      )
+  if (availability.reason === 'missing-provider-auth') {
+    return unavailable(
+      'source-auth-needed',
+      `Connect the saved ${providerLabel} source account before running manually.`
+    )
+  }
+  if (availability.reason === 'unavailable-source-tool') {
+    return unavailable(
+      'source-tool-unavailable',
+      `Install or configure the ${providerLabel} source tool before running manually.`
+    )
   }
   if (
-    availability.health === 'disconnected' ||
-    availability.health === 'blocked' ||
-    availability.health === 'error' ||
-    availability.status === 'disconnected' ||
-    availability.status === 'auth-failed' ||
-    availability.status === 'reconnection-failed' ||
-    availability.status === 'error'
+    availability.reason === 'unsupported-provider' ||
+    availability.reason === 'missing-task-source-capability'
   ) {
+    return unavailable(
+      'source-provider-unsupported',
+      `The saved ${providerLabel} source is not supported on this automation host.`
+    )
+  }
+  if (availability.reason === 'checking-task-source-capability') {
+    return unavailable(
+      'source-host-unavailable',
+      `Checking the saved ${providerLabel} source host before running manually.`
+    )
+  }
+  const isDisconnected =
+    ['disconnected', 'blocked', 'error'].includes(availability.health ?? '') ||
+    ['disconnected', 'auth-failed', 'reconnection-failed', 'error'].includes(
+      availability.status ?? ''
+    )
+  if (isDisconnected) {
     return unavailable(
       'source-host-unavailable',
       `Reconnect the saved ${providerLabel} source host before running manually.`
     )
   }
-  if (
+  const isConnecting =
     availability.health === 'connecting' ||
-    availability.status === 'connecting' ||
-    availability.status === 'deploying-relay' ||
-    availability.status === 'reconnecting'
-  ) {
+    ['connecting', 'deploying-relay', 'reconnecting'].includes(availability.status ?? '')
+  if (isConnecting) {
     return unavailable(
       'source-host-unavailable',
       `The saved ${providerLabel} source host is still connecting.`
@@ -230,17 +227,16 @@ function getAutomationSourceAvailability(
   return null
 }
 
+const PROVIDER_LABELS: Record<TaskSourceContext['provider'], string> = {
+  github: 'GitHub',
+  gitlab: 'GitLab',
+  linear: 'Linear',
+  jira: 'Jira',
+  plane: 'Plane'
+}
+
 function getAutomationSourceProviderLabel(provider: TaskSourceContext['provider']): string {
-  switch (provider) {
-    case 'github':
-      return 'GitHub'
-    case 'gitlab':
-      return 'GitLab'
-    case 'linear':
-      return 'Linear'
-    case 'jira':
-      return 'Jira'
-  }
+  return PROVIDER_LABELS[provider]
 }
 
 export function getRuntimeAutomationAvailability(
@@ -248,23 +244,17 @@ export function getRuntimeAutomationAvailability(
   runtimeStatusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus> | undefined
 ): AutomationTargetAvailability {
   const entry = runtimeStatusByEnvironmentId?.get(environmentId)
-  if (!entry) {
-    return unavailable(
-      'runtime-checking',
-      'Checking the selected remote server before running manually.'
-    )
-  }
-  if (!entry.status) {
-    return unavailable(
-      'runtime-unavailable',
-      'Reconnect this remote server before running manually.'
-    )
-  }
-  if (entry.status.graphStatus !== 'ready') {
-    return unavailable(
-      'runtime-unavailable',
-      'The selected remote server is not ready to run automations yet.'
-    )
+  if (!entry?.status || entry.status.graphStatus !== 'ready') {
+    if (!entry) {
+      return unavailable(
+        'runtime-checking',
+        'Checking the selected remote server before running manually.'
+      )
+    }
+    const message = !entry.status
+      ? 'Reconnect this remote server before running manually.'
+      : 'The selected remote server is not ready to run automations yet.'
+    return unavailable('runtime-unavailable', message)
   }
   const compat = evaluateRuntimeCompat({
     clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,
@@ -284,10 +274,8 @@ function getAutomationSshTargetId(automation: Automation, repo: Repo): string | 
   if (parsedHost?.kind === 'ssh') {
     return parsedHost.targetId
   }
-  if (automation.executionTargetType === 'ssh' && automation.executionTargetId.trim()) {
-    return automation.executionTargetId
-  }
-  return repo.connectionId?.trim() || null
+  const isSshTarget = automation.executionTargetType === 'ssh' && automation.executionTargetId.trim()
+  return isSshTarget ? automation.executionTargetId : repo.connectionId?.trim() || null
 }
 
 function unavailable(
