@@ -262,6 +262,60 @@ it.each(['single', 'split', 'other-workspace', 'reselected'] as const)(
   }
 )
 
+it('leaves a chat already open in this workspace where it is, without a second copy', async () => {
+  await savedTranscript(rig)
+  const { runtime, session } = setupMainOwnedWorkspace()
+  await runtime.publishStructuredAgentSessionTab({
+    workspaceId: WORKTREE_ID,
+    sessionId: id,
+    agent: 'codex',
+    activate: false
+  })
+  const chatTabs = () =>
+    session().unifiedTabs?.[WORKTREE_ID]?.filter(
+      (tab) => tab.contentType === 'agent-session' && tab.entityId === id
+    ) ?? []
+  const openChat = await vi.waitFor(() => {
+    expect(chatTabs()).toHaveLength(1)
+    return chatTabs()[0]!.id
+  })
+  const incarnationId = '11111111-1111-4111-8111-111111111111'
+  runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
+  const source = runtime.resolveTerminalPane(`${TAB_ID}:${LEAF_A}`, WORKTREE_ID)
+  if (!source.presentation) {
+    throw new Error('missing captured source')
+  }
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => false,
+    stopAndWait: async () => {
+      await runtime.onPtyExit(PTY_A, 0, incarnationId, { hostExitConfirmed: true })
+      return true
+    },
+    getForegroundProcess: async () => null
+  })
+  const write = vi.spyOn(runtime, 'setSwitchedTabContent')
+  expect(
+    await executeStructuredSessionSwitch(
+      {
+        sessionId: id,
+        execution: {
+          invocationId: 'open-chat',
+          source: {
+            terminal: source.handle,
+            expectedIncarnationId: incarnationId,
+            originalPresentation: source.presentation
+          }
+        }
+      },
+      { runtime },
+      'chat'
+    )
+  ).toEqual({ status: 'completed', sessionId: id })
+  expect(write).not.toHaveBeenCalled()
+  expect(chatTabs().map((tab) => tab.id)).toEqual([openChat])
+})
+
 it('keeps the stopped source when the layout write that would take its tab fails', async () => {
   await savedTranscript(rig)
   const { runtime, session } = setupMainOwnedWorkspace()

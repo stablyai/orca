@@ -29,12 +29,15 @@ export async function placeSwitchChat(
   const { workspaceId, sessionId } = chat
   const terminal = { kind: 'terminal' as const, terminalId: source.terminalId ?? '' }
   const content = { kind: 'agent-session' as const, sessionId, agent: chat.agent }
+  const shown = ctx.runtime.mobileSessionTabsByWorktree.get(workspaceId)
+  // A chat already open in a tab (another one, or this switch's own after a lost answer) stays
+  // where it is and is selected there, as opening any open chat does.
   const switched =
-    source.terminalId && source.wholeTab
+    source.terminalId &&
+    source.wholeTab &&
+    !logicalTabHolding(shown, { kind: 'agent-session', sessionId })
       ? await ctx.runtime.setSwitchedTabContent(workspaceId, {
-          tabId:
-            logicalTabHolding(ctx.runtime.mobileSessionTabsByWorktree.get(workspaceId), terminal) ??
-            source.terminalId,
+          tabId: logicalTabHolding(shown, terminal) ?? source.terminalId,
           expectSource: terminal,
           window: content,
           layout: content,

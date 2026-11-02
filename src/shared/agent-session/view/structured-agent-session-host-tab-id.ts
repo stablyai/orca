@@ -1,5 +1,7 @@
 // A chat has two ids: its layout tab id (any saved id; main's chat-tab table holds it) and its
-// row id on the wire, which paired clients and phones key rows and selections by.
+// row id on the wire, which paired clients and phones (old ones included) key rows and selections
+// by. Only the wire edge reads a row id's form (snapshot merge, old-client rows, legacy saved
+// ids); everywhere else a tab is found by what it holds.
 
 export const AGENT_SESSION_ROW_PREFIX = 'agent-session:'
 

@@ -179,6 +179,11 @@ it('a chat tab takes the switch’s terminal under the terminal’s own id and k
   expect(store.getState().tabsByWorktree[WORKTREE]?.some((tab) => tab.id === 'terminal-2')).toBe(
     true
   )
+  expect(
+    tabs()
+      .filter((tab) => tab.entityId === 'terminal-2')
+      .map((tab) => tab.id)
+  ).toEqual([SWITCHED])
   expect(group()?.tabOrder).toEqual(['before', SWITCHED, 'after'])
 })
 
