@@ -318,7 +318,7 @@
         "statusBarItems": {
           "default": [],
           "description": "Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. At most 8.",
-          "x-orca-since": "1.4.247",
+          "x-orca-since": "1.4.248",
           "maxItems": 8,
           "type": "array",
           "items": {
@@ -1271,14 +1271,14 @@
           "maxLength": 64,
           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
           "description": "Item id, unique among this plugin's status bar items; `statusBar.update` names it.",
-          "x-orca-since": "1.4.247",
+          "x-orca-since": "1.4.248",
           "examples": [
             "blocked-count"
           ]
         },
         "text": {
           "description": "Short label shown in the status bar.",
-          "x-orca-since": "1.4.247",
+          "x-orca-since": "1.4.248",
           "examples": [
             "3 blocked"
           ],
@@ -1287,7 +1287,7 @@
         },
         "icon": {
           "description": "Icon shown before the text, from the panel icon set.",
-          "x-orca-since": "1.4.247",
+          "x-orca-since": "1.4.248",
           "examples": [
             "bell"
           ],
@@ -1352,7 +1352,7 @@
         },
         "tone": {
           "description": "Colour of the item. Defaults to `neutral`.",
-          "x-orca-since": "1.4.247",
+          "x-orca-since": "1.4.248",
           "examples": [
             "warning"
           ],
@@ -1367,13 +1367,13 @@
         },
         "tooltip": {
           "description": "Shown on hover. Defaults to the plugin name.",
-          "x-orca-since": "1.4.247",
+          "x-orca-since": "1.4.248",
           "type": "string",
           "maxLength": 256
         },
         "command": {
           "description": "Id of a command this plugin contributes in `contributes.commands`, run when the item is pressed.",
-          "x-orca-since": "1.4.247",
+          "x-orca-since": "1.4.248",
           "examples": [
             "guard.showLog"
           ],
