@@ -20823,6 +20823,9 @@
       "showDetails": "Show {{name}}'s task and latest message",
       "task": "Task",
       "asksYou": "Asks you",
+      "openFailed": "{{name}}: {{detail}}",
+      "chatUnavailable": "This host cannot open the chat. Try again.",
+      "terminalExited": "This terminal has exited.",
       "latest": "Latest",
       "to": "To",
       "from": "From"
