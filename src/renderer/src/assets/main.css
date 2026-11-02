@@ -1518,6 +1518,12 @@ html.native-shell .app-layout {
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 3%, transparent);
 }
 
+/* #15971: the active wash matches the host pill's accent fill, so the border carries its shape. */
+[data-worktree-card-surface][data-worktree-card-active='primary'] [data-variant='hostContext'] {
+  border-color: var(--muted-foreground);
+  color: var(--host-badge-foreground, var(--foreground));
+}
+
 [data-worktree-card-surface][data-worktree-card-active='secondary'] {
   border-color: color-mix(in srgb, var(--sidebar-ring) 25%, transparent);
   background: color-mix(in srgb, var(--sidebar-accent) 45%, transparent);
