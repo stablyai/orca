@@ -7,6 +7,7 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import { readHookRootEvidence, type HookPaneRoot } from '../../shared/hook-process-root-evidence'
 import type { AgentHookRelayEnvelope } from '../../shared/agent-hook-relay'
 import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
+import { startOrcadAgentHookServer } from '../orcad/orcad-managed-agent-hooks'
 import {
   NOW,
   CLAUDE,
@@ -314,4 +315,20 @@ describe('WSL relay startup spool replay', () => {
       }
     }
   )
+})
+
+describe.skipIf(process.platform === 'win32')('orcad startup', () => {
+  it('installs its pane-root reader before replay, so a pane it cannot bind stays a fallback', async () => {
+    const userDataPath = spoolDir([
+      spooled(PANE, 49969, { hook_event_name: 'UserPromptSubmit', prompt: 'task' })
+    ])
+    runningPane(49969, CLAUDE)
+    // Before the daemon provider is installed, the local provider owns no PTY for this pane.
+    const { server, started } = launchServer(userDataPath, {
+      reader: false,
+      start: (target) => startOrcadAgentHookServer(target, { env: 'production', userDataPath })
+    })
+    await started
+    expect(server.presence()).toMatchObject({ process: capture(49969), fallback: true })
+  })
 })
