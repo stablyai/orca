@@ -7,7 +7,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { holdPhysicalCloseTasks } from '../orchestration-crew/crew-menu.test-fixture'
 import type { OrchestrationCrewSnapshot } from '../../../../shared/orchestration-crew'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { getDefaultSettings } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
@@ -64,7 +64,7 @@ const second = testOrcaSessionId('22222222-2222-4222-8222-222222222222')
 const initialSettings = useAppStore.getState().settings
 function setOrchestrationPanel(enabled: boolean) {
   useAppStore.setState({
-    settings: { experimentalOrchestrationPanel: enabled } as GlobalSettings
+    settings: { ...getDefaultSettings('/home/test'), experimentalOrchestrationPanel: enabled }
   })
 }
 beforeEach(() => {

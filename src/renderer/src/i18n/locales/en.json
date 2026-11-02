@@ -16931,7 +16931,8 @@
                 "description": "This file isn't UTF-8 text. Saving it as UTF-8 replaces any characters that aren't valid UTF-8 with �, and the original bytes can't be recovered.",
                 "action": "Save as UTF-8"
               }
-            }
+            },
+            "deniedByPlugin": "The plugin {{plugin}} refused this save: {{reason}}"
           }
         },
         "RichMarkdownTableControls": {
@@ -19342,6 +19343,7 @@
       "failureWords": {
         "theAgent": "The agent",
         "providerStartFailed": "{{agent}} stopped before it finished starting.",
+        "savedConversationMissing": "{{agent}} couldn't find this chat's saved conversation.",
         "runCommandAgain": "Run /{{command}} again.",
         "sendToTryAgain": "Send your message to try again.",
         "sendAgainToTryOnceMore": "Send your message again to try once more.",

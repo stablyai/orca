@@ -237,6 +237,8 @@ declare module 'orca/host' {
     "agent.tool.before": { event: { agent: string; workspaceId: string | null; terminalId?: string; tool: string; input: JsonValue; callId?: string }; result: { deny: string } }
     /** An agent in an Orca terminal finished a tool call (successfully or not). Observe only: Orca does not wait for it. */
     "agent.tool.after": { event: { agent: string; workspaceId: string | null; terminalId?: string; tool: string; input: JsonValue; callId?: string; output?: JsonValue }; result: never }
+    /** The person is about to save a text file from an Orca editor tab (an explicit save, not autosave). Change `text` with `next` (format on save) or return `{ deny }` to refuse the save, which shows your reason. Edits made while the hook ran stay unsaved. */
+    "editor.save.before": { event: { workspaceId: string | null; path: string; languageId?: string; text: string }; result: { deny: string } }
   }
   export type PluginHookName = keyof PluginHooks
 }

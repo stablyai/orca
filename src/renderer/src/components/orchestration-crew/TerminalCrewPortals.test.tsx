@@ -7,7 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { getDefaultSettings } from '../../../../shared/constants'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { PtyTransport } from '../terminal-pane/pty-transport-types'
 import { emptyCrew, type OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
@@ -88,7 +88,9 @@ function mount(insertion?: {
 }) {
   // On unless the test turned it off first.
   if (useAppStore.getState().settings?.experimentalOrchestrationPanel === undefined) {
-    useAppStore.setState({ settings: { experimentalOrchestrationPanel: true } as GlobalSettings })
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/home/test'), experimentalOrchestrationPanel: true }
+    })
   }
   const link = { connected: !insertion?.restored }
   currentWorker = insertion
@@ -349,14 +351,18 @@ it.each(['retired pane', 'disconnected terminal'] as const)(
 )
 
 it('mounts no pane panel, identity lookup or crew read while the setting is off, live both ways', () => {
-  useAppStore.setState({ settings: { experimentalOrchestrationPanel: false } as GlobalSettings })
+  useAppStore.setState({
+    settings: { ...getDefaultSettings('/home/test'), experimentalOrchestrationPanel: false }
+  })
   const { first, second } = mount()
   expect(document.querySelector('[data-orchestration-crew]')).toBeNull()
   expect(rig.identity).not.toHaveBeenCalled()
   expect(rig.crew).not.toHaveBeenCalled()
 
   act(() =>
-    useAppStore.setState({ settings: { experimentalOrchestrationPanel: true } as GlobalSettings })
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/home/test'), experimentalOrchestrationPanel: true }
+    })
   )
   for (const pane of [first, second]) {
     expect(
@@ -365,7 +371,9 @@ it('mounts no pane panel, identity lookup or crew read while the setting is off,
   }
 
   act(() =>
-    useAppStore.setState({ settings: { experimentalOrchestrationPanel: false } as GlobalSettings })
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/home/test'), experimentalOrchestrationPanel: false }
+    })
   )
   expect(document.querySelector('[data-orchestration-crew]')).toBeNull()
 })
