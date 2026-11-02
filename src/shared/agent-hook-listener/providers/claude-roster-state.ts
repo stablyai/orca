@@ -95,19 +95,6 @@ export function getOrCreateClaudeSubagentRoster(
   return roster
 }
 
-/** Only fresh inventory retires a reported shell; lead verdicts cannot override positive process evidence. */
-export function updateClaudeRunningNonAgentTask(
-  state: HookListenerState,
-  paneKey: string,
-  hasRunningNonAgentTask: boolean
-): void {
-  if (hasRunningNonAgentTask) {
-    state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
-  } else {
-    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
-  }
-}
-
 /** Keep same-state lead clocks continuous; explicit restored stash times take precedence. */
 export function setClaudeMainAgentTurnState(
   state: HookListenerState,
