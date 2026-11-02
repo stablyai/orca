@@ -1,5 +1,6 @@
 import { ClaudeRemoteHookService } from './claude-remote-hook-service'
-import { getAppEnvironment } from '../../shared/app-environment'
+import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
+import { getOrcaUserDataPath } from '../codex/codex-home-paths'
 import {
   listClaudeProfileHomes,
   listClaudeProfileHomesAsync
@@ -233,10 +234,10 @@ export class ClaudeHookService {
   }
 
   private removeAgentViews(): void {
-    for (const configDir of [
-      undefined,
-      ...listClaudeProfileHomes(getAppEnvironment().getPath('userData'))
-    ]) {
+    const dataRoot = hasAppEnvironment()
+      ? getAppEnvironment().getPath('userData')
+      : getOrcaUserDataPath()
+    for (const configDir of [undefined, ...listClaudeProfileHomes(dataRoot)]) {
       removeClaudeAgentView(getConfigPath(this.options.settings, configDir))
     }
   }
