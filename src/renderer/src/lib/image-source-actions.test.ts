@@ -1,3 +1,5 @@
+import { buildImageDataUri } from '../../../shared/image-data-uri'
+import { MAX_RASTER_IMAGE_PREVIEW_DIMENSION_PX } from '../../../shared/raster-image-preview-limits'
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -10,6 +12,71 @@ import {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('image source actions', () => {
+  it.each([
+    [MAX_RASTER_IMAGE_PREVIEW_DIMENSION_PX + 1, 1],
+    [8192, 8192]
+  ])(
+    'saves original bytes with a %i x %i raster header without applying preview limits',
+    async (width, height) => {
+      const bytes = Buffer.alloc(24)
+      bytes.set([137, 80, 78, 71, 13, 10, 26, 10])
+      bytes.writeUInt32BE(13, 8)
+      bytes.write('IHDR', 12, 'ascii')
+      bytes.writeUInt32BE(width, 16)
+      bytes.writeUInt32BE(height, 20)
+      const content = bytes.toString('base64')
+      expect(buildImageDataUri('image/png', content)).toBeNull()
+      const readFile = vi.fn().mockResolvedValue({
+        content: `${content.slice(0, 8)}\n${content.slice(8)}`,
+        isBinary: true,
+        mimeType: 'image/png'
+      })
+      const saveDownloadedFile = vi
+        .fn()
+        .mockResolvedValue({ canceled: false, destinationPath: '/saved.png' })
+      vi.stubGlobal('api', { fs: { readFile, saveDownloadedFile } })
+      await saveImageSource(
+        readImageFileSource({ target: { kind: 'local' }, filePath: '/large.png' }),
+        'large.png'
+      )
+      expect(saveDownloadedFile).toHaveBeenCalledWith({
+        suggestedName: 'large.png',
+        content,
+        encoding: 'base64'
+      })
+    }
+  )
+
+  it.each([
+    { content: btoa('web page'), mimeType: 'text/html' },
+    { content: btoa('document'), mimeType: 'application/pdf' },
+    { content: ' \n\t', mimeType: 'image/png' },
+    { content: 'not%base64', mimeType: 'image/png' }
+  ])('refuses an unusable file payload with MIME $mimeType before saving', async (result) => {
+    const readFile = vi.fn().mockResolvedValue({ ...result, isBinary: true })
+    const saveDownloadedFile = vi.fn()
+    vi.stubGlobal('api', { fs: { readFile, saveDownloadedFile } })
+    await expect(
+      saveImageSource(
+        readImageFileSource({ target: { kind: 'local' }, filePath: '/image.png' }),
+        'image.png'
+      )
+    ).rejects.toThrow()
+    expect(saveDownloadedFile).not.toHaveBeenCalled()
+  })
+
+  it('keeps non-binary SVG markup as an SVG Blob', async () => {
+    const markup = '<svg xmlns="http://www.w3.org/2000/svg"/>'
+    const readFile = vi.fn().mockResolvedValue({ content: markup, isBinary: false })
+    vi.stubGlobal('api', { fs: { readFile } })
+    const blob = await readImageFileSource(
+      { target: { kind: 'local' }, filePath: '/drawing.svg' },
+      'image/svg+xml'
+    )()
+    expect(blob.type).toBe('image/svg+xml')
+    expect(await blob.text()).toBe(markup)
+  })
+
   it('reads original file bytes lazily through the existing owner route without range previews', async () => {
     const readFile = vi
       .fn()
