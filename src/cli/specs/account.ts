@@ -59,7 +59,7 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
     ],
     examples: [
       'orca account auto-switch --agent claude --on',
-      'orca account auto-switch --agent claude --on --environment macstudio'
+      'orca account auto-switch --agent claude --on --environment build-box'
     ]
   }
 ]
