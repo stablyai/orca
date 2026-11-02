@@ -6,7 +6,7 @@ export function getTarProgram(): string {
     : 'tar'
 }
 
-/** The destination must already exist; callers extract only checksum-verified archives. */
+/** The destination must already exist, and callers extract only checksum-verified archives. */
 export function getZipExtractorCommand(
   zipPath: string,
   extractDir: string
