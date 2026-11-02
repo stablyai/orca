@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 
 /** Trailing row of a group capped by Sessions per group; reveals or re-hides the rest. */
 export function AiVaultGroupMoreRow({
@@ -25,7 +25,7 @@ export function AiVaultGroupMoreRow({
         : translate(
             'auto.components.right.sidebar.AiVaultGroupMoreRow.showMore',
             'Show {{value0}} more',
-            { value0: hiddenCount.toLocaleString() }
+            { value0: hiddenCount.toLocaleString(getIntlLocale()) }
           )}
     </button>
   )
