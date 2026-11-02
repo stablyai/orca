@@ -515,3 +515,108 @@ it('does not retire committed A for a discarded suspended B render or allow a qu
   })
   expect(committed!.prSidebarState).toEqual({ kind: 'hidden' })
 })
+
+it('marks a failed poll discovery as every caller does, clears it on a good poll, and keeps a same-PR checks-only poll failure quiet', async () => {
+  const client = createFakeRpcClient()
+  let owner = 'fork'
+  let discoveryFails = false
+  let checksFail = false
+  client.sendRequest = async (method) => {
+    if (
+      (method === 'github.prForBranch' && discoveryFails) ||
+      (method === 'github.prChecks' && checksFail)
+    ) {
+      throw new Error('socket closed')
+    }
+    const value =
+      method === 'github.repoSlug'
+        ? repo(owner)
+        : method === 'worktree.show'
+          ? { worktree: { branch: 'feat' } }
+          : method === 'hostedReview.forBranch'
+            ? null
+            : method === 'github.prForBranch'
+              ? pr(owner)
+              : method === 'github.prChecks'
+                ? [{ name: `${owner}-ci`, status: 'completed', conclusion: 'success' }]
+                : method === 'status.get'
+                  ? {
+                      runtimeId: 'a',
+                      hostDescriptor: { installationId: 'a' },
+                      capabilities: ['github.exact-work-item-target.v1']
+                    }
+                  : method === 'github.workItemDetails'
+                    ? details(owner)
+                    : undefined
+    if (value === undefined) {
+      throw new Error(`unexpected ${method}`)
+    }
+    return rpcSuccess(method, value)
+  }
+  let controller: MobilePrSidebarController
+  function Probe() {
+    controller = useMobilePrSidebarController({
+      client,
+      connState: 'connected',
+      worktreeId: 'clone::/wt',
+      branch: 'feat',
+      headSha: 'head'
+    })
+    return null
+  }
+  await act(async () => {
+    renderer = create(<Probe />)
+  })
+  await act(async () => controller.refetchPRSidebar({ includeDetails: true }))
+  let result: string | undefined
+  const poll = () =>
+    act(async () => {
+      result = await controller.refetchPRSidebar({ includeDetails: false, background: true })
+    })
+  const forkChecks = [{ name: 'fork-ci', status: 'completed', conclusion: 'success', url: null }]
+  expect(controller!.prSidebarState).toMatchObject({
+    kind: 'ready',
+    data: { checks: forkChecks, details: { body: 'fork body' } }
+  })
+
+  // A timer's failed discovery keeps the PR and shows the same warning a foreground read does.
+  discoveryFails = true
+  await poll()
+  expect(result).toBe('failed')
+  expect(controller!.prSidebarState).toMatchObject({
+    kind: 'ready',
+    refreshFailed: true,
+    data: { pr: { title: 'fork' }, checks: forkChecks, details: { body: 'fork body' } }
+  })
+  discoveryFails = false
+  await poll()
+  expect(result).toBe('applied')
+  expect(controller!.prSidebarState).not.toHaveProperty('refreshFailed', true)
+
+  // A same-PR checks-only failure lands the discovery quietly: prior checks stay, an older warning clears.
+  discoveryFails = true
+  await poll()
+  expect(controller!.prSidebarState).toHaveProperty('refreshFailed', true)
+  discoveryFails = false
+  checksFail = true
+  await poll()
+  expect(result).toBe('failed')
+  expect(controller!.prSidebarState).not.toHaveProperty('refreshFailed', true)
+  expect(controller!.prSidebarState).toMatchObject({
+    kind: 'ready',
+    data: { checks: forkChecks, checksError: null, details: { body: 'fork body' } }
+  })
+
+  // An equal number in another repository is another PR: none of the fork's checks or details carry over.
+  owner = 'upstream'
+  await poll()
+  expect(controller!.prSidebarState).toMatchObject({
+    kind: 'ready',
+    data: { pr: { title: 'upstream' }, checks: [], details: null }
+  })
+  if (controller!.prSidebarState.kind !== 'ready') {
+    throw new Error('expected ready')
+  }
+  expect(controller!.prSidebarState.data.checksError).not.toBeNull()
+  expect(controller!.prSidebarState).not.toHaveProperty('refreshFailed', true)
+})
