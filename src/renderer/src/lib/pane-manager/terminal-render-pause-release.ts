@@ -72,7 +72,7 @@ type RenderObservableTerminal = {
 // Terminals whose WebGL canvas was emptied while paused; cleared by their next paint.
 const unpaintedCanvasTerminals = new WeakSet<object>()
 
-function hasUnpaintedCanvas(terminal: unknown): boolean {
+function hasUnpaintedCanvas(terminal: unknown): terminal is object {
   return typeof terminal === 'object' && terminal !== null && unpaintedCanvasTerminals.has(terminal)
 }
 
@@ -95,7 +95,12 @@ function rememberUnpaintedCanvas(terminal: unknown): void {
 export function requestFullViewportPresent(terminal: unknown): boolean {
   if (hasUnpaintedCanvas(terminal)) {
     // Nothing coherent to preserve: the canvas was emptied while paused and has not painted since.
-    return forceFullViewportPresent(terminal)
+    const presented = forceFullViewportPresent(terminal)
+    if (presented) {
+      // renderRows skips onRender; clear here so only this one paint can land mid-frame.
+      unpaintedCanvasTerminals.delete(terminal)
+    }
+    return presented
   }
   const service = getRenderService(terminal)
   if (!service) {

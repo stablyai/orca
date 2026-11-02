@@ -248,9 +248,34 @@ describe('terminal WebGL addon lifecycle', () => {
     expect(renderRows).toHaveBeenCalledWith(0, 23)
   })
 
+  it('keeps an attached, already painted renderer tear-free inside a synchronized frame', () => {
+    const renderRows = vi.fn()
+    const refreshRows = vi.fn()
+    const pane = createPane()
+    Object.assign(pane.container, { getBoundingClientRect: () => ({ width: 800, height: 400 }) })
+    const decPrivateModes = { synchronizedOutput: false }
+    Object.assign(pane.terminal, {
+      _core: {
+        _renderService: {
+          _isPaused: false,
+          _needsFullRefresh: false,
+          refreshRows,
+          _renderer: { value: { renderRows } }
+        },
+        coreService: { decPrivateModes }
+      }
+    })
+    attachWebgl(pane)
+    decPrivateModes.synchronizedOutput = true
+
+    presentPaneViewport(pane)
+
+    expect(renderRows).not.toHaveBeenCalled()
+    expect(refreshRows).toHaveBeenCalledWith(0, 23, true)
+  })
+
   it('paints a canvas attached while paused on its reveal present, inside a synchronized frame', () => {
     const renderRows = vi.fn()
-    let render: (() => void) | null = null
     const renderService = {
       _isPaused: true,
       _needsFullRefresh: false,
@@ -260,10 +285,7 @@ describe('terminal WebGL addon lifecycle', () => {
     const pane = createPane()
     Object.assign(pane.container, { getBoundingClientRect: () => ({ width: 800, height: 400 }) })
     Object.assign(pane.terminal, {
-      onRender: vi.fn((listener: () => void) => {
-        render = listener
-        return { dispose: vi.fn() }
-      }),
+      onRender: vi.fn(() => ({ dispose: vi.fn() })),
       _core: {
         _renderService: renderService,
         coreService: { decPrivateModes: { synchronizedOutput: true } }
@@ -277,10 +299,8 @@ describe('terminal WebGL addon lifecycle', () => {
     presentPaneViewport(pane)
     expect(renderRows).toHaveBeenCalledWith(0, 23)
 
-    // Once painted, a later reveal preserves the synchronized frame again.
-    render!()
+    // Only that one paint may land mid-frame; later presents wait for the frame to close.
     renderRows.mockClear()
-    renderService._isPaused = true
     presentPaneViewport(pane)
     expect(renderRows).not.toHaveBeenCalled()
     expect(renderService.refreshRows).toHaveBeenCalledWith(0, 23, true)
