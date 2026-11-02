@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/select'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import type { PlaneIssue } from '../../../../../shared/plane-types'
 import { PlaneIssueRow } from './PlaneIssueRow'
 
