@@ -441,6 +441,9 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('Hermes ready')).toBe('Hermes')
     expect(getAgentLabel('⠋ Devin')).toBe('Devin')
     expect(getAgentLabel('Devin ready')).toBe('Devin')
+    expect(getAgentLabel('Qwen Code')).toBe('Qwen Code')
+    expect(getAgentLabel('⠋ Qwen Code')).toBe('Qwen Code')
+    expect(getAgentLabel('qwen ready')).toBe('Qwen Code')
   })
 
   it('does not label the Claude agents management title', () => {
@@ -753,6 +756,10 @@ describe('formatAgentTypeLabel', () => {
 
   it("returns 'Agent' for 'unknown'", () => {
     expect(formatAgentTypeLabel('unknown')).toBe('Agent')
+  })
+
+  it("maps 'qwen-code' to 'Qwen Code'", () => {
+    expect(formatAgentTypeLabel('qwen-code')).toBe('Qwen Code')
   })
 
   it('passes through arbitrary custom agent names as-is', () => {
