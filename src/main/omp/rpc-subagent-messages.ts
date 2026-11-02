@@ -128,7 +128,15 @@ export class OmpRpcSubagentMessages {
           return [{ ...event, join, producer }]
         case 'text.close':
           return [{ ...event, join }]
-        default:
+        case 'activity':
+        case 'context.usage':
+        case 'input.accepted':
+        case 'provider.frame':
+        case 'request.open':
+        case 'request.withdrawn':
+        case 'session.ended':
+        case 'turn.end':
+        case 'turn.open':
           // Child accounting and lifecycle never change the root turn.
           return []
       }

@@ -261,7 +261,7 @@ it('publishes native children and background commands to the shared composer str
         role: 'custom',
         customType: 'async-result',
         content: 'CI completed',
-        timestamp: Date.now(),
+        timestamp: HOST_TEST_NOW,
         details: { jobs: [{ jobId: 'bg_48', type: 'bash', status: 'completed' }] }
       }
     })
