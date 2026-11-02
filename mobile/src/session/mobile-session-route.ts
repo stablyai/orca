@@ -5,6 +5,7 @@ export type MobileSessionRouteParams = {
   hostId: string
   worktreeId: string
   paneKey?: string
+  projectOpen?: string
   name?: string
   /** The server a `runtime:` workspace runs on; absent for the desktop's own workspaces. */
   executionHost?: ExecutionHostId
@@ -16,7 +17,8 @@ export function mobileSessionRouteTarget({
   worktreeId,
   name,
   paneKey,
-  executionHost
+  executionHost,
+  projectOpen
 }: MobileSessionRouteParams): HostStackRouteTarget {
   return {
     name: '[hostId]/session/[worktreeId]',
@@ -25,7 +27,8 @@ export function mobileSessionRouteTarget({
       worktreeId,
       ...(name ? { name } : {}),
       ...(paneKey ? { paneKey } : {}),
-      ...(executionHost ? { executionHost } : {})
+      ...(executionHost ? { executionHost } : {}),
+      ...(projectOpen ? { projectOpen } : {})
     }
   }
 }

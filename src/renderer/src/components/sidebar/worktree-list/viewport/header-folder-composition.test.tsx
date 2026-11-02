@@ -153,11 +153,11 @@ it('composes real dispatched headers, current repo gates and folder cache refres
         projectGroupDrag: { state: INITIAL_PROJECT_GROUP_DRAG_STATE, onHandlePointerDown: vi.fn() },
         sidebarRepoHeaderIdsByBucket: new Map(),
         sidebarProjectGroupHeaderIdsByBucket: new Map(),
-        repoHeaderIndexByRepoId: new Map(),
-        repoHeaderBucketByRepoId: new Map(),
+        repoHeaderIndexByRowKey: new Map(),
+        repoHeaderBucketByRowKey: new Map(),
         projectGroupHeaderIndexByGroupId: new Map(),
         projectGroupHeaderBucketByGroupId: new Map(),
-        repoHeaderSectionEndByRepoId: new Map(),
+        repoHeaderSectionEndByRowKey: new Map(),
         projectGroupHeaderSectionEndByGroupId: new Map()
       },
       projectActions: {

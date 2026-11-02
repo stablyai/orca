@@ -1,6 +1,10 @@
 import type { PointerEvent } from 'react'
 
-import type { ProjectHeaderDragBucketKey, ProjectHeaderDragRect } from './project-header-drop'
+import type {
+  ProjectHeaderDragBucketKey,
+  ProjectHeaderDragRect,
+  RepoHeaderRow
+} from './project-header-drop'
 import type { Repo } from '../../../../shared/repo-types'
 
 export type RepoDragState = {
@@ -18,7 +22,7 @@ export const INITIAL_REPO_DRAG_STATE: RepoDragState = {
 export type UseRepoHeaderDragArgs = {
   orderedRepoIds: string[]
   sidebarRepoHeaderIdsByBucket: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
-  repoById: ReadonlyMap<string, Repo>
+  sidebarRepoHeaderRowsByBucket: ReadonlyMap<ProjectHeaderDragBucketKey, readonly RepoHeaderRow[]>
   getLiveRepos: () => readonly Repo[]
   usesProjectGroupOrdering: boolean
   onCommitRepoOrder: (orderedIds: string[]) => void
@@ -35,6 +39,8 @@ export type ProjectHeaderDragSession = {
   // Why the row, not its id: a twin on another host shares the id.
   repo: Repo
   bucketKey: ProjectHeaderDragBucketKey
+  membershipBucketKey?: ProjectHeaderDragBucketKey
+  fixedPinTier?: boolean
   sidebarRepoHeaderIds: readonly string[]
   pointerId: number
   headerRects: ProjectHeaderDragRect[]

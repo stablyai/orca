@@ -110,6 +110,8 @@ export function appendOrderedGroups(
             type: 'header' as const,
             key,
             label: group.label,
+            projectPreferenceKey: group.projectPreferenceKey,
+            projectPinned: group.projectPreference?.pinned === true,
             count: group.items.length,
             icon: { kind: 'project' as const },
             repo,

@@ -60,3 +60,11 @@ export async function listActivationPtySessions(
   }
   return window.api.pty.listSessions(scope)
 }
+
+export function canInspectAgentActivationInventory(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.api?.runtime?.call === 'function' &&
+    typeof window.api?.pty?.listSessions === 'function'
+  )
+}

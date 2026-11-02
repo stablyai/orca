@@ -89,7 +89,7 @@ ITEM rowKey=pinned:ssh:gpu-vm|orca-ssh::/w/remote-x depth=0 groupDepth=0 childre
 ITEM rowKey=pinned:ssh:gpu-vm|shared::/w/same depth=0 groupDepth=0 lastChild=true children=0 placement=pinned owning=project:repo:shared
 HEADER key=project-group:pg-remote-folders label="Remote folders" count=1 tone="text-foreground" icon=FolderTree projectGroup=pg-remote-folders projectGroupDepth=0
 FOLDER key=folder-workspace:ssh:gpu-vm|folder:fw-remote projectGroup=pg-remote-folders depth=0 groupDepth=1
-HEADER key=project:p-orca label="orca" count=1 tone="text-foreground" icon=FolderTree repo=orca-ssh projectGroupDepth=0
+HEADER key=project:p-orca label="orca" count=1 tone="text-foreground" icon=FolderTree repo=orca-ssh projectGroupDepth=0 hostId=ssh:gpu-vm
 ITEM rowKey=project:p-orca:|orca-ssh::/orca-ssh depth=0 groupDepth=0 lastChild=true children=0 placement=natural owning=project:p-orca
 HEADER key=project:repo:api label="api" count=0 tone="text-foreground" icon=FolderTree repo=api projectGroupDepth=0
 PENDING key=pending:creation-1 creation=creation-1 repo=api
@@ -105,7 +105,7 @@ visible: orca-ssh::/w/remote-x shared::/w/same orca-ssh::/orca-ssh
 HEADER key=pinned collapseKey=pinned:host:ssh:gpu-vm label="Pinned" count=2 tone="text-foreground" icon=Pin hostCounts={ssh:gpu-vm:2} hostIds={ssh:gpu-vm:[orca-ssh::/w/remote-x,shared::/w/same]} ids=[orca-ssh::/w/remote-x,shared::/w/same]
 HEADER key=project-group:pg-remote-folders label="Remote folders" count=1 tone="text-foreground" icon=FolderTree projectGroup=pg-remote-folders projectGroupDepth=0
 FOLDER key=folder-workspace:ssh:gpu-vm|folder:fw-remote projectGroup=pg-remote-folders depth=0 groupDepth=1
-HEADER key=project:p-orca label="orca" count=1 tone="text-foreground" icon=FolderTree repo=orca-ssh projectGroupDepth=0
+HEADER key=project:p-orca label="orca" count=1 tone="text-foreground" icon=FolderTree repo=orca-ssh projectGroupDepth=0 hostId=ssh:gpu-vm
 HEADER key=project:repo:api label="api" count=0 tone="text-foreground" icon=FolderTree repo=api projectGroupDepth=0
 PENDING key=pending:creation-1 creation=creation-1 repo=api
 -- rows before host sections --
@@ -133,7 +133,7 @@ ITEM rowKey=pinned:ssh:gpu-vm|orca-ssh::/w/remote-x depth=0 groupDepth=0 childre
 ITEM rowKey=pinned:ssh:gpu-vm|shared::/w/same depth=0 groupDepth=0 lastChild=true children=0 placement=pinned owning=project:repo:shared
 HEADER key=project-group:pg-remote-folders label="Remote folders" count=1 tone="text-foreground" icon=FolderTree projectGroup=pg-remote-folders projectGroupDepth=0
 FOLDER key=folder-workspace:ssh:gpu-vm|folder:fw-remote projectGroup=pg-remote-folders depth=0 groupDepth=1
-HEADER key=project:p-orca label="orca" count=2 tone="text-foreground" icon=FolderTree repo=orca-ssh projectGroupDepth=0
+HEADER key=project:p-orca label="orca" count=2 tone="text-foreground" icon=FolderTree repo=orca-ssh projectGroupDepth=0 hostId=ssh:gpu-vm
 ITEM rowKey=project:p-orca:|orca-ssh::/orca-ssh depth=0 groupDepth=0 children=0 placement=natural owning=project:p-orca
 ITEM rowKey=project:p-orca:ssh:gpu-vm|orca-ssh::/w/remote-x depth=0 groupDepth=0 lastChild=true children=0 placement=natural owning=project:p-orca
 HEADER key=project:repo:api label="api" count=0 tone="text-foreground" icon=FolderTree repo=api projectGroupDepth=0
@@ -154,7 +154,7 @@ visible: orca-ssh::/w/remote-x shared::/w/same orca-ssh::/orca-ssh
 HEADER key=pinned collapseKey=pinned:host:ssh:gpu-vm label="Pinned" count=2 tone="text-foreground" icon=Pin hostCounts={ssh:gpu-vm:2} hostIds={ssh:gpu-vm:[orca-ssh::/w/remote-x,shared::/w/same]} ids=[orca-ssh::/w/remote-x,shared::/w/same]
 HEADER key=project-group:pg-remote-folders label="Remote folders" count=1 tone="text-foreground" icon=FolderTree projectGroup=pg-remote-folders projectGroupDepth=0
 FOLDER key=folder-workspace:ssh:gpu-vm|folder:fw-remote projectGroup=pg-remote-folders depth=0 groupDepth=1
-HEADER key=project:p-orca label="orca" count=2 tone="text-foreground" icon=FolderTree repo=orca-ssh projectGroupDepth=0
+HEADER key=project:p-orca label="orca" count=2 tone="text-foreground" icon=FolderTree repo=orca-ssh projectGroupDepth=0 hostId=ssh:gpu-vm
 HEADER key=project:repo:api label="api" count=0 tone="text-foreground" icon=FolderTree repo=api projectGroupDepth=0
 PENDING key=pending:creation-1 creation=creation-1 repo=api
 HEADER key=project:repo:shared label="shared" count=1 tone="text-foreground" icon=FolderTree repo=shared projectGroupDepth=0
