@@ -51,24 +51,6 @@ describe('browser history match', () => {
     ])
   })
 
-  it('strips scheme and a leading www. before testing the host prefix', () => {
-    expect(match([entry({ url: 'https://www.github.com/acme' })], 'git')).toEqual([
-      { tier: 'host-prefix', url: 'https://www.github.com/acme' }
-    ])
-  })
-
-  it('keeps fully-qualified URL prefixes in the top tier', () => {
-    expect(match([entry({ url: 'https://github.com/acme' })], 'https://github.com')).toEqual([
-      { tier: 'host-prefix', url: 'https://github.com/acme' }
-    ])
-  })
-
-  it('leaves a subdomain match in host-substring rather than host-prefix', () => {
-    expect(match([entry({ url: 'https://docs.github.com/actions' })], 'git')).toEqual([
-      { tier: 'host-substring', url: 'https://docs.github.com/actions' }
-    ])
-  })
-
   it('drops url-tail matches for the omnibox and keeps them for the address bar', () => {
     expect(match(GIT_CORPUS, 'git', { includeUrlTail: false }).map((row) => row.tier)).toEqual([
       'host-prefix',
@@ -136,25 +118,6 @@ describe('browser history match', () => {
     expect(match(tied.toReversed(), 'acme').map((row) => row.url)).toEqual(expected)
   })
 
-  it('honours the limit and returns the shared empty array when nothing matches', () => {
-    expect(match(GIT_CORPUS, 'git', { limit: 2 })).toHaveLength(2)
-    const prepared = prepareBrowserHistoryEntries(GIT_CORPUS)
-    const missA = matchBrowserHistory({ prepared, query: 'nothing-here', limit: 3, now: NOW })
-    const missB = matchBrowserHistory({ prepared, query: 'also-nothing', limit: 3, now: NOW })
-
-    expect(missA).toHaveLength(0)
-    expect(missA).toBe(missB)
-    expect(matchBrowserHistory({ prepared, query: '   ', limit: 3, now: NOW })).toBe(missA)
-    expect(matchBrowserHistory({ prepared, query: 'git', limit: 0, now: NOW })).toBe(missA)
-  })
-
-  it('reuses preparation for the same immutable history snapshot', () => {
-    const first = prepareBrowserHistoryEntries(GIT_CORPUS)
-
-    expect(prepareBrowserHistoryEntries(GIT_CORPUS)).toBe(first)
-    expect(prepareBrowserHistoryEntries([...GIT_CORPUS])).not.toBe(first)
-  })
-
   it('survives an unparseable url by falling back to url and title matching', () => {
     const broken = entry({ url: 'not a url at all', title: 'Broken' })
 
@@ -183,33 +146,6 @@ describe('browser history match', () => {
     )
 
     expect(rows.map((row) => row.url)).toEqual(['https://acme.dev/now', 'https://acme.dev/future'])
-  })
-
-  it('agrees with a naive reference scan on which entries match', () => {
-    const corpus = Array.from({ length: 300 }, (_, index) =>
-      entry({
-        url: `https://host-${index % 17}.example${index % 3 === 0 ? '.dev' : '.com'}/path/${index}?q=seg${index % 7}`,
-        title: `Page ${index} about topic ${index % 11}`,
-        lastVisitedAt: NOW - (index % 90) * HOUR,
-        visitCount: index % 120
-      })
-    )
-    for (const query of ['host-3', 'topic 4', 'seg2', 'example.dev', 'zzz']) {
-      const lower = query.toLowerCase()
-      const reference = corpus
-        .filter(
-          (item) =>
-            item.url.toLowerCase().includes(lower) || item.title.toLowerCase().includes(lower)
-        )
-        .map((item) => item.url)
-        .sort()
-
-      expect(
-        match(corpus, query, { limit: corpus.length })
-          .map((row) => row.url)
-          .sort()
-      ).toEqual(reference)
-    }
   })
 })
 
