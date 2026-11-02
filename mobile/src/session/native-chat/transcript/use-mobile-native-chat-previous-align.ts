@@ -145,6 +145,13 @@ export function useMobileNativeChatPreviousAlign<S extends MobileNativeChatScrol
   )
 
   const cancelAlign = useCallback(() => {
+    // A touch that does not scroll never reaches notePlace. Keep the offset where the jump stopped.
+    if (aligning.current) {
+      const s = argsRef.current.scroller()
+      if (s) {
+        argsRef.current.notePlace(s)
+      }
+    }
     if (alignFrame.current !== 0) {
       cancelAnimationFrame(alignFrame.current)
       alignFrame.current = 0
