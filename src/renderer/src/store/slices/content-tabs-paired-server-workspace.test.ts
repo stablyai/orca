@@ -44,7 +44,7 @@ vi.mock('sonner', () => ({
 
 createStoreCascadesMockApi()
 
-import { openStructuredAgentSessionProvisionalTab } from '@/lib/structured-agent-session-launch-surface'
+import { openStructuredAgentSessionProvisionalTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 
 const SERVER = 'server-1'
 const SERVER_WT = 'repo-s::/srv/app'

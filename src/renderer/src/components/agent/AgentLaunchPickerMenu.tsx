@@ -1,11 +1,16 @@
-import { useId, useRef, useState, type PointerEvent } from 'react'
+import { memo, useId, useRef, useState, type ComponentProps, type PointerEvent } from 'react'
 import { Input } from '@/components/ui/input'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { AgentLaunchSetupButton } from './AgentLaunchSetupButton'
 import { chatUnavailableLabel } from '../tab-bar/tab-agent-row-presentation'
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch-picker-rows'
+import {
+  useAgentPickerInventoryEntries,
+  type AgentPickerInventorySource
+} from './use-agent-launch-picker-inventory'
 import {
   searchAgentPickerSetups,
   type AgentPickerDraft,
@@ -24,7 +29,11 @@ export function pickerLaunchRow(
   }
 }
 
-type Launch = (row: NewTabAgentMenuRow, draft?: AgentPickerDraft, entry?: AgentPickerEntry) => void
+type Launch = (
+  row: NewTabAgentMenuRow,
+  draft?: AgentPickerDraft,
+  entry?: AgentPickerEntry
+) => boolean | void | Promise<boolean>
 
 function keepSetupFocus(event: PointerEvent<HTMLDivElement>) {
   // Radix row hover must not steal focus from the row's portaled setup or its nested controls.
@@ -92,11 +101,8 @@ export function AgentLaunchPickerMenu({
           openSetup={openSetup}
           onSetupOpenChange={setOpenSetup}
           label={setup.label}
-          initial={{
-            agent: setup.entry.agent,
-            surface: setup.entry.defaultSurface,
-            choices: setup.choices
-          }}
+          initialModel={setup.choices.model}
+          initialEffort={setup.choices.options?.effort}
           onSelectAgent={onSelectAgent}
           disabled={disabled}
           runLaunch={runLaunch}
@@ -126,12 +132,25 @@ export function AgentLaunchPickerMenu({
   )
 }
 
-function AgentPickerMenuRow({
+// Subscribe here so inventory updates do not re-render the tab bar.
+export function SubscribedAgentLaunchPickerMenu({
+  inventory,
+  ...props
+}: Omit<ComponentProps<typeof AgentLaunchPickerMenu>, 'entries'> & {
+  inventory: AgentPickerInventorySource
+}) {
+  const entries = useAgentPickerInventoryEntries(inventory)
+  return <AgentLaunchPickerMenu {...props} entries={entries} />
+}
+
+// Why: catalog and seed reads land one agent at a time after the menu opens; only that row re-renders.
+const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   entry,
   openSetup,
   onSetupOpenChange,
   label = entry.label,
-  initial,
+  initialModel,
+  initialEffort,
   disabled,
   runLaunch,
   shortcut,
@@ -141,15 +160,27 @@ function AgentPickerMenuRow({
   openSetup: string | null
   onSetupOpenChange: (id: string | null) => void
   label?: string
-  initial?: AgentPickerDraft
+  initialModel?: string
+  initialEffort?: string
   disabled?: boolean
   runLaunch: Launch
   shortcut?: string
   onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
 }) {
+  useUiLanguageRevision()
+  const initial: AgentPickerDraft | undefined = initialModel
+    ? {
+        agent: entry.agent,
+        surface: entry.defaultSurface,
+        choices: {
+          model: initialModel,
+          ...(initialEffort ? { options: { effort: initialEffort } } : {})
+        }
+      }
+    : undefined
   const setupId = useId()
   const item = useRef<HTMLDivElement>(null)
-  const configured = useRef<AgentPickerDraft | undefined>(undefined)
+  const dismissing = useRef(false)
   const unavailable = entry.rows.find((row) => row.kind === 'chat-unavailable')
   return (
     <AgentLaunchSetupButton
@@ -165,17 +196,25 @@ function AgentPickerMenuRow({
         }
       }}
       onUse={(draft) => {
-        configured.current = draft
-        item.current?.click()
+        const result = runLaunch(pickerLaunchRow(entry, draft.surface), draft, entry)
+        if (result !== false) {
+          // The row click dismisses Radix only; the operation above owns acceptance.
+          dismissing.current = true
+          item.current?.click()
+        }
+        return result
       }}
       renderAnchor={(trigger) => (
         <DropdownMenuItem
           ref={item}
           variant="launch"
           disabled={disabled || !entry.surfaces.length}
-          onSelect={() => {
-            const draft = configured.current ?? initial
-            configured.current = undefined
+          onSelect={(event) => {
+            if (dismissing.current) {
+              dismissing.current = false
+              return
+            }
+            const draft = initial
             const surface = draft?.surface ?? entry.defaultSurface
             const row = draft
               ? pickerLaunchRow(entry, surface)
@@ -184,10 +223,9 @@ function AgentPickerMenuRow({
                     ? row.kind === 'chat'
                     : row.kind === 'terminal' || row.kind === 'cli'
                 ) ?? pickerLaunchRow(entry, surface))
-            if (draft) {
-              runLaunch(row, draft, entry)
-            } else {
-              runLaunch(row, undefined)
+            const result = draft ? runLaunch(row, draft, entry) : runLaunch(row, undefined)
+            if (result === false) {
+              event.preventDefault()
             }
           }}
           onKeyDown={(event) => {
@@ -212,4 +250,4 @@ function AgentPickerMenuRow({
       )}
     />
   )
-}
+})

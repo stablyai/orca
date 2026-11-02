@@ -8,7 +8,7 @@ import * as senderSelection from './mobile-agent-message-context'
 import { MobileAgentMessageProvider } from './MobileAgentMessageProvider'
 import type { MobileSessionTab } from '../../mobile-session-route-types'
 import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { findAllByHostType } from '../../../test-support/react-test-renderer-host-nodes'
 const userMessage = (blocks: NativeChatMessage['blocks']): NativeChatMessage => ({
   id: 'u1',

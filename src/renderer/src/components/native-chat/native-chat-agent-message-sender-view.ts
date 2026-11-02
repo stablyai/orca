@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import {
   useAgentMessageSenderSource,
+  useAgentMessageSenderSources,
   useLeasedSenderSelector
 } from './native-chat-agent-message-sender-source'
 import type { AppState } from '@/store/types'
@@ -120,4 +121,44 @@ export function useAgentMessageSenderOpens(
     [resolve, identity]
   )
   return useLeasedSenderSelector(leaseLocate, opens)
+}
+
+export type AgentMessageSenderInput = {
+  sender: AgentMessageSender | undefined
+  worktreeId: string | null
+}
+
+/** List form of the card avatar's view: one subscription for every sender in `inputs`. */
+export function useAgentMessageSenderViews(
+  inputs: readonly AgentMessageSenderInput[],
+  target?: RuntimeClientTarget
+) {
+  const targetKind = target?.kind
+  const environmentId = target?.kind === 'environment' ? target.environmentId : undefined
+  const lookups = useMemo(() => {
+    const stable: RuntimeClientTarget | undefined =
+      targetKind === 'local'
+        ? { kind: 'local' }
+        : environmentId !== undefined
+          ? { kind: 'environment', environmentId }
+          : undefined
+    return inputs.map(({ sender, worktreeId }) => ({
+      locate: (state: AppState) => {
+        const resolved = sender
+          ? resolveAgentMessageSenderTarget(state, sender, worktreeId, stable, undefined)
+          : undefined
+        if (resolved?.kind === 'legacy') {
+          return resolved.location
+        }
+        const located = resolved?.kind === 'located' ? resolved.location : undefined
+        return located && { ...located, agentType: located.tab?.agentSessionAgent }
+      },
+      leaseLocate: (state: AppState) =>
+        sender
+          ? agentMessageSenderCandidateLocation(state, sender, worktreeId, stable, undefined)
+          : undefined,
+      savedAgent: agentMessageSavedKind(sender)
+    }))
+  }, [inputs, targetKind, environmentId])
+  return useAgentMessageSenderSources(lookups)
 }

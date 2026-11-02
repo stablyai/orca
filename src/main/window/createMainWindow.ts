@@ -1,14 +1,18 @@
 import { app, BrowserWindow, nativeTheme, powerMonitor, screen } from 'electron'
+import { release } from 'node:os'
 import { join } from 'node:path'
 import { getAppIconPath } from '../app-icon'
 import { browserManager } from '../browser/browser-manager'
 import { getBrowserClientHostId } from '../browser/browser-client-host-id'
 import { formatBrowserClientHostIdArgument } from '../../shared/browser-client-host-id-argument'
+import { formatWindowMaterialArgument, resolveWindowMaterial } from '../../shared/window-material'
+import { windowMaterialOptions } from './window-material-options'
+import { rememberWindowMaterial } from './window-material-suppression'
 import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import { flushUnsavedCloudSessions } from '../orca-profiles/profile-cloud-session-owner'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { closeWorkspaceSpaceWindow } from './workspace-space-window'
 import {
@@ -38,7 +42,7 @@ import {
 import { installMainWindowWebviewSecurity } from './main-window-webview-security'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
-import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session-runtime-end-record'
+import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/agent-session-runtime-end-record'
 
 export { WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS }
 
@@ -98,10 +102,11 @@ export function createMainWindow(
     // Webview guests have no safe transcript target; yield the dictation shortcut to the page.
     return false
   })
-  const blur = settings?.windowBackgroundBlur ?? false
-  // Only Windows acrylic is visible; macOS transparency adds WindowServer compositing behind opaque content (#8482). Creation-time only.
-  const platformBlurOptions =
-    blur && process.platform === 'win32' ? { backgroundMaterial: 'acrylic' as const } : {}
+  const windowMaterial = resolveWindowMaterial(
+    settings,
+    { platform: process.platform, osRelease: release() },
+    nativeTheme.prefersReducedTransparency
+  )
 
   const pumpHiddenFrames = shouldPumpHiddenWindowFrames(process.env, process.platform)
   const mainWindow = new BrowserWindow({
@@ -116,7 +121,11 @@ export function createMainWindow(
     acceptFirstMouse: true,
     // Save menu-bar space on Windows/Linux; Alt reveals it and macOS uses the system menu.
     autoHideMenuBar: true,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
+    ...windowMaterialOptions(
+      windowMaterial,
+      process.platform,
+      nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff'
+    ),
     // Keep macOS traffic lights inset; hide Windows native chrome to avoid duplicate titlebars.
     titleBarStyle:
       process.platform === 'darwin'
@@ -136,7 +145,6 @@ export function createMainWindow(
         }
       : {}),
     icon: getAppIconPath(settings?.appIcon),
-    ...platformBlurOptions,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
@@ -144,11 +152,13 @@ export function createMainWindow(
       // Pass host identity at birth so the renderer has it before first snapshot, without waiting for IPC registration.
       additionalArguments: [
         formatBrowserClientHostIdArgument(getBrowserClientHostId()),
+        ...(windowMaterial === 'off' ? [] : [formatWindowMaterialArgument(windowMaterial)]),
         ...(pumpHiddenFrames ? [formatHiddenWindowFramePumpArgument()] : []),
         ...wslHostsWindowArguments()
       ]
     }
   })
+  rememberWindowMaterial(mainWindow, windowMaterial)
   const rendererWebContentsId = mainWindow.webContents.id
   installWindowsPathRegistryChangeListener(mainWindow)
   // Native paste fallback is privileged; trust only the top-level renderer.

@@ -7,7 +7,7 @@ import {
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../../shared/structured-agent-session-projection'
+} from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'

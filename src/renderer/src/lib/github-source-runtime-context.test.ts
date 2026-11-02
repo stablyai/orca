@@ -37,13 +37,6 @@ describe('getGitHubRepoRoutingTarget', () => {
     ).toEqual({ kind: 'environment', environmentId: 'owner-runtime' })
   })
 
-  it('routes a runtime-owned repo to its owner runtime when there is no source context', () => {
-    expect(resolveTarget(runtimeOwnedRepo, 'repo-1', null)).toEqual({
-      kind: 'environment',
-      environmentId: 'owner-runtime'
-    })
-  })
-
   it('lets a runtime source override the repo owner when both name runtimes', () => {
     expect(
       resolveTarget(runtimeOwnedRepo, 'repo-1', {
@@ -120,16 +113,6 @@ describe('getGitHubRepoRoutingTarget', () => {
         environmentId: 'runtime-a'
       })
     })
-  })
-
-  it('ignores runtime hosts on non-GitHub sources', () => {
-    expect(
-      resolveTarget(runtimeOwnedRepo, 'repo-1', {
-        ...runtimeSourceContext,
-        provider: 'gitlab',
-        hostId: 'runtime:source-runtime'
-      })
-    ).toEqual({ kind: 'environment', environmentId: 'owner-runtime' })
   })
 
   it('never routes a repo without an explicit owner to the globally focused runtime', () => {

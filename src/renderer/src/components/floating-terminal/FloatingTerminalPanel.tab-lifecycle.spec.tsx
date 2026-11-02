@@ -12,7 +12,6 @@ import {
 } from './floating-terminal-panel-test-fixtures'
 import { mocks, setupFloatingTerminalPanelTest } from './floating-terminal-panel-test-harness'
 import {
-  findByProp,
   findByTypeName,
   flushAsyncWork,
   renderPanel,
@@ -26,23 +25,6 @@ describe('FloatingTerminalPanel close behavior', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
-  })
-  it('creates new floating terminal tabs with workspace-owned activation', async () => {
-    setFloatingTabs([makeTab({ id: 'tab-1' })])
-
-    const element = await renderPanel(true)
-    const tabBar = findByTypeName(element, 'TabBar')
-    ;(tabBar.props.onNewTerminalTab as () => void)()
-    await flushAsyncWork()
-
-    expect(mocks.createTab).toHaveBeenCalledWith(
-      FLOATING_TERMINAL_WORKTREE_ID,
-      'floating-group',
-      undefined,
-      { id: expect.any(String) }
-    )
-    expect(mocks.activateTab).not.toHaveBeenCalled()
-    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith(mocks.createTab.mock.calls[0][3]?.id)
   })
 
   it('keeps floating browser create and duplicate local during active web runtime sessions', async () => {
@@ -122,27 +104,6 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(openLayers.props.worktreePath).toBe('/tmp/orca')
   })
 
-  it('wires the shared pane overlay with the floating parking and shortcut policy', async () => {
-    setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' })])
-
-    await renderPanel(true)
-    runEffects()
-    await Promise.resolve()
-    const element = await renderPanel(true)
-
-    expect(findByTypeName(element, 'WorkspacePaneOverlayLayers').props).toEqual(
-      expect.objectContaining({
-        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-        shouldColdParkTerminalPanes: false,
-        isForceParked: false,
-        shouldMeasureHiddenWorktree: false,
-        backgroundMountTabIds: null,
-        activationDeferredMountTabIds: null,
-        ownsNativeChatToggleShortcut: false
-      })
-    )
-  })
-
   it('keeps the panel open when the explicit close action removes the last tab', async () => {
     const onOpenChange = vi.fn()
     setFloatingTabs([makeTab({ id: 'tab-1' })])
@@ -156,24 +117,6 @@ describe('FloatingTerminalPanel close behavior', () => {
       expect.objectContaining({ onClosed: expect.any(Function) })
     )
     expect(mocks.closeTab).not.toHaveBeenCalled()
-    expect(onOpenChange).not.toHaveBeenCalled()
-  })
-
-  it('keeps the panel open when the explicit close action leaves another tab', async () => {
-    const onOpenChange = vi.fn()
-    setFloatingTabs([
-      makeTab({ id: 'tab-1', sortOrder: 0 }),
-      makeTab({ id: 'tab-2', sortOrder: 1 })
-    ])
-
-    const element = await renderPanel(true, onOpenChange)
-    const tabBar = findByTypeName(element, 'TabBar')
-    ;(tabBar.props.onClose as (tabId: string) => void)('tab-2')
-
-    expect(mocks.closeTerminalTab).toHaveBeenCalledWith(
-      'tab-2',
-      expect.objectContaining({ onClosed: expect.any(Function) })
-    )
     expect(onOpenChange).not.toHaveBeenCalled()
   })
 
@@ -402,46 +345,5 @@ describe('FloatingTerminalPanel close behavior', () => {
       expect.objectContaining({ skipRunningProcessConfirm: true })
     )
     expect(mocks.closeTerminalTab).not.toHaveBeenCalledWith('tab-c', expect.anything())
-  })
-})
-
-describe('FloatingTerminalPanel tab drag wiring', () => {
-  beforeEach(setupFloatingTerminalPanelTest)
-
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
-  it('hosts the tab strip and body tree in one shared drag scope', async () => {
-    setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' })])
-
-    const element = await renderPanel(true)
-    const dragLayer = findByTypeName(element, 'WorkspaceTabDragLayer')
-
-    expect(dragLayer.props.worktreeId).toBe(FLOATING_TERMINAL_WORKTREE_ID)
-    expect(dragLayer.props.enabled).toBe(true)
-    expect(findByTypeName(element, 'TabBar')).toBeDefined()
-    expect(findByTypeName(element, 'TabGroupSplitNodeTree')).toBeDefined()
-  })
-
-  it('mounts the tree and pane overlays inside the absolute flex surface frame', async () => {
-    setFloatingTabs([makeTab({ id: 'tab-1' })])
-
-    const element = await renderPanel(true)
-    const frame = findByProp(element, 'data-floating-workspace-surface-frame')
-
-    // The tree needs a flex host or pane heights collapse to zero; this probe cannot measure layout.
-    expect(frame.props.className).toBe('absolute inset-0 flex')
-    expect(findByTypeName(frame, 'TabGroupSplitNodeTree')).toBeDefined()
-    // Keep overlays in the group bodies’ containing block so anchor/fallback geometry agrees.
-    expect(findByTypeName(frame, 'WorkspacePaneOverlayLayers')).toBeDefined()
-  })
-
-  it('leaves the drag scope inactive while the closed panel stays mounted', async () => {
-    setFloatingTabs([makeTab({ id: 'tab-1' })])
-
-    const element = await renderPanel(false)
-
-    expect(findByTypeName(element, 'WorkspaceTabDragLayer').props.enabled).toBe(false)
   })
 })

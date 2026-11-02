@@ -170,7 +170,7 @@ async function verifyStructuredSelections({
     { markdown: '| one | two |\n| --- | --- |\n| a | b |', selector: 'table' },
     {
       markdown: 'left ![pixel](/inserted.png) right',
-      html: '<p>left <img src="/inserted.png" alt="pixel"> right</p>'
+      html: '<p>left <img data-workspace-path="/inserted.png" alt="pixel"> right</p>'
     }
   ]
   for (const sample of samples) {

@@ -98,7 +98,8 @@ async function startOrcadRuntime(
   const { agentHookRuntimeDeps } = await import('../agent-hooks/agent-hook-runtime-deps')
   const { installHookStatusSessionTabsRepublish } =
     await import('../agent-hooks/hook-status-session-tabs-republish')
-  const { startOrcadManagedAgentHooks } = await import('./orcad-managed-agent-hooks')
+  const { startOrcadAgentHookServer, startOrcadManagedAgentHooks } =
+    await import('./orcad-managed-agent-hooks')
   const { AgentStatusObservedPaneIdentities, AgentStatusObservedPaneIdentityCapture } =
     await import('../runtime/agent-status-observed-pane-identity')
 
@@ -134,13 +135,8 @@ async function startOrcadRuntime(
     console.warn('[orcad] Could not prepare the profile CLI launcher', error)
   })
   const idleExitStartup = beginOrcadIdleExit(runtimeUserDataPath)
-  const { orcadSessionScannerIdleTimeoutMs } = await import('./orcad-session-scanner-idle')
-  const scannerIdleTimeoutMs = orcadSessionScannerIdleTimeoutMs()
-  if (scannerIdleTimeoutMs !== null) {
-    const { setAiVaultServiceIdleTimeoutMs } =
-      await import('../ai-vault/session-scanner-service-spawn')
-    setAiVaultServiceIdleTimeoutMs(scannerIdleTimeoutMs)
-  }
+  const { applyOrcadSessionScannerIdleTimeout } = await import('./orcad-session-scanner-idle')
+  await applyOrcadSessionScannerIdleTimeout()
   // Initialize sealing before Store load unseals protected settings.
   await timed('secret-store', () => prepareOrcadSecretStoreAndMigrate(runtimeUserDataPath))
   const { store: profileStore, authority: profileStateAuthority } = await timed('profile', () =>
@@ -155,7 +151,7 @@ async function startOrcadRuntime(
   // Subscribe before hooks start so early turns are counted.
   const { startOrcadStats } = await import('./orcad-stats')
   const stats = startOrcadStats(runtimeUserDataPath, agentHookServer, registerCleanup)
-  await agentHookServer.start({
+  await startOrcadAgentHookServer(agentHookServer, {
     env: 'production',
     userDataPath: runtimeUserDataPath,
     statusHooksEnabled: isAgentStatusHooksEnabled(profileStore.getSettings())

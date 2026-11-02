@@ -1,7 +1,7 @@
-import { agentSessionAccountHome } from '../../../shared/agent-session-account-home'
-import { CLAUDE_STRUCTURED_AGENT } from '../claude-structured-agent-definition'
+import { agentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { CLAUDE_STRUCTURED_AGENT } from './claude-structured-agent-definition'
 import { randomUUID } from 'node:crypto'
-import { refreshClaudeStructuredSessionOptions } from '../claude-structured-session-options'
+import { refreshClaudeStructuredSessionOptions } from './launch/claude-structured-session-options'
 import type {
   AgentSessionAcquisition,
   StructuredAgentSessionAcquireInput
@@ -19,8 +19,8 @@ import type {
 import { ClaudeBackgroundTaskTracker } from '../claude-background-task-tracker'
 import { ClaudeChildWorkDecoder } from '../claude-child-work-decoder'
 import { ClaudeSlashCommandCatalog } from '../claude-slash-command-catalog'
-import type { ClaudeStructuredLaunch } from '../claude-structured-launch-resolution'
-import type { ClaudeAcquisitionLaunch } from '../claude-structured-acquisition-launch'
+import type { ClaudeStructuredLaunch } from './launch/claude-structured-launch-resolution'
+import type { ClaudeAcquisitionLaunch } from './launch/claude-structured-acquisition-launch'
 import type { ClaudeNamingGeneration } from '../claude-naming-generation'
 import { readClaudeStartupFacts } from './claude-structured-session-startup'
 
@@ -29,12 +29,13 @@ function claudeSessionInitialization(input: {
   proof: ClaudeSession['initialization']['proof']
   contextActivity: number
   onLateRefusal: ClaudeSession['initialization']['onLateRefusal']
+  startup: ClaudeSession['initialization']['startup']
   connection: ClaudeSession['connection']
   emit: (event: ClaudeStructuredSessionEvent) => void
   naming: ClaudeNamingGeneration | undefined
   requestTimeoutMs: number | undefined
 }): ClaudeSession['initialization'] {
-  const { launch, proof, contextActivity, onLateRefusal, naming, connection } = input
+  const { launch, proof, contextActivity, onLateRefusal, startup, naming, connection } = input
   const facts = naming
     ? readClaudeStartupFacts({
         connection,
@@ -74,7 +75,8 @@ function claudeSessionInitialization(input: {
       covered: !launch.resumesTranscript || launch.resumeLeafUuid === null,
       contextActivity
     },
-    onLateRefusal
+    onLateRefusal,
+    startup
   }
 }
 

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PRRefreshOutcome } from '../../shared/github/pull-request-refresh-types'
 import type { Repo } from '../../shared/repo-types'
 import type { GitHubRepoContext, LocalGitExecOptions } from './github-repository-identity'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { __resetHostedReviewBranchCacheForTests } from '../source-control/hosted-review-branch-cache'
 
 const mocks = vi.hoisted(() => ({
@@ -91,6 +91,7 @@ const mutations: { label: string; run: (repo: Repo) => Promise<unknown> }[] = [
     run: (repo) => runtime.updateRepoPRState(repo.id, 7, { state: 'open' })
   },
   { label: 'RPC ready', run: (repo) => runtime.markRepoPRReadyForReview(repo.id, 7) },
+  { label: 'RPC draft', run: (repo) => runtime.markRepoPRDraft(repo.id, 7) },
   { label: 'RPC details', run: (repo) => runtime.updateRepoPRDetails(repo.id, 7, { body: 'B' }) },
   { label: 'RPC reviewers', run: (repo) => runtime.removeRepoPRReviewers(repo.id, 7, ['octo']) }
 ]
@@ -130,15 +131,30 @@ describe('PR mutation review-lookup fencing', () => {
     }
   })
 
-  it.each(mutations)('$label keeps sharing the in-flight lookup after failure', async ({ run }) => {
+  it.each(mutations)('$label starts a fresh lookup after failure', async ({ label, run }) => {
     mocks.exec.mockRejectedValue(new Error('denied'))
     const held = holdLookup(local)
     await vi.waitFor(() => expect(mocks.resolve).toHaveBeenCalledTimes(1))
     await run(local)
+    if (label === 'IPC merge') {
+      expect(mocks.exec).toHaveBeenCalledWith(
+        expect.arrayContaining(['pr', 'merge', '7']),
+        expect.anything()
+      )
+    }
     const after = getPRForBranchOutcome(local.path, 'topic', null, null)
     finishHeld(stale)
-    expect(await Promise.all([held, after])).toEqual([stale, stale])
-    expect(mocks.resolve).toHaveBeenCalledTimes(1)
+    expect(await Promise.all([held, after])).toEqual([stale, fresh])
+    expect(mocks.resolve).toHaveBeenCalledTimes(2)
+  })
+
+  it('turns a PR back into a draft with gh pr ready --undo', async () => {
+    await runtime.markRepoPRDraft(local.id, 7)
+    expect(mocks.exec.mock.calls[0]?.[0]).toEqual(
+      expect.arrayContaining(['pr', 'ready', '7', '--undo'])
+    )
+    await runtime.markRepoPRReadyForReview(local.id, 7)
+    expect(mocks.exec.mock.calls[1]?.[0]).not.toContain('--undo')
   })
 
   it('fences only the host that ran the mutation', async () => {

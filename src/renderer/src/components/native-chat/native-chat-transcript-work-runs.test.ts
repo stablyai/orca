@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat-resolution-receipt'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat/native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from './native-chat-turn-diffs'
-import type { NativeChatTurnStatus } from '../../../../shared/native-chat-turn-status'
+import type { NativeChatTurnStatus } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
 import {
   buildNativeChatTranscriptSlots,
   nativeChatSlotIndexOf,

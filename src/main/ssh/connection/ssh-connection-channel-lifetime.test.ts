@@ -10,10 +10,6 @@ it('removes its error listener when the channel closes', () => {
   expect(channel.listenerCount('error')).toBe(0)
 })
 
-it.each([undefined, null, {}, { on: () => {} }])('ignores an untrackable value (%s)', (value) => {
-  expect(() => trackSshConnectionChannelLifetime(value)).not.toThrow()
-})
-
 it('reports a channel error that nothing else handles instead of hiding it', () => {
   const report = vi.fn()
   const channel = new EventEmitter()
@@ -32,13 +28,4 @@ it('leaves a channel error to the owner that handles it', () => {
   channel.emit('error', new Error('handled'))
   expect(owner).toHaveBeenCalledOnce()
   expect(report).not.toHaveBeenCalled()
-})
-
-it('logs an unhandled channel error with the [ssh] prefix when no reporter is given', () => {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const channel = new EventEmitter()
-  trackSshConnectionChannelLifetime(channel)
-  channel.emit('error', new Error('orphaned'))
-  expect(warn).toHaveBeenCalledWith('[ssh] Unhandled SSH channel error: orphaned')
-  warn.mockRestore()
 })

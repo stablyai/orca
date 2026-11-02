@@ -26,7 +26,7 @@ import type { AgentMessageSender } from '../../../../shared/agent-session/agent-
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../../../shared/structured-agent-session-projection'
+} from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 import type { Tab } from '../../../../shared/tab-types'
 import type {

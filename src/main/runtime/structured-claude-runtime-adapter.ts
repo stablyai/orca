@@ -1,7 +1,7 @@
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-import type { ClaudeEnvDeps } from '../claude/claude-structured-child-env'
-import { ClaudeStructuredSessionAdapter } from '../claude/claude-structured-session-adapter'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { ClaudeEnvDeps } from '../claude/structured/launch/claude-structured-child-env'
+import { ClaudeStructuredSessionAdapter } from '../claude/structured/claude-structured-session-adapter'
 import type {
   ClaudeStructuredSessionAdapterDeps,
   ClaudeStructuredSessionEvent
@@ -13,7 +13,7 @@ import {
   recordAgentSessionProviderHandle,
   reviseAgentSessionProviderResumePoint
 } from './agent-session/ownership/agent-session-provider-handle-transition'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import {
   ClaudeAtRestCommandCatalog,
   type ClaudeAtRestCommandsDeps

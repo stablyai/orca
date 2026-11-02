@@ -1,3 +1,5 @@
+import { readAgentOrchestrationProjectionRecords } from '../orchestration-fleet-agent-status-snapshot'
+import { CrewChanges } from '../orchestration/crew/crew-changes'
 import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/structured-mailbox-pointer-delivery'
 
 import { createStructuredMailboxPointerHost } from '../orchestration/structured-mailbox-pointer-host'
@@ -17,12 +19,13 @@ import type {
   RuntimeWorktreeScanCache,
   RuntimeWorktreeScanInFlight
 } from '../orca-runtime-core'
-import type { AgentBrowserBridge } from '../../browser/agent-browser-bridge'
+import type { AgentBrowserBridge } from '../../browser/agent-browser/agent-browser-bridge'
 import type { BrowserBackend } from '../../browser/browser-backend'
 import type { EmulatorBridge } from '../../emulator/emulator-bridge'
 import { RuntimeResolvedWorktreeCache } from '../runtime-resolved-worktree-cache'
 import { RuntimeWorktreeLineageController } from '../runtime-worktree-lineage-controller'
 import { createRuntimeAgentProjections } from './runtime-agent-projections'
+import type { RuntimeAgentOrchestrationDependencies } from '../runtime-agent-orchestration-projection'
 import { RuntimeTerminalList } from '../runtime-terminal-list'
 import { RuntimeManagedWorktreeQueries } from '../runtime-managed-worktree-queries'
 import { RuntimePtyForegroundAgent } from '../runtime-pty-foreground-agent'
@@ -44,10 +47,7 @@ import type { RecentPtyOutputBuffer } from '../recent-pty-output-buffer'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { mainListsEveryPane } from '../terminal/surface/main-terminal-surfaces'
 import { TUI_IDLE_QUIESCENCE_MS } from '../orca-runtime-postlude'
-import { screenClearsBlockedTail } from '../blocked-tail-screen-clear'
-import { conversationRecordReader } from '../orchestration/structured-session-lineage'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { peekOpenedAgentSessionRecordStore } from '../agent-session-record-store-slot'
+import { readScreenClearingBlockedTail } from '../blocked-tail-screen-clear'
 
 export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId {
   protected readonly stopRequestedPtyIds = new Set<string>()
@@ -116,23 +116,28 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     showTerminal: (handle) => this.showTerminal(handle)
   })
 
+  protected agentOrchestrationDependencies(bound?: Partial<RuntimeAgentOrchestrationDependencies>) {
+    return {
+      getDb: () => this.getOrchestrationDbIfAvailable(),
+      getLeaves: () => this.leaves.values(),
+      getPtys: () => this.ptysById.values(),
+      paneOf: (pty) => this.paneOfPty(pty),
+      issueLeafHandle: (leaf) => this.issueHandle(leaf),
+      issuePtyHandle: (pty) => this.issuePtyHandle(pty),
+      makePaneKey: (leaf) => this.makeRuntimePaneKey(leaf),
+      getWorktreeId: (handle) => this.getTerminalWorktreeIdForHandle(handle),
+      getHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
+      getPaneKey: (handle) => this.getPaneKeyForTerminalHandle(handle),
+      getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle),
+      getAgentStatusSnapshot: () => this.getOrchestrationFleetAgentStatusSnapshot(),
+      getSessionRecords: () => readAgentOrchestrationProjectionRecords(),
+      ...bound
+    } satisfies RuntimeAgentOrchestrationDependencies
+  }
+
   protected readonly agentProjections = createRuntimeAgentProjections(this, {
-    getDb: () => this.getOrchestrationDbIfAvailable(),
-    getLeaves: () => this.leaves.values(),
-    getPtys: () => this.ptysById.values(),
-    paneOf: (pty) => this.paneOfPty(pty),
-    ...this.terminalHandleAccess(),
-    makePaneKey: (leaf) => this.makeRuntimePaneKey(leaf),
-    getWorktreeId: (handle) => this.getTerminalWorktreeIdForHandle(handle),
-    getHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
-    getPaneKey: (handle) => this.getPaneKeyForTerminalHandle(handle),
-    getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle),
-    getAgentStatusSnapshot: () => this.getOrchestrationFleetAgentStatusSnapshot(),
-    getSessionRecords: () => {
-      const store =
-        getStructuredAgentSessionHost()?.deps.store ?? peekOpenedAgentSessionRecordStore()
-      return store ? conversationRecordReader(store) : null
-    }
+    ...this.agentOrchestrationDependencies(),
+    ...this.terminalHandleAccess()
   })
 
   protected readonly agentOrchestrationProjection = this.agentProjections.orchestration
@@ -223,22 +228,17 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     isRunning: (handle) => this.isTerminalRunningAgent(handle),
     getTitleDisplayClear: (ptyId) => this.getPtyTitleDisplayClear(ptyId),
     flushPendingBlockedStamp: (ptyId) => this.flushPendingWaitBlockedCheck(ptyId),
-    readScreenClearingBlockedTail: (ptyId, lastOutputAt) => {
-      // Why quiet: a frame caught mid-paint can drop a dialog row the next chunk restores.
-      // No output timestamp counts as quiet; a clear can only remove a block.
-      if (lastOutputAt !== null && Date.now() - lastOutputAt < TUI_IDLE_QUIESCENCE_MS) {
-        return null
-      }
-      const screen = this.readCaughtUpRuledScreen(ptyId)
-      if (!screen || !screenClearsBlockedTail(this.getPaneAgentForTuiIdle(ptyId), screen.lines)) {
-        return null
-      }
-      // Why drop the stamp: our own paste echo ends the quiet, and the tail must not re-block on it.
-      this.clearWaitBlockedStamp(ptyId)
-      return screen.lines.join('\n')
-    }
+    readScreenClearingBlockedTail: (ptyId, lastOutputAt) =>
+      readScreenClearingBlockedTail({
+        lastOutputAt,
+        quiescenceMs: TUI_IDLE_QUIESCENCE_MS,
+        agent: () => this.getPaneAgentForTuiIdle(ptyId),
+        readScreen: () => this.readCaughtUpRuledScreen(ptyId),
+        clearStamp: () => this.clearWaitBlockedStamp(ptyId)
+      })
   })
 
+  readonly crewChanges = new CrewChanges()
   protected _orchestrationDb: OrchestrationDb | null = null
 
   protected readonly orchestrationMailboxOwner = new OrchestrationMailboxOwner({
@@ -298,10 +298,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getTerminalPaneKey: (handle) => this.getTerminalPaneKey(handle),
     getWorkspaceSession: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId),
     getGeneratedTitlesEnabled: () => this.store?.getSettings?.()?.tabAutoGenerateTitle === true,
-    getAgentStatusSnapshotForPane: (paneKey) =>
-      this.getAgentStatusSnapshotForPaneFn?.(paneKey) ??
-      this.getAgentStatusSnapshotFn?.().filter((row) => row.paneKey === paneKey) ??
-      [],
+    getAgentStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
+    getAgentStatusSnapshotForPane: (paneKey) => this.getAgentStatusSnapshotForPaneFn?.(paneKey),
     getTrackedTitle: (ptyId) => this.getTrackedDisplayTitleForPty(ptyId)
   })
 

@@ -19,11 +19,11 @@ import {
   conversationRecordReader,
   type AgentSessionRecordReader
 } from './orchestration/structured-session-lineage'
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey

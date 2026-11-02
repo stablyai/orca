@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import { toast } from 'sonner'
 import { mergePRCommentIntoList } from '@/store/github/pr-comment-cache'
 import { githubProjectHost } from '../../../../../shared/github/project-identity'
@@ -18,9 +19,11 @@ import { isMutablePRConversationComment } from '../../../../../shared/github/pr-
 import type { GitHubReactionContent, PRComment } from '../../../../../shared/github/comment-types'
 import { translate } from '@/i18n/i18n'
 import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { errorMessage } from '../../../../../shared/error-message'
 
 type ChecksPanelCommentMutationsInput = Pick<
   ChecksPanelControllerState,
+  | 'activeWorktree'
   | 'addPRConversationComment'
   | 'addPRReviewCommentReply'
   | 'branch'
@@ -36,6 +39,7 @@ type ChecksPanelCommentMutationsInput = Pick<
 
 export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutationsInput) {
   const {
+    activeWorktree,
     addPRConversationComment,
     addPRReviewCommentReply,
     branch,
@@ -62,8 +66,17 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
         pr.prRepo,
         pr.headSha
       )
+      let repoOwnerExecutionHostId: string
+      try {
+        repoOwnerExecutionHostId = forgeOwnerHostIdForWorkspace(repo, activeWorktree)
+      } catch (error) {
+        const failure = { ok: false as const, error: errorMessage(error) }
+        toast.error(codeHostErrorText(failure))
+        return failure
+      }
       const result = await addPRConversationComment(repo.path, prNumber, body, {
         repoId: repo.id,
+        repoOwnerExecutionHostId,
         prRepo: pr.prRepo
       })
       if (!isCurrentAsyncResult(requestKey)) {
@@ -77,6 +90,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
       return { ok: true as const }
     },
     [
+      activeWorktree,
       addPRConversationComment,
       branch,
       commentsDisabledReason,
@@ -165,21 +179,28 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
         pr.headSha
       )
       const previousReaction = comment.reactions?.find((reaction) => reaction.content === content)
-      setComments((current) => setReactionOnSubject(current, reactionSubjectId, content, reacted))
-      const ok = await setPRCommentReaction(
-        repo.path,
-        prNumber,
-        reactionSubjectId,
-        content,
-        reacted,
-        { repoId: repo.id, prRepo: pr.prRepo }
-      )
+      let optimisticApplied = false
+      let ok: boolean
+      try {
+        const repoOwnerExecutionHostId = forgeOwnerHostIdForWorkspace(repo, activeWorktree)
+        setComments((current) => setReactionOnSubject(current, reactionSubjectId, content, reacted))
+        optimisticApplied = true
+        ok = await setPRCommentReaction(repo.path, prNumber, reactionSubjectId, content, reacted, {
+          repoId: repo.id,
+          repoOwnerExecutionHostId,
+          prRepo: pr.prRepo
+        })
+      } catch {
+        ok = false
+      }
       if (!isCurrentAsyncResult(requestKey) || ok) {
         return ok
       }
-      setComments((current) =>
-        restoreReactionOnSubject(current, reactionSubjectId, content, previousReaction)
-      )
+      if (optimisticApplied) {
+        setComments((current) =>
+          restoreReactionOnSubject(current, reactionSubjectId, content, previousReaction)
+        )
+      }
       toast.error(
         translate(
           'auto.components.right.sidebar.ChecksPanel.updateReactionFailed',
@@ -189,6 +210,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
       return false
     },
     [
+      activeWorktree,
       branch,
       isCurrentAsyncResult,
       pr,
@@ -219,9 +241,20 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
           parent: comment,
           existingComments: commentsRef.current
         }) ?? comment.threadId
+      let repoOwnerExecutionHostId: string
+      try {
+        repoOwnerExecutionHostId = forgeOwnerHostIdForWorkspace(repo, activeWorktree)
+      } catch (error) {
+        const failure = { ok: false as const, error: errorMessage(error) }
+        if (notifyOnFailure) {
+          toast.error(codeHostErrorText(failure))
+        }
+        return failure
+      }
       const result = canPostPRReviewThreadReply(comment)
         ? await addPRReviewCommentReply(repo.path, prNumber, comment.id, body, {
             repoId: repo.id,
+            repoOwnerExecutionHostId,
             prRepo: pr.prRepo,
             threadId: parentThreadId,
             path: comment.path,
@@ -233,6 +266,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
             buildPRCommentConversationReplyBody(comment.author, body),
             {
               repoId: repo.id,
+              repoOwnerExecutionHostId,
               prRepo: pr.prRepo
             }
           )
@@ -256,6 +290,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
       return { ok: true as const }
     },
     [
+      activeWorktree,
       addPRConversationComment,
       addPRReviewCommentReply,
       branch,

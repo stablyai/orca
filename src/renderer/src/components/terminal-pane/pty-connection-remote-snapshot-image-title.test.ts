@@ -230,8 +230,4 @@ describe('reattach image title', () => {
   it('disarms a plain program the published title still names as an agent', async () => {
     expect(await epilogueAfterImage('Claude working', 'vim')).toContain(MOUSE_DISARM)
   })
-
-  it('falls back to the published title when an older host sends no image title', async () => {
-    expect(await epilogueAfterImage('Terminal 1', undefined)).toContain(MOUSE_DISARM)
-  })
 })

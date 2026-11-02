@@ -11,7 +11,7 @@ import { isAgentLaunchResult, type AgentLaunchResult } from '../../../../shared/
 import type {
   AgentSessionOperationOutcome,
   AgentSessionOperationRefusalCode
-} from '../../../../shared/agent-session-operation-ledger'
+} from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import { resolveAgentSessionReplayOutcome } from '../../../native-chat/agent-session-wire/structured-agent-session-replay-outcome'
 import type { TerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
 import type { RpcContext } from '../core'
@@ -62,14 +62,17 @@ function answerFromRecordedRow(
   outcome: AgentSessionOperationOutcome
 ): AgentLaunchAdmission | null {
   if (outcome.status === 'failed') {
+    const message =
+      typeof outcome.message === 'string' && outcome.message.length > 0
+        ? outcome.message
+        : undefined
     // Replay the original code verbatim; narrowing to agentSession refusals would falsely label a failed launch as an invalid id and invite retry.
     return {
       decision: 'refuse',
       refusal: {
         code: outcome.code,
-        message:
-          outcome.message ?? `Launch operation ${operationId} already failed: ${outcome.code}.`,
-        ...(outcome.message ? { said: outcome.message } : {})
+        message: message ?? `Launch operation ${operationId} already failed: ${outcome.code}.`,
+        ...(message ? { said: message } : {})
       }
     }
   }
@@ -222,7 +225,7 @@ export async function admitAgentLaunchOperation(
     record: succeeded,
     settle: succeeded,
     fail: (code, cause) => {
-      const message = agentLaunchFailureMessage(cause)
+      const message = agentLaunchFailureMessage(cause, params.target.kind)
       return store.recordOperationOutcome({
         callerKey,
         operationId,

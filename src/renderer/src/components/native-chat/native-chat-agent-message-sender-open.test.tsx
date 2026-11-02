@@ -34,9 +34,13 @@ vi.mock('@/lib/activate-ai-vault-structured-session', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   activateAiVaultStructuredSession: mocks.activateChat
 }))
+vi.mock('@/lib/agent-session/structured-agent-session-tab-activation', async (original) => ({
+  ...(await original<Record<string, unknown>>()),
+  activateStructuredAgentSessionById: mocks.activateChat
+}))
 
 import { useAppStore } from '@/store'
-import { makeTab } from '@/store/slices/store-test-helpers'
+import { makeTab, makeUnifiedTab } from '@/store/slices/store-test-helpers'
 import { openAgentMessageSender } from '@/lib/open-agent-message-sender'
 import { useAgentMessageSenderView } from './native-chat-agent-message-sender-view'
 import {
@@ -176,9 +180,12 @@ it('asks the host, with no dot, for a terminal sender whose terminal exited or w
   expect(card(terminal())).toEqual({ avatar: { agentType: 'claude' }, link: true })
   mocks.callRuntimeRpc.mockResolvedValue({ location: null, lost: 'terminal' })
   await open(terminal())
-  expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(LOCAL, 'orchestration.partyLocation', {
-    address: 'term_0'
-  })
+  expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+    LOCAL,
+    'orchestration.partyLocation',
+    { address: 'term_0' },
+    { timeoutMs: 5000 }
+  )
 })
 
 it('reopens a closed chat sender through the host lineage lookup', async () => {
@@ -188,23 +195,48 @@ it('reopens a closed chat sender through the host lineage lookup', async () => {
     party: { address: `orca_session_id:${session}`, terminalHandle: null, orcaSessionId: session },
     name: 'Closed chat'
   }
+  useAppStore.setState({
+    unifiedTabsByWorktree: {
+      workspace: [
+        makeUnifiedTab({
+          id: 'closed-issued',
+          groupId: 'g',
+          entityId: session,
+          contentType: 'agent-session',
+          worktreeId: 'workspace',
+          executionHostId: 'local',
+          agentSessionAgent: 'claude'
+        })
+      ]
+    }
+  })
   expect(card(chat).link).toBe(true)
   mocks.callRuntimeRpc.mockResolvedValue({
     location: { kind: 'chat', sessionId: session, worktreeId: 'workspace' }
   })
   await open(chat)
-  expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(LOCAL, 'orchestration.partyLocation', {
-    address: chat.party.address
+  expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+    LOCAL,
+    'orchestration.partyLocation',
+    { address: chat.party.address },
+    { timeoutMs: 5000 }
+  )
+  expect(mocks.activateChat).toHaveBeenCalledExactlyOnceWith({
+    sessionId: session,
+    worktreeId: 'workspace',
+    target: LOCAL
   })
-  expect(mocks.activateChat).toHaveBeenCalledTimes(1)
 })
 
 it('keeps an older host on its own lookup', async () => {
   mocks.callRuntimeRpc.mockResolvedValue({ location: null, lost: 'terminal' })
   await open(terminal('term_old'))
-  expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(LOCAL, 'orchestration.partyLocation', {
-    address: 'term_old'
-  })
+  expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+    LOCAL,
+    'orchestration.partyLocation',
+    { address: 'term_old' },
+    { timeoutMs: 5000 }
+  )
 })
 
 describe('an older paired host, which publishes no sender locations', () => {

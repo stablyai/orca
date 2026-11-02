@@ -8,7 +8,7 @@ import type {
 } from '../../../../shared/runtime-types'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
-import { holdAgentSessionInventory } from '../../structured-agent-session-inventory-hold'
+import { holdAgentSessionInventory } from '../../agent-session/structured-agent-session-inventory-hold'
 import type { Tab } from '../../../../shared/tab-types'
 import {
   captureTerminalCloseRequest,

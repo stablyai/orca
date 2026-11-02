@@ -1,4 +1,4 @@
-import { AgentSessionSelectionSchema } from '../agent-session-execution-options'
+import { AgentSessionSelectionSchema } from '../agent-session/options/agent-session-execution-options'
 import {
   SendBody,
   MAX_OPTION_LABEL,
@@ -13,15 +13,16 @@ import {
 } from './structured-agent-session-identifiers'
 import { z } from 'zod'
 import { CREATE_TAB_FIELDS } from './structured-agent-session-create-tab-params'
-import { isStructuredAgentId } from '../agent-session-provider-handle-encoding'
+import { isStructuredAgentId } from '../agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { normalizeExecutionHostId } from '../execution-host'
-import { AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH } from '../agent-session-question-answer'
+import { AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH } from '../agent-session/agent-session-question-answer'
 import {
   AGENT_SESSION_HISTORY_DIRECTIONS,
   AGENT_SESSION_HISTORY_MAX_LIMIT
-} from '../agent-session-wire'
+} from '../agent-session/agent-session-wire'
 import { AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH } from '../agent-session/agent-session-thread-goal-wire'
 import { MutationEnvelope } from './structured-agent-session-mutation-envelope'
+import { ResumeSource, ResumeWriterAdmission } from './structured-agent-session-resume-params'
 
 export {
   SendBlock,
@@ -37,6 +38,8 @@ export {
   MAX_ID_LENGTH,
   SessionId
 } from './structured-agent-session-identifiers'
+
+export { ResumeSource } from './structured-agent-session-resume-params'
 
 // Four Claude questions with all four generated choices occupy 610 chars when fully percent-encoded.
 export const MAX_RESPONSE_OPTION_ID_LENGTH = AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH
@@ -97,24 +100,11 @@ export const AttachParams = z
   })
   .strict()
 
-/** Identity only: derive transcript/account paths host-side so clients cannot choose imported files or credential directories. */
-export const ResumeSource = z
-  .object({
-    providerSessionId: Identifier('Invalid provider session id'),
-    cliSource: z
-      .object({
-        workspaceId: Identifier('Invalid workspace id'),
-        paneKey: Identifier('Invalid pane key')
-      })
-      .strict()
-      .optional()
-  })
-  .strict()
-
 export const CreateSupportParams = z
   .object({
     worktree: Identifier('Invalid worktree selector'),
-    agent: StructuredAgent
+    agent: StructuredAgent,
+    resumeFrom: ResumeWriterAdmission.optional()
   })
   .strict()
 

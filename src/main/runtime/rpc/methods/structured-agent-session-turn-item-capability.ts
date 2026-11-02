@@ -1,14 +1,14 @@
 // Remove when every supported release has AGENT_SESSION_TURN_ITEM_CAPABILITY.
 // Downgrade turn items to legacy status only at RPC; canonical journal/status/in-process readers keep the body.
 
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import { legacyAgentJournalTurnStatusBody } from '../../../../shared/agent-session-turn-record'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { legacyAgentJournalTurnStatusBody } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
-} from '../../../../shared/agent-session-wire'
-import { AGENT_SESSION_TURN_ITEM_CAPABILITY } from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/agent-session-wire'
+import { AGENT_SESSION_TURN_ITEM_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { RpcContext } from '../core'
 
 type TurnItemReader = Pick<RpcContext, 'clientKind' | 'clientCapabilities'>

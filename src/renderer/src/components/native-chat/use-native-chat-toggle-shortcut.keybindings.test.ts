@@ -3,7 +3,11 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { ActivePluginCommand } from '@/store/plugin-panels'
-import { makeGroup, makeTerminalTab, makeUnifiedTab } from '../worktree-jump-palette-test-fixtures'
+import {
+  makeGroup,
+  makeTerminalTab,
+  makeUnifiedTab
+} from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import { useNativeChatToggleShortcut } from './use-native-chat-toggle-shortcut'
 import { useGlobalKeybindings } from '@/app-shell/use-global-keybindings'
 import { useAppChromeLayout } from '@/app-shell/use-app-chrome-layout'

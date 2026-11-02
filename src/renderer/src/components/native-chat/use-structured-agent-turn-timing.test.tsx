@@ -6,8 +6,8 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission,
   AgentJournalTurnLifecycle
-} from '../../../../shared/agent-session-journal-types'
-import { agentJournalTurnBody } from '../../../../shared/agent-session-turn-record'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalTurnBody } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { useStructuredAgentTurnTiming } from './use-structured-agent-turn-timing'
 
 // Separate host/client clocks so leaked host timestamps produce an obvious counter offset.

@@ -1,14 +1,14 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
+import type { AgentSessionStatusEvent } from '../../../shared/agent-session/agent-session-wire'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
-import { projectStructuredAgentSessionStatusSummary } from '../../../shared/structured-agent-session-projection'
+import { projectStructuredAgentSessionStatusSummary } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { AgentHookServer, _internals } from '../../agent-hooks/server'
-import { createClaudeJournalTranslator } from '../../claude/claude-structured-journal-translation'
+import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import {
@@ -20,7 +20,7 @@ import { StructuredAgentSessionStatusFeed } from './structured-agent-session-sta
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION = 'recency-session'
 const CODEX_THREAD = 'thread-parent'

@@ -1,8 +1,8 @@
 import type { RpcClient, SendRequestOptions } from '../../transport/rpc-client'
 import type { ConnectionState, RpcResponse, RpcSuccess } from '../../transport/types'
 import {
-  BRIDGE_MAX_PENDING_REQUESTS,
   BRIDGE_MAX_SUBSCRIPTIONS,
+  bridgePendingRequestCap,
   isBridgeFrameWithinCap,
   utf8ByteLength
 } from './bridge-caps'
@@ -67,6 +67,7 @@ export type BridgeRpcClientOptions = {
 
 export type BridgeRpcClient = RpcClient &
   BridgeConnectionPathSource &
+  Required<Pick<RpcClient, 'getShellHostStatus'>> &
   BridgeShellSessionListeners & {
     /**
      * Asks the shell to draw its key rail, while a terminal and its key row are on screen, until the
@@ -215,12 +216,11 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       // Return a rejected promise: deferred operations hand it back directly, so synchronous throws would bypass callers’ promise catches.
       return Promise.reject(new BridgeClientClosedError())
     }
-    if (requests.size >= BRIDGE_MAX_PENDING_REQUESTS) {
-      return Promise.reject(
-        new BridgeClientCapExceededError(`over ${BRIDGE_MAX_PENDING_REQUESTS} requests in flight`)
-      )
-    }
     const [method, params, requestOptions] = args
+    const cap = bridgePendingRequestCap(isBridgeNativeMethod(method))
+    if (requests.size >= cap) {
+      return Promise.reject(new BridgeClientCapExceededError(`over ${cap} requests in flight`))
+    }
     return new Promise<RpcResponse>((resolve, reject) => {
       const frameOptions = readBridgeRequestFrameOptions(requestOptions, hasGrant)
       const id = nextId()
@@ -312,6 +312,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     // Clients without migration generation use a constant zero; native screen readers still require a number.
     getGeneration: () => snapshot().generation ?? 0,
     ...cache.pathSource(),
+    getShellHostStatus: () => shellSession.current()?.hostStatus ?? null,
     carriesRpcEnvelope: () => hasGrant(BRIDGE_RPC_ENVELOPE_GRANT),
     // Allow listener registration before init so providers can observe the first state change; it reads no unprimed value.
     onStateChange: (listener) => cache.onStateChange(listener),

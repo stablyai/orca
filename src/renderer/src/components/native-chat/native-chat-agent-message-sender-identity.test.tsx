@@ -2,7 +2,7 @@
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../../../shared/structured-agent-session-projection'
+} from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -10,11 +10,11 @@ import { useAppStore } from '@/store'
 import type {
   AgentSessionConversationName,
   AgentSessionStatusSummary
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import {
   foldAgentSessionConversationNames,
   type AgentSessionConversationNames
-} from '../../../../shared/agent-session-conversation-names'
+} from '../../../../shared/agent-session/agent-session-conversation-names'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'

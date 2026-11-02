@@ -50,7 +50,12 @@ export function MobileSessionTab({
       <DetailCardFocusBoundary refs={details.boundaryRefs} index={0} active={ownsCard} />
       <Pressable
         ref={openerRef}
-        style={[styles.tab, first && styles.tabFirst, active && styles.tabActive]}
+        style={({ pressed }) => [
+          styles.tab,
+          first && styles.tabFirst,
+          active && styles.tabActive,
+          pressed && styles.tabPressed
+        ]}
         onLayout={(event) => {
           onLayout(event)
           details.refreshSource()

@@ -4,7 +4,7 @@ import type {
   AgentMessageSource,
   AgentMessageSender
 } from '../../../shared/agent-session/agent-session-message-source'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { MessageRow, OrchestrationDb } from './db'
 import { agentMessageRelation } from './agent-message-relation'
 import { agentMessageSender, type SenderSnapshotResolver } from './agent-message-sender'

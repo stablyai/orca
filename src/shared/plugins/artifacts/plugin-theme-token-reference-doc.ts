@@ -4,6 +4,7 @@ import {
   PLUGIN_APP_THEME_TOKENS
 } from './plugin-theme-artifact'
 import { pluginAppThemeCssFallback } from './plugin-theme-css-fallbacks'
+import { PANEL_DESIGN_TOKEN_ALLOWLIST } from '../frames/plugin-panel-design-tokens'
 
 const REQUIRED = new Set<string>(PLUGIN_APP_THEME_REQUIRED_TOKENS)
 
@@ -121,6 +122,22 @@ function omittedValue(token: PluginAppThemeToken): string {
   return light === dark ? light : `light: ${light}; dark: ${dark}`
 }
 
+const APP_THEME_TOKENS: ReadonlySet<string> = new Set(PLUGIN_APP_THEME_TOKENS)
+const isAppThemeToken = (token: string): token is PluginAppThemeToken => APP_THEME_TOKENS.has(token)
+// Frame variables that are not colours of an app theme.
+const FRAME_ONLY_ROLES: Record<string, string> = {
+  '--radius': 'Corner radius of cards and controls'
+}
+
+/** The `--orca-*` CSS variables panel and editor frames get, with what each paints. */
+export function pluginFrameThemeVariables(): { variable: string; token: string; paints: string }[] {
+  return PANEL_DESIGN_TOKEN_ALLOWLIST.map((token) => ({
+    variable: `--orca-${token.slice(2)}`,
+    token,
+    paints: isAppThemeToken(token) ? TOKEN_ROLES[token] : (FRAME_ONLY_ROLES[token] ?? '')
+  }))
+}
+
 /** Colour token list for theme authors, rendered from the public token set. */
 export function renderPluginThemeTokenReference(): string {
   const lines = [
@@ -135,6 +152,16 @@ export function renderPluginThemeTokenReference(): string {
     ...PLUGIN_APP_THEME_TOKENS.map(
       (token) =>
         `| \`${token}\` | ${TOKEN_ROLES[token]} | ${REQUIRED.has(token) ? 'yes' : 'no'} | ${REQUIRED.has(token) ? '' : omittedValue(token)} |`
+    ),
+    '',
+    '## Frame CSS variables',
+    '',
+    "Panel and custom editor frames get these stable variables, set from Orca's active theme and updated in place when it changes. Other tokens are not exposed to frames.",
+    '',
+    '| Variable | Orca token |',
+    '| --- | --- |',
+    ...pluginFrameThemeVariables().map(
+      ({ variable, token }) => `| \`${variable}\` | \`${token}\` |`
     )
   ]
   return `${lines.join('\n')}\n`

@@ -1,23 +1,23 @@
 import { structuredAgentSessionHandingOver } from './structured-agent-session-handing-over'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { isStructuredAgentSessionStopNote } from './structured-agent-session-command-turn'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { activeStructuredAgentSessionTurnId } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { claudeUnwrittenUserMessageError } from '../../claude/claude-agent-sdk-user-message-queue'
-import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
+import { ClaudeStructuredSessionAdapter } from '../../claude/structured/claude-structured-session-adapter'
 import {
   fakeClaude,
   PROVIDER_SESSION_ID,
   type FakeConnection
-} from '../../claude/claude-structured-session-test-support'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+} from '../../claude/structured/claude-structured-session-test-support'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
 import {
   closeTestJournalHostDatabases,

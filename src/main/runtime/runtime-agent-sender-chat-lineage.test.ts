@@ -10,14 +10,14 @@ import {
   editPersistedTestAgentSessionStore,
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
-} from './agent-session-record-store-test-harness'
+} from './agent-session/records/agent-session-record-store-test-harness'
 import { readAgentSenderSessions } from './runtime-agent-sender-history'
 import {
   AGENT_SESSION_PREDECESSOR_IDS,
   agentSessionPredecessorWorkForTest
 } from './agent-session-record-lineage'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 
 const unissued = (): never => {
   throw new Error('a sender build issued a terminal handle')

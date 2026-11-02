@@ -15,7 +15,8 @@ import {
 import { showAgentPaneUnavailable } from '@/components/terminal-pane/stale-agent-row'
 import {
   activateAiVaultStructuredSession,
-  structuredSessionOpenFeedback
+  structuredSessionOpenFeedback,
+  type StructuredSessionOpenFeedback
 } from './activate-ai-vault-structured-session'
 import type { LocatedAgentSender } from '@/runtime/agent-sender-associations'
 import {
@@ -139,14 +140,16 @@ async function openUnheldTerminal(
       return click.reopen()
     }
   }
-  await focusTerminal(handle, environmentId, gone, name)
+  await focusTerminal(handle, environmentId, {
+    gone,
+    lookupFailure: (failure) => showLookupFailure(failure, name)
+  })
 }
 
 export async function focusTerminal(
   handle: string,
   environmentId: string | null,
-  gone: () => void = showAgentPaneUnavailable,
-  name = ''
+  feedback: { gone?: () => void; lookupFailure: (failure: LookupFailure) => void }
 ): Promise<void> {
   if (focusRendererTerminalHandle(handle, environmentId)) {
     return
@@ -155,17 +158,22 @@ export async function focusTerminal(
     await focusRuntimeTerminalHandle(handle, environmentId)
   } catch (error) {
     if (provesTerminalGone(error)) {
+      const gone = feedback.gone ?? showAgentPaneUnavailable
       gone()
     } else {
-      showLookupFailure(isRuntimeCompatBlockError(error) ? 'update' : 'unreachable', name)
+      feedback.lookupFailure(isRuntimeCompatBlockError(error) ? 'update' : 'unreachable')
     }
   }
 }
 
-export function showLookupFailure(failure: LookupFailure, name: string): void {
+export function showLookupFailure(
+  failure: LookupFailure,
+  name: string,
+  feedback: StructuredSessionOpenFeedback = structuredSessionOpenFeedback
+): void {
   if (failure === 'unreachable') {
-    structuredSessionOpenFeedback.unavailable(name)
+    feedback.unavailable(name)
   } else {
-    structuredSessionOpenFeedback.hostCannotOpen(name)
+    feedback.hostCannotOpen(name)
   }
 }

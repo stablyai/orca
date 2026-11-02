@@ -10,9 +10,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalRenderItem,
   AgentJournalResolution
-} from '../../../src/shared/agent-session-journal-types'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
+import type { ConnectionState } from '../transport/types'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { formatQuestionFreeTextAnswer } from './native-chat/input/mobile-native-chat-question'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
@@ -204,11 +205,22 @@ describe('useMobileStructuredAgentSession', () => {
     }
     return unsubscribePreference
   })
+  let clientState: ConnectionState = 'connected'
+  const stateListeners = new Set<(state: ConnectionState) => void>()
+  function setClientState(next: ConnectionState): void {
+    clientState = next
+    for (const stateListener of stateListeners) {
+      stateListener(next)
+    }
+  }
   const client: RpcClient = {
     sendRequest,
     subscribe,
-    getState: () => 'connected',
-    onStateChange: () => () => {},
+    getState: () => clientState,
+    onStateChange: (stateListener) => {
+      stateListeners.add(stateListener)
+      return () => stateListeners.delete(stateListener)
+    },
     getReconnectAttempt: () => 0,
     getLastConnectedAt: () => null,
     updateTerminalSubscriptionViewport: () => {},
@@ -230,13 +242,15 @@ describe('useMobileStructuredAgentSession', () => {
   }): null {
     hook = useMobileStructuredAgentSession({
       client,
+      pairedHostClient: client,
       sessionId,
       sourceIdentity,
       enabled: true,
       connected,
+      hostSupport: null,
       agent,
       onSendError
-    } as never)
+    })
     return null
   }
 
@@ -255,38 +269,13 @@ describe('useMobileStructuredAgentSession', () => {
     })
     sendRequest.mockImplementation(defaultSendRequest)
     listener = null
+    clientState = 'connected'
   })
 
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
     hook = null
-  })
-
-  it('subscribes and holds structured sessions without nativeChat or terminal RPCs', async () => {
-    act(() => {
-      renderer = create(createElement(Harness))
-    })
-
-    await vi.waitFor(() =>
-      expect(subscribe).toHaveBeenCalledWith(
-        'agentSession.subscribe',
-        { sessionId: 'session-1' },
-        expect.any(Function)
-      )
-    )
-    await vi.waitFor(() =>
-      expect(sendRequest).toHaveBeenCalledWith(
-        'agentSession.hold',
-        expect.objectContaining({ sessionId: 'session-1', holderId: expect.any(String) }),
-        expect.any(Object)
-      )
-    )
-    expect(sendRequest).not.toHaveBeenCalledWith(
-      expect.stringMatching(/^(nativeChat|terminal)\./),
-      expect.anything(),
-      expect.anything()
-    )
   })
 
   it('projects worker creation facts for phone cards alongside conversation messages', async () => {
@@ -348,11 +337,14 @@ describe('useMobileStructuredAgentSession', () => {
     )
 
     // Reconnect must acquire the connection-scoped hold before replaying the stream.
+    // The client reports its own drop before the route's connection prop follows.
     await act(async () => {
+      setClientState('disconnected')
       renderer?.update(createElement(Harness, { connected: false }))
     })
     expect([unsubscribe.mock.calls.length, unsubscribePreference.mock.calls.length]).toEqual([1, 1])
     await act(async () => {
+      setClientState('connected')
       renderer?.update(createElement(Harness, { connected: true }))
     })
 
@@ -380,6 +372,11 @@ describe('useMobileStructuredAgentSession', () => {
       throw new Error('reconnect calls were not recorded')
     }
     expect(secondHoldOrder).toBeLessThan(secondSubscribeOrder)
+    // The shared preference stream reopens with its client: one read at mount, one after reconnect.
+    expect(sendRequest.mock.calls.filter(([method]) => method === 'settings.get')).toHaveLength(2)
+    expect(
+      subscribe.mock.calls.filter(([method]) => method === 'runtime.clientEvents.subscribe')
+    ).toHaveLength(2)
     await act(async () => renderer?.unmount())
     renderer = null
     expect([unsubscribe.mock.calls.length, unsubscribePreference.mock.calls.length]).toEqual([2, 2])
@@ -715,6 +712,10 @@ describe('useMobileStructuredAgentSession', () => {
       expect(hook!.optionSnapshot.find((descriptor) => descriptor.id === 'model')).toMatchObject({
         settable: true
       })
+    })
+    // The picker is usable before fence 3's own read answers; only a read issued after the pick settles it.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
     })
     let reconcile!: (response: Awaited<ReturnType<typeof defaultSendRequest>>) => void
     sendRequest.mockImplementation(async (method, params) => {

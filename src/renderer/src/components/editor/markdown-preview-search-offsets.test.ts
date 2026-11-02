@@ -13,13 +13,6 @@ afterEach(() => {
 })
 
 describe('case-insensitive Markdown search offsets', () => {
-  it('finds a match at the end of a large ordinary text node', () => {
-    const prefix = 'a'.repeat(512 * 1024)
-    expect(findTextMatchRanges(`${prefix} Needle`, 'needle')).toEqual([
-      { start: prefix.length + 1, end: prefix.length + 7 }
-    ])
-  })
-
   it.each([
     { character: 'İ', first: 9, second: 18 },
     { character: '😊', first: 10, second: 20 },

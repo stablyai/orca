@@ -4,8 +4,8 @@ import {
   scanPendingAsks,
   asyncQuestionOccurrenceId
 } from '../../shared/native-chat/input/native-chat-ask'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import {
   codexItemBody,
   codexItemIdentity,

@@ -2,13 +2,13 @@ import type { AppState } from '@/store/types'
 import type { CreateBrowserTabOptions } from '@/store/slices/browser/browser-slice-contract'
 import type { TabSplitTarget } from '@/store/slices/tabs/tabs-slice-contract'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
-import { liveLayoutGroupIds } from '@/store/slices/editor/tabs/editor-open-target-group'
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import type { OpenWorkspaceBrowserTabRequest } from './workspace-browser-tab-open'
 import type { BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { findVisibleBrowserLinkTarget } from './visible-browser-link-target'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
+import { resolveLinkOpenSidePlacement } from './adjacent-link-open-group'
 
 export type HttpLinkBrowserPlacement = { targetGroupId: string } | { split: TabSplitTarget }
 
@@ -33,7 +33,7 @@ export type HttpLinkBrowserRequestFields = Pick<
   'targetGroupId' | 'split' | 'focusOnCreate' | 'selectWorktree'
 >
 
-/** Use the visible browser or split beside the clicked pane so its terminal/agent stays visible; click focus identifies the source group. */
+/** Reuse the visible browser or a neighbor; only a lone occupied group needs a split. */
 export function resolveHttpLinkBrowserPlacement(
   state: Omit<HttpLinkBrowserTabState, 'createBrowserTab'>,
   worktreeId: string
@@ -42,18 +42,12 @@ export function resolveHttpLinkBrowserPlacement(
   if (visibleBrowser) {
     return visibleBrowser
   }
-  const groups = state.groupsByWorktree?.[worktreeId] ?? []
-  const visibleGroupIds = liveLayoutGroupIds(state, worktreeId)
-  const sourceGroupId = state.activeGroupIdByWorktree?.[worktreeId]
-  if (!sourceGroupId || !visibleGroupIds.has(sourceGroupId)) {
-    return null
-  }
-  // Why: an empty pane covers nothing, so the link fills it instead of splitting beside it.
-  if (!groups.find((group) => group.id === sourceGroupId)?.activeTabId) {
-    return { targetGroupId: sourceGroupId }
-  }
-  // Why unactivated: a host snapshot reads an activated empty group as a terminal pane (see file-preview.ts).
-  return { split: { sourceGroupId, splitDirection: 'right', activate: false } }
+  const placement = resolveLinkOpenSidePlacement({
+    layout: state.layoutByWorktree?.[worktreeId],
+    groups: state.groupsByWorktree?.[worktreeId] ?? [],
+    sourceGroupId: state.activeGroupIdByWorktree?.[worktreeId]
+  })
+  return placement && ('groupId' in placement ? { targetGroupId: placement.groupId } : placement)
 }
 
 export function isHttpLinkBackgroundOpen(

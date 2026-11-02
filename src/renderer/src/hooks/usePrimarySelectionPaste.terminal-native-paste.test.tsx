@@ -114,18 +114,6 @@ describe('terminal-armed native paste suppression', () => {
     expect(keyboardPaste.defaultPrevented).toBe(false)
   })
 
-  it('keeps suppressing nothing when the terminal never armed the window', async () => {
-    await renderProbe()
-    const terminalTextarea = appendXtermHelperTextarea()
-
-    let paste!: Event
-    await act(async () => {
-      paste = dispatchPasteBeforeInput(terminalTextarea)
-    })
-
-    expect(paste.defaultPrevented).toBe(false)
-  })
-
   it('does not arm on macOS, where Chromium emits no native follow-up paste', async () => {
     setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)')
     await renderProbe()

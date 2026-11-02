@@ -227,7 +227,9 @@ export function registerRuntimeWindowLifecycle(
       send('runtime:browserDriverChanged', { browserPageId, driver }),
     browserRemoteViewersChanged: (browserPageId, hasRemoteViewers) =>
       send('runtime:browserRemoteViewersChanged', { browserPageId, hasRemoteViewers }),
-    clientHostedBrowserRowsChanged: (event) => send('runtime:clientHostedBrowserRowsChanged', event)
+    clientHostedBrowserRowsChanged: (event) =>
+      send('runtime:clientHostedBrowserRowsChanged', event),
+    claudeAccountSelected: (change) => send('claudeAccounts:selectedElsewhere', change)
   })
   // Switch point: the window reads its sidebar from main's feed and re-reads on each notice.
   const detachSidebarInputsNotices = ORCA_SIDEBAR_INPUTS_IS_MAIN

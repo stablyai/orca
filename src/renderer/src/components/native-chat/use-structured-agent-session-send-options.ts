@@ -1,10 +1,10 @@
 import { useCallback } from 'react'
-import type { StructuredAgentSessionSendControl } from '../../../../shared/structured-agent-session-send-mutation'
+import type { StructuredAgentSessionSendControl } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionSendSelection
-} from '../../../../shared/structured-agent-session-option-view'
-import { getStructuredAgentSessionLaunchSelection } from '@/lib/structured-agent-session-launch-options'
+} from '../../../../shared/agent-session/options/structured-agent-session-option-view'
+import { getStructuredAgentSessionLaunchSelection } from '@/lib/agent-session/launch/structured-agent-session-launch-options'
 import type { StructuredAgentSessionLaunchView } from './use-native-chat-provisional-launch'
 import type { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
 

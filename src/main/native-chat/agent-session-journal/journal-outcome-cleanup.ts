@@ -3,11 +3,16 @@
 
 import type { JournalHostDatabase } from './journal-host-database'
 import type Database from '../../sqlite/sync-database'
+import { JournalOutcomeCompaction } from './journal-outcome-compaction'
+import { vacuumJournalPage } from './journal-incremental-vacuum'
 
 const FIRST_PASS_MS = 60_000
 const PASS_INTERVAL_MS = 6 * 60 * 60_000
 const sweepPositions = new WeakMap<Database.Database, number>()
-type SweptDatabase = Pick<JournalHostDatabase, 'transaction' | 'isClosed' | 'readOnly'>
+type SweptDatabase = Pick<
+  JournalHostDatabase,
+  'transaction' | 'writeAutocommit' | 'isClosed' | 'readOnly'
+>
 
 /** A retired epoch's records go with it, as main deletes a retired epoch's rows: every generation
  * the chat's current epoch no longer names is swept, one bounded page per transaction. */
@@ -76,6 +81,7 @@ export function createJournalPace(
 
 /** Sweeps a minute after launch, then every six hours; a failed pass is retried by the next one. */
 export class JournalOutcomeSweeper {
+  private readonly compaction = new JournalOutcomeCompaction()
   private readonly pace: JournalPace
   private running: Promise<void> | null = null
   private timer: ReturnType<typeof setTimeout> | null = null
@@ -111,12 +117,22 @@ export class JournalOutcomeSweeper {
   }
 
   private async run(): Promise<void> {
-    for (;;) {
-      const database = this.current()
-      if (!database || !this.pace.work(() => sweepJournalOutcomePage(database))) {
-        return
+    for (const page of [
+      (database: SweptDatabase) => sweepJournalOutcomePage(database),
+      (database: SweptDatabase) => this.compaction.page(database),
+      (database: SweptDatabase) => vacuumJournalPage(database)
+    ]) {
+      for (;;) {
+        const database = this.current()
+        if (!database) {
+          return
+        }
+        const more = this.pace.work(() => page(database))
+        await this.pace.rest()
+        if (!more) {
+          break
+        }
       }
-      await this.pace.rest()
     }
   }
 
