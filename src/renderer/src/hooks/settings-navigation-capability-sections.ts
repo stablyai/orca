@@ -1,10 +1,12 @@
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { PlaneIcon } from '@/components/icons/PlaneIcon'
 import { getAccountsPaneSearchEntries } from '@/components/settings/accounts/accounts-search'
 import { getAgentsPaneSearchEntries } from '@/components/settings/agents/agents-search'
 import { getComputerUsePaneSearchEntries } from '@/components/settings/computer-use/computer-use-search'
 import { getGeneralPaneSearchEntries } from '@/components/settings/general/general-search'
 import { getIntegrationsPaneSearchEntries } from '@/components/settings/integrations/integrations-search'
 import { getLinearAgentSkillPaneSearchEntries } from '@/components/settings/skills/linear/linear-agent-skill-search'
+import { getPlaneAgentSkillPaneSearchEntries } from '@/components/settings/skills/plane/plane-agent-skill-search'
 import { getMobileSettingsPaneSearchEntries } from '@/components/settings/mobile/mobile-settings-search'
 import { getOrcaAccountSettingsSearchEntries } from '@/components/settings/accounts/orca/orca-account-settings-search'
 import { OrcaLogoSettingsIcon } from '@/components/settings/page/orca-logo-settings-icon'
@@ -29,7 +31,7 @@ import {
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
 export function buildCapabilitySettingsSections(
-  { isLocalWindowsHost, isWebClient, isLinearConnected }: SettingsNavigationBuildOptions,
+  { isLocalWindowsHost, isWebClient, isLinearConnected, isPlaneConnected }: SettingsNavigationBuildOptions,
   t: Translate = translate
 ): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
@@ -88,6 +90,21 @@ export function buildCapabilitySettingsSections(
             ),
             icon: LinearIcon,
             searchEntries: getLinearAgentSkillPaneSearchEntries(),
+            group: 'capabilities'
+          }
+        ]
+      : []),
+    ...(isPlaneConnected
+      ? [
+          {
+            id: 'plane',
+            title: translate('auto.hooks.useSettingsNavigationMetadata.planeTitle', 'Plane'),
+            description: translate(
+              'auto.hooks.useSettingsNavigationMetadata.planeDescription',
+              'How Plane works in Orca, setup checklist, agent skill, and example prompts.'
+            ),
+            icon: PlaneIcon,
+            searchEntries: getPlaneAgentSkillPaneSearchEntries(),
             group: 'capabilities'
           }
         ]

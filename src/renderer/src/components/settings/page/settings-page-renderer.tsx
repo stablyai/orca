@@ -14,6 +14,7 @@ import {
   renderAgentsSettingsSection,
   renderDesktopCapabilitySettingsSections,
   renderLinearSettingsSection,
+  renderPlaneSettingsSection,
   renderOrchestrationSettingsSection
 } from './settings-capability-section-renderers'
 import {
@@ -166,6 +167,7 @@ export function renderSettingsPage(
                   {renderAccountsSettingsSection(context, t)}
                   {renderOrchestrationSettingsSection(context, t)}
                   {renderLinearSettingsSection(context, t)}
+                  {renderPlaneSettingsSection(context)}
                   {renderDesktopCapabilitySettingsSections(context, t)}
                   {renderOrcaAccountSettingsSection(context, t)}
                   {renderSetupGuideSettingsSection(context, t)}

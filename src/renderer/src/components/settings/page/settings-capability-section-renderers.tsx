@@ -4,6 +4,7 @@ import { AgentsPane } from '../agents/AgentsPane'
 import { AgentDefaultSurfaceSection } from '../agents/surfaces/AgentDefaultSurfaceSection'
 import { ComputerUsePane } from '../computer-use/ComputerUsePane'
 import { LinearAgentSkillPane } from '../skills/linear/LinearAgentSkillPane'
+import { PlaneAgentSkillPane } from '../skills/plane/PlaneAgentSkillPane'
 import { OrchestrationPane } from '../orchestration/OrchestrationPane'
 import { VoicePane } from '../voice/VoicePane'
 import { SettingsSection } from '../section-layout/SettingsSection'
@@ -144,6 +145,25 @@ export function renderLinearSettingsSection(
       searchEntries={navigation.getSectionSearchEntries('linear')}
     >
       {view.isSectionMounted('linear') ? <LinearAgentSkillPane /> : null}
+    </SettingsSection>
+  ) : null
+}
+
+export function renderPlaneSettingsSection(
+  context: SettingsRenderContext
+): React.JSX.Element | null {
+  const { model, navigation, view } = context
+  return model.planeConnected ? (
+    <SettingsSection
+      id="plane"
+      title={translate('auto.components.settings.Settings.planeTitle', 'Plane')}
+      description={translate(
+        'auto.components.settings.Settings.planeDescription',
+        'How Plane works in Orca, setup checklist, agent skill, and example prompts.'
+      )}
+      searchEntries={navigation.getSectionSearchEntries('plane')}
+    >
+      {view.isSectionMounted('plane') ? <PlaneAgentSkillPane /> : null}
     </SettingsSection>
   ) : null
 }

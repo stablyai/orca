@@ -9,7 +9,10 @@ import {
 } from '@/lib/skills/installation/agent-feature-skill-names'
 import {
   getAgentSkillNavInstallStatus,
-  getLinearAgentSkillNavInstallStatus
+import {
+  getAgentSkillNavInstallStatus,
+  getLinearAgentSkillNavInstallStatus,
+  getPlaneAgentSkillNavInstallStatus
 } from '@/components/settings/navigation/agent-skill-nav-install-status'
 import { getProjectHostSetupProjectionFromState } from '../../../store/projects/project-host-setup-selector'
 import { getSettingsSectionSearchEntries, rankSettingsSearchItems } from '../search/settings-search'
@@ -59,6 +62,11 @@ export function useSettingsNavigationModel(
     loading: linearSkillLoading,
     skills: linearSkills
   } = model.linearSkill
+  const {
+    installed: planeSkillInstalled,
+    loading: planeSkillLoading,
+    skills: planeSkills
+  } = model.planeSkill
   const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
     model.computerUseSkill
   const capabilityInstallStatusBySectionId = useMemo(() => {
@@ -82,6 +90,17 @@ export function useSettingsNavigationModel(
           installed: linearSkillInstalled,
           loading: linearSkillLoading,
           plan: applicableSkillPlan
+        })
+      )
+    }
+    if (model.planeConnected) {
+      next.set(
+        'plane',
+        getPlaneAgentSkillNavInstallStatus({
+          skills: planeSkills,
+          installed: planeSkillInstalled,
+          loading: planeSkillLoading,
+          inventory: applicableFreshnessInventory
         })
       )
     }
@@ -115,13 +134,17 @@ export function useSettingsNavigationModel(
     linearSkills,
     model.linearConnected,
     model.modelStates,
+    model.planeConnected,
     model.settings,
     model.showDesktopOnlySettings,
     model.skillFreshnessApplies,
     model.skillPlan,
     model.voiceModelStatesLoading,
     orchestrationSkillInstalled,
-    orchestrationSkillLoading
+    orchestrationSkillLoading,
+    planeSkillInstalled,
+    planeSkillLoading,
+    planeSkills
   ])
   const navSections = useMemo(
     () =>
