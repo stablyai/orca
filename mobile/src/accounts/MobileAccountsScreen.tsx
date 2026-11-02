@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { View, Text, ScrollView, ActivityIndicator } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams } from 'expo-router'
@@ -11,29 +11,25 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-accounts-screen-styles'
 import { useNow } from '../hooks/use-now'
-import { ClaudeIcon, OpenAIIcon } from '../components/AgentIcons'
-import { AccountsSnapshotError, decodeAccountsSnapshot } from '../components/accounts-snapshot'
 import {
-  type AccountsSnapshot,
-  type ProviderKey,
-  getActiveProviderRateLimits,
-  getInactiveProviderUsage,
-  getUsageBarState,
-  getWindowResetLabel,
-  hasActiveProviderUsage,
-  UsageBar
-} from '../components/AccountUsage'
-import {
-  getActiveCodexAccountIdForRateLimitTarget,
-  getCodexResetCreditSummary
-} from '../components/codex-reset-credit'
-import { CodexResetCreditAction } from '../components/CodexResetCreditAction'
+  AccountsSnapshotError,
+  decodeAccountsSnapshot,
+  type AccountsSnapshot
+} from '../components/accounts-snapshot'
+import type { ProviderKey } from '../components/account-usage-state'
 import { useCodexResetCreditAction } from '../components/use-codex-reset-credit-action'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
-import { ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 import { useRouteHandoff } from '../navigation/route-handoff'
+import { ClaudeCodexAccountSections } from './claude-codex-account-section'
+import { AntigravityAccountSection } from './antigravity-account-section'
+import {
+  ManagedDataAccountSection,
+  managedDataBusyId,
+  type ManagedDataProvider
+} from './managed-data-account-section'
+import { ProviderUsageSection } from './provider-usage-section'
 
 type AccountsNotice = { title: string; message: string }
 
@@ -44,6 +40,11 @@ export function MobileAccountsScreen() {
   const router = useRouteHandoff()
   const insets = useSafeAreaInsets()
   const { hostId } = useLocalSearchParams<{ hostId: string }>()
+  const currentHost = useRef({ hostId })
+  if (currentHost.current.hostId !== hostId) {
+    currentHost.current = { hostId }
+  }
+  const hostScope = currentHost.current
 
   // Why: shared client per host. See docs/mobile-shared-client-per-host.md.
   const { client, state: connState } = useHostClient(hostId)
@@ -58,16 +59,33 @@ export function MobileAccountsScreen() {
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null)
   const [clockEnabled, setClockEnabled] = useState(false)
   const [notice, setNotice] = useState<AccountsNotice | null>(null)
+  const [providerAccountReload, setProviderAccountReload] = useState(0)
 
-  const acceptSnapshot = useCallback((nextSnapshot: AccountsSnapshot) => {
-    setSnapshot(nextSnapshot)
+  useEffect(() => {
+    setSnapshot(null)
     setError(null)
-  }, [])
+    setRefreshing(false)
+    setBusyAccountId(null)
+    setNotice(null)
+  }, [hostId])
+
+  const acceptSnapshot = useCallback(
+    (nextSnapshot: AccountsSnapshot) => {
+      if (currentHost.current === hostScope) {
+        setSnapshot(nextSnapshot)
+        setError(null)
+      }
+    },
+    [hostScope]
+  )
   const rejectInvalidSnapshot = useCallback(() => {
+    if (currentHost.current !== hostScope) {
+      return
+    }
     // Fail closed on unrecognized snapshot: stale data can expose finite reset for wrong account.
     setSnapshot(null)
     setError(t('accounts.screen.invalidSnapshot', 'Invalid accounts snapshot from host'))
-  }, [t])
+  }, [hostScope, t])
   const {
     supported: codexResetSupported,
     resetting: resettingCodex,
@@ -117,27 +135,36 @@ export function MobileAccountsScreen() {
   }, [hostId, t])
 
   const refresh = useCallback(async () => {
-    if (!client) {
+    if (!client || currentHost.current !== hostScope) {
       return
     }
     setRefreshing(true)
+    setProviderAccountReload((value) => value + 1)
     try {
       const res = await client.sendRequest('accounts.list')
+      if (currentHost.current !== hostScope) {
+        return
+      }
       if (res.ok) {
         acceptSnapshot(decodeAccountsSnapshot(res.result))
       } else {
         setError(res.error.message)
       }
     } catch (e) {
+      if (currentHost.current !== hostScope) {
+        return
+      }
       if (e instanceof AccountsSnapshotError) {
         rejectInvalidSnapshot()
       } else {
         setError(e instanceof Error ? e.message : String(e))
       }
     } finally {
-      setRefreshing(false)
+      if (currentHost.current === hostScope) {
+        setRefreshing(false)
+      }
     }
-  }, [acceptSnapshot, client, rejectInvalidSnapshot])
+  }, [acceptSnapshot, client, hostScope, rejectInvalidSnapshot])
 
   // Stream desktop poll/account-switch updates, falling back to one-shot accounts.list on subscription error.
   useEffect(() => {
@@ -201,120 +228,28 @@ export function MobileAccountsScreen() {
     [client, refresh, snapshot, t]
   )
 
-  const renderProviderSection = (provider: ProviderKey, title: string) => {
-    if (!snapshot) {
-      return null
-    }
-    const state = provider === 'claude' ? snapshot.claude : snapshot.codex
-    const activeAccountId =
-      provider === 'codex' && snapshot.codex.activeAccountIdsByRuntime
-        ? getActiveCodexAccountIdForRateLimitTarget(snapshot)
-        : state.activeAccountId
-    const activeUsage = getActiveProviderRateLimits(snapshot, provider)
-    const activeSessionBar = getUsageBarState(activeUsage, 'session')
-    const activeWeeklyBar = getUsageBarState(activeUsage, 'weekly')
-    const resetCredit = provider === 'codex' ? getCodexResetCreditSummary(activeUsage, now) : null
-    const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
-    const switchBlocked = busyAccountId !== null || resettingCodex || connState !== 'connected'
-    const spinner = <ActivityIndicator size="small" color={colors.textSecondary} />
-    return (
-      <View>
-        <SectionHeader title={title} icon={<Icon size={14} />} first={provider === 'claude'} />
-        <ListGroup style={styles.group}>
-          {/* A blocked row drops its press instead of dimming, so the picked one keeps full contrast. */}
-          <ListRow
-            key="default"
-            title={t('accounts.screen.default', 'System default')}
-            subtitle={t('accounts.screen.agentLogin', "Use the agent's own login")}
-            detail={
-              // Show system-default login usage for users without managed accounts.
-              activeAccountId === null && hasActiveProviderUsage(activeUsage) ? (
-                <View style={styles.usageRow}>
-                  <UsageBar
-                    label={t('accounts.screen.sessionWindow', '5h')}
-                    usedPercent={activeSessionBar.usedPercent}
-                    unavailable={activeSessionBar.unavailable}
-                    loading={activeSessionBar.loading}
-                    resetText={getWindowResetLabel(activeUsage, 'session', now)}
-                  />
-                  <UsageBar
-                    label={t('accounts.screen.weeklyWindow', '7d')}
-                    usedPercent={activeWeeklyBar.usedPercent}
-                    unavailable={activeWeeklyBar.unavailable}
-                    loading={activeWeeklyBar.loading}
-                    resetText={getWindowResetLabel(activeUsage, 'weekly', now)}
-                  />
-                </View>
-              ) : undefined
-            }
-            accessory={busyAccountId === `${provider}:default` ? spinner : undefined}
-            selected={activeAccountId === null}
-            onPress={switchBlocked ? undefined : () => void selectAccount(provider, null)}
-          />
-          {state.accounts.map((account) => {
-            const isActive = activeAccountId === account.id
-            const inactiveEntry = !isActive
-              ? getInactiveProviderUsage(snapshot, provider, account.id)
-              : null
-            const usage = isActive ? activeUsage : (inactiveEntry?.rateLimits ?? null)
-            const isFetching =
-              (isActive && usage?.status === 'fetching') ||
-              (!isActive && inactiveEntry?.isFetching === true)
-            const sessionBar = getUsageBarState(usage, 'session', isFetching)
-            const weeklyBar = getUsageBarState(usage, 'weekly', isFetching)
-            return (
-              <ListRow
-                key={account.id}
-                title={account.email}
-                detail={
-                  <>
-                    <View style={styles.usageRow}>
-                      <UsageBar
-                        label={t('accounts.screen.sessionWindow', '5h')}
-                        usedPercent={sessionBar.usedPercent}
-                        unavailable={sessionBar.unavailable}
-                        loading={sessionBar.loading}
-                        resetText={getWindowResetLabel(usage, 'session', now)}
-                      />
-                      <UsageBar
-                        label={t('accounts.screen.weeklyWindow', '7d')}
-                        usedPercent={weeklyBar.usedPercent}
-                        unavailable={weeklyBar.unavailable}
-                        loading={weeklyBar.loading}
-                        resetText={getWindowResetLabel(usage, 'weekly', now)}
-                      />
-                    </View>
-                    {usage?.error ? (
-                      <Text style={styles.errorText} numberOfLines={1}>
-                        {usage.error}
-                      </Text>
-                    ) : null}
-                  </>
-                }
-                accessory={busyAccountId === account.id ? spinner : undefined}
-                selected={isActive}
-                onPress={
-                  switchBlocked || isActive
-                    ? undefined
-                    : () => void selectAccount(provider, account.id)
-                }
-              />
-            )
-          })}
-          {resetCredit && codexResetSupported && resetScope && connState === 'connected' ? (
-            <CodexResetCreditAction
-              key="codex-reset"
-              summary={resetCredit}
-              scopeLabel={resetScopeLabel}
-              busy={resettingCodex}
-              disabled={resettingCodex || busyAccountId !== null || connState !== 'connected'}
-              onPress={confirmCodexReset}
-            />
-          ) : null}
-        </ListGroup>
-      </View>
-    )
-  }
+  const selectDataAccount = useCallback(
+    async (provider: ManagedDataProvider, accountId: string | null) => {
+      if (!client) {
+        return
+      }
+      setBusyAccountId(managedDataBusyId(provider, accountId))
+      const title = t('accounts.screen.switchFailed', 'Could not switch account')
+      try {
+        const res = await client.sendRequest('accounts.selectData', { provider, accountId })
+        if (!res.ok) {
+          setNotice({ title, message: res.error.message })
+        } else {
+          await refresh()
+        }
+      } catch (e) {
+        setNotice({ title, message: e instanceof Error ? e.message : String(e) })
+      } finally {
+        setBusyAccountId(null)
+      }
+    },
+    [client, refresh, t]
+  )
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -356,8 +291,55 @@ export function MobileAccountsScreen() {
           />
         ) : (
           <>
-            {renderProviderSection('claude', 'Claude')}
-            {renderProviderSection('codex', 'Codex')}
+            <ClaudeCodexAccountSections
+              snapshot={snapshot}
+              now={now}
+              busyAccountId={busyAccountId}
+              resettingCodex={resettingCodex}
+              connected={connState === 'connected'}
+              codexResetSupported={codexResetSupported}
+              resetScope={resetScope}
+              resetScopeLabel={resetScopeLabel}
+              onSelect={(provider, accountId) => {
+                void selectAccount(provider, accountId)
+              }}
+              onConfirmReset={confirmCodexReset}
+            />
+            <ManagedDataAccountSection
+              provider="opencode"
+              snapshot={snapshot}
+              busyAccountId={busyAccountId}
+              disabled={busyAccountId !== null || resettingCodex || connState !== 'connected'}
+              onSelect={(provider, accountId) => {
+                void selectDataAccount(provider, accountId)
+              }}
+            />
+            <ManagedDataAccountSection
+              provider="devin"
+              snapshot={snapshot}
+              busyAccountId={busyAccountId}
+              disabled={busyAccountId !== null || resettingCodex || connState !== 'connected'}
+              onSelect={(provider, accountId) => {
+                void selectDataAccount(provider, accountId)
+              }}
+            />
+            <ProviderUsageSection provider="gemini" snapshot={snapshot} now={now} />
+            <AntigravityAccountSection
+              snapshot={snapshot}
+              now={now}
+              client={client}
+              connected={connState === 'connected'}
+              reloadKey={providerAccountReload}
+              busyAccountId={busyAccountId}
+              disabled={busyAccountId !== null || resettingCodex || connState !== 'connected'}
+              onNotice={setNotice}
+              onChanged={refresh}
+            />
+            <ProviderUsageSection provider="opencodeGo" snapshot={snapshot} now={now} />
+            <ProviderUsageSection provider="minimax" snapshot={snapshot} now={now} />
+            <ProviderUsageSection provider="grok" snapshot={snapshot} now={now} />
+            <ProviderUsageSection provider="cursor" snapshot={snapshot} now={now} />
+            <ProviderUsageSection provider="zcode" snapshot={snapshot} now={now} />
             <View style={styles.footerHint}>
               <User size={14} color={colors.textMuted} />
               <Text style={styles.footerHintText}>
