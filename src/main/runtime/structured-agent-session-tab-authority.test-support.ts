@@ -1,7 +1,10 @@
 import { RpcDispatcher } from './rpc/dispatcher'
 import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from './rpc/methods/structured-agent-session-reveal'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/agent-session/agent-session-runtime-capabilities'
-import { readPersistedTestAgentSessionStore } from './agent-session/records/agent-session-record-store-test-harness'
+import {
+  readPersistedTestAgentSessionStore,
+  seedTestAgentSessionRecordStore
+} from './agent-session/records/agent-session-record-store-test-harness'
 import { randomUUID } from 'node:crypto'
 import type { MockInstance } from 'vitest'
 import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
@@ -25,7 +28,6 @@ import {
   createTestParams,
   CREATE_TEST_CALLER
 } from '../native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
-import { seedTestAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from './orca-runtime'
 import { withChatTabChanges } from './agent-session/agent-session-tab-layout'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'

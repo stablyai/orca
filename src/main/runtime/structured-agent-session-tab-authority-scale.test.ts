@@ -4,7 +4,8 @@ import {
   authorityProfile,
   openAuthorityRuntime,
   createC,
-  B
+  B,
+  root
 } from './structured-agent-session-tab-authority.test-support'
 import * as selection from './saved-structured-agent-session-restoration'
 import * as founding from './agent-session/records/agent-session-founding-admission'
@@ -15,19 +16,19 @@ import { stopStructuredAgentSessionRuntime } from './agent-session/structured-ag
 import { closeTestStores } from '../persistence/persistence-test-harness'
 import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { chatTabCommandsSettled } from './session-layout-apply.test-fixture'
-import { root } from './structured-agent-session-tab-authority.test-support'
 import {
   readPersistedTestAgentSessionStore,
   seedTestAgentSessionRecordStore
 } from './agent-session/records/agent-session-record-store-test-harness'
 import * as seed from './agent-session/structured-agent-session-tab-index-seed'
 import * as layoutLoad from '../../shared/workspace-layout/workspace-layout-load'
+import * as layoutSave from '../../shared/workspace-layout/workspace-layout-save'
 import { withChatTabChanges, type ChatTabChange } from './agent-session/agent-session-tab-layout'
 import * as tabLayout from './agent-session/agent-session-tab-layout'
 import * as tabCommands from '../../shared/workspace-layout/workspace-layout-tab-commands'
 import * as removal from '../../shared/workspace-layout/workspace-layout-removal'
 import { RuntimeWorkspaceSessionController } from './runtime-workspace-session-controller'
-import { collectionVisits, fieldReads } from './collection-visits.test-fixture'
+import { collectionVisits, fieldReads } from '../../shared/collection-visits.test-fixture'
 import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
 import type { ProfileStateDomainReplacement } from '../persistence/loading-store/profile-state-authority'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
@@ -403,15 +404,54 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
       mapSet.mockRestore()
     }
   })
-  const loads = { calls: 0, rows: 0 }
+  // The old-key close command, run alone by the serial queue, and each derivation of an old-key
+  // command (the close's, its admission's and the retained chat's open).
+  let closingOld = false
+  let derivingOld = false
+  const derive = tabLayout.loadChatTabLayout
+  vi.spyOn(tabLayout, 'loadChatTabLayout').mockImplementation((hostId, session, worktreeId) => {
+    derivingOld = worktreeId === OLD
+    try {
+      return derive(hostId, session, worktreeId)
+    } finally {
+      derivingOld = false
+    }
+  })
+  const closePhase = { loads: 0, loadedRows: 0, serializations: 0, serializedTabs: 0 }
+  // Every whole-layout load and serialization (a load serializes once to normalize; an applied
+  // command serializes its result), with the saved rows each was given. The serializer body
+  // searches its ordered tabs once per tab (workspace-layout-save.ts:50-51), an unchanged main
+  // cost: its visits are reported, not bounded here.
+  const loads = { calls: 0, rows: 0, oldRows: 0 }
   const load = layoutLoad.loadWorkspaceLayout
   vi.spyOn(layoutLoad, 'loadWorkspaceLayout').mockImplementation((...args) => {
     loads.calls++
     loads.rows += Object.values(args[1].unifiedTabs ?? {}).flat().length
+    loads.oldRows += args[1].unifiedTabs?.[OLD]?.length ?? 0
+    if (closingOld || derivingOld) {
+      closePhase.loads++
+      closePhase.loadedRows += Object.values(args[1].unifiedTabs ?? {}).flat().length
+    }
     return load(...args)
   })
-  // The old-key close command, run alone by the serial queue: the durable writes it makes.
-  let closingOld = false
+  const serializations = { calls: 0, tabs: 0, oldTabs: 0, visits: 0 }
+  const serialize = layoutSave.saveWorkspaceLayout
+  vi.spyOn(layoutSave, 'saveWorkspaceLayout').mockImplementation((loaded) => {
+    const { workspaces } = loaded.layout
+    serializations.calls++
+    serializations.tabs += Object.values(workspaces).reduce((sum, w) => sum + w.tabs.length, 0)
+    serializations.oldTabs += workspaces[OLD]?.tabs.length ?? 0
+    if (closingOld || derivingOld) {
+      closePhase.serializations++
+      closePhase.serializedTabs += Object.values(workspaces).reduce(
+        (sum, w) => sum + w.tabs.length,
+        0
+      )
+    }
+    const serialized = collectionVisits(() => serialize(loaded))
+    serializations.visits += serialized.visits
+    return serialized.value
+  })
   let closeWrites = 0
   const apply = rig.runtime.applyLayoutCommand.bind(rig.runtime)
   const commands = vi
@@ -561,6 +601,15 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
     carried: own.reduce((sum, write) => sum + write.carried, 0),
     loads: loads.calls,
     loadedRows: loads.rows,
+    loadedOldRows: loads.oldRows,
+    serializations: serializations.calls,
+    serializedTabs: serializations.tabs,
+    serializedOldTabs: serializations.oldTabs,
+    serializerVisits: serializations.visits,
+    closeLoads: closePhase.loads,
+    closeLoadedRows: closePhase.loadedRows,
+    closeSerializations: closePhase.serializations,
+    closeSerializedTabs: closePhase.serializedTabs,
     oldKeyCloseCommands: closes.length,
     oldKeyTabsClosedPerCommand: closes[0] ?? 0,
     savedMovedTabs: savedOld.filter((tab) => moved.includes(tab.entityId)).length,
@@ -636,6 +685,22 @@ it.each([
         expect(tally[part]![1]).toBeLessThanOrEqual(12 * tally[part]![0]!)
         expect(tally[`withoutHints.${part}`]).toEqual([0, 0])
       }
+      // Whole-layout loads and serializations while deriving, admitting and applying the old-key
+      // close: a fixed number of passes, each over the partition's rows at most (the old key's M
+      // rows plus the 2N opened elsewhere), whatever the number of requested tabs or emptied
+      // groups. The serializer's own per-tab search is main's and only reported.
+      expect(tally.closeLoads![1]).toBe(tally.closeLoads![0])
+      expect(tally.closeSerializations![1]).toBe(tally.closeSerializations![0])
+      expect(tally.closeLoads![0]).toBeLessThanOrEqual(4)
+      expect(tally.closeSerializations![0]).toBeLessThanOrEqual(6)
+      for (const [i, n] of [20, 200].entries()) {
+        const partitionRows = 2 * n + n / 10 + 1 + 2 * n
+        expect(tally.closeLoadedRows![i]).toBeLessThanOrEqual(tally.closeLoads![i]! * partitionRows)
+        expect(tally.closeSerializedTabs![i]).toBeLessThanOrEqual(
+          tally.closeSerializations![i]! * partitionRows
+        )
+      }
+      console.log('K18_SERIALIZER_VISITS_MAIN_COST', JSON.stringify(tally.serializerVisits))
       expect(tally.rootCopies).toEqual([1, 1])
       expect(tally.rootKeysCopied![1]).toBe(tally.rootKeysCopied![0])
     }
