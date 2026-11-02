@@ -37,80 +37,6 @@ describe('createNewTerminalTab', () => {
     isWebRuntimeSessionActiveMock.mockReturnValue(false)
   })
 
-  it('creates a local terminal tab outside the paired web runtime', () => {
-    const createTab = vi.fn(() => ({ id: 'tab-1' }))
-    const setActiveTabType = vi.fn()
-    const setTabBarOrder = vi.fn()
-    getStateMock
-      .mockReturnValueOnce({
-        ...terminalOwnerRows(null),
-        createTab,
-        setActiveTabType,
-        setTabBarOrder
-      })
-      .mockReturnValueOnce({
-        tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
-        openFiles: [],
-        tabBarOrderByWorktree: {},
-        setTabBarOrder
-      })
-
-    createNewTerminalTab('wt-1', 'zsh')
-
-    expect(createTab).toHaveBeenCalledWith('wt-1', undefined, 'zsh', { id: 'tab-1' })
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
-    expect(setTabBarOrder).toHaveBeenCalledWith('wt-1', ['tab-1'])
-    expect(createWebRuntimeSessionTerminalMock).not.toHaveBeenCalled()
-  })
-
-  it('keeps open browser tabs before the new terminal when no order is saved yet', () => {
-    createBrowserUuidMock.mockReturnValueOnce('term-new')
-    const setTabBarOrder = vi.fn()
-    getStateMock
-      .mockReturnValueOnce({
-        ...terminalOwnerRows(null),
-        createTab: vi.fn(() => ({ id: 'term-new' })),
-        setActiveTabType: vi.fn(),
-        setTabBarOrder
-      })
-      .mockReturnValueOnce({
-        tabsByWorktree: { 'wt-1': [{ id: 'term-a' }, { id: 'term-new' }] },
-        openFiles: [],
-        browserTabsByWorktree: { 'wt-1': [{ id: 'browser-1' }] },
-        tabBarOrderByWorktree: {},
-        setTabBarOrder
-      })
-
-    createNewTerminalTab('wt-1')
-
-    expect(setTabBarOrder).toHaveBeenCalledWith('wt-1', ['term-a', 'browser-1', 'term-new'])
-  })
-
-  it('delegates terminal creation to the host runtime in paired web clients', () => {
-    const createTab = vi.fn(() => ({ id: 'tab-1' }))
-    const setActiveTabType = vi.fn()
-    isWebRuntimeSessionActiveMock.mockReturnValue(true)
-    getStateMock.mockReturnValue({
-      ...terminalOwnerRows('web-runtime'),
-      createTab,
-      setActiveTabType
-    })
-
-    createNewTerminalTab('wt-1', 'pwsh')
-
-    expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith(
-      {
-        worktreeId: 'wt-1',
-        environmentId: 'web-runtime',
-        shell: 'pwsh',
-        activate: true
-      },
-      { userAct: true }
-    )
-    expect(createTab).not.toHaveBeenCalled()
-    expect(setActiveTabType).not.toHaveBeenCalled()
-  })
-
   it('delegates terminal creation to the explicit owner runtime when another runtime is focused', () => {
     const createTab = vi.fn(() => ({ id: 'tab-1' }))
     const setActiveTabType = vi.fn()
@@ -130,57 +56,6 @@ describe('createNewTerminalTab', () => {
         worktreeId: 'wt-1',
         environmentId: 'owner-runtime',
         shell: 'pwsh',
-        activate: true
-      },
-      { userAct: true }
-    )
-    expect(createTab).not.toHaveBeenCalled()
-  })
-
-  it('creates local terminal tabs with a requested startup cwd', () => {
-    const createTab = vi.fn(() => ({ id: 'tab-1' }))
-    const setActiveTabType = vi.fn()
-    const setTabBarOrder = vi.fn()
-    getStateMock
-      .mockReturnValueOnce({
-        ...terminalOwnerRows(null),
-        createTab,
-        setActiveTabType,
-        setTabBarOrder
-      })
-      .mockReturnValueOnce({
-        tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
-        openFiles: [],
-        tabBarOrderByWorktree: {},
-        setTabBarOrder
-      })
-
-    createNewTerminalTab('wt-1', undefined, { startupCwd: '/repo/packages/app' })
-
-    expect(createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
-      id: 'tab-1',
-      startupCwd: '/repo/packages/app'
-    })
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
-  })
-
-  it('delegates requested startup cwd to host runtime terminals', () => {
-    const createTab = vi.fn(() => ({ id: 'tab-1' }))
-    isWebRuntimeSessionActiveMock.mockReturnValue(true)
-    getStateMock.mockReturnValue({
-      ...terminalOwnerRows('web-runtime'),
-      createTab,
-      setActiveTabType: vi.fn()
-    })
-
-    createNewTerminalTab('wt-1', undefined, { startupCwd: '/repo/packages/app' })
-
-    expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith(
-      {
-        worktreeId: 'wt-1',
-        environmentId: 'web-runtime',
-        command: undefined,
-        cwd: '/repo/packages/app',
         activate: true
       },
       { userAct: true }

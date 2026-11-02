@@ -4,10 +4,10 @@ import type { Subscriber } from './structured-agent-session-subscribers'
 
 // Deduplicate against last sent values only; withheld fields must not suppress final replacements.
 import type {
-  AgentSessionBackgroundTaskState,
   AgentSessionSlashCommand,
   AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import type { QueuePublication } from './structured-agent-session-queued-publication'
 import { boundedFrames } from './agent-session-bounded-frames'
 

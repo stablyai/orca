@@ -41,12 +41,18 @@ CREATE TABLE IF NOT EXISTS journal_set_aside (
 }
 
 // JSON rows preserve unreadable records byte-for-byte.
+export const AGENT_SESSION_CLEAR_SUCCESSOR_INDEX_SQL = `
+CREATE INDEX IF NOT EXISTS idx_agent_session_clear_successor
+  ON agent_session_records(CASE WHEN json_valid(record_json) THEN json_extract(record_json, '$.conversationCommand.replacementSessionId') END);
+`
+
 export function createAgentSessionRecordTablesSql(): string {
   return `
 CREATE TABLE IF NOT EXISTS agent_session_records (
   session_id  TEXT PRIMARY KEY,
   record_json TEXT NOT NULL
 );
+${AGENT_SESSION_CLEAR_SUCCESSOR_INDEX_SQL}
 CREATE TABLE IF NOT EXISTS agent_session_operations (
   operation_key TEXT PRIMARY KEY,
   row_json      TEXT NOT NULL

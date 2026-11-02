@@ -16,8 +16,10 @@ import type { SettingsHostScope } from './settings-host-scope'
 
 export type AccountsPaneProps = {
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
   hostScope: SettingsHostScope
+  nativeAccounts?: boolean
+  onAccountLocationChange?: () => void
   wslSupportedPlatform?: boolean
   wslAvailable?: boolean
   wslDistros?: string[]
@@ -68,7 +70,8 @@ export type AccountsPaneSectionModel = {
   settings: GlobalSettings
   /** Host whose accounts the pane lists and mutates. */
   accountOwner: RuntimeClientTarget
-  updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
+  onAccountLocationChange?: () => void
   searchQuery: string
   recordFeatureInteraction: (featureId: FeatureInteractionId) => void
   wslSupportedPlatform: boolean

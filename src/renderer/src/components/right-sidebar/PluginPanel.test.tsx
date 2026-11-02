@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ActivePluginPanel } from '@/store/plugin-panels'
 
 vi.mock('@/i18n/i18n', () => ({
+  getIntlLocale: () => 'en-US',
   translate: (_key: string, fallback: string) => fallback
 }))
 
@@ -119,10 +120,9 @@ describe('PluginPanel', () => {
 
     const initialIframe = container.querySelector('iframe')
     expect(initialIframe).not.toBeNull()
-    expect(readPanelEntryMock).toHaveBeenCalledWith({
-      pluginKey: 'samples.my-plugin',
-      panelId: 'dashboard'
-    })
+    expect(readPanelEntryMock).toHaveBeenCalledWith(
+      expect.objectContaining({ pluginKey: 'samples.my-plugin', panelId: 'dashboard' })
+    )
     expect(initialIframe?.getAttribute('srcdoc')).toContain('<h1>Hello plugin</h1>')
     expect(initialIframe?.getAttribute('title')).toBe('Dashboard')
     expect(initialIframe?.getAttribute('name')).toBe(
@@ -130,6 +130,351 @@ describe('PluginPanel', () => {
     )
     // allow-same-origin would expose app DOM/storage; keep the sandbox scripts-only.
     expect(initialIframe?.getAttribute('sandbox')).toBe('allow-scripts')
+  })
+
+  it('mounts an isolated guest when main offers one, and starts the watchdog on dom-ready', async () => {
+    const guest = {
+      partition: 'persist:orca-plugin-0123456789abcdef',
+      url: 'orca-plugin-frame://0123456789abcdef/panel.html'
+    }
+    readPanelEntryMock.mockResolvedValue({ html: '<h1>x</h1>', sessionToken: SESSION_TOKEN, guest })
+
+    await renderPanel('plugin:samples.my-plugin/dashboard')
+
+    expect(container.querySelector('iframe')).toBeNull()
+    const webview = container.querySelector('webview')
+    expect(webview?.getAttribute('partition')).toBe(guest.partition)
+    expect(webview?.getAttribute('src')).toBe(guest.url)
+    expect(webview?.getAttribute('title')).toBe('Dashboard')
+    expect(watchdogStartMock).not.toHaveBeenCalled()
+    await act(async () => {
+      webview?.dispatchEvent(new Event('dom-ready'))
+    })
+    expect(watchdogStartMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('remounts a guest that main closed at an unchanged URL, then gives up after a few tries', async () => {
+    const guest = {
+      partition: 'persist:orca-plugin-0123456789abcdef',
+      url: 'orca-plugin-frame://0123456789abcdef/panel.html'
+    }
+    readPanelEntryMock.mockResolvedValue({ html: '', sessionToken: SESSION_TOKEN, guest })
+    await renderPanel('plugin:samples.my-plugin/dashboard')
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const before = container.querySelector('webview')
+      await act(async () => {
+        before?.dispatchEvent(new Event('destroyed'))
+        await waitForHappyDomTasks()
+      })
+      const after = container.querySelector('webview')
+      expect(after).not.toBeNull()
+      expect(after).not.toBe(before)
+    }
+    expect(readPanelEntryMock).toHaveBeenCalledTimes(4)
+    await act(async () => {
+      container.querySelector('webview')?.dispatchEvent(new Event('render-process-gone'))
+      await waitForHappyDomTasks()
+    })
+    expect(container.querySelector('webview')).toBeNull()
+    expect(container.textContent).toContain('could not be loaded')
+  })
+
+  it('draws a declarative tree from its hidden guest and sends events back', async () => {
+    const guest = {
+      partition: 'persist:orca-plugin-0123456789abcdef',
+      url: 'orca-plugin-frame://0123456789abcdef/__orca/declarative-host.html?entry=panel.js'
+    }
+    readPanelEntryMock.mockResolvedValue({
+      html: '',
+      sessionToken: SESSION_TOKEN,
+      guest,
+      ui: 'components'
+    })
+    await renderPanel('plugin:samples.my-plugin/dashboard')
+
+    const webview = container.querySelector('webview')
+    // The runner is inert and hidden: it can never hold focus or be read out.
+    expect(webview?.closest('[inert]')?.getAttribute('aria-hidden')).toBe('true')
+    const blur = vi.fn()
+    Object.assign(webview!, { blur })
+    webview?.dispatchEvent(new Event('focus'))
+    expect(blur).toHaveBeenCalled()
+    const send = vi.fn()
+    Object.assign(webview!, { send })
+    const fromGuest = (event: string, payload: unknown) =>
+      webview?.dispatchEvent(
+        Object.assign(new Event('ipc-message'), {
+          channel: 'orca-plugin-frame',
+          args: [{ orca: 1, kind: 'evt', event, payload }, false]
+        })
+      )
+    await act(async () => {
+      fromGuest('ui.render', {
+        document: 'd1',
+        revision: 3,
+        tree: {
+          type: 'Button',
+          props: { onPress: { $callback: 'c1' } },
+          children: ['Add']
+        }
+      })
+    })
+    const button = container.querySelector('button')
+    expect(button?.textContent).toBe('Add')
+    await act(async () => button?.click())
+    expect(send).toHaveBeenCalledWith('orca-plugin-frame', {
+      orca: 1,
+      kind: 'evt',
+      event: 'ui.event',
+      payload: { document: 'd1', revision: 3, callback: 'c1', args: [] }
+    })
+    await act(async () => {
+      fromGuest('ui.error', { document: 'd1', revision: 3, message: 'boom' })
+    })
+    // The translate mock does not interpolate; the alert itself is the error state.
+    expect(container.querySelector('[role="status"]')).not.toBeNull()
+    expect(container.querySelector('button')?.textContent).toBe('Add')
+  })
+
+  it('validates only the newest of a burst of declarative renders', async () => {
+    const { pluginDeclarativeRenderPayloadSchema } =
+      await import('../../../../shared/plugins/declarative/plugin-declarative-messages')
+    const parse = vi.spyOn(pluginDeclarativeRenderPayloadSchema, 'safeParse')
+    readPanelEntryMock.mockResolvedValue({
+      html: '',
+      sessionToken: SESSION_TOKEN,
+      guest: { partition: 'persist:orca-plugin-0123456789abcdef', url: 'orca-plugin-frame://x/y' },
+      ui: 'components'
+    })
+    await renderPanel('plugin:samples.my-plugin/dashboard')
+    const webview = container.querySelector('webview')
+    Object.assign(webview!, { send: vi.fn() })
+    await act(async () => {
+      for (let revision = 1; revision <= 50; revision += 1) {
+        webview?.dispatchEvent(
+          Object.assign(new Event('ipc-message'), {
+            channel: 'orca-plugin-frame',
+            args: [
+              {
+                orca: 1,
+                kind: 'evt',
+                event: 'ui.render',
+                payload: {
+                  document: 'd1',
+                  revision,
+                  tree: { type: 'Text', props: {}, children: [`r${revision}`] }
+                }
+              },
+              false
+            ]
+          })
+        )
+      }
+      await waitForHappyDomTasks()
+    })
+    expect(container.textContent).toContain('r50')
+    expect(parse).toHaveBeenCalledTimes(1)
+  })
+
+  it('answers a guest ready with its persisted state and stores what it persists', async () => {
+    const panelState = vi.fn(async (request: { op: string }) =>
+      request.op === 'read'
+        ? {
+            ok: true,
+            state: { plugin: { todos: { version: 1, value: ['a'] } }, workspace: {} }
+          }
+        : { ok: true }
+    )
+    Object.assign(globalThis.window.api.plugins, { panelState })
+    readPanelEntryMock.mockResolvedValue({
+      html: '',
+      sessionToken: SESSION_TOKEN,
+      guest: { partition: 'persist:orca-plugin-0123456789abcdef', url: 'orca-plugin-frame://x/y' },
+      ui: 'components'
+    })
+    await renderPanel('plugin:samples.my-plugin/dashboard')
+    const webview = container.querySelector('webview')
+    const send = vi.fn()
+    Object.assign(webview!, { send })
+    const fromGuest = async (event: string, payload: unknown) => {
+      await act(async () => {
+        webview?.dispatchEvent(
+          Object.assign(new Event('ipc-message'), {
+            channel: 'orca-plugin-frame',
+            args: [{ orca: 1, kind: 'evt', event, payload }, false]
+          })
+        )
+        await waitForHappyDomTasks()
+      })
+    }
+    await fromGuest('ui.ready', { document: 'd1' })
+    expect(panelState).toHaveBeenCalledWith(
+      expect.objectContaining({ op: 'read', sessionToken: SESSION_TOKEN })
+    )
+    expect(send).toHaveBeenCalledWith('orca-plugin-frame', {
+      orca: 1,
+      kind: 'evt',
+      event: 'ui.hydrate',
+      payload: expect.objectContaining({
+        panel: { id: 'dashboard' },
+        plugin: { todos: { version: 1, value: ['a'] } }
+      })
+    })
+    await fromGuest('ui.persist', {
+      document: 'd1',
+      entries: [{ scope: 'plugin', key: 'todos', version: 1, value: ['a', 'b'] }]
+    })
+    expect(panelState).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        op: 'write',
+        entries: [{ scope: 'plugin', key: 'todos', version: 1, value: ['a', 'b'] }]
+      })
+    )
+  })
+
+  it('tells browser clients a declarative panel needs the desktop app', async () => {
+    readPanelEntryMock.mockResolvedValue({
+      html: '',
+      sessionToken: SESSION_TOKEN,
+      ui: 'components'
+    })
+    Object.assign(window, { __ORCA_WEB_CLIENT__: true })
+    try {
+      await renderPanel('plugin:samples.my-plugin/dashboard')
+    } finally {
+      Reflect.deleteProperty(window, '__ORCA_WEB_CLIENT__')
+    }
+    expect(container.querySelector('iframe')).toBeNull()
+    expect(container.textContent).toContain('only in the Orca desktop app')
+  })
+
+  it('says a declarative panel is unavailable on desktop while isolated frames are off', async () => {
+    readPanelEntryMock.mockResolvedValue({
+      html: '',
+      sessionToken: SESSION_TOKEN,
+      ui: 'components'
+    })
+    await renderPanel('plugin:samples.my-plugin/dashboard')
+    expect(container.querySelector('iframe')).toBeNull()
+    expect(container.textContent).toContain('needs isolated plugin frames')
+  })
+
+  it('accepts a reloaded declarative guest that counts revisions from 1 again', async () => {
+    readPanelEntryMock.mockResolvedValue({
+      html: '',
+      sessionToken: SESSION_TOKEN,
+      guest: { partition: 'persist:orca-plugin-0123456789abcdef', url: 'orca-plugin-frame://x/y' },
+      ui: 'components'
+    })
+    await renderPanel('plugin:samples.my-plugin/dashboard')
+    const webview = container.querySelector('webview')
+    Object.assign(webview!, { send: vi.fn() })
+    const render = async (revision: number, text: string) => {
+      await act(async () => {
+        webview?.dispatchEvent(
+          Object.assign(new Event('ipc-message'), {
+            channel: 'orca-plugin-frame',
+            args: [
+              {
+                orca: 1,
+                kind: 'evt',
+                event: 'ui.render',
+                payload: {
+                  document: 'd1',
+                  revision,
+                  tree: { type: 'Text', props: {}, children: [text] }
+                }
+              },
+              false
+            ]
+          })
+        )
+        await waitForHappyDomTasks()
+      })
+    }
+    await render(5, 'before reload')
+    await act(async () => {
+      webview?.dispatchEvent(new Event('did-start-loading'))
+    })
+    await render(1, 'after reload')
+    expect(container.textContent).toContain('after reload')
+  })
+
+  it('hot reloads a dev components panel: last good tree on a broken save, memory atoms handed over', async () => {
+    const devGuest = (rev: number) => ({
+      partition: 'persist:orca-plugin-0123456789abcdef',
+      url: `orca-plugin-frame://0123456789abcdef/__orca/declarative-host.html?entry=p.tsx&rev=dev-${rev}`,
+      dev: true
+    })
+    const entry = (rev: number) => ({
+      html: '',
+      sessionToken: SESSION_TOKEN,
+      guest: devGuest(rev),
+      ui: 'components'
+    })
+    readPanelEntryMock.mockResolvedValue(entry(1))
+    await renderPanel('plugin:samples.my-plugin/dashboard')
+    const guestOf = () => {
+      const webview = container.querySelector('webview')!
+      const send = vi.fn()
+      Object.assign(webview, { send })
+      const post = async (event: string, payload: unknown) => {
+        await act(async () => {
+          webview.dispatchEvent(
+            Object.assign(new Event('ipc-message'), {
+              channel: 'orca-plugin-frame',
+              args: [{ orca: 1, kind: 'evt', event, payload }, false]
+            })
+          )
+          await waitForHappyDomTasks()
+        })
+      }
+      const hydrates = () =>
+        send.mock.calls
+          .filter(([, envelope]) => envelope.event === 'ui.hydrate')
+          .map(([, envelope]) => envelope.payload)
+      return { webview, post, hydrates }
+    }
+    const text = (value: string) => ({ type: 'Text', props: {}, children: [value] })
+    const first = guestOf()
+    await first.post('ui.ready', { document: 'd1' })
+    expect(first.hydrates()[0]).toMatchObject({ retain: true })
+    await first.post('ui.render', { document: 'd1', revision: 1, tree: text('draft: hi') })
+    await first.post('ui.retain', {
+      document: 'd1',
+      entries: [{ key: 'draft', version: 1, value: 'hi' }]
+    })
+
+    // A save that does not load: a new guest, the old tree stays, and an inline error names the line.
+    readPanelEntryMock.mockResolvedValue(entry(2))
+    await act(async () => {
+      pluginChangedListener?.()
+      await waitForHappyDomTasks()
+    })
+    const broken = guestOf()
+    expect(broken.webview).not.toBe(first.webview)
+    await broken.post('ui.error', { revision: 0, message: 'src/p.tsx:3:5: Unexpected token' })
+    expect(container.textContent).toContain('draft: hi')
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'src/p.tsx:3:5: Unexpected token'
+    )
+
+    // The fix loads: seeded with the retained atoms, it replaces the tree and clears the error.
+    readPanelEntryMock.mockResolvedValue(entry(3))
+    await act(async () => {
+      pluginChangedListener?.()
+      await waitForHappyDomTasks()
+    })
+    const fixed = guestOf()
+    await fixed.post('ui.ready', { document: 'd3' })
+    expect(fixed.hydrates()[0]).toMatchObject({
+      memory: { draft: { version: 1, value: 'hi' } },
+      retain: true
+    })
+    await fixed.post('ui.render', { document: 'd3', revision: 1, tree: text('draft: hi (v3)') })
+    expect(container.textContent).toContain('draft: hi (v3)')
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+    expect(container.textContent).toContain('Reloaded')
   })
 
   it('restarts the watchdog after a dev reload replaces the panel document', async () => {

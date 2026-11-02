@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
-import { View, Text, Pressable, TextInput } from 'react-native'
+import { View, Text, Pressable } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 import { TextField } from './composer-input/TextField'
@@ -17,6 +17,8 @@ import { updateStoredCustomKeys, type CustomKey } from '../terminal/terminal-cus
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileSwitch } from './MobileSwitch'
+import { ListGroup, ListRow } from './list/ListGroup'
+import { FieldTextInput } from './composer-input/FieldTextInput'
 
 type Step = 'choose-type' | 'shortcut-combo' | 'special-keys' | 'text-macro'
 
@@ -201,53 +203,37 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
       </View>
 
       {step === 'choose-type' && (
-        <View style={styles.group}>
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+        <ListGroup>
+          <ListRow
+            key="shortcut-combo"
+            title={t('components.customKeyModal.shortcutCombo', 'Shortcut Combo')}
+            subtitle={t(
+              'components.customKeyModal.shortcutComboHint',
+              'Build Ctrl, Alt, and Shift key chords'
+            )}
+            navigates
             onPress={() => setStep('shortcut-combo')}
-          >
-            <Text style={styles.rowLabel}>
-              {t('components.customKeyModal.shortcutCombo', 'Shortcut Combo')}
-            </Text>
-            <Text style={styles.rowHint}>
-              {t(
-                'components.customKeyModal.shortcutComboHint',
-                'Build Ctrl, Alt, and Shift key chords'
-              )}
-            </Text>
-          </Pressable>
-          <View style={styles.separator} />
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+          />
+          <ListRow
+            key="text-macro"
+            title={t('components.customKeyModal.textMacro', 'Text Macro')}
+            subtitle={t('components.customKeyModal.textMacroHint', 'Send custom text command')}
+            navigates
             onPress={() => setStep('text-macro')}
-          >
-            <Text style={styles.rowLabel}>
-              {t('components.customKeyModal.textMacro', 'Text Macro')}
-            </Text>
-            <Text style={styles.rowHint}>
-              {t('components.customKeyModal.textMacroHint', 'Send custom text command')}
-            </Text>
-          </Pressable>
+          />
           {onManageShortcuts ? (
-            <>
-              <View style={styles.separator} />
-              <Pressable
-                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-                onPress={onManageShortcuts}
-              >
-                <Text style={styles.rowLabel}>
-                  {t('components.customKeyModal.manageShortcuts', 'Manage Shortcuts')}
-                </Text>
-                <Text style={styles.rowHint}>
-                  {t(
-                    'components.customKeyModal.manageShortcutsHint',
-                    'Show, hide, or reorder shortcut keys'
-                  )}
-                </Text>
-              </Pressable>
-            </>
+            <ListRow
+              key="manage-shortcuts"
+              title={t('components.customKeyModal.manageShortcuts', 'Manage Shortcuts')}
+              subtitle={t(
+                'components.customKeyModal.manageShortcutsHint',
+                'Show, hide, or reorder shortcut keys'
+              )}
+              navigates
+              onPress={onManageShortcuts}
+            />
           ) : null}
-        </View>
+        </ListGroup>
       )}
 
       {step === 'shortcut-combo' && (
@@ -304,12 +290,11 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
 
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>{t('components.customKeyModal.key', 'Key')}</Text>
-            <TextInput
+            <FieldTextInput
               style={styles.keyInput}
               value={shortcutKey.length === 1 ? shortcutKey.toUpperCase() : ''}
               onChangeText={handleShortcutKeyInput}
               placeholder={SPECIAL_KEY_BY_ID[shortcutKey]?.label ?? 'C'}
-              placeholderTextColor={colors.textMuted}
               autoCapitalize="characters"
               autoCorrect={false}
               maxLength={1}
@@ -325,7 +310,11 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
           </View>
 
           <Pressable
-            style={[styles.saveButton, !shortcutPreview && styles.saveButtonDisabled]}
+            style={({ pressed }) => [
+              styles.saveButton,
+              !shortcutPreview && styles.saveButtonDisabled,
+              pressed && pressedStyle
+            ]}
             disabled={!shortcutPreview}
             onPress={handleShortcutSave}
           >
@@ -409,7 +398,11 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
               />
             </View>
             <Pressable
-              style={[styles.saveButton, !macroText.trim() && styles.saveButtonDisabled]}
+              style={({ pressed }) => [
+                styles.saveButton,
+                !macroText.trim() && styles.saveButtonDisabled,
+                pressed && pressedStyle
+              ]}
               disabled={!macroText.trim()}
               onPress={handleMacroSave}
             >

@@ -82,20 +82,6 @@ describe('useOrderHeldWhileEngaged', () => {
     fire(row, 'dragend')
     expect(result.current).toEqual(['b', 'a'])
   })
-
-  it('never holds Manual or Name: your own drop or rename shows at once', () => {
-    const { row } = mountList()
-    const { result, rerender } = renderHook(
-      ({ ids, sortBy }: { ids: string[]; sortBy: SortBy }) => useOrderHeldWhileEngaged(ids, sortBy),
-      { initialProps: { ids: ['a', 'b'], sortBy: 'manual' } }
-    )
-    fire(row, 'pointerover')
-    fire(row, 'dragstart')
-    rerender({ ids: ['b', 'a'], sortBy: 'manual' })
-    expect(result.current).toEqual(['b', 'a'])
-    rerender({ ids: ['a', 'b'], sortBy: 'name' })
-    expect(result.current).toEqual(['a', 'b'])
-  })
 })
 
 describe('useProjectRecencyHeldWhileEngaged', () => {

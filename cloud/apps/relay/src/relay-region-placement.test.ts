@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RelayAssignmentStore, type RelayAssignment } from './assignment-store.js'
+import { RelayAssignmentStore, type RelayAssignment } from './assignment/assignment-store.js'
 import type { RelayCellConfig } from './config.js'
 import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
 import { ReservePaceError } from './reserve-assignment.js'

@@ -9,7 +9,7 @@ import { writeOpenCodeSqliteDatabase } from './session-scanner-opencode-sqlite-f
 import { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
 import { resolveOpenCodeSqliteWorkerEntryPath } from './session-scanner-opencode-sqlite-worker-spawn'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
-import { AGENT_SESSION_HOST_STATUS_COPY } from '../../shared/agent-session-host-status-rows'
+import { AGENT_SESSION_HOST_STATUS_COPY } from '../../shared/agent-session/view/agent-session-host-status-rows'
 
 const directory = mkdtempSync(join(tmpdir(), 'orca-opencode-native-worker-'))
 const entry = resolveOpenCodeSqliteWorkerEntryPath(directory)

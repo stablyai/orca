@@ -1,5 +1,5 @@
 import type { StructuredAgentSessionStatusPublisher } from '../../native-chat/agent-session-wire/structured-agent-session-status-ownership'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
 import {
   parseAgentStatusSubject,
@@ -9,17 +9,17 @@ import {
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../../shared/structured-agent-session-projection'
+} from '../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   continueMainAgentStatus,
   isAgentStatusHeldOpenByChildWork,
   mainAgentTurnInterrupted
 } from '../../../shared/agent-lead-status-fold'
-import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
+import { structuredAgentSessionAgentStatus } from '../../../shared/agent-session/view/structured-agent-session-agent-status'
 import {
   structuredAgentSessionDatedMainAgent,
   structuredAgentSessionRowStateStartedAt
-} from '../../../shared/structured-agent-session-status-started-at'
+} from '../../../shared/agent-session/view/structured-agent-session-status-started-at'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
 import { AgentHookServerIngestTerminal } from './server-ingest-terminal'
 

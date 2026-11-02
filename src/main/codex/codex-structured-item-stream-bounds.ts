@@ -1,4 +1,4 @@
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import { toolExecutionMetadata } from '../../shared/native-chat/tools/native-chat-tool-identity'
 import type {
   CodexItemStreamState,

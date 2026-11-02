@@ -10,13 +10,12 @@ import {
   status,
   resetSenderStore
 } from './native-chat-agent-sender.test-fixture'
-import { AGENT_SESSION_WRITE_NOTICE_COPY } from '../../../../shared/agent-session-write-notice-copy'
 import * as terminalLinks from '@/components/terminal-pane/terminal-handle-links'
 import * as markdown from './NativeChatMarkdown'
 import * as display from '../../../../shared/agent-session/agent-message-display-text'
 import type * as SonnerModule from 'sonner'
 import type * as RuntimeRpc from '@/runtime/runtime-rpc-client'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 import { nativeChatSlotCopyText } from './native-chat-message-copy-text'
@@ -31,15 +30,15 @@ import { desktopStructuredTranscript } from './structured-agent-session-message-
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
-} from '../../../../shared/structured-agent-session-reducer'
-import type { AgentSessionHistoryPage } from '../../../../shared/agent-session-wire'
-import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'
-import { isAdmissibleAgentJournalRenderItem } from '../../../../shared/agent-session-journal-schemas'
+} from '../../../../shared/agent-session/structured-agent-session-reducer'
+import type { AgentSessionHistoryPage } from '../../../../shared/agent-session/agent-session-wire'
+import { projectStructuredItemToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { isAdmissibleAgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-schemas'
 import { agentMessageHeading } from '../../../../shared/agent-session/agent-message-presentation'
 import { nativeChatTurnFoldRow } from '../../../../shared/native-chat/transcript/native-chat-turn-fold'
-import { isNoiseMessage } from '../../../../shared/native-chat-noise'
+import { isNoiseMessage } from '../../../../shared/native-chat/native-chat-noise'
 import { nativeChatRowSpeaksOrActs } from '../../../../shared/native-chat/native-chat-trailing-run'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 it('reloads a positioned worker start into the shared card with full task, Copy and navigation', async () => {
   const task = `  Task with [a link][target].\n\n${'More task text.\n'.repeat(20)}END  \n\n[target]: https://example.com\n`
@@ -64,7 +63,7 @@ it('reloads a positioned worker start into the shared card with full task, Copy 
     journalPosition: { sequence: 7, index: 0 },
     timestamp: 1
   })
-  expect(agentMessageHeading(message.from, message.agentStart)).toBe('started')
+  expect(agentMessageHeading(message.from, message)).toBe('started')
   expect(nativeChatTurnFoldRow(message, 'turn', false).outlivesTurn).toBe(true)
   expect(isNoiseMessage(message)).toBe(false)
   expect(nativeChatRowSpeaksOrActs(message, true, new Map())).toBe(false)
@@ -108,9 +107,14 @@ it('reloads a positioned worker start into the shared card with full task, Copy 
   navigation.rpc.mockResolvedValue({ location: { kind: 'terminal', handle: 'term_0' } })
   const focus = vi.spyOn(terminalLinks, 'focusRendererTerminalHandle').mockReturnValue(true)
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Build cards' })))
-  expect(navigation.rpc).toHaveBeenCalledWith({ kind: 'local' }, 'orchestration.partyLocation', {
-    address: 'term_0'
-  })
+  expect(navigation.rpc).toHaveBeenCalledWith(
+    { kind: 'local' },
+    'orchestration.partyLocation',
+    {
+      address: 'term_0'
+    },
+    { timeoutMs: 5000 }
+  )
   expect(focus).toHaveBeenCalledWith('term_0', null)
 })
 
@@ -139,6 +143,25 @@ it.each(['', '   ', '<system-reminder>Internal noise</system-reminder>'])(
     expect(screen.getByText('Started worker')).toBeInTheDocument()
   }
 )
+
+it.each([
+  ['Fix it', 'Handed off to agent'],
+  ['', 'Started agent']
+])('heads a launch its chat made on its own with task %j as %j, not a worker', (task, title) => {
+  const message = projectStructuredAgentStartItem({
+    itemId: 'handoff',
+    revision: 1,
+    sequence: 2,
+    observedAt: 1,
+    body: { kind: 'agent-handoff', launchId: 'launch-1', agent: from.senders[0], task }
+  })!
+  render(<MessageRow message={message} expandSignal={false} onScrollMessageToTop={() => {}} />)
+  expect(screen.getByText(title)).toBeInTheDocument()
+  expect(screen.queryByText('Started worker')).not.toBeInTheDocument()
+  // With no task the card is the agent's name alone: nothing to copy.
+  expect(screen.getByText('Build cards')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Copy message' }) !== null).toBe(task !== '')
+})
 
 it('renders unreadable worker metadata with the existing unnamed fallback and no navigation', () => {
   const raw: unknown = {
@@ -169,6 +192,41 @@ it('renders unreadable worker metadata with the existing unnamed fallback and no
   expect(screen.getByText('an agent')).toBeInTheDocument()
   expect(screen.getByText('Keep the complete task')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'an agent' })).toBeNull()
+})
+
+it.each([
+  { agent: 'codex', unknown: false },
+  { agent: undefined, unknown: true }
+])('draws a worker no live row names by its saved agent=$agent', ({ agent, unknown }) => {
+  const raw: unknown = {
+    itemId: 'start:gone',
+    revision: 1,
+    sequence: 1,
+    observedAt: 1,
+    body: {
+      kind: 'agent-start',
+      dispatchId: 'gone',
+      task: 'Port the parser',
+      worker: {
+        party: { address: 'term_gone', terminalHandle: 'term_gone', orcaSessionId: null },
+        name: 'Parser port',
+        ...(agent ? { agent } : {})
+      }
+    }
+  }
+  if (!isAdmissibleAgentJournalRenderItem(raw)) {
+    throw new Error('start item was refused')
+  }
+  render(
+    <MessageRow
+      message={projectStructuredAgentStartItem(raw)!}
+      expandSignal={false}
+      onScrollMessageToTop={() => {}}
+      runtimeContext={context}
+    />
+  )
+  expect(screen.getByText('Parser port')).toBeInTheDocument()
+  expect(screen.queryByText('?') !== null).toBe(unknown)
 })
 
 it.each([false, true])(
@@ -390,17 +448,23 @@ it.each(['task', 'mail'] as const)(
     vi.stubGlobal('api', { ui: { writeClipboardText } })
     navigation.rpc.mockRejectedValue(new Error('unreachable'))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Build cards' })))
-    expect(navigation.rpc).toHaveBeenCalledWith({ kind: 'local' }, 'orchestration.partyLocation', {
-      address: 'term_0'
-    })
+    expect(navigation.rpc).toHaveBeenCalledWith(
+      { kind: 'local' },
+      'orchestration.partyLocation',
+      {
+        address: 'term_0'
+      },
+      { timeoutMs: 5000 }
+    )
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Other sender' })))
     expect(navigation.rpc).toHaveBeenLastCalledWith(
       { kind: 'local' },
       'orchestration.partyLocation',
-      { address: 'term_1' }
+      { address: 'term_1' },
+      { timeoutMs: 5000 }
     )
     expect(navigation.toast).toHaveBeenCalledWith(
-      `${AGENT_SESSION_WRITE_NOTICE_COPY.unreachable} ${AGENT_SESSION_WRITE_NOTICE_COPY.tryAgain}`
+      'The structured agent session is not available yet. Retry in a moment.'
     )
     expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull()
     act(() => {

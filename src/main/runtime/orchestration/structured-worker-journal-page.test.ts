@@ -2,13 +2,13 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity,
-  AgentJournalProducerLinkage
-} from '../../../shared/agent-session-journal-types'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionHistoryRequest } from '../../../shared/agent-session-wire'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import {
+  type AgentJournalItemBody,
+  type AgentJournalProducerLinkage,
+  AGENT_JOURNAL_THREAD_SCOPE
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionHistoryRequest } from '../../../shared/agent-session/agent-session-wire'
 import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
 import type { JournalRow } from '../../native-chat/agent-session-journal/journal-row-schema'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
@@ -21,13 +21,13 @@ import {
 import {
   projectStructuredItemsToNativeChat,
   projectStructuredAgentSessionStatusSummary
-} from '../../../shared/structured-agent-session-projection'
+} from '../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
-} from '../../../shared/structured-agent-session-reducer'
+} from '../../../shared/agent-session/structured-agent-session-reducer'
 import { structuredAgentSessionWorkingAtStop } from '../../native-chat/agent-session-wire/structured-agent-session-working-at-teardown'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const host = vi.hoisted(() => {
   const state: { journal: AgentSessionJournal | null } = { journal: null }

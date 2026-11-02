@@ -30,6 +30,7 @@ export function useResourceSessionInventory(ready: boolean, active = false, loca
       unsubscribeManagement()
       unsubscribeSpawn()
       unsubscribeExit()
+      cache.dispose()
     }
   }, [cache])
   const removeSession = useCallback(

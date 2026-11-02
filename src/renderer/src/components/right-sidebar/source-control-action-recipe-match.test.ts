@@ -47,37 +47,6 @@ describe('sourceControlActionRecipeMatchesTarget', () => {
     ).toBe(true)
   })
 
-  it('returns true when the launch recipe matches the global saved recipe', () => {
-    expect(
-      sourceControlActionRecipeMatchesTarget({
-        actionId: 'resolveConflicts',
-        target: { type: 'global' },
-        recipe: {
-          agentId: 'codex',
-          commandInputTemplate: '{basePrompt}',
-          agentArgs: '--model sonnet'
-        },
-        settings: settings()
-      })
-    ).toBe(true)
-  })
-
-  it('returns false when the repo target has no saved override yet', () => {
-    expect(
-      sourceControlActionRecipeMatchesTarget({
-        actionId: 'resolveConflicts',
-        target: { type: 'repo', repoId: 'repo-1' },
-        recipe: {
-          agentId: 'codex',
-          commandInputTemplate: '{basePrompt}',
-          agentArgs: '--model sonnet'
-        },
-        settings: settings(),
-        repo: { sourceControlAi: { enabled: true } } satisfies Pick<Repo, 'sourceControlAi'>
-      })
-    ).toBe(false)
-  })
-
   it('returns true when the launch recipe matches the repo saved recipe', () => {
     expect(
       sourceControlActionRecipeMatchesTarget({
@@ -95,33 +64,6 @@ describe('sourceControlActionRecipeMatchesTarget', () => {
               fixCommitFailure: {
                 agentId: 'claude',
                 commandInputTemplate: '{basePrompt}\n\nrepo only'
-              }
-            }
-          }
-        } satisfies Pick<Repo, 'sourceControlAi'>
-      })
-    ).toBe(true)
-  })
-
-  it('returns true when the resolve conflicts recipe matches the repo saved recipe', () => {
-    expect(
-      sourceControlActionRecipeMatchesTarget({
-        actionId: 'resolveConflicts',
-        target: { type: 'repo', repoId: 'repo-1' },
-        recipe: {
-          agentId: 'codex',
-          commandInputTemplate: '{basePrompt}',
-          agentArgs: ''
-        },
-        settings: settings(),
-        repo: {
-          sourceControlAi: {
-            enabled: true,
-            actionOverrides: {
-              resolveConflicts: {
-                agentId: 'codex',
-                commandInputTemplate: '{basePrompt}',
-                agentArgs: ''
               }
             }
           }

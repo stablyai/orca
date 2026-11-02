@@ -128,23 +128,27 @@
       "available_one": "{{count}} reset available",
       "available_other": "{{count}} resets available"
     },
+    "diffReviewBody": {
+      "unchangedLines_one": "{{count}} unchanged line",
+      "unchangedLines_other": "{{count}} unchanged lines"
+    },
     "diffReviewDrawers": {
-      "fileSummary_one": "{{fileCount}} file reviewed, {{count}} note",
-      "fileSummary_other": "{{fileCount}} file reviewed, {{count}} notes",
-      "filesSummary_one": "{{fileCount}} files reviewed, {{count}} note",
-      "filesSummary_other": "{{fileCount}} files reviewed, {{count}} notes",
-      "stageableFiles_one": "{{count}} reviewed unstaged files can be staged",
-      "stageableFiles_other": "{{count}} reviewed unstaged files can be staged",
+      "notes_one": "{{count}} note",
+      "notes_other": "{{count}} notes",
       "unsentNotes_one": "{{count}} unsent notes",
-      "unsentNotes_other": "{{count}} unsent notes"
+      "unsentNotes_other": "{{count}} unsent notes",
+      "viewedFiles_one": "{{count}} file viewed",
+      "viewedFiles_other": "{{count}} files viewed"
     },
     "diffReviewFileSummary": {
-      "notes_one": "{{count}} note",
-      "notes_other": "{{count}} notes"
+      "threadsWhenInSync_one": "Its GitHub comment shows here once this branch matches the pull request.",
+      "threadsWhenInSync_other": "Its {{count}} GitHub comments show here once this branch matches the pull request."
     },
-    "diffReviewHeader": {
-      "unsentNotes_one": "{{count}} unsent note",
-      "unsentNotes_other": "{{count}} unsent notes"
+    "worktreeAgentList": {
+      "hideChildAgents_one": "Hide {{count}} child agent",
+      "hideChildAgents_other": "Hide {{count}} child agents",
+      "showChildAgents_one": "Show {{count}} child agent",
+      "showChildAgents_other": "Show {{count}} child agents"
     },
     "worktreeListRow": {
       "children_one": "{{count}} child",
@@ -165,10 +169,6 @@
     }
   },
   "pullRequest": {
-    "checksSection": {
-      "failingChecks_one": "{{count}} failing check",
-      "failingChecks_other": "{{count}} failing checks"
-    },
     "commentCard": {
       "daysAgo_one": "{{count}}d ago",
       "daysAgo_other": "{{count}}d ago",
@@ -181,9 +181,25 @@
       "yearsAgo_one": "{{count}}y ago",
       "yearsAgo_other": "{{count}}y ago"
     },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "{{count}} commit behind (base commit: {{baseCommit}})",
-      "commitsBehind_other": "{{count}} commits behind (base commit: {{baseCommit}})"
+    "emptyState": {
+      "commitsReady_one": "{{count}} commit on {{branch}} is ready to go into {{base}}.",
+      "commitsReady_other": "{{count}} commits on {{branch}} are ready to go into {{base}}."
+    },
+    "gates": {
+      "approvals_one": "{{count}} approval",
+      "approvals_other": "{{count}} approvals",
+      "checksFailing_one": "{{count}} check failing",
+      "checksFailing_other": "{{count}} checks failing",
+      "checksPassed_one": "{{count}} check passed",
+      "checksPassed_other": "{{count}} checks passed",
+      "checksRunning_one": "{{count}} check running",
+      "checksRunning_other": "{{count}} checks running",
+      "conflictFiles_one": "{{count}} file",
+      "conflictFiles_other": "{{count}} files",
+      "fromBots_one": "{{count}} from a bot",
+      "fromBots_other": "{{count}} from bots",
+      "unresolvedThreads_one": "{{count}} unresolved thread",
+      "unresolvedThreads_other": "{{count}} unresolved threads"
     },
     "prActionsState": {
       "mergeThrough_one": "Merge through #{{number}} · {{count}} PR",
@@ -200,6 +216,18 @@
       "passed_other": "{{count}} passed",
       "pending_one": "{{count}} pending",
       "pending_other": "{{count}} pending"
+    },
+    "reviewersSheet": {
+      "approvals_one": "{{count}} approval",
+      "approvals_other": "{{count}} approvals"
+    },
+    "screens": {
+      "threadSubtitle_one": "{{author}} · {{count}} message",
+      "threadSubtitle_other": "{{author}} · {{count}} messages"
+    },
+    "tab": {
+      "filesChanged_one": "{{count}} file changed",
+      "filesChanged_other": "{{count}} files changed"
     }
   },
   "session": {
@@ -239,6 +267,12 @@
       "stateWorkingCount_one": "{{value0}} working",
       "stateWorkingCount_other": "{{value0}} working"
     },
+    "diffReviewScreenModel": {
+      "commitFiles_one": "{{count}} file",
+      "commitFiles_other": "{{count}} files",
+      "uncommittedFiles_one": "{{count}} uncommitted",
+      "uncommittedFiles_other": "{{count}} uncommitted"
+    },
     "fileReader": {
       "reviewNotes_one": "{{count}} review note",
       "reviewNotes_other": "{{count}} review notes"
@@ -246,10 +280,6 @@
     "queuedMessageCardRow": {
       "images_one": "{{count}} image",
       "images_other": "{{count}} images"
-    },
-    "useDiffReviewGitActions": {
-      "reviewedFilesStaged_one": "{{count}} reviewed file staged",
-      "reviewedFilesStaged_other": "{{count}} reviewed files staged"
     }
   },
   "settings": {
@@ -273,11 +303,19 @@
       "pushCommits_one": "Push {{count}} commit.",
       "pushCommits_other": "Push {{count}} commits."
     },
-    "branchCompare": {
+    "changesHeader": {
       "commits_one": "{{count}} commit",
       "commits_other": "{{count}} commits",
+      "filesNeedDecision_one": "{{count}} file needs a decision before you can finish.",
+      "filesNeedDecision_other": "{{count}} files need a decision before you can finish."
+    },
+    "commitDetail": {
       "files_one": "{{count}} file",
       "files_other": "{{count}} files"
+    },
+    "commits": {
+      "baseNewer_one": "1 newer commit",
+      "baseNewer_other": "{{count}} newer commits"
     },
     "dropdownCounts": {
       "fastForwardCount_one": "Fast-forward {{count}} commit",
@@ -307,9 +345,19 @@
       "years_one": "{{count}}y",
       "years_other": "{{count}}y"
     },
-    "prChip": {
-      "openWithComments_one": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} unresolved comments. Open pull request.",
-      "openWithComments_other": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} unresolved comments. Open pull request."
+    "nextStep": {
+      "checksFailing_one": "{{count}} check failing",
+      "checksFailing_other": "{{count}} checks failing",
+      "checksRunning_one": "{{count}} check still running",
+      "checksRunning_other": "{{count}} checks still running"
+    },
+    "primaryAction": {
+      "commitFiles_one": "Commit {{count}} file",
+      "commitFiles_other": "Commit {{count}} files",
+      "pullCommits_one": "Pull {{count}} commit",
+      "pullCommits_other": "Pull {{count}} commits",
+      "pushCommits_one": "Push {{count}} commit",
+      "pushCommits_other": "Push {{count}} commits"
     }
   },
   "tasks": {

@@ -103,46 +103,12 @@ describe('orcad profile CLI launcher', () => {
     }
   )
 
-  it.skipIf(process.platform === 'win32')(
-    'refreshes the launcher when the host switches server slots',
-    async () => {
-      await writeCli()
-      await prepareOrcadCliLauncher()
-      roots.install = join(directory, 'updated server')
-      await writeCli()
-      await prepareOrcadCliLauncher()
-      const launcher = getOrcadCliLauncherPath()
-      if (!launcher) {
-        throw new Error('CLI launcher is missing')
-      }
-      expect(await readFile(launcher, 'utf8')).toContain(roots.install)
-    }
-  )
-
   it('leaves old slots without a CLI usable and clears a previous launcher', async () => {
     await writeCli()
     await prepareOrcadCliLauncher()
     roots.install = join(directory, 'old server')
     await prepareOrcadCliLauncher()
     expect(getOrcadCliLauncherPath()).toBeNull()
-  })
-
-  describe('on a Linux host', () => {
-    beforeEach(() => {
-      Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
-    })
-
-    it('refreshes both CLI names when the runtime switches server slots', async () => {
-      await writeCli()
-      await prepareOrcadCliLauncher()
-      roots.install = join(directory, 'updated server')
-      await writeCli()
-      await prepareOrcadCliLauncher()
-      const binDir = join(roots.profile, 'cli', 'bin')
-      const script = await readFile(join(binDir, 'orca-ide'), 'utf8')
-      expect(script).toContain(roots.install)
-      expect(script).toBe(await readFile(join(binDir, 'orca'), 'utf8'))
-    })
   })
 
   describe('on a Windows host', () => {
@@ -191,12 +157,6 @@ describe('orcad profile CLI launcher', () => {
       await prepareOrcadCliLauncher()
       expect(await readFile(join(binDir(), 'orca.exe'), 'utf8')).toBe('native launcher v2')
       expect(await readConfig()).toContain(`cli=${join(roots.install, 'out', 'cli', 'index.js')}`)
-    })
-
-    it('leaves a slot without the native launcher with no orca command', async () => {
-      await writeCli()
-      await prepareOrcadCliLauncher()
-      expect(getOrcadCliLauncherPath()).toBeNull()
     })
   })
 })

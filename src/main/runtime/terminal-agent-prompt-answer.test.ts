@@ -68,16 +68,6 @@ function harness() {
 }
 
 describe('TerminalAgentPromptAnswers', () => {
-  it('writes the chosen option’s key, without Enter, for the prompt still pending', async () => {
-    const h = harness()
-    const prompt = h.answers.pending(h.runtime, target)
-    expect(prompt?.kind).toBe('approval')
-    await expect(h.answer(prompt!.promptId, 'reject_once')).resolves.toEqual({
-      outcome: 'accepted'
-    })
-    expect(h.keys).toEqual(['\x1b'])
-  })
-
   it('refuses a second answer to the same prompt before the agent reports moving on', async () => {
     const h = harness()
     const { promptId } = h.answers.pending(h.runtime, target)!

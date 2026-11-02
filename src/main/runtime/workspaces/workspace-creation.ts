@@ -1,8 +1,11 @@
-import type { Repo } from '../../../shared/repo-types'
-import type {
-  WorktreeLineageInput,
-  WorktreeLineageResolution
+import {
+  RuntimeLineageError,
+  LINEAGE_PARENT_AMBIGUOUS,
+  formatAmbiguousCwdParentMessage,
+  type WorktreeLineageInput,
+  type WorktreeLineageResolution
 } from '../runtime-worktree-lineage-resolution'
+import type { Repo } from '../../../shared/repo-types'
 import { OrcaRuntimeWithGetWorktreeTerminalProvisioningHost } from './startup/workspace-terminal-provisioning'
 import type { RuntimeManagedWorktreeCreateArgs } from '../runtime-managed-worktree-create-types'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
@@ -124,9 +127,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
           createTerminal: (selector, options) =>
             this.createTerminal(selector, { ...options, ...wslUserAct(args) }),
           pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
-          sendFollowup: (handle, followup, terminal) => {
-            void this.deliverStartupFollowup(handle, followup, { terminalCreation: terminal })
-          },
+          sendFollowup: (handle, followup, terminal) =>
+            void this.deliverStartupFollowup(handle, followup, { terminalCreation: terminal }),
           invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
           notifyWorktreesChanged: (repoId) => this.notifyWorktreesChanged(repoId),
           emitCreated: (event) => this.emitWorktreeLifecycle(event),
@@ -136,7 +138,17 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     }
     const lineageInput =
       args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
-    const lineageResolution = await this.resolveLineageForWorktreeCreate(lineageInput, repo)
+    const lineageResolution = await this.resolveLineageForWorktreeCreate(lineageInput, repo).catch(
+      (error: unknown) => {
+        if (error instanceof RuntimeLineageError && error.code === LINEAGE_PARENT_AMBIGUOUS) {
+          throw new RuntimeLineageError(
+            error.code,
+            formatAmbiguousCwdParentMessage(args.startupAgent ?? args.createdWithAgent)
+          )
+        }
+        throw error
+      }
+    )
     if (createRoute.kind === 'runtime') {
       throw new ExecutionHostNotDispatchableError(createRoute.hostId)
     }
@@ -229,9 +241,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         createTerminal: (selector, options) =>
           this.createTerminal(selector, { ...options, ...wslUserAct(args) }, worktree),
         pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
-        sendFollowup: (handle, followup, terminal) => {
-          void this.deliverStartupFollowup(handle, followup, { terminalCreation: terminal })
-        },
+        sendFollowup: (handle, followup, terminal) =>
+          void this.deliverStartupFollowup(handle, followup, { terminalCreation: terminal }),
         provision: (options) =>
           this.provisionManagedWorktreeTerminals({ ...options, ...wslUserAct(args) }, worktree),
         activate: activationCallbacks.local

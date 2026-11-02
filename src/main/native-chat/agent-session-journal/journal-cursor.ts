@@ -1,11 +1,9 @@
 // Cursors from replaced epochs require a fresh snapshot; partial replay would mix timelines.
 
-import type {
-  AgentJournalCursor,
-  AgentJournalResetReason
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalResetReason } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReadSince } from './journal-store-contracts'
-import type { JournalReadRow } from './journal-read-row'
+import type { JournalRowsRead } from './journal-read-row'
 
 export type JournalCursorRange = {
   epoch: string
@@ -70,7 +68,7 @@ export function findSequenceGap(
 export function readJournalSince(
   source: {
     state: { epoch: string; lastSequence: number; oldestSequence: number }
-    rowsAfter: (afterSequence: number) => JournalReadRow[]
+    rowsAfter: (afterSequence: number) => JournalRowsRead
   },
   cursor: AgentJournalCursor,
   currentCursor: () => AgentJournalCursor
@@ -79,9 +77,5 @@ export function readJournalSince(
   if (!resume.ok) {
     return { ok: false, reset: resume.reset }
   }
-  return {
-    ok: true,
-    rows: source.rowsAfter(resume.afterSequence),
-    cursor: currentCursor()
-  }
+  return { ok: true, ...source.rowsAfter(resume.afterSequence), cursor: currentCursor() }
 }

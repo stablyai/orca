@@ -30,6 +30,7 @@ vi.mock('../theme/mobile-theme', () => ({
   spacing: { xs: 4, sm: 8, md: 12 },
   radii: { control: 12 },
   concentricRadius: (outer: number, inset: number) => outer - inset,
+  feedback: { pressedOpacity: 0.7, disabledOpacity: 0.4 },
   typography: { metaSize: 12 },
   getMobileColorScheme: () => 'dark',
   subscribeMobileColorScheme: () => () => {}

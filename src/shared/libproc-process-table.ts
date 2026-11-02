@@ -38,6 +38,7 @@ export type InProcessPsOptions = {
   maxOutputBytes?: number
   /** A display poll: any ps it needs waits behind interactive and fresh readers in the fork budget. */
   background?: boolean
+  freshArgv?: boolean
   /** Called with when (monotonic ms) the result's oldest recovered argv was read, when that predates this request:
    * evidence built on the result is as old as that input, not as the table read. */
   onArgvReadAt?: (monotonicMs: number) => void
@@ -185,7 +186,8 @@ export async function runPsInProcess(
         ctype,
         env,
         deadline,
-        options.background === true
+        options.background === true,
+        options.freshArgv === true ? requestedAtMs : Number.NEGATIVE_INFINITY
       )
     }
   } catch {

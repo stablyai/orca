@@ -1,4 +1,4 @@
-import type { AgentJournalRowAttribution } from '../../shared/agent-session-journal-types'
+import type { AgentJournalRowAttribution } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { appendCodexItemAndPublish } from './codex-structured-journal-sink'
 import {
   pendingPatchBytes,

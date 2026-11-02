@@ -5,7 +5,7 @@ import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-w
 import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
 import type { BrowserBackend, BrowserBackendCreateTab } from './browser-backend'
 import type { BrowserManager } from './browser-manager'
-import type { AgentBrowserBridge } from './agent-browser-bridge'
+import type { AgentBrowserBridge } from './agent-browser/agent-browser-bridge'
 import { browserSessionRegistry } from './browser-session-registry'
 import { installBrowserJavaScriptDialogs } from './browser-javascript-dialogs'
 import type { ServeBrowserPageState } from '../runtime/serve-browser-tab-layout'

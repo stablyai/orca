@@ -170,6 +170,8 @@ export function useMobileTasksRouteAndItemState() {
   const [linearTeams, setLinearTeams] = useState<LinearTeam[]>([])
   const [creatingTask, setCreatingTask] = useState(false)
   const [loading, setLoading] = useState(false)
+  // False until a list read settles, so an unread list is not shown as an empty one.
+  const [taskListSettled, setTaskListSettled] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [tasksSupportState, setTasksSupportState] = useState<TasksSupportState>({
     kind: 'unknown',
@@ -333,6 +335,8 @@ export function useMobileTasksRouteAndItemState() {
     setCreatingTask,
     loading,
     setLoading,
+    taskListSettled,
+    setTaskListSettled,
     refreshing,
     setRefreshing,
     tasksSupportState,

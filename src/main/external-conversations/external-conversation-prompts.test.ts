@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
-import type { AgentPhase, AgentTransition } from '../../shared/agent-transitions'
+import {
+  AGENT_DONE_QUIET_MS,
+  type AgentPhase,
+  type AgentTransition
+} from '../../shared/agent-transitions'
 import type { ConversationEvent, ConversationSnapshot } from './external-conversation-events'
 import type { ConversationKey } from './external-conversation-types'
 import {
@@ -221,6 +225,56 @@ describe('ExternalConversationSeam watch', () => {
       at: 300,
       turnId: 100
     })
+  })
+
+  it('tells the reply of a turn its subagent holds open, then the wake-up turn that follows', async () => {
+    const { seam, host, hookRows, paneChange } = await linked()
+    const seen: ConversationEvent[] = []
+    seam.watch(host, (event) => {
+      if (event.kind !== 'snapshot') {
+        seen.push(event)
+      }
+    })
+    const observedWorking: AgentPaneChange = {
+      kind: 'observed',
+      paneKey: PANE,
+      workspace: { worktreeId: WORKTREE, sshHostId: null },
+      phase: 'working',
+      at: 2
+    }
+    hookRows.set(PANE, hookRow({ turnStartedAt: 100 }))
+    paneChange(moved('rest', 'working', 'prompt-submitted'))
+    paneChange(observedWorking)
+    // The lead's turn ended; its running subagent keeps the row working and holds the notification.
+    const launched = { state: 'done' as const, stateStartedAt: 300, outcome: 'success' as const }
+    hookRows.set(
+      PANE,
+      hookRow({ turnStartedAt: 100, lastAssistantMessage: 'Launched.', mainAgent: launched })
+    )
+    paneChange(observedWorking)
+    hookRows.set(PANE, hookRow({ turnStartedAt: 400 }))
+    paneChange(observedWorking)
+    hookRows.set(
+      PANE,
+      hookRow({
+        state: 'done',
+        stateStartedAt: 500,
+        turnStartedAt: 400,
+        lastAssistantMessage: 'Subagent done.',
+        mainAgent: { state: 'done', stateStartedAt: 500, outcome: 'success' }
+      })
+    )
+    vi.useFakeTimers()
+    try {
+      paneChange(moved('working', 'done', 'turn-finished'))
+      vi.advanceTimersByTime(AGENT_DONE_QUIET_MS)
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(
+      seen.flatMap((event) => (event.kind === 'turn-ended' ? [event.lastAssistantMessage] : []))
+    ).toEqual(['Launched.', 'Subagent done.'])
   })
 
   it('names the turn a reply belongs to as turn events do, only while watched and linked', async () => {

@@ -10,6 +10,7 @@ import {
   MESSAGE_MAX_HEIGHT,
   MESSAGE_MIN_HEIGHT
 } from './composer-input-styles'
+import { useInputFocus } from './use-input-focus'
 
 type MessageBoxProps = Omit<
   TextInputProps,
@@ -27,11 +28,11 @@ type MessageBoxProps = Omit<
   leading?: ReactNode
   /** Controls at the end of the action row, before Send. */
   trailing?: ReactNode
-  /** A bar floating at the bottom of the screen; casts the composer's shadow. */
-  docked?: boolean
   /** Drawn over the text, which hides while it is set, e.g. dictation's live preview. */
   inputOverlay?: ReactNode
   monospace?: boolean
+  /** One pill-shaped row with its controls beside the text, for short replies. */
+  inline?: boolean
   style?: StyleProp<ViewStyle>
 }
 
@@ -46,24 +47,36 @@ export function MessageBox({
   sendAccessibilityLabel,
   leading,
   trailing,
-  docked = false,
   inputOverlay,
   monospace = false,
+  inline = false,
   style,
   editable = true,
   multiline = true,
+  onFocus,
+  onBlur,
   ...inputProps
 }: MessageBoxProps): React.JSX.Element {
   useMobileColorScheme()
   const ownRef = useRef<TextInput>(null)
   const ref = inputRef ?? ownRef
   const contentHeight = useTextInputContentHeight(ref, value)
+  const focus = useInputFocus({ onFocus, onBlur })
   const hasActions = leading !== undefined || trailing !== undefined || onSend !== undefined
   const minHeight = hasActions ? MESSAGE_MIN_HEIGHT : FORM_MESSAGE_MIN_HEIGHT
   return (
-    <View style={[styles.box, !hasActions && styles.formBox, docked && styles.docked, style]}>
+    <View
+      style={[
+        styles.box,
+        // A box with its own controls is marked by them, like the chat composer; a bare one by its edge.
+        !hasActions && styles.formBox,
+        !hasActions && focus.focused && styles.focused,
+        inline && styles.inlineBox,
+        style
+      ]}
+    >
       {/* Always wrapped, so showing the overlay never remounts the field under the keyboard. */}
-      <View>
+      <View style={inline ? styles.inlineText : undefined}>
         <TextInput
           ref={ref}
           value={value}
@@ -84,11 +97,14 @@ export function MessageBox({
             inputOverlay !== undefined && styles.hiddenText
           ]}
           {...inputProps}
+          // Only a bare box draws a ring, so only it re-renders on focus.
+          onFocus={hasActions ? onFocus : focus.onFocus}
+          onBlur={hasActions ? onBlur : focus.onBlur}
         />
         {inputOverlay}
       </View>
       {hasActions ? (
-        <View style={styles.actionRow}>
+        <View style={[styles.actionRow, inline && styles.inlineActions]}>
           {leading}
           <View style={styles.actionSpacer} />
           {trailing}

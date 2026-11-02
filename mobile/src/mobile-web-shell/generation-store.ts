@@ -2,11 +2,11 @@ import { z } from 'zod'
 import {
   MobileWebBundleManifestReadSchema,
   type MobileWebBundleManifestRead
-} from '../transport/mobile-web-bundle-reply-schemas'
+} from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import type {
   MobileWebBundleFetchResult,
   MobileWebBundleReusableAssets
-} from '../transport/mobile-web-bundle-fetch'
+} from '../transport/web-bundle/mobile-web-bundle-fetch'
 import { joinUri } from './generation-cache-uri'
 import { MANIFEST_FILE_NAME, requireStorablePath } from './generation-asset-path'
 import { reusableAssetsOf } from './generation-reuse'

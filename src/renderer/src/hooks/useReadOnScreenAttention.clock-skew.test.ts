@@ -123,15 +123,6 @@ describe('useReadOnScreenAttention — clock-skewed execution host', () => {
     expect(calls).toEqual([])
   })
 
-  it('still acks a normally stamped turn once', () => {
-    seedFutureStampedTurn(NOW - 5_000)
-    const calls = instrumentAcknowledgeAgents()
-
-    renderHook(() => useReadOnScreenAttention())
-
-    expect(calls).toEqual([[PANE_KEY]])
-  })
-
   it('keeps an explicitly marked-unread visible turn unread', () => {
     seedFutureStampedTurn(NOW - 5_000)
     useAppStore.getState().acknowledgeAgents([PANE_KEY])

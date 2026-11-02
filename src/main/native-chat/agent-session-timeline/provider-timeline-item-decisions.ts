@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from 'node:util'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { cancelledJournalPromptBody } from '../agent-session-journal/journal-prompt-body-bounds'
 import { requiresTerminalSettlement } from '../agent-session-journal/journal-terminal-settlement'
 import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/structured-agent-session-event-sink-estimate'

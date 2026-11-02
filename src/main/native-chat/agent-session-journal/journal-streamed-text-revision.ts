@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util'
-import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
+import { agentJournalLinkageFields } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 

@@ -1,4 +1,5 @@
 import type { UiLanguageDetection } from '../../shared/ui-locale'
+import type { WindowMaterial } from '../../shared/window-material'
 import type { AppIdentity } from '../../shared/app-identity'
 import type { E2EConfig } from '../../shared/e2e-config'
 import type { ExecutionHostId } from '../../shared/execution-host'
@@ -27,6 +28,8 @@ export type AppApi = {
   restartAsAdministrator: () => Promise<void>
   /** Append filenames to this base: Vite /@fs in dev, file:// resources when packaged. */
   getFeatureWallAssetBaseUrl: () => Promise<string>
+  /** Drops macOS vibrancy while an opaque theme image covers it; no-op otherwise. */
+  setWindowMaterialSuppressed: (suppressed: boolean) => Promise<void>
   /** Uses app.exit(0), bypassing normal quit handling. */
   relaunch: () => Promise<void>
   /** Uses normal quit handling so daemon terminals survive for reattachment. */
@@ -82,6 +85,8 @@ export type PlatformApi = {
     /** Login shell or ComSpec when available. */
     shell: string
     displayServer: 'wayland' | 'x11' | null
+    /** Material this window was created with; secondary windows and the web client are 'off'. */
+    windowMaterial: WindowMaterial
   }
 }
 

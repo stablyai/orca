@@ -21,20 +21,13 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
 vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => false }))
 // The slide settles at once, so a back press unmounts the page in the same act.
-vi.mock('react-native-reanimated', () => ({
-  default: { View: 'AnimatedView' },
-  runOnJS:
-    <Args extends unknown[]>(fn: (...args: Args) => void) =>
-    (...args: Args) =>
-      fn(...args),
-  useAnimatedStyle: () => ({}),
-  useSharedValue: (value: number) => ({ value }),
-  withTiming: (to: number, _config: unknown, done?: (finished: boolean) => void) => {
-    done?.(true)
-    return to
-  }
+vi.mock('react-native-reanimated', async () =>
+  (await import('../test-support/reanimated-pager-stub')).reanimatedPagerStub()
+)
+// Stub the drawer's sheet machinery, not BottomDrawer: the option pager under test lives in that module.
+vi.mock('../components/keyed-bottom-drawer', () => ({
+  KeyedBottomDrawer: ({ children }: { children: () => unknown }) => children()
 }))
-vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
 vi.mock('../components/MobileSearchField', () => ({ MobileSearchField: 'MobileSearchField' }))
 vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 

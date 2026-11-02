@@ -8,14 +8,14 @@ import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
 } from '../codex/app-server/codex-app-server-connection-types'
-import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
+import type { openCodexAppServerConnection } from '../codex/app-server/codex-app-server-connection'
 import { refuseUnroutedSteer } from '../codex/codex-structured-dispatch-test-support'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  type RuntimeCapability
-} from '../../shared/protocol-version'
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../shared/agent-session/agent-session-runtime-capabilities'
+import type { RuntimeCapability } from '../../shared/protocol-version'
 import { attachFingerprintFields } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { RpcRequest, RpcResponse } from './rpc/core'
@@ -24,7 +24,7 @@ import { STRUCTURED_AGENT_SESSION_METHODS } from './rpc/methods/structured-agent
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
 

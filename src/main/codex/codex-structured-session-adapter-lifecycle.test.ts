@@ -1,15 +1,9 @@
-import {
-  checkpointJournalRig,
-  closeCheckpointTestJournals
-} from '../claude/claude-checkpoint-test-support'
 import { StructuredAgentSessionExitObservation } from '../native-chat/agent-session-wire/structured-agent-session-exit-observation'
 import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
-import type {
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
@@ -17,14 +11,14 @@ import type {
 import type {
   CodexAppServerLaunch,
   openCodexAppServerConnection
-} from './codex-app-server-connection'
+} from './app-server/codex-app-server-connection'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import {
-  CodexStructuredSessionAdapter,
-  type CodexStructuredLaunch,
-  type CodexStructuredSessionEvent
-} from './codex-structured-session-adapter'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
+import type {
+  CodexStructuredLaunch,
+  CodexStructuredSessionEvent
+} from './codex-structured-session-state'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const THREAD_ID = 'thread-abc'
 
@@ -59,7 +53,6 @@ type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
   calls: { method: string; params?: Record<string, unknown> }[]
   replies: { id: number | string; result?: unknown; code?: number; message?: string }[]
   closeCount: number
-  readingPaused: boolean
 }
 
 function fakeCodex(routes: Record<string, Route> = {}): {
@@ -75,13 +68,6 @@ function fakeCodex(routes: Record<string, Route> = {}): {
       calls: [],
       replies: [],
       closeCount: 0,
-      readingPaused: false,
-      pauseReading: () => {
-        connection.readingPaused = true
-      },
-      resumeReading: () => {
-        connection.readingPaused = false
-      },
       pid: 4321,
       closed: false,
       request: async (method, params) => {
@@ -542,102 +528,4 @@ describe('acquired scheduled plan delivery', () => {
       vi.useRealTimers()
     }
   })
-})
-
-it('retries an acquired plan after native drain without a notification head, then settles its real dispatched send', async () => {
-  const r = await checkpointJournalRig({
-    watermarks: { maxQueuedOperations: 2, lowQueuedOperations: 0, lowQueuedBytes: 0 }
-  })
-  r.translator.dispose()
-  vi.useFakeTimers({ toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout'] })
-  const codex = fakeCodex({ 'turn/start': () => ({ turn: { id: 'turn' } }) })
-  const adapter = adapterFor(codex)
-  const gate = Promise.withResolvers<void>()
-  try {
-    await acquireReadyCodexForTest(adapter, {
-      identity: identityFor('session-1'),
-      fence: 7,
-      spawnToken: 'spawn-9',
-      events: r.deferred.sink
-    })
-    await expect(
-      adapter.dispatch({
-        sessionId: 'session-1',
-        clientMessageId: 'pending-send',
-        fence: 7,
-        body: USER_MESSAGE
-      })
-    ).resolves.toMatchObject({ state: 'admitted' })
-    const connection = codex.connections[0]
-    const notify = (method: string, params: PlanNotificationFixtureParams) =>
-      connection.handlers.onNotification?.(method, { threadId: THREAD_ID, ...params })
-    notify('turn/started', { turn: { id: 'turn' } })
-    await r.deferred.drained()
-    notify('item/started', { item: { type: 'plan', id: 'plan', text: '' } })
-    notify('item/plan/delta', { itemId: 'plan', delta: 'P' })
-    await vi.advanceTimersByTimeAsync(60)
-    await r.deferred.drained()
-    const plan = () =>
-      r.journal
-        .snapshot()
-        .items.find(
-          (item) => item.body.kind === 'status' && item.body.presentation === 'plan-document'
-        )
-    const first = plan()
-    expect(first?.body).toMatchObject({ text: 'P' })
-    await vi.advanceTimersByTimeAsync(40)
-    notify('item/plan/delta', { itemId: 'plan', delta: 'T' })
-    await vi.advanceTimersByTimeAsync(60)
-    await r.journal.readInOrder(() => {
-      void r.journal.readInOrder(() => gate.promise)
-    })
-    for (const uuid of ['block-1', 'block-2']) {
-      expect(
-        r.deferred.sink.tryAppendItem?.(
-          { provider: 'claude', sessionId: 'block', uuid },
-          { kind: 'status', text: uuid },
-          { turnScope: { kind: 'thread' } }
-        )
-      ).toEqual({ accepted: true })
-    }
-    await vi.advanceTimersByTimeAsync(300)
-    expect(connection.readingPaused).toBe(true)
-    expect(plan()?.body).toMatchObject({ text: 'P' })
-    expect(adapter.heldSends('session-1')).toEqual(new Set(['pending-send']))
-    expect(connection.closeCount).toBe(0)
-    gate.resolve()
-    expect((await r.deferred.drained()).ok).toBe(true)
-    expect(connection.readingPaused).toBe(false)
-    await vi.advanceTimersByTimeAsync(60)
-    expect((await r.deferred.drained()).ok).toBe(true)
-    expect(plan()).toMatchObject({
-      sequence: first?.sequence,
-      observedAt: first?.observedAt,
-      turnScope: first?.turnScope,
-      body: { text: 'PT' }
-    })
-    expect(adapter.heldSends('session-1')).toEqual(new Set(['pending-send']))
-    expect(vi.getTimerCount()).toBe(0)
-    // The real echo arrives only after reads resumed and the autonomous full tail was proven.
-    notify('item/completed', {
-      turnId: 'turn',
-      item: { type: 'userMessage', id: 'echo', clientId: 'pending-send' }
-    })
-    await r.deferred.drained()
-    expect(adapter.heldSends('session-1')?.size).toBe(0)
-    await adapter.closeAll()
-    expect((await r.deferred.drained()).ok).toBe(true)
-    const beforeReopen = r.journal.snapshot().items
-    await r.journal.close()
-    const reopened = await r.reopen()
-    expect(reopened.snapshot().items).toEqual(beforeReopen)
-    expect(
-      reopened.snapshot().items.find((item) => item.itemId === first?.itemId)?.body
-    ).toMatchObject({ text: 'PT' })
-  } finally {
-    gate.resolve()
-    await adapter.closeAll()
-    await closeCheckpointTestJournals()
-    vi.useRealTimers()
-  }
 })

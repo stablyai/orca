@@ -26,7 +26,7 @@ vi.mock('../../../shared/layout-owner-switch', () => ({
     return mocks.layoutOwnerIsMain
   }
 }))
-vi.mock('@/lib/structured-agent-session-launch-prompt', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-prompt', () => ({
   discardStructuredAgentSessionChatSends: vi.fn()
 }))
 vi.mock('./structured-agent-session-close', () => ({
@@ -55,7 +55,7 @@ import {
   resetStructuredAgentLaunchPersistenceForTests,
   writeStructuredAgentLaunchRecord
 } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
-import { wasStructuredAgentLaunchClosedByLocalCancel } from '@/lib/structured-agent-session-local-launch-cancel'
+import { wasStructuredAgentLaunchClosedByLocalCancel } from '@/lib/agent-session/launch/structured-agent-session-local-launch-cancel'
 import {
   beginStructuredAgentSessionTabClose,
   suppressCancelledStructuredSessionTabs

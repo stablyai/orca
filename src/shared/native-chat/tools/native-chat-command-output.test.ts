@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { surfaceNativeChatCommandOutputs } from './native-chat-command-output'
-import { stripNoiseMessages } from '../../native-chat-noise'
-import type { NativeChatMessage } from '../../native-chat-types'
+import { stripNoiseMessages } from '../native-chat-noise'
+import type { NativeChatMessage } from '../native-chat-types'
 
 // The two user rows OpenClaude 0.31.0 writes for `/context` (its caveat row is
 // `isMeta` and never decoded), as the transcript decoder emits them.

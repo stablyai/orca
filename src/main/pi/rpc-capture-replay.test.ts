@@ -13,19 +13,19 @@ import type {
   JournalItemRow,
   JournalRow
 } from '../native-chat/agent-session-journal/journal-row-schema'
-import type { AgentSessionHistoryRequest } from '../../shared/agent-session-wire'
+import type { AgentSessionHistoryRequest } from '../../shared/agent-session/agent-session-wire'
 import type { AgentSessionHistoryScope } from '../native-chat/agent-session-wire/agent-session-history-page'
 import { readStructuredAgentSessionHistoryResult } from '../native-chat/agent-session-wire/structured-agent-session-history-result'
 import { readStructuredJournalPage } from '../runtime/orchestration/structured-worker-journal-page'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
-} from '../../shared/structured-agent-session-reducer'
+} from '../../shared/agent-session/structured-agent-session-reducer'
 
 import { PiRpcOptionObservations, readPiRpcSessionOptions } from './rpc-options'
 import { piRpcStateSchema } from './rpc-protocol'
 import { piRpcFailureFact } from './rpc-prompt-delivery'
-import { agentSessionFailureSentence } from '../../shared/agent-session-failure-words'
+import { agentSessionFailureSentence } from '../../shared/agent-session/failures/agent-session-failure-words'
 import { piRpcDialogPresentation } from './rpc-extension-dialogs'
 import {
   closeProviderTimelineRigs,

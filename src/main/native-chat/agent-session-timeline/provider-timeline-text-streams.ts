@@ -6,7 +6,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody,
   type AgentJournalProducerLinkage
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   AGENT_SESSION_TEXT_CHECKPOINT_MS,
   createAgentSessionDeltaCoalescer,

@@ -1,4 +1,4 @@
-import type { AgentSessionOptionsResult } from '../../../../../src/shared/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../../../src/shared/agent-session/options/agent-session-options-result'
 import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
 import {
   OPTIONS,
@@ -15,8 +15,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AccessibilityInfo, Platform } from 'react-native'
 import { colors } from '../../../theme/mobile-theme'
-import { structuredAgentSessionPermissionDescriptor } from '../../../../../src/shared/structured-agent-session-permission-option'
-import { createStructuredAgentSessionOptionState } from '../../../../../src/shared/structured-agent-session-options'
+import { structuredAgentSessionPermissionDescriptor } from '../../../../../src/shared/agent-session/options/structured-agent-session-permission-option'
+import { createStructuredAgentSessionOptionState } from '../../../../../src/shared/agent-session/options/structured-agent-session-options'
 import type {
   SessionOptionDescriptor,
   SessionOptionSelectChoice

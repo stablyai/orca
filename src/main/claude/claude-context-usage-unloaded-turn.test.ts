@@ -2,23 +2,23 @@ import { agentSessionConversationView } from '../../shared/agent-session-convers
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AgentSessionHistoryPage } from '../../shared/agent-session-wire'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
-import { MAX_RETAINED_OWN_ITEMS } from '../../shared/structured-agent-session-item-retention'
+import type { AgentSessionHistoryPage } from '../../shared/agent-session/agent-session-wire'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { MAX_RETAINED_OWN_ITEMS } from '../../shared/agent-session/view/structured-agent-session-item-retention'
 import {
   latestStructuredAgentContextFacts,
   selectStructuredAgentContextUsage
-} from '../../shared/structured-agent-session-context-usage'
+} from '../../shared/agent-session/structured-agent-session-context-usage'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
   type StructuredAgentSessionState
-} from '../../shared/structured-agent-session-reducer'
+} from '../../shared/agent-session/structured-agent-session-reducer'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { readAgentSessionHistory } from '../native-chat/agent-session-wire/agent-session-history-page'
@@ -31,9 +31,9 @@ import {
   resultFrame,
   userFrame
 } from './claude-context-usage-test-support'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   claudeAndCodexAgents,
   NO_STRUCTURED_AGENTS

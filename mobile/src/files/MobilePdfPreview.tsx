@@ -7,7 +7,7 @@ import { usePdfOpener } from '../platform/pdf-opener'
 import { PdfOpenRefusedError } from '../platform/pdf-opener-contract'
 import type { MobileFileMedia } from './mobile-file-media'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
-import { MobileLoadErrorState, MobileStateButton } from '../components/MobileLoadErrorState'
+import { MobileLoadErrorState, MobileStateButton } from '../components/MobileStateView'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
@@ -68,7 +68,7 @@ export function MobilePdfPreview({ media }: { media: MobileFileMedia }) {
     )
   }
   if (state.status === 'failed') {
-    return <MobileLoadErrorState message={state.message} onRetry={state.retryable ? open : null} />
+    return <MobileLoadErrorState error={state.message} onRetry={state.retryable ? open : null} />
   }
   if (state.status === 'opening') {
     return (

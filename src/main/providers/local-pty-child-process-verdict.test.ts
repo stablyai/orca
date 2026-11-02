@@ -1,5 +1,6 @@
 import * as pty from 'node-pty'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as PtyMasterForegroundObservation from '../pty/pty-master-foreground-observation'
 
 const { resolveForegroundMock } = vi.hoisted(() => ({ resolveForegroundMock: vi.fn() }))
 const jobMembers = vi.hoisted(() => vi.fn())
@@ -16,15 +17,19 @@ vi.mock('./agent-foreground-process', () => ({
   resolveAgentForegroundProcessWithAvailability: resolveForegroundMock,
   confirmShellForegroundProcess: confirmShellForegroundMock
 }))
+
+const observeForegroundMock = vi.hoisted(() => vi.fn())
+vi.mock('../pty/pty-master-foreground-observation', async (importOriginal) => ({
+  ...(await importOriginal<typeof PtyMasterForegroundObservation>()),
+  observePtyForeground: observeForegroundMock
+}))
 import { isRetiredPtyMaster } from '../pty/node-pty-master-fd-retirement'
-import {
-  confirmLocalPtyShellForeground,
-  hasLocalPtyChildProcesses,
-  inspectLocalPtyChildProcesses
-} from './local-pty-foreground-inspection'
+
 import { LocalPtyProvider } from './local-pty-provider'
 import { ptyIncarnations, ptyProcesses, ptyShellPath } from './local-pty-provider-state'
 import { inspectPtyProviderProcess } from './pty-process-inspection'
+import { readLaunchedAgentForeground } from '../runtime/launched-agent-foreground'
+import type { TerminalForegroundSample } from '../../shared/terminal-foreground-observation'
 
 // Match the recorded basename so only the retired descriptor distinguishes the pane from idle.
 const POSIX_SHELL = 'sh'
@@ -92,71 +97,8 @@ afterEach(() => {
   ptyShellPath.clear()
 })
 
-describe('confirmLocalPtyShellForeground', () => {
-  it('proves against the spawned shell path, which tells the Git Bash launcher apart', async () => {
-    const launcher = 'C:\\Program Files\\Git\\bin\\bash.exe'
-    registerPane('pty-git-bash', 'bash.exe', launcher)
-    confirmShellForegroundMock.mockResolvedValueOnce(true)
-
-    await expect(confirmLocalPtyShellForeground('pty-git-bash')).resolves.toBe(true)
-    expect(confirmShellForegroundMock).toHaveBeenCalledWith(4242, launcher, expect.any(Object))
-  })
-})
-
 // Windows has no master fd to retire, and `WindowsTerminal.process` answers from the spawn name.
 const describeOnPosix = process.platform === 'win32' ? describe.skip : describe
-
-describe('inspectLocalPtyChildProcesses', () => {
-  it('reports unverifiable when the pty fd cannot be read', async () => {
-    registerPane(
-      'pty-closed',
-      () => {
-        throw new Error('EBADF: bad file descriptor')
-      },
-      '/bin/zsh'
-    )
-    expect(await inspectLocalPtyChildProcesses('pty-closed')).toBe('unverifiable')
-  })
-
-  it('still answers no-children when the shell itself is in the foreground', async () => {
-    registerPane('pty-idle', 'zsh', '/bin/zsh')
-    expect(await inspectLocalPtyChildProcesses('pty-idle')).toBe('no-children')
-  })
-
-  it('answers children when something else is in the foreground', async () => {
-    registerPane('pty-busy', 'vim', '/bin/zsh')
-    expect(await inspectLocalPtyChildProcesses('pty-busy')).toBe('children')
-  })
-
-  it('treats a pane this provider does not hold as a real negative', async () => {
-    expect(await inspectLocalPtyChildProcesses('pty-absent')).toBe('no-children')
-  })
-
-  it('preserves uncertainty conservatively in the boolean adapter', async () => {
-    let reads = 0
-    registerPane(
-      'pty-closed',
-      () => {
-        reads += 1
-        throw new Error('EBADF: bad file descriptor')
-      },
-      '/bin/zsh'
-    )
-    await expect(hasLocalPtyChildProcesses('pty-closed')).resolves.toBe(true)
-    // The result must come from the failed read, not from an earlier short-circuit.
-    expect(reads).toBe(1)
-  })
-})
-
-describeOnPosix('inspectLocalPtyChildProcesses on a retired master', () => {
-  it('reports unverifiable rather than reading the spawn file as an idle shell', async () => {
-    const term = await registerRetiredPane('pty-retired')
-
-    expect(term.process).toBe(POSIX_SHELL)
-    // False idle would authorize pane termination despite the unreadable descriptor.
-    expect(await inspectLocalPtyChildProcesses('pty-retired')).toBe('unverifiable')
-  }, 15000)
-})
 
 describe('inspectPtyProviderProcess child-process evidence', () => {
   const provider = new LocalPtyProvider()
@@ -236,6 +178,47 @@ describe('inspectPtyProviderProcess child-process evidence', () => {
       childProcessEvidence: 'unverifiable'
     })
   })
+})
+
+describe('fresh foreground observation', () => {
+  it.each([
+    ['non-shell', 'claude', 'agent'],
+    ['shell', '-zsh', 'shell']
+  ] as const)(
+    'keeps a %s observation valid when the wall clock steps back during its read',
+    async (foregroundKind, processName, expected) => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(1_000)
+      registerPane('pty-clock-step', '/bin/zsh', '/bin/zsh')
+      observeForegroundMock.mockImplementationOnce(async (): Promise<TerminalForegroundSample> => {
+        vi.setSystemTime(995)
+        return { verdict: 'observed', source: 'pty-master', foregroundKind, processName }
+      })
+      const provider = new LocalPtyProvider()
+      const inspectProcess = vi.fn((id: string, options?: { foregroundOnly?: boolean }) =>
+        provider.inspectProcess(id, options)
+      )
+      try {
+        expect(
+          await readLaunchedAgentForeground(
+            {
+              supportsForegroundObservation: () => true,
+              inspectProcess,
+              getForegroundProcess: async () => null
+            },
+            { remote: false, windows: false },
+            'pty-clock-step',
+            'claude'
+          )
+        ).toBe(expected)
+        await expect(inspectProcess.mock.results[0].value).resolves.toMatchObject({
+          foregroundObservation: { verdict: 'observed', capturedAgeMs: 0 }
+        })
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
 })
 
 describeOnPosix('inspectPtyProviderProcess on a retired master', () => {

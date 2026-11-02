@@ -1,4 +1,4 @@
-import type { AgentJournalTurnLifecycle } from '../../shared/agent-session-journal-types'
+import type { AgentJournalTurnLifecycle } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { readCodexThreadItem, type CodexTurnOrdinals } from './codex-structured-item-translation'
 import type { CodexJournalCompactions } from './codex-structured-journal-compactions'
 import type { CodexJournalItems } from './codex-structured-journal-items'

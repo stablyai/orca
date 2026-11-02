@@ -1,11 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalSubmission,
-  AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
-  sendStopCanTakeBack,
   withdrawCodexSendsNoTurnOpenedFor,
   type UnopenedSendJournal
 } from './structured-agent-session-unopened-send-withdrawal'
@@ -68,23 +65,6 @@ function journalWith(
   }
   return { journal, resolveDispatch }
 }
-
-describe('a send a Stop can take back', () => {
-  it('is one still being handed over, or one this process lost the answer to', () => {
-    expect(sendStopCanTakeBack(sendBeforeStop())).toBe(true)
-    expect(sendStopCanTakeBack(sendBeforeStop({ dispatchState: 'unknown' }))).toBe(true)
-  })
-
-  it('is never one an earlier process left in doubt', () => {
-    expect(sendStopCanTakeBack(sendBeforeStop({ dispatchState: 'unknown', recovered: true }))).toBe(
-      false
-    )
-  })
-
-  it("is never a queued card's send that was not handed over", () => {
-    expect(sendStopCanTakeBack(sendBeforeStop({ handedOverAt: undefined }))).toBe(false)
-  })
-})
 
 describe("a Codex child's end, or a Stop Codex took, under a person's Stop", () => {
   it('withdraws a send whose answer this process lost', async () => {

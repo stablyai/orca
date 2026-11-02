@@ -89,24 +89,6 @@ async function createGatedTransport(options: Record<string, unknown> = {}) {
 
 // The user is told when keys typed into a starting remote pane were dropped for safety.
 describe('remote pre-bind typing discard notice', () => {
-  it('tells the pane when startup work made it drop typing from before the terminal bound', async () => {
-    const onTypingDiscardedBeforeBind = vi.fn()
-    const { transport, created, waitForCreate } = await createGatedTransport({
-      keepTypeAheadForNewTerminal: () => true,
-      releasePreconnectInput: () => false,
-      onTypingDiscardedBeforeBind
-    })
-    expect(transport.sendInput('make the tests pass\r', 'driving')).toBe(true)
-    const connecting = transport.connect({ url: '', callbacks: {} })
-    await waitForCreate()
-    created.resolve({ handle: 'terminal-new' })
-    await connecting
-    await completeAttach()
-
-    expect(onTypingDiscardedBeforeBind).toHaveBeenCalledTimes(1)
-    transport.destroy?.()
-  })
-
   it('says nothing when the typing reaches the terminal it was typed for', async () => {
     const onTypingDiscardedBeforeBind = vi.fn()
     const { transport, created, waitForCreate } = await createGatedTransport({

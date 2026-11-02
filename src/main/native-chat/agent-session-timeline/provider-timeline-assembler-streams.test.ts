@@ -6,8 +6,8 @@ import { PiRpcContextUsage } from '../../pi/rpc-context-usage'
 import { testEventSinkLogging } from '../agent-session-wire/structured-agent-session-logger-test-support'
 import { measureDeltaSnapshotWork } from '../agent-session-wire/agent-session-delta-work-test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { agentJournalTurnBody } from '../../../shared/agent-session-turn-record'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   closeProviderTimelineRigs,
   messageText,

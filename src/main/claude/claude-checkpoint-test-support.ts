@@ -9,7 +9,7 @@ import {
   type StructuredAgentSessionSinkWatermarks
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 
 const journals = createTrackedJournalOpener()
 const roots: string[] = []

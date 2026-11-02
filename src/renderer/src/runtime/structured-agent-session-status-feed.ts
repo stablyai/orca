@@ -1,7 +1,7 @@
 // Share one read-only host status stream per target. Retain latest summaries across disconnect and merge fresh snapshots; tab maps own visibility, so this feed never retracts summaries.
 
 import { AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-workspace-sleep'
-import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
+import type { AgentSessionStatusEvent } from '../../../shared/agent-session/agent-session-wire'
 import {
   foldAgentSessionConversationNames,
   type AgentSessionConversationNames
@@ -11,8 +11,8 @@ import {
   foldAgentSessionStatusEvent,
   revokeAgentSessionStatusLive,
   type AgentSessionStatusSnapshot
-} from '../../../shared/agent-session-status-snapshot-fold'
-import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+} from '../../../shared/agent-session/view/agent-session-status-snapshot-fold'
+import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-attention-capabilities'
 import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { subscribeStructuredAgentSessionStatus } from './structured-agent-session-client'
