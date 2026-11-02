@@ -126,6 +126,102 @@ describe('TrustDialogStatusObserver', () => {
     ])
   })
 
+  const UP = '\x1b[A'
+  const DOWN = '\x1b[B'
+  // Keys verified against Claude Code 2.1.316 with a scratch config: arrows move the highlight, Enter picks it.
+  it.each([
+    [
+      'claude-2-1-316-startup-mcp-server',
+      'New MCP server found in this project: scratch-echo',
+      [
+        ['Use this MCP server', `${UP}${UP}\r`],
+        ['Use this and all future MCP servers in this project', `${UP}\r`],
+        ['Continue without using this MCP server', '\r']
+      ]
+    ],
+    [
+      'claude-2-1-316-startup-mcp-server-narrow',
+      'New MCP server found in this project: scratch-echo',
+      [
+        ['Use this MCP server', `${UP}${UP}\r`],
+        ['Use this and all future MCP servers in this project', `${UP}\r`],
+        ['Continue without using this MCP server', '\r']
+      ]
+    ],
+    [
+      'claude-2-1-316-startup-api-key',
+      'Detected a custom API key in your environment',
+      [
+        ['Yes', `${UP}\r`],
+        ['No (recommended)', '\r']
+      ]
+    ],
+    [
+      'claude-2-1-316-startup-bypass-permissions',
+      'WARNING: Claude Code running in Bypass Permissions mode',
+      [
+        ['No, exit', '\r'],
+        ['Yes, I accept', `${DOWN}\r`]
+      ]
+    ],
+    [
+      'claude-2-1-316-startup-external-imports',
+      'Allow external CLAUDE.md file imports?',
+      [
+        ['No, disable external imports', '\r'],
+        ['Yes, allow external imports', `${DOWN}\r`]
+      ]
+    ]
+  ])('offers %s a card with its own choices', async (name, description, choices) => {
+    const { published, prompts, recording, write } = await pane(name)
+    await write(recording, 1)
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(published).toEqual(['waiting'])
+    const card = parseInteractivePrompt(prompts[0], undefined, 'claude')
+    expect(card?.kind === 'approval' && card.approval).toEqual({
+      title: 'Claude is waiting for a choice in the terminal',
+      description,
+      options: choices.map(([label, send]) => ({ label, send }))
+    })
+  })
+
+  // Codex's startup menu keys are not verified, so its card only locks Send and points at the terminal.
+  it.each(['codex-0158-update-available-dialog', 'codex-0158-hooks-review-dialog'])(
+    'offers %s a card without answers',
+    async (name) => {
+      const { published, prompts, recording, write } = await pane(name, 'codex')
+      await write(recording, 1)
+      expect(published).toEqual(['waiting'])
+      const card = parseInteractivePrompt(prompts[0], undefined, 'codex')
+      expect(card?.kind === 'approval' && card.approval).toEqual({
+        title: 'Codex is waiting for a choice in the terminal',
+        options: []
+      })
+    }
+  )
+
+  it('leaves a ready Claude composer alone', async () => {
+    const { published, recording, write } = await pane('claude-2-1-316-default-labelled-blurred')
+    await write(recording, 1)
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(published).toEqual([])
+  })
+
+  it('re-aims the startup card when the highlight moves in the terminal', async () => {
+    const { prompts, recording, write } = await pane('claude-2-1-316-startup-mcp-server')
+    await write(recording)
+    // Up in the terminal: Claude repaints its choices with the cursor on the middle row.
+    await write(
+      '\x1b[9;1H\x1b[2K  ❯ Use this and all future MCP servers in this project' +
+        '\x1b[10;1H\x1b[2K    Continue without using this MCP server'
+    )
+    await vi.advanceTimersByTimeAsync(1_000)
+    const card = parseInteractivePrompt(prompts.at(-1), undefined, 'claude')
+    expect(card?.kind === 'approval' && card.approval.options.map((option) => option.send)).toEqual(
+      [`${UP}\r`, '\r', `${DOWN}\r`]
+    )
+  })
+
   it('ignores the dialog wording quoted in ordinary output', async () => {
     const { published, write } = await pane('codex-0-158-0-trustprompt', 'codex')
     const reply = [
